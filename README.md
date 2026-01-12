@@ -1,10 +1,30 @@
-# nnterp
+<p align="center">
+  <img src="./nnterp_logo.png" alt="nnterp" width="300">
+</p>
 
-<a href="https://butanium.github.io/nnterp/"><img src="https://img.shields.io/badge/-Read%20the%20Docs%20Here-blue?style=for-the-badge&logo=Read-the-Docs&logoColor=white"></img></a> <a href="https://colab.research.google.com/github/Butanium/nnterp/blob/main/demo.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg"></img></a>
+<h3 align="center">
+A unified interface for mechanistic interpretability of transformers
+</h3>
 
-**A unified interface for all transformer models that puts best `NNsight` practices for LLMs in everyone's hands.**
+<p align="center">
+<i>Created by Clément Dumas</i>
+</p>
 
-Built on top of [NNsight](https://github.com/ndif-team/nnsight), `nnterp` provides a standardized interface for mechanistic interpretability research across all transformer architectures. Unlike `transformer_lens` which reimplements transformers, `nnterp` preserves the original HuggingFace implementations while solving the naming convention chaos through intelligent renaming.
+<p align="center">
+| <a href="https://ndif-team.github.io/nnterp/"><b>Documentation</b></a> | <a href="https://github.com/ndif-team/nnterp"><b>GitHub</b></a> | <a href="https://discord.gg/6uFJmCSwW7"><b>Discord</b></a> | <a href="https://discuss.ndif.us/"><b>Forum</b></a> | <a href="https://x.com/ndif_team"><b>Twitter</b></a> | <a href="https://arxiv.org/abs/2511.14465"><b>Paper</b></a> |
+</p>
+
+<p align="center">
+<a href="https://colab.research.google.com/github/Butanium/nnterp/blob/main/demo.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg"></img></a>
+</p>
+
+---
+
+## About
+
+**nnterp** is a unified interface for all transformer models that puts best NNsight practices for LLMs in everyone's hands.
+
+Built on top of [NNsight](https://github.com/ndif-team/nnsight), nnterp provides a standardized interface for mechanistic interpretability research across all transformer architectures. Unlike `transformer_lens` which reimplements transformers, `nnterp` preserves the original HuggingFace implementations while solving the naming convention chaos through intelligent renaming.
 
 ## Why nnterp?
 

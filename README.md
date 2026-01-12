@@ -41,7 +41,7 @@ StandardizedTransformer
 ```
 and include built-in properties like `model.logits` and `model.next_token_probs`.
 
-Unlike other libraries that reimplement transformers, `nnterp` uses `NNsight`'s renaming feature to work with the original HuggingFace implementations, ensuring perfect compatibility and preventing subtle bugs. `nnterp` also includes automatic testing to ensure models are correctly standardized. When you load a model, it runs fast validation checks. See the [documentation](https://butanium.github.io/nnterp/model-validation.html) for details.
+Unlike other libraries that reimplement transformers, `nnterp` uses `NNsight`'s renaming feature to work with the original HuggingFace implementations, ensuring perfect compatibility and preventing subtle bugs. `nnterp` also includes automatic testing to ensure models are correctly standardized. When you load a model, it runs fast validation checks. See the [documentation](https://ndif-team.github.io/nnterp/model-validation.html) for details.
 
 ## Installation
 - `pip install nnterp` - Basic installation
@@ -145,7 +145,7 @@ results = run_prompts(model, prompts, get_probs_func=logit_lens)
 ```
 ---
 
-More examples and detailed documentation can be found at [butanium.github.io/nnterp](https://butanium.github.io/nnterp/)
+More examples and detailed documentation can be found at [butanium.github.io/nnterp](https://ndif-team.github.io/nnterp/)
 
 
 ## I found a bug!

@@ -115,6 +115,7 @@ class RenameConfig:
     lm_head_name: str | list[str] | None = None
     model_name: str | list[str] | None = None
     layers_name: str | list[str] | None = None
+    down_proj_name: str | list[str] | None = None
     attn_prob_source: AttnProbFunction | None = None
     ignore_mlp: bool | None = None
     ignore_attn: bool | None = None
@@ -184,6 +185,15 @@ EMBED_TOKENS_NAMES = expand_path_with_model(
     ]
 )
 
+DOWN_PROJ_NAMES = expand_path_with_model(
+    [
+        "c_proj",
+        "output.dense",
+        "wo",
+        "dense_4h_to_h",
+        "fc2"
+    ]
+)
 
 def get_rename_dict(
     rename_config: RenameConfig | None = None,
@@ -205,6 +215,7 @@ def get_rename_dict(
         update_rename_dict("mlp", rename_config.mlp_name)
         update_rename_dict("ln_final", rename_config.ln_final_name)
         update_rename_dict("lm_head", rename_config.lm_head_name)
+        update_rename_dict("down_proj", rename_config.down_proj_name)
 
     rename_dict.update(
         {name: "model" for name in MODEL_NAMES}
@@ -214,6 +225,7 @@ def get_rename_dict(
         | {name: "ln_final" for name in LN_NAMES}
         | {name: "lm_head" for name in LM_HEAD_NAMES}
         | {name: "embed_tokens" for name in EMBED_TOKENS_NAMES}
+        | {name: "down_proj" for name in DOWN_PROJ_NAMES}
     )
     return rename_dict
 
@@ -324,7 +336,8 @@ class LayerAccessor:
     def get_module(self, layer: int) -> Envoy:
         module = self.model.layers[layer]
         if self.attr_name is not None:
-            module = getattr(module, self.attr_name)
+            for attr in self.attr_name.split("."):
+                module = getattr(module, attr)
         return module
 
     def __getitem__(self, layer: int) -> TraceTensor | Envoy:

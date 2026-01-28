@@ -1,6 +1,6 @@
-<p align="center">
+<!-- TODO: add a logo <p align="center">
   <img src="./nnterp_logo.png" alt="nnterp" width="300">
-</p>
+</p> -->
 
 <h3 align="center">
 A unified interface for mechanistic interpretability of transformers

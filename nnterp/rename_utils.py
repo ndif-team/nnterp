@@ -743,3 +743,22 @@ def check_model_renaming(
         allow_dispatch,
         errors_to_raise=(RenamingError,),
     )
+
+
+HF_TO_VLLM_KWARGS_MAP = dict(
+    max_num_tokens="max_tokens",
+)
+VLLM_TO_HF_KWARGS_MAP = {v: k for k, v in HF_TO_VLLM_KWARGS_MAP.items()}
+
+
+def hf_kwargs_to_vllm_kwargs(args, kwargs: dict) -> dict:
+    for k, v in kwargs.items():
+        if k in HF_TO_VLLM_KWARGS_MAP:
+            if VLLM_TO_HF_KWARGS_MAP[k] in kwargs:
+                if kwargs[VLLM_TO_HF_KWARGS_MAP[k]] != v:
+                    raise ValueError(
+                        f"Conflicting values for {VLLM_TO_HF_KWARGS_MAP[k]} and {k}, which correspond to the same argument in hf and vllm but are set to different values: {kwargs[VLLM_TO_HF_KWARGS_MAP[k]]} and {v}"
+                    )
+            kwargs[VLLM_TO_HF_KWARGS_MAP[k]] = v
+
+    return kwargs

@@ -170,7 +170,8 @@ You might encounter the error `with block not found at line xyz` when running th
 - Create a git tag with the version number `git tag vx.y.z; git push origin vx.y.z`
 - Build with `python -m build`
 - Publish with e.g. `twine upload dist/*x.y.z*`
-- test with `pytest --cache-clear`. **cache-clear is mandatory for now otherwise `NNsight`'s source can break.** It might not be sufficient, in which case you can do `make clean` to remove Python cache.
+- Test with `uv run pytest nnterp/tests` or `uv run pytest nnterp/tests --model-names gpt2` to test with a specific model. Also you can use `uv run pytest nnterp/tests --class-names LlamaForCausalLM` to test with a specific class.
+<!--commented out as it is likely fixed now - test with `pytest --cache-clear`. **cache-clear is mandatory for now otherwise `NNsight`'s source can break.** It might not be sufficient, in which case you can do `make clean` to remove Python cache. -->
 
 
 ## Citation

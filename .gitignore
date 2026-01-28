@@ -25,6 +25,7 @@ config.yaml
 .nfs*
 .env
 .venv
+.ipynb_checkpoints/
 # Documentation build files
 docs/_build/
 docs/build/

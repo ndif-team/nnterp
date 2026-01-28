@@ -7,7 +7,7 @@ A unified interface for mechanistic interpretability of transformers
 </h3>
 
 <p align="center">
-<i>Created by Clément Dumas</i>
+<i>Created by [Clément Dumas](https://github.com/butanium)</i>
 </p>
 
 <p align="center">

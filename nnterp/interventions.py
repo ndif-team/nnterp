@@ -2,7 +2,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import torch as th
-from loguru import logger
+
+from .logging import logger
 from .nnsight_utils import (
     get_layer_output,
     get_next_token_probs,

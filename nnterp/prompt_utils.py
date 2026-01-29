@@ -7,7 +7,8 @@ from tqdm.auto import tqdm
 from .nnsight_utils import LanguageModel, compute_next_token_probs
 from .standardized_transformer import StandardizedTransformer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
-from loguru import logger
+
+from .logging import logger
 
 
 class TokenizationError(Exception):

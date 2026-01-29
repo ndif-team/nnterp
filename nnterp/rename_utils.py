@@ -18,9 +18,13 @@ from .utils import (
     BloomForCausalLM,
     GPT2LMHeadModel,
     GPTJForCausalLM,
+    MixtralForCausalLM,
+    Qwen2MoeForCausalLM,
+    DbrxForCausalLM,
+    GptOssForCausalLM,
 )
 
-IgnoreType = Literal["mlp", "attention"]
+IgnoreType = Literal["mlp", "attention", "down_proj"]
 
 
 class RenamingError(Exception):
@@ -155,6 +159,15 @@ def default_vocab_size_config_keys():
 # Models with no mlp module
 IGNORE_MLP_MODELS = (OPTForCausalLM,)
 
+# MoE models don't have a single mlp.down_proj - they have multiple experts each with their own down_proj
+IGNORE_DOWN_PROJ_MODELS = (
+    MixtralForCausalLM,
+    Qwen2MoeForCausalLM,
+    DbrxForCausalLM,
+    GptOssForCausalLM,
+    BloomForCausalLM,  # Bloom is excluded because of issues that require more investigation
+)
+
 # Alternative names for LLM layers
 ATTENTION_NAMES = ["attn", "self_attention", "attention", "norm_attn_norm"]
 LAYER_NAMES = expand_path_with_model(
@@ -187,13 +200,15 @@ EMBED_TOKENS_NAMES = expand_path_with_model(
 
 DOWN_PROJ_NAMES = expand_path_with_model(
     [
-        "c_proj",
-        "output.dense",
-        "wo",
-        "dense_4h_to_h",
-        "fc2"
+        "c_proj", 
+        "output.dense", 
+        "wo", 
+        "dense_4h_to_h", 
+        "fc2",
+        "fc_out"
     ]
 )
+
 
 def get_rename_dict(
     rename_config: RenameConfig | None = None,
@@ -600,6 +615,11 @@ def get_ignores(model, rename_config: RenameConfig | None = None) -> list[str]:
             message += " You'll have to manually use layers.fc1 and layers.fc2 instead."
         logger.warning(message)
         ignores.append("mlp")
+    if isinstance(model, IGNORE_DOWN_PROJ_MODELS):
+        message = f"{model.__class__.__name__} is a MoE model with multiple experts. "
+        message += "down_projs accessor is not supported for MoE models."
+        logger.warning(message)
+        ignores.append("down_proj")
     if rename_config is not None:
         if rename_config.ignore_mlp:
             ignores.append("mlp")

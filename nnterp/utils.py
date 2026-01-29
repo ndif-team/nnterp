@@ -41,6 +41,10 @@ try:
 except ImportError:
     Qwen2MoeForCausalLM = ArchitectureNotFound
 try:
+    from transformers import GptOssForCausalLM
+except ImportError:
+    GptOssForCausalLM = ArchitectureNotFound
+try:
     from transformers import DbrxForCausalLM
 except ImportError:
     DbrxForCausalLM = ArchitectureNotFound

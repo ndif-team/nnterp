@@ -1,7 +1,9 @@
 from __future__ import annotations
 from typing import Callable
-from loguru import logger
+
 import torch as th
+
+from .logging import logger
 from torch.nn import Module
 from torch import Size
 from nnsight import LanguageModel

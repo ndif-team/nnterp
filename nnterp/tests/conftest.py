@@ -10,8 +10,8 @@ import time
 
 import pytest
 from _pytest.outcomes import Skipped
-from loguru import logger
 from nnterp import StandardizedTransformer
+from nnterp.logging import logger
 from nnsight import LanguageModel
 
 from .utils import (

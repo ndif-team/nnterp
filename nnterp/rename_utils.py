@@ -2,9 +2,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Literal
 from enum import Enum
-from loguru import logger
 
 import torch as th
+
+from .logging import logger
 from nnsight import Envoy
 from .utils import (
     TraceTensor,

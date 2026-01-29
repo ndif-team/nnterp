@@ -1,13 +1,16 @@
 import json
+import logging
+import subprocess
 import transformers
 from collections import defaultdict
+
+from tests.utils import get_arch
+
+logger = logging.getLogger("nnterp")
 
 with open("data/test_loading_status.json", "r") as f:
     data = json.load(f)
 all_models = data[transformers.__version__]["0.5.0.dev8"]["available_nn_models"]
-import subprocess
-from loguru import logger
-from tests.utils import get_arch
 
 passing_models = []
 failing_models = []

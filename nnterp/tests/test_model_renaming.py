@@ -184,6 +184,12 @@ def test_standardized_transformer_methods(model_name):
             attn_output_accessor = model.attentions_output[0].save()
             attn_output_direct = model.model.layers[0].self_attn.output[0].save()
             if "mlp" not in ignores:
+                if "down_proj" not in ignores:
+                    down_proj_output_accessor = model.down_projs_output[0].save()
+                    down_proj_output_direct = model.model.layers[0].mlp.down_proj.output
+                    if isinstance(down_proj_output_direct, tuple):
+                        down_proj_output_direct = down_proj_output_direct[0]
+                    down_proj_output_direct = down_proj_output_direct.save()
                 mlps_output_accessor = model.mlps_output[0].save()
                 mlps_output_direct = model.model.layers[0].mlp.output
                 if isinstance(mlps_output_direct, tuple):
@@ -213,6 +219,10 @@ def test_standardized_transformer_methods(model_name):
             assert th.allclose(
                 mlps_output_accessor, mlps_output_direct
             ), "MLP output mismatch between accessor and direct access"
+            if "down_proj" not in ignores:
+                assert th.allclose(
+                    down_proj_output_accessor, down_proj_output_direct
+                ), "Down proj output mismatch between accessor and direct access"
         assert th.allclose(
             layer_output_accessor, layer_output_direct
         ), "Layer output mismatch between accessor and direct access"
@@ -299,6 +309,9 @@ def test_standardized_transformer_input_accessors(model_name):
             if "mlp" not in ignores:
                 mlp_input_accessor = model.mlps_input[0].save()
                 mlp_input_direct = model.model.layers[0].mlp.input.save()
+                if "down_proj" not in ignores:
+                    down_proj_input_accessor = model.down_projs_input[0].save()
+                    down_proj_input_direct = model.model.layers[0].mlp.down_proj.input.save()
 
         # Verify input accessors work correctly
         assert th.allclose(
@@ -311,6 +324,10 @@ def test_standardized_transformer_input_accessors(model_name):
             assert th.allclose(
                 mlp_input_accessor, mlp_input_direct
             ), "MLP input accessor mismatch"
+            if "down_proj" not in ignores:
+                assert th.allclose(
+                    down_proj_input_accessor, down_proj_input_direct
+                ), "Down proj input accessor mismatch"
 
 
 def test_standardized_transformer_steer_method(model_name):

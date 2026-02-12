@@ -18,7 +18,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "nnsight>=0.5",
+    "nnsight>=0.5.16",
     "transformers",
 ]
 [project.optional-dependencies]

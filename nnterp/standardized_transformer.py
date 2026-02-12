@@ -7,6 +7,7 @@ from .logging import logger
 from torch.nn import Module
 from torch import Size
 from nnsight import LanguageModel
+from nnsight.ndif import register as ndif_register
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
@@ -62,9 +63,11 @@ class StandardizedTransformer(LanguageModel):
             loading the model. Defaults to False.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
+        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp
+            for NDIF remote execution via cloudpickle serialization.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
-            when scan() fails during renaming checks. Defaults to True. You should set this to false
-            if you plan to use the model remotely.
+            when scan() fails during renaming checks. Defaults to True. Automatically set to False
+            when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
             tracing by setting attn_implementation="eager". Defaults to False.
         check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
@@ -81,12 +84,16 @@ class StandardizedTransformer(LanguageModel):
         model: str | Module,
         trust_remote_code: bool = False,
         check_renaming: bool = True,
+        remote: bool = False,
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
         check_attn_probs_with_trace: bool = True,
         rename_config: RenameConfig | None = None,
         **kwargs,
     ):
+        if remote:
+            allow_dispatch = False
+            ndif_register("nnterp")
         kwargs.setdefault("device_map", "auto")
         if "attn_implementation" in kwargs and enable_attention_probs:
             if kwargs["attn_implementation"] != "eager":

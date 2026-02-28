@@ -446,6 +446,7 @@
                   
   <h1>Source code for nnterp.standardized_transformer</h1><div class="highlight"><pre>
 <span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">th</span>
@@ -454,6 +455,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="kn">import</span> <span class="n">Module</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">Size</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">nnsight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LanguageModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">nnsight.ndif</span><span class="w"> </span><span class="kn">import</span> <span class="n">register</span> <span class="k">as</span> <span class="n">ndif_register</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers.tokenization_utils_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">PreTrainedTokenizerBase</span>
 
@@ -511,9 +513,11 @@
 <span class="sd">            loading the model. Defaults to False.</span>
 <span class="sd">        check_renaming (bool, default True): If True, the renaming of modules is validated.</span>
 <span class="sd">            Defaults to True.</span>
+<span class="sd">        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp</span>
+<span class="sd">            for NDIF remote execution via cloudpickle serialization.</span>
 <span class="sd">        allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model</span>
-<span class="sd">            when scan() fails during renaming checks. Defaults to True. You should set this to false</span>
-<span class="sd">            if you plan to use the model remotely.</span>
+<span class="sd">            when scan() fails during renaming checks. Defaults to True. Automatically set to False</span>
+<span class="sd">            when remote=True.</span>
 <span class="sd">        enable_attention_probs (bool, default False): If True, enables attention probabilities</span>
 <span class="sd">            tracing by setting attn_implementation=&quot;eager&quot;. Defaults to False.</span>
 <span class="sd">        check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.</span>
@@ -530,12 +534,17 @@
         <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Module</span><span class="p">,</span>
         <span class="n">trust_remote_code</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">check_renaming</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">remote</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">allow_dispatch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">enable_attention_probs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">check_attn_probs_with_trace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">allow_multimodal</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">rename_config</span><span class="p">:</span> <span class="n">RenameConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
+        <span class="k">if</span> <span class="n">remote</span><span class="p">:</span>
+            <span class="n">allow_dispatch</span> <span class="o">=</span> <span class="kc">False</span>
+            <span class="n">ndif_register</span><span class="p">(</span><span class="s2">&quot;nnterp&quot;</span><span class="p">)</span>
         <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;device_map&quot;</span><span class="p">,</span> <span class="s2">&quot;auto&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="s2">&quot;attn_implementation&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">enable_attention_probs</span><span class="p">:</span>
             <span class="k">if</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;attn_implementation&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">&quot;eager&quot;</span><span class="p">:</span>
@@ -594,7 +603,9 @@
         <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">check_renaming</span><span class="p">:</span>
-            <span class="n">check_model_renaming</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">ignores</span><span class="p">,</span> <span class="n">allow_dispatch</span><span class="p">)</span>
+            <span class="n">check_model_renaming</span><span class="p">(</span>
+                <span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">ignores</span><span class="p">,</span> <span class="n">allow_dispatch</span><span class="p">,</span> <span class="n">allow_multimodal</span>
+            <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">attention_probabilities</span> <span class="o">=</span> <span class="n">AttentionProbabilitiesAccessor</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">rename_config</span><span class="o">=</span><span class="n">rename_config</span><span class="p">,</span>
@@ -734,25 +745,45 @@
         <span class="n">steering_vector</span><span class="p">:</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
         <span class="n">positions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">token_positions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">batch_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Steer the hidden states of a layer using a steering vector by doing layer_output += factor * steering_vector.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            layers: The layer(s) to steer</span>
-<span class="sd">            steering_vector: The steering vector to apply</span>
-<span class="sd">            factor: The factor to multiply the steering vector by</span>
-<span class="sd">            positions: The position to steer. If None, all positions are steered.</span>
+<span class="sd">            layers: The layer(s) to steer.</span>
+<span class="sd">            steering_vector: The steering vector to apply.</span>
+<span class="sd">            factor: The factor to multiply the steering vector by.</span>
+<span class="sd">            positions: Deprecated, use token_positions instead.</span>
+<span class="sd">            token_positions: Token positions to steer along the sequence dimension. If None, all positions are steered.</span>
+<span class="sd">            batch_index: Batch indices to steer. If None, all batch elements are steered.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Cannot specify both `positions` (deprecated) and `token_positions`.&quot;</span>
+                <span class="p">)</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="s2">&quot;`positions` is deprecated, use `token_positions` instead.&quot;</span><span class="p">,</span>
+                <span class="ne">DeprecationWarning</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">token_positions</span> <span class="o">=</span> <span class="n">positions</span>
+
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layers</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
             <span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="n">layers</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">layers</span><span class="p">):</span>  <span class="c1"># sort to ensure execution order</span>
             <span class="n">layer_device</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span><span class="o">.</span><span class="n">device</span>
             <span class="n">steering_with</span> <span class="o">=</span> <span class="n">factor</span> <span class="o">*</span> <span class="n">steering_vector</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">layer_device</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
+            <span class="k">elif</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][</span><span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
+            <span class="k">elif</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][:,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][:,</span> <span class="n">positions</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span></div>
+                <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][</span><span class="n">batch_index</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span></div>
 
 
 <div class="viewcode-block" id="StandardizedTransformer.project_on_vocab">

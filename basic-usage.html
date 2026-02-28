@@ -537,6 +537,13 @@
     <span class="n">model</span><span class="o">.</span><span class="n">steer</span><span class="p">(</span><span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">steering_vector</span><span class="o">=</span><span class="n">steering_vector</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>You can target specific token positions or batch elements:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">model</span><span class="o">.</span><span class="n">trace</span><span class="p">([</span><span class="s2">&quot;The weather today is&quot;</span><span class="p">,</span> <span class="s2">&quot;I feel very&quot;</span><span class="p">]):</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">steer</span><span class="p">(</span><span class="n">layers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">steering_vector</span><span class="o">=</span><span class="n">steering_vector</span><span class="p">,</span> <span class="n">token_positions</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># first token only</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">steer</span><span class="p">(</span><span class="n">layers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">steering_vector</span><span class="o">=</span><span class="n">steering_vector</span><span class="p">,</span> <span class="n">batch_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># first prompt only</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">steer</span><span class="p">(</span><span class="n">layers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">steering_vector</span><span class="o">=</span><span class="n">steering_vector</span><span class="p">,</span> <span class="n">batch_index</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">token_positions</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+</pre></div>
+</div>
 </section>
 </section>
 

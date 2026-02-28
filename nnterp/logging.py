@@ -9,8 +9,6 @@ logger = logging.getLogger("nnterp")
 # Users can configure their own handlers if needed
 if not logger.handlers:
     handler = logging.StreamHandler()
-    handler.setFormatter(
-        logging.Formatter("%(levelname)s | %(name)s | %(message)s")
-    )
+    handler.setFormatter(logging.Formatter("%(levelname)s | %(name)s | %(message)s"))
     logger.addHandler(handler)
     logger.setLevel(logging.INFO)

@@ -113,9 +113,14 @@ patchscope_probs = patchscope_lens(
 
 # Activation steering
 import torch
+steering_vector = torch.randn(model.hidden_size)
 with model.trace("Hello, how are you?"):
-    steering_vector = torch.randn(model.hidden_size)
     model.steer(layers=[5, 10], steering_vector=steering_vector, factor=1.5)
+
+# Steer specific token positions or batch elements
+with model.trace(["Hello, how are you?", "Goodbye, world!"]):
+    model.steer(layers=5, steering_vector=steering_vector, token_positions=0)  # first token only
+    model.steer(layers=5, steering_vector=steering_vector, batch_index=0)  # first prompt only
 ```
 
 ---

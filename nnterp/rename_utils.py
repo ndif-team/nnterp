@@ -707,6 +707,7 @@ def check_model_renaming(
     model_name: str,
     ignores: list[IgnoreType],
     allow_dispatch: bool,
+    allow_multimodal: bool = False,
 ):
 
     if not hasattr(std_model, "layers"):
@@ -714,6 +715,18 @@ def check_model_renaming(
             f"Could not find layers module in {model_name} architecture. This means that it was not properly renamed.\n"
             "Please pass the name of the layers module to the layers_rename argument."
         )
+    if not allow_multimodal:
+        layer_types = {type(layer._module) for layer in std_model.layers}
+        if len(layer_types) > 1:
+            type_names = ", ".join(sorted(t.__name__ for t in layer_types))
+            raise RenamingError(
+                f"Model {model_name} has heterogeneous layer types: {type_names}.\n"
+                "This likely means it is a multimodal model where some layers (e.g. cross-attention) "
+                "only activate with specific inputs (like images). "
+                "nnterp cannot guarantee standardized access to all layers in this case.\n"
+                "If you want to use this model anyway, pass allow_multimodal=True to StandardizedTransformer."
+            )
+
     if not hasattr(std_model, "ln_final"):
         raise RenamingError(
             f"Could not find ln_final module in {model_name} architecture. This means that it was not properly renamed.\n"

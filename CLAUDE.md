@@ -1,18 +1,3 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
-
-## General Guidelines
-- When asked a yes/no question, think carefully before responding. Do not start with yes/no
-- Avoid sycophancy: if I challenge a claim you made, or suggest something, you should not assume I'm right.
-- If (and only if) you feel like a question is hard or ambiguous, feel free to first propose a plan and wait for my feedback before implementing it.
-- Always explain your reasoning and design choices
-
-## Communication Style
-- **Focus on assumptions, not summaries**: When completing code changes, highlight the key assumptions you made during implementation rather than listing what files were edited
-- **Assumption-driven responses**: Structure responses around design decisions and assumptions rather than mechanical descriptions of changes
-- **Example**: Instead of "I edited file X to add function Y", say "Key assumption: StandardizedTransformer failures should not update JSON since they're test-time convenience checks, not core loading capabilities"
-
 ## Sphinx Documentation Guidelines
 - **IMPORTANT: Respect nnsight execution order**: ALL code examples must access components in forward pass order (layers_output[1] before layers_output[2], attention before layer output of same layer, etc.)
 - **Use demo.py tone**: Keep explanations factual and concise, avoid verbose language like "core philosophy" or "research-first design"
@@ -270,19 +255,4 @@ with model.trace(prompts) as tracer:
 from nnterp.prompt_utils import Prompt, run_prompts
 prompts = [Prompt.from_strings("input", {"target": "expected"}, tokenizer)]
 results = run_prompts(model, prompts)
-```
-
-## Communication conventions
-- When mentioning a line and file use the "path/from/project_root/file.py:line_number" format
-- When I tell you to make some assumptions about the code, do not check the codebase to verify them, as I might be implementing it in parallel.
-- VERY IMPORTANT: BEFORE YOU START CODING, repeat the research code mantra:
-```
-I must not hide failures or bloat my code.
-Try-except, dummy data, and bloated code are the correctness and clarity-killer.
-The little lies and excesses that bring total obliteration.
-I will face my crashes. I will resist my urge to comment, over-engineer, and provide dummy data.
-Let failures speak loud, let simplicity flow through me.
-Assert shapes, face errors, permit only what is essential.
-And when temptation passes, where hiding and bloating lived there will be nothing.
-Only minimal, debuggable truth will remain.
 ```

@@ -3,6 +3,7 @@ import torch as th
 from torch.nn import Module
 from torch import Size
 from nnsight import LanguageModel
+from nnsight.ndif import register as ndif_register
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from .utils import (
@@ -45,9 +46,11 @@ class StandardizationMixin:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
+        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp
+            for NDIF remote execution via cloudpickle serialization.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
-            when scan() fails during renaming checks. Defaults to True. You should set this to false
-            if you plan to use the model remotely.
+            when scan() fails during renaming checks. Defaults to True. Automatically set to False
+            when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
             tracing by setting attn_implementation="eager". Defaults to False.
         check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
@@ -64,12 +67,16 @@ class StandardizationMixin:
         self,
         model: str | Module,
         check_renaming: bool = True,
+        remote: bool = False,
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
         check_attn_probs_with_trace: bool = True,
         rename_config: RenameConfig | None = None,
     ):
         """Initialize standardization after the base model has been initialized."""
+        if remote:
+            allow_dispatch = False
+            ndif_register("nnterp")
         if isinstance(model, str):
             model_name = model
         else:
@@ -365,9 +372,11 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
+        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp
+            for NDIF remote execution via cloudpickle serialization.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
-            when scan() fails during renaming checks. Defaults to True. You should set this to false
-            if you plan to use the model remotely.
+            when scan() fails during renaming checks. Defaults to True. Automatically set to False
+            when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
             tracing by setting attn_implementation="eager". Defaults to False.
         check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
@@ -380,6 +389,7 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
         self,
         model: str | Module,
         check_renaming: bool = True,
+        remote: bool = False,
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
         check_attn_probs_with_trace: bool = True,
@@ -411,6 +421,7 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
         self._init_standardization(
             model=model,
             check_renaming=check_renaming,
+            remote=remote,
             allow_dispatch=allow_dispatch,
             enable_attention_probs=enable_attention_probs,
             check_attn_probs_with_trace=check_attn_probs_with_trace,

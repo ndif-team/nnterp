@@ -16,6 +16,7 @@ Different transformer models use different naming conventions. ``nnterp`` standa
    ├── layers
    │   ├── self_attn
    │   └── mlp
+   │       └── down_proj
    ├── ln_final
    └── lm_head
 
@@ -49,9 +50,10 @@ Access layer inputs and outputs directly:
        # Access layer outputs
        layer_5_output = model.layers_output[5]
        
-   # Access attention and MLP outputs:
+   # Access attention, MLP, and down_proj outputs:
    with model.trace("hello"):
        attn_output = model.attentions_output[3]
+       down_proj_output = model.down_projs_output[3]
        mlp_output = model.mlps_output[3]
 
 Skip Layers

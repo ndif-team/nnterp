@@ -19,9 +19,13 @@ from .utils import (
     BloomForCausalLM,
     GPT2LMHeadModel,
     GPTJForCausalLM,
+    MixtralForCausalLM,
+    Qwen2MoeForCausalLM,
+    DbrxForCausalLM,
+    GptOssForCausalLM,
 )
 
-IgnoreType = Literal["mlp", "attention"]
+IgnoreType = Literal["mlp", "attention", "down_proj"]
 
 
 class RenamingError(Exception):
@@ -116,6 +120,7 @@ class RenameConfig:
     lm_head_name: str | list[str] | None = None
     model_name: str | list[str] | None = None
     layers_name: str | list[str] | None = None
+    down_proj_name: str | list[str] | None = None
     attn_prob_source: AttnProbFunction | None = None
     ignore_mlp: bool | None = None
     ignore_attn: bool | None = None
@@ -155,6 +160,15 @@ def default_vocab_size_config_keys():
 # Models with no mlp module
 IGNORE_MLP_MODELS = (OPTForCausalLM,)
 
+# MoE models don't have a single mlp.down_proj - they have multiple experts each with their own down_proj
+IGNORE_DOWN_PROJ_MODELS = (
+    MixtralForCausalLM,
+    Qwen2MoeForCausalLM,
+    DbrxForCausalLM,
+    GptOssForCausalLM,
+    BloomForCausalLM,  # Bloom is excluded because of issues that require more investigation
+)
+
 # Alternative names for LLM layers
 ATTENTION_NAMES = ["attn", "self_attention", "attention", "norm_attn_norm"]
 LAYER_NAMES = expand_path_with_model(
@@ -185,6 +199,17 @@ EMBED_TOKENS_NAMES = expand_path_with_model(
     ]
 )
 
+DOWN_PROJ_NAMES = expand_path_with_model(
+    [
+        "c_proj", 
+        "output.dense", 
+        "wo", 
+        "dense_4h_to_h", 
+        "fc2",
+        "fc_out"
+    ]
+)
+
 
 def get_rename_dict(
     rename_config: RenameConfig | None = None,
@@ -206,6 +231,7 @@ def get_rename_dict(
         update_rename_dict("mlp", rename_config.mlp_name)
         update_rename_dict("ln_final", rename_config.ln_final_name)
         update_rename_dict("lm_head", rename_config.lm_head_name)
+        update_rename_dict("down_proj", rename_config.down_proj_name)
 
     rename_dict.update(
         {name: "model" for name in MODEL_NAMES}
@@ -215,6 +241,7 @@ def get_rename_dict(
         | {name: "ln_final" for name in LN_NAMES}
         | {name: "lm_head" for name in LM_HEAD_NAMES}
         | {name: "embed_tokens" for name in EMBED_TOKENS_NAMES}
+        | {name: "down_proj" for name in DOWN_PROJ_NAMES}
     )
     return rename_dict
 
@@ -325,7 +352,8 @@ class LayerAccessor:
     def get_module(self, layer: int) -> Envoy:
         module = self.model.layers[layer]
         if self.attr_name is not None:
-            module = getattr(module, self.attr_name)
+            for attr in self.attr_name.split("."):
+                module = getattr(module, attr)
         return module
 
     def __getitem__(self, layer: int) -> TraceTensor | Envoy:
@@ -588,6 +616,11 @@ def get_ignores(model, rename_config: RenameConfig | None = None) -> list[str]:
             message += " You'll have to manually use layers.fc1 and layers.fc2 instead."
         logger.warning(message)
         ignores.append("mlp")
+    if isinstance(model, IGNORE_DOWN_PROJ_MODELS):
+        message = f"{model.__class__.__name__} is a MoE model with multiple experts. "
+        message += "down_projs accessor is not supported for MoE models."
+        logger.warning(message)
+        ignores.append("down_proj")
     if rename_config is not None:
         if rename_config.ignore_mlp:
             ignores.append("mlp")

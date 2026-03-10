@@ -1,6 +1,6 @@
 from __future__ import annotations
 import warnings
-from typing import Callable
+from typing import Callable, Type
 
 import torch as th
 
@@ -9,7 +9,7 @@ from torch.nn import Module
 from torch import Size
 from nnsight import LanguageModel
 from nnsight.ndif import register as ndif_register
-from transformers import AutoTokenizer
+from transformers import AutoConfig, AutoModel, AutoModelForCausalLM, AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
 from .utils import (
@@ -30,6 +30,56 @@ from .rename_utils import (
     RenamingError,
     get_vocab_size,
 )
+
+
+# Mapping from architecture name suffixes to AutoModel classes.
+# Order matters: first match wins.
+_ARCHITECTURE_AUTOMODEL_MAP: list[tuple[str, str]] = [
+    ("ForCausalLM", "AutoModelForCausalLM"),
+    ("ForConditionalGeneration", "AutoModelForImageTextToText"),
+    ("ForSeq2SeqLM", "AutoModelForSeq2SeqLM"),
+    ("ForTextToWaveform", "AutoModelForTextToWaveform"),
+    ("ForTextToSpectrogram", "AutoModelForTextToSpectrogram"),
+    ("ForSpeechSeq2Seq", "AutoModelForSpeechSeq2Seq"),
+]
+
+
+def detect_automodel(
+    model: str,
+    trust_remote_code: bool = False,
+) -> Type[AutoModel]:
+    """Detect the appropriate AutoModel class for a model by inspecting its config.
+
+    Loads the model config from HuggingFace, reads the ``architectures`` field,
+    and returns the best-matching ``AutoModelFor*`` class.
+
+    Args:
+        model: HuggingFace model name or path.
+        trust_remote_code: Whether to trust remote code when loading the config.
+
+    Returns:
+        The appropriate AutoModel class (e.g. ``AutoModelForCausalLM``).
+    """
+    from transformers.models.auto import modeling_auto
+
+    config = AutoConfig.from_pretrained(model, trust_remote_code=trust_remote_code)
+    architectures = getattr(config, "architectures", None) or []
+
+    for arch_name in architectures:
+        for suffix, automodel_name in _ARCHITECTURE_AUTOMODEL_MAP:
+            if arch_name.endswith(suffix):
+                automodel_cls = getattr(modeling_auto, automodel_name, None)
+                if automodel_cls is not None:
+                    logger.info(
+                        f"Auto-detected {automodel_name} for architecture {arch_name}"
+                    )
+                    return automodel_cls
+
+    logger.info(
+        f"No specific AutoModel detected for architectures {architectures}, "
+        f"defaulting to AutoModelForCausalLM"
+    )
+    return AutoModelForCausalLM
 
 
 class StandardizedTransformer(LanguageModel):
@@ -73,6 +123,9 @@ class StandardizedTransformer(LanguageModel):
             tracing by setting attn_implementation="eager". Defaults to False.
         check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
+        automodel (Type[AutoModel] | str | None, default None): The AutoModel class to use for
+            loading the model. Can be a class (e.g. ``AutoModelForCausalLM``), a string name
+            (e.g. ``"AutoModelForCausalLM"``), or ``None`` to auto-detect from the model config.
     """
 
     num_layers: int
@@ -91,6 +144,7 @@ class StandardizedTransformer(LanguageModel):
         check_attn_probs_with_trace: bool = True,
         allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
+        automodel: Type[AutoModel] | str | None = None,
         **kwargs,
     ):
         if remote:
@@ -109,6 +163,15 @@ class StandardizedTransformer(LanguageModel):
             else kwargs.pop("attn_implementation", None)
         )
 
+        # Resolve the automodel class
+        if automodel is None and isinstance(model, str):
+            automodel = detect_automodel(model, trust_remote_code=trust_remote_code)
+        elif automodel is None:
+            automodel = AutoModelForCausalLM
+        elif isinstance(automodel, str):
+            from transformers.models.auto import modeling_auto
+            automodel = getattr(modeling_auto, automodel)
+
         tokenizer_kwargs = kwargs.pop("tokenizer_kwargs", {})
         rename = get_rename_dict(rename_config=rename_config)
         user_rename = kwargs.pop("rename", None)
@@ -119,6 +182,7 @@ class StandardizedTransformer(LanguageModel):
             rename.update(user_rename)
         super().__init__(
             model,
+            automodel=automodel,
             attn_implementation=attn_implementation,
             tokenizer_kwargs=tokenizer_kwargs,
             trust_remote_code=trust_remote_code,

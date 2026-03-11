@@ -156,7 +156,7 @@ def default_vocab_size_config_keys():
 IGNORE_MLP_MODELS = (OPTForCausalLM,)
 
 # Alternative names for LLM layers
-ATTENTION_NAMES = ["attn", "self_attention", "attention", "norm_attn_norm"]
+ATTENTION_NAMES = ["attn", "self_attention", "attention", "norm_attn_norm", "linear_attn"]
 LAYER_NAMES = expand_path_with_model(
     [
         "h",

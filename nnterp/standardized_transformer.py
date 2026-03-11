@@ -32,26 +32,21 @@ from .rename_utils import (
 )
 
 
-# Mapping from architecture name suffixes to AutoModel classes.
-# Order matters: first match wins.
-_ARCHITECTURE_AUTOMODEL_MAP: list[tuple[str, str]] = [
-    ("ForCausalLM", "AutoModelForCausalLM"),
-    ("ForConditionalGeneration", "AutoModelForImageTextToText"),
-    ("ForSeq2SeqLM", "AutoModelForSeq2SeqLM"),
-    ("ForTextToWaveform", "AutoModelForTextToWaveform"),
-    ("ForTextToSpectrogram", "AutoModelForTextToSpectrogram"),
-    ("ForSpeechSeq2Seq", "AutoModelForSpeechSeq2Seq"),
-]
-
-
 def detect_automodel(
     model: str,
     trust_remote_code: bool = False,
 ) -> Type[AutoModel]:
     """Detect the appropriate AutoModel class for a model by inspecting its config.
 
-    Loads the model config from HuggingFace, reads the ``architectures`` field,
-    and returns the best-matching ``AutoModelFor*`` class.
+    Loads the model config from HuggingFace and checks which ``AutoModelFor*``
+    classes support it via their internal ``_model_mapping``. Returns the first
+    match from a priority-ordered list.
+
+    ``AutoModelForImageTextToText`` is checked before ``AutoModelForCausalLM``
+    because VLM configs (e.g. Qwen3.5) are registered in both mappings, but
+    ``AutoModelForCausalLM`` fails at init for VLM configs that nest
+    ``vocab_size`` under ``text_config``. Pure text models are not in the
+    ``ImageTextToText`` mapping, so they correctly fall through to ``CausalLM``.
 
     Args:
         model: HuggingFace model name or path.
@@ -60,24 +55,37 @@ def detect_automodel(
     Returns:
         The appropriate AutoModel class (e.g. ``AutoModelForCausalLM``).
     """
-    from transformers.models.auto import modeling_auto
+    from transformers import (
+        AutoModelForImageTextToText,
+        AutoModelForSeq2SeqLM,
+        AutoModelForSpeechSeq2Seq,
+        AutoModelForTextToSpectrogram,
+        AutoModelForTextToWaveform,
+    )
 
     config = AutoConfig.from_pretrained(model, trust_remote_code=trust_remote_code)
-    architectures = getattr(config, "architectures", None) or []
 
-    for arch_name in architectures:
-        for suffix, automodel_name in _ARCHITECTURE_AUTOMODEL_MAP:
-            if arch_name.endswith(suffix):
-                automodel_cls = getattr(modeling_auto, automodel_name, None)
-                if automodel_cls is not None:
-                    logger.info(
-                        f"Auto-detected {automodel_name} for architecture {arch_name}"
-                    )
-                    return automodel_cls
+    # Priority-ordered: first match wins.
+    candidates = [
+        AutoModelForImageTextToText,
+        AutoModelForCausalLM,
+        AutoModelForSeq2SeqLM,
+        AutoModelForSpeechSeq2Seq,
+        AutoModelForTextToWaveform,
+        AutoModelForTextToSpectrogram,
+    ]
+
+    for cls in candidates:
+        if type(config) in cls._model_mapping:
+            logger.info(
+                f"Auto-detected {cls.__name__} for {model} "
+                f"(config: {type(config).__name__})"
+            )
+            return cls
 
     logger.info(
-        f"No specific AutoModel detected for architectures {architectures}, "
-        f"defaulting to AutoModelForCausalLM"
+        f"No specific AutoModel detected for {model} "
+        f"(config: {type(config).__name__}), defaulting to AutoModelForCausalLM"
     )
     return AutoModelForCausalLM
 

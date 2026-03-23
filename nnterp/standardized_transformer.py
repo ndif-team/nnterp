@@ -281,10 +281,19 @@ class StandardizationMixin:
         for layer in sorted(layers):  # sort to ensure execution order
             layer_device = self.layers_output[layer].device
             steering_with = factor * steering_vector.to(layer_device)
-            if positions is None:
-                self.layers_output[layer] += steering_with
+            if self.is_vllm:
+                # vLLM inference tensors don't support inplace ops
+                if positions is None:
+                    self.layers_output[layer] = self.layers_output[layer] + steering_with
+                else:
+                    out = self.layers_output[layer].clone()
+                    out[:, positions] = out[:, positions] + steering_with
+                    self.layers_output[layer] = out
             else:
-                self.layers_output[layer][:, positions] += steering_with
+                if positions is None:
+                    self.layers_output[layer] += steering_with
+                else:
+                    self.layers_output[layer][:, positions] += steering_with
 
     def project_on_vocab(self, hidden_state: TraceTensor) -> TraceTensor:
         hidden_state = self.ln_final(hidden_state)

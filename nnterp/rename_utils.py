@@ -173,7 +173,7 @@ LN_NAMES = expand_path_with_model(
         "model.ln_final",
     ]
 )
-LM_HEAD_NAMES = ["embed_out"]
+LM_HEAD_NAMES = expand_path_with_model(["embed_out", "model.lm_head"])
 MLP_NAMES = ["block_sparse_moe", "ffn"]
 EMBED_TOKENS_NAMES = expand_path_with_model(
     [

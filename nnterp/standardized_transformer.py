@@ -62,6 +62,7 @@ class StandardizationMixin:
     hidden_size: int
     vocab_size: int
     is_vllm: bool
+    remote: bool
 
     def _init_standardization(
         self,
@@ -74,8 +75,8 @@ class StandardizationMixin:
         rename_config: RenameConfig | None = None,
     ):
         """Initialize standardization after the base model has been initialized."""
+        self.remote = remote
         if remote:
-            allow_dispatch = False
             ndif_register("nnterp")
         if isinstance(model, str):
             model_name = model

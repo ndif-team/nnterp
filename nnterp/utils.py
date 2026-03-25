@@ -108,10 +108,12 @@ def try_with_scan(
 
     This function tries to execute the given function within a model.scan() context first,
     which avoids dispatching the model. If that fails and fallback is allowed, it will
-    try using model.trace() instead, which does dispatch the model.
+    try using model.trace() instead. If model.remote is True, the trace runs remotely
+    via NDIF; otherwise, the model is dispatched locally.
 
     Args:
-        model: The model object that supports .scan() and .trace() methods
+        model (StandardizationMixin): A StandardizationMixin instance (e.g. StandardizedTransformer
+            or StandardizedVLLM). Must have .scan(), .trace(), and .remote attributes.
         function: A callable to execute within the model context (takes no arguments)
         error_to_throw (Exception): Exception to raise if both scan and trace fail
         allow_dispatch (bool): Whether to allow fallback to .trace() if .scan() fails
@@ -140,7 +142,7 @@ def try_with_scan(
                 "Error when trying to scan the model - using .trace() instead (which will dispatch the model)..."
             )
         try:
-            with model.trace(dummy_inputs()) as tracer:
+            with model.trace(dummy_inputs(), remote=model.remote) as tracer:
                 function()
                 tracer.stop()
         except Exception as e2:

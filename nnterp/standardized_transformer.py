@@ -325,8 +325,8 @@ class StandardizationMixin:
         if isinstance(layers, int):
             layers = [layers]
         for layer in sorted(layers):  # sort to ensure execution order
-            layer_device = self.layers_output[layer].device
-            steering_with = factor * steering_vector.to(layer_device)
+            layer_output = self.layers_output[layer]
+            steering_with = factor * steering_vector.to(device=layer_output.device, dtype=layer_output.dtype)
             if self.is_vllm:
                 # vLLM inference tensors don't support inplace ops
                 if batch_index is None and token_positions is None:

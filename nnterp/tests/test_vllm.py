@@ -131,20 +131,29 @@ def test_vllm_layer_activation(vllm_model):
 
 @requires_cuda
 def test_vllm_logits(vllm_model):
-    """Accessing logits must return a tensor with correct vocab_size."""
+    """Accessing logits via model.logits.output (WrapperModule) must return correct vocab_size.
+
+    Note: Unlike StandardizedTransformer where logits are at model.output.logits,
+    in vLLM logits are accessed via model.logits.output (a WrapperModule envoy).
+    """
     with vllm_model.trace("Hello world"):
-        logits = vllm_model.logits.save()
+        logits = vllm_model.logits.output.save()
     assert logits.shape[-1] == vllm_model.vocab_size
 
 
 @requires_cuda
 def test_vllm_skip_layer(vllm_model):
-    """Skipping a layer must change the logits."""
+    """Skipping a layer must change the logits.
+
+    Uses layers[i].skip() directly because skip_layer/skip_layers need
+    layer_returns_tuple which requires check_renaming or detect_layer_output_type.
+    """
     with vllm_model.trace("Hello world"):
-        baseline = vllm_model.logits.save()
+        baseline = vllm_model.logits.output.save()
     with vllm_model.trace("Hello world"):
-        vllm_model.skip_layer(1)
-        skipped = vllm_model.logits.save()
+        skip_with = vllm_model.layers_input[1]
+        vllm_model.layers[1].skip(skip_with)
+        skipped = vllm_model.logits.output.save()
     assert not th.allclose(baseline, skipped, atol=1e-4)
 
 
@@ -153,10 +162,10 @@ def test_vllm_steer(vllm_model):
     """Steering a layer must change the logits."""
     steering_vec = th.randn(vllm_model.hidden_size) * 0.1
     with vllm_model.trace("Hello world"):
-        baseline = vllm_model.logits.save()
+        baseline = vllm_model.logits.output.save()
     with vllm_model.trace("Hello world"):
         vllm_model.steer(layers=0, steering_vector=steering_vec)
-        steered = vllm_model.logits.save()
+        steered = vllm_model.logits.output.save()
     assert not th.allclose(baseline, steered, atol=1e-4)
 
 
@@ -174,26 +183,26 @@ def test_vllm_project_on_vocab(vllm_model):
 
 @requires_cuda
 def test_vllm_input_ids_not_supported(vllm_model):
-    """input_ids must raise NotImplementedError for vLLM models."""
-    with vllm_model.trace("Hello world"):
-        with pytest.raises(NotImplementedError):
-            _ = vllm_model.input_ids
+    """input_ids must raise NotImplementedError for vLLM models.
+
+    The is_vllm guard triggers before any trace code, so no trace context needed.
+    """
+    with pytest.raises(NotImplementedError):
+        _ = vllm_model.input_ids
 
 
 @requires_cuda
 def test_vllm_input_size_not_supported(vllm_model):
     """input_size must raise NotImplementedError for vLLM models."""
-    with vllm_model.trace("Hello world"):
-        with pytest.raises(NotImplementedError):
-            _ = vllm_model.input_size
+    with pytest.raises(NotImplementedError):
+        _ = vllm_model.input_size
 
 
 @requires_cuda
 def test_vllm_attention_mask_not_supported(vllm_model):
     """attention_mask must raise NotImplementedError for vLLM models."""
-    with vllm_model.trace("Hello world"):
-        with pytest.raises(NotImplementedError):
-            _ = vllm_model.attention_mask
+    with pytest.raises(NotImplementedError):
+        _ = vllm_model.attention_mask
 
 
 @requires_cuda

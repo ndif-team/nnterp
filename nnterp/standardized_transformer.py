@@ -354,6 +354,18 @@ class StandardizationMixin:
                     self.layers_output[layer][batch_index] += steering_with
 
     def project_on_vocab(self, hidden_state: TraceTensor) -> TraceTensor:
+        """Project a hidden state onto the vocabulary space.
+
+        For vLLM models, this must be called inside a ``model.trace()`` context
+        because ``ln_final``/``lm_head`` weights live in the vLLM worker subprocess
+        and are on ``meta`` device in the main process.
+        """
+        if self.is_vllm and not self.interleaving:
+            raise RuntimeError(
+                "project_on_vocab cannot be called outside a trace context for vLLM models "
+                "because ln_final/lm_head weights are on meta device. "
+                "Call it inside model.trace() instead."
+            )
         hidden_state = self.ln_final(hidden_state)
         return self.lm_head(hidden_state)
 

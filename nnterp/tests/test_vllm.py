@@ -170,12 +170,16 @@ def test_vllm_steer(vllm_model):
 
 
 @requires_cuda
-def test_vllm_project_on_vocab(vllm_model):
-    """project_on_vocab must return tensor with vocab_size last dim."""
+def test_vllm_project_on_vocab_outside_trace_raises(vllm_model):
+    """project_on_vocab outside trace must raise RuntimeError for vLLM.
+
+    vLLM model weights (ln_final, lm_head) are on meta device in the main
+    process — only the vLLM worker subprocess has real weights.
+    """
     with vllm_model.trace("Hello world"):
         h = vllm_model.layers_output[-1].save()
-    vocab_logits = vllm_model.project_on_vocab(h)
-    assert vocab_logits.shape[-1] == vllm_model.vocab_size
+    with pytest.raises(RuntimeError, match="outside a trace context"):
+        vllm_model.project_on_vocab(h)
 
 
 # --- Unsupported features ---

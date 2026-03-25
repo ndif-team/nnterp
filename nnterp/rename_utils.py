@@ -500,7 +500,8 @@ class AttentionProbabilitiesAccessor:
             self[layer] = rnd
             if probs.device != th.device("meta"):
                 sum_last = probs.sum(dim=-1)
-                if not th.allclose(sum_last, th.ones_like(sum_last)):
+                atol = 1e-2 if probs.dtype == th.bfloat16 else 1e-5
+                if not th.allclose(sum_last, th.ones_like(sum_last), atol=atol):
                     raise RenamingError("Attention probabilities do not sum to 1.")
 
         if use_trace:

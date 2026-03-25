@@ -167,6 +167,7 @@ LAYER_NAMES = expand_path_with_model(
 LN_NAMES = expand_path_with_model(
     [
         "final_layer_norm",
+        "final_layernorm",
         "ln_f",
         "norm_f",
         "norm",
@@ -175,7 +176,7 @@ LN_NAMES = expand_path_with_model(
     ]
 )
 LM_HEAD_NAMES = expand_path_with_model(["embed_out", "model.lm_head"])
-MLP_NAMES = ["block_sparse_moe", "ffn"]
+MLP_NAMES = ["block_sparse_moe", "feed_forward", "ffn"]
 EMBED_TOKENS_NAMES = expand_path_with_model(
     [
         "wte",
@@ -749,6 +750,23 @@ def check_model_renaming(
             raise RenamingError(
                 f"Could not find mlp module in {model_name} architecture. This means that it was not properly renamed.\n"
                 "Please pass the name of the mlp module to the mlp_rename argument."
+            )
+
+    if "attention" not in ignores:
+        attn_types = {type(std_model.attentions[i]._module) for i in range(std_model.num_layers)}
+        if len(attn_types) > 1:
+            type_names = ", ".join(sorted(t.__name__ for t in attn_types))
+            logger.warning(
+                f"Model {model_name} has heterogeneous attention types across layers: {type_names}. "
+                "Some nnterp operations may not work consistently across all layers."
+            )
+    if "mlp" not in ignores:
+        mlp_types = {type(std_model.mlps[i]._module) for i in range(std_model.num_layers)}
+        if len(mlp_types) > 1:
+            type_names = ", ".join(sorted(t.__name__ for t in mlp_types))
+            logger.warning(
+                f"Model {model_name} has heterogeneous MLP types across layers: {type_names}. "
+                "Some nnterp operations may not work consistently across all layers."
             )
 
     try_with_scan(

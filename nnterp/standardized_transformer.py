@@ -522,8 +522,9 @@ class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
         enable_attention_probs (bool, default False): If True, enables attention probabilities
             tracing by setting attn_implementation="eager".
         check_attn_probs_with_trace (bool, default True): If True, validates attention probabilities.
-        allow_multimodal (bool, default True): Whether to allow heterogeneous layer types.
-            Defaults to True for VLMs since cross-attention layers are expected.
+        allow_multimodal (bool, default False): Whether to allow heterogeneous layer types
+            (e.g. cross-attention layers in Mllama). These layers only activate with image
+            inputs, so text-only tracing will fail on them.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming.
     """
 
@@ -537,7 +538,7 @@ class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
         check_attn_probs_with_trace: bool = True,
-        allow_multimodal: bool = True,
+        allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
         **kwargs,
     ):

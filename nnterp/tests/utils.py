@@ -17,7 +17,7 @@ import nnsight
 from nnsight import LanguageModel
 from nnterp import StandardizedTransformer
 from nnterp.logging import logger
-from nnterp.utils import dummy_inputs
+from nnterp.utils import detect_automodel, dummy_inputs
 
 
 TRANSFORMERS_VERSION = transformers.__version__
@@ -43,6 +43,38 @@ SKIP_PATTERNS = _TEST_CONFIG["skip_patterns"]
 
 # Test file categorization for failure tracking
 TEST_FILE_CATEGORIES = _TEST_CONFIG["test_file_categories"]
+
+
+@lru_cache(maxsize=1000)
+def is_vlm(model_name: str) -> bool:
+    """Detect if a model is a vision-language model via its AutoConfig.
+
+    Returns False for models whose config is unrecognized by transformers
+    (e.g. FLUX) — if we can't load the config, we can't test it as a VLM.
+    """
+    from transformers import AutoModelForImageTextToText
+
+    try:
+        return detect_automodel(model_name) is AutoModelForImageTextToText
+    except (ValueError, KeyError, OSError):
+        return False
+
+
+@lru_cache(maxsize=1000)
+def is_vlm_available(model_name: str) -> bool:
+    """Check if a VLM can load into nnsight's VisionLanguageModel.
+
+    Filters out models that fail due to HF/nnsight issues (missing processor,
+    unsupported architecture, etc.) so nnterp tests only cover nnterp-level bugs.
+    """
+    from nnsight.modeling.vlm import VisionLanguageModel
+
+    try:
+        VisionLanguageModel(model_name)
+        return True
+    except Exception as e:
+        logger.info(f"VLM {model_name} unavailable in nnsight: {e}")
+        return False
 
 
 def should_skip_model(model_name):
@@ -223,7 +255,7 @@ def test_model_availability(model_name):
 
     try:
         hf_model = AutoModelForCausalLM.from_pretrained(
-            model_name, trust_remote_code=False
+            model_name, trust_remote_code=False, device_map="cpu"
         )
     except Exception as e:
         if "trust_remote_code" in str(e):
@@ -232,6 +264,7 @@ def test_model_availability(model_name):
             return ("cant_load", None)
 
     try:
+        hf_model(th.tensor([[1]]))
         hf_model(th.tensor([[1]]))
     except Exception:
         return ("cant_forward", None)

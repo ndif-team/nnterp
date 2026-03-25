@@ -65,6 +65,57 @@ except ImportError:
     Qwen2ForCausalLM = ArchitectureNotFound
 
 
+def detect_automodel(
+    model: str,
+    trust_remote_code: bool = False,
+):
+    """Detect the appropriate AutoModel class for a model by inspecting its config.
+
+    Checks which ``AutoModelFor*`` classes support the model's config via their
+    internal ``_model_mapping``. Returns the first match from a priority-ordered list.
+
+    ``AutoModelForImageTextToText`` is checked before ``AutoModelForCausalLM``
+    because VLM configs (e.g. Qwen2.5-VL) are registered in both mappings, but
+    ``AutoModelForCausalLM`` fails at init for VLM configs that nest
+    ``vocab_size`` under ``text_config``.
+
+    Args:
+        model: HuggingFace model name or path.
+        trust_remote_code: Whether to trust remote code when loading the config.
+
+    Returns:
+        The appropriate AutoModel class (e.g. ``AutoModelForCausalLM``).
+    """
+    from transformers import (
+        AutoConfig,
+        AutoModelForCausalLM,
+        AutoModelForImageTextToText,
+        AutoModelForSeq2SeqLM,
+    )
+
+    config = AutoConfig.from_pretrained(model, trust_remote_code=trust_remote_code)
+
+    candidates = [
+        AutoModelForImageTextToText,
+        AutoModelForCausalLM,
+        AutoModelForSeq2SeqLM,
+    ]
+
+    for cls in candidates:
+        if type(config) in cls._model_mapping:
+            logger.info(
+                f"Auto-detected {cls.__name__} for {model} "
+                f"(config: {type(config).__name__})"
+            )
+            return cls
+
+    logger.info(
+        f"No specific AutoModel detected for {model} "
+        f"(config: {type(config).__name__}), defaulting to AutoModelForCausalLM"
+    )
+    return AutoModelForCausalLM
+
+
 def is_notebook():
     """Detect the current Python environment"""
     try:

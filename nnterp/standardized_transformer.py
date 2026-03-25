@@ -6,6 +6,7 @@ import torch as th
 from torch.nn import Module
 from torch import Size
 from nnsight import LanguageModel
+from nnsight.modeling.vlm import VisionLanguageModel
 from nnsight.ndif import register as ndif_register
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
@@ -145,6 +146,28 @@ class StandardizationMixin:
             )
             rename.update(user_rename)
         return rename
+
+    def _prepare_init_kwargs(self, enable_attention_probs, rename_config, **kwargs):
+        """Preprocess kwargs shared across StandardizedTransformer, StandardizedVLM, etc.
+
+        Returns (attn_implementation, rename, kwargs) ready to pass to super().__init__.
+        """
+        kwargs.setdefault("device_map", "auto")
+        if "attn_implementation" in kwargs and enable_attention_probs:
+            if kwargs["attn_implementation"] != "eager":
+                raise ValueError(
+                    f"Cannot use attn_implementation='{kwargs['attn_implementation']}' with enable_attention_probs=True. "
+                    "Either set enable_attention_probs=False or don't pass attn_implementation."
+                )
+        attn_implementation = (
+            "eager"
+            if enable_attention_probs
+            else kwargs.pop("attn_implementation", None)
+        )
+        rename = self._get_rename(
+            rename_config=rename_config, user_rename=kwargs.pop("rename", None)
+        )
+        return attn_implementation, rename, kwargs
 
     def detect_layer_output_type(self):
         if self.layers_output.returns_tuple is None:
@@ -438,23 +461,88 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
         enable_attention_probs: bool = False,
         check_attn_probs_with_trace: bool = True,
         rename_config: RenameConfig | None = None,
+        automodel=None,
         **kwargs,
     ):
-        kwargs.setdefault("device_map", "auto")
-        if "attn_implementation" in kwargs and enable_attention_probs:
-            if kwargs["attn_implementation"] != "eager":
-                raise ValueError(
-                    f"Cannot use attn_implementation='{kwargs['attn_implementation']}' with enable_attention_probs=True. "
-                    "Either set enable_attention_probs=False or don't pass attn_implementation."
+        # Detect VLMs and warn
+        if automodel is None and isinstance(model, str):
+            from .utils import detect_automodel
+            from transformers import AutoModelForImageTextToText
+
+            automodel = detect_automodel(
+                model, trust_remote_code=kwargs.get("trust_remote_code", False)
+            )
+            if automodel is AutoModelForImageTextToText:
+                warnings.warn(
+                    f"Model {model!r} appears to be a vision-language model. "
+                    "Consider using StandardizedVLM or load_model() instead for proper image input support.",
+                    UserWarning,
+                    stacklevel=2,
                 )
-        attn_implementation = (
-            "eager"
-            if enable_attention_probs
-            else kwargs.pop("attn_implementation", None)
+
+        attn_implementation, rename, kwargs = self._prepare_init_kwargs(
+            enable_attention_probs, rename_config, **kwargs
+        )
+        super().__init__(
+            model,
+            automodel=automodel,
+            attn_implementation=attn_implementation,
+            rename=rename,
+            **kwargs,
+        )
+        self._init_standardization(
+            model=model,
+            check_renaming=check_renaming,
+            remote=remote,
+            allow_dispatch=allow_dispatch,
+            enable_attention_probs=enable_attention_probs,
+            check_attn_probs_with_trace=check_attn_probs_with_trace,
+            rename_config=rename_config,
         )
 
-        rename = self._get_rename(
-            rename_config=rename_config, user_rename=kwargs.pop("rename", None)
+    @property
+    def logits(self) -> TraceTensor:
+        """Returns the predicted logits."""
+        return self.output.logits
+
+
+class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
+    """Standardized wrapper for vision-language models (e.g. Qwen2.5-VL, LLaVA).
+
+    Extends nnsight's ``VisionLanguageModel`` with the same standardized
+    module access as ``StandardizedTransformer``. Supports image inputs
+    via the ``images`` kwarg in ``model.trace()``.
+
+    Args:
+        model (str or Module): Hugging Face repository ID or path of the model to load.
+        check_renaming (bool, default True): If True, the renaming of modules is validated.
+        remote (bool, default False): If True, registers nnterp for NDIF remote execution.
+        allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
+            when scan() fails during renaming checks.
+        enable_attention_probs (bool, default False): If True, enables attention probabilities
+            tracing by setting attn_implementation="eager".
+        check_attn_probs_with_trace (bool, default True): If True, validates attention probabilities.
+        allow_multimodal (bool, default True): Whether to allow heterogeneous layer types.
+            Defaults to True for VLMs since cross-attention layers are expected.
+        rename_config (RenameConfig, default None): A RenameConfig object to use for renaming.
+    """
+
+    is_vllm: bool = False
+
+    def __init__(
+        self,
+        model: str | Module,
+        check_renaming: bool = True,
+        remote: bool = False,
+        allow_dispatch: bool = True,
+        enable_attention_probs: bool = False,
+        check_attn_probs_with_trace: bool = True,
+        allow_multimodal: bool = True,
+        rename_config: RenameConfig | None = None,
+        **kwargs,
+    ):
+        attn_implementation, rename, kwargs = self._prepare_init_kwargs(
+            enable_attention_probs, rename_config, **kwargs
         )
         super().__init__(
             model,
@@ -469,6 +557,7 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
             allow_dispatch=allow_dispatch,
             enable_attention_probs=enable_attention_probs,
             check_attn_probs_with_trace=check_attn_probs_with_trace,
+            allow_multimodal=allow_multimodal,
             rename_config=rename_config,
         )
 

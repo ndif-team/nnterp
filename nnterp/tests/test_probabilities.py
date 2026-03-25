@@ -35,10 +35,11 @@ def test_access_attn_probabilities(model_name):
             logits.shape[1],
         )  # (batch_size, num_heads, seq_len, seq_len)
         summed_probs = attn_probs.sum(dim=-1)
+        atol = 1e-2 if attn_probs.dtype == th.bfloat16 else 1e-5
         assert th.allclose(
             summed_probs,
             th.ones_like(summed_probs),
-            atol=1e-5,
+            atol=atol,
         )  # last dimension is the attention of token i to all other tokens
 
 

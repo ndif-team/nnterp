@@ -21,6 +21,7 @@ __all__ = [
 def load_model(
     model: str,
     use_vllm: bool = False,
+    allow_experimental_vllm: bool = False,
     **model_kwargs,
 ) -> Union[StandardizedTransformer, "StandardizedVLLM", StandardizedVLM]:
     """Load a model using the appropriate wrapper.
@@ -31,6 +32,8 @@ def load_model(
     Args:
         model: HuggingFace model name or path.
         use_vllm: Whether to use the vLLM wrapper.
+        allow_experimental_vllm: Acknowledge that the vLLM backend is experimental.
+            Required when ``use_vllm=True``.
         **model_kwargs: Keyword arguments to pass to the model wrapper.
 
     Returns:
@@ -39,7 +42,9 @@ def load_model(
     if use_vllm:
         from .standardized_vllm import StandardizedVLLM
 
-        return StandardizedVLLM(model, **model_kwargs)
+        return StandardizedVLLM(
+            model, allow_experimental_vllm=allow_experimental_vllm, **model_kwargs
+        )
 
     from transformers import AutoModelForImageTextToText
 

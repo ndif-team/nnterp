@@ -56,6 +56,9 @@ class StandardizedVLLM(VLLM, StandardizationMixin):
         check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
         force_dangerous_prefix_caching (bool, default False): If True, allows using enable_prefix_caching=True. Only use if you know what you are doing as this could lead to some of your interventions leaking to other requests or interventions being skipped for some tokens in context.
+        allow_experimental_vllm (bool, default False): The vLLM+nnsight backend is still
+            experimental and may produce incorrect results. Set to True to acknowledge this
+            and proceed. If False, raises an error.
     """
 
     is_vllm: bool = True
@@ -70,8 +73,22 @@ class StandardizedVLLM(VLLM, StandardizationMixin):
         check_attn_probs_with_trace: bool = True,
         rename_config: RenameConfig | None = None,
         force_dangerous_prefix_caching: bool = False,
+        allow_experimental_vllm: bool = False,
         **vllm_kwargs,
     ):
+        if not allow_experimental_vllm:
+            raise RuntimeError(
+                "The vLLM+nnsight backend is experimental and may produce incorrect results. "
+                "Pass allow_experimental_vllm=True to acknowledge this and proceed."
+            )
+        import warnings
+
+        warnings.warn(
+            "The vLLM+nnsight backend is experimental and may produce incorrect results. "
+            "Verify outputs against the HuggingFace backend before relying on them.",
+            UserWarning,
+            stacklevel=2,
+        )
         if th.cuda.is_available():
             vllm_kwargs.setdefault("tensor_parallel_size", th.cuda.device_count())
         else:

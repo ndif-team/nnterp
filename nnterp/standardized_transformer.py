@@ -1,4 +1,7 @@
-from loguru import logger
+from __future__ import annotations
+import warnings
+
+from .logging import logger
 import torch as th
 from torch.nn import Module
 from torch import Size
@@ -72,6 +75,7 @@ class StandardizationMixin:
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
         check_attn_probs_with_trace: bool = True,
+        allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
     ):
         """Initialize standardization after the base model has been initialized."""
@@ -107,7 +111,9 @@ class StandardizationMixin:
         )
 
         if check_renaming:
-            check_model_renaming(self, model_name, ignores, allow_dispatch)
+            check_model_renaming(
+                self, model_name, ignores, allow_dispatch, allow_multimodal
+            )
         self.attention_probabilities = AttentionProbabilitiesAccessor(
             self,
             rename_config=rename_config,
@@ -267,16 +273,32 @@ class StandardizationMixin:
         steering_vector: th.Tensor,
         factor: float = 1,
         positions: int | list[int] | th.Tensor | None = None,
+        token_positions: int | list[int] | th.Tensor | None = None,
+        batch_index: int | list[int] | th.Tensor | None = None,
     ):
         """
         Steer the hidden states of a layer using a steering vector by doing layer_output += factor * steering_vector.
 
         Args:
-            layers: The layer(s) to steer
-            steering_vector: The steering vector to apply
-            factor: The factor to multiply the steering vector by
-            positions: The position to steer. If None, all positions are steered.
+            layers: The layer(s) to steer.
+            steering_vector: The steering vector to apply.
+            factor: The factor to multiply the steering vector by.
+            positions: Deprecated, use token_positions instead.
+            token_positions: Token positions to steer along the sequence dimension. If None, all positions are steered.
+            batch_index: Batch indices to steer. If None, all batch elements are steered.
         """
+        if positions is not None:
+            if token_positions is not None:
+                raise ValueError(
+                    "Cannot specify both `positions` (deprecated) and `token_positions`."
+                )
+            warnings.warn(
+                "`positions` is deprecated, use `token_positions` instead.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            token_positions = positions
+
         if isinstance(layers, int):
             layers = [layers]
         for layer in sorted(layers):  # sort to ensure execution order
@@ -284,17 +306,29 @@ class StandardizationMixin:
             steering_with = factor * steering_vector.to(layer_device)
             if self.is_vllm:
                 # vLLM inference tensors don't support inplace ops
-                if positions is None:
+                if batch_index is None and token_positions is None:
                     self.layers_output[layer] = self.layers_output[layer] + steering_with
+                elif batch_index is not None and token_positions is not None:
+                    out = self.layers_output[layer].clone()
+                    out[batch_index, token_positions] = out[batch_index, token_positions] + steering_with
+                    self.layers_output[layer] = out
+                elif token_positions is not None:
+                    out = self.layers_output[layer].clone()
+                    out[:, token_positions] = out[:, token_positions] + steering_with
+                    self.layers_output[layer] = out
                 else:
                     out = self.layers_output[layer].clone()
-                    out[:, positions] = out[:, positions] + steering_with
+                    out[batch_index] = out[batch_index] + steering_with
                     self.layers_output[layer] = out
             else:
-                if positions is None:
+                if batch_index is None and token_positions is None:
                     self.layers_output[layer] += steering_with
+                elif batch_index is not None and token_positions is not None:
+                    self.layers_output[layer][batch_index, token_positions] += steering_with
+                elif token_positions is not None:
+                    self.layers_output[layer][:, token_positions] += steering_with
                 else:
-                    self.layers_output[layer][:, positions] += steering_with
+                    self.layers_output[layer][batch_index] += steering_with
 
     def project_on_vocab(self, hidden_state: TraceTensor) -> TraceTensor:
         hidden_state = self.ln_final(hidden_state)

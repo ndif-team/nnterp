@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import sys
-from loguru import logger
 from typing import Union
+
+from .logging import logger
 import torch as th
 from nnsight.intervention.tracing.globals import Object
 import transformers

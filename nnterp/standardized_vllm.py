@@ -1,4 +1,4 @@
-from loguru import logger
+from .logging import logger
 import torch as th
 from torch.nn import Module
 from nnsight.modeling.vllm import VLLM

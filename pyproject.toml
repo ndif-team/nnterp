@@ -15,7 +15,10 @@ classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
 ]
-dependencies = ["loguru>=0.7.3", "nnsight>=0.5", "transformers"]
+dependencies = [
+    "nnsight>=0.6",
+    "transformers",
+]
 [project.optional-dependencies]
 display = ["plotly", "pandas"]
 

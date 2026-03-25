@@ -219,6 +219,14 @@ steering_vector = th.randn(768)  # gpt2 hidden size
 with nnterp_gpt2.trace("The weather today is"):
     nnterp_gpt2.steer(layers=[1, 3], steering_vector=steering_vector, factor=0.5)
 
+# Steer specific token positions or batch elements
+with nnterp_gpt2.trace(["The weather today is", "I feel very"]):
+    nnterp_gpt2.steer(layers=1, steering_vector=steering_vector, token_positions=0)
+    nnterp_gpt2.steer(layers=1, steering_vector=steering_vector, batch_index=0)
+    nnterp_gpt2.steer(
+        layers=1, steering_vector=steering_vector, batch_index=1, token_positions=[0, 1]
+    )
+
 # %% [markdown]
 # ## 6. Specific Token Activation Collection
 #

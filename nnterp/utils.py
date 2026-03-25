@@ -55,6 +55,11 @@ except ImportError:
     LlamaForCausalLM = ArchitectureNotFound
 
 try:
+    from transformers import StableLmForCausalLM
+except ImportError:
+    StableLmForCausalLM = ArchitectureNotFound
+
+try:
     from transformers import Qwen3ForCausalLM
 except ImportError:
     Qwen3ForCausalLM = ArchitectureNotFound

@@ -19,6 +19,9 @@ from .utils import (
     BloomForCausalLM,
     GPT2LMHeadModel,
     GPTJForCausalLM,
+    Qwen2MoeForCausalLM,
+    DbrxForCausalLM,
+    StableLmForCausalLM,
 )
 
 IgnoreType = Literal["mlp", "attention"]
@@ -419,6 +422,27 @@ def gptj_attention_prob_source(attention_module, return_module_source: bool = Fa
         return attention_module.source.self__attn_0.source.self_attn_dropout_0
 
 
+def qwen2moe_attention_prob_source(attention_module, return_module_source: bool = False):
+    if return_module_source:
+        return attention_module.source
+    else:
+        return attention_module.source.nn_functional_dropout_0
+
+
+def dbrx_attention_prob_source(attention_module, return_module_source: bool = False):
+    if return_module_source:
+        return attention_module.attn.source
+    else:
+        return attention_module.attn.source.nn_functional_dropout_0
+
+
+def stablelm_attention_prob_source(attention_module, return_module_source: bool = False):
+    if return_module_source:
+        return attention_module.source
+    else:
+        return attention_module.source.self_attention_dropout_0
+
+
 class AttentionProbabilitiesAccessor:
     def __init__(
         self,
@@ -436,6 +460,12 @@ class AttentionProbabilitiesAccessor:
             self.source_attr = gpt2_attention_prob_source
         elif isinstance(model._model, GPTJForCausalLM):
             self.source_attr = gptj_attention_prob_source
+        elif isinstance(model._model, Qwen2MoeForCausalLM):
+            self.source_attr = qwen2moe_attention_prob_source
+        elif isinstance(model._model, DbrxForCausalLM):
+            self.source_attr = dbrx_attention_prob_source
+        elif isinstance(model._model, StableLmForCausalLM):
+            self.source_attr = stablelm_attention_prob_source
         else:
             self.source_attr = default_attention_prob_source
         self.enabled = True

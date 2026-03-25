@@ -22,6 +22,7 @@ from .utils import (
     Qwen2MoeForCausalLM,
     DbrxForCausalLM,
     StableLmForCausalLM,
+    GptOssForCausalLM,
 )
 
 IgnoreType = Literal["mlp", "attention"]
@@ -443,6 +444,15 @@ def stablelm_attention_prob_source(attention_module, return_module_source: bool 
         return attention_module.source.self_attention_dropout_0
 
 
+def gptoss_attention_prob_source(attention_module, return_module_source: bool = False):
+    if return_module_source:
+        return attention_module.source.attention_interface_0.source
+    else:
+        return (
+            attention_module.source.attention_interface_0.source.nn_functional_dropout_0
+        )
+
+
 class AttentionProbabilitiesAccessor:
     def __init__(
         self,
@@ -452,6 +462,7 @@ class AttentionProbabilitiesAccessor:
     ):
         self.model = model
         self.initialized_with_enable = initialized_with_enable
+        self.attn_probs_dont_sum_to_one = False
         if rename_config is not None and rename_config.attn_prob_source is not None:
             self.source_attr = rename_config.attn_prob_source
         elif isinstance(model._model, BloomForCausalLM):
@@ -466,6 +477,9 @@ class AttentionProbabilitiesAccessor:
             self.source_attr = dbrx_attention_prob_source
         elif isinstance(model._model, StableLmForCausalLM):
             self.source_attr = stablelm_attention_prob_source
+        elif isinstance(model._model, GptOssForCausalLM):
+            self.source_attr = gptoss_attention_prob_source
+            self.attn_probs_dont_sum_to_one = True
         else:
             self.source_attr = default_attention_prob_source
         self.enabled = True
@@ -531,9 +545,19 @@ class AttentionProbabilitiesAccessor:
             self[layer] = rnd
             if probs.device != th.device("meta"):
                 sum_last = probs.sum(dim=-1)
-                atol = 1e-2 if probs.dtype == th.bfloat16 else 1e-5
-                if not th.allclose(sum_last, th.ones_like(sum_last), atol=atol):
-                    raise RenamingError("Attention probabilities do not sum to 1.")
+                if self.attn_probs_dont_sum_to_one:
+                    if not (sum_last > 0).all():
+                        raise RenamingError(
+                            "Attention probabilities should be > 0."
+                        )
+                    if not (sum_last < 1 + 1e-5).all():
+                        raise RenamingError(
+                            "Attention probabilities should sum to < 1 for models with sink tokens."
+                        )
+                else:
+                    atol = 1e-2 if probs.dtype == th.bfloat16 else 1e-5
+                    if not th.allclose(sum_last, th.ones_like(sum_last), atol=atol):
+                        raise RenamingError("Attention probabilities do not sum to 1.")
 
         if use_trace:
             with self.model.trace(dummy_inputs()):

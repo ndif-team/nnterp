@@ -69,6 +69,11 @@ try:
 except ImportError:
     Qwen2ForCausalLM = ArchitectureNotFound
 
+try:
+    from transformers import GptOssForCausalLM
+except ImportError:
+    GptOssForCausalLM = ArchitectureNotFound
+
 
 def detect_automodel(
     model: str,

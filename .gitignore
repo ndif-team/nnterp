@@ -1,6 +1,6 @@
 # project specific
-data/test_log*
-data/*.old.json
+nnterp/data/test_logs/
+nnterp/data/*.old.json
 nnterp/data/test_loading_status.*
 nnterp/data/toy_models_cache.*
 nnterp/data/test_logs/latest_status.json

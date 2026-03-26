@@ -215,13 +215,12 @@ def test_vllm_project_on_vocab_outside_trace_raises(vllm_model):
 
 
 @requires_cuda
-def test_vllm_input_ids_not_supported(vllm_model):
-    """input_ids must raise NotImplementedError for vLLM models.
-
-    The is_vllm guard triggers before any trace code, so no trace context needed.
-    """
-    with pytest.raises(NotImplementedError):
-        _ = vllm_model.input_ids
+def test_vllm_input_ids(vllm_model):
+    """input_ids for vLLM must return (seq_len,) — 1D, no batch dimension."""
+    with vllm_model.trace("Hello world"):
+        ids = vllm_model.input_ids.save()
+    assert ids.ndim == 1, f"Expected 1D input_ids for vLLM, got shape {ids.shape}"
+    assert ids.shape[0] > 0
 
 
 @requires_cuda

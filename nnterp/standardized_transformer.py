@@ -205,10 +205,11 @@ class StandardizationMixin:
 
     @property
     def input_ids(self) -> TraceTensor:
-        if self.is_vllm:
-            raise NotImplementedError(
-                "input_ids is not supported for VLLM models as it is flattened and without padding."
-            )
+        """Returns the input token IDs.
+
+        For HF models: shape ``(batch_size, sequence_length)``.
+        For vLLM models: shape ``(sequence_length,)`` (no batch dimension).
+        """
         return self.inputs[1]["input_ids"]
 
     @property

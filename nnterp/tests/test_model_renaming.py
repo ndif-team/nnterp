@@ -1,3 +1,4 @@
+import warnings
 import torch as th
 import pytest
 from nnsight import LanguageModel
@@ -319,22 +320,20 @@ def test_standardized_transformer_steer_method(model_name):
         model = StandardizedTransformer(model_name)
         prompt = "Hello, world!"
 
-        # Create a random steering vector
         hidden_size = model.hidden_size
         if hidden_size is None:
             pytest.fail(f"Model {model_name} has no hidden size")
 
-        steering_vector = th.randn(hidden_size) * 0.1  # Small perturbation
+        steering_vector = th.randn(hidden_size) * 0.1
 
-        # Test steering single layer
         with model.trace(prompt):
             baseline_output = model.logits.save()
 
+        # Test steering single layer
         with model.trace(prompt):
             model.steer(layers=0, steering_vector=steering_vector, factor=1.0)
             steered_output = model.logits.save()
 
-        # Steered output should be different from baseline
         assert not th.allclose(
             baseline_output, steered_output, atol=1e-4
         ), "Steering should change model output"
@@ -352,17 +351,140 @@ def test_standardized_transformer_steer_method(model_name):
             baseline_output, multi_steered_output, atol=1e-4
         ), "Multi-layer steering should change output"
 
-        # Test position-specific steering
-        num_tokens = len(model.tokenizer.encode(prompt))
-        assert num_tokens > 1, "Prompt should have multiple tokens for position testing"
-
-        with model.trace(prompt):
-            model.steer(layers=0, steering_vector=steering_vector, positions=0)
-            pos_steered_output = model.logits.save()
+        # Test deprecated `positions` arg still works but warns
+        with warnings.catch_warnings(record=True) as w:
+            warnings.simplefilter("always")
+            with model.trace(prompt):
+                model.steer(layers=0, steering_vector=steering_vector, positions=0)
+                pos_steered_output = model.logits.save()
+            assert len(w) == 1
+            assert issubclass(w[0].category, DeprecationWarning)
+            assert "positions" in str(w[0].message)
 
         assert not th.allclose(
             baseline_output, pos_steered_output, atol=1e-4
-        ), "Position-specific steering should change output"
+        ), "Deprecated positions arg should still change output"
+
+        # Test that positions + token_positions raises
+        with pytest.raises(ValueError, match="Cannot specify both"):
+            with model.trace(prompt):
+                model.steer(
+                    layers=0,
+                    steering_vector=steering_vector,
+                    positions=0,
+                    token_positions=0,
+                )
+
+
+def test_steer_token_positions(model_name):
+    """Test steer with token_positions argument."""
+    with th.no_grad():
+        model = StandardizedTransformer(model_name)
+        prompt = "Hello, world!"
+        num_tokens = len(model.tokenizer.encode(prompt))
+        assert num_tokens > 1, "Prompt should have multiple tokens for position testing"
+
+        hidden_size = model.hidden_size
+        if hidden_size is None:
+            pytest.fail(f"Model {model_name} has no hidden size")
+
+        steering_vector = th.randn(hidden_size) * 0.1
+
+        with model.trace(prompt):
+            baseline_output = model.logits.save()
+
+        # Steer only the first token position
+        with model.trace(prompt):
+            model.steer(layers=0, steering_vector=steering_vector, token_positions=0)
+            steered_pos0 = model.logits.save()
+
+        assert not th.allclose(
+            baseline_output, steered_pos0, atol=1e-4
+        ), "token_positions=0 steering should change output"
+
+        # Steer a list of positions
+        with model.trace(prompt):
+            model.steer(
+                layers=0, steering_vector=steering_vector, token_positions=[0, 1]
+            )
+            steered_pos01 = model.logits.save()
+
+        assert not th.allclose(
+            baseline_output, steered_pos01, atol=1e-4
+        ), "token_positions=[0,1] steering should change output"
+
+
+def test_steer_batch_index(model_name):
+    """Test steer with batch_index argument."""
+    with th.no_grad():
+        model = StandardizedTransformer(model_name)
+        prompts = ["Hello, world!", "Goodbye, world!"]
+
+        hidden_size = model.hidden_size
+        if hidden_size is None:
+            pytest.fail(f"Model {model_name} has no hidden size")
+
+        steering_vector = th.randn(hidden_size) * 0.1
+
+        with model.trace(prompts):
+            baseline_output = model.logits.save()
+
+        # Steer only the first batch element
+        with model.trace(prompts):
+            model.steer(layers=0, steering_vector=steering_vector, batch_index=0)
+            steered_batch0 = model.logits.save()
+
+        assert not th.allclose(
+            baseline_output[0], steered_batch0[0], atol=1e-4
+        ), "batch_index=0 should change first prompt output"
+        assert th.allclose(
+            baseline_output[1], steered_batch0[1], atol=1e-4
+        ), "batch_index=0 should NOT change second prompt output"
+
+        # Steer only the second batch element
+        with model.trace(prompts):
+            model.steer(layers=0, steering_vector=steering_vector, batch_index=1)
+            steered_batch1 = model.logits.save()
+
+        assert th.allclose(
+            baseline_output[0], steered_batch1[0], atol=1e-4
+        ), "batch_index=1 should NOT change first prompt output"
+        assert not th.allclose(
+            baseline_output[1], steered_batch1[1], atol=1e-4
+        ), "batch_index=1 should change second prompt output"
+
+
+def test_steer_batch_index_and_token_positions(model_name):
+    """Test steer with both batch_index and token_positions."""
+    with th.no_grad():
+        model = StandardizedTransformer(model_name)
+        prompts = ["Hello, world!", "Goodbye, world!"]
+
+        hidden_size = model.hidden_size
+        if hidden_size is None:
+            pytest.fail(f"Model {model_name} has no hidden size")
+
+        steering_vector = th.randn(hidden_size) * 0.1
+
+        with model.trace(prompts):
+            baseline_output = model.logits.save()
+
+        # Steer first batch element at first token position only
+        with model.trace(prompts):
+            model.steer(
+                layers=0,
+                steering_vector=steering_vector,
+                batch_index=0,
+                token_positions=0,
+            )
+            steered_b0_t0 = model.logits.save()
+
+        assert not th.allclose(
+            baseline_output[0], steered_b0_t0[0], atol=1e-4
+        ), "batch_index=0, token_positions=0 should change first prompt output"
+        assert th.allclose(
+            baseline_output[1], steered_b0_t0[1], atol=1e-4
+        ), "batch_index=0, token_positions=0 should NOT change second prompt output"
 
 
 def test_standardized_transformer_skip_methods(model_name):

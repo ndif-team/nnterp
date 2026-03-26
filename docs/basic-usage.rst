@@ -100,7 +100,16 @@ Steering:
 .. code-block:: python
 
    import torch
-   
+
    steering_vector = torch.randn(768)  # gpt2 hidden size
    with model.trace("The weather today is"):
        model.steer(layers=[1, 3], steering_vector=steering_vector, factor=0.5)
+
+You can target specific token positions or batch elements:
+
+.. code-block:: python
+
+   with model.trace(["The weather today is", "I feel very"]):
+       model.steer(layers=1, steering_vector=steering_vector, token_positions=0)  # first token only
+       model.steer(layers=1, steering_vector=steering_vector, batch_index=0)  # first prompt only
+       model.steer(layers=1, steering_vector=steering_vector, batch_index=1, token_positions=[0, 1])

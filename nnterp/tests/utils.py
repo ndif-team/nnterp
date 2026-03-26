@@ -1,4 +1,3 @@
-from loguru import logger
 from functools import lru_cache
 from collections import defaultdict
 import copy
@@ -17,6 +16,7 @@ from huggingface_hub import get_collection
 import nnsight
 from nnsight import LanguageModel
 from nnterp import StandardizedTransformer
+from nnterp.logging import logger
 from nnterp.utils import dummy_inputs
 
 

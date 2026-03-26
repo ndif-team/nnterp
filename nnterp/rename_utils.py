@@ -723,6 +723,27 @@ def check_io(std_model, model_name: str, ignores: list[IgnoreType]):
                 )
 
 
+def _check_has_module(obj, attr: str, model_name: str, rename_arg: str):
+    """Raise RenamingError if ``obj`` doesn't have ``attr``."""
+    if not hasattr(obj, attr):
+        raise RenamingError(
+            f"Could not find {attr} module in {model_name} architecture. "
+            f"This means that it was not properly renamed.\n"
+            f"Please pass the name of the {attr} module to the {rename_arg} argument."
+        )
+
+
+def _warn_heterogeneous_types(accessor, num_layers: int, kind: str, model_name: str):
+    """Warn if modules accessed by ``accessor[i]`` have mixed types across layers."""
+    types = {type(accessor[i]._module) for i in range(num_layers)}
+    if len(types) > 1:
+        type_names = ", ".join(sorted(t.__name__ for t in types))
+        logger.warning(
+            f"Model {model_name} has heterogeneous {kind} types across layers: {type_names}. "
+            "Some nnterp operations may not work consistently across all layers."
+        )
+
+
 def check_model_renaming(
     std_model,
     model_name: str,
@@ -730,12 +751,8 @@ def check_model_renaming(
     allow_dispatch: bool,
     allow_multimodal: bool = False,
 ):
+    _check_has_module(std_model, "layers", model_name, "layers_rename")
 
-    if not hasattr(std_model, "layers"):
-        raise RenamingError(
-            f"Could not find layers module in {model_name} architecture. This means that it was not properly renamed.\n"
-            "Please pass the name of the layers module to the layers_rename argument."
-        )
     if not allow_multimodal:
         layer_types = {type(layer._module) for layer in std_model.layers}
         if len(layer_types) > 1:
@@ -748,45 +765,16 @@ def check_model_renaming(
                 "If you want to use this model anyway, pass allow_multimodal=True to StandardizedTransformer."
             )
 
-    if not hasattr(std_model, "ln_final"):
-        raise RenamingError(
-            f"Could not find ln_final module in {model_name} architecture. This means that it was not properly renamed.\n"
-            "Please pass the name of the ln_final module to the ln_final_rename argument."
-        )
-    if not hasattr(std_model, "lm_head"):
-        raise RenamingError(
-            f"Could not find lm_head module in {model_name} architecture. This means that it was not properly renamed.\n"
-            "Please pass the name of the lm_head module to the lm_head_rename argument."
-        )
-    if "attention" not in ignores:
-        if not hasattr(std_model.layers[0], "self_attn"):
-            raise RenamingError(
-                f"Could not find self_attn module in {model_name} architecture. This means that it was not properly renamed.\n"
-                "Please pass the name of the self_attn module to the attn_rename argument."
-            )
-    if "mlp" not in ignores:
-        if not hasattr(std_model.layers[0], "mlp"):
-            raise RenamingError(
-                f"Could not find mlp module in {model_name} architecture. This means that it was not properly renamed.\n"
-                "Please pass the name of the mlp module to the mlp_rename argument."
-            )
+    _check_has_module(std_model, "ln_final", model_name, "ln_final_rename")
+    _check_has_module(std_model, "lm_head", model_name, "lm_head_rename")
 
     if "attention" not in ignores:
-        attn_types = {type(std_model.attentions[i]._module) for i in range(std_model.num_layers)}
-        if len(attn_types) > 1:
-            type_names = ", ".join(sorted(t.__name__ for t in attn_types))
-            logger.warning(
-                f"Model {model_name} has heterogeneous attention types across layers: {type_names}. "
-                "Some nnterp operations may not work consistently across all layers."
-            )
+        _check_has_module(std_model.layers[0], "self_attn", model_name, "attn_rename")
+        _warn_heterogeneous_types(std_model.attentions, std_model.num_layers, "attention", model_name)
+
     if "mlp" not in ignores:
-        mlp_types = {type(std_model.mlps[i]._module) for i in range(std_model.num_layers)}
-        if len(mlp_types) > 1:
-            type_names = ", ".join(sorted(t.__name__ for t in mlp_types))
-            logger.warning(
-                f"Model {model_name} has heterogeneous MLP types across layers: {type_names}. "
-                "Some nnterp operations may not work consistently across all layers."
-            )
+        _check_has_module(std_model.layers[0], "mlp", model_name, "mlp_rename")
+        _warn_heterogeneous_types(std_model.mlps, std_model.num_layers, "MLP", model_name)
 
     try_with_scan(
         std_model,

@@ -213,14 +213,12 @@ class StandardizationMixin:
 
     @property
     def input_size(self) -> Size:
+        """Returns the shape of the input tensor.
+
+        For HF models: ``(batch_size, sequence_length)``.
+        For vLLM models: ``(sequence_length,)`` (no batch dimension).
         """
-        Returns the shape of the input tensor (batch_size, sequence_length)
-        """
-        if self.is_vllm:
-            raise NotImplementedError(
-                "input_size is not supported for VLLM models as it is flattened and without padding."
-            )
-        return self.input_ids.shape
+        return self.inputs[1]["input_ids"].shape
 
     @property
     def attention_mask(self) -> TraceTensor:

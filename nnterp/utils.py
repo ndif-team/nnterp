@@ -191,7 +191,7 @@ def try_with_scan(
     try:
         with model.scan(dummy_inputs(), use_cache=False) as tracer:
             function()
-            tracer.stop()
+            # tracer.stop() TODO: uncomment when nnsight fix this upstream
         return True
     except Exception as e:
         if errors_to_raise is not None and isinstance(e, errors_to_raise):
@@ -206,7 +206,7 @@ def try_with_scan(
         try:
             with model.trace(dummy_inputs(), remote=model.remote) as tracer:
                 function()
-                tracer.stop()
+                # tracer.stop() TODO: uncomment when nnsight fix this upstream
         except Exception as e2:
             if errors_to_raise is not None and isinstance(e2, errors_to_raise):
                 raise e2

@@ -1,12 +1,10 @@
 """Tests for StandardizedVLLM (vLLM backend) support.
 
-Note: The nnsight+vLLM backend is experimental. The ``check_model_renaming``
-step during init uses ``try_with_scan`` which falls back to ``model.trace()``,
-and this often triggers ``EngineDeadError`` in vLLM. For this reason, most
-integration tests use ``check_renaming=False``. A dedicated test documents
-that ``check_renaming=True`` currently fails.
+Each GPU test gets its own vLLM engine via the ``vllm_model`` fixture
+(function-scoped) so that a crash in one test doesn't cascade to others.
 """
 
+import gc
 import warnings
 
 import pytest
@@ -52,7 +50,7 @@ def test_load_model_raises_with_experimental_flag_false():
         load_model("gpt2", use_vllm=True, allow_experimental_vllm=False)
 
 
-# --- Prefix caching (raises before model load, no GPU needed beyond init) ---
+# --- Prefix caching (raises before engine start) ---
 
 
 @requires_cuda
@@ -66,45 +64,37 @@ def test_vllm_prefix_caching_raises_without_force():
         )
 
 
-# --- GPU tests (use check_renaming=False to avoid EngineDeadError) ---
+# --- GPU tests (each gets its own engine for isolation) ---
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def vllm_model():
-    """Load a small vLLM model for the test module.
+    """Load a vLLM model, yield it, then shut down the engine.
 
-    Uses check_renaming=False because check_model_renaming triggers
-    try_with_scan → model.trace() which causes EngineDeadError in vLLM.
+    Each test gets its own engine so a crash doesn't cascade.
     """
     if not th.cuda.is_available():
         pytest.skip("CUDA not available")
-    model = StandardizedVLLM("gpt2", allow_experimental_vllm=True, check_renaming=False)
-    return model
+    model = StandardizedVLLM("gpt2", allow_experimental_vllm=True)
+    yield model
+    # Shut down the vLLM engine subprocess and distributed state
+    if model.vllm_entrypoint is not None:
+        model.vllm_entrypoint.llm_engine.engine_core.shutdown()
+    from nnsight.modeling.vllm.vllm import VLLM
+    VLLM._cleanup_distributed()
+    del model
+    gc.collect()
 
 
 @requires_cuda
-def test_vllm_check_renaming_fails():
-    """Document that check_renaming=True currently fails with vLLM.
+def test_vllm_check_renaming_works(vllm_model):
+    """check_renaming=True must succeed for vLLM models.
 
-    The check_model_renaming step uses try_with_scan which falls back to
-    model.trace(). This triggers a vLLM EngineDeadError because the renaming
-    check's dummy_inputs are incompatible with vLLM's engine lifecycle.
-    This test documents the current limitation.
+    Validates that check_io correctly handles vLLM's flat tensor shapes
+    (no batch dimension) and skips lm_head.output (separate logit phase).
     """
-    with pytest.raises(Exception):
-        StandardizedVLLM("gpt2", allow_experimental_vllm=True, check_renaming=True)
-
-
-@requires_cuda
-def test_vllm_warns_on_init():
-    """StandardizedVLLM must emit a UserWarning about experimental status."""
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        StandardizedVLLM("gpt2", allow_experimental_vllm=True, check_renaming=False)
-        experimental_warnings = [x for x in w if "experimental" in str(x.message)]
-        assert len(experimental_warnings) >= 1, (
-            f"Expected at least 1 experimental warning, got {len(experimental_warnings)}"
-        )
+    assert vllm_model.num_layers > 0
+    assert vllm_model.hidden_size > 0
 
 
 @requires_cuda
@@ -170,6 +160,45 @@ def test_vllm_steer(vllm_model):
 
 
 @requires_cuda
+def test_vllm_generate_multi_token(vllm_model):
+    """model.generate() with tracer.all() must collect tokens at each step.
+
+    Uses tracer.invoke() + tracer.all() pattern with .save() on the list
+    so values are transported back from the vLLM worker subprocess.
+    Prompt goes in tracer.invoke(), not in .generate().
+    """
+    with vllm_model.generate(max_new_tokens=3) as tracer:
+        out = list().save()
+        with tracer.invoke("Hello world"):
+            with tracer.all():
+                out.append(vllm_model.samples.output.item().save())
+    assert len(out) == 3
+
+
+@requires_cuda
+def test_vllm_generate_with_layer_read(vllm_model):
+    """model.generate() must allow reading layer activations per step."""
+    with vllm_model.generate(max_new_tokens=3) as tracer:
+        layers = list().save()
+        with tracer.invoke("Hello world"):
+            with tracer.all():
+                layers.append(vllm_model.layers_output[0])
+    assert len(layers) == 3
+    assert all(l.shape[-1] == vllm_model.hidden_size for l in layers)
+
+
+@requires_cuda
+def test_vllm_trace_defaults_single_token(vllm_model):
+    """model.trace() must default to single forward pass (max_tokens=1)."""
+    with vllm_model.trace() as tracer:
+        out = list().save()
+        with tracer.invoke("Hello world"):
+            with tracer.all():
+                out.append(vllm_model.samples.output.item().save())
+    assert len(out) == 1
+
+
+@requires_cuda
 def test_vllm_project_on_vocab_outside_trace_raises(vllm_model):
     """project_on_vocab outside trace must raise RuntimeError for vLLM.
 
@@ -196,10 +225,11 @@ def test_vllm_input_ids_not_supported(vllm_model):
 
 
 @requires_cuda
-def test_vllm_input_size_not_supported(vllm_model):
-    """input_size must raise NotImplementedError for vLLM models."""
-    with pytest.raises(NotImplementedError):
-        _ = vllm_model.input_size
+def test_vllm_input_size_is_1d(vllm_model):
+    """input_size for vLLM must return (seq_len,) — 1D, no batch dimension."""
+    with vllm_model.trace("Hello world"):
+        input_size = vllm_model.input_size.save()
+    assert len(input_size) == 1, f"Expected 1D input_size for vLLM, got {input_size}"
 
 
 @requires_cuda
@@ -210,19 +240,9 @@ def test_vllm_attention_mask_not_supported(vllm_model):
 
 
 @requires_cuda
-def test_vllm_attention_probs_not_supported():
-    """enable_attention_probs=True must raise NotImplementedError for vLLM.
-
-    Note: with check_renaming=True this fails at renaming before reaching the
-    attention probs check, so we use check_renaming=False.
-    """
-    with pytest.raises(NotImplementedError, match="attention probabilities"):
-        StandardizedVLLM(
-            "gpt2",
-            allow_experimental_vllm=True,
-            enable_attention_probs=True,
-            check_renaming=False,
-        )
+def test_vllm_attention_probs_not_supported(vllm_model):
+    """enable_attention_probs=True must raise NotImplementedError for vLLM."""
+    assert not vllm_model.attn_probs_available
 
 
 @requires_cuda
@@ -236,20 +256,14 @@ def test_vllm_add_prefix_false_tokenizer_not_supported(vllm_model):
 
 
 @requires_cuda
-def test_load_model_vllm_returns_standardized_vllm():
+def test_load_model_vllm_returns_standardized_vllm(vllm_model):
     """load_model with use_vllm=True must return StandardizedVLLM."""
-    model = load_model(
-        "gpt2", use_vllm=True, allow_experimental_vllm=True, check_renaming=False
-    )
-    assert isinstance(model, StandardizedVLLM)
+    assert isinstance(vllm_model, StandardizedVLLM)
 
 
 @requires_cuda
-def test_load_model_vllm_is_not_transformer():
+def test_load_model_vllm_is_not_transformer(vllm_model):
     """load_model with use_vllm=True must not return StandardizedTransformer."""
     from nnterp import StandardizedTransformer
 
-    model = load_model(
-        "gpt2", use_vllm=True, allow_experimental_vllm=True, check_renaming=False
-    )
-    assert not isinstance(model, StandardizedTransformer)
+    assert not isinstance(vllm_model, StandardizedTransformer)

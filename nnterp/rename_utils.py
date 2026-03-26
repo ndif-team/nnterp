@@ -652,110 +652,75 @@ def get_ignores(model, rename_config: RenameConfig | None = None) -> list[str]:
     return ignores
 
 
+def _check_tensor(tensor, name: str, expected_shape: tuple, model_name: str):
+    """Validate that a tensor has the expected type and shape."""
+    if not isinstance(tensor, th.Tensor):
+        raise ValueError(
+            f"{name} is not a tensor in {model_name} architecture. "
+            f"Found type {type(tensor)}. This means it's not properly initialized."
+        )
+    if tensor.shape != expected_shape:
+        raise ValueError(
+            f"{name} has shape {tensor.shape} != {expected_shape} in {model_name} architecture. "
+            "This means it's not properly initialized."
+        )
+
+
 def check_io(std_model, model_name: str, ignores: list[IgnoreType]):
-    batch_size, seq_len = std_model.input_size
+    """Validate that standardized accessors return tensors with consistent shapes.
+
+    Handles both HF models (``input_size = (batch, seq)``) and vLLM models
+    (``input_size = (seq,)``). Shape expectations adapt via ``(*input_size, dim)``.
+
+    For vLLM, ``lm_head.output`` is not checked because vLLM computes logits
+    in a separate phase outside the model's forward pass.
+    """
+    input_size = std_model.input_size
     hidden_size = std_model.hidden_size
     if hidden_size is None:
         raise RenamingError(
-            f"Can't check the shapes of the model internals because the hidden size is not available in {model_name} architecture."
+            f"Can't check the shapes of the model internals because the hidden size is not available in {model_name} architecture. "
             "You should pass the hidden size as an integer or look at the config and pass the key in the hidden_size_config_key argument of a RenameConfig."
         )
-    token_embeddings = std_model.token_embeddings
-    if not isinstance(token_embeddings, th.Tensor):
-        raise ValueError(
-            f"token_embeddings is not a tensor in {model_name} architecture. Found type {type(token_embeddings)}. This means it's not properly initialized."
-        )
-    if token_embeddings.shape != (batch_size, seq_len, hidden_size):
-        raise ValueError(
-            f"token_embeddings has shape {token_embeddings.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-        )
-    layer_input = std_model.layers_input[0]
-    if not isinstance(layer_input, th.Tensor):
-        raise ValueError(
-            f"layers_input[0] is not a tensor in {model_name} architecture. Found type {type(layer_input)}. This means it's not properly initialized."
-        )
-    if layer_input.shape != (batch_size, seq_len, hidden_size):
-        raise ValueError(
-            f"layers_input[0] has shape {layer_input.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-        )
+    expected_hidden = (*input_size, hidden_size)
+
+    _check_tensor(std_model.token_embeddings, "token_embeddings", expected_hidden, model_name)
+    _check_tensor(std_model.layers_input[0], "layers_input[0]", expected_hidden, model_name)
+
     if "attention" not in ignores:
-        attention_input = std_model.attentions_input[0]
-        attention_output = std_model.attentions_output[0]
-        if not isinstance(attention_input, th.Tensor):
-            raise ValueError(
-                f"attentions_input[0] is not a tensor in {model_name} architecture. Found type {type(attention_input)}. This means it's not properly initialized."
-            )
-        if attention_input.shape != (batch_size, seq_len, hidden_size):
-            raise ValueError(
-                f"attentions_input[0] has shape {attention_input.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-            )
-        if not isinstance(attention_output, th.Tensor):
-            raise ValueError(
-                f"attentions_output[0] is not a tensor in {model_name} architecture. Found type {type(attention_output)}. This means it's not properly initialized."
-            )
-        if attention_output.shape != (
-            batch_size,
-            seq_len,
-            hidden_size,
-        ):
-            raise ValueError(
-                f"attentions_output[0] has shape {attention_output.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-            )
+        _check_tensor(std_model.attentions_input[0], "attentions_input[0]", expected_hidden, model_name)
+        _check_tensor(std_model.attentions_output[0], "attentions_output[0]", expected_hidden, model_name)
+
     if "mlp" not in ignores:
-        mlp_input = std_model.mlps_input[0]
-        mlp_output = std_model.mlps_output[0]
-        if not isinstance(mlp_input, th.Tensor):
+        _check_tensor(std_model.mlps_input[0], "mlps_input[0]", expected_hidden, model_name)
+        _check_tensor(std_model.mlps_output[0], "mlps_output[0]", expected_hidden, model_name)
+
+    _check_tensor(std_model.layers_output[0], "layers_output[0]", expected_hidden, model_name)
+    _check_tensor(std_model.ln_final.output, "ln_final.output", expected_hidden, model_name)
+
+    # vLLM computes logits in a separate phase (not part of the model forward pass),
+    # so lm_head.output is not accessible during a vLLM trace.
+    if not std_model.is_vllm:
+        lm_head_out = std_model.lm_head.output
+        if not isinstance(lm_head_out, th.Tensor):
             raise ValueError(
-                f"mlps_input[0] is not a tensor in {model_name} architecture. Found type {type(mlp_input)}. This means it's not properly initialized."
+                f"lm_head.output is not a tensor in {model_name} architecture. "
+                f"Found type {type(lm_head_out)}. This means it's not properly initialized."
             )
-        if mlp_input.shape != (batch_size, seq_len, hidden_size):
-            raise ValueError(
-                f"mlps_input[0] has shape {mlp_input.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
+        expected_vocab = (*input_size, std_model.vocab_size)
+        if std_model.vocab_size is None:
+            logger.warning(
+                f"Couldn't find vocab_size in {model_name} config. Couldn't properly test the shape of lm_head.output."
             )
-        if not isinstance(mlp_output, th.Tensor):
-            raise ValueError(
-                f"mlps_output[0] is not a tensor in {model_name} architecture. Found type {type(mlp_output)}. This means it's not properly initialized."
-            )
-        if mlp_output.shape != (batch_size, seq_len, hidden_size):
-            raise ValueError(
-                f"mlps_output[0] has shape {mlp_output.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-            )
-    layer_output = std_model.layers_output[0]
-    if not isinstance(layer_output, th.Tensor):
-        raise ValueError(
-            f"layers_output[0] is not a tensor in {model_name} architecture. Found type {type(layer_output)}. This means it's not properly initialized."
-        )
-    if layer_output.shape != (batch_size, seq_len, hidden_size):
-        raise ValueError(
-            f"layers_output[0] has shape {layer_output.shape} != {(batch_size, seq_len, std_model.config.hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-        )
-    ln_final_out = std_model.ln_final.output
-    if not isinstance(ln_final_out, th.Tensor):
-        raise ValueError(
-            f"ln_final.output is not a tensor in {model_name} architecture. Found type {type(ln_final_out)}. This means it's not properly initialized."
-        )
-    if ln_final_out.shape != (batch_size, seq_len, hidden_size):
-        raise ValueError(
-            f"ln_final.output has shape {ln_final_out.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-        )
-    lm_head_out = std_model.lm_head.output
-    if not isinstance(lm_head_out, th.Tensor):
-        raise ValueError(
-            f"lm_head.output is not a tensor in {model_name} architecture. Found type {type(lm_head_out)}. This means it's not properly initialized."
-        )
-    if std_model.vocab_size is None:
-        logger.warning(
-            f"Couldn't find vocab_size in {model_name} config. Couldn't properly test the shape of lm_head.output."
-        )
-        if lm_head_out.dim() != 3 or lm_head_out.shape[:-1] != (batch_size, seq_len):
-            raise ValueError(
-                f"lm_head.output has shape {lm_head_out.shape} != ({batch_size}, { seq_len}, <vocab_size>) in {model_name} architecture. This means it's not properly initialized."
-            )
-    else:
-        if lm_head_out.shape != (batch_size, seq_len, std_model.vocab_size):
-            raise ValueError(
-                f"lm_head.output has shape {lm_head_out.shape} != {(batch_size, seq_len, std_model.vocab_size)} in {model_name} architecture. This means it's not properly initialized."
-            )
+            if lm_head_out.shape[:-1] != input_size:
+                raise ValueError(
+                    f"lm_head.output has shape {lm_head_out.shape}, expected prefix {input_size} in {model_name} architecture."
+                )
+        else:
+            if lm_head_out.shape != expected_vocab:
+                raise ValueError(
+                    f"lm_head.output has shape {lm_head_out.shape} != {expected_vocab} in {model_name} architecture."
+                )
 
 
 def check_model_renaming(
@@ -833,19 +798,21 @@ def check_model_renaming(
 
 
 HF_TO_VLLM_KWARGS_MAP = dict(
-    max_num_tokens="max_tokens",
+    max_new_tokens="max_tokens",
 )
-VLLM_TO_HF_KWARGS_MAP = {v: k for k, v in HF_TO_VLLM_KWARGS_MAP.items()}
 
 
-def hf_kwargs_to_vllm_kwargs(args, kwargs: dict) -> dict:
-    for k, v in kwargs.items():
-        if k in HF_TO_VLLM_KWARGS_MAP:
-            if VLLM_TO_HF_KWARGS_MAP[k] in kwargs:
-                if kwargs[VLLM_TO_HF_KWARGS_MAP[k]] != v:
-                    raise ValueError(
-                        f"Conflicting values for {VLLM_TO_HF_KWARGS_MAP[k]} and {k}, which correspond to the same argument in hf and vllm but are set to different values: {kwargs[VLLM_TO_HF_KWARGS_MAP[k]]} and {v}"
-                    )
-            kwargs[VLLM_TO_HF_KWARGS_MAP[k]] = v
+def hf_kwargs_to_vllm_kwargs(kwargs: dict) -> dict:
+    """Translate HuggingFace keyword arguments to their vLLM equivalents.
 
+    Raises ValueError if both the HF and vLLM names are present with different values.
+    """
+    for hf_name, vllm_name in HF_TO_VLLM_KWARGS_MAP.items():
+        if hf_name in kwargs:
+            if vllm_name in kwargs and kwargs[vllm_name] != kwargs[hf_name]:
+                raise ValueError(
+                    f"Conflicting values for {hf_name} and {vllm_name}: "
+                    f"{kwargs[hf_name]} vs {kwargs[vllm_name]}"
+                )
+            kwargs[vllm_name] = kwargs.pop(hf_name)
     return kwargs

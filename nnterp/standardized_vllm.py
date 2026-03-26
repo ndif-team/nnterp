@@ -122,15 +122,39 @@ class StandardizedVLLM(VLLM, StandardizationMixin):
             rename_config=rename_config,
         )
 
-    def _prepare_input(self, *args, is_trace: bool = True, **kwargs):
-        """Preprocess inputs and convert HF kwargs to VLLM kwargs."""
-        if is_trace:
-            kwargs.setdefault("max_tokens", 1)
-        if "max_tokens" in kwargs and kwargs["max_tokens"] != 1:
+    def trace(self, *args, **kwargs):
+        """Trace a single forward pass (defaults to ``max_tokens=1``).
+
+        For multi-token generation, use ``.generate()`` instead.
+        """
+        kwargs.setdefault("max_tokens", 1)
+        if kwargs["max_tokens"] != 1:
             logger.warning(
-                "max_tokens != 1 will result in behavior similar to LanguageModel.generate() "
-                "with multiple forward pass. If you want your code to be compatible with both, "
-                "use vllm_model.generate."
+                "max_tokens != 1 in .trace() triggers multi-step generation. "
+                "For consistency with StandardizedTransformer, use .generate() "
+                "for multi-token generation and .trace() for single forward pass."
             )
-        kwargs = hf_kwargs_to_vllm_kwargs(args, kwargs)
+        return super().trace(*args, **kwargs)
+
+    def generate(self, *args, **kwargs):
+        """Trace with multi-token generation, mirroring ``LanguageModel.generate()``.
+
+        Unlike ``.trace()`` which defaults to ``max_tokens=1`` (single forward pass),
+        ``.generate()`` allows multi-step autoregressive generation.
+        Accepts both HF kwargs (``max_new_tokens``) and vLLM kwargs (``max_tokens``).
+
+        Args:
+            **kwargs: Passed to ``VLLM.trace()``, including vLLM sampling params
+                (``temperature``, ``top_p``, ``stop``, etc.) and HF equivalents.
+        """
+        return VLLM.trace(self, *args, **kwargs)
+
+    def _prepare_input(self, *args, **kwargs):
+        """Preprocess inputs and convert HF kwargs to VLLM kwargs."""
+        kwargs = hf_kwargs_to_vllm_kwargs(kwargs)
         return super()._prepare_input(*args, **kwargs)
+
+    def _prepare_generation(self, prompts, params, **kwargs):
+        """Convert HF kwargs to vLLM before propagating trace-level kwargs to invokes."""
+        kwargs = hf_kwargs_to_vllm_kwargs(kwargs)
+        return super()._prepare_generation(prompts, params, **kwargs)

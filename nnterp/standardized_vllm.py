@@ -1,4 +1,5 @@
 from .logging import logger
+import os
 import torch as th
 from torch.nn import Module
 from nnsight.modeling.vllm import VLLM
@@ -76,6 +77,9 @@ class StandardizedVLLM(VLLM, StandardizationMixin):
         allow_experimental_vllm: bool = False,
         **vllm_kwargs,
     ):
+        allow_experimental_vllm = allow_experimental_vllm or bool(
+            os.environ.get("NNTERP_ALLOW_EXPERIMENTAL_VLLM")
+        )
         if not allow_experimental_vllm:
             raise RuntimeError(
                 "The vLLM+nnsight backend is experimental and may produce incorrect results. "

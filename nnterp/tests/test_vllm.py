@@ -133,16 +133,11 @@ def test_vllm_logits(vllm_model):
 
 @requires_cuda
 def test_vllm_skip_layer(vllm_model):
-    """Skipping a layer must change the logits.
-
-    Uses layers[i].skip() directly because skip_layer/skip_layers need
-    layer_returns_tuple which requires check_renaming or detect_layer_output_type.
-    """
+    """Skipping a layer via skip_layer() must change the logits."""
     with vllm_model.trace("Hello world"):
         baseline = vllm_model.logits.output.save()
     with vllm_model.trace("Hello world"):
-        skip_with = vllm_model.layers_input[1]
-        vllm_model.layers[1].skip(skip_with)
+        vllm_model.skip_layer(1)
         skipped = vllm_model.logits.output.save()
     assert not th.allclose(baseline, skipped, atol=1e-4)
 

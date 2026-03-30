@@ -33,7 +33,8 @@ def load_model(
         model: HuggingFace model name or path.
         use_vllm: Whether to use the vLLM wrapper.
         allow_experimental_vllm: Acknowledge that the vLLM backend is experimental.
-            Required when ``use_vllm=True``.
+            Required when ``use_vllm=True``. Can also be enabled by setting the
+            ``NNTERP_ALLOW_EXPERIMENTAL_VLLM=1`` environment variable.
         **model_kwargs: Keyword arguments to pass to the model wrapper.
 
     Returns:

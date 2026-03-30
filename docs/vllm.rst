@@ -55,6 +55,17 @@ Or directly:
 
 The ``allow_experimental_vllm=True`` flag is required to acknowledge the experimental status. A ``UserWarning`` is emitted on every initialization.
 
+Alternatively, you can set the ``NNTERP_ALLOW_EXPERIMENTAL_VLLM`` environment variable to skip passing the flag each time:
+
+.. code-block:: bash
+
+   export NNTERP_ALLOW_EXPERIMENTAL_VLLM=1
+
+.. code-block:: python
+
+   # No need for allow_experimental_vllm=True anymore
+   model = load_model("meta-llama/Llama-2-7b-hf", use_vllm=True)
+
 Standardized Interface
 ----------------------
 

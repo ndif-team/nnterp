@@ -59,7 +59,8 @@ class StandardizedVLLM(VLLM, StandardizationMixin):
         force_dangerous_prefix_caching (bool, default False): If True, allows using enable_prefix_caching=True. Only use if you know what you are doing as this could lead to some of your interventions leaking to other requests or interventions being skipped for some tokens in context.
         allow_experimental_vllm (bool, default False): The vLLM+nnsight backend is still
             experimental and may produce incorrect results. Set to True to acknowledge this
-            and proceed. If False, raises an error.
+            and proceed. If False, raises an error. Can also be enabled by setting the
+            ``NNTERP_ALLOW_EXPERIMENTAL_VLLM=1`` environment variable.
     """
 
     is_vllm: bool = True
@@ -83,7 +84,8 @@ class StandardizedVLLM(VLLM, StandardizationMixin):
         if not allow_experimental_vllm:
             raise RuntimeError(
                 "The vLLM+nnsight backend is experimental and may produce incorrect results. "
-                "Pass allow_experimental_vllm=True to acknowledge this and proceed."
+                "Pass allow_experimental_vllm=True or set the NNTERP_ALLOW_EXPERIMENTAL_VLLM=1 "
+                "environment variable to acknowledge this and proceed."
             )
         import warnings
 

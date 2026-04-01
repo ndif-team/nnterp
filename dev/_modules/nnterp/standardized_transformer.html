@@ -446,15 +446,17 @@
                   
   <h1>Source code for nnterp.standardized_transformer</h1><div class="highlight"><pre>
 <span></span><span class="kn">from</span><span class="w"> </span><span class="nn">__future__</span><span class="w"> </span><span class="kn">import</span> <span class="n">annotations</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Callable</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">loguru</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
+<span class="kn">import</span><span class="w"> </span><span class="nn">warnings</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">th</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">torch.nn</span><span class="w"> </span><span class="kn">import</span> <span class="n">Module</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="kn">import</span> <span class="n">Size</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">nnsight</span><span class="w"> </span><span class="kn">import</span> <span class="n">LanguageModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">nnsight.modeling.vlm</span><span class="w"> </span><span class="kn">import</span> <span class="n">VisionLanguageModel</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">nnsight.ndif</span><span class="w"> </span><span class="kn">import</span> <span class="n">register</span> <span class="k">as</span> <span class="n">ndif_register</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoTokenizer</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers.tokenization_utils_base</span><span class="w"> </span><span class="kn">import</span> <span class="n">PreTrainedTokenizerBase</span>
-
 <span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">TraceTensor</span><span class="p">,</span>
     <span class="n">DummyCache</span><span class="p">,</span>
@@ -475,23 +477,13 @@
 <span class="p">)</span>
 
 
-<div class="viewcode-block" id="StandardizedTransformer">
-<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedTransformer">[docs]</a>
-<span class="k">class</span><span class="w"> </span><span class="nc">StandardizedTransformer</span><span class="p">(</span><span class="n">LanguageModel</span><span class="p">):</span>
+<div class="viewcode-block" id="StandardizationMixin">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizationMixin">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StandardizationMixin</span><span class="p">:</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">    Renames the LanguageModel modules to match a standardized architecture.</span>
+<span class="sd">    Mixin class for standardizing the architecture of a model.</span>
 
-<span class="sd">    The model structure is organized as follows::</span>
-
-<span class="sd">        StandardizedTransformer</span>
-<span class="sd">        ├── embed_tokens</span>
-<span class="sd">        ├── layers</span>
-<span class="sd">        │   ├── self_attn</span>
-<span class="sd">        │   └── mlp</span>
-<span class="sd">        ├── ln_final</span>
-<span class="sd">        └── lm_head</span>
-
-<span class="sd">    In addition to renaming modules, this class provides built-in accessors to extract and set intermediate activations:</span>
+<span class="sd">    This class provides built-in accessors to extract and set intermediate activations:</span>
 
 <span class="sd">    - embed_tokens: Get embedding module</span>
 <span class="sd">    - token_embeddings: Get/set token embeddings (equivalent to embed_tokens.output)</span>
@@ -504,14 +496,14 @@
 <span class="sd">    - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i</span>
 
 <span class="sd">    Args:</span>
-<span class="sd">        repo_id (str): Hugging Face repository ID or path of the model to load.</span>
-<span class="sd">        trust_remote_code (bool, optional): If True, remote code will be trusted when</span>
-<span class="sd">            loading the model. Defaults to False.</span>
+<span class="sd">        model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.</span>
 <span class="sd">        check_renaming (bool, default True): If True, the renaming of modules is validated.</span>
 <span class="sd">            Defaults to True.</span>
+<span class="sd">        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp</span>
+<span class="sd">            for NDIF remote execution via cloudpickle serialization.</span>
 <span class="sd">        allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model</span>
-<span class="sd">            when scan() fails during renaming checks. Defaults to True. You should set this to false</span>
-<span class="sd">            if you plan to use the model remotely.</span>
+<span class="sd">            when scan() fails during renaming checks. Defaults to True. Automatically set to False</span>
+<span class="sd">            when remote=True.</span>
 <span class="sd">        enable_attention_probs (bool, default False): If True, enables attention probabilities</span>
 <span class="sd">            tracing by setting attn_implementation=&quot;eager&quot;. Defaults to False.</span>
 <span class="sd">        check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.</span>
@@ -522,47 +514,24 @@
     <span class="n">num_heads</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">hidden_size</span><span class="p">:</span> <span class="nb">int</span>
     <span class="n">vocab_size</span><span class="p">:</span> <span class="nb">int</span>
+    <span class="n">is_vllm</span><span class="p">:</span> <span class="nb">bool</span>
+    <span class="n">remote</span><span class="p">:</span> <span class="nb">bool</span>
 
-    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_init_standardization</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Module</span><span class="p">,</span>
-        <span class="n">trust_remote_code</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">check_renaming</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">remote</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">allow_dispatch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">enable_attention_probs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">check_attn_probs_with_trace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">allow_multimodal</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="n">rename_config</span><span class="p">:</span> <span class="n">RenameConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
-        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
-        <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;device_map&quot;</span><span class="p">,</span> <span class="s2">&quot;auto&quot;</span><span class="p">)</span>
-        <span class="k">if</span> <span class="s2">&quot;attn_implementation&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">enable_attention_probs</span><span class="p">:</span>
-            <span class="k">if</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;attn_implementation&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">&quot;eager&quot;</span><span class="p">:</span>
-                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                    <span class="sa">f</span><span class="s2">&quot;Cannot use attn_implementation=&#39;</span><span class="si">{</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;attn_implementation&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; with enable_attention_probs=True. &quot;</span>
-                    <span class="s2">&quot;Either set enable_attention_probs=False or don&#39;t pass attn_implementation.&quot;</span>
-                <span class="p">)</span>
-        <span class="n">attn_implementation</span> <span class="o">=</span> <span class="p">(</span>
-            <span class="s2">&quot;eager&quot;</span>
-            <span class="k">if</span> <span class="n">enable_attention_probs</span>
-            <span class="k">else</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;attn_implementation&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="p">)</span>
-
-        <span class="n">tokenizer_kwargs</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;tokenizer_kwargs&quot;</span><span class="p">,</span> <span class="p">{})</span>
-        <span class="n">rename</span> <span class="o">=</span> <span class="n">get_rename_dict</span><span class="p">(</span><span class="n">rename_config</span><span class="o">=</span><span class="n">rename_config</span><span class="p">)</span>
-        <span class="n">user_rename</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;rename&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
-        <span class="k">if</span> <span class="n">user_rename</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Updating default rename with user-provided rename: </span><span class="si">{</span><span class="n">user_rename</span><span class="si">}</span><span class="s2">&quot;</span>
-            <span class="p">)</span>
-            <span class="n">rename</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">user_rename</span><span class="p">)</span>
-        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
-            <span class="n">model</span><span class="p">,</span>
-            <span class="n">attn_implementation</span><span class="o">=</span><span class="n">attn_implementation</span><span class="p">,</span>
-            <span class="n">tokenizer_kwargs</span><span class="o">=</span><span class="n">tokenizer_kwargs</span><span class="p">,</span>
-            <span class="n">trust_remote_code</span><span class="o">=</span><span class="n">trust_remote_code</span><span class="p">,</span>
-            <span class="n">rename</span><span class="o">=</span><span class="n">rename</span><span class="p">,</span>
-            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
-        <span class="p">)</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Initialize standardization after the base model has been initialized.&quot;&quot;&quot;</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">remote</span> <span class="o">=</span> <span class="n">remote</span>
+        <span class="k">if</span> <span class="n">remote</span><span class="p">:</span>
+            <span class="n">ndif_register</span><span class="p">(</span><span class="s2">&quot;nnterp&quot;</span><span class="p">)</span>
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
             <span class="n">model_name</span> <span class="o">=</span> <span class="n">model</span>
         <span class="k">else</span><span class="p">:</span>
@@ -592,12 +561,18 @@
         <span class="p">)</span>
 
         <span class="k">if</span> <span class="n">check_renaming</span><span class="p">:</span>
-            <span class="n">check_model_renaming</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">ignores</span><span class="p">,</span> <span class="n">allow_dispatch</span><span class="p">)</span>
+            <span class="n">check_model_renaming</span><span class="p">(</span>
+                <span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">ignores</span><span class="p">,</span> <span class="n">allow_dispatch</span><span class="p">,</span> <span class="n">allow_multimodal</span>
+            <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">attention_probabilities</span> <span class="o">=</span> <span class="n">AttentionProbabilitiesAccessor</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
             <span class="n">rename_config</span><span class="o">=</span><span class="n">rename_config</span><span class="p">,</span>
             <span class="n">initialized_with_enable</span><span class="o">=</span><span class="n">enable_attention_probs</span><span class="p">,</span>
         <span class="p">)</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_vllm</span> <span class="ow">and</span> <span class="n">enable_attention_probs</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+                <span class="s2">&quot;nnterp VLLM wrapper doesn&#39;t support attention probabilities yet, please set enable_attention_probs=False.&quot;</span>
+            <span class="p">)</span>
         <span class="k">if</span> <span class="n">check_renaming</span> <span class="ow">and</span> <span class="n">enable_attention_probs</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">attention_probabilities</span><span class="o">.</span><span class="n">check_source</span><span class="p">(</span>
                 <span class="n">allow_dispatch</span><span class="o">=</span><span class="n">allow_dispatch</span><span class="p">,</span>
@@ -608,8 +583,43 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">attention_probabilities</span><span class="o">.</span><span class="n">disable</span><span class="p">()</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_add_prefix_false_tokenizer</span> <span class="o">=</span> <span class="kc">None</span>
 
-<div class="viewcode-block" id="StandardizedTransformer.detect_layer_output_type">
-<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedTransformer.detect_layer_output_type">[docs]</a>
+    <span class="k">def</span><span class="w"> </span><span class="nf">_get_rename</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">rename_config</span><span class="p">:</span> <span class="n">RenameConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">user_rename</span><span class="p">:</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">rename</span> <span class="o">=</span> <span class="n">get_rename_dict</span><span class="p">(</span><span class="n">rename_config</span><span class="o">=</span><span class="n">rename_config</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">user_rename</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Updating default rename with user-provided rename: </span><span class="si">{</span><span class="n">user_rename</span><span class="si">}</span><span class="s2">&quot;</span>
+            <span class="p">)</span>
+            <span class="n">rename</span><span class="o">.</span><span class="n">update</span><span class="p">(</span><span class="n">user_rename</span><span class="p">)</span>
+        <span class="k">return</span> <span class="n">rename</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="nf">_prepare_init_kwargs</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">enable_attention_probs</span><span class="p">,</span> <span class="n">rename_config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span><span class="p">):</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Preprocess kwargs shared across StandardizedTransformer, StandardizedVLM, etc.</span>
+
+<span class="sd">        Returns (attn_implementation, rename, kwargs) ready to pass to super().__init__.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="n">kwargs</span><span class="o">.</span><span class="n">setdefault</span><span class="p">(</span><span class="s2">&quot;device_map&quot;</span><span class="p">,</span> <span class="s2">&quot;auto&quot;</span><span class="p">)</span>
+        <span class="k">if</span> <span class="s2">&quot;attn_implementation&quot;</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">enable_attention_probs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">kwargs</span><span class="p">[</span><span class="s2">&quot;attn_implementation&quot;</span><span class="p">]</span> <span class="o">!=</span> <span class="s2">&quot;eager&quot;</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Cannot use attn_implementation=&#39;</span><span class="si">{</span><span class="n">kwargs</span><span class="p">[</span><span class="s1">&#39;attn_implementation&#39;</span><span class="p">]</span><span class="si">}</span><span class="s2">&#39; with enable_attention_probs=True. &quot;</span>
+                    <span class="s2">&quot;Either set enable_attention_probs=False or don&#39;t pass attn_implementation.&quot;</span>
+                <span class="p">)</span>
+        <span class="n">attn_implementation</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="s2">&quot;eager&quot;</span>
+            <span class="k">if</span> <span class="n">enable_attention_probs</span>
+            <span class="k">else</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;attn_implementation&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="n">rename</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_get_rename</span><span class="p">(</span>
+            <span class="n">rename_config</span><span class="o">=</span><span class="n">rename_config</span><span class="p">,</span> <span class="n">user_rename</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="s2">&quot;rename&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
+        <span class="p">)</span>
+        <span class="k">return</span> <span class="n">attn_implementation</span><span class="p">,</span> <span class="n">rename</span><span class="p">,</span> <span class="n">kwargs</span>
+
+<div class="viewcode-block" id="StandardizationMixin.detect_layer_output_type">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizationMixin.detect_layer_output_type">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">detect_layer_output_type</span><span class="p">(</span><span class="bp">self</span><span class="p">):</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="o">.</span><span class="n">returns_tuple</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
 
@@ -628,6 +638,13 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">add_prefix_false_tokenizer</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">PreTrainedTokenizerBase</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">        Returns the tokenizer with add_prefix_space=False. Which means that &quot;word&quot; and &quot; word&quot; will be tokenized as different tokens.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_vllm</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="s2">&quot;nnterp VLLM wrapper doesn&#39;t support add_prefix_space=False, the normal tokenizer might already work but it might be model dependent.&quot;</span>
+            <span class="p">)</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">_add_prefix_false_tokenizer</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">_add_prefix_false_tokenizer</span> <span class="o">=</span> <span class="n">AutoTokenizer</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span>
                 <span class="bp">self</span><span class="o">.</span><span class="n">name_or_path</span><span class="p">,</span> <span class="n">add_prefix_space</span><span class="o">=</span><span class="kc">False</span>
@@ -640,18 +657,29 @@
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">input_ids</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TraceTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the input token IDs.</span>
+
+<span class="sd">        For HF models: shape ``(batch_size, sequence_length)``.</span>
+<span class="sd">        For vLLM models: shape ``(sequence_length,)`` (no batch dimension).</span>
+<span class="sd">        &quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">input_size</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Size</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Returns the shape of the input tensor (batch_size, sequence_length)</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the shape of the input tensor.</span>
+
+<span class="sd">        For HF models: ``(batch_size, sequence_length)``.</span>
+<span class="sd">        For vLLM models: ``(sequence_length,)`` (no batch dimension).</span>
 <span class="sd">        &quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">input_ids</span><span class="o">.</span><span class="n">shape</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="s2">&quot;input_ids&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">shape</span>
 
     <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">attention_mask</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TraceTensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the attention mask tensor.&quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_vllm</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">NotImplementedError</span><span class="p">(</span>
+                <span class="s2">&quot;attention_mask is not supported yet for VLLM models as it&#39;s not in the inputs dictionary.&quot;</span>
+            <span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="s2">&quot;attention_mask&quot;</span><span class="p">]</span>
 
     <span class="nd">@property</span>
@@ -665,18 +693,13 @@
         <span class="bp">self</span><span class="o">.</span><span class="n">embed_tokens</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="n">value</span>
 
     <span class="nd">@property</span>
-    <span class="k">def</span><span class="w"> </span><span class="nf">logits</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TraceTensor</span><span class="p">:</span>
-<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the predicted logits.&quot;&quot;&quot;</span>
-        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">logits</span>
-
-    <span class="nd">@property</span>
     <span class="k">def</span><span class="w"> </span><span class="nf">next_token_probs</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TraceTensor</span><span class="p">:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the predicted probabilities for the next token.</span>
 <span class="sd">        Assumes padding_side is &quot;left&quot;.&quot;&quot;&quot;</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">logits</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="p">:]</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 
-<div class="viewcode-block" id="StandardizedTransformer.skip_layer">
-<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedTransformer.skip_layer">[docs]</a>
+<div class="viewcode-block" id="StandardizationMixin.skip_layer">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizationMixin.skip_layer">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">skip_layer</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">skip_with</span><span class="p">:</span> <span class="n">TraceTensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Skip the computation of a layer.</span>
@@ -688,8 +711,8 @@
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">skip_layers</span><span class="p">(</span><span class="n">layer</span><span class="p">,</span> <span class="n">layer</span><span class="p">,</span> <span class="n">skip_with</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="StandardizedTransformer.skip_layers">
-<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedTransformer.skip_layers">[docs]</a>
+<div class="viewcode-block" id="StandardizationMixin.skip_layers">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizationMixin.skip_layers">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">skip_layers</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">start_layer</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
@@ -724,44 +747,93 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span><span class="o">.</span><span class="n">skip</span><span class="p">(</span><span class="n">skip_with</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="StandardizedTransformer.steer">
-<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedTransformer.steer">[docs]</a>
+<div class="viewcode-block" id="StandardizationMixin.steer">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizationMixin.steer">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">steer</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">layers</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">],</span>
         <span class="n">steering_vector</span><span class="p">:</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span>
         <span class="n">factor</span><span class="p">:</span> <span class="nb">float</span> <span class="o">=</span> <span class="mi">1</span><span class="p">,</span>
         <span class="n">positions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">token_positions</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">batch_index</span><span class="p">:</span> <span class="nb">int</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">int</span><span class="p">]</span> <span class="o">|</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
-<span class="sd">        Steer the hidden states of a layer using a steering vector.</span>
+<span class="sd">        Steer the hidden states of a layer using a steering vector by doing layer_output += factor * steering_vector.</span>
 
 <span class="sd">        Args:</span>
-<span class="sd">            layers: The layer(s) to steer</span>
-<span class="sd">            steering_vector: The steering vector to apply</span>
-<span class="sd">            factor: The factor to multiply the steering vector by</span>
-<span class="sd">            positions: The position to steer. If None, all positions are steered.</span>
+<span class="sd">            layers: The layer(s) to steer.</span>
+<span class="sd">            steering_vector: The steering vector to apply.</span>
+<span class="sd">            factor: The factor to multiply the steering vector by.</span>
+<span class="sd">            positions: Deprecated, use token_positions instead.</span>
+<span class="sd">            token_positions: Token positions to steer along the sequence dimension. If None, all positions are steered.</span>
+<span class="sd">            batch_index: Batch indices to steer. If None, all batch elements are steered.</span>
 <span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="n">positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="s2">&quot;Cannot specify both `positions` (deprecated) and `token_positions`.&quot;</span>
+                <span class="p">)</span>
+            <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                <span class="s2">&quot;`positions` is deprecated, use `token_positions` instead.&quot;</span><span class="p">,</span>
+                <span class="ne">DeprecationWarning</span><span class="p">,</span>
+                <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+            <span class="p">)</span>
+            <span class="n">token_positions</span> <span class="o">=</span> <span class="n">positions</span>
+
         <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layers</span><span class="p">,</span> <span class="nb">int</span><span class="p">):</span>
             <span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="n">layers</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">layers</span><span class="p">):</span>  <span class="c1"># sort to ensure execution order</span>
-            <span class="n">layer_device</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span><span class="o">.</span><span class="n">device</span>
-            <span class="n">steering_with</span> <span class="o">=</span> <span class="n">factor</span> <span class="o">*</span> <span class="n">steering_vector</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">layer_device</span><span class="p">)</span>
-            <span class="k">if</span> <span class="n">positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
+            <span class="n">layer_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span>
+            <span class="n">steering_with</span> <span class="o">=</span> <span class="n">factor</span> <span class="o">*</span> <span class="n">steering_vector</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">layer_output</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">layer_output</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_vllm</span><span class="p">:</span>
+                <span class="c1"># vLLM inference tensors don&#39;t support inplace ops</span>
+                <span class="k">if</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">+</span> <span class="n">steering_with</span>
+                <span class="k">elif</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+                    <span class="n">out</span><span class="p">[</span><span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+</span> <span class="n">steering_with</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="n">out</span>
+                <span class="k">elif</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+                    <span class="n">out</span><span class="p">[:,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">=</span> <span class="n">out</span><span class="p">[:,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+</span> <span class="n">steering_with</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="n">out</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
+                    <span class="n">out</span><span class="p">[</span><span class="n">batch_index</span><span class="p">]</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">batch_index</span><span class="p">]</span> <span class="o">+</span> <span class="n">steering_with</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="n">out</span>
             <span class="k">else</span><span class="p">:</span>
-                <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][:,</span> <span class="n">positions</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span></div>
+                <span class="k">if</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
+                <span class="k">elif</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][</span><span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
+                <span class="k">elif</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][:,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][</span><span class="n">batch_index</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span></div>
 
 
-<div class="viewcode-block" id="StandardizedTransformer.project_on_vocab">
-<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedTransformer.project_on_vocab">[docs]</a>
+<div class="viewcode-block" id="StandardizationMixin.project_on_vocab">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizationMixin.project_on_vocab">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">project_on_vocab</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">hidden_state</span><span class="p">:</span> <span class="n">TraceTensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TraceTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Project a hidden state onto the vocabulary space.</span>
+
+<span class="sd">        For vLLM models, this must be called inside a ``model.trace()`` context</span>
+<span class="sd">        because ``ln_final``/``lm_head`` weights live in the vLLM worker subprocess</span>
+<span class="sd">        and are on ``meta`` device in the main process.</span>
+<span class="sd">        &quot;&quot;&quot;</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_vllm</span> <span class="ow">and</span> <span class="ow">not</span> <span class="bp">self</span><span class="o">.</span><span class="n">interleaving</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="ne">RuntimeError</span><span class="p">(</span>
+                <span class="s2">&quot;project_on_vocab cannot be called outside a trace context for vLLM models &quot;</span>
+                <span class="s2">&quot;because ln_final/lm_head weights are on meta device. &quot;</span>
+                <span class="s2">&quot;Call it inside model.trace() instead.&quot;</span>
+            <span class="p">)</span>
         <span class="n">hidden_state</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">ln_final</span><span class="p">(</span><span class="n">hidden_state</span><span class="p">)</span>
         <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">lm_head</span><span class="p">(</span><span class="n">hidden_state</span><span class="p">)</span></div>
 
 
-<div class="viewcode-block" id="StandardizedTransformer.probs_to_dict">
-<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedTransformer.probs_to_dict">[docs]</a>
+<div class="viewcode-block" id="StandardizationMixin.probs_to_dict">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizationMixin.probs_to_dict">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">probs_to_dict</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">tokens</span><span class="p">:</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">probs</span><span class="p">:</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]:</span>
 <span class="w">        </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">        Convert a tensor of probabilities to a dictionary mapping tokens to their probabilities</span>
@@ -772,8 +844,8 @@
         <span class="p">}</span></div>
 
 
-<div class="viewcode-block" id="StandardizedTransformer.get_topk_closest_tokens">
-<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedTransformer.get_topk_closest_tokens">[docs]</a>
+<div class="viewcode-block" id="StandardizationMixin.get_topk_closest_tokens">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizationMixin.get_topk_closest_tokens">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_topk_closest_tokens</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span> <span class="n">hidden_state</span><span class="p">:</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">k</span><span class="o">=</span><span class="mi">5</span>
     <span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">dict</span><span class="p">[</span><span class="nb">str</span><span class="p">,</span> <span class="nb">float</span><span class="p">]]:</span>
@@ -809,6 +881,178 @@
                 <span class="sa">f</span><span class="s2">&quot;Unsupported hidden state shape </span><span class="si">{</span><span class="n">hidden_state</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">. Expected 1D or 2D tensor.&quot;</span>
             <span class="p">)</span></div>
 </div>
+
+
+
+<div class="viewcode-block" id="StandardizedTransformer">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedTransformer">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StandardizedTransformer</span><span class="p">(</span><span class="n">LanguageModel</span><span class="p">,</span> <span class="n">StandardizationMixin</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
+<span class="sd">    Renames the LanguageModel modules to match a standardized architecture.</span>
+
+<span class="sd">    The model structure is organized as follows::</span>
+
+<span class="sd">        StandardizedTransformer</span>
+<span class="sd">        ├── embed_tokens</span>
+<span class="sd">        ├── layers</span>
+<span class="sd">        │   ├── self_attn</span>
+<span class="sd">        │   └── mlp</span>
+<span class="sd">        ├── ln_final</span>
+<span class="sd">        └── lm_head</span>
+
+<span class="sd">    The following properties are also available:</span>
+
+<span class="sd">    - num_layers: int</span>
+<span class="sd">    - num_heads: int</span>
+<span class="sd">    - hidden_size: int</span>
+<span class="sd">    - vocab_size: int</span>
+
+<span class="sd">    In addition to renaming modules, this class provides built-in accessors to extract and set intermediate activations:</span>
+
+<span class="sd">    - embed_tokens: Get embedding module</span>
+<span class="sd">    - token_embeddings: Get/set token embeddings (equivalent to embed_tokens.output)</span>
+<span class="sd">    - layers[i]: Get layer module at layer i</span>
+<span class="sd">    - layers_input[i]: Get/set layer input at layer i</span>
+<span class="sd">    - layers_output[i]: Get/set layer output at layer i</span>
+<span class="sd">    - attentions[i]: Get attention module at layer i</span>
+<span class="sd">    - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i</span>
+<span class="sd">    - mlps[i]: Get MLP module at layer i</span>
+<span class="sd">    - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.</span>
+<span class="sd">        check_renaming (bool, default True): If True, the renaming of modules is validated.</span>
+<span class="sd">            Defaults to True.</span>
+<span class="sd">        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp</span>
+<span class="sd">            for NDIF remote execution via cloudpickle serialization.</span>
+<span class="sd">        allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model</span>
+<span class="sd">            when scan() fails during renaming checks. Defaults to True. Automatically set to False</span>
+<span class="sd">            when remote=True.</span>
+<span class="sd">        enable_attention_probs (bool, default False): If True, enables attention probabilities</span>
+<span class="sd">            tracing by setting attn_implementation=&quot;eager&quot;. Defaults to False.</span>
+<span class="sd">        check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.</span>
+<span class="sd">        rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">is_vllm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Module</span><span class="p">,</span>
+        <span class="n">check_renaming</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">remote</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">allow_dispatch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">enable_attention_probs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">check_attn_probs_with_trace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">rename_config</span><span class="p">:</span> <span class="n">RenameConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">automodel</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="c1"># Detect VLMs and warn</span>
+        <span class="k">if</span> <span class="n">automodel</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">detect_automodel</span>
+            <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForImageTextToText</span>
+
+            <span class="n">automodel</span> <span class="o">=</span> <span class="n">detect_automodel</span><span class="p">(</span>
+                <span class="n">model</span><span class="p">,</span> <span class="n">trust_remote_code</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;trust_remote_code&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">automodel</span> <span class="ow">is</span> <span class="n">AutoModelForImageTextToText</span><span class="p">:</span>
+                <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Model </span><span class="si">{</span><span class="n">model</span><span class="si">!r}</span><span class="s2"> appears to be a vision-language model. &quot;</span>
+                    <span class="s2">&quot;Consider using StandardizedVLM or load_model() instead for proper image input support.&quot;</span><span class="p">,</span>
+                    <span class="ne">UserWarning</span><span class="p">,</span>
+                    <span class="n">stacklevel</span><span class="o">=</span><span class="mi">2</span><span class="p">,</span>
+                <span class="p">)</span>
+
+        <span class="n">attn_implementation</span><span class="p">,</span> <span class="n">rename</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_init_kwargs</span><span class="p">(</span>
+            <span class="n">enable_attention_probs</span><span class="p">,</span> <span class="n">rename_config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">model</span><span class="p">,</span>
+            <span class="n">automodel</span><span class="o">=</span><span class="n">automodel</span><span class="p">,</span>
+            <span class="n">attn_implementation</span><span class="o">=</span><span class="n">attn_implementation</span><span class="p">,</span>
+            <span class="n">rename</span><span class="o">=</span><span class="n">rename</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_standardization</span><span class="p">(</span>
+            <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+            <span class="n">check_renaming</span><span class="o">=</span><span class="n">check_renaming</span><span class="p">,</span>
+            <span class="n">remote</span><span class="o">=</span><span class="n">remote</span><span class="p">,</span>
+            <span class="n">allow_dispatch</span><span class="o">=</span><span class="n">allow_dispatch</span><span class="p">,</span>
+            <span class="n">enable_attention_probs</span><span class="o">=</span><span class="n">enable_attention_probs</span><span class="p">,</span>
+            <span class="n">check_attn_probs_with_trace</span><span class="o">=</span><span class="n">check_attn_probs_with_trace</span><span class="p">,</span>
+            <span class="n">rename_config</span><span class="o">=</span><span class="n">rename_config</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">logits</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TraceTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the predicted logits.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">logits</span></div>
+
+
+
+<div class="viewcode-block" id="StandardizedVLM">
+<a class="viewcode-back" href="../../api.html#nnterp.standardized_transformer.StandardizedVLM">[docs]</a>
+<span class="k">class</span><span class="w"> </span><span class="nc">StandardizedVLM</span><span class="p">(</span><span class="n">VisionLanguageModel</span><span class="p">,</span> <span class="n">StandardizationMixin</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Standardized wrapper for vision-language models (e.g. Qwen2.5-VL, LLaVA).</span>
+
+<span class="sd">    Extends nnsight&#39;s ``VisionLanguageModel`` with the same standardized</span>
+<span class="sd">    module access as ``StandardizedTransformer``. Supports image inputs</span>
+<span class="sd">    via the ``images`` kwarg in ``model.trace()``.</span>
+
+<span class="sd">    Args:</span>
+<span class="sd">        model (str or Module): Hugging Face repository ID or path of the model to load.</span>
+<span class="sd">        check_renaming (bool, default True): If True, the renaming of modules is validated.</span>
+<span class="sd">        remote (bool, default False): If True, registers nnterp for NDIF remote execution.</span>
+<span class="sd">        allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model</span>
+<span class="sd">            when scan() fails during renaming checks.</span>
+<span class="sd">        enable_attention_probs (bool, default False): If True, enables attention probabilities</span>
+<span class="sd">            tracing by setting attn_implementation=&quot;eager&quot;.</span>
+<span class="sd">        check_attn_probs_with_trace (bool, default True): If True, validates attention probabilities.</span>
+<span class="sd">        allow_multimodal (bool, default False): Whether to allow heterogeneous layer types</span>
+<span class="sd">            (e.g. cross-attention layers in Mllama). These layers only activate with image</span>
+<span class="sd">            inputs, so text-only tracing will fail on them.</span>
+<span class="sd">        rename_config (RenameConfig, default None): A RenameConfig object to use for renaming.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+
+    <span class="n">is_vllm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+
+    <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
+        <span class="bp">self</span><span class="p">,</span>
+        <span class="n">model</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="n">Module</span><span class="p">,</span>
+        <span class="n">check_renaming</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">remote</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">allow_dispatch</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">enable_attention_probs</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">check_attn_probs_with_trace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
+        <span class="n">allow_multimodal</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+        <span class="n">rename_config</span><span class="p">:</span> <span class="n">RenameConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+    <span class="p">):</span>
+        <span class="n">attn_implementation</span><span class="p">,</span> <span class="n">rename</span><span class="p">,</span> <span class="n">kwargs</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">_prepare_init_kwargs</span><span class="p">(</span>
+            <span class="n">enable_attention_probs</span><span class="p">,</span> <span class="n">rename_config</span><span class="p">,</span> <span class="o">**</span><span class="n">kwargs</span>
+        <span class="p">)</span>
+        <span class="nb">super</span><span class="p">()</span><span class="o">.</span><span class="fm">__init__</span><span class="p">(</span>
+            <span class="n">model</span><span class="p">,</span>
+            <span class="n">attn_implementation</span><span class="o">=</span><span class="n">attn_implementation</span><span class="p">,</span>
+            <span class="n">rename</span><span class="o">=</span><span class="n">rename</span><span class="p">,</span>
+            <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">_init_standardization</span><span class="p">(</span>
+            <span class="n">model</span><span class="o">=</span><span class="n">model</span><span class="p">,</span>
+            <span class="n">check_renaming</span><span class="o">=</span><span class="n">check_renaming</span><span class="p">,</span>
+            <span class="n">remote</span><span class="o">=</span><span class="n">remote</span><span class="p">,</span>
+            <span class="n">allow_dispatch</span><span class="o">=</span><span class="n">allow_dispatch</span><span class="p">,</span>
+            <span class="n">enable_attention_probs</span><span class="o">=</span><span class="n">enable_attention_probs</span><span class="p">,</span>
+            <span class="n">check_attn_probs_with_trace</span><span class="o">=</span><span class="n">check_attn_probs_with_trace</span><span class="p">,</span>
+            <span class="n">allow_multimodal</span><span class="o">=</span><span class="n">allow_multimodal</span><span class="p">,</span>
+            <span class="n">rename_config</span><span class="o">=</span><span class="n">rename_config</span><span class="p">,</span>
+        <span class="p">)</span>
+
+    <span class="nd">@property</span>
+    <span class="k">def</span><span class="w"> </span><span class="nf">logits</span><span class="p">(</span><span class="bp">self</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">TraceTensor</span><span class="p">:</span>
+<span class="w">        </span><span class="sd">&quot;&quot;&quot;Returns the predicted logits.&quot;&quot;&quot;</span>
+        <span class="k">return</span> <span class="bp">self</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">logits</span></div>
 
 </pre></div>
 

@@ -451,21 +451,11 @@
 <section id="module-nnterp.standardized_transformer">
 <span id="nnterp-standardized-transformer-module"></span><h2>nnterp.standardized_transformer module<a class="headerlink" href="#module-nnterp.standardized_transformer" title="Link to this heading">#</a></h2>
 <dl class="py class">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">StandardizedTransformer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trust_remote_code</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_renaming</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_dispatch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_attention_probs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_attn_probs_with_trace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rename_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer" title="Link to this definition">#</a></dt>
-<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">LanguageModel</span></code></p>
-<p>Renames the LanguageModel modules to match a standardized architecture.</p>
-<p>The model structure is organized as follows:</p>
-<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>StandardizedTransformer
-├── embed_tokens
-├── layers
-│   ├── self_attn
-│   └── mlp
-├── ln_final
-└── lm_head
-</pre></div>
-</div>
-<p>In addition to renaming modules, this class provides built-in accessors to extract and set intermediate activations:</p>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">StandardizationMixin</span></span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizationMixin"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
+<p>Mixin class for standardizing the architecture of a model.</p>
+<p>This class provides built-in accessors to extract and set intermediate activations:</p>
 <ul class="simple">
 <li><p>embed_tokens: Get embedding module</p></li>
 <li><p>token_embeddings: Get/set token embeddings (equivalent to embed_tokens.output)</p></li>
@@ -480,96 +470,105 @@
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>repo_id</strong> (<em>str</em>) – Hugging Face repository ID or path of the model to load.</p></li>
-<li><p><strong>trust_remote_code</strong> (<em>bool</em><em>, </em><em>optional</em>) – If True, remote code will be trusted when
-loading the model. Defaults to False.</p></li>
+<li><p><strong>model</strong> (<em>str</em><em> or </em><em>Module</em>) – Hugging Face repository ID or path of the model to load or loaded model.</p></li>
 <li><p><strong>check_renaming</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, the renaming of modules is validated.
 Defaults to True.</p></li>
+<li><p><strong>remote</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, sets allow_dispatch=False and registers nnterp
+for NDIF remote execution via cloudpickle serialization.</p></li>
 <li><p><strong>allow_dispatch</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, allows using trace() to dispatch the model
-when scan() fails during renaming checks. Defaults to True. You should set this to false
-if you plan to use the model remotely.</p></li>
+when scan() fails during renaming checks. Defaults to True. Automatically set to False
+when remote=True.</p></li>
 <li><p><strong>enable_attention_probs</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, enables attention probabilities
 tracing by setting attn_implementation=”eager”. Defaults to False.</p></li>
 <li><p><strong>check_attn_probs_with_trace</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.</p></li>
 <li><p><strong>rename_config</strong> (<a class="reference internal" href="#nnterp.rename_utils.RenameConfig" title="nnterp.rename_utils.RenameConfig"><em>RenameConfig</em></a><em>, </em><em>default None</em>) – A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.</p></li>
-<li><p><strong>model</strong> (<em>str</em><em> | </em><em>Module</em>)</p></li>
 </ul>
 </dd>
 </dl>
 <dl class="py attribute">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.num_layers">
-<span class="sig-name descname"><span class="pre">num_layers</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.num_layers" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.num_layers">
+<span class="sig-name descname"><span class="pre">num_layers</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.num_layers" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.num_heads">
-<span class="sig-name descname"><span class="pre">num_heads</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.num_heads" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.num_heads">
+<span class="sig-name descname"><span class="pre">num_heads</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.num_heads" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.hidden_size">
-<span class="sig-name descname"><span class="pre">hidden_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.hidden_size" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.hidden_size">
+<span class="sig-name descname"><span class="pre">hidden_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.hidden_size" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py attribute">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.vocab_size">
-<span class="sig-name descname"><span class="pre">vocab_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.vocab_size" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.vocab_size">
+<span class="sig-name descname"><span class="pre">vocab_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">int</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.vocab_size" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.is_vllm">
+<span class="sig-name descname"><span class="pre">is_vllm</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.is_vllm" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.remote">
+<span class="sig-name descname"><span class="pre">remote</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.remote" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.detect_layer_output_type">
-<span class="sig-name descname"><span class="pre">detect_layer_output_type</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedTransformer.detect_layer_output_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.detect_layer_output_type" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.detect_layer_output_type">
+<span class="sig-name descname"><span class="pre">detect_layer_output_type</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizationMixin.detect_layer_output_type"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.detect_layer_output_type" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.add_prefix_false_tokenizer">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">add_prefix_false_tokenizer</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">PreTrainedTokenizerBase</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.add_prefix_false_tokenizer" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.attn_probs_available">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">attn_probs_available</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.attn_probs_available" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.input_ids">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">input_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.input_ids" title="Link to this definition">#</a></dt>
-<dd></dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.input_size">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">input_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Size</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.input_size" title="Link to this definition">#</a></dt>
-<dd><p>Returns the shape of the input tensor (batch_size, sequence_length)</p>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.add_prefix_false_tokenizer">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">add_prefix_false_tokenizer</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">PreTrainedTokenizerBase</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.add_prefix_false_tokenizer" title="Link to this definition">#</a></dt>
+<dd><p>Returns the tokenizer with add_prefix_space=False. Which means that “word” and “ word” will be tokenized as different tokens.</p>
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.attention_mask">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">attention_mask</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.attention_mask" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.attn_probs_available">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">attn_probs_available</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.attn_probs_available" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.input_ids">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">input_ids</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.input_ids" title="Link to this definition">#</a></dt>
+<dd><p>Returns the input token IDs.</p>
+<p>For HF models: shape <code class="docutils literal notranslate"><span class="pre">(batch_size,</span> <span class="pre">sequence_length)</span></code>.
+For vLLM models: shape <code class="docutils literal notranslate"><span class="pre">(sequence_length,)</span></code> (no batch dimension).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.input_size">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">input_size</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Size</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.input_size" title="Link to this definition">#</a></dt>
+<dd><p>Returns the shape of the input tensor.</p>
+<p>For HF models: <code class="docutils literal notranslate"><span class="pre">(batch_size,</span> <span class="pre">sequence_length)</span></code>.
+For vLLM models: <code class="docutils literal notranslate"><span class="pre">(sequence_length,)</span></code> (no batch dimension).</p>
+</dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.attention_mask">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">attention_mask</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.attention_mask" title="Link to this definition">#</a></dt>
 <dd><p>Returns the attention mask tensor.</p>
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.token_embeddings">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">token_embeddings</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.token_embeddings" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.token_embeddings">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">token_embeddings</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.token_embeddings" title="Link to this definition">#</a></dt>
 <dd><p>Returns the token embeddings. Equivalent to self.embed_tokens.output</p>
 </dd></dl>
 
 <dl class="py property">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.logits">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">logits</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.logits" title="Link to this definition">#</a></dt>
-<dd><p>Returns the predicted logits.</p>
-</dd></dl>
-
-<dl class="py property">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.next_token_probs">
-<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">next_token_probs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.next_token_probs" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.next_token_probs">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">next_token_probs</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.next_token_probs" title="Link to this definition">#</a></dt>
 <dd><p>Returns the predicted probabilities for the next token.
 Assumes padding_side is “left”.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.skip_layer">
-<span class="sig-name descname"><span class="pre">skip_layer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">layer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_with</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedTransformer.skip_layer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.skip_layer" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.skip_layer">
+<span class="sig-name descname"><span class="pre">skip_layer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">layer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_with</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizationMixin.skip_layer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.skip_layer" title="Link to this definition">#</a></dt>
 <dd><p>Skip the computation of a layer.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -582,8 +581,8 @@ Assumes padding_side is “left”.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.skip_layers">
-<span class="sig-name descname"><span class="pre">skip_layers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_layer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_layer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_with</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layer_returns_tuple</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedTransformer.skip_layers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.skip_layers" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.skip_layers">
+<span class="sig-name descname"><span class="pre">skip_layers</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">start_layer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">end_layer</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">skip_with</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layer_returns_tuple</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizationMixin.skip_layers"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.skip_layers" title="Link to this definition">#</a></dt>
 <dd><p>Skip all layers between start_layer and end_layer (inclusive).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -598,25 +597,31 @@ Assumes padding_side is “left”.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.steer">
-<span class="sig-name descname"><span class="pre">steer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">layers</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steering_vector</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">positions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedTransformer.steer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.steer" title="Link to this definition">#</a></dt>
-<dd><p>Steer the hidden states of a layer using a steering vector.</p>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.steer">
+<span class="sig-name descname"><span class="pre">steer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">layers</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">steering_vector</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">factor</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">1</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">positions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">token_positions</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">batch_index</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizationMixin.steer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.steer" title="Link to this definition">#</a></dt>
+<dd><p>Steer the hidden states of a layer using a steering vector by doing layer_output += factor * steering_vector.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>layers</strong> (<em>int</em><em> | </em><em>list</em><em>[</em><em>int</em><em>]</em>) – The layer(s) to steer</p></li>
-<li><p><strong>steering_vector</strong> (<em>Tensor</em>) – The steering vector to apply</p></li>
-<li><p><strong>factor</strong> (<em>float</em>) – The factor to multiply the steering vector by</p></li>
-<li><p><strong>positions</strong> (<em>int</em><em> | </em><em>list</em><em>[</em><em>int</em><em>] </em><em>| </em><em>Tensor</em><em> | </em><em>None</em>) – The position to steer. If None, all positions are steered.</p></li>
+<li><p><strong>layers</strong> (<em>int</em><em> | </em><em>list</em><em>[</em><em>int</em><em>]</em>) – The layer(s) to steer.</p></li>
+<li><p><strong>steering_vector</strong> (<em>Tensor</em>) – The steering vector to apply.</p></li>
+<li><p><strong>factor</strong> (<em>float</em>) – The factor to multiply the steering vector by.</p></li>
+<li><p><strong>positions</strong> (<em>int</em><em> | </em><em>list</em><em>[</em><em>int</em><em>] </em><em>| </em><em>Tensor</em><em> | </em><em>None</em>) – Deprecated, use token_positions instead.</p></li>
+<li><p><strong>token_positions</strong> (<em>int</em><em> | </em><em>list</em><em>[</em><em>int</em><em>] </em><em>| </em><em>Tensor</em><em> | </em><em>None</em>) – Token positions to steer along the sequence dimension. If None, all positions are steered.</p></li>
+<li><p><strong>batch_index</strong> (<em>int</em><em> | </em><em>list</em><em>[</em><em>int</em><em>] </em><em>| </em><em>Tensor</em><em> | </em><em>None</em>) – Batch indices to steer. If None, all batch elements are steered.</p></li>
 </ul>
 </dd>
 </dl>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.project_on_vocab">
-<span class="sig-name descname"><span class="pre">project_on_vocab</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hidden_state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedTransformer.project_on_vocab"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.project_on_vocab" title="Link to this definition">#</a></dt>
-<dd><dl class="field-list simple">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.project_on_vocab">
+<span class="sig-name descname"><span class="pre">project_on_vocab</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hidden_state</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizationMixin.project_on_vocab"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.project_on_vocab" title="Link to this definition">#</a></dt>
+<dd><p>Project a hidden state onto the vocabulary space.</p>
+<p>For vLLM models, this must be called inside a <code class="docutils literal notranslate"><span class="pre">model.trace()</span></code> context
+because <code class="docutils literal notranslate"><span class="pre">ln_final</span></code>/<code class="docutils literal notranslate"><span class="pre">lm_head</span></code> weights live in the vLLM worker subprocess
+and are on <code class="docutils literal notranslate"><span class="pre">meta</span></code> device in the main process.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><p><strong>hidden_state</strong> (<em>Tensor</em><em> | </em><em>Object</em>)</p>
 </dd>
@@ -627,8 +632,8 @@ Assumes padding_side is “left”.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.probs_to_dict">
-<span class="sig-name descname"><span class="pre">probs_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tokens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">probs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedTransformer.probs_to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.probs_to_dict" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.probs_to_dict">
+<span class="sig-name descname"><span class="pre">probs_to_dict</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">tokens</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">probs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizationMixin.probs_to_dict"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.probs_to_dict" title="Link to this definition">#</a></dt>
 <dd><p>Convert a tensor of probabilities to a dictionary mapping tokens to their probabilities</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -644,8 +649,8 @@ Assumes padding_side is “left”.</p>
 </dd></dl>
 
 <dl class="py method">
-<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.get_topk_closest_tokens">
-<span class="sig-name descname"><span class="pre">get_topk_closest_tokens</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hidden_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedTransformer.get_topk_closest_tokens"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.get_topk_closest_tokens" title="Link to this definition">#</a></dt>
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizationMixin.get_topk_closest_tokens">
+<span class="sig-name descname"><span class="pre">get_topk_closest_tokens</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">hidden_state</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">k</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">5</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizationMixin.get_topk_closest_tokens"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizationMixin.get_topk_closest_tokens" title="Link to this definition">#</a></dt>
 <dd><p>Get the top-k closest tokens to the hidden state h.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
@@ -664,6 +669,110 @@ Pandas is included in <code class="docutils literal notranslate"><span class="pr
 <dd class="field-odd"><p>dict[str, float] | list[dict[str, float]]</p>
 </dd>
 </dl>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">StandardizedTransformer</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_renaming</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remote</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_dispatch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_attention_probs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_attn_probs_with_trace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rename_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">automodel</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedTransformer"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">LanguageModel</span></code>, <a class="reference internal" href="#nnterp.standardized_transformer.StandardizationMixin" title="nnterp.standardized_transformer.StandardizationMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">StandardizationMixin</span></code></a></p>
+<p>Renames the LanguageModel modules to match a standardized architecture.</p>
+<p>The model structure is organized as follows:</p>
+<div class="highlight-default notranslate"><div class="highlight"><pre><span></span>StandardizedTransformer
+├── embed_tokens
+├── layers
+│   ├── self_attn
+│   └── mlp
+├── ln_final
+└── lm_head
+</pre></div>
+</div>
+<p>The following properties are also available:</p>
+<ul class="simple">
+<li><p>num_layers: int</p></li>
+<li><p>num_heads: int</p></li>
+<li><p>hidden_size: int</p></li>
+<li><p>vocab_size: int</p></li>
+</ul>
+<p>In addition to renaming modules, this class provides built-in accessors to extract and set intermediate activations:</p>
+<ul class="simple">
+<li><p>embed_tokens: Get embedding module</p></li>
+<li><p>token_embeddings: Get/set token embeddings (equivalent to embed_tokens.output)</p></li>
+<li><p>layers[i]: Get layer module at layer i</p></li>
+<li><p>layers_input[i]: Get/set layer input at layer i</p></li>
+<li><p>layers_output[i]: Get/set layer output at layer i</p></li>
+<li><p>attentions[i]: Get attention module at layer i</p></li>
+<li><p>attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i</p></li>
+<li><p>mlps[i]: Get MLP module at layer i</p></li>
+<li><p>mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i</p></li>
+</ul>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<em>str</em><em> or </em><em>Module</em>) – Hugging Face repository ID or path of the model to load or loaded model.</p></li>
+<li><p><strong>check_renaming</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, the renaming of modules is validated.
+Defaults to True.</p></li>
+<li><p><strong>remote</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, sets allow_dispatch=False and registers nnterp
+for NDIF remote execution via cloudpickle serialization.</p></li>
+<li><p><strong>allow_dispatch</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, allows using trace() to dispatch the model
+when scan() fails during renaming checks. Defaults to True. Automatically set to False
+when remote=True.</p></li>
+<li><p><strong>enable_attention_probs</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, enables attention probabilities
+tracing by setting attn_implementation=”eager”. Defaults to False.</p></li>
+<li><p><strong>check_attn_probs_with_trace</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.</p></li>
+<li><p><strong>rename_config</strong> (<a class="reference internal" href="#nnterp.rename_utils.RenameConfig" title="nnterp.rename_utils.RenameConfig"><em>RenameConfig</em></a><em>, </em><em>default None</em>) – A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.is_vllm">
+<span class="sig-name descname"><span class="pre">is_vllm</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.is_vllm" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedTransformer.logits">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">logits</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedTransformer.logits" title="Link to this definition">#</a></dt>
+<dd><p>Returns the predicted logits.</p>
+</dd></dl>
+
+</dd></dl>
+
+<dl class="py class">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedVLM">
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">StandardizedVLM</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_renaming</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">remote</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_dispatch</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">enable_attention_probs</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">check_attn_probs_with_trace</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">True</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_multimodal</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rename_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="o"><span class="pre">**</span></span><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/standardized_transformer.html#StandardizedVLM"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedVLM" title="Link to this definition">#</a></dt>
+<dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">VisionLanguageModel</span></code>, <a class="reference internal" href="#nnterp.standardized_transformer.StandardizationMixin" title="nnterp.standardized_transformer.StandardizationMixin"><code class="xref py py-class docutils literal notranslate"><span class="pre">StandardizationMixin</span></code></a></p>
+<p>Standardized wrapper for vision-language models (e.g. Qwen2.5-VL, LLaVA).</p>
+<p>Extends nnsight’s <code class="docutils literal notranslate"><span class="pre">VisionLanguageModel</span></code> with the same standardized
+module access as <code class="docutils literal notranslate"><span class="pre">StandardizedTransformer</span></code>. Supports image inputs
+via the <code class="docutils literal notranslate"><span class="pre">images</span></code> kwarg in <code class="docutils literal notranslate"><span class="pre">model.trace()</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<em>str</em><em> or </em><em>Module</em>) – Hugging Face repository ID or path of the model to load.</p></li>
+<li><p><strong>check_renaming</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, the renaming of modules is validated.</p></li>
+<li><p><strong>remote</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, registers nnterp for NDIF remote execution.</p></li>
+<li><p><strong>allow_dispatch</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, allows using trace() to dispatch the model
+when scan() fails during renaming checks.</p></li>
+<li><p><strong>enable_attention_probs</strong> (<em>bool</em><em>, </em><em>default False</em>) – If True, enables attention probabilities
+tracing by setting attn_implementation=”eager”.</p></li>
+<li><p><strong>check_attn_probs_with_trace</strong> (<em>bool</em><em>, </em><em>default True</em>) – If True, validates attention probabilities.</p></li>
+<li><p><strong>allow_multimodal</strong> (<em>bool</em><em>, </em><em>default False</em>) – Whether to allow heterogeneous layer types
+(e.g. cross-attention layers in Mllama). These layers only activate with image
+inputs, so text-only tracing will fail on them.</p></li>
+<li><p><strong>rename_config</strong> (<a class="reference internal" href="#nnterp.rename_utils.RenameConfig" title="nnterp.rename_utils.RenameConfig"><em>RenameConfig</em></a><em>, </em><em>default None</em>) – A RenameConfig object to use for renaming.</p></li>
+</ul>
+</dd>
+</dl>
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedVLM.is_vllm">
+<span class="sig-name descname"><span class="pre">is_vllm</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">bool</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">False</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedVLM.is_vllm" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py property">
+<dt class="sig sig-object py" id="nnterp.standardized_transformer.StandardizedVLM.logits">
+<em class="property"><span class="pre">property</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">logits</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">Tensor</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">Object</span></em><a class="headerlink" href="#nnterp.standardized_transformer.StandardizedVLM.logits" title="Link to this definition">#</a></dt>
+<dd><p>Returns the predicted logits.</p>
 </dd></dl>
 
 </dd></dl>
@@ -1585,6 +1694,29 @@ Dimensions are (num_layers, num_prompts, hidden_size)</p>
 </dd></dl>
 
 <dl class="py function">
+<dt class="sig sig-object py" id="nnterp.utils.detect_automodel">
+<span class="sig-name descname"><span class="pre">detect_automodel</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">trust_remote_code</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/utils.html#detect_automodel"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.utils.detect_automodel" title="Link to this definition">#</a></dt>
+<dd><p>Detect the appropriate AutoModel class for a model by inspecting its config.</p>
+<p>Checks which <code class="docutils literal notranslate"><span class="pre">AutoModelFor*</span></code> classes support the model’s config via their
+internal <code class="docutils literal notranslate"><span class="pre">_model_mapping</span></code>. Returns the first match from a priority-ordered list.</p>
+<p><code class="docutils literal notranslate"><span class="pre">AutoModelForImageTextToText</span></code> is checked before <code class="docutils literal notranslate"><span class="pre">AutoModelForCausalLM</span></code>
+because VLM configs (e.g. Qwen2.5-VL) are registered in both mappings, but
+<code class="docutils literal notranslate"><span class="pre">AutoModelForCausalLM</span></code> fails at init for VLM configs that nest
+<code class="docutils literal notranslate"><span class="pre">vocab_size</span></code> under <code class="docutils literal notranslate"><span class="pre">text_config</span></code>.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><ul class="simple">
+<li><p><strong>model</strong> (<em>str</em>) – HuggingFace model name or path.</p></li>
+<li><p><strong>trust_remote_code</strong> (<em>bool</em>) – Whether to trust remote code when loading the config.</p></li>
+</ul>
+</dd>
+<dt class="field-even">Returns<span class="colon">:</span></dt>
+<dd class="field-even"><p>The appropriate AutoModel class (e.g. <code class="docutils literal notranslate"><span class="pre">AutoModelForCausalLM</span></code>).</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
 <dt class="sig sig-object py" id="nnterp.utils.is_notebook">
 <span class="sig-name descname"><span class="pre">is_notebook</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/utils.html#is_notebook"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.utils.is_notebook" title="Link to this definition">#</a></dt>
 <dd><p>Detect the current Python environment</p>
@@ -1632,11 +1764,13 @@ Dimensions are (num_layers, num_prompts, hidden_size)</p>
 <dd><p>Attempt to execute a function using model.scan(), falling back to model.trace() if needed.</p>
 <p>This function tries to execute the given function within a model.scan() context first,
 which avoids dispatching the model. If that fails and fallback is allowed, it will
-try using model.trace() instead, which does dispatch the model.</p>
+try using model.trace() instead. If model.remote is True, the trace runs remotely
+via NDIF; otherwise, the model is dispatched locally.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
-<li><p><strong>model</strong> – The model object that supports .scan() and .trace() methods</p></li>
+<li><p><strong>model</strong> (<a class="reference internal" href="#nnterp.standardized_transformer.StandardizationMixin" title="nnterp.standardized_transformer.StandardizationMixin"><em>StandardizationMixin</em></a>) – A StandardizationMixin instance (e.g. StandardizedTransformer
+or StandardizedVLLM). Must have .scan(), .trace(), and .remote attributes.</p></li>
 <li><p><strong>function</strong> – A callable to execute within the model context (takes no arguments)</p></li>
 <li><p><strong>error_to_throw</strong> (<em>Exception</em>) – Exception to raise if both scan and trace fail</p></li>
 <li><p><strong>allow_dispatch</strong> (<em>bool</em>) – Whether to allow fallback to .trace() if .scan() fails</p></li>
@@ -1987,6 +2121,46 @@ Returns None if the tuple status has not been detected yet.</p>
 </dl>
 </dd></dl>
 
+<dl class="py function">
+<dt class="sig sig-object py" id="nnterp.rename_utils.qwen2moe_attention_prob_source">
+<span class="sig-name descname"><span class="pre">qwen2moe_attention_prob_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">attention_module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_module_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#qwen2moe_attention_prob_source"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.qwen2moe_attention_prob_source" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>return_module_source</strong> (<em>bool</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="nnterp.rename_utils.dbrx_attention_prob_source">
+<span class="sig-name descname"><span class="pre">dbrx_attention_prob_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">attention_module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_module_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#dbrx_attention_prob_source"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.dbrx_attention_prob_source" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>return_module_source</strong> (<em>bool</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="nnterp.rename_utils.stablelm_attention_prob_source">
+<span class="sig-name descname"><span class="pre">stablelm_attention_prob_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">attention_module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_module_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#stablelm_attention_prob_source"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.stablelm_attention_prob_source" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>return_module_source</strong> (<em>bool</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="nnterp.rename_utils.gptoss_attention_prob_source">
+<span class="sig-name descname"><span class="pre">gptoss_attention_prob_source</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">attention_module</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">return_module_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#gptoss_attention_prob_source"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.gptoss_attention_prob_source" title="Link to this definition">#</a></dt>
+<dd><dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>return_module_source</strong> (<em>bool</em>)</p>
+</dd>
+</dl>
+</dd></dl>
+
 <dl class="py class">
 <dt class="sig sig-object py" id="nnterp.rename_utils.AttentionProbabilitiesAccessor">
 <em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">AttentionProbabilitiesAccessor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rename_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">initialized_with_enable</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#AttentionProbabilitiesAccessor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.AttentionProbabilitiesAccessor" title="Link to this definition">#</a></dt>
@@ -2057,7 +2231,12 @@ Returns None if the tuple status has not been detected yet.</p>
 <dl class="py function">
 <dt class="sig sig-object py" id="nnterp.rename_utils.check_io">
 <span class="sig-name descname"><span class="pre">check_io</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">std_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignores</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#check_io"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.check_io" title="Link to this definition">#</a></dt>
-<dd><dl class="field-list simple">
+<dd><p>Validate that standardized accessors return tensors with consistent shapes.</p>
+<p>Handles both HF models (<code class="docutils literal notranslate"><span class="pre">input_size</span> <span class="pre">=</span> <span class="pre">(batch,</span> <span class="pre">seq)</span></code>) and vLLM models
+(<code class="docutils literal notranslate"><span class="pre">input_size</span> <span class="pre">=</span> <span class="pre">(seq,)</span></code>). Shape expectations adapt via <code class="docutils literal notranslate"><span class="pre">(*input_size,</span> <span class="pre">dim)</span></code>.</p>
+<p>For vLLM, <code class="docutils literal notranslate"><span class="pre">lm_head.output</span></code> is not checked because vLLM computes logits
+in a separate phase outside the model’s forward pass.</p>
+<dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>model_name</strong> (<em>str</em>)</p></li>
@@ -2069,14 +2248,30 @@ Returns None if the tuple status has not been detected yet.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="nnterp.rename_utils.check_model_renaming">
-<span class="sig-name descname"><span class="pre">check_model_renaming</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">std_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_dispatch</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#check_model_renaming"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.check_model_renaming" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">check_model_renaming</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">std_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_dispatch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_multimodal</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#check_model_renaming"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.check_model_renaming" title="Link to this definition">#</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>model_name</strong> (<em>str</em>)</p></li>
 <li><p><strong>ignores</strong> (<em>list</em><em>[</em><em>Literal</em><em>[</em><em>'mlp'</em><em>, </em><em>'attention'</em><em>]</em><em>]</em>)</p></li>
 <li><p><strong>allow_dispatch</strong> (<em>bool</em>)</p></li>
+<li><p><strong>allow_multimodal</strong> (<em>bool</em>)</p></li>
 </ul>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="nnterp.rename_utils.hf_kwargs_to_vllm_kwargs">
+<span class="sig-name descname"><span class="pre">hf_kwargs_to_vllm_kwargs</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">kwargs</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#hf_kwargs_to_vllm_kwargs"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.hf_kwargs_to_vllm_kwargs" title="Link to this definition">#</a></dt>
+<dd><p>Translate HuggingFace keyword arguments to their vLLM equivalents.</p>
+<p>Raises ValueError if both the HF and vLLM names are present with different values.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>kwargs</strong> (<em>dict</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>dict</p>
 </dd>
 </dl>
 </dd></dl>
@@ -2109,26 +2304,37 @@ Returns None if the tuple status has not been detected yet.</p>
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#">Documentation</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-nnterp.standardized_transformer">nnterp.standardized_transformer module</a><ul class="nav section-nav flex-column">
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.num_layers"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.num_layers</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.num_heads"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.num_heads</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.hidden_size"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.hidden_size</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.vocab_size"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.vocab_size</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.is_vllm"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.is_vllm</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.remote"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.remote</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.detect_layer_output_type"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.detect_layer_output_type()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.add_prefix_false_tokenizer"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.add_prefix_false_tokenizer</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.attn_probs_available"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.attn_probs_available</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.input_ids"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.input_ids</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.input_size"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.input_size</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.attention_mask"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.attention_mask</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.token_embeddings"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.token_embeddings</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.next_token_probs"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.next_token_probs</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.skip_layer"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.skip_layer()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.skip_layers"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.skip_layers()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.steer"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.steer()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.project_on_vocab"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.project_on_vocab()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.probs_to_dict"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.probs_to_dict()</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizationMixin.get_topk_closest_tokens"><code class="docutils literal notranslate"><span class="pre">StandardizationMixin.get_topk_closest_tokens()</span></code></a></li>
+</ul>
+</li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer</span></code></a><ul class="nav section-nav flex-column">
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.num_layers"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.num_layers</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.num_heads"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.num_heads</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.hidden_size"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.hidden_size</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.vocab_size"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.vocab_size</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.detect_layer_output_type"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.detect_layer_output_type()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.add_prefix_false_tokenizer"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.add_prefix_false_tokenizer</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.attn_probs_available"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.attn_probs_available</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.input_ids"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.input_ids</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.input_size"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.input_size</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.attention_mask"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.attention_mask</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.token_embeddings"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.token_embeddings</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.is_vllm"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.is_vllm</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.logits"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.logits</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.next_token_probs"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.next_token_probs</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.skip_layer"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.skip_layer()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.skip_layers"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.skip_layers()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.steer"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.steer()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.project_on_vocab"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.project_on_vocab()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.probs_to_dict"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.probs_to_dict()</span></code></a></li>
-<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedTransformer.get_topk_closest_tokens"><code class="docutils literal notranslate"><span class="pre">StandardizedTransformer.get_topk_closest_tokens()</span></code></a></li>
+</ul>
+</li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedVLM"><code class="docutils literal notranslate"><span class="pre">StandardizedVLM</span></code></a><ul class="nav section-nav flex-column">
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedVLM.is_vllm"><code class="docutils literal notranslate"><span class="pre">StandardizedVLM.is_vllm</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.standardized_transformer.StandardizedVLM.logits"><code class="docutils literal notranslate"><span class="pre">StandardizedVLM.logits</span></code></a></li>
 </ul>
 </li>
 </ul>
@@ -2214,6 +2420,7 @@ Returns None if the tuple status has not been detected yet.</p>
 <li class="toc-h1 nav-item toc-entry"><a class="reference internal nav-link" href="#internal-modules">Internal Modules</a><ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#module-nnterp.utils">nnterp.utils module</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.utils.ArchitectureNotFound"><code class="docutils literal notranslate"><span class="pre">ArchitectureNotFound</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.utils.detect_automodel"><code class="docutils literal notranslate"><span class="pre">detect_automodel()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.utils.is_notebook"><code class="docutils literal notranslate"><span class="pre">is_notebook()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.utils.display_markdown"><code class="docutils literal notranslate"><span class="pre">display_markdown()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.utils.display_source"><code class="docutils literal notranslate"><span class="pre">display_source()</span></code></a></li>
@@ -2270,6 +2477,10 @@ Returns None if the tuple status has not been detected yet.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.default_attention_prob_source"><code class="docutils literal notranslate"><span class="pre">default_attention_prob_source()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.gpt2_attention_prob_source"><code class="docutils literal notranslate"><span class="pre">gpt2_attention_prob_source()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.gptj_attention_prob_source"><code class="docutils literal notranslate"><span class="pre">gptj_attention_prob_source()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.qwen2moe_attention_prob_source"><code class="docutils literal notranslate"><span class="pre">qwen2moe_attention_prob_source()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.dbrx_attention_prob_source"><code class="docutils literal notranslate"><span class="pre">dbrx_attention_prob_source()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.stablelm_attention_prob_source"><code class="docutils literal notranslate"><span class="pre">stablelm_attention_prob_source()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.gptoss_attention_prob_source"><code class="docutils literal notranslate"><span class="pre">gptoss_attention_prob_source()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.AttentionProbabilitiesAccessor"><code class="docutils literal notranslate"><span class="pre">AttentionProbabilitiesAccessor</span></code></a><ul class="nav section-nav flex-column">
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.AttentionProbabilitiesAccessor.disable"><code class="docutils literal notranslate"><span class="pre">AttentionProbabilitiesAccessor.disable()</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.AttentionProbabilitiesAccessor.check_source"><code class="docutils literal notranslate"><span class="pre">AttentionProbabilitiesAccessor.check_source()</span></code></a></li>
@@ -2279,6 +2490,7 @@ Returns None if the tuple status has not been detected yet.</p>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.get_ignores"><code class="docutils literal notranslate"><span class="pre">get_ignores()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.check_io"><code class="docutils literal notranslate"><span class="pre">check_io()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.check_model_renaming"><code class="docutils literal notranslate"><span class="pre">check_model_renaming()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.hf_kwargs_to_vllm_kwargs"><code class="docutils literal notranslate"><span class="pre">hf_kwargs_to_vllm_kwargs()</span></code></a></li>
 </ul>
 </li>
 </ul>

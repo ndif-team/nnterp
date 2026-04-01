@@ -478,6 +478,38 @@
 <span class="nb">print</span><span class="p">(</span><span class="sa">f</span><span class="s2">&quot;vocabulary size: </span><span class="si">{</span><span class="n">model</span><span class="o">.</span><span class="n">vocab_size</span><span class="si">}</span><span class="s2">&quot;</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>Or use <code class="docutils literal notranslate"><span class="pre">load_model()</span></code> which auto-detects the model type:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">nnterp</span><span class="w"> </span><span class="kn">import</span> <span class="n">load_model</span>
+
+<span class="n">model</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>  <span class="c1"># returns StandardizedTransformer</span>
+<span class="n">vlm</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span><span class="p">)</span>  <span class="c1"># returns StandardizedVLM</span>
+</pre></div>
+</div>
+</section>
+<section id="vision-language-models">
+<h3>Vision-Language Models<a class="headerlink" href="#vision-language-models" title="Link to this heading">#</a></h3>
+<p><code class="docutils literal notranslate"><span class="pre">StandardizedVLM</span></code> wraps vision-language models with the same standardized interface.
+It extends nnsight’s <code class="docutils literal notranslate"><span class="pre">VisionLanguageModel</span></code> and supports image inputs via <code class="docutils literal notranslate"><span class="pre">model.trace()</span></code>:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="kn">from</span><span class="w"> </span><span class="nn">nnterp</span><span class="w"> </span><span class="kn">import</span> <span class="n">StandardizedVLM</span>
+
+<span class="n">vlm</span> <span class="o">=</span> <span class="n">StandardizedVLM</span><span class="p">(</span><span class="s2">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span><span class="p">)</span>
+
+<span class="c1"># Text-only tracing works the same as StandardizedTransformer</span>
+<span class="k">with</span> <span class="n">vlm</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="s2">&quot;Hello world&quot;</span><span class="p">):</span>
+    <span class="n">layer_out</span> <span class="o">=</span> <span class="n">vlm</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="c1"># All standardized accessors are available</span>
+<span class="nb">print</span><span class="p">(</span><span class="n">vlm</span><span class="o">.</span><span class="n">num_layers</span><span class="p">,</span> <span class="n">vlm</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">,</span> <span class="n">vlm</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span>
+</pre></div>
+</div>
+<div class="admonition note">
+<p class="admonition-title">Note</p>
+<p>Some VLM architectures are not supported:</p>
+<ul class="simple">
+<li><p><strong>Heterogeneous layers</strong> (e.g. Mllama/Llama-3.2-Vision): cross-attention layers only activate with image inputs, causing errors during text-only tracing. Pass <code class="docutils literal notranslate"><span class="pre">allow_multimodal=True</span></code> to opt in if you know what you’re doing.</p></li>
+<li><p><strong>AltUp models</strong> (e.g. Gemma 3n): use 4D hidden states instead of the standard 3D <code class="docutils literal notranslate"><span class="pre">(batch,</span> <span class="pre">seq,</span> <span class="pre">hidden)</span></code> shape. See <a class="reference external" href="https://github.com/ndif-team/nnterp/issues/35">issue #35</a>.</p></li>
+</ul>
+</div>
 </section>
 </section>
 <section id="accessing-module-i-o">
@@ -537,6 +569,13 @@
     <span class="n">model</span><span class="o">.</span><span class="n">steer</span><span class="p">(</span><span class="n">layers</span><span class="o">=</span><span class="p">[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">3</span><span class="p">],</span> <span class="n">steering_vector</span><span class="o">=</span><span class="n">steering_vector</span><span class="p">,</span> <span class="n">factor</span><span class="o">=</span><span class="mf">0.5</span><span class="p">)</span>
 </pre></div>
 </div>
+<p>You can target specific token positions or batch elements:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="k">with</span> <span class="n">model</span><span class="o">.</span><span class="n">trace</span><span class="p">([</span><span class="s2">&quot;The weather today is&quot;</span><span class="p">,</span> <span class="s2">&quot;I feel very&quot;</span><span class="p">]):</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">steer</span><span class="p">(</span><span class="n">layers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">steering_vector</span><span class="o">=</span><span class="n">steering_vector</span><span class="p">,</span> <span class="n">token_positions</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># first token only</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">steer</span><span class="p">(</span><span class="n">layers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">steering_vector</span><span class="o">=</span><span class="n">steering_vector</span><span class="p">,</span> <span class="n">batch_index</span><span class="o">=</span><span class="mi">0</span><span class="p">)</span>  <span class="c1"># first prompt only</span>
+    <span class="n">model</span><span class="o">.</span><span class="n">steer</span><span class="p">(</span><span class="n">layers</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">steering_vector</span><span class="o">=</span><span class="n">steering_vector</span><span class="p">,</span> <span class="n">batch_index</span><span class="o">=</span><span class="mi">1</span><span class="p">,</span> <span class="n">token_positions</span><span class="o">=</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">])</span>
+</pre></div>
+</div>
 </section>
 </section>
 
@@ -565,6 +604,7 @@
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#standardized-interface">Standardized Interface</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#loading-models">Loading Models</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#vision-language-models">Vision-Language Models</a></li>
 </ul>
 </li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#accessing-module-i-o">Accessing Module I/O</a><ul class="nav section-nav flex-column">

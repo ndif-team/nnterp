@@ -454,6 +454,25 @@
 <section id="added">
 <h3>Added<a class="headerlink" href="#added" title="Link to this heading">#</a></h3>
 <ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">StandardizedVLM</span></code> wrapper for vision-language models (Qwen2-VL, Gemma-3, GLM-4v, etc.)</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">load_model()</span></code> entrypoint that auto-detects VLMs via <code class="docutils literal notranslate"><span class="pre">detect_automodel()</span></code></p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">detect_automodel()</span></code> utility to determine the right AutoModel class from config</p></li>
+<li><p>Llama-4 support (<code class="docutils literal notranslate"><span class="pre">feed_forward</span></code> MLP naming)</p></li>
+<li><p>Heterogeneous submodule type warnings (e.g. dense MLP vs MoE across layers)</p></li>
+<li><p>VLM test suite with auto-discovery from HuggingFace toy model collection</p></li>
+<li><p>Skip pattern comments in test config for better maintainability</p></li>
+</ul>
+</section>
+<section id="changed">
+<h3>Changed<a class="headerlink" href="#changed" title="Link to this heading">#</a></h3>
+<ul class="simple">
+<li><p><code class="docutils literal notranslate"><span class="pre">StandardizedVLM.allow_multimodal</span></code> defaults to <code class="docutils literal notranslate"><span class="pre">False</span></code> (fail loud on heterogeneous layers)</p></li>
+<li><p>bfloat16 tolerance for attention probability checks (<code class="docutils literal notranslate"><span class="pre">1e-2</span></code> instead of <code class="docutils literal notranslate"><span class="pre">1e-5</span></code>)</p></li>
+</ul>
+</section>
+<section id="previous">
+<h3>Previous<a class="headerlink" href="#previous" title="Link to this heading">#</a></h3>
+<ul class="simple">
 <li><p>Initial Sphinx documentation setup</p></li>
 <li><p>API documentation for all main modules</p></li>
 <li><p>Integration with Read the Docs theme</p></li>
@@ -487,6 +506,8 @@
     <ul class="visible nav section-nav flex-column">
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#unreleased">[Unreleased]</a><ul class="nav section-nav flex-column">
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#added">Added</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#changed">Changed</a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#previous">Previous</a></li>
 </ul>
 </li>
 </ul>

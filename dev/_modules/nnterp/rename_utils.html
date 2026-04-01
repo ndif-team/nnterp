@@ -449,9 +449,10 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Literal</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">loguru</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
 
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">th</span>
+
+<span class="kn">from</span><span class="w"> </span><span class="nn">.logging</span><span class="w"> </span><span class="kn">import</span> <span class="n">logger</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">nnsight</span><span class="w"> </span><span class="kn">import</span> <span class="n">Envoy</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
     <span class="n">TraceTensor</span><span class="p">,</span>
@@ -465,6 +466,10 @@
     <span class="n">BloomForCausalLM</span><span class="p">,</span>
     <span class="n">GPT2LMHeadModel</span><span class="p">,</span>
     <span class="n">GPTJForCausalLM</span><span class="p">,</span>
+    <span class="n">Qwen2MoeForCausalLM</span><span class="p">,</span>
+    <span class="n">DbrxForCausalLM</span><span class="p">,</span>
+    <span class="n">StableLmForCausalLM</span><span class="p">,</span>
+    <span class="n">GptOssForCausalLM</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">IgnoreType</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;mlp&quot;</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">]</span>
@@ -626,7 +631,7 @@
 <span class="n">IGNORE_MLP_MODELS</span> <span class="o">=</span> <span class="p">(</span><span class="n">OPTForCausalLM</span><span class="p">,)</span>
 
 <span class="c1"># Alternative names for LLM layers</span>
-<span class="n">ATTENTION_NAMES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;attn&quot;</span><span class="p">,</span> <span class="s2">&quot;self_attention&quot;</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">,</span> <span class="s2">&quot;norm_attn_norm&quot;</span><span class="p">]</span>
+<span class="n">ATTENTION_NAMES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;attn&quot;</span><span class="p">,</span> <span class="s2">&quot;self_attention&quot;</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">,</span> <span class="s2">&quot;norm_attn_norm&quot;</span><span class="p">,</span> <span class="s2">&quot;linear_attn&quot;</span><span class="p">]</span>
 <span class="n">LAYER_NAMES</span> <span class="o">=</span> <span class="n">expand_path_with_model</span><span class="p">(</span>
     <span class="p">[</span>
         <span class="s2">&quot;h&quot;</span><span class="p">,</span>
@@ -637,6 +642,7 @@
 <span class="n">LN_NAMES</span> <span class="o">=</span> <span class="n">expand_path_with_model</span><span class="p">(</span>
     <span class="p">[</span>
         <span class="s2">&quot;final_layer_norm&quot;</span><span class="p">,</span>
+        <span class="s2">&quot;final_layernorm&quot;</span><span class="p">,</span>
         <span class="s2">&quot;ln_f&quot;</span><span class="p">,</span>
         <span class="s2">&quot;norm_f&quot;</span><span class="p">,</span>
         <span class="s2">&quot;norm&quot;</span><span class="p">,</span>
@@ -644,8 +650,8 @@
         <span class="s2">&quot;model.ln_final&quot;</span><span class="p">,</span>
     <span class="p">]</span>
 <span class="p">)</span>
-<span class="n">LM_HEAD_NAMES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;embed_out&quot;</span><span class="p">]</span>
-<span class="n">MLP_NAMES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;block_sparse_moe&quot;</span><span class="p">,</span> <span class="s2">&quot;ffn&quot;</span><span class="p">]</span>
+<span class="n">LM_HEAD_NAMES</span> <span class="o">=</span> <span class="n">expand_path_with_model</span><span class="p">([</span><span class="s2">&quot;embed_out&quot;</span><span class="p">,</span> <span class="s2">&quot;model.lm_head&quot;</span><span class="p">])</span>
+<span class="n">MLP_NAMES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;block_sparse_moe&quot;</span><span class="p">,</span> <span class="s2">&quot;feed_forward&quot;</span><span class="p">,</span> <span class="s2">&quot;ffn&quot;</span><span class="p">]</span>
 <span class="n">EMBED_TOKENS_NAMES</span> <span class="o">=</span> <span class="n">expand_path_with_model</span><span class="p">(</span>
     <span class="p">[</span>
         <span class="s2">&quot;wte&quot;</span><span class="p">,</span>
@@ -924,6 +930,48 @@
 
 
 
+<div class="viewcode-block" id="qwen2moe_attention_prob_source">
+<a class="viewcode-back" href="../../api.html#nnterp.rename_utils.qwen2moe_attention_prob_source">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">qwen2moe_attention_prob_source</span><span class="p">(</span><span class="n">attention_module</span><span class="p">,</span> <span class="n">return_module_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">return_module_source</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">attention_module</span><span class="o">.</span><span class="n">source</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">attention_module</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">nn_functional_dropout_0</span></div>
+
+
+
+<div class="viewcode-block" id="dbrx_attention_prob_source">
+<a class="viewcode-back" href="../../api.html#nnterp.rename_utils.dbrx_attention_prob_source">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">dbrx_attention_prob_source</span><span class="p">(</span><span class="n">attention_module</span><span class="p">,</span> <span class="n">return_module_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">return_module_source</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">attention_module</span><span class="o">.</span><span class="n">attn</span><span class="o">.</span><span class="n">source</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">attention_module</span><span class="o">.</span><span class="n">attn</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">nn_functional_dropout_0</span></div>
+
+
+
+<div class="viewcode-block" id="stablelm_attention_prob_source">
+<a class="viewcode-back" href="../../api.html#nnterp.rename_utils.stablelm_attention_prob_source">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">stablelm_attention_prob_source</span><span class="p">(</span><span class="n">attention_module</span><span class="p">,</span> <span class="n">return_module_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">return_module_source</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">attention_module</span><span class="o">.</span><span class="n">source</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">attention_module</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">self_attention_dropout_0</span></div>
+
+
+
+<div class="viewcode-block" id="gptoss_attention_prob_source">
+<a class="viewcode-back" href="../../api.html#nnterp.rename_utils.gptoss_attention_prob_source">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">gptoss_attention_prob_source</span><span class="p">(</span><span class="n">attention_module</span><span class="p">,</span> <span class="n">return_module_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+    <span class="k">if</span> <span class="n">return_module_source</span><span class="p">:</span>
+        <span class="k">return</span> <span class="n">attention_module</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">attention_interface_0</span><span class="o">.</span><span class="n">source</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">return</span> <span class="p">(</span>
+            <span class="n">attention_module</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">attention_interface_0</span><span class="o">.</span><span class="n">source</span><span class="o">.</span><span class="n">nn_functional_dropout_0</span>
+        <span class="p">)</span></div>
+
+
+
 <div class="viewcode-block" id="AttentionProbabilitiesAccessor">
 <a class="viewcode-back" href="../../api.html#nnterp.rename_utils.AttentionProbabilitiesAccessor">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">AttentionProbabilitiesAccessor</span><span class="p">:</span>
@@ -935,6 +983,7 @@
     <span class="p">):</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">initialized_with_enable</span> <span class="o">=</span> <span class="n">initialized_with_enable</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">attn_probs_dont_sum_to_one</span> <span class="o">=</span> <span class="kc">False</span>
         <span class="k">if</span> <span class="n">rename_config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">rename_config</span><span class="o">.</span><span class="n">attn_prob_source</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">rename_config</span><span class="o">.</span><span class="n">attn_prob_source</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">BloomForCausalLM</span><span class="p">):</span>
@@ -943,6 +992,15 @@
             <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">gpt2_attention_prob_source</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">GPTJForCausalLM</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">gptj_attention_prob_source</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">Qwen2MoeForCausalLM</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">qwen2moe_attention_prob_source</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">DbrxForCausalLM</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">dbrx_attention_prob_source</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">StableLmForCausalLM</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">stablelm_attention_prob_source</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">GptOssForCausalLM</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">gptoss_attention_prob_source</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">attn_probs_dont_sum_to_one</span> <span class="o">=</span> <span class="kc">True</span>
         <span class="k">else</span><span class="p">:</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">default_attention_prob_source</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">enabled</span> <span class="o">=</span> <span class="kc">True</span>
@@ -1013,8 +1071,19 @@
             <span class="bp">self</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="n">rnd</span>
             <span class="k">if</span> <span class="n">probs</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">th</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;meta&quot;</span><span class="p">):</span>
                 <span class="n">sum_last</span> <span class="o">=</span> <span class="n">probs</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
-                <span class="k">if</span> <span class="ow">not</span> <span class="n">th</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">sum_last</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">sum_last</span><span class="p">)):</span>
-                    <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span><span class="s2">&quot;Attention probabilities do not sum to 1.&quot;</span><span class="p">)</span>
+                <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">attn_probs_dont_sum_to_one</span><span class="p">:</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">sum_last</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+                        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
+                            <span class="s2">&quot;Attention probabilities should be &gt; 0.&quot;</span>
+                        <span class="p">)</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">sum_last</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="mf">1e-5</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
+                        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
+                            <span class="s2">&quot;Attention probabilities should sum to &lt; 1 for models with sink tokens.&quot;</span>
+                        <span class="p">)</span>
+                <span class="k">else</span><span class="p">:</span>
+                    <span class="n">atol</span> <span class="o">=</span> <span class="mf">1e-2</span> <span class="k">if</span> <span class="n">probs</span><span class="o">.</span><span class="n">dtype</span> <span class="o">==</span> <span class="n">th</span><span class="o">.</span><span class="n">bfloat16</span> <span class="k">else</span> <span class="mf">1e-5</span>
+                    <span class="k">if</span> <span class="ow">not</span> <span class="n">th</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">sum_last</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">sum_last</span><span class="p">),</span> <span class="n">atol</span><span class="o">=</span><span class="n">atol</span><span class="p">):</span>
+                        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span><span class="s2">&quot;Attention probabilities do not sum to 1.&quot;</span><span class="p">)</span>
 
         <span class="k">if</span> <span class="n">use_trace</span><span class="p">:</span>
             <span class="k">with</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">dummy_inputs</span><span class="p">()):</span>
@@ -1117,113 +1186,99 @@
 
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_tensor</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">expected_shape</span><span class="p">:</span> <span class="nb">tuple</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate that a tensor has the expected type and shape.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">tensor</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">tensor</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
+        <span class="p">)</span>
+    <span class="k">if</span> <span class="n">tensor</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">expected_shape</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> has shape </span><span class="si">{</span><span class="n">tensor</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="n">expected_shape</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. &quot;</span>
+            <span class="s2">&quot;This means it&#39;s not properly initialized.&quot;</span>
+        <span class="p">)</span>
+
+
 <div class="viewcode-block" id="check_io">
 <a class="viewcode-back" href="../../api.html#nnterp.rename_utils.check_io">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">check_io</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">ignores</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">IgnoreType</span><span class="p">]):</span>
-    <span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">input_size</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Validate that standardized accessors return tensors with consistent shapes.</span>
+
+<span class="sd">    Handles both HF models (``input_size = (batch, seq)``) and vLLM models</span>
+<span class="sd">    (``input_size = (seq,)``). Shape expectations adapt via ``(*input_size, dim)``.</span>
+
+<span class="sd">    For vLLM, ``lm_head.output`` is not checked because vLLM computes logits</span>
+<span class="sd">    in a separate phase outside the model&#39;s forward pass.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">input_size</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">input_size</span>
     <span class="n">hidden_size</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">hidden_size</span>
     <span class="k">if</span> <span class="n">hidden_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Can&#39;t check the shapes of the model internals because the hidden size is not available in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture.&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Can&#39;t check the shapes of the model internals because the hidden size is not available in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. &quot;</span>
             <span class="s2">&quot;You should pass the hidden size as an integer or look at the config and pass the key in the hidden_size_config_key argument of a RenameConfig.&quot;</span>
         <span class="p">)</span>
-    <span class="n">token_embeddings</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">token_embeddings</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">token_embeddings</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;token_embeddings is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">token_embeddings</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="n">token_embeddings</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;token_embeddings has shape </span><span class="si">{</span><span class="n">token_embeddings</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span><span class="w"> </span><span class="n">seq_len</span><span class="p">,</span><span class="w"> </span><span class="n">hidden_size</span><span class="p">)</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-        <span class="p">)</span>
-    <span class="n">layer_input</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">layers_input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer_input</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;layers_input[0] is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">layer_input</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="n">layer_input</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;layers_input[0] has shape </span><span class="si">{</span><span class="n">layer_input</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span><span class="w"> </span><span class="n">seq_len</span><span class="p">,</span><span class="w"> </span><span class="n">hidden_size</span><span class="p">)</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="s2">&quot;attention&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
-        <span class="n">attention_input</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">attentions_input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="n">attention_output</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">attentions_output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attention_input</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;attentions_input[0] is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">attention_input</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span>
-        <span class="k">if</span> <span class="n">attention_input</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;attentions_input[0] has shape </span><span class="si">{</span><span class="n">attention_input</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span><span class="w"> </span><span class="n">seq_len</span><span class="p">,</span><span class="w"> </span><span class="n">hidden_size</span><span class="p">)</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">attention_output</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;attentions_output[0] is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">attention_output</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span>
-        <span class="k">if</span> <span class="n">attention_output</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span>
-            <span class="n">batch_size</span><span class="p">,</span>
-            <span class="n">seq_len</span><span class="p">,</span>
-            <span class="n">hidden_size</span><span class="p">,</span>
-        <span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;attentions_output[0] has shape </span><span class="si">{</span><span class="n">attention_output</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span><span class="w"> </span><span class="n">seq_len</span><span class="p">,</span><span class="w"> </span><span class="n">hidden_size</span><span class="p">)</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span>
-    <span class="k">if</span> <span class="s2">&quot;mlp&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
-        <span class="n">mlp_input</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">mlps_input</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="n">mlp_output</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">mlps_output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">mlp_input</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;mlps_input[0] is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">mlp_input</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span>
-        <span class="k">if</span> <span class="n">mlp_input</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;mlps_input[0] has shape </span><span class="si">{</span><span class="n">mlp_input</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span><span class="w"> </span><span class="n">seq_len</span><span class="p">,</span><span class="w"> </span><span class="n">hidden_size</span><span class="p">)</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">mlp_output</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;mlps_output[0] is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">mlp_output</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span>
-        <span class="k">if</span> <span class="n">mlp_output</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;mlps_output[0] has shape </span><span class="si">{</span><span class="n">mlp_output</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span><span class="w"> </span><span class="n">seq_len</span><span class="p">,</span><span class="w"> </span><span class="n">hidden_size</span><span class="p">)</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span>
-    <span class="n">layer_output</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">layer_output</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;layers_output[0] is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">layer_output</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="n">layer_output</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;layers_output[0] has shape </span><span class="si">{</span><span class="n">layer_output</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span><span class="w"> </span><span class="n">seq_len</span><span class="p">,</span><span class="w"> </span><span class="n">std_model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">hidden_size</span><span class="p">)</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-        <span class="p">)</span>
-    <span class="n">ln_final_out</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">ln_final</span><span class="o">.</span><span class="n">output</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">ln_final_out</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;ln_final.output is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">ln_final_out</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="n">ln_final_out</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;ln_final.output has shape </span><span class="si">{</span><span class="n">ln_final_out</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span><span class="w"> </span><span class="n">seq_len</span><span class="p">,</span><span class="w"> </span><span class="n">hidden_size</span><span class="p">)</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-        <span class="p">)</span>
-    <span class="n">lm_head_out</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">lm_head</span><span class="o">.</span><span class="n">output</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">lm_head_out</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;lm_head.output is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">lm_head_out</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="n">std_model</span><span class="o">.</span><span class="n">vocab_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Couldn&#39;t find vocab_size in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> config. Couldn&#39;t properly test the shape of lm_head.output.&quot;</span>
-        <span class="p">)</span>
-        <span class="k">if</span> <span class="n">lm_head_out</span><span class="o">.</span><span class="n">dim</span><span class="p">()</span> <span class="o">!=</span> <span class="mi">3</span> <span class="ow">or</span> <span class="n">lm_head_out</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;lm_head.output has shape </span><span class="si">{</span><span class="n">lm_head_out</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != (</span><span class="si">{</span><span class="n">batch_size</span><span class="si">}</span><span class="s2">, </span><span class="si">{</span><span class="w"> </span><span class="n">seq_len</span><span class="si">}</span><span class="s2">, &lt;vocab_size&gt;) in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span>
-    <span class="k">else</span><span class="p">:</span>
-        <span class="k">if</span> <span class="n">lm_head_out</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="p">(</span><span class="n">batch_size</span><span class="p">,</span> <span class="n">seq_len</span><span class="p">,</span> <span class="n">std_model</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;lm_head.output has shape </span><span class="si">{</span><span class="n">lm_head_out</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="p">(</span><span class="n">batch_size</span><span class="p">,</span><span class="w"> </span><span class="n">seq_len</span><span class="p">,</span><span class="w"> </span><span class="n">std_model</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means it&#39;s not properly initialized.&quot;</span>
-            <span class="p">)</span></div>
+    <span class="n">expected_hidden</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">)</span>
 
+    <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">token_embeddings</span><span class="p">,</span> <span class="s2">&quot;token_embeddings&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+    <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers_input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;layers_input[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s2">&quot;attention&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
+        <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">attentions_input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;attentions_input[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+        <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">attentions_output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;attentions_output[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="s2">&quot;mlp&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
+        <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">mlps_input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;mlps_input[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+        <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">mlps_output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;mlps_output[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+
+    <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;layers_output[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+    <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">ln_final</span><span class="o">.</span><span class="n">output</span><span class="p">,</span> <span class="s2">&quot;ln_final.output&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+
+    <span class="c1"># vLLM computes logits in a separate phase (not part of the model forward pass),</span>
+    <span class="c1"># so lm_head.output is not accessible during a vLLM trace.</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">std_model</span><span class="o">.</span><span class="n">is_vllm</span><span class="p">:</span>
+        <span class="n">lm_head_out</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">lm_head</span><span class="o">.</span><span class="n">output</span>
+        <span class="k">if</span> <span class="ow">not</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">lm_head_out</span><span class="p">,</span> <span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">):</span>
+            <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;lm_head.output is not a tensor in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. &quot;</span>
+                <span class="sa">f</span><span class="s2">&quot;Found type </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">lm_head_out</span><span class="p">)</span><span class="si">}</span><span class="s2">. This means it&#39;s not properly initialized.&quot;</span>
+            <span class="p">)</span>
+        <span class="n">expected_vocab</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">input_size</span><span class="p">,</span> <span class="n">std_model</span><span class="o">.</span><span class="n">vocab_size</span><span class="p">)</span>
+        <span class="k">if</span> <span class="n">std_model</span><span class="o">.</span><span class="n">vocab_size</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Couldn&#39;t find vocab_size in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> config. Couldn&#39;t properly test the shape of lm_head.output.&quot;</span>
+            <span class="p">)</span>
+            <span class="k">if</span> <span class="n">lm_head_out</span><span class="o">.</span><span class="n">shape</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">!=</span> <span class="n">input_size</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;lm_head.output has shape </span><span class="si">{</span><span class="n">lm_head_out</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2">, expected prefix </span><span class="si">{</span><span class="n">input_size</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture.&quot;</span>
+                <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">lm_head_out</span><span class="o">.</span><span class="n">shape</span> <span class="o">!=</span> <span class="n">expected_vocab</span><span class="p">:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;lm_head.output has shape </span><span class="si">{</span><span class="n">lm_head_out</span><span class="o">.</span><span class="n">shape</span><span class="si">}</span><span class="s2"> != </span><span class="si">{</span><span class="n">expected_vocab</span><span class="si">}</span><span class="s2"> in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture.&quot;</span>
+                <span class="p">)</span></div>
+
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_has_module</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">rename_arg</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Raise RenamingError if ``obj`` doesn&#39;t have ``attr``.&quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">obj</span><span class="p">,</span> <span class="n">attr</span><span class="p">):</span>
+        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Could not find </span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2"> module in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;This means that it was not properly renamed.</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;Please pass the name of the </span><span class="si">{</span><span class="n">attr</span><span class="si">}</span><span class="s2"> module to the </span><span class="si">{</span><span class="n">rename_arg</span><span class="si">}</span><span class="s2"> argument.&quot;</span>
+        <span class="p">)</span>
+
+
+<span class="k">def</span><span class="w"> </span><span class="nf">_warn_heterogeneous_types</span><span class="p">(</span><span class="n">accessor</span><span class="p">,</span> <span class="n">num_layers</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span> <span class="n">kind</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Warn if modules accessed by ``accessor[i]`` have mixed types across layers.&quot;&quot;&quot;</span>
+    <span class="n">types</span> <span class="o">=</span> <span class="p">{</span><span class="nb">type</span><span class="p">(</span><span class="n">accessor</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">_module</span><span class="p">)</span> <span class="k">for</span> <span class="n">i</span> <span class="ow">in</span> <span class="nb">range</span><span class="p">(</span><span class="n">num_layers</span><span class="p">)}</span>
+    <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">types</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+        <span class="n">type_names</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="vm">__name__</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">types</span><span class="p">))</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;Model </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> has heterogeneous </span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2"> types across layers: </span><span class="si">{</span><span class="n">type_names</span><span class="si">}</span><span class="s2">. &quot;</span>
+            <span class="s2">&quot;Some nnterp operations may not work consistently across all layers.&quot;</span>
+        <span class="p">)</span>
 
 
 <div class="viewcode-block" id="check_model_renaming">
@@ -1233,35 +1288,32 @@
     <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">ignores</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">IgnoreType</span><span class="p">],</span>
     <span class="n">allow_dispatch</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+    <span class="n">allow_multimodal</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">):</span>
+    <span class="n">_check_has_module</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="s2">&quot;layers&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="s2">&quot;layers_rename&quot;</span><span class="p">)</span>
 
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="s2">&quot;layers&quot;</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Could not find layers module in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means that it was not properly renamed.</span><span class="se">\n</span><span class="s2">&quot;</span>
-            <span class="s2">&quot;Please pass the name of the layers module to the layers_rename argument.&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="s2">&quot;ln_final&quot;</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Could not find ln_final module in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means that it was not properly renamed.</span><span class="se">\n</span><span class="s2">&quot;</span>
-            <span class="s2">&quot;Please pass the name of the ln_final module to the ln_final_rename argument.&quot;</span>
-        <span class="p">)</span>
-    <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="s2">&quot;lm_head&quot;</span><span class="p">):</span>
-        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
-            <span class="sa">f</span><span class="s2">&quot;Could not find lm_head module in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means that it was not properly renamed.</span><span class="se">\n</span><span class="s2">&quot;</span>
-            <span class="s2">&quot;Please pass the name of the lm_head module to the lm_head_rename argument.&quot;</span>
-        <span class="p">)</span>
+    <span class="k">if</span> <span class="ow">not</span> <span class="n">allow_multimodal</span><span class="p">:</span>
+        <span class="n">layer_types</span> <span class="o">=</span> <span class="p">{</span><span class="nb">type</span><span class="p">(</span><span class="n">layer</span><span class="o">.</span><span class="n">_module</span><span class="p">)</span> <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="n">std_model</span><span class="o">.</span><span class="n">layers</span><span class="p">}</span>
+        <span class="k">if</span> <span class="nb">len</span><span class="p">(</span><span class="n">layer_types</span><span class="p">)</span> <span class="o">&gt;</span> <span class="mi">1</span><span class="p">:</span>
+            <span class="n">type_names</span> <span class="o">=</span> <span class="s2">&quot;, &quot;</span><span class="o">.</span><span class="n">join</span><span class="p">(</span><span class="nb">sorted</span><span class="p">(</span><span class="n">t</span><span class="o">.</span><span class="vm">__name__</span> <span class="k">for</span> <span class="n">t</span> <span class="ow">in</span> <span class="n">layer_types</span><span class="p">))</span>
+            <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Model </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> has heterogeneous layer types: </span><span class="si">{</span><span class="n">type_names</span><span class="si">}</span><span class="s2">.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="s2">&quot;This likely means it is a multimodal model where some layers (e.g. cross-attention) &quot;</span>
+                <span class="s2">&quot;only activate with specific inputs (like images). &quot;</span>
+                <span class="s2">&quot;nnterp cannot guarantee standardized access to all layers in this case.</span><span class="se">\n</span><span class="s2">&quot;</span>
+                <span class="s2">&quot;If you want to use this model anyway, pass allow_multimodal=True to StandardizedTransformer.&quot;</span>
+            <span class="p">)</span>
+
+    <span class="n">_check_has_module</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="s2">&quot;ln_final&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="s2">&quot;ln_final_rename&quot;</span><span class="p">)</span>
+    <span class="n">_check_has_module</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="s2">&quot;lm_head&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="s2">&quot;lm_head_rename&quot;</span><span class="p">)</span>
+
     <span class="k">if</span> <span class="s2">&quot;attention&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;self_attn&quot;</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Could not find self_attn module in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means that it was not properly renamed.</span><span class="se">\n</span><span class="s2">&quot;</span>
-                <span class="s2">&quot;Please pass the name of the self_attn module to the attn_rename argument.&quot;</span>
-            <span class="p">)</span>
+        <span class="n">_check_has_module</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;self_attn&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="s2">&quot;attn_rename&quot;</span><span class="p">)</span>
+        <span class="n">_warn_heterogeneous_types</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">attentions</span><span class="p">,</span> <span class="n">std_model</span><span class="o">.</span><span class="n">num_layers</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+
     <span class="k">if</span> <span class="s2">&quot;mlp&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
-        <span class="k">if</span> <span class="ow">not</span> <span class="nb">hasattr</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;mlp&quot;</span><span class="p">):</span>
-            <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
-                <span class="sa">f</span><span class="s2">&quot;Could not find mlp module in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. This means that it was not properly renamed.</span><span class="se">\n</span><span class="s2">&quot;</span>
-                <span class="s2">&quot;Please pass the name of the mlp module to the mlp_rename argument.&quot;</span>
-            <span class="p">)</span>
+        <span class="n">_check_has_module</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;mlp&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="s2">&quot;mlp_rename&quot;</span><span class="p">)</span>
+        <span class="n">_warn_heterogeneous_types</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">mlps</span><span class="p">,</span> <span class="n">std_model</span><span class="o">.</span><span class="n">num_layers</span><span class="p">,</span> <span class="s2">&quot;MLP&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
 
     <span class="n">try_with_scan</span><span class="p">(</span>
         <span class="n">std_model</span><span class="p">,</span>
@@ -1270,6 +1322,30 @@
         <span class="n">allow_dispatch</span><span class="p">,</span>
         <span class="n">errors_to_raise</span><span class="o">=</span><span class="p">(</span><span class="n">RenamingError</span><span class="p">,),</span>
     <span class="p">)</span></div>
+
+
+
+<span class="n">HF_TO_VLLM_KWARGS_MAP</span> <span class="o">=</span> <span class="nb">dict</span><span class="p">(</span>
+    <span class="n">max_new_tokens</span><span class="o">=</span><span class="s2">&quot;max_tokens&quot;</span><span class="p">,</span>
+<span class="p">)</span>
+
+
+<div class="viewcode-block" id="hf_kwargs_to_vllm_kwargs">
+<a class="viewcode-back" href="../../api.html#nnterp.rename_utils.hf_kwargs_to_vllm_kwargs">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">hf_kwargs_to_vllm_kwargs</span><span class="p">(</span><span class="n">kwargs</span><span class="p">:</span> <span class="nb">dict</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">dict</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Translate HuggingFace keyword arguments to their vLLM equivalents.</span>
+
+<span class="sd">    Raises ValueError if both the HF and vLLM names are present with different values.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">for</span> <span class="n">hf_name</span><span class="p">,</span> <span class="n">vllm_name</span> <span class="ow">in</span> <span class="n">HF_TO_VLLM_KWARGS_MAP</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+        <span class="k">if</span> <span class="n">hf_name</span> <span class="ow">in</span> <span class="n">kwargs</span><span class="p">:</span>
+            <span class="k">if</span> <span class="n">vllm_name</span> <span class="ow">in</span> <span class="n">kwargs</span> <span class="ow">and</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">vllm_name</span><span class="p">]</span> <span class="o">!=</span> <span class="n">kwargs</span><span class="p">[</span><span class="n">hf_name</span><span class="p">]:</span>
+                <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;Conflicting values for </span><span class="si">{</span><span class="n">hf_name</span><span class="si">}</span><span class="s2"> and </span><span class="si">{</span><span class="n">vllm_name</span><span class="si">}</span><span class="s2">: &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">kwargs</span><span class="p">[</span><span class="n">hf_name</span><span class="p">]</span><span class="si">}</span><span class="s2"> vs </span><span class="si">{</span><span class="n">kwargs</span><span class="p">[</span><span class="n">vllm_name</span><span class="p">]</span><span class="si">}</span><span class="s2">&quot;</span>
+                <span class="p">)</span>
+            <span class="n">kwargs</span><span class="p">[</span><span class="n">vllm_name</span><span class="p">]</span> <span class="o">=</span> <span class="n">kwargs</span><span class="o">.</span><span class="n">pop</span><span class="p">(</span><span class="n">hf_name</span><span class="p">)</span>
+    <span class="k">return</span> <span class="n">kwargs</span></div>
 
 </pre></div>
 

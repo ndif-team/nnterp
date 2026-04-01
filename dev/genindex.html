@@ -435,6 +435,7 @@
  | <a href="#N"><strong>N</strong></a>
  | <a href="#O"><strong>O</strong></a>
  | <a href="#P"><strong>P</strong></a>
+ | <a href="#Q"><strong>Q</strong></a>
  | <a href="#R"><strong>R</strong></a>
  | <a href="#S"><strong>S</strong></a>
  | <a href="#T"><strong>T</strong></a>
@@ -445,11 +446,11 @@
 <h2 id="A">A</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.add_prefix_false_tokenizer">add_prefix_false_tokenizer (StandardizedTransformer property)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.add_prefix_false_tokenizer">add_prefix_false_tokenizer (StandardizationMixin property)</a>
 </li>
       <li><a href="api.html#nnterp.utils.ArchitectureNotFound">ArchitectureNotFound (class in nnterp.utils)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.attention_mask">attention_mask (StandardizedTransformer property)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.attention_mask">attention_mask (StandardizationMixin property)</a>
 </li>
       <li><a href="api.html#nnterp.rename_utils.AttentionProbabilitiesAccessor">AttentionProbabilitiesAccessor (class in nnterp.rename_utils)</a>
 </li>
@@ -461,7 +462,7 @@
 </li>
       <li><a href="api.html#nnterp.rename_utils.RenameConfig.attn_prob_source">attn_prob_source (RenameConfig attribute)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.attn_probs_available">attn_probs_available (StandardizedTransformer property)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.attn_probs_available">attn_probs_available (StandardizationMixin property)</a>
 </li>
       <li><a href="api.html#nnterp.rename_utils.AttnProbFunction">AttnProbFunction (class in nnterp.rename_utils)</a>
 </li>
@@ -501,6 +502,8 @@
 <h2 id="D">D</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#nnterp.rename_utils.dbrx_attention_prob_source">dbrx_attention_prob_source() (in module nnterp.rename_utils)</a>
+</li>
       <li><a href="api.html#nnterp.rename_utils.default_attention_prob_source">default_attention_prob_source() (in module nnterp.rename_utils)</a>
 </li>
       <li><a href="api.html#nnterp.rename_utils.default_attn_head_config_keys">default_attn_head_config_keys() (in module nnterp.rename_utils)</a>
@@ -509,10 +512,12 @@
 </li>
       <li><a href="api.html#nnterp.rename_utils.default_vocab_size_config_keys">default_vocab_size_config_keys() (in module nnterp.rename_utils)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.detect_layer_output_type">detect_layer_output_type() (StandardizedTransformer method)</a>
+      <li><a href="api.html#nnterp.utils.detect_automodel">detect_automodel() (in module nnterp.utils)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.detect_layer_output_type">detect_layer_output_type() (StandardizationMixin method)</a>
+</li>
       <li><a href="api.html#nnterp.rename_utils.AttentionProbabilitiesAccessor.disable">disable() (AttentionProbabilitiesAccessor method)</a>
 </li>
       <li><a href="api.html#nnterp.utils.display_markdown">display_markdown() (in module nnterp.utils)</a>
@@ -613,7 +618,7 @@
 </li>
       <li><a href="api.html#nnterp.nnsight_utils.get_token_activations">get_token_activations() (in module nnterp.nnsight_utils)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.get_topk_closest_tokens">get_topk_closest_tokens() (StandardizedTransformer method)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.get_topk_closest_tokens">get_topk_closest_tokens() (StandardizationMixin method)</a>
 </li>
       <li><a href="api.html#nnterp.nnsight_utils.get_unembed">get_unembed() (in module nnterp.nnsight_utils)</a>
 
@@ -633,6 +638,8 @@
 </li>
       <li><a href="api.html#nnterp.rename_utils.gptj_attention_prob_source">gptj_attention_prob_source() (in module nnterp.rename_utils)</a>
 </li>
+      <li><a href="api.html#nnterp.rename_utils.gptoss_attention_prob_source">gptoss_attention_prob_source() (in module nnterp.rename_utils)</a>
+</li>
   </ul></td>
 </tr></table>
 
@@ -641,9 +648,11 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api.html#nnterp.prompt_utils.Prompt.has_no_collisions">has_no_collisions() (Prompt method)</a>
 </li>
+      <li><a href="api.html#nnterp.rename_utils.hf_kwargs_to_vllm_kwargs">hf_kwargs_to_vllm_kwargs() (in module nnterp.rename_utils)</a>
+</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.hidden_size">hidden_size (StandardizedTransformer attribute)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.hidden_size">hidden_size (StandardizationMixin attribute)</a>
 </li>
       <li><a href="api.html#nnterp.rename_utils.RenameConfig.hidden_size_config_key">hidden_size_config_key (RenameConfig attribute)</a>
 </li>
@@ -663,18 +672,26 @@
         <li><a href="api.html#nnterp.interventions.TargetPromptBatch.index_to_patch">(TargetPromptBatch attribute)</a>
 </li>
       </ul></li>
-  </ul></td>
-  <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api.html#nnterp.rename_utils.IOType.INPUT">INPUT (IOType attribute)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.input_ids">input_ids (StandardizedTransformer property)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.input_ids">input_ids (StandardizationMixin property)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.input_size">input_size (StandardizedTransformer property)</a>
+  </ul></td>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.input_size">input_size (StandardizationMixin property)</a>
 </li>
       <li><a href="api.html#nnterp.rename_utils.IOType">IOType (class in nnterp.rename_utils)</a>
 </li>
       <li><a href="api.html#nnterp.utils.is_notebook">is_notebook() (in module nnterp.utils)</a>
 </li>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.is_vllm">is_vllm (StandardizationMixin attribute)</a>
+
+      <ul>
+        <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.is_vllm">(StandardizedTransformer attribute)</a>
+</li>
+        <li><a href="api.html#nnterp.standardized_transformer.StandardizedVLM.is_vllm">(StandardizedVLM attribute)</a>
+</li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -694,7 +711,11 @@
       <li><a href="api.html#nnterp.interventions.logit_lens">logit_lens() (in module nnterp.interventions)</a>
 </li>
       <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.logits">logits (StandardizedTransformer property)</a>
+
+      <ul>
+        <li><a href="api.html#nnterp.standardized_transformer.StandardizedVLM.logits">(StandardizedVLM property)</a>
 </li>
+      </ul></li>
   </ul></td>
 </tr></table>
 
@@ -734,7 +755,7 @@
 <h2 id="N">N</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.next_token_probs">next_token_probs (StandardizedTransformer property)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.next_token_probs">next_token_probs (StandardizationMixin property)</a>
 </li>
       <li><a href="api.html#nnterp.prompt_utils.next_token_probs_unsqueeze">next_token_probs_unsqueeze() (in module nnterp.prompt_utils)</a>
 </li>
@@ -789,9 +810,9 @@
         <li><a href="api.html#module-nnterp.utils">module</a>
 </li>
       </ul></li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.num_heads">num_heads (StandardizedTransformer attribute)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.num_heads">num_heads (StandardizationMixin attribute)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.num_layers">num_layers (StandardizedTransformer attribute)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.num_layers">num_layers (StandardizationMixin attribute)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -817,14 +838,14 @@
 </li>
       <li><a href="api.html#nnterp.rename_utils.AttentionProbabilitiesAccessor.print_source">print_source() (AttentionProbabilitiesAccessor method)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.probs_to_dict">probs_to_dict() (StandardizedTransformer method)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.probs_to_dict">probs_to_dict() (StandardizationMixin method)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api.html#nnterp.nnsight_utils.project_on_vocab">project_on_vocab() (in module nnterp.nnsight_utils)</a>
 
       <ul>
-        <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.project_on_vocab">(StandardizedTransformer method)</a>
+        <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.project_on_vocab">(StandardizationMixin method)</a>
 </li>
       </ul></li>
       <li><a href="api.html#nnterp.prompt_utils.Prompt">Prompt (class in nnterp.prompt_utils)</a>
@@ -842,17 +863,27 @@
   </ul></td>
 </tr></table>
 
+<h2 id="Q">Q</h2>
+<table style="width: 100%" class="indextable genindextable"><tr>
+  <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#nnterp.rename_utils.qwen2moe_attention_prob_source">qwen2moe_attention_prob_source() (in module nnterp.rename_utils)</a>
+</li>
+  </ul></td>
+</tr></table>
+
 <h2 id="R">R</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.remote">remote (StandardizationMixin attribute)</a>
+</li>
       <li><a href="api.html#nnterp.rename_utils.RenameConfig">RenameConfig (class in nnterp.rename_utils)</a>
 </li>
       <li><a href="api.html#nnterp.rename_utils.RenamingError">RenamingError</a>
 </li>
-      <li><a href="api.html#nnterp.interventions.repeat_prompt">repeat_prompt() (in module nnterp.interventions)</a>
-</li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
+      <li><a href="api.html#nnterp.interventions.repeat_prompt">repeat_prompt() (in module nnterp.interventions)</a>
+</li>
       <li><a href="api.html#nnterp.rename_utils.LayerAccessor.returns_tuple">returns_tuple (LayerAccessor property)</a>
 </li>
       <li><a href="api.html#nnterp.prompt_utils.Prompt.run">run() (Prompt method)</a>
@@ -867,15 +898,21 @@
   <td style="width: 33%; vertical-align: top;"><ul>
       <li><a href="api.html#nnterp.nnsight_utils.set_layer_output">set_layer_output() (in module nnterp.nnsight_utils)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.skip_layer">skip_layer() (StandardizedTransformer method)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.skip_layer">skip_layer() (StandardizationMixin method)</a>
+</li>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.skip_layers">skip_layers() (StandardizationMixin method)</a>
+</li>
+      <li><a href="api.html#nnterp.rename_utils.stablelm_attention_prob_source">stablelm_attention_prob_source() (in module nnterp.rename_utils)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.skip_layers">skip_layers() (StandardizedTransformer method)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin">StandardizationMixin (class in nnterp.standardized_transformer)</a>
 </li>
       <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer">StandardizedTransformer (class in nnterp.standardized_transformer)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.steer">steer() (StandardizedTransformer method)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizedVLM">StandardizedVLM (class in nnterp.standardized_transformer)</a>
+</li>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.steer">steer() (StandardizationMixin method)</a>
 </li>
   </ul></td>
 </tr></table>
@@ -897,7 +934,7 @@
 </li>
       <li><a href="api.html#nnterp.utils.DummyCache.to_legacy_cache">to_legacy_cache() (DummyCache method)</a>
 </li>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.token_embeddings">token_embeddings (StandardizedTransformer property)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.token_embeddings">token_embeddings (StandardizationMixin property)</a>
 </li>
       <li><a href="api.html#nnterp.prompt_utils.TokenizationError">TokenizationError</a>
 </li>
@@ -917,7 +954,7 @@
 <h2 id="V">V</h2>
 <table style="width: 100%" class="indextable genindextable"><tr>
   <td style="width: 33%; vertical-align: top;"><ul>
-      <li><a href="api.html#nnterp.standardized_transformer.StandardizedTransformer.vocab_size">vocab_size (StandardizedTransformer attribute)</a>
+      <li><a href="api.html#nnterp.standardized_transformer.StandardizationMixin.vocab_size">vocab_size (StandardizationMixin attribute)</a>
 </li>
   </ul></td>
   <td style="width: 33%; vertical-align: top;"><ul>

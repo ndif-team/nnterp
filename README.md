@@ -108,7 +108,7 @@ patchscope_probs = patchscope_lens(
     model,
     source_prompts=["The capital of England is"],
     target_patch_prompts=target,
-    layer_to_patch=10
+    layers=10
 )
 
 # Activation steering

@@ -48,11 +48,22 @@ nnterp is a mechanistic interpretability library built on top of nnsight, provid
 
 **nnsight** `nnterp` is built on top of `nnsight`. A very important thing about `nnsight` is that interventions in a trace **MUST BE WRITTEN IN ORDER**. This means e.g. you can't access the output of a layer and then access its input / its mlp output.
 
+**Model Loading** (`__init__.py`)
+- `load_model(model_name)` — **Recommended entrypoint**. Auto-detects VLMs via `detect_automodel()` and returns the appropriate wrapper (`StandardizedTransformer`, `StandardizedVLM`, or `StandardizedVLLM`)
+- `detect_automodel(model_name)` — Inspects model config to determine the right `AutoModel` class. Priority: `AutoModelForImageTextToText` > `AutoModelForCausalLM` > `AutoModelForSeq2SeqLM`
+
 **StandardizedTransformer** (`standardized_transformer.py`)
-- Unified interface for different transformer architectures (extends `nnsight.LanguageModel`)
+- Unified interface for text transformer architectures (extends `nnsight.LanguageModel`)
 - Standardizes module naming across models (layers, attention, MLP components)
-- **Primary model loading method**: Use `StandardizedTransformer("model_name")` instead of deprecated `load_model()`
 - **Attention probabilities**: Opt-in with `enable_attention_probs=True` (automatically sets `attn_implementation="eager"`)
+- If a VLM is passed to `StandardizedTransformer`, it warns and suggests using `StandardizedVLM` or `load_model()`
+
+**StandardizedVLM** (`standardized_transformer.py`)
+- Unified interface for vision-language models (extends `nnsight.VisionLanguageModel`)
+- Same standardized accessors as `StandardizedTransformer` (layers, attention, MLP, logits, etc.)
+- Supports image inputs via `model.trace(prompt, images=...)`
+- `allow_multimodal=False` by default: models with heterogeneous layer types (e.g. Mllama cross-attention) are rejected unless opted in
+- **Known limitations**: Gemma 3n (AltUp 4D hidden states, see #35), Mllama (cross-attention layers only fire with image inputs)
 
 **Key Accessors**:
 - `layers_input[i]` / `layers_output[i]` - Layer I/O
@@ -104,7 +115,8 @@ nnterp is a mechanistic interpretability library built on top of nnsight, provid
 - `RenameConfig` - Dataclass for model-specific module renaming configuration
 - `get_rename_dict()` - Generate renaming dictionary for a model
 - `check_model_renaming()` - Validate module standardization after renaming
-- **Supported Architectures**: OPT, Mixtral, Bloom, GPT-2, Qwen2Moe, Dbrx, GPT-J, LLaMA, Qwen3, Qwen2
+- `allow_multimodal` param: controls whether heterogeneous layer types (e.g. self-attn + cross-attn) are accepted
+- **Supported Architectures**: OPT, Mixtral, Bloom, GPT-2, Qwen2Moe, Dbrx, GPT-J, LLaMA, Llama-4, Qwen3, Qwen2, Gemma-3, GLM-4v, and many more via auto-renaming
 - Includes attention probability accessors for different architectures
 
 **Display** (`display.py`, optional `[display]` dependency)
@@ -114,7 +126,13 @@ nnterp is a mechanistic interpretability library built on top of nnsight, provid
 ### Module Relationships
 
 ```
-StandardizedTransformer
+load_model() (__init__.py)
+  ├── detect_automodel() (utils.py) → picks AutoModel class
+  ├── StandardizedTransformer (text models)
+  └── StandardizedVLM (vision-language models)
+
+StandardizedTransformer / StandardizedVLM
+  ├── StandardizationMixin (shared accessors, steer, skip_layer, etc.)
   ├── rename_utils (module renaming config)
   ├── nnsight_utils (activation collection)
   └── utils (TraceTensor type, DummyCache)
@@ -192,6 +210,8 @@ display.py (optional)
 - `test_nnsight_utils.py` - Core utility functions
 - `test_probabilities.py` - Probability calculations
 - `test_prompt_utils.py` - Prompt and target token handling
+- `test_vlm.py` - VLM support (load_model autodetection, VLM properties, interventions)
+- `test_detect_automodel.py` - AutoModel class detection for text/VLM/seq2seq models
 
 **Available Fixtures** (`conftest.py`):
 - `model_name` - Parametrized fixture with test model names (e.g., "gpt2", "Maykeye/TinyLLama-v0")
@@ -223,7 +243,13 @@ These files are used for test result tracking and cross-version compatibility mo
 
 ### Public API
 
-**Exported from `nnterp` package** (`__init__.py`): `StandardizedTransformer`
+**Exported from `nnterp` package** (`__init__.py`):
+- `StandardizedTransformer` — text model wrapper
+- `StandardizedVLM` — vision-language model wrapper
+- `load_model()` — auto-detecting entrypoint (recommended)
+- `detect_automodel()` — detect appropriate AutoModel class for a model
+- `get_rename_dict()` — get renaming dictionary for a model
+- `ModuleAccessor` — standardized module access helper
 
 All other functions/classes must be imported from their respective modules (e.g., `from nnterp.interventions import logit_lens`).
 
@@ -237,8 +263,14 @@ All other functions/classes must be imported from their respective modules (e.g.
 
 **Model Loading and Usage**:
 ```python
-from nnterp import StandardizedTransformer
+from nnterp import load_model
+model = load_model("gpt2")  # returns StandardizedTransformer
+vlm = load_model("Qwen/Qwen2-VL-2B-Instruct")  # returns StandardizedVLM
+
+# Or explicitly:
+from nnterp import StandardizedTransformer, StandardizedVLM
 model = StandardizedTransformer("gpt2")
+vlm = StandardizedVLM("Qwen/Qwen2-VL-2B-Instruct")
 ```
 
 **Intervention Structure**:

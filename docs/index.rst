@@ -22,6 +22,7 @@ Note that ``nnterp`` doesn't support all models either, since NNsight itself doe
 What ``nnterp`` provides:
 
 - **Unified naming**: ``model.layers_output[5]`` works for GPT-2, LLaMA, Gemma, etc.
+- **Vision-language models**: ``load_model()`` auto-detects VLMs and returns the right wrapper
 - **Common interventions**: logit lens, patchscope, steering built-in
 - **HuggingFace compatibility**: Uses original model implementations via nnsight
 

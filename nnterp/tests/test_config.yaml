@@ -31,14 +31,18 @@ core_test_models:
 
 # Substring patterns to skip models known to fail tests
 # Any model containing these substrings will be skipped
-skip_patterns: 
-  - whisper
-  - mamba
-  - bamba
-  - lfm2
-  - granite-4.0-h
-  - granite-moe-hybrid
-  - tiny-random-bert
+skip_patterns:
+  - whisper  # audio model
+  - mamba  # state-space model, not a transformer
+  - bamba  # state-space model, not a transformer
+  - lfm2  # state-space model, not a transformer
+  - granite-4.0-h  # hybrid SSM/transformer, not supported
+  - granite-moe-hybrid  # hybrid SSM/transformer, not supported
+  - tiny-random-bert  # encoder-only, not supported
+  - gemma-3n  # AltUp 4D hidden states, see issue #35
+  - llama-3.2-vision  # heterogeneous layers (cross-attn only fires with images)
+  - falcon-h1  # hybrid SSM/transformer, not supported
+  - jamba  # hybrid SSM/transformer, not supported
 
 # Test file categorization for failure tracking
 # Maps category names (middle part only) to their test files

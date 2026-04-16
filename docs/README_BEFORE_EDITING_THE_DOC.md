@@ -2,7 +2,7 @@
 
 ## Overview
 
-The `nnterp` documentation is built using Sphinx with the PyData theme and hosted on GitHub Pages at https://butanium.github.io/nnterp/. The docs present `nnterp` as a nnsight wrapper specifically for transformer models, providing a standardized interface across architectures.
+The `nnterp` documentation is built using Sphinx with the PyData theme and hosted on GitHub Pages at https://ndif-team.github.io/nnterp/. The docs present `nnterp` as a nnsight wrapper specifically for transformer models, providing a standardized interface across architectures.
 
 ## Configuration (conf.py)
 

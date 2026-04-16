@@ -15,7 +15,7 @@ A unified interface for mechanistic interpretability of transformers
 </p>
 
 <p align="center">
-<a href="https://colab.research.google.com/github/Butanium/nnterp/blob/main/demo.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg"></img></a>
+<a href="https://colab.research.google.com/github/ndif-team/nnterp/blob/main/demo.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg"></img></a>
 </p>
 
 ---
@@ -152,7 +152,7 @@ results = run_prompts(model, prompts, get_probs_func=logit_lens)
 ```
 ---
 
-More examples and detailed documentation can be found at [butanium.github.io/nnterp](https://ndif-team.github.io/nnterp/)
+More examples and detailed documentation can be found at [ndif-team.github.io/nnterp](https://ndif-team.github.io/nnterp/)
 
 
 ## I found a bug!

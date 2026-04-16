@@ -6,18 +6,18 @@ nnterp is a nnsight wrapper for transformer models providing a standardized inte
 
 ## Getting Started
 
-- [Quick Start](https://butanium.github.io/nnterp/dev/_sources/getting-started/quickstart.rst.txt): Get started with nnterp in 5 minutes. Learn installation, model loading with StandardizedTransformer, and basic activation access patterns.
+- [Quick Start](https://ndif-team.github.io/nnterp/dev/_sources/getting-started/quickstart.rst.txt): Get started with nnterp in 5 minutes. Learn installation, model loading with StandardizedTransformer, and basic activation access patterns.
 
 ## User Guide
 
-- [Basic Usage](https://butanium.github.io/nnterp/dev/_sources/basic-usage.rst.txt): Learn the standardized interface for transformer models. Covers model loading, accessing layer inputs/outputs, skip layers functionality, and built-in methods like project_on_vocab and steer.
-- [Interventions](https://butanium.github.io/nnterp/dev/_sources/interventions.rst.txt): Common intervention methods for transformer analysis. Includes logit lens for layer-wise predictions and patchscope for cross-context activation replacement.
-- [Model Validation & Testing](https://butanium.github.io/nnterp/dev/_sources/model-validation.rst.txt): Automatic testing system that runs on model load. Learn what nnterp guarantees, trade-offs with model dispatch and attention implementation, and manual testing commands.
-- [Adding Support for Your Model](https://butanium.github.io/nnterp/dev/_sources/adding-model-support.rst.txt): Add custom model support using RenameConfig. Learn path-based renaming, multiple alternative names, and implementing attention probabilities with real GPT-J example.
-- [Advanced Features](https://butanium.github.io/nnterp/dev/_sources/advanced-features.rst.txt): Advanced features including attention probabilities access, using nnterp's renaming with LanguageModel or NNsight classes (without using StandardizedTransformer) or to access a model's PyTorch modules directly, prompt utilities with target token tracking, and visualization functions for plotting logits and token evolution.
-- [NNsight Best Practices](https://butanium.github.io/nnterp/dev/_sources/nnsight-best-practices.rst.txt): Critical NNsight patterns for nnterp usage. Covers execution order requirements (forward pass order), gradient computation with backward passes, and performance optimization with tracer.stop() and caching.
-- [NNsight Utils](https://butanium.github.io/nnterp/dev/_sources/nnsight-utils.rst.txt): Standalone utility functions for regular nnsight models with llama/gemma naming conventions. Includes layer access helpers, projection utilities, and activation collection functions. StandardizedTransformer recommended for robustness.
+- [Basic Usage](https://ndif-team.github.io/nnterp/dev/_sources/basic-usage.rst.txt): Learn the standardized interface for transformer models. Covers model loading, accessing layer inputs/outputs, skip layers functionality, and built-in methods like project_on_vocab and steer.
+- [Interventions](https://ndif-team.github.io/nnterp/dev/_sources/interventions.rst.txt): Common intervention methods for transformer analysis. Includes logit lens for layer-wise predictions and patchscope for cross-context activation replacement.
+- [Model Validation & Testing](https://ndif-team.github.io/nnterp/dev/_sources/model-validation.rst.txt): Automatic testing system that runs on model load. Learn what nnterp guarantees, trade-offs with model dispatch and attention implementation, and manual testing commands.
+- [Adding Support for Your Model](https://ndif-team.github.io/nnterp/dev/_sources/adding-model-support.rst.txt): Add custom model support using RenameConfig. Learn path-based renaming, multiple alternative names, and implementing attention probabilities with real GPT-J example.
+- [Advanced Features](https://ndif-team.github.io/nnterp/dev/_sources/advanced-features.rst.txt): Advanced features including attention probabilities access, using nnterp's renaming with LanguageModel or NNsight classes (without using StandardizedTransformer) or to access a model's PyTorch modules directly, prompt utilities with target token tracking, and visualization functions for plotting logits and token evolution.
+- [NNsight Best Practices](https://ndif-team.github.io/nnterp/dev/_sources/nnsight-best-practices.rst.txt): Critical NNsight patterns for nnterp usage. Covers execution order requirements (forward pass order), gradient computation with backward passes, and performance optimization with tracer.stop() and caching.
+- [NNsight Utils](https://ndif-team.github.io/nnterp/dev/_sources/nnsight-utils.rst.txt): Standalone utility functions for regular nnsight models with llama/gemma naming conventions. Includes layer access helpers, projection utilities, and activation collection functions. StandardizedTransformer recommended for robustness.
 
 ## API Reference
 
-- [Documentation](https://butanium.github.io/nnterp/dev/_sources/api.rst.txt): Auto-generated API reference from docstrings. Complete documentation for standardized_transformer, interventions, prompt_utils, display, nnsight_utils, and internal modules.
+- [Documentation](https://ndif-team.github.io/nnterp/dev/_sources/api.rst.txt): Auto-generated API reference from docstrings. Complete documentation for standardized_transformer, interventions, prompt_utils, display, nnsight_utils, and internal modules.

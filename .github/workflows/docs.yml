@@ -30,7 +30,7 @@ jobs:
       
       - name: Build documentation
         env:
-          SPHINX_HTML_BASEURL: ${{ github.ref == 'refs/heads/main' && 'https://ndif-team.github.io/nnterp/' || 'https://ndif-team.github.io/nnterp/dev/' }}
+          SPHINX_HTML_BASEURL: ${{ github.ref == 'refs/heads/main' && 'https://butanium.github.io/nnterp/' || 'https://butanium.github.io/nnterp/dev/' }}
         run: |
           cd docs
           uv run make html

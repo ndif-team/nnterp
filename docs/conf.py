@@ -37,7 +37,7 @@ html_sourcelink_suffix = ".txt"
 # Important for GitHub Pages
 # Allow override via environment variable for dev/staging deployments
 html_baseurl = os.environ.get(
-    "SPHINX_HTML_BASEURL", "https://butanium.github.io/nnterp/"
+    "SPHINX_HTML_BASEURL", "https://ndif-team.github.io/nnterp/"
 )
 html_extra_path = [".nojekyll", "llms.txt"]
 
@@ -57,7 +57,7 @@ html_theme_options = {
     "icon_links": [
         {
             "name": "GitHub",
-            "url": "https://github.com/butanium/nnterp",
+            "url": "https://github.com/ndif-team/nnterp",
             "icon": "fa-brands fa-github",
         },
     ],

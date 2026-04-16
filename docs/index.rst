@@ -11,7 +11,7 @@ You can install ``nnterp`` using pip:
 
    pip install nnterp
    # or for latest improvements
-   pip install git+https://github.com/Butanium/nnterp/
+   pip install git+https://github.com/ndif-team/nnterp/
 
 **You need to know NNsight to use nnterp.** ``nnterp`` provides a standardized interface for transformer models and common interventions, making it easier to work with different architectures. But for anything complex, you'll still need NNsight directly.
 

@@ -33,7 +33,7 @@ llms = [
 
 vllm = ["nnsight[vllm]"]
 [project.urls]
-"Homepage" = "https://github.com/butanium/nnterp"
+"Homepage" = "https://github.com/ndif-team/nnterp"
 
 [dependency-groups]
 dev = [

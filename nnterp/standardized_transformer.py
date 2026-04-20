@@ -141,6 +141,9 @@ class StandardizedTransformer(LanguageModel):
         self.mlps = LayerAccessor(self, "mlp", None)
         self.mlps_input = LayerAccessor(self, "mlp", IOType.INPUT)
         self.mlps_output = LayerAccessor(self, "mlp", IOType.OUTPUT)
+        self.down_projs = LayerAccessor(self, "mlp.down_proj", None)
+        self.down_projs_input = LayerAccessor(self, "mlp.down_proj", IOType.INPUT)
+        self.down_projs_output = LayerAccessor(self, "mlp.down_proj", IOType.OUTPUT)
 
         self.num_layers = len(self.layers)
         self.num_heads = get_num_attention_heads(

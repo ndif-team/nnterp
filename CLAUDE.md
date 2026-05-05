@@ -3,6 +3,10 @@
 - **Use demo.py tone**: Keep explanations factual and concise, avoid verbose language like "core philosophy" or "research-first design"
 - **nnterp is for transformers**: Describe it as a nnsight wrapper specifically for transformer models, not general mechanistic interpretability
 
+## nnsight Usage
+- **Do NOT assume nnsight bugs without thorough verification.** Most "nnsight bugs" are actually incorrect usage. Before blaming nnsight, check the nnsight docs and examples for the correct pattern. Common mistakes: wrong execution order, missing `.save()`, using regular Python objects where nnsight proxies are needed.
+- **nnsight's vLLM backend works very differently from the HF backend.** When working on vLLM-related code, always check `.venv/.../nnsight/modeling/vllm/README.md` first.
+
 ## Code Philosophy
 - Correctness first: Ensure code is functionally correct before optimizing
 - Iterative refinement: After implementing changes, review the entire file to identify opportunities for simplification and improvement

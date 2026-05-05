@@ -1,6 +1,7 @@
 # project specific
 nnterp/data/test_logs/
 nnterp/data/*.old.json
+scratch/
 nnterp/data/test_loading_status.*
 nnterp/data/toy_models_cache.*
 nnterp/data/test_logs/latest_status.json

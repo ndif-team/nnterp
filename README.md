@@ -97,7 +97,7 @@ with model.trace("Hello world"):
 Common mechanistic interpretability interventions with best practices built-in:
 
 ```python
-from nnterp.interventions import logit_lens, patchscope_lens, steer
+from nnterp.interventions import logit_lens, patchscope_lens
 
 # Logit lens: decode hidden states at each layer
 layer_probs = logit_lens(model, ["The capital of France is"])
@@ -110,7 +110,7 @@ patchscope_probs = patchscope_lens(
     model,
     source_prompts=["The capital of England is"],
     target_patch_prompts=target,
-    layer_to_patch=10
+    layers=10
 )
 
 # Activation steering

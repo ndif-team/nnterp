@@ -6,13 +6,11 @@ build-backend = "setuptools.build_meta"
 [project]
 dynamic = ["version"]
 name = "nnterp"
-authors = [
-  { name="Clément Dumas", email="butanium.contact@gmail.com" },
-]
+authors = [{ name = "Clément Dumas", email = "butanium.contact@gmail.com" }]
 description = "Utils and mechanistic interpretability intervensions using nnsight"
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
+license = { text = "MIT" }
 classifiers = [
     "Programming Language :: Python :: 3",
     "Operating System :: OS Independent",
@@ -32,10 +30,8 @@ llms = [
     "hf_xet",
     "sentencepiece",
 ]
-    
-vllm = [
-    "vllm",
-]
+
+vllm = ["nnsight[vllm]"]
 [project.urls]
 "Homepage" = "https://github.com/ndif-team/nnterp"
 
@@ -58,6 +54,7 @@ dev = [
     "pre-commit",
     "black[jupyter]",
     "jupytext",
+    "jupyter",
     "build",
     "ruff",
 ]
@@ -107,3 +104,6 @@ flash-attn = [{ requirement = "torch", match-runtime = true }]
 
 [tool.uv.extra-build-variables]
 flash-attn = { FLASH_ATTENTION_SKIP_CUDA_BUILD = "TRUE" }
+
+[tool.pytest.ini_options]
+testpaths = ["nnterp/tests"]

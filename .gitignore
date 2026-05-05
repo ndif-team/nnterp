@@ -7,6 +7,7 @@ nnterp/data/test_logs/latest_status.json
 nnterp/data/test_logs/*_status.json
 .coverage
 .idea
+scratch
 
 # general
 .junk/**
@@ -25,6 +26,7 @@ config.yaml
 .nfs*
 .env
 .venv
+.ipynb_checkpoints/
 # Documentation build files
 docs/_build/
 docs/build/

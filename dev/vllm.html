@@ -489,6 +489,14 @@ Always verify outputs against the HuggingFace backend before relying on them.</p
 </pre></div>
 </div>
 <p>The <code class="docutils literal notranslate"><span class="pre">allow_experimental_vllm=True</span></code> flag is required to acknowledge the experimental status. A <code class="docutils literal notranslate"><span class="pre">UserWarning</span></code> is emitted on every initialization.</p>
+<p>Alternatively, you can set the <code class="docutils literal notranslate"><span class="pre">NNTERP_ALLOW_EXPERIMENTAL_VLLM</span></code> environment variable to skip passing the flag each time:</p>
+<div class="highlight-bash notranslate"><div class="highlight"><pre><span></span><span class="nb">export</span><span class="w"> </span><span class="nv">NNTERP_ALLOW_EXPERIMENTAL_VLLM</span><span class="o">=</span><span class="m">1</span>
+</pre></div>
+</div>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># No need for allow_experimental_vllm=True anymore</span>
+<span class="n">model</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;meta-llama/Llama-2-7b-hf&quot;</span><span class="p">,</span> <span class="n">use_vllm</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
+</pre></div>
+</div>
 </section>
 <section id="standardized-interface">
 <h2>Standardized Interface<a class="headerlink" href="#standardized-interface" title="Link to this heading">#</a></h2>

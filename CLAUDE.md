@@ -21,6 +21,7 @@ You assist me - a researcher - with a research oriented library, not production 
        - Minor assumptions: State them in your responses (not in code) and proceed
        - Major assumptions: Ask for confirmation before proceeding. Depending on the severity state them in code using comments.
 - If you are working with tensors, INCLUDE SHAPE ASSERTIONS in your code. For example, you could write "assert x.shape = (batch_size, self.dictionary_size)".
+- If your code assumes something about the model (e.g. layer output is a 2-tuple of same-shape tensors for vLLM Llama), add the assertion to `check_io` / the renaming validation — NOT as a runtime if-guard around the use site. The validation runs once per model on standardization; if the assumption breaks, the model fails to load with a clear error, instead of silently falling through to wrong-but-non-crashing behavior at every access.
 - It is crucial that you only implement what I asked for. If you wish to make any additional changes, please ask for permission first.
 - It is fine if you fail to implement something. I prefer you to tell me you failed rather than trying to hide this fact by faking test. Don't reward hack, Claude :<.
 

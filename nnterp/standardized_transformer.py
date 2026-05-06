@@ -232,8 +232,16 @@ class StandardizationMixin:
 
     @property
     def token_embeddings(self) -> TraceTensor:
-        """Returns the token embeddings. Equivalent to self.embed_tokens.output"""
-        return self.embed_tokens.output
+        """Returns the token embeddings. Equivalent to self.embed_tokens.output.
+
+        Clones for vLLM: the embed_tokens output buffer is reused across
+        downstream layers (and, with tied embeddings, by the lm_head logits
+        phase), so a saved reference would surface the post-mutation value.
+        """
+        out = self.embed_tokens.output
+        if self.is_vllm:
+            out = out.clone()
+        return out
 
     @token_embeddings.setter
     def token_embeddings(self, value: TraceTensor):

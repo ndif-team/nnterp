@@ -16,7 +16,7 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 dependencies = [
-    "nnsight>=0.6",
+    "nnsight>=0.7",
     "transformers",
 ]
 [project.optional-dependencies]
@@ -98,6 +98,9 @@ exclude = '''
   | dist
 )/
 '''
+
+[tool.uv]
+exclude-newer-package = { nnsight = "2030-01-01" }
 
 [tool.uv.extra-build-dependencies]
 flash-attn = [{ requirement = "torch", match-runtime = true }]

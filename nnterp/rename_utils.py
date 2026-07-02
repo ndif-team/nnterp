@@ -19,6 +19,10 @@ from .utils import (
     BloomForCausalLM,
     GPT2LMHeadModel,
     GPTJForCausalLM,
+    Qwen2MoeForCausalLM,
+    DbrxForCausalLM,
+    StableLmForCausalLM,
+    GptOssForCausalLM,
 )
 
 IgnoreType = Literal["mlp", "attention"]
@@ -156,7 +160,7 @@ def default_vocab_size_config_keys():
 IGNORE_MLP_MODELS = (OPTForCausalLM,)
 
 # Alternative names for LLM layers
-ATTENTION_NAMES = ["attn", "self_attention", "attention", "norm_attn_norm"]
+ATTENTION_NAMES = ["attn", "self_attention", "attention", "norm_attn_norm", "linear_attn"]
 LAYER_NAMES = expand_path_with_model(
     [
         "h",
@@ -167,6 +171,7 @@ LAYER_NAMES = expand_path_with_model(
 LN_NAMES = expand_path_with_model(
     [
         "final_layer_norm",
+        "final_layernorm",
         "ln_f",
         "norm_f",
         "norm",
@@ -174,8 +179,8 @@ LN_NAMES = expand_path_with_model(
         "model.ln_final",
     ]
 )
-LM_HEAD_NAMES = ["embed_out"]
-MLP_NAMES = ["block_sparse_moe", "ffn"]
+LM_HEAD_NAMES = expand_path_with_model(["embed_out", "model.lm_head"])
+MLP_NAMES = ["block_sparse_moe", "feed_forward", "ffn"]
 EMBED_TOKENS_NAMES = expand_path_with_model(
     [
         "wte",
@@ -418,6 +423,36 @@ def gptj_attention_prob_source(attention_module, return_module_source: bool = Fa
         return attention_module.source.self__attn_0.source.self_attn_dropout_0
 
 
+def qwen2moe_attention_prob_source(attention_module, return_module_source: bool = False):
+    if return_module_source:
+        return attention_module.source
+    else:
+        return attention_module.source.nn_functional_dropout_0
+
+
+def dbrx_attention_prob_source(attention_module, return_module_source: bool = False):
+    if return_module_source:
+        return attention_module.attn.source
+    else:
+        return attention_module.attn.source.nn_functional_dropout_0
+
+
+def stablelm_attention_prob_source(attention_module, return_module_source: bool = False):
+    if return_module_source:
+        return attention_module.source
+    else:
+        return attention_module.source.self_attention_dropout_0
+
+
+def gptoss_attention_prob_source(attention_module, return_module_source: bool = False):
+    if return_module_source:
+        return attention_module.source.attention_interface_0.source
+    else:
+        return (
+            attention_module.source.attention_interface_0.source.nn_functional_dropout_0
+        )
+
+
 class AttentionProbabilitiesAccessor:
     def __init__(
         self,
@@ -427,6 +462,7 @@ class AttentionProbabilitiesAccessor:
     ):
         self.model = model
         self.initialized_with_enable = initialized_with_enable
+        self.attn_probs_dont_sum_to_one = False
         if rename_config is not None and rename_config.attn_prob_source is not None:
             self.source_attr = rename_config.attn_prob_source
         elif isinstance(model._model, BloomForCausalLM):
@@ -435,6 +471,15 @@ class AttentionProbabilitiesAccessor:
             self.source_attr = gpt2_attention_prob_source
         elif isinstance(model._model, GPTJForCausalLM):
             self.source_attr = gptj_attention_prob_source
+        elif isinstance(model._model, Qwen2MoeForCausalLM):
+            self.source_attr = qwen2moe_attention_prob_source
+        elif isinstance(model._model, DbrxForCausalLM):
+            self.source_attr = dbrx_attention_prob_source
+        elif isinstance(model._model, StableLmForCausalLM):
+            self.source_attr = stablelm_attention_prob_source
+        elif isinstance(model._model, GptOssForCausalLM):
+            self.source_attr = gptoss_attention_prob_source
+            self.attn_probs_dont_sum_to_one = True
         else:
             self.source_attr = default_attention_prob_source
         self.enabled = True
@@ -500,8 +545,19 @@ class AttentionProbabilitiesAccessor:
             self[layer] = rnd
             if probs.device != th.device("meta"):
                 sum_last = probs.sum(dim=-1)
-                if not th.allclose(sum_last, th.ones_like(sum_last)):
-                    raise RenamingError("Attention probabilities do not sum to 1.")
+                if self.attn_probs_dont_sum_to_one:
+                    if not (sum_last > 0).all():
+                        raise RenamingError(
+                            "Attention probabilities should be > 0."
+                        )
+                    if not (sum_last < 1 + 1e-5).all():
+                        raise RenamingError(
+                            "Attention probabilities should sum to < 1 for models with sink tokens."
+                        )
+                else:
+                    atol = 1e-2 if probs.dtype == th.bfloat16 else 1e-5
+                    if not th.allclose(sum_last, th.ones_like(sum_last), atol=atol):
+                        raise RenamingError("Attention probabilities do not sum to 1.")
 
         if use_trace:
             with self.model.trace(dummy_inputs()):
@@ -596,110 +652,96 @@ def get_ignores(model, rename_config: RenameConfig | None = None) -> list[str]:
     return ignores
 
 
+def _check_tensor(tensor, name: str, expected_shape: tuple, model_name: str):
+    """Validate that a tensor has the expected type and shape."""
+    if not isinstance(tensor, th.Tensor):
+        raise ValueError(
+            f"{name} is not a tensor in {model_name} architecture. "
+            f"Found type {type(tensor)}. This means it's not properly initialized."
+        )
+    if tensor.shape != expected_shape:
+        raise ValueError(
+            f"{name} has shape {tensor.shape} != {expected_shape} in {model_name} architecture. "
+            "This means it's not properly initialized."
+        )
+
+
 def check_io(std_model, model_name: str, ignores: list[IgnoreType]):
-    batch_size, seq_len = std_model.input_size
+    """Validate that standardized accessors return tensors with consistent shapes.
+
+    Handles both HF models (``input_size = (batch, seq)``) and vLLM models
+    (``input_size = (seq,)``). Shape expectations adapt via ``(*input_size, dim)``.
+
+    For vLLM, ``lm_head.output`` is not checked because vLLM computes logits
+    in a separate phase outside the model's forward pass.
+    """
+    input_size = std_model.input_size
     hidden_size = std_model.hidden_size
     if hidden_size is None:
         raise RenamingError(
-            f"Can't check the shapes of the model internals because the hidden size is not available in {model_name} architecture."
+            f"Can't check the shapes of the model internals because the hidden size is not available in {model_name} architecture. "
             "You should pass the hidden size as an integer or look at the config and pass the key in the hidden_size_config_key argument of a RenameConfig."
         )
-    token_embeddings = std_model.token_embeddings
-    if not isinstance(token_embeddings, th.Tensor):
-        raise ValueError(
-            f"token_embeddings is not a tensor in {model_name} architecture. Found type {type(token_embeddings)}. This means it's not properly initialized."
-        )
-    if token_embeddings.shape != (batch_size, seq_len, hidden_size):
-        raise ValueError(
-            f"token_embeddings has shape {token_embeddings.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-        )
-    layer_input = std_model.layers_input[0]
-    if not isinstance(layer_input, th.Tensor):
-        raise ValueError(
-            f"layers_input[0] is not a tensor in {model_name} architecture. Found type {type(layer_input)}. This means it's not properly initialized."
-        )
-    if layer_input.shape != (batch_size, seq_len, hidden_size):
-        raise ValueError(
-            f"layers_input[0] has shape {layer_input.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-        )
+    expected_hidden = (*input_size, hidden_size)
+
+    _check_tensor(std_model.token_embeddings, "token_embeddings", expected_hidden, model_name)
+    _check_tensor(std_model.layers_input[0], "layers_input[0]", expected_hidden, model_name)
+
     if "attention" not in ignores:
-        attention_input = std_model.attentions_input[0]
-        attention_output = std_model.attentions_output[0]
-        if not isinstance(attention_input, th.Tensor):
-            raise ValueError(
-                f"attentions_input[0] is not a tensor in {model_name} architecture. Found type {type(attention_input)}. This means it's not properly initialized."
-            )
-        if attention_input.shape != (batch_size, seq_len, hidden_size):
-            raise ValueError(
-                f"attentions_input[0] has shape {attention_input.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-            )
-        if not isinstance(attention_output, th.Tensor):
-            raise ValueError(
-                f"attentions_output[0] is not a tensor in {model_name} architecture. Found type {type(attention_output)}. This means it's not properly initialized."
-            )
-        if attention_output.shape != (
-            batch_size,
-            seq_len,
-            hidden_size,
-        ):
-            raise ValueError(
-                f"attentions_output[0] has shape {attention_output.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-            )
+        _check_tensor(std_model.attentions_input[0], "attentions_input[0]", expected_hidden, model_name)
+        _check_tensor(std_model.attentions_output[0], "attentions_output[0]", expected_hidden, model_name)
+
     if "mlp" not in ignores:
-        mlp_input = std_model.mlps_input[0]
-        mlp_output = std_model.mlps_output[0]
-        if not isinstance(mlp_input, th.Tensor):
+        _check_tensor(std_model.mlps_input[0], "mlps_input[0]", expected_hidden, model_name)
+        _check_tensor(std_model.mlps_output[0], "mlps_output[0]", expected_hidden, model_name)
+
+    _check_tensor(std_model.layers_output[0], "layers_output[0]", expected_hidden, model_name)
+    _check_tensor(std_model.ln_final.output, "ln_final.output", expected_hidden, model_name)
+
+    # vLLM computes logits in a separate phase (not part of the model forward pass),
+    # so lm_head.output is not accessible during a vLLM trace.
+    if not std_model.is_vllm:
+        lm_head_out = std_model.lm_head.output
+        if not isinstance(lm_head_out, th.Tensor):
             raise ValueError(
-                f"mlps_input[0] is not a tensor in {model_name} architecture. Found type {type(mlp_input)}. This means it's not properly initialized."
+                f"lm_head.output is not a tensor in {model_name} architecture. "
+                f"Found type {type(lm_head_out)}. This means it's not properly initialized."
             )
-        if mlp_input.shape != (batch_size, seq_len, hidden_size):
-            raise ValueError(
-                f"mlps_input[0] has shape {mlp_input.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
+        expected_vocab = (*input_size, std_model.vocab_size)
+        if std_model.vocab_size is None:
+            logger.warning(
+                f"Couldn't find vocab_size in {model_name} config. Couldn't properly test the shape of lm_head.output."
             )
-        if not isinstance(mlp_output, th.Tensor):
-            raise ValueError(
-                f"mlps_output[0] is not a tensor in {model_name} architecture. Found type {type(mlp_output)}. This means it's not properly initialized."
-            )
-        if mlp_output.shape != (batch_size, seq_len, hidden_size):
-            raise ValueError(
-                f"mlps_output[0] has shape {mlp_output.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-            )
-    layer_output = std_model.layers_output[0]
-    if not isinstance(layer_output, th.Tensor):
-        raise ValueError(
-            f"layers_output[0] is not a tensor in {model_name} architecture. Found type {type(layer_output)}. This means it's not properly initialized."
+            if lm_head_out.shape[:-1] != input_size:
+                raise ValueError(
+                    f"lm_head.output has shape {lm_head_out.shape}, expected prefix {input_size} in {model_name} architecture."
+                )
+        else:
+            if lm_head_out.shape != expected_vocab:
+                raise ValueError(
+                    f"lm_head.output has shape {lm_head_out.shape} != {expected_vocab} in {model_name} architecture."
+                )
+
+
+def _check_has_module(obj, attr: str, model_name: str, rename_arg: str):
+    """Raise RenamingError if ``obj`` doesn't have ``attr``."""
+    if not hasattr(obj, attr):
+        raise RenamingError(
+            f"Could not find {attr} module in {model_name} architecture. "
+            f"This means that it was not properly renamed.\n"
+            f"Please pass the name of the {attr} module to the {rename_arg} argument."
         )
-    if layer_output.shape != (batch_size, seq_len, hidden_size):
-        raise ValueError(
-            f"layers_output[0] has shape {layer_output.shape} != {(batch_size, seq_len, std_model.config.hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-        )
-    ln_final_out = std_model.ln_final.output
-    if not isinstance(ln_final_out, th.Tensor):
-        raise ValueError(
-            f"ln_final.output is not a tensor in {model_name} architecture. Found type {type(ln_final_out)}. This means it's not properly initialized."
-        )
-    if ln_final_out.shape != (batch_size, seq_len, hidden_size):
-        raise ValueError(
-            f"ln_final.output has shape {ln_final_out.shape} != {(batch_size, seq_len, hidden_size)} in {model_name} architecture. This means it's not properly initialized."
-        )
-    lm_head_out = std_model.lm_head.output
-    if not isinstance(lm_head_out, th.Tensor):
-        raise ValueError(
-            f"lm_head.output is not a tensor in {model_name} architecture. Found type {type(lm_head_out)}. This means it's not properly initialized."
-        )
-    if std_model.vocab_size is None:
+
+
+def _warn_heterogeneous_types(accessor, num_layers: int, kind: str, model_name: str):
+    """Warn if modules accessed by ``accessor[i]`` have mixed types across layers."""
+    types = {type(accessor[i]._module) for i in range(num_layers)}
+    if len(types) > 1:
+        type_names = ", ".join(sorted(t.__name__ for t in types))
         logger.warning(
-            f"Couldn't find vocab_size in {model_name} config. Couldn't properly test the shape of lm_head.output."
+            f"Model {model_name} has heterogeneous {kind} types across layers: {type_names}. "
+            "Some nnterp operations may not work consistently across all layers."
         )
-        if lm_head_out.dim() != 3 or lm_head_out.shape[:-1] != (batch_size, seq_len):
-            raise ValueError(
-                f"lm_head.output has shape {lm_head_out.shape} != ({batch_size}, { seq_len}, <vocab_size>) in {model_name} architecture. This means it's not properly initialized."
-            )
-    else:
-        if lm_head_out.shape != (batch_size, seq_len, std_model.vocab_size):
-            raise ValueError(
-                f"lm_head.output has shape {lm_head_out.shape} != {(batch_size, seq_len, std_model.vocab_size)} in {model_name} architecture. This means it's not properly initialized."
-            )
 
 
 def check_model_renaming(
@@ -709,12 +751,8 @@ def check_model_renaming(
     allow_dispatch: bool,
     allow_multimodal: bool = False,
 ):
+    _check_has_module(std_model, "layers", model_name, "layers_rename")
 
-    if not hasattr(std_model, "layers"):
-        raise RenamingError(
-            f"Could not find layers module in {model_name} architecture. This means that it was not properly renamed.\n"
-            "Please pass the name of the layers module to the layers_rename argument."
-        )
     if not allow_multimodal:
         layer_types = {type(layer._module) for layer in std_model.layers}
         if len(layer_types) > 1:
@@ -727,28 +765,16 @@ def check_model_renaming(
                 "If you want to use this model anyway, pass allow_multimodal=True to StandardizedTransformer."
             )
 
-    if not hasattr(std_model, "ln_final"):
-        raise RenamingError(
-            f"Could not find ln_final module in {model_name} architecture. This means that it was not properly renamed.\n"
-            "Please pass the name of the ln_final module to the ln_final_rename argument."
-        )
-    if not hasattr(std_model, "lm_head"):
-        raise RenamingError(
-            f"Could not find lm_head module in {model_name} architecture. This means that it was not properly renamed.\n"
-            "Please pass the name of the lm_head module to the lm_head_rename argument."
-        )
+    _check_has_module(std_model, "ln_final", model_name, "ln_final_rename")
+    _check_has_module(std_model, "lm_head", model_name, "lm_head_rename")
+
     if "attention" not in ignores:
-        if not hasattr(std_model.layers[0], "self_attn"):
-            raise RenamingError(
-                f"Could not find self_attn module in {model_name} architecture. This means that it was not properly renamed.\n"
-                "Please pass the name of the self_attn module to the attn_rename argument."
-            )
+        _check_has_module(std_model.layers[0], "self_attn", model_name, "attn_rename")
+        _warn_heterogeneous_types(std_model.attentions, std_model.num_layers, "attention", model_name)
+
     if "mlp" not in ignores:
-        if not hasattr(std_model.layers[0], "mlp"):
-            raise RenamingError(
-                f"Could not find mlp module in {model_name} architecture. This means that it was not properly renamed.\n"
-                "Please pass the name of the mlp module to the mlp_rename argument."
-            )
+        _check_has_module(std_model.layers[0], "mlp", model_name, "mlp_rename")
+        _warn_heterogeneous_types(std_model.mlps, std_model.num_layers, "MLP", model_name)
 
     try_with_scan(
         std_model,
@@ -757,3 +783,24 @@ def check_model_renaming(
         allow_dispatch,
         errors_to_raise=(RenamingError,),
     )
+
+
+HF_TO_VLLM_KWARGS_MAP = dict(
+    max_new_tokens="max_tokens",
+)
+
+
+def hf_kwargs_to_vllm_kwargs(kwargs: dict) -> dict:
+    """Translate HuggingFace keyword arguments to their vLLM equivalents.
+
+    Raises ValueError if both the HF and vLLM names are present with different values.
+    """
+    for hf_name, vllm_name in HF_TO_VLLM_KWARGS_MAP.items():
+        if hf_name in kwargs:
+            if vllm_name in kwargs and kwargs[vllm_name] != kwargs[hf_name]:
+                raise ValueError(
+                    f"Conflicting values for {hf_name} and {vllm_name}: "
+                    f"{kwargs[hf_name]} vs {kwargs[vllm_name]}"
+                )
+            kwargs[vllm_name] = kwargs.pop(hf_name)
+    return kwargs

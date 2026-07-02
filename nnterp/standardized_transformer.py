@@ -1,17 +1,15 @@
 from __future__ import annotations
 import warnings
-from typing import Callable
-
-import torch as th
 
 from .logging import logger
+import torch as th
 from torch.nn import Module
 from torch import Size
 from nnsight import LanguageModel
+from nnsight.modeling.vlm import VisionLanguageModel
 from nnsight.ndif import register as ndif_register
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
-
 from .utils import (
     TraceTensor,
     DummyCache,
@@ -32,21 +30,11 @@ from .rename_utils import (
 )
 
 
-class StandardizedTransformer(LanguageModel):
+class StandardizationMixin:
     """
-    Renames the LanguageModel modules to match a standardized architecture.
+    Mixin class for standardizing the architecture of a model.
 
-    The model structure is organized as follows::
-
-        StandardizedTransformer
-        ├── embed_tokens
-        ├── layers
-        │   ├── self_attn
-        │   └── mlp
-        ├── ln_final
-        └── lm_head
-
-    In addition to renaming modules, this class provides built-in accessors to extract and set intermediate activations:
+    This class provides built-in accessors to extract and set intermediate activations:
 
     - embed_tokens: Get embedding module
     - token_embeddings: Get/set token embeddings (equivalent to embed_tokens.output)
@@ -59,9 +47,7 @@ class StandardizedTransformer(LanguageModel):
     - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
 
     Args:
-        repo_id (str): Hugging Face repository ID or path of the model to load.
-        trust_remote_code (bool, optional): If True, remote code will be trusted when
-            loading the model. Defaults to False.
+        model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
         remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp
@@ -79,11 +65,12 @@ class StandardizedTransformer(LanguageModel):
     num_heads: int
     hidden_size: int
     vocab_size: int
+    is_vllm: bool
+    remote: bool
 
-    def __init__(
+    def _init_standardization(
         self,
         model: str | Module,
-        trust_remote_code: bool = False,
         check_renaming: bool = True,
         remote: bool = False,
         allow_dispatch: bool = True,
@@ -91,40 +78,11 @@ class StandardizedTransformer(LanguageModel):
         check_attn_probs_with_trace: bool = True,
         allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
-        **kwargs,
     ):
+        """Initialize standardization after the base model has been initialized."""
+        self.remote = remote
         if remote:
-            allow_dispatch = False
             ndif_register("nnterp")
-        kwargs.setdefault("device_map", "auto")
-        if "attn_implementation" in kwargs and enable_attention_probs:
-            if kwargs["attn_implementation"] != "eager":
-                raise ValueError(
-                    f"Cannot use attn_implementation='{kwargs['attn_implementation']}' with enable_attention_probs=True. "
-                    "Either set enable_attention_probs=False or don't pass attn_implementation."
-                )
-        attn_implementation = (
-            "eager"
-            if enable_attention_probs
-            else kwargs.pop("attn_implementation", None)
-        )
-
-        tokenizer_kwargs = kwargs.pop("tokenizer_kwargs", {})
-        rename = get_rename_dict(rename_config=rename_config)
-        user_rename = kwargs.pop("rename", None)
-        if user_rename is not None:
-            logger.info(
-                f"Updating default rename with user-provided rename: {user_rename}"
-            )
-            rename.update(user_rename)
-        super().__init__(
-            model,
-            attn_implementation=attn_implementation,
-            tokenizer_kwargs=tokenizer_kwargs,
-            trust_remote_code=trust_remote_code,
-            rename=rename,
-            **kwargs,
-        )
         if isinstance(model, str):
             model_name = model
         else:
@@ -162,6 +120,10 @@ class StandardizedTransformer(LanguageModel):
             rename_config=rename_config,
             initialized_with_enable=enable_attention_probs,
         )
+        if self.is_vllm and enable_attention_probs:
+            raise NotImplementedError(
+                "nnterp VLLM wrapper doesn't support attention probabilities yet, please set enable_attention_probs=False."
+            )
         if check_renaming and enable_attention_probs:
             self.attention_probabilities.check_source(
                 allow_dispatch=allow_dispatch,
@@ -171,6 +133,41 @@ class StandardizedTransformer(LanguageModel):
             # Disable attention probabilities as we can't check them without dispatching the model or not validating the sum to 1 and causal effect of modifying them
             self.attention_probabilities.disable()
         self._add_prefix_false_tokenizer = None
+
+    def _get_rename(
+        self,
+        rename_config: RenameConfig | None = None,
+        user_rename: dict[str, str] | None = None,
+    ):
+        rename = get_rename_dict(rename_config=rename_config)
+        if user_rename is not None:
+            logger.info(
+                f"Updating default rename with user-provided rename: {user_rename}"
+            )
+            rename.update(user_rename)
+        return rename
+
+    def _prepare_init_kwargs(self, enable_attention_probs, rename_config, **kwargs):
+        """Preprocess kwargs shared across StandardizedTransformer, StandardizedVLM, etc.
+
+        Returns (attn_implementation, rename, kwargs) ready to pass to super().__init__.
+        """
+        kwargs.setdefault("device_map", "auto")
+        if "attn_implementation" in kwargs and enable_attention_probs:
+            if kwargs["attn_implementation"] != "eager":
+                raise ValueError(
+                    f"Cannot use attn_implementation='{kwargs['attn_implementation']}' with enable_attention_probs=True. "
+                    "Either set enable_attention_probs=False or don't pass attn_implementation."
+                )
+        attn_implementation = (
+            "eager"
+            if enable_attention_probs
+            else kwargs.pop("attn_implementation", None)
+        )
+        rename = self._get_rename(
+            rename_config=rename_config, user_rename=kwargs.pop("rename", None)
+        )
+        return attn_implementation, rename, kwargs
 
     def detect_layer_output_type(self):
         if self.layers_output.returns_tuple is None:
@@ -189,6 +186,13 @@ class StandardizedTransformer(LanguageModel):
 
     @property
     def add_prefix_false_tokenizer(self) -> PreTrainedTokenizerBase:
+        """
+        Returns the tokenizer with add_prefix_space=False. Which means that "word" and " word" will be tokenized as different tokens.
+        """
+        if self.is_vllm:
+            raise ValueError(
+                "nnterp VLLM wrapper doesn't support add_prefix_space=False, the normal tokenizer might already work but it might be model dependent."
+            )
         if self._add_prefix_false_tokenizer is None:
             self._add_prefix_false_tokenizer = AutoTokenizer.from_pretrained(
                 self.name_or_path, add_prefix_space=False
@@ -201,18 +205,29 @@ class StandardizedTransformer(LanguageModel):
 
     @property
     def input_ids(self) -> TraceTensor:
+        """Returns the input token IDs.
+
+        For HF models: shape ``(batch_size, sequence_length)``.
+        For vLLM models: shape ``(sequence_length,)`` (no batch dimension).
+        """
         return self.inputs[1]["input_ids"]
 
     @property
     def input_size(self) -> Size:
+        """Returns the shape of the input tensor.
+
+        For HF models: ``(batch_size, sequence_length)``.
+        For vLLM models: ``(sequence_length,)`` (no batch dimension).
         """
-        Returns the shape of the input tensor (batch_size, sequence_length)
-        """
-        return self.input_ids.shape
+        return self.inputs[1]["input_ids"].shape
 
     @property
     def attention_mask(self) -> TraceTensor:
         """Returns the attention mask tensor."""
+        if self.is_vllm:
+            raise NotImplementedError(
+                "attention_mask is not supported yet for VLLM models as it's not in the inputs dictionary."
+            )
         return self.inputs[1]["attention_mask"]
 
     @property
@@ -224,11 +239,6 @@ class StandardizedTransformer(LanguageModel):
     def token_embeddings(self, value: TraceTensor):
         """Sets the token embeddings. Equivalent to self.embed_tokens.output = value"""
         self.embed_tokens.output = value
-
-    @property
-    def logits(self) -> TraceTensor:
-        """Returns the predicted logits."""
-        return self.output.logits
 
     @property
     def next_token_probs(self) -> TraceTensor:
@@ -314,18 +324,47 @@ class StandardizedTransformer(LanguageModel):
         if isinstance(layers, int):
             layers = [layers]
         for layer in sorted(layers):  # sort to ensure execution order
-            layer_device = self.layers_output[layer].device
-            steering_with = factor * steering_vector.to(layer_device)
-            if batch_index is None and token_positions is None:
-                self.layers_output[layer] += steering_with
-            elif batch_index is not None and token_positions is not None:
-                self.layers_output[layer][batch_index, token_positions] += steering_with
-            elif token_positions is not None:
-                self.layers_output[layer][:, token_positions] += steering_with
+            layer_output = self.layers_output[layer]
+            steering_with = factor * steering_vector.to(device=layer_output.device, dtype=layer_output.dtype)
+            if self.is_vllm:
+                # vLLM inference tensors don't support inplace ops
+                if batch_index is None and token_positions is None:
+                    self.layers_output[layer] = self.layers_output[layer] + steering_with
+                elif batch_index is not None and token_positions is not None:
+                    out = self.layers_output[layer].clone()
+                    out[batch_index, token_positions] = out[batch_index, token_positions] + steering_with
+                    self.layers_output[layer] = out
+                elif token_positions is not None:
+                    out = self.layers_output[layer].clone()
+                    out[:, token_positions] = out[:, token_positions] + steering_with
+                    self.layers_output[layer] = out
+                else:
+                    out = self.layers_output[layer].clone()
+                    out[batch_index] = out[batch_index] + steering_with
+                    self.layers_output[layer] = out
             else:
-                self.layers_output[layer][batch_index] += steering_with
+                if batch_index is None and token_positions is None:
+                    self.layers_output[layer] += steering_with
+                elif batch_index is not None and token_positions is not None:
+                    self.layers_output[layer][batch_index, token_positions] += steering_with
+                elif token_positions is not None:
+                    self.layers_output[layer][:, token_positions] += steering_with
+                else:
+                    self.layers_output[layer][batch_index] += steering_with
 
     def project_on_vocab(self, hidden_state: TraceTensor) -> TraceTensor:
+        """Project a hidden state onto the vocabulary space.
+
+        For vLLM models, this must be called inside a ``model.trace()`` context
+        because ``ln_final``/``lm_head`` weights live in the vLLM worker subprocess
+        and are on ``meta`` device in the main process.
+        """
+        if self.is_vllm and not self.interleaving:
+            raise RuntimeError(
+                "project_on_vocab cannot be called outside a trace context for vLLM models "
+                "because ln_final/lm_head weights are on meta device. "
+                "Call it inside model.trace() instead."
+            )
         hidden_state = self.ln_final(hidden_state)
         return self.lm_head(hidden_state)
 
@@ -372,3 +411,169 @@ class StandardizedTransformer(LanguageModel):
             raise ValueError(
                 f"Unsupported hidden state shape {hidden_state.shape}. Expected 1D or 2D tensor."
             )
+
+
+class StandardizedTransformer(LanguageModel, StandardizationMixin):
+    """
+    Renames the LanguageModel modules to match a standardized architecture.
+
+    The model structure is organized as follows::
+
+        StandardizedTransformer
+        ├── embed_tokens
+        ├── layers
+        │   ├── self_attn
+        │   └── mlp
+        ├── ln_final
+        └── lm_head
+
+    The following properties are also available:
+
+    - num_layers: int
+    - num_heads: int
+    - hidden_size: int
+    - vocab_size: int
+
+    In addition to renaming modules, this class provides built-in accessors to extract and set intermediate activations:
+
+    - embed_tokens: Get embedding module
+    - token_embeddings: Get/set token embeddings (equivalent to embed_tokens.output)
+    - layers[i]: Get layer module at layer i
+    - layers_input[i]: Get/set layer input at layer i
+    - layers_output[i]: Get/set layer output at layer i
+    - attentions[i]: Get attention module at layer i
+    - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i
+    - mlps[i]: Get MLP module at layer i
+    - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
+
+    Args:
+        model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
+        check_renaming (bool, default True): If True, the renaming of modules is validated.
+            Defaults to True.
+        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp
+            for NDIF remote execution via cloudpickle serialization.
+        allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
+            when scan() fails during renaming checks. Defaults to True. Automatically set to False
+            when remote=True.
+        enable_attention_probs (bool, default False): If True, enables attention probabilities
+            tracing by setting attn_implementation="eager". Defaults to False.
+        check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
+        rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
+    """
+
+    is_vllm: bool = False
+
+    def __init__(
+        self,
+        model: str | Module,
+        check_renaming: bool = True,
+        remote: bool = False,
+        allow_dispatch: bool = True,
+        enable_attention_probs: bool = False,
+        check_attn_probs_with_trace: bool = True,
+        rename_config: RenameConfig | None = None,
+        automodel=None,
+        **kwargs,
+    ):
+        # Detect VLMs and warn
+        if automodel is None and isinstance(model, str):
+            from .utils import detect_automodel
+            from transformers import AutoModelForImageTextToText
+
+            automodel = detect_automodel(
+                model, trust_remote_code=kwargs.get("trust_remote_code", False)
+            )
+            if automodel is AutoModelForImageTextToText:
+                warnings.warn(
+                    f"Model {model!r} appears to be a vision-language model. "
+                    "Consider using StandardizedVLM or load_model() instead for proper image input support.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        attn_implementation, rename, kwargs = self._prepare_init_kwargs(
+            enable_attention_probs, rename_config, **kwargs
+        )
+        super().__init__(
+            model,
+            automodel=automodel,
+            attn_implementation=attn_implementation,
+            rename=rename,
+            **kwargs,
+        )
+        self._init_standardization(
+            model=model,
+            check_renaming=check_renaming,
+            remote=remote,
+            allow_dispatch=allow_dispatch,
+            enable_attention_probs=enable_attention_probs,
+            check_attn_probs_with_trace=check_attn_probs_with_trace,
+            rename_config=rename_config,
+        )
+
+    @property
+    def logits(self) -> TraceTensor:
+        """Returns the predicted logits."""
+        return self.output.logits
+
+
+class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
+    """Standardized wrapper for vision-language models (e.g. Qwen2.5-VL, LLaVA).
+
+    Extends nnsight's ``VisionLanguageModel`` with the same standardized
+    module access as ``StandardizedTransformer``. Supports image inputs
+    via the ``images`` kwarg in ``model.trace()``.
+
+    Args:
+        model (str or Module): Hugging Face repository ID or path of the model to load.
+        check_renaming (bool, default True): If True, the renaming of modules is validated.
+        remote (bool, default False): If True, registers nnterp for NDIF remote execution.
+        allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
+            when scan() fails during renaming checks.
+        enable_attention_probs (bool, default False): If True, enables attention probabilities
+            tracing by setting attn_implementation="eager".
+        check_attn_probs_with_trace (bool, default True): If True, validates attention probabilities.
+        allow_multimodal (bool, default False): Whether to allow heterogeneous layer types
+            (e.g. cross-attention layers in Mllama). These layers only activate with image
+            inputs, so text-only tracing will fail on them.
+        rename_config (RenameConfig, default None): A RenameConfig object to use for renaming.
+    """
+
+    is_vllm: bool = False
+
+    def __init__(
+        self,
+        model: str | Module,
+        check_renaming: bool = True,
+        remote: bool = False,
+        allow_dispatch: bool = True,
+        enable_attention_probs: bool = False,
+        check_attn_probs_with_trace: bool = True,
+        allow_multimodal: bool = False,
+        rename_config: RenameConfig | None = None,
+        **kwargs,
+    ):
+        attn_implementation, rename, kwargs = self._prepare_init_kwargs(
+            enable_attention_probs, rename_config, **kwargs
+        )
+        super().__init__(
+            model,
+            attn_implementation=attn_implementation,
+            rename=rename,
+            **kwargs,
+        )
+        self._init_standardization(
+            model=model,
+            check_renaming=check_renaming,
+            remote=remote,
+            allow_dispatch=allow_dispatch,
+            enable_attention_probs=enable_attention_probs,
+            check_attn_probs_with_trace=check_attn_probs_with_trace,
+            allow_multimodal=allow_multimodal,
+            rename_config=rename_config,
+        )
+
+    @property
+    def logits(self) -> TraceTensor:
+        """Returns the predicted logits."""
+        return self.output.logits

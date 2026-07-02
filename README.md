@@ -54,9 +54,11 @@ Unlike other libraries that reimplement transformers, `nnterp` uses `NNsight`'s 
 Here is a simple example where we load a model and access its standardized internals:
 
 ```python
-from nnterp import StandardizedTransformer
+from nnterp import load_model
 
-model = StandardizedTransformer("gpt2")  # or "meta-llama/Llama-2-7b-hf", etc.
+model = load_model("gpt2")  # or "meta-llama/Llama-2-7b-hf", etc.
+# load_model auto-detects VLMs:
+# vlm = load_model("Qwen/Qwen2-VL-2B-Instruct")  # returns StandardizedVLM
 
 with model.trace("The Eiffel Tower is in the city of"):
     # Unified interface across all models (must follow forward pass order!)
@@ -164,7 +166,6 @@ Contribution are welcome! If a functionality is missing, and you implemented it 
 ## Next steps
 Here are some nice features that could be cool to have, and for which I'd be happy to accept PRs (ordered by most to least useful imo):
 - [ ] Add helpers for getting gradients
-- [ ] Add support for `vllm` when `NNsight` supports it
 - [ ] Add helpers for `NNsight`'s cache as it returns raw tuple outputs instead of nice vectors.
 - [ ] Add access to k/q/v
 
@@ -175,7 +176,8 @@ You might encounter the error `with block not found at line xyz` when running th
 - Create a git tag with the version number `git tag vx.y.z; git push origin vx.y.z`
 - Build with `python -m build`
 - Publish with e.g. `twine upload dist/*x.y.z*`
-- test with `pytest --cache-clear`. **cache-clear is mandatory for now otherwise `NNsight`'s source can break.** It might not be sufficient, in which case you can do `make clean` to remove Python cache.
+- Test with `uv run pytest nnterp/tests` or `uv run pytest nnterp/tests --model-names gpt2` to test with a specific model. Also you can use `uv run pytest nnterp/tests --class-names LlamaForCausalLM` to test with a specific class.
+<!--commented out as it is likely fixed now - test with `pytest --cache-clear`. **cache-clear is mandatory for now otherwise `NNsight`'s source can break.** It might not be sufficient, in which case you can do `make clean` to remove Python cache. -->
 
 
 ## Citation

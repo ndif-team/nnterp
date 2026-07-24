@@ -6,7 +6,7 @@ from enum import Enum
 import torch as th
 
 from .logging import logger
-from nnsight import Envoy
+from nnsight.intervention.envoy import Envoy
 from .utils import (
     TraceTensor,
     is_notebook,
@@ -429,11 +429,11 @@ class AttentionProbabilitiesAccessor:
         self.initialized_with_enable = initialized_with_enable
         if rename_config is not None and rename_config.attn_prob_source is not None:
             self.source_attr = rename_config.attn_prob_source
-        elif isinstance(model._model, BloomForCausalLM):
+        elif isinstance(model._module, BloomForCausalLM):
             self.source_attr = bloom_attention_prob_source
-        elif isinstance(model._model, GPT2LMHeadModel):
+        elif isinstance(model._module, GPT2LMHeadModel):
             self.source_attr = gpt2_attention_prob_source
-        elif isinstance(model._model, GPTJForCausalLM):
+        elif isinstance(model._module, GPTJForCausalLM):
             self.source_attr = gptj_attention_prob_source
         else:
             self.source_attr = default_attention_prob_source

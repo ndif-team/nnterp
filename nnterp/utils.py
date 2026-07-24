@@ -5,14 +5,15 @@ from typing import Union
 
 from .logging import logger
 import torch as th
-from nnsight.intervention.tracing.globals import Object
+
+from nnsight import Object
 import transformers
 import nnsight
 
 TraceTensor = Union[th.Tensor, Object]
 
 
-NNSIGHT_VERSION = nnsight.__version__
+NNSIGHT_VERSION = getattr(nnsight, "__version__", "unknown")
 TRANSFORMERS_VERSION = transformers.__version__
 
 

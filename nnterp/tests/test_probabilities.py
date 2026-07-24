@@ -38,7 +38,7 @@ def test_access_attn_probabilities(model_name):
         assert th.allclose(
             summed_probs,
             th.ones_like(summed_probs),
-            atol=1e-5,
+            atol=1e-2,  # attn_probs may be bf16 (pipeline default); rows sum to 1 ± ~4e-3
         )  # last dimension is the attention of token i to all other tokens
 
 

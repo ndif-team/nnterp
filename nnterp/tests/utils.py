@@ -21,7 +21,7 @@ from nnterp.utils import dummy_inputs
 
 
 TRANSFORMERS_VERSION = transformers.__version__
-NNSIGHT_VERSION = nnsight.__version__
+NNSIGHT_VERSION = getattr(nnsight, "__version__", "unknown")
 test_loading_status_path = importlib.resources.files("nnterp.data").joinpath(
     "test_loading_status.json"
 )

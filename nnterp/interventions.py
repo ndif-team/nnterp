@@ -348,7 +348,7 @@ def patchscope_generate(
                     get_layer_output(nn_model, layer)[
                         :, target_patch_prompt.index_to_patch
                     ] = hiddens[layer]
-                    gen = nn_model.generator.output.save()
+                    gen = tracer.result.save()
                     generations[layer] = gen
     for k, v in generations.items():
         generations[k] = v.cpu()

@@ -109,7 +109,6 @@ class StandardizedTransformer(LanguageModel):
             else kwargs.pop("attn_implementation", None)
         )
 
-        tokenizer_kwargs = kwargs.pop("tokenizer_kwargs", {})
         rename = get_rename_dict(rename_config=rename_config)
         user_rename = kwargs.pop("rename", None)
         if user_rename is not None:
@@ -117,10 +116,11 @@ class StandardizedTransformer(LanguageModel):
                 f"Updating default rename with user-provided rename: {user_rename}"
             )
             rename.update(user_rename)
+        # tokenizer_kwargs flows through to LanguageModel, which applies it to the
+        # loaded tokenizer.
         super().__init__(
             model,
             attn_implementation=attn_implementation,
-            tokenizer_kwargs=tokenizer_kwargs,
             trust_remote_code=trust_remote_code,
             rename=rename,
             **kwargs,
@@ -130,7 +130,7 @@ class StandardizedTransformer(LanguageModel):
         else:
             model_name = model.__class__.__name__
 
-        ignores = get_ignores(self._model, rename_config)
+        ignores = get_ignores(self._module, rename_config)
 
         # Create accessor instances
         self.layers_input = LayerAccessor(self, None, IOType.INPUT)
@@ -144,13 +144,13 @@ class StandardizedTransformer(LanguageModel):
 
         self.num_layers = len(self.layers)
         self.num_heads = get_num_attention_heads(
-            self._model, raise_error=False, rename_config=rename_config
+            self._module, raise_error=False, rename_config=rename_config
         )
         self.hidden_size = get_hidden_size(
-            self._model, raise_error=False, rename_config=rename_config
+            self._module, raise_error=False, rename_config=rename_config
         )
         self.vocab_size = get_vocab_size(
-            self._model, raise_error=False, rename_config=rename_config
+            self._module, raise_error=False, rename_config=rename_config
         )
 
         if check_renaming:

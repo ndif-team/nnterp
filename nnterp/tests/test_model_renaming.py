@@ -26,7 +26,7 @@ def get_layer_test(model_name, model, renamed, i):
         return model.transformer.h[i]
     elif model_name == "Maykeye/TinyLLama-v0":
         return model.model.layers[i]
-    elif isinstance(model._model, OPTForCausalLM):
+    elif isinstance(model._module, OPTForCausalLM):
         return model.model.decoder.layers[i]
     else:
         try:
@@ -43,7 +43,7 @@ def get_norm_test(model_name, model, renamed):
         return model.transformer.ln_f
     elif model_name == "Maykeye/TinyLLama-v0":
         return model.model.norm
-    elif isinstance(model._model, OPTForCausalLM):
+    elif isinstance(model._module, OPTForCausalLM):
         return model.model.decoder.final_layer_norm
     else:
         try:
@@ -60,7 +60,7 @@ def get_num_layers_test(model_name, model, renamed):
         return len(model.model.layers)
     elif model_name in ["gpt2", "bigscience/bigscience-small-testing"]:
         return len(model.transformer.h)
-    elif isinstance(model._model, OPTForCausalLM):
+    elif isinstance(model._module, OPTForCausalLM):
         return len(model.model.decoder.layers)
     else:
         try:
@@ -95,18 +95,17 @@ def test_model_renaming_activations_diff(model_name):
                 with open("bump.log", "a") as f:
                     f.write(f"Model {model_name} manual test not implemented\n")
                 return None
+            # Layer 0 and the norm are already checked above; new nnsight captures
+            # the trace body as source and cannot `return` from inside it, so don't
+            # early-return here.
             with model.trace(prompt):
                 # Collect layer outputs
                 for i in range(num_layers):
                     layer = get_layer_test(model_name, model, renamed, i)
-                    if layer is None:
-                        return None
                     activations.append(layer.output[0].save())
 
                 # Collect final layer norm output
                 norm = get_norm_test(model_name, model, renamed)
-                if norm is None:
-                    return None
                 activations.append(norm.output[0].save())
 
                 # Collect logits
@@ -143,7 +142,7 @@ def test_renaming_forward(model_name):
         # Test that key attributes exist and are accessible
         assert renamed_model.model.layers[0].self_attn is not None
         assert renamed_model.attentions[0] is not None
-        if not isinstance(renamed_model._model, OPTForCausalLM):
+        if not isinstance(renamed_model._module, OPTForCausalLM):
             assert renamed_model.model.layers[0].mlp is not None
             assert renamed_model.mlps[0] is not None
         assert renamed_model.model.ln_final is not None
@@ -171,7 +170,7 @@ def test_standardized_transformer_methods(model_name):
 
         num_layers = model.num_layers
         assert num_layers > 0
-        ignores = get_ignores(model._model)
+        ignores = get_ignores(model._module)
         with model.trace(prompt):
             assert model.layers[0] is not None
             # Test accessor and direct module access
@@ -257,7 +256,7 @@ def test_renamed_model_methods(model_name):
 
         num_layers = get_num_layers(model)
         assert num_layers > 0
-        ignores = get_ignores(model._model)
+        ignores = get_ignores(model._module)
         with model.trace(prompt):
             batch_size = model.input_size[0].save()
             seq_len = model.input_size[1].save()
@@ -305,7 +304,7 @@ def test_standardized_transformer_input_accessors(model_name):
         model = StandardizedTransformer(model_name)
         prompt = "Hello, world!"
 
-        ignores = get_ignores(model._model)
+        ignores = get_ignores(model._module)
         with model.trace(prompt):
             # Test input accessors
             layer_input_accessor = model.layers_input[0].save()
@@ -626,7 +625,7 @@ def test_module_accessor(model_name, raw_model):
     """Test ModuleAccessor class - all methods and functionality"""
     with th.no_grad():
         # Get the underlying PreTrainedModel
-        pretrained_model = raw_model._model
+        pretrained_model = raw_model._module
 
         # Test ModuleAccessor with default config
         accessor = ModuleAccessor(pretrained_model)
@@ -828,7 +827,7 @@ def test_slow_but_exact_bloom_disables_output_accessors():
     output projections with F.linear, so no module carries the sublayer
     contributions: attentions_output / mlps_output are disabled (issue #51)."""
     model = StandardizedTransformer("bigscience/bigscience-small-testing")
-    ignores = get_ignores(model._model)
+    ignores = get_ignores(model._module)
     assert "attention" in ignores and "mlp" in ignores
     with pytest.raises(RenamingError, match="disabled"):
         model.attentions_output[0]

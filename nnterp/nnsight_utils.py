@@ -5,9 +5,8 @@ import torch as th
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from nnsight import LanguageModel, NNsight
+from nnsight import NNsight, Object, LanguageModel
 from nnsight.intervention.envoy import Envoy
-from nnsight.intervention.tracing.globals import Object
 from transformers import PreTrainedModel
 
 from .utils import TraceTensor, unpack_tuple

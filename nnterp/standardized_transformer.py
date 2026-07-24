@@ -97,14 +97,14 @@ class StandardizationMixin:
         else:
             model_name = model.__class__.__name__
 
-        ignores = get_ignores(self._model, rename_config)
+        ignores = get_ignores(self._module, rename_config)
 
         # Create accessor instances. attentions_output / mlps_output may target a
         # submodule on architectures that add the residual inside the sublayer
         # module (see rename_utils.RESIDUAL_INSIDE_SUBLAYER_SOURCES and issue #51),
         # and are disabled (None source) when no module carries the contribution.
         attn_output_source, mlp_output_source = get_output_sources(
-            self._model, rename_config
+            self._module, rename_config
         )
 
         def output_accessor(source: str | None, name: str, default: str):
@@ -135,13 +135,13 @@ class StandardizationMixin:
 
         self.num_layers = len(self.layers)
         self.num_heads = get_num_attention_heads(
-            self._model, raise_error=False, rename_config=rename_config
+            self._module, raise_error=False, rename_config=rename_config
         )
         self.hidden_size = get_hidden_size(
-            self._model, raise_error=False, rename_config=rename_config
+            self._module, raise_error=False, rename_config=rename_config
         )
         self.vocab_size = get_vocab_size(
-            self._model, raise_error=False, rename_config=rename_config
+            self._module, raise_error=False, rename_config=rename_config
         )
 
         if check_renaming:

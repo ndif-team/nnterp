@@ -386,36 +386,75 @@ class LayerAccessor:
         return self._detected_is_tuple
 
 
+def first_available_op(source, *candidates: str):
+    """Return the first of `candidates` that exists as an operation on `source`.
+
+    nnsight names a source operation after the callee expression in the model's
+    forward, so the name changes whenever transformers rewrites that line. The
+    attention dropout is the recurring case:
+
+    - transformers <= 4.57 wrote ``module.attn_dropout(attn_weights)`` in GPT-2's
+      ``eager_attention_forward`` -> ``module_attn_dropout_0``
+    - transformers >= 5 writes ``nn.functional.dropout(...)`` there instead
+      -> ``nn_functional_dropout_0``
+
+    Trying the known spellings in order keeps one nnterp working across both.
+    """
+    for name in candidates:
+        try:
+            return getattr(source, name)
+        except AttributeError:
+            continue
+    raise RenamingError(
+        f"None of the expected attention-probability operations {list(candidates)} "
+        f"exist in this model's attention forward. This usually means the transformers "
+        f"version rewrote that line; print the available operations with "
+        f"`model.attention_probabilities.print_source()` and pass the right one via "
+        f"`RenameConfig(attn_prob_source=...)`."
+    )
+
+
+# Ordered by likelihood for the architectures each is used with; every entry is a
+# spelling of the same operation across transformers versions.
+ATTENTION_DROPOUT_OPS = ("nn_functional_dropout_0", "module_attn_dropout_0")
+
+
 def bloom_attention_prob_source(attention_module, return_module_source: bool = False):
     if return_module_source:
         return attention_module.source
     else:
-        return attention_module.source.self_attention_dropout_0
+        return first_available_op(
+            attention_module.source, "self_attention_dropout_0", *ATTENTION_DROPOUT_OPS
+        )
 
 
 def default_attention_prob_source(attention_module, return_module_source: bool = False):
+    source = attention_module.source.attention_interface_0.source
     if return_module_source:
-        return attention_module.source.attention_interface_0.source
+        return source
     else:
-        return (
-            attention_module.source.attention_interface_0.source.nn_functional_dropout_0
-        )
+        return first_available_op(source, *ATTENTION_DROPOUT_OPS)
 
 
 def gpt2_attention_prob_source(attention_module, return_module_source: bool = False):
+    source = attention_module.source.attention_interface_0.source
     if return_module_source:
-        return attention_module.source.attention_interface_0.source
+        return source
     else:
-        return (
-            attention_module.source.attention_interface_0.source.module_attn_dropout_0
-        )
+        # transformers >= 5 moved GPT-2 onto nn.functional.dropout, which is what
+        # default_attention_prob_source already expects; <= 4.57 used
+        # module.attn_dropout.
+        return first_available_op(source, *ATTENTION_DROPOUT_OPS)
 
 
 def gptj_attention_prob_source(attention_module, return_module_source: bool = False):
+    source = attention_module.source.self__attn_0.source
     if return_module_source:
-        return attention_module.source.self__attn_0.source
+        return source
     else:
-        return attention_module.source.self__attn_0.source.self_attn_dropout_0
+        return first_available_op(
+            source, "self_attn_dropout_0", *ATTENTION_DROPOUT_OPS
+        )
 
 
 class AttentionProbabilitiesAccessor:

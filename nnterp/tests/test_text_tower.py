@@ -97,7 +97,5 @@ def test_resolve_automodel_is_never_the_thing_that_fails_a_load(monkeypatch):
     def boom(*args, **kwargs):
         raise OSError("no such repo")
 
-    monkeypatch.setattr(
-        "transformers.AutoConfig.from_pretrained", boom, raising=True
-    )
+    monkeypatch.setattr("transformers.AutoConfig.from_pretrained", boom, raising=True)
     assert tt.resolve_automodel("definitely/not-a-real-repo") is None

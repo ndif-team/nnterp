@@ -17,6 +17,7 @@ from .utils import (
     DummyCache,
     try_with_scan,
 )
+from .text_tower import resolve_automodel
 from .rename_utils import (
     IOType,
     LayerAccessor,
@@ -73,6 +74,14 @@ class StandardizedTransformer(LanguageModel):
             tracing by setting attn_implementation="eager". Defaults to False.
         check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
+        text_tower (bool, default True): If True and ``model`` names a composite
+            multimodal checkpoint that *also* registers a text-only causal LM
+            (e.g. Qwen3.6-35B-A3B, ``model_type qwen3_5_moe``), load that text
+            tower through ``AutoModelForCausalLM``. The vision tower is not
+            loaded. Has no effect on ordinary text models or on genuine
+            multimodal-only checkpoints. Set False for nnsight's default
+            handling, which refuses such checkpoints and points at
+            ``VisionLanguageModel``.
     """
 
     num_layers: int
@@ -91,6 +100,7 @@ class StandardizedTransformer(LanguageModel):
         check_attn_probs_with_trace: bool = True,
         allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
+        text_tower: bool = True,
         **kwargs,
     ):
         if remote:
@@ -117,6 +127,13 @@ class StandardizedTransformer(LanguageModel):
                 f"Updating default rename with user-provided rename: {user_rename}"
             )
             rename.update(user_rename)
+        # A composite multimodal config that also registers a text-only causal LM
+        # is loadable as its text tower, but nnsight refuses it on sight; opt out
+        # of that refusal rather than making the caller pre-load the module.
+        if text_tower and "automodel" not in kwargs:
+            automodel = resolve_automodel(model, trust_remote_code=trust_remote_code)
+            if automodel is not None:
+                kwargs["automodel"] = automodel
         super().__init__(
             model,
             attn_implementation=attn_implementation,

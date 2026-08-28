@@ -28,6 +28,7 @@ core_test_models:
   - yujiepan/mixtral-8xtiny-random
   - yujiepan/qwen1.5-moe-tiny-random
   - yujiepan/qwen3-moe-tiny-random
+  - hf-internal-testing/tiny-random-MptForCausalLM
 
 # Substring patterns to skip models known to fail tests
 # Any model containing these substrings will be skipped

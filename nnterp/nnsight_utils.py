@@ -11,7 +11,7 @@ from nnsight.intervention.tracing.globals import Object
 from transformers import PreTrainedModel
 
 from .utils import TraceTensor, unpack_tuple
-from .standardized_transformer import StandardizedTransformer
+from .standardized_transformer import StandardizationMixin, StandardizedTransformer
 from .rename_utils import get_rename_dict, RenameConfig
 
 GetModuleOutput = Callable[[LanguageModel, int], TraceTensor]
@@ -102,6 +102,10 @@ def get_attention_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
     Returns:
         The Proxy for the output of the attention block of the layer
     """
+    if isinstance(nn_model, StandardizationMixin):
+        # Follows the standardized output source, which can differ from the module
+        # output on architectures that add the residual inside the module (issue #51)
+        return nn_model.attentions_output[layer]
     return unpack_tuple(get_attention(nn_model, layer).output)
 
 
@@ -116,6 +120,8 @@ def get_mlp_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
     """
     Get the output of the MLP of a layer
     """
+    if isinstance(nn_model, StandardizationMixin):
+        return nn_model.mlps_output[layer]
     return unpack_tuple(get_mlp(nn_model, layer).output)
 
 

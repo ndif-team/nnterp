@@ -74,6 +74,11 @@ try:
 except ImportError:
     GptOssForCausalLM = ArchitectureNotFound
 
+try:
+    from transformers import MptForCausalLM
+except ImportError:
+    MptForCausalLM = ArchitectureNotFound
+
 
 def detect_automodel(
     model: str,
@@ -154,7 +159,10 @@ class DummyCache:
 
 
 def dummy_inputs():
-    return {"input_ids": th.tensor([[0, 1, 1]]), "attention_mask": th.tensor([[1, 1, 1]])}
+    return {
+        "input_ids": th.tensor([[0, 1, 1]]),
+        "attention_mask": th.tensor([[1, 1, 1]]),
+    }
 
 
 def try_with_scan(

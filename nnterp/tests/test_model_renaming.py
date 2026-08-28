@@ -14,7 +14,7 @@ from nnterp.nnsight_utils import (
     get_num_layers,
     ModuleAccessor,
 )
-from nnterp.rename_utils import get_ignores, RenameConfig
+from nnterp.rename_utils import get_ignores, RenameConfig, RenamingError
 from transformers import OPTForCausalLM
 import torch.nn as nn
 
@@ -182,11 +182,24 @@ def test_standardized_transformer_methods(model_name):
             if "mlp" not in ignores:
                 assert model.mlps[0] is not None
                 assert model.layers[0].mlp is not None
-            attn_output_accessor = model.attentions_output[0].save()
-            attn_output_direct = model.model.layers[0].self_attn.output[0].save()
+            # On architectures that add the residual inside the sublayer module
+            # (BLOOM, MPT, DBRX), the output accessors target a submodule, so the
+            # direct access follows the accessor's attr_name path (issue #51).
+            if "attention" not in ignores:
+                attn_output_accessor = model.attentions_output[0].save()
+                attn_output_direct = model.model.layers[0]
+                for attr in model.attentions_output.attr_name.split("."):
+                    attn_output_direct = getattr(attn_output_direct, attr)
+                attn_output_direct = attn_output_direct.output
+                if isinstance(attn_output_direct, tuple):
+                    attn_output_direct = attn_output_direct[0]
+                attn_output_direct = attn_output_direct.save()
             if "mlp" not in ignores:
                 mlps_output_accessor = model.mlps_output[0].save()
-                mlps_output_direct = model.model.layers[0].mlp.output
+                mlps_output_direct = model.model.layers[0]
+                for attr in model.mlps_output.attr_name.split("."):
+                    mlps_output_direct = getattr(mlps_output_direct, attr)
+                mlps_output_direct = mlps_output_direct.output
                 if isinstance(mlps_output_direct, tuple):
                     mlps_output_direct = mlps_output_direct[0]
                 mlps_output_direct = mlps_output_direct.save()
@@ -207,9 +220,10 @@ def test_standardized_transformer_methods(model_name):
         assert th.allclose(
             layer_input_accessor, layer_input_direct
         ), "Layer input mismatch between accessor and direct access"
-        assert th.allclose(
-            attn_output_accessor, attn_output_direct
-        ), "Attention output mismatch between accessor and direct access"
+        if "attention" not in ignores:
+            assert th.allclose(
+                attn_output_accessor, attn_output_direct
+            ), "Attention output mismatch between accessor and direct access"
         if "mlp" not in ignores:
             assert th.allclose(
                 mlps_output_accessor, mlps_output_direct
@@ -229,7 +243,8 @@ def test_standardized_transformer_methods(model_name):
         assert next_probs.shape == (logits.shape[0], logits.shape[2])
         if "mlp" not in ignores:
             assert mlps_output_accessor.shape == layer_output_accessor.shape
-        assert attn_output_accessor.shape == layer_input_accessor.shape
+        if "attention" not in ignores:
+            assert attn_output_accessor.shape == layer_input_accessor.shape
 
 
 def test_renamed_model_methods(model_name):
@@ -251,7 +266,8 @@ def test_renamed_model_methods(model_name):
 
             # Test layer 0 methods
             layer_input = get_layer_input(model, 0).save()
-            attn_output = get_attention_output(model, 0).save()
+            if "attention" not in ignores:
+                attn_output = get_attention_output(model, 0).save()
             if "mlp" not in ignores:
                 mlps_output = get_mlp_output(model, 0)
                 if isinstance(mlps_output, tuple):
@@ -279,7 +295,8 @@ def test_renamed_model_methods(model_name):
         assert logits_output.shape == (batch_size, seq_len, model.vocab_size)
         if "mlp" not in ignores:
             assert mlps_output.shape == (batch_size, seq_len, model.hidden_size)
-        assert attn_output.shape == (batch_size, seq_len, model.hidden_size)
+        if "attention" not in ignores:
+            assert attn_output.shape == (batch_size, seq_len, model.hidden_size)
 
 
 def test_standardized_transformer_input_accessors(model_name):
@@ -721,3 +738,105 @@ def test_module_accessor(model_name, raw_model):
             layers_attr = accessor.layers
             assert isinstance(layers_attr, nn.ModuleList)
             assert len(layers_attr) == len(layers)
+
+
+# Architectures that add the residual inside the attention/MLP module (issue #51).
+RESIDUAL_INSIDE_MODELS = [
+    "yujiepan/bloom-tiny-random",
+    "hf-internal-testing/tiny-random-MptForCausalLM",
+    "yujiepan/dbrx-tiny-random",
+]
+
+
+@pytest.mark.parametrize("residual_model_name", RESIDUAL_INSIDE_MODELS)
+def test_sublayer_output_contribution_semantics(residual_model_name):
+    """attentions_output / mlps_output expose additive contributions, not
+    residual-added states, on architectures that add the residual inside the
+    sublayer module (issue #51)."""
+    with th.no_grad():
+        model = StandardizedTransformer(residual_model_name)
+        prompt = "Hello, world!"
+        with model.trace(prompt):
+            layer_in = model.layers_input[0].save()
+            attn_out = model.attentions_output[0].save()
+            mlp_out = model.mlps_output[0].save()
+            layer_out = model.layers_output[0].save()
+
+        # The buggy behavior returned residual-stream states here
+        assert not th.allclose(mlp_out, layer_out)
+        assert not th.allclose(attn_out, layer_in)
+        # Pre-LN additivity: the contributions sum to the residual stream delta
+        assert th.allclose(layer_in + attn_out + mlp_out, layer_out, atol=1e-5)
+
+        # Setting the attention contribution to zero removes it from the stream
+        with model.trace(prompt):
+            layer_in_ablated = model.layers_input[0].save()
+            model.attentions_output[0] = th.zeros_like(model.attentions_output[0])
+            mlp_out_ablated = model.mlps_output[0].save()
+            layer_out_ablated = model.layers_output[0].save()
+
+        assert not th.allclose(layer_out_ablated, layer_out)
+        assert th.allclose(
+            layer_in_ablated + mlp_out_ablated, layer_out_ablated, atol=1e-5
+        )
+
+
+def test_residual_inside_module_detection(monkeypatch):
+    """Without a configured output source, loading an architecture whose sublayer
+    modules take a residual argument raises a RenamingError (issue #51)."""
+    from nnterp import rename_utils
+    from nnterp.rename_utils import RenamingError
+
+    monkeypatch.setattr(rename_utils, "RESIDUAL_INSIDE_SUBLAYER_SOURCES", {})
+    with pytest.raises(RenamingError, match="residual"):
+        StandardizedTransformer("yujiepan/bloom-tiny-random")
+
+
+def test_residual_inside_module_user_config(monkeypatch):
+    """RenameConfig output sources configure contribution semantics for
+    architectures without built-in support, and explicitly passing the default
+    source opts out of the residual-argument detection (issue #51)."""
+    from nnterp import rename_utils
+
+    monkeypatch.setattr(rename_utils, "RESIDUAL_INSIDE_SUBLAYER_SOURCES", {})
+    model = StandardizedTransformer(
+        "yujiepan/bloom-tiny-random",
+        rename_config=RenameConfig(
+            attn_output_source="self_attn.dense",
+            mlp_output_source="mlp.dense_4h_to_h",
+        ),
+    )
+    with th.no_grad():
+        with model.trace("Hello, world!"):
+            layer_in = model.layers_input[0].save()
+            attn_out = model.attentions_output[0].save()
+            mlp_out = model.mlps_output[0].save()
+            layer_out = model.layers_output[0].save()
+    assert th.allclose(layer_in + attn_out + mlp_out, layer_out, atol=1e-5)
+
+    # Explicit default source = user asserts the module output is the contribution
+    StandardizedTransformer(
+        "yujiepan/bloom-tiny-random",
+        rename_config=RenameConfig(
+            attn_output_source="self_attn", mlp_output_source="mlp"
+        ),
+    )
+
+
+def test_slow_but_exact_bloom_disables_output_accessors():
+    """BLOOM checkpoints with pretraining_tp > 1 and slow_but_exact=True compute the
+    output projections with F.linear, so no module carries the sublayer
+    contributions: attentions_output / mlps_output are disabled (issue #51)."""
+    model = StandardizedTransformer("bigscience/bigscience-small-testing")
+    ignores = get_ignores(model._model)
+    assert "attention" in ignores and "mlp" in ignores
+    with pytest.raises(RenamingError, match="disabled"):
+        model.attentions_output[0]
+    with pytest.raises(RenamingError, match="disabled"):
+        model.mlps_output[0]
+    # Module and input accessors still work, and tracing is unaffected
+    with th.no_grad(), model.trace("Hello, world!"):
+        attn_in = model.attentions_input[0].save()
+        logits = model.logits.save()
+    assert attn_in.shape[-1] == model.hidden_size
+    assert logits.shape[-1] == model.vocab_size

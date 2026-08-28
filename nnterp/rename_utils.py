@@ -1,3 +1,4 @@
+import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import Literal
@@ -23,6 +24,7 @@ from .utils import (
     DbrxForCausalLM,
     StableLmForCausalLM,
     GptOssForCausalLM,
+    MptForCausalLM,
 )
 
 IgnoreType = Literal["mlp", "attention"]
@@ -103,6 +105,20 @@ class RenameConfig:
         or the vocab size directly. Defaults to standard keys:
         ['vocab_size', 'n_vocab', 'text_config.vocab_size'].
 
+    attn_output_source : str, optional
+        Dotted path (relative to a layer, using standardized names) to the module
+        whose output is the attention's additive contribution to the residual stream,
+        e.g. "self_attn.dense" for BLOOM. Needed for architectures that add the
+        residual *inside* the attention module, where the module output is already
+        a residual-stream state (see https://github.com/ndif-team/nnterp/issues/51).
+        ``attentions_output[i]`` reads/writes this module's output. Passing the
+        default "self_attn" explicitly asserts that the module output is the
+        additive contribution despite a ``residual``-like argument in its forward.
+
+    mlp_output_source : str, optional
+        Same as ``attn_output_source`` for the MLP, e.g. "mlp.dense_4h_to_h" for
+        BLOOM or "mlp.down_proj" for MPT.
+
     Example
     -------
     Custom configuration for a non-standard architecture::
@@ -126,6 +142,8 @@ class RenameConfig:
     attn_head_config_key: str | list[str] | int | None = None
     hidden_size_config_key: str | list[str] | int | None = None
     vocab_size_config_key: str | list[str] | int | None = None
+    attn_output_source: str | None = None
+    mlp_output_source: str | None = None
 
 
 MODEL_NAMES = ["transformer", "gpt_neox", "decoder", "language_model"]
@@ -159,8 +177,68 @@ def default_vocab_size_config_keys():
 # Models with no mlp module
 IGNORE_MLP_MODELS = (OPTForCausalLM,)
 
+# Architectures that add the residual stream to the sublayer output *inside* the
+# attention/MLP module, so the module output is a residual-stream state instead of
+# the additive contribution (https://github.com/ndif-team/nnterp/issues/51).
+# Maps model class -> (attn_output_source, mlp_output_source); None keeps the default.
+RESIDUAL_INSIDE_SUBLAYER_SOURCES = {
+    BloomForCausalLM: ("self_attn.dense", "mlp.dense_4h_to_h"),
+    MptForCausalLM: (None, "mlp.down_proj"),
+    # DbrxNormAttentionNorm returns (resid_mid, norm_2(resid_mid), attn_weights):
+    # its output[0] is a residual-stream state, the inner attn output is the contribution.
+    DbrxForCausalLM: ("self_attn.attn", None),
+}
+
+
+def bloom_slow_but_exact(model) -> bool:
+    """BLOOM checkpoints with pretraining_tp > 1 and slow_but_exact=True (e.g.
+    bigscience/bigscience-small-testing) compute the output projections with
+    F.linear, bypassing the dense modules, so no pre-residual module exists."""
+    return (
+        isinstance(model, BloomForCausalLM)
+        and model.config.pretraining_tp > 1
+        and model.config.slow_but_exact
+    )
+
+
+def get_output_sources(
+    model, rename_config: RenameConfig | None = None
+) -> tuple[str | None, str | None]:
+    """Resolve the module paths targeted by attentions_output / mlps_output.
+
+    Defaults to the attention/MLP modules themselves. For architectures that add
+    the residual inside the sublayer module (BLOOM, MPT), targets the last
+    pre-residual projection so the accessors expose the additive contribution.
+    Returns None for a sublayer whose contribution is not exposed by any module
+    (slow_but_exact BLOOM): the corresponding accessor is disabled.
+    """
+    attn_source, mlp_source = "self_attn", "mlp"
+    if bloom_slow_but_exact(model):
+        attn_source = mlp_source = None
+    else:
+        for model_class, (
+            attn_override,
+            mlp_override,
+        ) in RESIDUAL_INSIDE_SUBLAYER_SOURCES.items():
+            if isinstance(model, model_class):
+                attn_source = attn_override or attn_source
+                mlp_source = mlp_override or mlp_source
+    if rename_config is not None:
+        if rename_config.attn_output_source is not None:
+            attn_source = rename_config.attn_output_source
+        if rename_config.mlp_output_source is not None:
+            mlp_source = rename_config.mlp_output_source
+    return attn_source, mlp_source
+
+
 # Alternative names for LLM layers
-ATTENTION_NAMES = ["attn", "self_attention", "attention", "norm_attn_norm", "linear_attn"]
+ATTENTION_NAMES = [
+    "attn",
+    "self_attention",
+    "attention",
+    "norm_attn_norm",
+    "linear_attn",
+]
 LAYER_NAMES = expand_path_with_model(
     [
         "h",
@@ -313,24 +391,34 @@ class IOType(Enum):
 
 
 class LayerAccessor:
-    """I/O accessor that provides input/output access with setter"""
+    """I/O accessor that provides input/output access with setter.
+
+    If ``disabled_reason`` is set, any access raises a RenamingError with that
+    message (used when no module carries the accessor's semantics, e.g.
+    attentions_output on slow_but_exact BLOOM).
+    """
 
     def __init__(
         self,
         model,
         attr_name: str | None,
         io_type: IOType | None,
+        disabled_reason: str | None = None,
     ):
 
         self.model = model
         self.attr_name = attr_name
         self.io_type = io_type
+        self.disabled_reason = disabled_reason
         self._detected_is_tuple: bool | None = None
 
     def get_module(self, layer: int) -> Envoy:
+        if self.disabled_reason is not None:
+            raise RenamingError(self.disabled_reason)
         module = self.model.layers[layer]
         if self.attr_name is not None:
-            module = getattr(module, self.attr_name)
+            for attr in self.attr_name.split("."):
+                module = getattr(module, attr)
         return module
 
     def __getitem__(self, layer: int) -> TraceTensor | Envoy:
@@ -423,7 +511,9 @@ def gptj_attention_prob_source(attention_module, return_module_source: bool = Fa
         return attention_module.source.self__attn_0.source.self_attn_dropout_0
 
 
-def qwen2moe_attention_prob_source(attention_module, return_module_source: bool = False):
+def qwen2moe_attention_prob_source(
+    attention_module, return_module_source: bool = False
+):
     if return_module_source:
         return attention_module.source
     else:
@@ -437,7 +527,9 @@ def dbrx_attention_prob_source(attention_module, return_module_source: bool = Fa
         return attention_module.attn.source.nn_functional_dropout_0
 
 
-def stablelm_attention_prob_source(attention_module, return_module_source: bool = False):
+def stablelm_attention_prob_source(
+    attention_module, return_module_source: bool = False
+):
     if return_module_source:
         return attention_module.source
     else:
@@ -472,6 +564,9 @@ class AttentionProbabilitiesAccessor:
         elif isinstance(model._model, GPTJForCausalLM):
             self.source_attr = gptj_attention_prob_source
         elif isinstance(model._model, Qwen2MoeForCausalLM):
+            self.source_attr = qwen2moe_attention_prob_source
+        elif isinstance(model._model, MptForCausalLM):
+            # MptAttention: softmax then nn.functional.dropout, same as Qwen2Moe
             self.source_attr = qwen2moe_attention_prob_source
         elif isinstance(model._model, DbrxForCausalLM):
             self.source_attr = dbrx_attention_prob_source
@@ -547,9 +642,7 @@ class AttentionProbabilitiesAccessor:
                 sum_last = probs.sum(dim=-1)
                 if self.attn_probs_dont_sum_to_one:
                     if not (sum_last > 0).all():
-                        raise RenamingError(
-                            "Attention probabilities should be > 0."
-                        )
+                        raise RenamingError("Attention probabilities should be > 0.")
                     if not (sum_last < 1 + 1e-5).all():
                         raise RenamingError(
                             "Attention probabilities should sum to < 1 for models with sink tokens."
@@ -644,6 +737,15 @@ def get_ignores(model, rename_config: RenameConfig | None = None) -> list[str]:
             message += " You'll have to manually use layers.fc1 and layers.fc2 instead."
         logger.warning(message)
         ignores.append("mlp")
+    if bloom_slow_but_exact(model):
+        logger.warning(
+            f"{model.config.name_or_path} uses pretraining_tp > 1 with slow_but_exact=True, "
+            "which computes the attention/MLP output projections with F.linear instead of the "
+            "dense modules. No module exposes the sublayer contributions, so attentions_output "
+            "/ mlps_output are disabled and attention/MLP checks are skipped "
+            "(see https://github.com/ndif-team/nnterp/issues/51)."
+        )
+        ignores.extend(["attention", "mlp"])
     if rename_config is not None:
         if rename_config.ignore_mlp:
             ignores.append("mlp")
@@ -684,19 +786,54 @@ def check_io(std_model, model_name: str, ignores: list[IgnoreType]):
         )
     expected_hidden = (*input_size, hidden_size)
 
-    _check_tensor(std_model.token_embeddings, "token_embeddings", expected_hidden, model_name)
-    _check_tensor(std_model.layers_input[0], "layers_input[0]", expected_hidden, model_name)
+    _check_tensor(
+        std_model.token_embeddings, "token_embeddings", expected_hidden, model_name
+    )
+    _check_tensor(
+        std_model.layers_input[0], "layers_input[0]", expected_hidden, model_name
+    )
 
     if "attention" not in ignores:
-        _check_tensor(std_model.attentions_input[0], "attentions_input[0]", expected_hidden, model_name)
-        _check_tensor(std_model.attentions_output[0], "attentions_output[0]", expected_hidden, model_name)
+        _check_tensor(
+            std_model.attentions_input[0],
+            "attentions_input[0]",
+            expected_hidden,
+            model_name,
+        )
+        _check_tensor(
+            std_model.attentions_output[0],
+            "attentions_output[0]",
+            expected_hidden,
+            model_name,
+        )
 
     if "mlp" not in ignores:
-        _check_tensor(std_model.mlps_input[0], "mlps_input[0]", expected_hidden, model_name)
-        _check_tensor(std_model.mlps_output[0], "mlps_output[0]", expected_hidden, model_name)
+        _check_tensor(
+            std_model.mlps_input[0], "mlps_input[0]", expected_hidden, model_name
+        )
+        mlp_out = std_model.mlps_output[0]
+        _check_tensor(mlp_out, "mlps_output[0]", expected_hidden, model_name)
 
-    _check_tensor(std_model.layers_output[0], "layers_output[0]", expected_hidden, model_name)
-    _check_tensor(std_model.ln_final.output, "ln_final.output", expected_hidden, model_name)
+    layer_out = std_model.layers_output[0]
+    _check_tensor(layer_out, "layers_output[0]", expected_hidden, model_name)
+    # Value-based residual-semantics check (issue #51), only when the tensors hold
+    # real values (i.e. not during a scan on fake/meta tensors).
+    if (
+        "mlp" not in ignores
+        and layer_out.device != th.device("meta")
+        and th.allclose(mlp_out, layer_out)
+    ):
+        raise RenamingError(
+            f"mlps_output[0] is identical to layers_output[0] in {model_name} architecture. "
+            "This means the MLP module adds the residual stream to its output inside the module, "
+            "so mlps_output returns residual-stream states instead of the additive MLP "
+            "contribution (see https://github.com/ndif-team/nnterp/issues/51). Pass "
+            "RenameConfig(mlp_output_source='<path.to.submodule>') pointing to the submodule "
+            "whose output is the additive contribution (e.g. 'mlp.dense_4h_to_h' for BLOOM)."
+        )
+    _check_tensor(
+        std_model.ln_final.output, "ln_final.output", expected_hidden, model_name
+    )
 
     # vLLM computes logits in a separate phase (not part of the model forward pass),
     # so lm_head.output is not accessible during a vLLM trace.
@@ -744,12 +881,73 @@ def _warn_heterogeneous_types(accessor, num_layers: int, kind: str, model_name: 
         )
 
 
+def _check_output_source(
+    std_model,
+    kind: IgnoreType,
+    model_name: str,
+    rename_config: RenameConfig | None = None,
+):
+    """Check that attentions_output / mlps_output expose the additive sublayer
+    contribution, not a residual-added state (issue #51).
+
+    If the sublayer module takes a residual-like argument in its forward pass, it
+    most likely adds the residual to its output inside the module (BLOOM, MPT), so
+    an output source pointing to the pre-residual submodule must be configured.
+    An explicitly configured source (built-in or via RenameConfig) is trusted,
+    including an explicit default source (user asserts the module output is the
+    contribution).
+    """
+    if kind == "attention":
+        accessor, default_source, config_field = (
+            std_model.attentions_output,
+            "self_attn",
+            "attn_output_source",
+        )
+    else:
+        accessor, default_source, config_field = (
+            std_model.mlps_output,
+            "mlp",
+            "mlp_output_source",
+        )
+    try:
+        module = accessor.get_module(0)._module
+    except AttributeError as e:
+        raise RenamingError(
+            f"The configured {config_field}='{accessor.attr_name}' does not resolve to a module "
+            f"of layer 0 in {model_name} architecture."
+        ) from e
+    explicitly_configured = (
+        rename_config is not None and getattr(rename_config, config_field) is not None
+    )
+    if explicitly_configured or accessor.attr_name != default_source:
+        return
+    residual_params = [
+        name
+        for name in inspect.signature(module.forward).parameters
+        if "residual" in name
+    ]
+    if residual_params:
+        accessor_name = "attentions_output" if kind == "attention" else "mlps_output"
+        raise RenamingError(
+            f"The {kind} module ({type(module).__name__}) of {model_name} takes a "
+            f"`{residual_params[0]}` argument in its forward pass. This usually means the residual "
+            f"stream is added to the sublayer output inside the module, in which case "
+            f"{accessor_name} would return residual-stream states instead of the additive {kind} "
+            "contribution (see https://github.com/ndif-team/nnterp/issues/51).\n"
+            f"If so, pass RenameConfig({config_field}='<path.to.submodule>') pointing to the "
+            f"submodule whose output is the additive contribution (e.g. 'self_attn.dense' for "
+            f"BLOOM). If the module does not add the residual to its output, pass "
+            f"RenameConfig({config_field}='{default_source}') to keep the default behavior."
+        )
+
+
 def check_model_renaming(
     std_model,
     model_name: str,
     ignores: list[IgnoreType],
     allow_dispatch: bool,
     allow_multimodal: bool = False,
+    rename_config: RenameConfig | None = None,
 ):
     _check_has_module(std_model, "layers", model_name, "layers_rename")
 
@@ -770,11 +968,17 @@ def check_model_renaming(
 
     if "attention" not in ignores:
         _check_has_module(std_model.layers[0], "self_attn", model_name, "attn_rename")
-        _warn_heterogeneous_types(std_model.attentions, std_model.num_layers, "attention", model_name)
+        _warn_heterogeneous_types(
+            std_model.attentions, std_model.num_layers, "attention", model_name
+        )
+        _check_output_source(std_model, "attention", model_name, rename_config)
 
     if "mlp" not in ignores:
         _check_has_module(std_model.layers[0], "mlp", model_name, "mlp_rename")
-        _warn_heterogeneous_types(std_model.mlps, std_model.num_layers, "MLP", model_name)
+        _warn_heterogeneous_types(
+            std_model.mlps, std_model.num_layers, "MLP", model_name
+        )
+        _check_output_source(std_model, "mlp", model_name, rename_config)
 
     try_with_scan(
         std_model,

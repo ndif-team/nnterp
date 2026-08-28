@@ -85,6 +85,29 @@ Provide multiple options for the same component:
        mlp_name=["ffn", "feed_forward", "mlp_block"]
    )
 
+Modules That Add the Residual Internally
+----------------------------------------
+
+Some architectures (BLOOM, MPT, DBRX) add the residual stream to the sublayer
+output *inside* the attention/MLP module, so the module output is a
+residual-stream state rather than the additive contribution
+(`issue #51 <https://github.com/ndif-team/nnterp/issues/51>`_). nnterp refuses to
+load an unknown architecture whose attention/MLP forward takes a
+``residual``-like argument. To add support, point the output accessors to the
+last pre-residual submodule:
+
+.. code-block:: python
+
+   rename_config = RenameConfig(
+       attn_output_source="self_attn.dense",     # BLOOM's attention output projection
+       mlp_output_source="mlp.dense_4h_to_h",    # BLOOM's MLP output projection
+   )
+
+Paths are relative to a layer and use standardized (post-renaming) names. If the
+module does not actually add the residual to its output, pass the default source
+(``attn_output_source="self_attn"`` / ``mlp_output_source="mlp"``) to keep the
+module output.
+
 Real Example: GPT-J Support
 ----------------------------
 

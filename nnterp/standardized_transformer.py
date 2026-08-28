@@ -513,6 +513,10 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
             tracing by setting attn_implementation="eager". Defaults to False.
         check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
+        text_only (bool, default False): If True and the checkpoint registers a separate text-only
+            causal LM class next to its multimodal one (e.g. Mllama, Llama-4, Qwen3.5), load only that
+            text tower (no vision weights). No effect on text models or on multimodal checkpoints
+            without a separate text-only class. See ``detect_automodel``.
     """
 
     is_vllm: bool = False
@@ -527,6 +531,7 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
         check_attn_probs_with_trace: bool = True,
         rename_config: RenameConfig | None = None,
         automodel=None,
+        text_only: bool = False,
         **kwargs,
     ):
         # Detect VLMs and warn
@@ -535,7 +540,9 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
             from transformers import AutoModelForImageTextToText
 
             automodel = detect_automodel(
-                model, trust_remote_code=kwargs.get("trust_remote_code", False)
+                model,
+                trust_remote_code=kwargs.get("trust_remote_code", False),
+                text_only=text_only,
             )
             if automodel is AutoModelForImageTextToText:
                 warnings.warn(

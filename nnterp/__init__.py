@@ -22,6 +22,7 @@ def load_model(
     model: str,
     use_vllm: bool = False,
     allow_experimental_vllm: bool = False,
+    text_only: bool = False,
     **model_kwargs,
 ) -> Union[StandardizedTransformer, "StandardizedVLLM", StandardizedVLM]:
     """Load a model using the appropriate wrapper.
@@ -35,6 +36,10 @@ def load_model(
         allow_experimental_vllm: Acknowledge that the vLLM backend is experimental.
             Required when ``use_vllm=True``. Can also be enabled by setting the
             ``NNTERP_ALLOW_EXPERIMENTAL_VLLM=1`` environment variable.
+        text_only: If True and the checkpoint registers a separate text-only causal LM
+            class next to its multimodal one (e.g. Mllama, Llama-4, Qwen3.5), load only
+            that text tower as a ``StandardizedTransformer`` (no vision weights).
+            No effect otherwise. See ``detect_automodel``.
         **model_kwargs: Keyword arguments to pass to the model wrapper.
 
     Returns:
@@ -52,8 +57,10 @@ def load_model(
     automodel_cls = detect_automodel(
         model,
         trust_remote_code=model_kwargs.get("trust_remote_code", False),
+        text_only=text_only,
     )
     if automodel_cls is AutoModelForImageTextToText:
         return StandardizedVLM(model, **model_kwargs)
 
+    model_kwargs.setdefault("automodel", automodel_cls)
     return StandardizedTransformer(model, **model_kwargs)

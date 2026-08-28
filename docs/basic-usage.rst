@@ -89,18 +89,6 @@ Access layer inputs and outputs directly:
        attn_output = model.attentions_output[3]
        mlp_output = model.mlps_output[3]
 
-.. note::
-
-   ``attentions_output[i]`` and ``mlps_output[i]`` never include the residual
-   stream. On architectures that add the residual *inside* the attention/MLP
-   module (BLOOM, MPT, DBRX), they target the last pre-residual submodule instead
-   of the literal module output (see
-   `issue #51 <https://github.com/ndif-team/nnterp/issues/51>`_). Use
-   ``model.attentions[i].output`` / ``model.mlps[i].output`` if you want the raw
-   module output. On architectures with post-sublayer layernorms outside these
-   modules (e.g. Gemma-2/3), the tensor added to the residual stream is the
-   post-layernorm output, not the module output these accessors return.
-
 Skip Layers
 ~~~~~~~~~~~
 

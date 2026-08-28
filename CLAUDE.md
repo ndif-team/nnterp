@@ -53,8 +53,8 @@ nnterp is a mechanistic interpretability library built on top of nnsight, provid
 **nnsight** `nnterp` is built on top of `nnsight`. A very important thing about `nnsight` is that interventions in a trace **MUST BE WRITTEN IN ORDER**. This means e.g. you can't access the output of a layer and then access its input / its mlp output.
 
 **Model Loading** (`__init__.py`)
-- `load_model(model_name)` — **Recommended entrypoint**. Auto-detects VLMs via `detect_automodel()` and returns the appropriate wrapper (`StandardizedTransformer`, `StandardizedVLM`, or `StandardizedVLLM`)
-- `detect_automodel(model_name)` — Inspects model config to determine the right `AutoModel` class. Priority: `AutoModelForImageTextToText` > `AutoModelForCausalLM` > `AutoModelForSeq2SeqLM`
+- `load_model(model_name)` — **Recommended entrypoint**. Auto-detects VLMs via `detect_automodel()` and returns the appropriate wrapper (`StandardizedTransformer`, `StandardizedVLM`, or `StandardizedVLLM`). `text_only=True` loads only the text tower of multimodal checkpoints that register a separate causal-LM class (Mllama, Llama-4, Qwen3.5)
+- `detect_automodel(model_name)` — Inspects model config to determine the right `AutoModel` class. Priority: `AutoModelForImageTextToText` > `AutoModelForCausalLM` > `AutoModelForSeq2SeqLM`. With `text_only=True`, returns a marker subclass of `AutoModelForCausalLM` for dual-registered configs (needed so nnsight 0.7's multimodal guard stands down; drop with the nnsight 0.8 migration)
 
 **StandardizedTransformer** (`standardized_transformer.py`)
 - Unified interface for text transformer architectures (extends `nnsight.LanguageModel`)

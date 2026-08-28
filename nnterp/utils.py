@@ -7,6 +7,7 @@ from .logging import logger
 import torch as th
 from nnsight.intervention.tracing.globals import Object
 import transformers
+from transformers import AutoModelForCausalLM
 import nnsight
 
 TraceTensor = Union[th.Tensor, Object]
@@ -80,9 +81,21 @@ except ImportError:
     MptForCausalLM = ArchitectureNotFound
 
 
+class TextOnlyAutoModelForCausalLM(AutoModelForCausalLM):
+    """``AutoModelForCausalLM`` as returned by ``detect_automodel(text_only=True)``.
+
+    Builds exactly what ``AutoModelForCausalLM`` builds (auto classes dispatch on
+    the inherited ``_model_mapping``). It is a distinct class because nnsight 0.7's
+    ``LanguageModel`` refuses configs registered with ``AutoModelForImageTextToText``
+    unless a non-default ``automodel`` is passed. To drop with the nnsight 0.8
+    migration, where ``task="text-generation"`` replaces ``automodel``.
+    """
+
+
 def detect_automodel(
     model: str,
     trust_remote_code: bool = False,
+    text_only: bool = False,
 ):
     """Detect the appropriate AutoModel class for a model by inspecting its config.
 
@@ -97,18 +110,55 @@ def detect_automodel(
     Args:
         model: HuggingFace model name or path.
         trust_remote_code: Whether to trust remote code when loading the config.
+        text_only: If True and the checkpoint registers a separate text-only causal
+            LM class next to its multimodal one (e.g. Mllama, Llama-4, Qwen3.5),
+            return that class so only the text tower is loaded. Raises if the
+            installed transformers cannot build it from the checkpoint's composite
+            config. No effect when there is no separate text-only class.
 
     Returns:
         The appropriate AutoModel class (e.g. ``AutoModelForCausalLM``).
     """
     from transformers import (
         AutoConfig,
-        AutoModelForCausalLM,
         AutoModelForImageTextToText,
         AutoModelForSeq2SeqLM,
     )
 
     config = AutoConfig.from_pretrained(model, trust_remote_code=trust_remote_code)
+    config_cls = type(config)
+
+    if (
+        text_only
+        and config_cls in AutoModelForImageTextToText._model_mapping
+        and config_cls in AutoModelForCausalLM._model_mapping
+    ):
+        text_cls = AutoModelForCausalLM._model_mapping[config_cls]
+        if text_cls is AutoModelForImageTextToText._model_mapping[config_cls]:
+            logger.info(
+                f"{model} has no separate text-only class ({text_cls.__name__} is "
+                "also its multimodal class), loading the multimodal model."
+            )
+        else:
+            # Not every architecture can build its text tower from the composite
+            # config (Llama4ForCausalLM reads vocab_size at the top level in 4.56).
+            with th.device("meta"):
+                try:
+                    AutoModelForCausalLM.from_config(
+                        config, trust_remote_code=trust_remote_code
+                    )
+                except Exception as e:
+                    raise ValueError(
+                        f"text_only=True but {text_cls.__name__} cannot be built from "
+                        f"the {config_cls.__name__} of {model} with transformers "
+                        f"{TRANSFORMERS_VERSION}: {e}\nLoad the full multimodal model "
+                        "instead (text_only=False or StandardizedVLM)."
+                    ) from e
+            logger.info(
+                f"Loading only the text tower ({text_cls.__name__}) of {model}, "
+                "the vision tower is not loaded."
+            )
+            return TextOnlyAutoModelForCausalLM
 
     candidates = [
         AutoModelForImageTextToText,
@@ -117,7 +167,7 @@ def detect_automodel(
     ]
 
     for cls in candidates:
-        if type(config) in cls._model_mapping:
+        if config_cls in cls._model_mapping:
             logger.info(
                 f"Auto-detected {cls.__name__} for {model} "
                 f"(config: {type(config).__name__})"

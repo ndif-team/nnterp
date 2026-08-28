@@ -81,17 +81,6 @@ except ImportError:
     MptForCausalLM = ArchitectureNotFound
 
 
-class TextOnlyAutoModelForCausalLM(AutoModelForCausalLM):
-    """``AutoModelForCausalLM`` as returned by ``detect_automodel(text_only=True)``.
-
-    Builds exactly what ``AutoModelForCausalLM`` builds (auto classes dispatch on
-    the inherited ``_model_mapping``). It is a distinct class because nnsight 0.7's
-    ``LanguageModel`` refuses configs registered with ``AutoModelForImageTextToText``
-    unless a non-default ``automodel`` is passed. To drop with the nnsight 0.8
-    migration, where ``task="text-generation"`` replaces ``automodel``.
-    """
-
-
 def detect_automodel(
     model: str,
     trust_remote_code: bool = False,
@@ -115,6 +104,9 @@ def detect_automodel(
             return that class so only the text tower is loaded. Raises if the
             installed transformers cannot build it from the checkpoint's composite
             config. No effect when there is no separate text-only class.
+            nnsight 0.7.0 refuses such configs in ``LanguageModel`` regardless of
+            the automodel's dispatch (over-broad multimodal guard, fixed upstream);
+            nnsight 0.6 and 0.8 (``task="text-generation"``) are unaffected.
 
     Returns:
         The appropriate AutoModel class (e.g. ``AutoModelForCausalLM``).
@@ -158,7 +150,7 @@ def detect_automodel(
                 f"Loading only the text tower ({text_cls.__name__}) of {model}, "
                 "the vision tower is not loaded."
             )
-            return TextOnlyAutoModelForCausalLM
+            return AutoModelForCausalLM
 
     candidates = [
         AutoModelForImageTextToText,

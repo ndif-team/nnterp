@@ -35,11 +35,7 @@ MLLAMA_TINY = "yujiepan/llama-3.2-vision-tiny-random"
 
 def test_detect_automodel_text_only_selects_text_tower():
     assert detect_automodel(MLLAMA_TINY) is AutoModelForImageTextToText
-    cls = detect_automodel(MLLAMA_TINY, text_only=True)
-    # A marker subclass so nnsight 0.7's multimodal guard stands down; same dispatch
-    assert cls is not AutoModelForCausalLM
-    assert issubclass(cls, AutoModelForCausalLM)
-    assert cls._model_mapping is AutoModelForCausalLM._model_mapping
+    assert detect_automodel(MLLAMA_TINY, text_only=True) is AutoModelForCausalLM
 
 
 def test_detect_automodel_text_only_without_separate_text_class():

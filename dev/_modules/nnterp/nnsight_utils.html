@@ -458,7 +458,7 @@
 <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">PreTrainedModel</span>
 
 <span class="kn">from</span><span class="w"> </span><span class="nn">.utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">TraceTensor</span><span class="p">,</span> <span class="n">unpack_tuple</span>
-<span class="kn">from</span><span class="w"> </span><span class="nn">.standardized_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="n">StandardizedTransformer</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">.standardized_transformer</span><span class="w"> </span><span class="kn">import</span> <span class="n">StandardizationMixin</span><span class="p">,</span> <span class="n">StandardizedTransformer</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">.rename_utils</span><span class="w"> </span><span class="kn">import</span> <span class="n">get_rename_dict</span><span class="p">,</span> <span class="n">RenameConfig</span>
 
 <span class="n">GetModuleOutput</span> <span class="o">=</span> <span class="n">Callable</span><span class="p">[[</span><span class="n">LanguageModel</span><span class="p">,</span> <span class="nb">int</span><span class="p">],</span> <span class="n">TraceTensor</span><span class="p">]</span>
@@ -572,6 +572,10 @@
 <span class="sd">    Returns:</span>
 <span class="sd">        The Proxy for the output of the attention block of the layer</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">nn_model</span><span class="p">,</span> <span class="n">StandardizationMixin</span><span class="p">):</span>
+        <span class="c1"># Follows the standardized output source, which can differ from the module</span>
+        <span class="c1"># output on architectures that add the residual inside the module (issue #51)</span>
+        <span class="k">return</span> <span class="n">nn_model</span><span class="o">.</span><span class="n">attentions_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span>
     <span class="k">return</span> <span class="n">unpack_tuple</span><span class="p">(</span><span class="n">get_attention</span><span class="p">(</span><span class="n">nn_model</span><span class="p">,</span> <span class="n">layer</span><span class="p">)</span><span class="o">.</span><span class="n">output</span><span class="p">)</span></div>
 
 
@@ -592,6 +596,8 @@
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;</span>
 <span class="sd">    Get the output of the MLP of a layer</span>
 <span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">nn_model</span><span class="p">,</span> <span class="n">StandardizationMixin</span><span class="p">):</span>
+        <span class="k">return</span> <span class="n">nn_model</span><span class="o">.</span><span class="n">mlps_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span>
     <span class="k">return</span> <span class="n">unpack_tuple</span><span class="p">(</span><span class="n">get_mlp</span><span class="p">(</span><span class="n">nn_model</span><span class="p">,</span> <span class="n">layer</span><span class="p">)</span><span class="o">.</span><span class="n">output</span><span class="p">)</span></div>
 
 

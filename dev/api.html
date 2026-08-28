@@ -467,6 +467,13 @@
 <li><p>mlps[i]: Get MLP module at layer i</p></li>
 <li><p>mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i</p></li>
 </ul>
+<p>attentions_output[i] / mlps_output[i] never include the residual stream: on
+architectures that add the residual inside the attention/MLP module (BLOOM,
+MPT, DBRX), they target the last pre-residual submodule instead of the module
+output (see issue #51). Note that on architectures with post-sublayer
+layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the
+residual stream is the post-layernorm output, not the module output returned
+here.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -707,6 +714,13 @@ Pandas is included in <code class="docutils literal notranslate"><span class="pr
 <li><p>mlps[i]: Get MLP module at layer i</p></li>
 <li><p>mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i</p></li>
 </ul>
+<p>attentions_output[i] / mlps_output[i] never include the residual stream: on
+architectures that add the residual inside the attention/MLP module (BLOOM,
+MPT, DBRX), they target the last pre-residual submodule instead of the module
+output (see issue #51). Note that on architectures with post-sublayer
+layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the
+residual stream is the post-layernorm output, not the module output returned
+here.</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -1832,7 +1846,7 @@ return the full module source from where the attention probabilities are compute
 
 <dl class="py class">
 <dt class="sig sig-object py" id="nnterp.rename_utils.RenameConfig">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">RenameConfig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">attn_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mlp_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ln_final_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lm_head_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layers_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attn_prob_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_mlp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_attn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attn_head_config_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_size_config_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size_config_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#RenameConfig"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.RenameConfig" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">RenameConfig</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">attn_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mlp_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ln_final_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">lm_head_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">layers_name</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attn_prob_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_mlp</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignore_attn</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attn_head_config_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">hidden_size_config_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">vocab_size_config_key</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attn_output_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">mlp_output_source</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#RenameConfig"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.RenameConfig" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
 <p>Configuration for renaming transformer model modules to standardized names.</p>
 <p>This dataclass specifies how to map model-specific module names to standardized names
@@ -1862,6 +1876,16 @@ or the hidden size directly. Defaults to standard keys:
 <li><p><strong>vocab_size_config_key</strong> (<em>str</em><em>, </em><em>list</em><em> of </em><em>str</em><em>, or </em><em>int</em><em>, </em><em>optional</em>) – Custom key name for vocab size in model config,
 or the vocab size directly. Defaults to standard keys:
 [‘vocab_size’, ‘n_vocab’, ‘text_config.vocab_size’].</p></li>
+<li><p><strong>attn_output_source</strong> (<em>str</em><em>, </em><em>optional</em>) – Dotted path (relative to a layer, using standardized names) to the module
+whose output is the attention’s additive contribution to the residual stream,
+e.g. “self_attn.dense” for BLOOM. Needed for architectures that add the
+residual <em>inside</em> the attention module, where the module output is already
+a residual-stream state (see <a class="github reference external" href="https://github.com/ndif-team/nnterp/issues/51">ndif-team/nnterp#51</a>).
+<code class="docutils literal notranslate"><span class="pre">attentions_output[i]</span></code> reads/writes this module’s output. Passing the
+default “self_attn” explicitly asserts that the module output is the
+additive contribution despite a <code class="docutils literal notranslate"><span class="pre">residual</span></code>-like argument in its forward.</p></li>
+<li><p><strong>mlp_output_source</strong> (<em>str</em><em>, </em><em>optional</em>) – Same as <code class="docutils literal notranslate"><span class="pre">attn_output_source</span></code> for the MLP, e.g. “mlp.dense_4h_to_h” for
+BLOOM or “mlp.down_proj” for MPT.</p></li>
 </ul>
 </dd>
 </dl>
@@ -1933,6 +1957,16 @@ or the vocab size directly. Defaults to standard keys:
 <span class="sig-name descname"><span class="pre">vocab_size_config_key</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">list</span><span class="p"><span class="pre">[</span></span><span class="pre">str</span><span class="p"><span class="pre">]</span></span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">int</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#nnterp.rename_utils.RenameConfig.vocab_size_config_key" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
 
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nnterp.rename_utils.RenameConfig.attn_output_source">
+<span class="sig-name descname"><span class="pre">attn_output_source</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#nnterp.rename_utils.RenameConfig.attn_output_source" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
+<dl class="py attribute">
+<dt class="sig sig-object py" id="nnterp.rename_utils.RenameConfig.mlp_output_source">
+<span class="sig-name descname"><span class="pre">mlp_output_source</span></span><em class="property"><span class="p"><span class="pre">:</span></span><span class="w"> </span><span class="pre">str</span><span class="w"> </span><span class="p"><span class="pre">|</span></span><span class="w"> </span><span class="pre">None</span></em><em class="property"><span class="w"> </span><span class="p"><span class="pre">=</span></span><span class="w"> </span><span class="pre">None</span></em><a class="headerlink" href="#nnterp.rename_utils.RenameConfig.mlp_output_source" title="Link to this definition">#</a></dt>
+<dd></dd></dl>
+
 </dd></dl>
 
 <dl class="py function">
@@ -1962,6 +1996,38 @@ or the vocab size directly. Defaults to standard keys:
 <dt class="sig sig-object py" id="nnterp.rename_utils.default_vocab_size_config_keys">
 <span class="sig-name descname"><span class="pre">default_vocab_size_config_keys</span></span><span class="sig-paren">(</span><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#default_vocab_size_config_keys"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.default_vocab_size_config_keys" title="Link to this definition">#</a></dt>
 <dd></dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="nnterp.rename_utils.bloom_slow_but_exact">
+<span class="sig-name descname"><span class="pre">bloom_slow_but_exact</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#bloom_slow_but_exact"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.bloom_slow_but_exact" title="Link to this definition">#</a></dt>
+<dd><p>BLOOM checkpoints with pretraining_tp &gt; 1 and slow_but_exact=True (e.g.
+bigscience/bigscience-small-testing) compute the output projections with
+F.linear, bypassing the dense modules, so no pre-residual module exists.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Return type<span class="colon">:</span></dt>
+<dd class="field-odd"><p>bool</p>
+</dd>
+</dl>
+</dd></dl>
+
+<dl class="py function">
+<dt class="sig sig-object py" id="nnterp.rename_utils.get_output_sources">
+<span class="sig-name descname"><span class="pre">get_output_sources</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rename_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#get_output_sources"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.get_output_sources" title="Link to this definition">#</a></dt>
+<dd><p>Resolve the module paths targeted by attentions_output / mlps_output.</p>
+<p>Defaults to the attention/MLP modules themselves. For architectures that add
+the residual inside the sublayer module (BLOOM, MPT), targets the last
+pre-residual projection so the accessors expose the additive contribution.
+Returns None for a sublayer whose contribution is not exposed by any module
+(slow_but_exact BLOOM): the corresponding accessor is disabled.</p>
+<dl class="field-list simple">
+<dt class="field-odd">Parameters<span class="colon">:</span></dt>
+<dd class="field-odd"><p><strong>rename_config</strong> (<a class="reference internal" href="#nnterp.rename_utils.RenameConfig" title="nnterp.rename_utils.RenameConfig"><em>RenameConfig</em></a><em> | </em><em>None</em>)</p>
+</dd>
+<dt class="field-even">Return type<span class="colon">:</span></dt>
+<dd class="field-even"><p>tuple[str | None, str | None]</p>
+</dd>
+</dl>
+</dd></dl>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="nnterp.rename_utils.get_rename_dict">
@@ -2048,14 +2114,18 @@ or the vocab size directly. Defaults to standard keys:
 
 <dl class="py class">
 <dt class="sig sig-object py" id="nnterp.rename_utils.LayerAccessor">
-<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">LayerAccessor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attr_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">io_type</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#LayerAccessor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.LayerAccessor" title="Link to this definition">#</a></dt>
+<em class="property"><span class="pre">class</span><span class="w"> </span></em><span class="sig-name descname"><span class="pre">LayerAccessor</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">attr_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">io_type</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">disabled_reason</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#LayerAccessor"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.LayerAccessor" title="Link to this definition">#</a></dt>
 <dd><p>Bases: <code class="xref py py-class docutils literal notranslate"><span class="pre">object</span></code></p>
-<p>I/O accessor that provides input/output access with setter</p>
+<p>I/O accessor that provides input/output access with setter.</p>
+<p>If <code class="docutils literal notranslate"><span class="pre">disabled_reason</span></code> is set, any access raises a RenamingError with that
+message (used when no module carries the accessor’s semantics, e.g.
+attentions_output on slow_but_exact BLOOM).</p>
 <dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
 <li><p><strong>attr_name</strong> (<em>str</em><em> | </em><em>None</em>)</p></li>
 <li><p><strong>io_type</strong> (<a class="reference internal" href="#nnterp.rename_utils.IOType" title="nnterp.rename_utils.IOType"><em>IOType</em></a><em> | </em><em>None</em>)</p></li>
+<li><p><strong>disabled_reason</strong> (<em>str</em><em> | </em><em>None</em>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -2248,7 +2318,7 @@ in a separate phase outside the model’s forward pass.</p>
 
 <dl class="py function">
 <dt class="sig sig-object py" id="nnterp.rename_utils.check_model_renaming">
-<span class="sig-name descname"><span class="pre">check_model_renaming</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">std_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_dispatch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_multimodal</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#check_model_renaming"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.check_model_renaming" title="Link to this definition">#</a></dt>
+<span class="sig-name descname"><span class="pre">check_model_renaming</span></span><span class="sig-paren">(</span><em class="sig-param"><span class="n"><span class="pre">std_model</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">model_name</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">ignores</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_dispatch</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">allow_multimodal</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">False</span></span></em>, <em class="sig-param"><span class="n"><span class="pre">rename_config</span></span><span class="o"><span class="pre">=</span></span><span class="default_value"><span class="pre">None</span></span></em><span class="sig-paren">)</span><a class="reference internal" href="_modules/nnterp/rename_utils.html#check_model_renaming"><span class="viewcode-link"><span class="pre">[source]</span></span></a><a class="headerlink" href="#nnterp.rename_utils.check_model_renaming" title="Link to this definition">#</a></dt>
 <dd><dl class="field-list simple">
 <dt class="field-odd">Parameters<span class="colon">:</span></dt>
 <dd class="field-odd"><ul class="simple">
@@ -2256,6 +2326,7 @@ in a separate phase outside the model’s forward pass.</p>
 <li><p><strong>ignores</strong> (<em>list</em><em>[</em><em>Literal</em><em>[</em><em>'mlp'</em><em>, </em><em>'attention'</em><em>]</em><em>]</em>)</p></li>
 <li><p><strong>allow_dispatch</strong> (<em>bool</em>)</p></li>
 <li><p><strong>allow_multimodal</strong> (<em>bool</em>)</p></li>
+<li><p><strong>rename_config</strong> (<a class="reference internal" href="#nnterp.rename_utils.RenameConfig" title="nnterp.rename_utils.RenameConfig"><em>RenameConfig</em></a><em> | </em><em>None</em>)</p></li>
 </ul>
 </dd>
 </dl>
@@ -2452,12 +2523,16 @@ in a separate phase outside the model’s forward pass.</p>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.RenameConfig.attn_head_config_key"><code class="docutils literal notranslate"><span class="pre">RenameConfig.attn_head_config_key</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.RenameConfig.hidden_size_config_key"><code class="docutils literal notranslate"><span class="pre">RenameConfig.hidden_size_config_key</span></code></a></li>
 <li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.RenameConfig.vocab_size_config_key"><code class="docutils literal notranslate"><span class="pre">RenameConfig.vocab_size_config_key</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.RenameConfig.attn_output_source"><code class="docutils literal notranslate"><span class="pre">RenameConfig.attn_output_source</span></code></a></li>
+<li class="toc-h4 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.RenameConfig.mlp_output_source"><code class="docutils literal notranslate"><span class="pre">RenameConfig.mlp_output_source</span></code></a></li>
 </ul>
 </li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.expand_path_with_model"><code class="docutils literal notranslate"><span class="pre">expand_path_with_model()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.default_attn_head_config_keys"><code class="docutils literal notranslate"><span class="pre">default_attn_head_config_keys()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.default_hidden_size_config_keys"><code class="docutils literal notranslate"><span class="pre">default_hidden_size_config_keys()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.default_vocab_size_config_keys"><code class="docutils literal notranslate"><span class="pre">default_vocab_size_config_keys()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.bloom_slow_but_exact"><code class="docutils literal notranslate"><span class="pre">bloom_slow_but_exact()</span></code></a></li>
+<li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.get_output_sources"><code class="docutils literal notranslate"><span class="pre">get_output_sources()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.get_rename_dict"><code class="docutils literal notranslate"><span class="pre">get_rename_dict()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.text_config"><code class="docutils literal notranslate"><span class="pre">text_config()</span></code></a></li>
 <li class="toc-h3 nav-item toc-entry"><a class="reference internal nav-link" href="#nnterp.rename_utils.get_num_attention_heads"><code class="docutils literal notranslate"><span class="pre">get_num_attention_heads()</span></code></a></li>

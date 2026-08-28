@@ -519,6 +519,26 @@
 </pre></div>
 </div>
 </section>
+<section id="modules-that-add-the-residual-internally">
+<h2>Modules That Add the Residual Internally<a class="headerlink" href="#modules-that-add-the-residual-internally" title="Link to this heading">#</a></h2>
+<p>Some architectures (BLOOM, MPT, DBRX) add the residual stream to the sublayer
+output <em>inside</em> the attention/MLP module, so the module output is a
+residual-stream state rather than the additive contribution
+(<a class="reference external" href="https://github.com/ndif-team/nnterp/issues/51">issue #51</a>). nnterp refuses to
+load an unknown architecture whose attention/MLP forward takes a
+<code class="docutils literal notranslate"><span class="pre">residual</span></code>-like argument. To add support, point the output accessors to the
+last pre-residual submodule:</p>
+<div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="n">rename_config</span> <span class="o">=</span> <span class="n">RenameConfig</span><span class="p">(</span>
+    <span class="n">attn_output_source</span><span class="o">=</span><span class="s2">&quot;self_attn.dense&quot;</span><span class="p">,</span>     <span class="c1"># BLOOM&#39;s attention output projection</span>
+    <span class="n">mlp_output_source</span><span class="o">=</span><span class="s2">&quot;mlp.dense_4h_to_h&quot;</span><span class="p">,</span>    <span class="c1"># BLOOM&#39;s MLP output projection</span>
+<span class="p">)</span>
+</pre></div>
+</div>
+<p>Paths are relative to a layer and use standardized (post-renaming) names. If the
+module does not actually add the residual to its output, pass the default source
+(<code class="docutils literal notranslate"><span class="pre">attn_output_source=&quot;self_attn&quot;</span></code> / <code class="docutils literal notranslate"><span class="pre">mlp_output_source=&quot;mlp&quot;</span></code>) to keep the
+module output.</p>
+</section>
 <section id="real-example-gpt-j-support">
 <h2>Real Example: GPT-J Support<a class="headerlink" href="#real-example-gpt-j-support" title="Link to this heading">#</a></h2>
 <p>Here’s how GPT-J attention probabilities were added to nnterp:</p>
@@ -650,6 +670,7 @@
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#basic-renameconfig-usage">Basic RenameConfig Usage</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#path-based-renaming">Path-Based Renaming</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#multiple-alternative-names">Multiple Alternative Names</a></li>
+<li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#modules-that-add-the-residual-internally">Modules That Add the Residual Internally</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#real-example-gpt-j-support">Real Example: GPT-J Support</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#attention-probabilities-optional">Attention Probabilities (Optional)</a></li>
 <li class="toc-h2 nav-item toc-entry"><a class="reference internal nav-link" href="#troubleshooting">Troubleshooting</a></li>

@@ -445,7 +445,8 @@
                 <article class="bd-article">
                   
   <h1>Source code for nnterp.rename_utils</h1><div class="highlight"><pre>
-<span></span><span class="kn">from</span><span class="w"> </span><span class="nn">abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">ABC</span><span class="p">,</span> <span class="n">abstractmethod</span>
+<span></span><span class="kn">import</span><span class="w"> </span><span class="nn">inspect</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">abc</span><span class="w"> </span><span class="kn">import</span> <span class="n">ABC</span><span class="p">,</span> <span class="n">abstractmethod</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">dataclasses</span><span class="w"> </span><span class="kn">import</span> <span class="n">dataclass</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">typing</span><span class="w"> </span><span class="kn">import</span> <span class="n">Literal</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">enum</span><span class="w"> </span><span class="kn">import</span> <span class="n">Enum</span>
@@ -470,6 +471,7 @@
     <span class="n">DbrxForCausalLM</span><span class="p">,</span>
     <span class="n">StableLmForCausalLM</span><span class="p">,</span>
     <span class="n">GptOssForCausalLM</span><span class="p">,</span>
+    <span class="n">MptForCausalLM</span><span class="p">,</span>
 <span class="p">)</span>
 
 <span class="n">IgnoreType</span> <span class="o">=</span> <span class="n">Literal</span><span class="p">[</span><span class="s2">&quot;mlp&quot;</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">]</span>
@@ -561,6 +563,20 @@
 <span class="sd">        or the vocab size directly. Defaults to standard keys:</span>
 <span class="sd">        [&#39;vocab_size&#39;, &#39;n_vocab&#39;, &#39;text_config.vocab_size&#39;].</span>
 
+<span class="sd">    attn_output_source : str, optional</span>
+<span class="sd">        Dotted path (relative to a layer, using standardized names) to the module</span>
+<span class="sd">        whose output is the attention&#39;s additive contribution to the residual stream,</span>
+<span class="sd">        e.g. &quot;self_attn.dense&quot; for BLOOM. Needed for architectures that add the</span>
+<span class="sd">        residual *inside* the attention module, where the module output is already</span>
+<span class="sd">        a residual-stream state (see https://github.com/ndif-team/nnterp/issues/51).</span>
+<span class="sd">        ``attentions_output[i]`` reads/writes this module&#39;s output. Passing the</span>
+<span class="sd">        default &quot;self_attn&quot; explicitly asserts that the module output is the</span>
+<span class="sd">        additive contribution despite a ``residual``-like argument in its forward.</span>
+
+<span class="sd">    mlp_output_source : str, optional</span>
+<span class="sd">        Same as ``attn_output_source`` for the MLP, e.g. &quot;mlp.dense_4h_to_h&quot; for</span>
+<span class="sd">        BLOOM or &quot;mlp.down_proj&quot; for MPT.</span>
+
 <span class="sd">    Example</span>
 <span class="sd">    -------</span>
 <span class="sd">    Custom configuration for a non-standard architecture::</span>
@@ -583,7 +599,9 @@
     <span class="n">ignore_attn</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">attn_head_config_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
     <span class="n">hidden_size_config_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
-    <span class="n">vocab_size_config_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
+    <span class="n">vocab_size_config_key</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="nb">list</span><span class="p">[</span><span class="nb">str</span><span class="p">]</span> <span class="o">|</span> <span class="nb">int</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">attn_output_source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="n">mlp_output_source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span></div>
 
 
 
@@ -630,8 +648,74 @@
 <span class="c1"># Models with no mlp module</span>
 <span class="n">IGNORE_MLP_MODELS</span> <span class="o">=</span> <span class="p">(</span><span class="n">OPTForCausalLM</span><span class="p">,)</span>
 
+<span class="c1"># Architectures that add the residual stream to the sublayer output *inside* the</span>
+<span class="c1"># attention/MLP module, so the module output is a residual-stream state instead of</span>
+<span class="c1"># the additive contribution (https://github.com/ndif-team/nnterp/issues/51).</span>
+<span class="c1"># Maps model class -&gt; (attn_output_source, mlp_output_source); None keeps the default.</span>
+<span class="n">RESIDUAL_INSIDE_SUBLAYER_SOURCES</span> <span class="o">=</span> <span class="p">{</span>
+    <span class="n">BloomForCausalLM</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;self_attn.dense&quot;</span><span class="p">,</span> <span class="s2">&quot;mlp.dense_4h_to_h&quot;</span><span class="p">),</span>
+    <span class="n">MptForCausalLM</span><span class="p">:</span> <span class="p">(</span><span class="kc">None</span><span class="p">,</span> <span class="s2">&quot;mlp.down_proj&quot;</span><span class="p">),</span>
+    <span class="c1"># DbrxNormAttentionNorm returns (resid_mid, norm_2(resid_mid), attn_weights):</span>
+    <span class="c1"># its output[0] is a residual-stream state, the inner attn output is the contribution.</span>
+    <span class="n">DbrxForCausalLM</span><span class="p">:</span> <span class="p">(</span><span class="s2">&quot;self_attn.attn&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">),</span>
+<span class="p">}</span>
+
+
+<div class="viewcode-block" id="bloom_slow_but_exact">
+<a class="viewcode-back" href="../../api.html#nnterp.rename_utils.bloom_slow_but_exact">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">bloom_slow_but_exact</span><span class="p">(</span><span class="n">model</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">bool</span><span class="p">:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;BLOOM checkpoints with pretraining_tp &gt; 1 and slow_but_exact=True (e.g.</span>
+<span class="sd">    bigscience/bigscience-small-testing) compute the output projections with</span>
+<span class="sd">    F.linear, bypassing the dense modules, so no pre-residual module exists.&quot;&quot;&quot;</span>
+    <span class="k">return</span> <span class="p">(</span>
+        <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">BloomForCausalLM</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">pretraining_tp</span> <span class="o">&gt;</span> <span class="mi">1</span>
+        <span class="ow">and</span> <span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">slow_but_exact</span>
+    <span class="p">)</span></div>
+
+
+
+<div class="viewcode-block" id="get_output_sources">
+<a class="viewcode-back" href="../../api.html#nnterp.rename_utils.get_output_sources">[docs]</a>
+<span class="k">def</span><span class="w"> </span><span class="nf">get_output_sources</span><span class="p">(</span>
+    <span class="n">model</span><span class="p">,</span> <span class="n">rename_config</span><span class="p">:</span> <span class="n">RenameConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
+<span class="p">)</span> <span class="o">-&gt;</span> <span class="nb">tuple</span><span class="p">[</span><span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">]:</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Resolve the module paths targeted by attentions_output / mlps_output.</span>
+
+<span class="sd">    Defaults to the attention/MLP modules themselves. For architectures that add</span>
+<span class="sd">    the residual inside the sublayer module (BLOOM, MPT), targets the last</span>
+<span class="sd">    pre-residual projection so the accessors expose the additive contribution.</span>
+<span class="sd">    Returns None for a sublayer whose contribution is not exposed by any module</span>
+<span class="sd">    (slow_but_exact BLOOM): the corresponding accessor is disabled.</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="n">attn_source</span><span class="p">,</span> <span class="n">mlp_source</span> <span class="o">=</span> <span class="s2">&quot;self_attn&quot;</span><span class="p">,</span> <span class="s2">&quot;mlp&quot;</span>
+    <span class="k">if</span> <span class="n">bloom_slow_but_exact</span><span class="p">(</span><span class="n">model</span><span class="p">):</span>
+        <span class="n">attn_source</span> <span class="o">=</span> <span class="n">mlp_source</span> <span class="o">=</span> <span class="kc">None</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="k">for</span> <span class="n">model_class</span><span class="p">,</span> <span class="p">(</span>
+            <span class="n">attn_override</span><span class="p">,</span>
+            <span class="n">mlp_override</span><span class="p">,</span>
+        <span class="p">)</span> <span class="ow">in</span> <span class="n">RESIDUAL_INSIDE_SUBLAYER_SOURCES</span><span class="o">.</span><span class="n">items</span><span class="p">():</span>
+            <span class="k">if</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">model_class</span><span class="p">):</span>
+                <span class="n">attn_source</span> <span class="o">=</span> <span class="n">attn_override</span> <span class="ow">or</span> <span class="n">attn_source</span>
+                <span class="n">mlp_source</span> <span class="o">=</span> <span class="n">mlp_override</span> <span class="ow">or</span> <span class="n">mlp_source</span>
+    <span class="k">if</span> <span class="n">rename_config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">rename_config</span><span class="o">.</span><span class="n">attn_output_source</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">attn_source</span> <span class="o">=</span> <span class="n">rename_config</span><span class="o">.</span><span class="n">attn_output_source</span>
+        <span class="k">if</span> <span class="n">rename_config</span><span class="o">.</span><span class="n">mlp_output_source</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="n">mlp_source</span> <span class="o">=</span> <span class="n">rename_config</span><span class="o">.</span><span class="n">mlp_output_source</span>
+    <span class="k">return</span> <span class="n">attn_source</span><span class="p">,</span> <span class="n">mlp_source</span></div>
+
+
+
 <span class="c1"># Alternative names for LLM layers</span>
-<span class="n">ATTENTION_NAMES</span> <span class="o">=</span> <span class="p">[</span><span class="s2">&quot;attn&quot;</span><span class="p">,</span> <span class="s2">&quot;self_attention&quot;</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">,</span> <span class="s2">&quot;norm_attn_norm&quot;</span><span class="p">,</span> <span class="s2">&quot;linear_attn&quot;</span><span class="p">]</span>
+<span class="n">ATTENTION_NAMES</span> <span class="o">=</span> <span class="p">[</span>
+    <span class="s2">&quot;attn&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;self_attention&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;attention&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;norm_attn_norm&quot;</span><span class="p">,</span>
+    <span class="s2">&quot;linear_attn&quot;</span><span class="p">,</span>
+<span class="p">]</span>
 <span class="n">LAYER_NAMES</span> <span class="o">=</span> <span class="n">expand_path_with_model</span><span class="p">(</span>
     <span class="p">[</span>
         <span class="s2">&quot;h&quot;</span><span class="p">,</span>
@@ -804,26 +888,36 @@
 <div class="viewcode-block" id="LayerAccessor">
 <a class="viewcode-back" href="../../api.html#nnterp.rename_utils.LayerAccessor">[docs]</a>
 <span class="k">class</span><span class="w"> </span><span class="nc">LayerAccessor</span><span class="p">:</span>
-<span class="w">    </span><span class="sd">&quot;&quot;&quot;I/O accessor that provides input/output access with setter&quot;&quot;&quot;</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;I/O accessor that provides input/output access with setter.</span>
+
+<span class="sd">    If ``disabled_reason`` is set, any access raises a RenamingError with that</span>
+<span class="sd">    message (used when no module carries the accessor&#39;s semantics, e.g.</span>
+<span class="sd">    attentions_output on slow_but_exact BLOOM).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="k">def</span><span class="w"> </span><span class="fm">__init__</span><span class="p">(</span>
         <span class="bp">self</span><span class="p">,</span>
         <span class="n">model</span><span class="p">,</span>
         <span class="n">attr_name</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">io_type</span><span class="p">:</span> <span class="n">IOType</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span>
+        <span class="n">disabled_reason</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
     <span class="p">):</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">model</span> <span class="o">=</span> <span class="n">model</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">attr_name</span> <span class="o">=</span> <span class="n">attr_name</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">io_type</span> <span class="o">=</span> <span class="n">io_type</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">disabled_reason</span> <span class="o">=</span> <span class="n">disabled_reason</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">_detected_is_tuple</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span>
 
 <div class="viewcode-block" id="LayerAccessor.get_module">
 <a class="viewcode-back" href="../../api.html#nnterp.rename_utils.LayerAccessor.get_module">[docs]</a>
     <span class="k">def</span><span class="w"> </span><span class="nf">get_module</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">layer</span><span class="p">:</span> <span class="nb">int</span><span class="p">)</span> <span class="o">-&gt;</span> <span class="n">Envoy</span><span class="p">:</span>
+        <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">disabled_reason</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+            <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">disabled_reason</span><span class="p">)</span>
         <span class="n">module</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">model</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span>
         <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">attr_name</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-            <span class="n">module</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="bp">self</span><span class="o">.</span><span class="n">attr_name</span><span class="p">)</span>
+            <span class="k">for</span> <span class="n">attr</span> <span class="ow">in</span> <span class="bp">self</span><span class="o">.</span><span class="n">attr_name</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="s2">&quot;.&quot;</span><span class="p">):</span>
+                <span class="n">module</span> <span class="o">=</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">module</span><span class="p">,</span> <span class="n">attr</span><span class="p">)</span>
         <span class="k">return</span> <span class="n">module</span></div>
 
 
@@ -932,7 +1026,9 @@
 
 <div class="viewcode-block" id="qwen2moe_attention_prob_source">
 <a class="viewcode-back" href="../../api.html#nnterp.rename_utils.qwen2moe_attention_prob_source">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">qwen2moe_attention_prob_source</span><span class="p">(</span><span class="n">attention_module</span><span class="p">,</span> <span class="n">return_module_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">qwen2moe_attention_prob_source</span><span class="p">(</span>
+    <span class="n">attention_module</span><span class="p">,</span> <span class="n">return_module_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">):</span>
     <span class="k">if</span> <span class="n">return_module_source</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">attention_module</span><span class="o">.</span><span class="n">source</span>
     <span class="k">else</span><span class="p">:</span>
@@ -952,7 +1048,9 @@
 
 <div class="viewcode-block" id="stablelm_attention_prob_source">
 <a class="viewcode-back" href="../../api.html#nnterp.rename_utils.stablelm_attention_prob_source">[docs]</a>
-<span class="k">def</span><span class="w"> </span><span class="nf">stablelm_attention_prob_source</span><span class="p">(</span><span class="n">attention_module</span><span class="p">,</span> <span class="n">return_module_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">):</span>
+<span class="k">def</span><span class="w"> </span><span class="nf">stablelm_attention_prob_source</span><span class="p">(</span>
+    <span class="n">attention_module</span><span class="p">,</span> <span class="n">return_module_source</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
+<span class="p">):</span>
     <span class="k">if</span> <span class="n">return_module_source</span><span class="p">:</span>
         <span class="k">return</span> <span class="n">attention_module</span><span class="o">.</span><span class="n">source</span>
     <span class="k">else</span><span class="p">:</span>
@@ -993,6 +1091,9 @@
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">GPTJForCausalLM</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">gptj_attention_prob_source</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">Qwen2MoeForCausalLM</span><span class="p">):</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">qwen2moe_attention_prob_source</span>
+        <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">MptForCausalLM</span><span class="p">):</span>
+            <span class="c1"># MptAttention: softmax then nn.functional.dropout, same as Qwen2Moe</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">qwen2moe_attention_prob_source</span>
         <span class="k">elif</span> <span class="nb">isinstance</span><span class="p">(</span><span class="n">model</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">DbrxForCausalLM</span><span class="p">):</span>
             <span class="bp">self</span><span class="o">.</span><span class="n">source_attr</span> <span class="o">=</span> <span class="n">dbrx_attention_prob_source</span>
@@ -1073,9 +1174,7 @@
                 <span class="n">sum_last</span> <span class="o">=</span> <span class="n">probs</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
                 <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">attn_probs_dont_sum_to_one</span><span class="p">:</span>
                     <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">sum_last</span> <span class="o">&gt;</span> <span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
-                        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
-                            <span class="s2">&quot;Attention probabilities should be &gt; 0.&quot;</span>
-                        <span class="p">)</span>
+                        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span><span class="s2">&quot;Attention probabilities should be &gt; 0.&quot;</span><span class="p">)</span>
                     <span class="k">if</span> <span class="ow">not</span> <span class="p">(</span><span class="n">sum_last</span> <span class="o">&lt;</span> <span class="mi">1</span> <span class="o">+</span> <span class="mf">1e-5</span><span class="p">)</span><span class="o">.</span><span class="n">all</span><span class="p">():</span>
                         <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
                             <span class="s2">&quot;Attention probabilities should sum to &lt; 1 for models with sink tokens.&quot;</span>
@@ -1177,6 +1276,15 @@
             <span class="n">message</span> <span class="o">+=</span> <span class="s2">&quot; You&#39;ll have to manually use layers.fc1 and layers.fc2 instead.&quot;</span>
         <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span><span class="n">message</span><span class="p">)</span>
         <span class="n">ignores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;mlp&quot;</span><span class="p">)</span>
+    <span class="k">if</span> <span class="n">bloom_slow_but_exact</span><span class="p">(</span><span class="n">model</span><span class="p">):</span>
+        <span class="n">logger</span><span class="o">.</span><span class="n">warning</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">name_or_path</span><span class="si">}</span><span class="s2"> uses pretraining_tp &gt; 1 with slow_but_exact=True, &quot;</span>
+            <span class="s2">&quot;which computes the attention/MLP output projections with F.linear instead of the &quot;</span>
+            <span class="s2">&quot;dense modules. No module exposes the sublayer contributions, so attentions_output &quot;</span>
+            <span class="s2">&quot;/ mlps_output are disabled and attention/MLP checks are skipped &quot;</span>
+            <span class="s2">&quot;(see https://github.com/ndif-team/nnterp/issues/51).&quot;</span>
+        <span class="p">)</span>
+        <span class="n">ignores</span><span class="o">.</span><span class="n">extend</span><span class="p">([</span><span class="s2">&quot;attention&quot;</span><span class="p">,</span> <span class="s2">&quot;mlp&quot;</span><span class="p">])</span>
     <span class="k">if</span> <span class="n">rename_config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
         <span class="k">if</span> <span class="n">rename_config</span><span class="o">.</span><span class="n">ignore_mlp</span><span class="p">:</span>
             <span class="n">ignores</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="s2">&quot;mlp&quot;</span><span class="p">)</span>
@@ -1220,19 +1328,54 @@
         <span class="p">)</span>
     <span class="n">expected_hidden</span> <span class="o">=</span> <span class="p">(</span><span class="o">*</span><span class="n">input_size</span><span class="p">,</span> <span class="n">hidden_size</span><span class="p">)</span>
 
-    <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">token_embeddings</span><span class="p">,</span> <span class="s2">&quot;token_embeddings&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
-    <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers_input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;layers_input[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+    <span class="n">_check_tensor</span><span class="p">(</span>
+        <span class="n">std_model</span><span class="o">.</span><span class="n">token_embeddings</span><span class="p">,</span> <span class="s2">&quot;token_embeddings&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span>
+    <span class="p">)</span>
+    <span class="n">_check_tensor</span><span class="p">(</span>
+        <span class="n">std_model</span><span class="o">.</span><span class="n">layers_input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;layers_input[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span>
+    <span class="p">)</span>
 
     <span class="k">if</span> <span class="s2">&quot;attention&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
-        <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">attentions_input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;attentions_input[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
-        <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">attentions_output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;attentions_output[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+        <span class="n">_check_tensor</span><span class="p">(</span>
+            <span class="n">std_model</span><span class="o">.</span><span class="n">attentions_input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="s2">&quot;attentions_input[0]&quot;</span><span class="p">,</span>
+            <span class="n">expected_hidden</span><span class="p">,</span>
+            <span class="n">model_name</span><span class="p">,</span>
+        <span class="p">)</span>
+        <span class="n">_check_tensor</span><span class="p">(</span>
+            <span class="n">std_model</span><span class="o">.</span><span class="n">attentions_output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span>
+            <span class="s2">&quot;attentions_output[0]&quot;</span><span class="p">,</span>
+            <span class="n">expected_hidden</span><span class="p">,</span>
+            <span class="n">model_name</span><span class="p">,</span>
+        <span class="p">)</span>
 
     <span class="k">if</span> <span class="s2">&quot;mlp&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
-        <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">mlps_input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;mlps_input[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
-        <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">mlps_output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;mlps_output[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+        <span class="n">_check_tensor</span><span class="p">(</span>
+            <span class="n">std_model</span><span class="o">.</span><span class="n">mlps_input</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;mlps_input[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span>
+        <span class="p">)</span>
+        <span class="n">mlp_out</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">mlps_output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+        <span class="n">_check_tensor</span><span class="p">(</span><span class="n">mlp_out</span><span class="p">,</span> <span class="s2">&quot;mlps_output[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
 
-    <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;layers_output[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
-    <span class="n">_check_tensor</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">ln_final</span><span class="o">.</span><span class="n">output</span><span class="p">,</span> <span class="s2">&quot;ln_final.output&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+    <span class="n">layer_out</span> <span class="o">=</span> <span class="n">std_model</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span>
+    <span class="n">_check_tensor</span><span class="p">(</span><span class="n">layer_out</span><span class="p">,</span> <span class="s2">&quot;layers_output[0]&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+    <span class="c1"># Value-based residual-semantics check (issue #51), only when the tensors hold</span>
+    <span class="c1"># real values (i.e. not during a scan on fake/meta tensors).</span>
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="s2">&quot;mlp&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span>
+        <span class="ow">and</span> <span class="n">layer_out</span><span class="o">.</span><span class="n">device</span> <span class="o">!=</span> <span class="n">th</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;meta&quot;</span><span class="p">)</span>
+        <span class="ow">and</span> <span class="n">th</span><span class="o">.</span><span class="n">allclose</span><span class="p">(</span><span class="n">mlp_out</span><span class="p">,</span> <span class="n">layer_out</span><span class="p">)</span>
+    <span class="p">):</span>
+        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;mlps_output[0] is identical to layers_output[0] in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture. &quot;</span>
+            <span class="s2">&quot;This means the MLP module adds the residual stream to its output inside the module, &quot;</span>
+            <span class="s2">&quot;so mlps_output returns residual-stream states instead of the additive MLP &quot;</span>
+            <span class="s2">&quot;contribution (see https://github.com/ndif-team/nnterp/issues/51). Pass &quot;</span>
+            <span class="s2">&quot;RenameConfig(mlp_output_source=&#39;&lt;path.to.submodule&gt;&#39;) pointing to the submodule &quot;</span>
+            <span class="s2">&quot;whose output is the additive contribution (e.g. &#39;mlp.dense_4h_to_h&#39; for BLOOM).&quot;</span>
+        <span class="p">)</span>
+    <span class="n">_check_tensor</span><span class="p">(</span>
+        <span class="n">std_model</span><span class="o">.</span><span class="n">ln_final</span><span class="o">.</span><span class="n">output</span><span class="p">,</span> <span class="s2">&quot;ln_final.output&quot;</span><span class="p">,</span> <span class="n">expected_hidden</span><span class="p">,</span> <span class="n">model_name</span>
+    <span class="p">)</span>
 
     <span class="c1"># vLLM computes logits in a separate phase (not part of the model forward pass),</span>
     <span class="c1"># so lm_head.output is not accessible during a vLLM trace.</span>
@@ -1281,6 +1424,66 @@
         <span class="p">)</span>
 
 
+<span class="k">def</span><span class="w"> </span><span class="nf">_check_output_source</span><span class="p">(</span>
+    <span class="n">std_model</span><span class="p">,</span>
+    <span class="n">kind</span><span class="p">:</span> <span class="n">IgnoreType</span><span class="p">,</span>
+    <span class="n">model_name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
+    <span class="n">rename_config</span><span class="p">:</span> <span class="n">RenameConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
+<span class="p">):</span>
+<span class="w">    </span><span class="sd">&quot;&quot;&quot;Check that attentions_output / mlps_output expose the additive sublayer</span>
+<span class="sd">    contribution, not a residual-added state (issue #51).</span>
+
+<span class="sd">    If the sublayer module takes a residual-like argument in its forward pass, it</span>
+<span class="sd">    most likely adds the residual to its output inside the module (BLOOM, MPT), so</span>
+<span class="sd">    an output source pointing to the pre-residual submodule must be configured.</span>
+<span class="sd">    An explicitly configured source (built-in or via RenameConfig) is trusted,</span>
+<span class="sd">    including an explicit default source (user asserts the module output is the</span>
+<span class="sd">    contribution).</span>
+<span class="sd">    &quot;&quot;&quot;</span>
+    <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;attention&quot;</span><span class="p">:</span>
+        <span class="n">accessor</span><span class="p">,</span> <span class="n">default_source</span><span class="p">,</span> <span class="n">config_field</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">std_model</span><span class="o">.</span><span class="n">attentions_output</span><span class="p">,</span>
+            <span class="s2">&quot;self_attn&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;attn_output_source&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">else</span><span class="p">:</span>
+        <span class="n">accessor</span><span class="p">,</span> <span class="n">default_source</span><span class="p">,</span> <span class="n">config_field</span> <span class="o">=</span> <span class="p">(</span>
+            <span class="n">std_model</span><span class="o">.</span><span class="n">mlps_output</span><span class="p">,</span>
+            <span class="s2">&quot;mlp&quot;</span><span class="p">,</span>
+            <span class="s2">&quot;mlp_output_source&quot;</span><span class="p">,</span>
+        <span class="p">)</span>
+    <span class="k">try</span><span class="p">:</span>
+        <span class="n">module</span> <span class="o">=</span> <span class="n">accessor</span><span class="o">.</span><span class="n">get_module</span><span class="p">(</span><span class="mi">0</span><span class="p">)</span><span class="o">.</span><span class="n">_module</span>
+    <span class="k">except</span> <span class="ne">AttributeError</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;The configured </span><span class="si">{</span><span class="n">config_field</span><span class="si">}</span><span class="s2">=&#39;</span><span class="si">{</span><span class="n">accessor</span><span class="o">.</span><span class="n">attr_name</span><span class="si">}</span><span class="s2">&#39; does not resolve to a module &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;of layer 0 in </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> architecture.&quot;</span>
+        <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+    <span class="n">explicitly_configured</span> <span class="o">=</span> <span class="p">(</span>
+        <span class="n">rename_config</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="nb">getattr</span><span class="p">(</span><span class="n">rename_config</span><span class="p">,</span> <span class="n">config_field</span><span class="p">)</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span>
+    <span class="p">)</span>
+    <span class="k">if</span> <span class="n">explicitly_configured</span> <span class="ow">or</span> <span class="n">accessor</span><span class="o">.</span><span class="n">attr_name</span> <span class="o">!=</span> <span class="n">default_source</span><span class="p">:</span>
+        <span class="k">return</span>
+    <span class="n">residual_params</span> <span class="o">=</span> <span class="p">[</span>
+        <span class="n">name</span>
+        <span class="k">for</span> <span class="n">name</span> <span class="ow">in</span> <span class="n">inspect</span><span class="o">.</span><span class="n">signature</span><span class="p">(</span><span class="n">module</span><span class="o">.</span><span class="n">forward</span><span class="p">)</span><span class="o">.</span><span class="n">parameters</span>
+        <span class="k">if</span> <span class="s2">&quot;residual&quot;</span> <span class="ow">in</span> <span class="n">name</span>
+    <span class="p">]</span>
+    <span class="k">if</span> <span class="n">residual_params</span><span class="p">:</span>
+        <span class="n">accessor_name</span> <span class="o">=</span> <span class="s2">&quot;attentions_output&quot;</span> <span class="k">if</span> <span class="n">kind</span> <span class="o">==</span> <span class="s2">&quot;attention&quot;</span> <span class="k">else</span> <span class="s2">&quot;mlps_output&quot;</span>
+        <span class="k">raise</span> <span class="n">RenamingError</span><span class="p">(</span>
+            <span class="sa">f</span><span class="s2">&quot;The </span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2"> module (</span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">module</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">) of </span><span class="si">{</span><span class="n">model_name</span><span class="si">}</span><span class="s2"> takes a &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;`</span><span class="si">{</span><span class="n">residual_params</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="si">}</span><span class="s2">` argument in its forward pass. This usually means the residual &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;stream is added to the sublayer output inside the module, in which case &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">accessor_name</span><span class="si">}</span><span class="s2"> would return residual-stream states instead of the additive </span><span class="si">{</span><span class="n">kind</span><span class="si">}</span><span class="s2"> &quot;</span>
+            <span class="s2">&quot;contribution (see https://github.com/ndif-team/nnterp/issues/51).</span><span class="se">\n</span><span class="s2">&quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;If so, pass RenameConfig(</span><span class="si">{</span><span class="n">config_field</span><span class="si">}</span><span class="s2">=&#39;&lt;path.to.submodule&gt;&#39;) pointing to the &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;submodule whose output is the additive contribution (e.g. &#39;self_attn.dense&#39; for &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;BLOOM). If the module does not add the residual to its output, pass &quot;</span>
+            <span class="sa">f</span><span class="s2">&quot;RenameConfig(</span><span class="si">{</span><span class="n">config_field</span><span class="si">}</span><span class="s2">=&#39;</span><span class="si">{</span><span class="n">default_source</span><span class="si">}</span><span class="s2">&#39;) to keep the default behavior.&quot;</span>
+        <span class="p">)</span>
+
+
 <div class="viewcode-block" id="check_model_renaming">
 <a class="viewcode-back" href="../../api.html#nnterp.rename_utils.check_model_renaming">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">check_model_renaming</span><span class="p">(</span>
@@ -1289,6 +1492,7 @@
     <span class="n">ignores</span><span class="p">:</span> <span class="nb">list</span><span class="p">[</span><span class="n">IgnoreType</span><span class="p">],</span>
     <span class="n">allow_dispatch</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
     <span class="n">allow_multimodal</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">rename_config</span><span class="p">:</span> <span class="n">RenameConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
 <span class="p">):</span>
     <span class="n">_check_has_module</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="s2">&quot;layers&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="s2">&quot;layers_rename&quot;</span><span class="p">)</span>
 
@@ -1309,11 +1513,17 @@
 
     <span class="k">if</span> <span class="s2">&quot;attention&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
         <span class="n">_check_has_module</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;self_attn&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="s2">&quot;attn_rename&quot;</span><span class="p">)</span>
-        <span class="n">_warn_heterogeneous_types</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">attentions</span><span class="p">,</span> <span class="n">std_model</span><span class="o">.</span><span class="n">num_layers</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+        <span class="n">_warn_heterogeneous_types</span><span class="p">(</span>
+            <span class="n">std_model</span><span class="o">.</span><span class="n">attentions</span><span class="p">,</span> <span class="n">std_model</span><span class="o">.</span><span class="n">num_layers</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">,</span> <span class="n">model_name</span>
+        <span class="p">)</span>
+        <span class="n">_check_output_source</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="s2">&quot;attention&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">rename_config</span><span class="p">)</span>
 
     <span class="k">if</span> <span class="s2">&quot;mlp&quot;</span> <span class="ow">not</span> <span class="ow">in</span> <span class="n">ignores</span><span class="p">:</span>
         <span class="n">_check_has_module</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">],</span> <span class="s2">&quot;mlp&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="s2">&quot;mlp_rename&quot;</span><span class="p">)</span>
-        <span class="n">_warn_heterogeneous_types</span><span class="p">(</span><span class="n">std_model</span><span class="o">.</span><span class="n">mlps</span><span class="p">,</span> <span class="n">std_model</span><span class="o">.</span><span class="n">num_layers</span><span class="p">,</span> <span class="s2">&quot;MLP&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">)</span>
+        <span class="n">_warn_heterogeneous_types</span><span class="p">(</span>
+            <span class="n">std_model</span><span class="o">.</span><span class="n">mlps</span><span class="p">,</span> <span class="n">std_model</span><span class="o">.</span><span class="n">num_layers</span><span class="p">,</span> <span class="s2">&quot;MLP&quot;</span><span class="p">,</span> <span class="n">model_name</span>
+        <span class="p">)</span>
+        <span class="n">_check_output_source</span><span class="p">(</span><span class="n">std_model</span><span class="p">,</span> <span class="s2">&quot;mlp&quot;</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">rename_config</span><span class="p">)</span>
 
     <span class="n">try_with_scan</span><span class="p">(</span>
         <span class="n">std_model</span><span class="p">,</span>

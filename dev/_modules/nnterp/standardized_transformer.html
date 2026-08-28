@@ -469,6 +469,7 @@
     <span class="n">RenameConfig</span><span class="p">,</span>
     <span class="n">get_rename_dict</span><span class="p">,</span>
     <span class="n">get_ignores</span><span class="p">,</span>
+    <span class="n">get_output_sources</span><span class="p">,</span>
     <span class="n">check_model_renaming</span><span class="p">,</span>
     <span class="n">get_num_attention_heads</span><span class="p">,</span>
     <span class="n">get_hidden_size</span><span class="p">,</span>
@@ -494,6 +495,14 @@
 <span class="sd">    - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i</span>
 <span class="sd">    - mlps[i]: Get MLP module at layer i</span>
 <span class="sd">    - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i</span>
+
+<span class="sd">    attentions_output[i] / mlps_output[i] never include the residual stream: on</span>
+<span class="sd">    architectures that add the residual inside the attention/MLP module (BLOOM,</span>
+<span class="sd">    MPT, DBRX), they target the last pre-residual submodule instead of the module</span>
+<span class="sd">    output (see issue #51). Note that on architectures with post-sublayer</span>
+<span class="sd">    layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the</span>
+<span class="sd">    residual stream is the post-layernorm output, not the module output returned</span>
+<span class="sd">    here.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.</span>
@@ -539,15 +548,39 @@
 
         <span class="n">ignores</span> <span class="o">=</span> <span class="n">get_ignores</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">rename_config</span><span class="p">)</span>
 
-        <span class="c1"># Create accessor instances</span>
+        <span class="c1"># Create accessor instances. attentions_output / mlps_output may target a</span>
+        <span class="c1"># submodule on architectures that add the residual inside the sublayer</span>
+        <span class="c1"># module (see rename_utils.RESIDUAL_INSIDE_SUBLAYER_SOURCES and issue #51),</span>
+        <span class="c1"># and are disabled (None source) when no module carries the contribution.</span>
+        <span class="n">attn_output_source</span><span class="p">,</span> <span class="n">mlp_output_source</span> <span class="o">=</span> <span class="n">get_output_sources</span><span class="p">(</span>
+            <span class="bp">self</span><span class="o">.</span><span class="n">_model</span><span class="p">,</span> <span class="n">rename_config</span>
+        <span class="p">)</span>
+
+        <span class="k">def</span><span class="w"> </span><span class="nf">output_accessor</span><span class="p">(</span><span class="n">source</span><span class="p">:</span> <span class="nb">str</span> <span class="o">|</span> <span class="kc">None</span><span class="p">,</span> <span class="n">name</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span> <span class="n">default</span><span class="p">:</span> <span class="nb">str</span><span class="p">):</span>
+            <span class="k">if</span> <span class="n">source</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
+                <span class="k">return</span> <span class="n">LayerAccessor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="n">source</span><span class="p">,</span> <span class="n">IOType</span><span class="o">.</span><span class="n">OUTPUT</span><span class="p">)</span>
+            <span class="k">return</span> <span class="n">LayerAccessor</span><span class="p">(</span>
+                <span class="bp">self</span><span class="p">,</span>
+                <span class="n">default</span><span class="p">,</span>
+                <span class="n">IOType</span><span class="o">.</span><span class="n">OUTPUT</span><span class="p">,</span>
+                <span class="n">disabled_reason</span><span class="o">=</span><span class="p">(</span>
+                    <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">name</span><span class="si">}</span><span class="s2"> is disabled for this model: no module exposes the sublayer&#39;s &quot;</span>
+                    <span class="s2">&quot;additive contribution to the residual stream (see the warning logged at &quot;</span>
+                    <span class="s2">&quot;load and https://github.com/ndif-team/nnterp/issues/51). Use &quot;</span>
+                    <span class="sa">f</span><span class="s2">&quot;layers[i].</span><span class="si">{</span><span class="n">default</span><span class="si">}</span><span class="s2">.output for the raw (residual-added) module output.&quot;</span>
+                <span class="p">),</span>
+            <span class="p">)</span>
+
         <span class="bp">self</span><span class="o">.</span><span class="n">layers_input</span> <span class="o">=</span> <span class="n">LayerAccessor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">IOType</span><span class="o">.</span><span class="n">INPUT</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span> <span class="o">=</span> <span class="n">LayerAccessor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="kc">None</span><span class="p">,</span> <span class="n">IOType</span><span class="o">.</span><span class="n">OUTPUT</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">attentions</span> <span class="o">=</span> <span class="n">LayerAccessor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;self_attn&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">attentions_input</span> <span class="o">=</span> <span class="n">LayerAccessor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;self_attn&quot;</span><span class="p">,</span> <span class="n">IOType</span><span class="o">.</span><span class="n">INPUT</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">attentions_output</span> <span class="o">=</span> <span class="n">LayerAccessor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;self_attn&quot;</span><span class="p">,</span> <span class="n">IOType</span><span class="o">.</span><span class="n">OUTPUT</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">attentions_output</span> <span class="o">=</span> <span class="n">output_accessor</span><span class="p">(</span>
+            <span class="n">attn_output_source</span><span class="p">,</span> <span class="s2">&quot;attentions_output&quot;</span><span class="p">,</span> <span class="s2">&quot;self_attn&quot;</span>
+        <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">mlps</span> <span class="o">=</span> <span class="n">LayerAccessor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;mlp&quot;</span><span class="p">,</span> <span class="kc">None</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">mlps_input</span> <span class="o">=</span> <span class="n">LayerAccessor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;mlp&quot;</span><span class="p">,</span> <span class="n">IOType</span><span class="o">.</span><span class="n">INPUT</span><span class="p">)</span>
-        <span class="bp">self</span><span class="o">.</span><span class="n">mlps_output</span> <span class="o">=</span> <span class="n">LayerAccessor</span><span class="p">(</span><span class="bp">self</span><span class="p">,</span> <span class="s2">&quot;mlp&quot;</span><span class="p">,</span> <span class="n">IOType</span><span class="o">.</span><span class="n">OUTPUT</span><span class="p">)</span>
+        <span class="bp">self</span><span class="o">.</span><span class="n">mlps_output</span> <span class="o">=</span> <span class="n">output_accessor</span><span class="p">(</span><span class="n">mlp_output_source</span><span class="p">,</span> <span class="s2">&quot;mlps_output&quot;</span><span class="p">,</span> <span class="s2">&quot;mlp&quot;</span><span class="p">)</span>
 
         <span class="bp">self</span><span class="o">.</span><span class="n">num_layers</span> <span class="o">=</span> <span class="nb">len</span><span class="p">(</span><span class="bp">self</span><span class="o">.</span><span class="n">layers</span><span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">num_heads</span> <span class="o">=</span> <span class="n">get_num_attention_heads</span><span class="p">(</span>
@@ -562,7 +595,12 @@
 
         <span class="k">if</span> <span class="n">check_renaming</span><span class="p">:</span>
             <span class="n">check_model_renaming</span><span class="p">(</span>
-                <span class="bp">self</span><span class="p">,</span> <span class="n">model_name</span><span class="p">,</span> <span class="n">ignores</span><span class="p">,</span> <span class="n">allow_dispatch</span><span class="p">,</span> <span class="n">allow_multimodal</span>
+                <span class="bp">self</span><span class="p">,</span>
+                <span class="n">model_name</span><span class="p">,</span>
+                <span class="n">ignores</span><span class="p">,</span>
+                <span class="n">allow_dispatch</span><span class="p">,</span>
+                <span class="n">allow_multimodal</span><span class="p">,</span>
+                <span class="n">rename_config</span><span class="o">=</span><span class="n">rename_config</span><span class="p">,</span>
             <span class="p">)</span>
         <span class="bp">self</span><span class="o">.</span><span class="n">attention_probabilities</span> <span class="o">=</span> <span class="n">AttentionProbabilitiesAccessor</span><span class="p">(</span>
             <span class="bp">self</span><span class="p">,</span>
@@ -785,14 +823,20 @@
             <span class="n">layers</span> <span class="o">=</span> <span class="p">[</span><span class="n">layers</span><span class="p">]</span>
         <span class="k">for</span> <span class="n">layer</span> <span class="ow">in</span> <span class="nb">sorted</span><span class="p">(</span><span class="n">layers</span><span class="p">):</span>  <span class="c1"># sort to ensure execution order</span>
             <span class="n">layer_output</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span>
-            <span class="n">steering_with</span> <span class="o">=</span> <span class="n">factor</span> <span class="o">*</span> <span class="n">steering_vector</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">device</span><span class="o">=</span><span class="n">layer_output</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">layer_output</span><span class="o">.</span><span class="n">dtype</span><span class="p">)</span>
+            <span class="n">steering_with</span> <span class="o">=</span> <span class="n">factor</span> <span class="o">*</span> <span class="n">steering_vector</span><span class="o">.</span><span class="n">to</span><span class="p">(</span>
+                <span class="n">device</span><span class="o">=</span><span class="n">layer_output</span><span class="o">.</span><span class="n">device</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">layer_output</span><span class="o">.</span><span class="n">dtype</span>
+            <span class="p">)</span>
             <span class="k">if</span> <span class="bp">self</span><span class="o">.</span><span class="n">is_vllm</span><span class="p">:</span>
                 <span class="c1"># vLLM inference tensors don&#39;t support inplace ops</span>
                 <span class="k">if</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">+</span> <span class="n">steering_with</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">+</span> <span class="n">steering_with</span>
+                    <span class="p">)</span>
                 <span class="k">elif</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
-                    <span class="n">out</span><span class="p">[</span><span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">=</span> <span class="n">out</span><span class="p">[</span><span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+</span> <span class="n">steering_with</span>
+                    <span class="n">out</span><span class="p">[</span><span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">=</span> <span class="p">(</span>
+                        <span class="n">out</span><span class="p">[</span><span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+</span> <span class="n">steering_with</span>
+                    <span class="p">)</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">=</span> <span class="n">out</span>
                 <span class="k">elif</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="n">out</span> <span class="o">=</span> <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span><span class="o">.</span><span class="n">clone</span><span class="p">()</span>
@@ -806,7 +850,9 @@
                 <span class="k">if</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
                 <span class="k">elif</span> <span class="n">batch_index</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span> <span class="ow">and</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
-                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][</span><span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
+                    <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][</span>
+                        <span class="n">batch_index</span><span class="p">,</span> <span class="n">token_positions</span>
+                    <span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
                 <span class="k">elif</span> <span class="n">token_positions</span> <span class="ow">is</span> <span class="ow">not</span> <span class="kc">None</span><span class="p">:</span>
                     <span class="bp">self</span><span class="o">.</span><span class="n">layers_output</span><span class="p">[</span><span class="n">layer</span><span class="p">][:,</span> <span class="n">token_positions</span><span class="p">]</span> <span class="o">+=</span> <span class="n">steering_with</span>
                 <span class="k">else</span><span class="p">:</span>
@@ -918,6 +964,14 @@
 <span class="sd">    - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i</span>
 <span class="sd">    - mlps[i]: Get MLP module at layer i</span>
 <span class="sd">    - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i</span>
+
+<span class="sd">    attentions_output[i] / mlps_output[i] never include the residual stream: on</span>
+<span class="sd">    architectures that add the residual inside the attention/MLP module (BLOOM,</span>
+<span class="sd">    MPT, DBRX), they target the last pre-residual submodule instead of the module</span>
+<span class="sd">    output (see issue #51). Note that on architectures with post-sublayer</span>
+<span class="sd">    layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the</span>
+<span class="sd">    residual stream is the post-layernorm output, not the module output returned</span>
+<span class="sd">    here.</span>
 
 <span class="sd">    Args:</span>
 <span class="sd">        model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.</span>

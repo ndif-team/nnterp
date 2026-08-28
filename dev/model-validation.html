@@ -476,6 +476,7 @@
 <li><p>All models follow the standardized naming convention</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">model.layers_output[i]</span></code> returns tensors with expected shapes</p></li>
 <li><p><code class="docutils literal notranslate"><span class="pre">model.attention_probabilities[i]</span></code> (if enabled) returns properly normalized attention matrices</p></li>
+<li><p><code class="docutils literal notranslate"><span class="pre">model.attentions_output[i]</span></code> / <code class="docutils literal notranslate"><span class="pre">model.mlps_output[i]</span></code> never include the residual stream. Architectures that add it inside the attention/MLP module (BLOOM, MPT, DBRX) are remapped to the pre-residual submodule, unknown ones are rejected at load (see <a class="reference internal" href="adding-model-support.html"><span class="doc">Adding Support for Your Model</span></a>)</p></li>
 </ul>
 </section>
 <section id="what-nnterp-cannot-guarantee">
@@ -483,6 +484,7 @@
 <p><code class="docutils literal notranslate"><span class="pre">nnterp</span></code> cannot guarantee:</p>
 <ul class="simple">
 <li><p><strong>Attention probabilities remain unmodified</strong>: The model might apply additional transformations after the attention probabilities are computed but before they’re used. Check <code class="docutils literal notranslate"><span class="pre">model.attention_probabilities.print_source()</span></code> to understand the exact hook location in the HuggingFace implementation.</p></li>
+<li><p><strong>Sublayer outputs are the exact residual contribution</strong>: on architectures with post-sublayer layernorms outside the attention/MLP module (e.g. Gemma-2/3), the tensor added to the residual stream is the post-layernorm output, not <code class="docutils literal notranslate"><span class="pre">attentions_output[i]</span></code> / <code class="docutils literal notranslate"><span class="pre">mlps_output[i]</span></code>. See <a class="reference external" href="https://github.com/ndif-team/nnterp/issues/53">issue #53</a>.</p></li>
 <li><p><strong>Perfect HuggingFace compatibility</strong>: While <code class="docutils literal notranslate"><span class="pre">nnterp</span></code> uses original HuggingFace implementations, some edge cases might behave differently due to the renaming process.</p></li>
 </ul>
 <div class="highlight-python notranslate"><div class="highlight"><pre><span></span><span class="c1"># Check where attention probabilities are hooked</span>

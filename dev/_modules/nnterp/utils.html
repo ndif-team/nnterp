@@ -524,6 +524,11 @@
 <span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
     <span class="n">GptOssForCausalLM</span> <span class="o">=</span> <span class="n">ArchitectureNotFound</span>
 
+<span class="k">try</span><span class="p">:</span>
+    <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">MptForCausalLM</span>
+<span class="k">except</span> <span class="ne">ImportError</span><span class="p">:</span>
+    <span class="n">MptForCausalLM</span> <span class="o">=</span> <span class="n">ArchitectureNotFound</span>
+
 
 <div class="viewcode-block" id="detect_automodel">
 <a class="viewcode-back" href="../../api.html#nnterp.utils.detect_automodel">[docs]</a>
@@ -624,7 +629,10 @@
 <div class="viewcode-block" id="dummy_inputs">
 <a class="viewcode-back" href="../../api.html#nnterp.utils.dummy_inputs">[docs]</a>
 <span class="k">def</span><span class="w"> </span><span class="nf">dummy_inputs</span><span class="p">():</span>
-    <span class="k">return</span> <span class="p">{</span><span class="s2">&quot;input_ids&quot;</span><span class="p">:</span> <span class="n">th</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]]),</span> <span class="s2">&quot;attention_mask&quot;</span><span class="p">:</span> <span class="n">th</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]])}</span></div>
+    <span class="k">return</span> <span class="p">{</span>
+        <span class="s2">&quot;input_ids&quot;</span><span class="p">:</span> <span class="n">th</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]]),</span>
+        <span class="s2">&quot;attention_mask&quot;</span><span class="p">:</span> <span class="n">th</span><span class="o">.</span><span class="n">tensor</span><span class="p">([[</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">]]),</span>
+    <span class="p">}</span></div>
 
 
 

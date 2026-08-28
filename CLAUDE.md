@@ -73,6 +73,7 @@ nnterp is a mechanistic interpretability library built on top of nnsight, provid
 - `layers_input[i]` / `layers_output[i]` - Layer I/O
 - `attentions[i]` / `attentions_input[i]` / `attentions_output[i]` - Attention modules
 - `mlps[i]` / `mlps_input[i]` / `mlps_output[i]` - MLP modules
+- `attentions_output[i]` / `mlps_output[i]` never include the residual stream. Architectures that add the residual inside the sublayer module (BLOOM, MPT, DBRX) have their output accessors remapped to the pre-residual submodule via `rename_utils.RESIDUAL_INSIDE_SUBLAYER_SOURCES` (issue #51); unknown architectures with a `residual` forward arg are rejected at load unless `RenameConfig(attn_output_source=.../mlp_output_source=...)` is passed. (Caveat: on Gemma-2/3-style models, a post-sublayer layernorm outside the module means the added contribution is the post-LN output, not the module output these accessors return.)
 - `token_embeddings` - Token embedding layer (read/write)
 - `logits` - Final model logits
 - `next_token_probs` - Softmax of last token logits
@@ -120,6 +121,7 @@ nnterp is a mechanistic interpretability library built on top of nnsight, provid
 - `get_rename_dict()` - Generate renaming dictionary for a model
 - `check_model_renaming()` - Validate module standardization after renaming
 - `allow_multimodal` param: controls whether heterogeneous layer types (e.g. self-attn + cross-attn) are accepted
+- `attn_output_source` / `mlp_output_source` params: dotted path (relative to a layer) to the module whose output is the sublayer's additive contribution, for architectures that add the residual inside the attention/MLP module
 - **Supported Architectures**: OPT, Mixtral, Bloom, GPT-2, Qwen2Moe, Dbrx, GPT-J, LLaMA, Llama-4, Qwen3, Qwen2, Gemma-3, GLM-4v, and many more via auto-renaming
 - Includes attention probability accessors for different architectures
 

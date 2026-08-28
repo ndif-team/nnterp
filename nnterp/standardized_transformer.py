@@ -22,6 +22,7 @@ from .rename_utils import (
     RenameConfig,
     get_rename_dict,
     get_ignores,
+    get_output_sources,
     check_model_renaming,
     get_num_attention_heads,
     get_hidden_size,
@@ -45,6 +46,14 @@ class StandardizationMixin:
     - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i
     - mlps[i]: Get MLP module at layer i
     - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
+
+    attentions_output[i] / mlps_output[i] never include the residual stream: on
+    architectures that add the residual inside the attention/MLP module (BLOOM,
+    MPT, DBRX), they target the last pre-residual submodule instead of the module
+    output (see issue #51). Note that on architectures with post-sublayer
+    layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the
+    residual stream is the post-layernorm output, not the module output returned
+    here.
 
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
@@ -90,15 +99,39 @@ class StandardizationMixin:
 
         ignores = get_ignores(self._model, rename_config)
 
-        # Create accessor instances
+        # Create accessor instances. attentions_output / mlps_output may target a
+        # submodule on architectures that add the residual inside the sublayer
+        # module (see rename_utils.RESIDUAL_INSIDE_SUBLAYER_SOURCES and issue #51),
+        # and are disabled (None source) when no module carries the contribution.
+        attn_output_source, mlp_output_source = get_output_sources(
+            self._model, rename_config
+        )
+
+        def output_accessor(source: str | None, name: str, default: str):
+            if source is not None:
+                return LayerAccessor(self, source, IOType.OUTPUT)
+            return LayerAccessor(
+                self,
+                default,
+                IOType.OUTPUT,
+                disabled_reason=(
+                    f"{name} is disabled for this model: no module exposes the sublayer's "
+                    "additive contribution to the residual stream (see the warning logged at "
+                    "load and https://github.com/ndif-team/nnterp/issues/51). Use "
+                    f"layers[i].{default}.output for the raw (residual-added) module output."
+                ),
+            )
+
         self.layers_input = LayerAccessor(self, None, IOType.INPUT)
         self.layers_output = LayerAccessor(self, None, IOType.OUTPUT)
         self.attentions = LayerAccessor(self, "self_attn", None)
         self.attentions_input = LayerAccessor(self, "self_attn", IOType.INPUT)
-        self.attentions_output = LayerAccessor(self, "self_attn", IOType.OUTPUT)
+        self.attentions_output = output_accessor(
+            attn_output_source, "attentions_output", "self_attn"
+        )
         self.mlps = LayerAccessor(self, "mlp", None)
         self.mlps_input = LayerAccessor(self, "mlp", IOType.INPUT)
-        self.mlps_output = LayerAccessor(self, "mlp", IOType.OUTPUT)
+        self.mlps_output = output_accessor(mlp_output_source, "mlps_output", "mlp")
 
         self.num_layers = len(self.layers)
         self.num_heads = get_num_attention_heads(
@@ -113,7 +146,12 @@ class StandardizationMixin:
 
         if check_renaming:
             check_model_renaming(
-                self, model_name, ignores, allow_dispatch, allow_multimodal
+                self,
+                model_name,
+                ignores,
+                allow_dispatch,
+                allow_multimodal,
+                rename_config=rename_config,
             )
         self.attention_probabilities = AttentionProbabilitiesAccessor(
             self,
@@ -325,14 +363,20 @@ class StandardizationMixin:
             layers = [layers]
         for layer in sorted(layers):  # sort to ensure execution order
             layer_output = self.layers_output[layer]
-            steering_with = factor * steering_vector.to(device=layer_output.device, dtype=layer_output.dtype)
+            steering_with = factor * steering_vector.to(
+                device=layer_output.device, dtype=layer_output.dtype
+            )
             if self.is_vllm:
                 # vLLM inference tensors don't support inplace ops
                 if batch_index is None and token_positions is None:
-                    self.layers_output[layer] = self.layers_output[layer] + steering_with
+                    self.layers_output[layer] = (
+                        self.layers_output[layer] + steering_with
+                    )
                 elif batch_index is not None and token_positions is not None:
                     out = self.layers_output[layer].clone()
-                    out[batch_index, token_positions] = out[batch_index, token_positions] + steering_with
+                    out[batch_index, token_positions] = (
+                        out[batch_index, token_positions] + steering_with
+                    )
                     self.layers_output[layer] = out
                 elif token_positions is not None:
                     out = self.layers_output[layer].clone()
@@ -346,7 +390,9 @@ class StandardizationMixin:
                 if batch_index is None and token_positions is None:
                     self.layers_output[layer] += steering_with
                 elif batch_index is not None and token_positions is not None:
-                    self.layers_output[layer][batch_index, token_positions] += steering_with
+                    self.layers_output[layer][
+                        batch_index, token_positions
+                    ] += steering_with
                 elif token_positions is not None:
                     self.layers_output[layer][:, token_positions] += steering_with
                 else:
@@ -445,6 +491,14 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
     - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i
     - mlps[i]: Get MLP module at layer i
     - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
+
+    attentions_output[i] / mlps_output[i] never include the residual stream: on
+    architectures that add the residual inside the attention/MLP module (BLOOM,
+    MPT, DBRX), they target the last pre-residual submodule instead of the module
+    output (see issue #51). Note that on architectures with post-sublayer
+    layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the
+    residual stream is the post-layernorm output, not the module output returned
+    here.
 
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.

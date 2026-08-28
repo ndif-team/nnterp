@@ -35,6 +35,7 @@ What ``nnterp`` Guarantees
 - All models follow the standardized naming convention
 - ``model.layers_output[i]`` returns tensors with expected shapes
 - ``model.attention_probabilities[i]`` (if enabled) returns properly normalized attention matrices
+- ``model.attentions_output[i]`` / ``model.mlps_output[i]`` never include the residual stream. Architectures that add it inside the attention/MLP module (BLOOM, MPT, DBRX) are remapped to the pre-residual submodule, unknown ones are rejected at load (see :doc:`adding-model-support`)
 
 What ``nnterp`` Cannot Guarantee
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -42,6 +43,7 @@ What ``nnterp`` Cannot Guarantee
 ``nnterp`` cannot guarantee:
 
 - **Attention probabilities remain unmodified**: The model might apply additional transformations after the attention probabilities are computed but before they're used. Check ``model.attention_probabilities.print_source()`` to understand the exact hook location in the HuggingFace implementation.
+- **Sublayer outputs are the exact residual contribution**: on architectures with post-sublayer layernorms outside the attention/MLP module (e.g. Gemma-2/3), the tensor added to the residual stream is the post-layernorm output, not ``attentions_output[i]`` / ``mlps_output[i]``. See `issue #53 <https://github.com/ndif-team/nnterp/issues/53>`_.
 - **Perfect HuggingFace compatibility**: While ``nnterp`` uses original HuggingFace implementations, some edge cases might behave differently due to the renaming process.
 
 .. code-block:: python

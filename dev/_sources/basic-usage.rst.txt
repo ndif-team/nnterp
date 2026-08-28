@@ -46,6 +46,9 @@ Or use ``load_model()`` which auto-detects the model type:
 
    model = load_model("gpt2")  # returns StandardizedTransformer
    vlm = load_model("Qwen/Qwen2-VL-2B-Instruct")  # returns StandardizedVLM
+   # Only the text tower of a multimodal checkpoint that ships a separate one
+   # (e.g. Llama-4, Mllama): no vision weights, returns StandardizedTransformer
+   text_model = load_model("meta-llama/Llama-3.2-11B-Vision", text_only=True)
 
 Vision-Language Models
 ~~~~~~~~~~~~~~~~~~~~~~

@@ -483,6 +483,9 @@
 
 <span class="n">model</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;gpt2&quot;</span><span class="p">)</span>  <span class="c1"># returns StandardizedTransformer</span>
 <span class="n">vlm</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;Qwen/Qwen2-VL-2B-Instruct&quot;</span><span class="p">)</span>  <span class="c1"># returns StandardizedVLM</span>
+<span class="c1"># Only the text tower of a multimodal checkpoint that ships a separate one</span>
+<span class="c1"># (e.g. Llama-4, Mllama): no vision weights, returns StandardizedTransformer</span>
+<span class="n">text_model</span> <span class="o">=</span> <span class="n">load_model</span><span class="p">(</span><span class="s2">&quot;meta-llama/Llama-3.2-11B-Vision&quot;</span><span class="p">,</span> <span class="n">text_only</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span>
 </pre></div>
 </div>
 </section>

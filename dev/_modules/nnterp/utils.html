@@ -454,6 +454,7 @@
 <span class="kn">import</span><span class="w"> </span><span class="nn">torch</span><span class="w"> </span><span class="k">as</span><span class="w"> </span><span class="nn">th</span>
 <span class="kn">from</span><span class="w"> </span><span class="nn">nnsight.intervention.tracing.globals</span><span class="w"> </span><span class="kn">import</span> <span class="n">Object</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">transformers</span>
+<span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForCausalLM</span>
 <span class="kn">import</span><span class="w"> </span><span class="nn">nnsight</span>
 
 <span class="n">TraceTensor</span> <span class="o">=</span> <span class="n">Union</span><span class="p">[</span><span class="n">th</span><span class="o">.</span><span class="n">Tensor</span><span class="p">,</span> <span class="n">Object</span><span class="p">]</span>
@@ -535,6 +536,7 @@
 <span class="k">def</span><span class="w"> </span><span class="nf">detect_automodel</span><span class="p">(</span>
     <span class="n">model</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>
     <span class="n">trust_remote_code</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
+    <span class="n">text_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
 <span class="p">):</span>
 <span class="w">    </span><span class="sd">&quot;&quot;&quot;Detect the appropriate AutoModel class for a model by inspecting its config.</span>
 
@@ -549,18 +551,58 @@
 <span class="sd">    Args:</span>
 <span class="sd">        model: HuggingFace model name or path.</span>
 <span class="sd">        trust_remote_code: Whether to trust remote code when loading the config.</span>
+<span class="sd">        text_only: If True and the checkpoint registers a separate text-only causal</span>
+<span class="sd">            LM class next to its multimodal one (e.g. Mllama, Llama-4, Qwen3.5),</span>
+<span class="sd">            return that class so only the text tower is loaded. Raises if the</span>
+<span class="sd">            installed transformers cannot build it from the checkpoint&#39;s composite</span>
+<span class="sd">            config. No effect when there is no separate text-only class.</span>
+<span class="sd">            nnsight 0.7.0 refuses such configs in ``LanguageModel`` regardless of</span>
+<span class="sd">            the automodel&#39;s dispatch (over-broad multimodal guard, fixed upstream);</span>
+<span class="sd">            nnsight 0.6 and 0.8 (``task=&quot;text-generation&quot;``) are unaffected.</span>
 
 <span class="sd">    Returns:</span>
 <span class="sd">        The appropriate AutoModel class (e.g. ``AutoModelForCausalLM``).</span>
 <span class="sd">    &quot;&quot;&quot;</span>
     <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="p">(</span>
         <span class="n">AutoConfig</span><span class="p">,</span>
-        <span class="n">AutoModelForCausalLM</span><span class="p">,</span>
         <span class="n">AutoModelForImageTextToText</span><span class="p">,</span>
         <span class="n">AutoModelForSeq2SeqLM</span><span class="p">,</span>
     <span class="p">)</span>
 
     <span class="n">config</span> <span class="o">=</span> <span class="n">AutoConfig</span><span class="o">.</span><span class="n">from_pretrained</span><span class="p">(</span><span class="n">model</span><span class="p">,</span> <span class="n">trust_remote_code</span><span class="o">=</span><span class="n">trust_remote_code</span><span class="p">)</span>
+    <span class="n">config_cls</span> <span class="o">=</span> <span class="nb">type</span><span class="p">(</span><span class="n">config</span><span class="p">)</span>
+
+    <span class="k">if</span> <span class="p">(</span>
+        <span class="n">text_only</span>
+        <span class="ow">and</span> <span class="n">config_cls</span> <span class="ow">in</span> <span class="n">AutoModelForImageTextToText</span><span class="o">.</span><span class="n">_model_mapping</span>
+        <span class="ow">and</span> <span class="n">config_cls</span> <span class="ow">in</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">_model_mapping</span>
+    <span class="p">):</span>
+        <span class="n">text_cls</span> <span class="o">=</span> <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">_model_mapping</span><span class="p">[</span><span class="n">config_cls</span><span class="p">]</span>
+        <span class="k">if</span> <span class="n">text_cls</span> <span class="ow">is</span> <span class="n">AutoModelForImageTextToText</span><span class="o">.</span><span class="n">_model_mapping</span><span class="p">[</span><span class="n">config_cls</span><span class="p">]:</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2"> has no separate text-only class (</span><span class="si">{</span><span class="n">text_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> is &quot;</span>
+                <span class="s2">&quot;also its multimodal class), loading the multimodal model.&quot;</span>
+            <span class="p">)</span>
+        <span class="k">else</span><span class="p">:</span>
+            <span class="c1"># Not every architecture can build its text tower from the composite</span>
+            <span class="c1"># config (Llama4ForCausalLM reads vocab_size at the top level in 4.56).</span>
+            <span class="k">with</span> <span class="n">th</span><span class="o">.</span><span class="n">device</span><span class="p">(</span><span class="s2">&quot;meta&quot;</span><span class="p">):</span>
+                <span class="k">try</span><span class="p">:</span>
+                    <span class="n">AutoModelForCausalLM</span><span class="o">.</span><span class="n">from_config</span><span class="p">(</span>
+                        <span class="n">config</span><span class="p">,</span> <span class="n">trust_remote_code</span><span class="o">=</span><span class="n">trust_remote_code</span>
+                    <span class="p">)</span>
+                <span class="k">except</span> <span class="ne">Exception</span> <span class="k">as</span> <span class="n">e</span><span class="p">:</span>
+                    <span class="k">raise</span> <span class="ne">ValueError</span><span class="p">(</span>
+                        <span class="sa">f</span><span class="s2">&quot;text_only=True but </span><span class="si">{</span><span class="n">text_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> cannot be built from &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;the </span><span class="si">{</span><span class="n">config_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> of </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2"> with transformers &quot;</span>
+                        <span class="sa">f</span><span class="s2">&quot;</span><span class="si">{</span><span class="n">TRANSFORMERS_VERSION</span><span class="si">}</span><span class="s2">: </span><span class="si">{</span><span class="n">e</span><span class="si">}</span><span class="se">\n</span><span class="s2">Load the full multimodal model &quot;</span>
+                        <span class="s2">&quot;instead (text_only=False or StandardizedVLM).&quot;</span>
+                    <span class="p">)</span> <span class="kn">from</span><span class="w"> </span><span class="nn">e</span>
+            <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
+                <span class="sa">f</span><span class="s2">&quot;Loading only the text tower (</span><span class="si">{</span><span class="n">text_cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">) of </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2">, &quot;</span>
+                <span class="s2">&quot;the vision tower is not loaded.&quot;</span>
+            <span class="p">)</span>
+            <span class="k">return</span> <span class="n">AutoModelForCausalLM</span>
 
     <span class="n">candidates</span> <span class="o">=</span> <span class="p">[</span>
         <span class="n">AutoModelForImageTextToText</span><span class="p">,</span>
@@ -569,7 +611,7 @@
     <span class="p">]</span>
 
     <span class="k">for</span> <span class="bp">cls</span> <span class="ow">in</span> <span class="n">candidates</span><span class="p">:</span>
-        <span class="k">if</span> <span class="nb">type</span><span class="p">(</span><span class="n">config</span><span class="p">)</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_model_mapping</span><span class="p">:</span>
+        <span class="k">if</span> <span class="n">config_cls</span> <span class="ow">in</span> <span class="bp">cls</span><span class="o">.</span><span class="n">_model_mapping</span><span class="p">:</span>
             <span class="n">logger</span><span class="o">.</span><span class="n">info</span><span class="p">(</span>
                 <span class="sa">f</span><span class="s2">&quot;Auto-detected </span><span class="si">{</span><span class="bp">cls</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2"> for </span><span class="si">{</span><span class="n">model</span><span class="si">}</span><span class="s2"> &quot;</span>
                 <span class="sa">f</span><span class="s2">&quot;(config: </span><span class="si">{</span><span class="nb">type</span><span class="p">(</span><span class="n">config</span><span class="p">)</span><span class="o">.</span><span class="vm">__name__</span><span class="si">}</span><span class="s2">)&quot;</span>

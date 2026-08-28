@@ -986,6 +986,10 @@
 <span class="sd">            tracing by setting attn_implementation=&quot;eager&quot;. Defaults to False.</span>
 <span class="sd">        check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.</span>
 <span class="sd">        rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.</span>
+<span class="sd">        text_only (bool, default False): If True and the checkpoint registers a separate text-only</span>
+<span class="sd">            causal LM class next to its multimodal one (e.g. Mllama, Llama-4, Qwen3.5), load only that</span>
+<span class="sd">            text tower (no vision weights). No effect on text models or on multimodal checkpoints</span>
+<span class="sd">            without a separate text-only class. See ``detect_automodel``.</span>
 <span class="sd">    &quot;&quot;&quot;</span>
 
     <span class="n">is_vllm</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span>
@@ -1000,6 +1004,7 @@
         <span class="n">check_attn_probs_with_trace</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">True</span><span class="p">,</span>
         <span class="n">rename_config</span><span class="p">:</span> <span class="n">RenameConfig</span> <span class="o">|</span> <span class="kc">None</span> <span class="o">=</span> <span class="kc">None</span><span class="p">,</span>
         <span class="n">automodel</span><span class="o">=</span><span class="kc">None</span><span class="p">,</span>
+        <span class="n">text_only</span><span class="p">:</span> <span class="nb">bool</span> <span class="o">=</span> <span class="kc">False</span><span class="p">,</span>
         <span class="o">**</span><span class="n">kwargs</span><span class="p">,</span>
     <span class="p">):</span>
         <span class="c1"># Detect VLMs and warn</span>
@@ -1008,7 +1013,9 @@
             <span class="kn">from</span><span class="w"> </span><span class="nn">transformers</span><span class="w"> </span><span class="kn">import</span> <span class="n">AutoModelForImageTextToText</span>
 
             <span class="n">automodel</span> <span class="o">=</span> <span class="n">detect_automodel</span><span class="p">(</span>
-                <span class="n">model</span><span class="p">,</span> <span class="n">trust_remote_code</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;trust_remote_code&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">)</span>
+                <span class="n">model</span><span class="p">,</span>
+                <span class="n">trust_remote_code</span><span class="o">=</span><span class="n">kwargs</span><span class="o">.</span><span class="n">get</span><span class="p">(</span><span class="s2">&quot;trust_remote_code&quot;</span><span class="p">,</span> <span class="kc">False</span><span class="p">),</span>
+                <span class="n">text_only</span><span class="o">=</span><span class="n">text_only</span><span class="p">,</span>
             <span class="p">)</span>
             <span class="k">if</span> <span class="n">automodel</span> <span class="ow">is</span> <span class="n">AutoModelForImageTextToText</span><span class="p">:</span>
                 <span class="n">warnings</span><span class="o">.</span><span class="n">warn</span><span class="p">(</span>

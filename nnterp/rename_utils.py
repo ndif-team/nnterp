@@ -429,7 +429,7 @@ def bloom_attention_prob_source(attention_module, return_module_source: bool = F
 
 
 def default_attention_prob_source(attention_module, return_module_source: bool = False):
-    source = attention_module.source.attention_interface_0.source
+    source = attention_module.source.attention_interface_1.source
     if return_module_source:
         return source
     else:
@@ -437,7 +437,7 @@ def default_attention_prob_source(attention_module, return_module_source: bool =
 
 
 def gpt2_attention_prob_source(attention_module, return_module_source: bool = False):
-    source = attention_module.source.attention_interface_0.source
+    source = attention_module.source.attention_interface_1.source
     if return_module_source:
         return source
     else:

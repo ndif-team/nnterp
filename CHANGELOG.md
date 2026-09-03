@@ -15,6 +15,12 @@
   transformers 4.x and 5.x. Verified on GPT-2, Bloom, Llama-style (SmolLM2) and
   GPT-NeoX (Pythia).
 
+- **Attention probabilities work on nnsight 0.8.** nnsight 0.8 labels an
+  assignment and a call on one per-name counter, so the attention forward's
+  `attention_interface = ...` binding is `attention_interface_0` and the call is
+  `attention_interface_1`. The source functions read the call. Requires
+  `nnsight>=0.8`, now declared.
+
 ## v1.3.0
 
 ### Breaking Changes

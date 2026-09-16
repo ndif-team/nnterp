@@ -6,7 +6,6 @@ import torch as th
 from torch.nn import Module
 from torch import Size
 from nnsight import TransformersModel
-from nnsight.modeling.vlm import VisionLanguageModel
 from nnsight.ndif import register as ndif_register
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
@@ -584,10 +583,10 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
         return self.output.logits
 
 
-class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
+class StandardizedVLM(TransformersModel, StandardizationMixin):
     """Standardized wrapper for vision-language models (e.g. Qwen2.5-VL, LLaVA).
 
-    Extends nnsight's ``VisionLanguageModel`` with the same standardized
+    Extends nnsight's ``TransformersModel`` with the same standardized
     module access as ``StandardizedTransformer``. Supports image inputs
     via the ``images`` kwarg in ``model.trace()``.
 
@@ -608,6 +607,9 @@ class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
 
     is_vllm: bool = False
 
+    def _remoteable_class(self) -> type:
+        return TransformersModel
+
     def __init__(
         self,
         model: str | Module,
@@ -618,6 +620,7 @@ class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
         check_attn_probs_with_trace: bool = True,
         allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
+        tokenizer_kwargs: dict | None = None,
         **kwargs,
     ):
         attn_implementation, rename, kwargs = self._prepare_init_kwargs(
@@ -625,10 +628,13 @@ class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
         )
         super().__init__(
             model,
+            task="image-text-to-text",
             attn_implementation=attn_implementation,
             rename=rename,
             **kwargs,
         )
+        for key, value in (tokenizer_kwargs or {}).items():
+            setattr(self.tokenizer, key, value)
         self._init_standardization(
             model=model,
             check_renaming=check_renaming,

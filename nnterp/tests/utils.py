@@ -62,15 +62,14 @@ def is_vlm(model_name: str) -> bool:
 
 @lru_cache(maxsize=1000)
 def is_vlm_available(model_name: str) -> bool:
-    """Check if a VLM can load into nnsight's VisionLanguageModel.
+    """Check if a VLM can load into nnsight's image-text-to-text pipeline.
 
     Filters out models that fail due to HF/nnsight issues (missing processor,
     unsupported architecture, etc.) so nnterp tests only cover nnterp-level bugs.
     """
-    from nnsight.modeling.vlm import VisionLanguageModel
 
     try:
-        VisionTransformersModel(model_name, task="text-generation")
+        TransformersModel(model_name, task="image-text-to-text")
         return True
     except Exception as e:
         logger.info(f"VLM {model_name} unavailable in nnsight: {e}")

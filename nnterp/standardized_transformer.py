@@ -5,8 +5,7 @@ from .logging import logger
 import torch as th
 from torch.nn import Module
 from torch import Size
-from nnsight import LanguageModel
-from nnsight.modeling.vlm import VisionLanguageModel
+from nnsight import TransformersModel
 from nnsight.ndif import register as ndif_register
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
@@ -97,14 +96,14 @@ class StandardizationMixin:
         else:
             model_name = model.__class__.__name__
 
-        ignores = get_ignores(self._model, rename_config)
+        ignores = get_ignores(self._module, rename_config)
 
         # Create accessor instances. attentions_output / mlps_output may target a
         # submodule on architectures that add the residual inside the sublayer
         # module (see rename_utils.RESIDUAL_INSIDE_SUBLAYER_SOURCES and issue #51),
         # and are disabled (None source) when no module carries the contribution.
         attn_output_source, mlp_output_source = get_output_sources(
-            self._model, rename_config
+            self._module, rename_config
         )
 
         def output_accessor(source: str | None, name: str, default: str):
@@ -135,13 +134,13 @@ class StandardizationMixin:
 
         self.num_layers = len(self.layers)
         self.num_heads = get_num_attention_heads(
-            self._model, raise_error=False, rename_config=rename_config
+            self._module, raise_error=False, rename_config=rename_config
         )
         self.hidden_size = get_hidden_size(
-            self._model, raise_error=False, rename_config=rename_config
+            self._module, raise_error=False, rename_config=rename_config
         )
         self.vocab_size = get_vocab_size(
-            self._model, raise_error=False, rename_config=rename_config
+            self._module, raise_error=False, rename_config=rename_config
         )
 
         if check_renaming:
@@ -459,9 +458,9 @@ class StandardizationMixin:
             )
 
 
-class StandardizedTransformer(LanguageModel, StandardizationMixin):
+class StandardizedTransformer(TransformersModel, StandardizationMixin):
     """
-    Renames the LanguageModel modules to match a standardized architecture.
+    Renames the TransformersModel modules to match a standardized architecture.
 
     The model structure is organized as follows::
 
@@ -532,6 +531,7 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
         rename_config: RenameConfig | None = None,
         automodel=None,
         text_only: bool = False,
+        tokenizer_kwargs: dict | None = None,
         **kwargs,
     ):
         # Detect VLMs and warn
@@ -557,11 +557,13 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
         )
         super().__init__(
             model,
-            automodel=automodel,
+            task="text-generation",
             attn_implementation=attn_implementation,
             rename=rename,
             **kwargs,
         )
+        for key, value in (tokenizer_kwargs or {}).items():
+            setattr(self.tokenizer, key, value)
         self._init_standardization(
             model=model,
             check_renaming=check_renaming,
@@ -572,16 +574,19 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
             rename_config=rename_config,
         )
 
+    def _remoteable_class(self) -> type:
+        return TransformersModel
+
     @property
     def logits(self) -> TraceTensor:
         """Returns the predicted logits."""
         return self.output.logits
 
 
-class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
+class StandardizedVLM(TransformersModel, StandardizationMixin):
     """Standardized wrapper for vision-language models (e.g. Qwen2.5-VL, LLaVA).
 
-    Extends nnsight's ``VisionLanguageModel`` with the same standardized
+    Extends nnsight's ``TransformersModel`` with the same standardized
     module access as ``StandardizedTransformer``. Supports image inputs
     via the ``images`` kwarg in ``model.trace()``.
 
@@ -602,6 +607,9 @@ class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
 
     is_vllm: bool = False
 
+    def _remoteable_class(self) -> type:
+        return TransformersModel
+
     def __init__(
         self,
         model: str | Module,
@@ -612,6 +620,7 @@ class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
         check_attn_probs_with_trace: bool = True,
         allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
+        tokenizer_kwargs: dict | None = None,
         **kwargs,
     ):
         attn_implementation, rename, kwargs = self._prepare_init_kwargs(
@@ -619,10 +628,13 @@ class StandardizedVLM(VisionLanguageModel, StandardizationMixin):
         )
         super().__init__(
             model,
+            task="image-text-to-text",
             attn_implementation=attn_implementation,
             rename=rename,
             **kwargs,
         )
+        for key, value in (tokenizer_kwargs or {}).items():
+            setattr(self.tokenizer, key, value)
         self._init_standardization(
             model=model,
             check_renaming=check_renaming,

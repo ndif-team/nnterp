@@ -58,8 +58,8 @@ def test_text_only_loads_text_tower():
     # Mllama's text tower has cross-attention layers (heterogeneous), so skip renaming checks
     model = load_model(MLLAMA_TINY, text_only=True, check_renaming=False)
     assert isinstance(model, StandardizedTransformer)
-    assert isinstance(model._model, MllamaForCausalLM)
-    assert not hasattr(model._model, "vision_model")
+    assert isinstance(model._module, MllamaForCausalLM)
+    assert not hasattr(model._module, "vision_model")
     with model.trace("Hello, world!"):
         logits = model.logits.save()
     assert logits.shape[-1] == model.vocab_size

@@ -5,7 +5,8 @@ from typing import Union
 
 from .logging import logger
 import torch as th
-from nnsight.intervention.tracing.globals import Object
+
+from nnsight import Object
 import transformers
 from transformers import AutoModelForCausalLM
 import nnsight
@@ -69,6 +70,11 @@ try:
     from transformers import Qwen2ForCausalLM
 except ImportError:
     Qwen2ForCausalLM = ArchitectureNotFound
+
+try:
+    from transformers import FalconForCausalLM
+except ImportError:
+    FalconForCausalLM = ArchitectureNotFound
 
 try:
     from transformers import GptOssForCausalLM

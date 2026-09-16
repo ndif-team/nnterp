@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from typing import Callable
 import torch as th
 from tqdm.auto import tqdm
-from .nnsight_utils import LanguageModel, compute_next_token_probs
+from .nnsight_utils import TransformersModel, compute_next_token_probs
 from .standardized_transformer import StandardizedTransformer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
@@ -17,7 +17,7 @@ class TokenizationError(Exception):
 
 def get_first_tokens(
     words: str | list[str],
-    llm_or_tokenizer: LanguageModel | StandardizedTransformer | PreTrainedTokenizerBase,
+    llm_or_tokenizer: TransformersModel | StandardizedTransformer | PreTrainedTokenizerBase,
     use_hacky_implementation=False,
 ) -> list[int]:
     """
@@ -25,7 +25,7 @@ def get_first_tokens(
 
     Args:
         words: A string or a list of strings to get the first token of.
-        llm_or_tokenizer: The tokenizer to use. If a LanguageModel or StandardizedTransformer is provided,
+        llm_or_tokenizer: The tokenizer to use. If a TransformersModel or StandardizedTransformer is provided,
             the tokenizer will be extracted from it. It is recommended to use StandardizedTransformer. If you want to use your own tokenizer,
             it's recommended to initialize it with add_prefix_space=False or to use the hacky implementation.
         use_hacky_implementation: If True, use a hacky implementation to get the first token of a word by tokenizing "🍐word" and extracting the first token of word.
@@ -44,7 +44,7 @@ def get_first_tokens(
                 f"Error getting model.add_prefix_false_tokenizer, using model.tokenizer instead:\n{e}"
             )
             tokenizer = llm_or_tokenizer.tokenizer
-    elif isinstance(llm_or_tokenizer, LanguageModel):
+    elif isinstance(llm_or_tokenizer, TransformersModel):
         tokenizer = llm_or_tokenizer.tokenizer
     else:
         tokenizer = llm_or_tokenizer
@@ -162,7 +162,7 @@ class Prompt:
 
 
 def next_token_probs_unsqueeze(
-    nn_model: LanguageModel, prompt: str | list[str], remote=False, **_kwargs
+    nn_model: TransformersModel, prompt: str | list[str], remote=False, **_kwargs
 ) -> th.Tensor:
     probs = compute_next_token_probs(nn_model, prompt, remote=remote)
     return probs.unsqueeze(1)  # Add a fake layer dimension
@@ -170,7 +170,7 @@ def next_token_probs_unsqueeze(
 
 @th.no_grad
 def run_prompts(
-    nn_model: LanguageModel,
+    nn_model: TransformersModel,
     prompts: list[Prompt],
     batch_size: int = 32,
     get_probs_func: Callable | None = None,

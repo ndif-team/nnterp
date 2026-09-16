@@ -12,7 +12,7 @@ import pytest
 from _pytest.outcomes import Skipped
 from nnterp import StandardizedTransformer
 from nnterp.logging import logger
-from nnsight import LanguageModel
+from nnsight import TransformersModel
 
 from .utils import (
     get_all_available_models,
@@ -536,7 +536,7 @@ def model(model_name, failed_model_cache, request):
 
 @pytest.fixture
 def raw_model(model_name, failed_model_cache, request):
-    """Fixture providing raw LanguageModel instances.
+    """Fixture providing raw TransformersModel instances.
 
     If a model fails to load, it is cached and subsequent tests
     for that model are skipped.
@@ -548,7 +548,7 @@ def raw_model(model_name, failed_model_cache, request):
             pytest.skip(f"Model {model_name} previously failed to load")
 
     try:
-        return LanguageModel(model_name, device_map="auto")
+        return TransformersModel(model_name, task="text-generation", device_map="auto")
     except Exception as e:
         # Update cache under lock to ensure thread safety
         with lock:

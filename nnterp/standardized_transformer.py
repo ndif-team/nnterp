@@ -5,7 +5,7 @@ from .logging import logger
 import torch as th
 from torch.nn import Module
 from torch import Size
-from nnsight import LanguageModel
+from nnsight import TransformersModel
 from nnsight.modeling.vlm import VisionLanguageModel
 from nnsight.ndif import register as ndif_register
 from transformers import AutoTokenizer
@@ -459,9 +459,9 @@ class StandardizationMixin:
             )
 
 
-class StandardizedTransformer(LanguageModel, StandardizationMixin):
+class StandardizedTransformer(TransformersModel, StandardizationMixin):
     """
-    Renames the LanguageModel modules to match a standardized architecture.
+    Renames the TransformersModel modules to match a standardized architecture.
 
     The model structure is organized as follows::
 
@@ -532,6 +532,7 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
         rename_config: RenameConfig | None = None,
         automodel=None,
         text_only: bool = False,
+        tokenizer_kwargs: dict | None = None,
         **kwargs,
     ):
         # Detect VLMs and warn
@@ -562,6 +563,8 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
             rename=rename,
             **kwargs,
         )
+        for key, value in (tokenizer_kwargs or {}).items():
+            setattr(self.tokenizer, key, value)
         self._init_standardization(
             model=model,
             check_renaming=check_renaming,
@@ -571,6 +574,9 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
             check_attn_probs_with_trace=check_attn_probs_with_trace,
             rename_config=rename_config,
         )
+
+    def _remoteable_class(self) -> type:
+        return TransformersModel
 
     @property
     def logits(self) -> TraceTensor:

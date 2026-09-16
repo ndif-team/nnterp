@@ -1,6 +1,6 @@
 import pytest
 import torch as th
-from nnsight import LanguageModel
+from nnsight import TransformersModel
 from nnterp.nnsight_utils import (
     get_num_layers,
     get_layer,
@@ -24,13 +24,13 @@ from nnterp.rename_utils import get_vocab_size
 def test_load_model(llama_like_model_name):
     """Test loading model with different configurations"""
     with th.no_grad():
-        LanguageModel(llama_like_model_name, device_map="auto")
+        TransformersModel(llama_like_model_name, task="text-generation", device_map="auto")
 
 
 def test_basic_utils(llama_like_model_name):
     """Test basic utility functions"""
     with th.no_grad():
-        model = LanguageModel(llama_like_model_name, device_map="auto")
+        model = TransformersModel(llama_like_model_name, task="text-generation", device_map="auto")
         prompt = "Hello, world!"
 
         num_layers = get_num_layers(model)
@@ -77,7 +77,7 @@ def test_basic_utils(llama_like_model_name):
 def test_activation_collection(llama_like_model_name):
     """Test activation collection functions"""
     with th.no_grad():
-        model = LanguageModel(llama_like_model_name, device_map="auto")
+        model = TransformersModel(llama_like_model_name, task="text-generation", device_map="auto")
         prompts = ["Hello, world!", "Testing, 1, 2, 3"] * 2
 
         # Test activation collection with session
@@ -108,7 +108,7 @@ def test_activation_collection(llama_like_model_name):
 
 def test_project_on_vocab_layer_output_backward(llama_like_model_name):
     """Test that project_on_vocab output supports backward and gradients have correct shape."""
-    model = LanguageModel(llama_like_model_name, device_map="auto")
+    model = TransformersModel(llama_like_model_name, task="text-generation", device_map="auto")
     prompt = "Hello, world!"
     with model.trace(prompt):
         layer_input = get_layer_input(model, 0).save()
@@ -136,7 +136,7 @@ def test_project_on_vocab_layer_output_backward(llama_like_model_name):
 
 
 def test_grad_from_mlp(llama_like_model_name):
-    model = LanguageModel(llama_like_model_name, device_map="auto")
+    model = TransformersModel(llama_like_model_name, task="text-generation", device_map="auto")
     prompt = "Hello, world!"
     if get_num_layers(model) < 2:
         pytest.skip("Model has less than 2 layers")
@@ -171,7 +171,7 @@ def test_cache_with_renamed_modules(llama_like_model_name):
         "Cache is not supported yet due to a nnsight renaming issue."
     )  # TODO: Update once nnsight is fixed
     with th.no_grad():
-        model = LanguageModel(llama_like_model_name, device_map="auto")
+        model = TransformersModel(llama_like_model_name, task="text-generation", device_map="auto")
         prompt = "Hello, world!"
         num_layers = get_num_layers(model)
 

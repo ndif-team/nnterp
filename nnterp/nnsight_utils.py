@@ -5,7 +5,7 @@ import torch as th
 import torch.nn as nn
 from torch.utils.data import DataLoader
 
-from nnsight import NNsight, Object, LanguageModel
+from nnsight import NNsight, Object, TransformersModel
 from nnsight.intervention.envoy import Envoy
 from transformers import PreTrainedModel
 
@@ -13,17 +13,17 @@ from .utils import TraceTensor, unpack_tuple
 from .standardized_transformer import StandardizationMixin, StandardizedTransformer
 from .rename_utils import get_rename_dict, RenameConfig
 
-GetModuleOutput = Callable[[LanguageModel, int], TraceTensor]
+GetModuleOutput = Callable[[TransformersModel, int], TraceTensor]
 
 
-def get_embed_tokens(model: LanguageModel) -> nn.Module:
+def get_embed_tokens(model: TransformersModel) -> nn.Module:
     """
     Get the token embedding layer of the model
     """
     return model.embed_tokens
 
 
-def get_layers(model: LanguageModel) -> list[Envoy]:
+def get_layers(model: TransformersModel) -> list[Envoy]:
     """
     Get the layers of the model
     """
@@ -32,7 +32,7 @@ def get_layers(model: LanguageModel) -> list[Envoy]:
     return model.model.layers
 
 
-def get_num_layers(nn_model: LanguageModel):
+def get_num_layers(nn_model: TransformersModel):
     """
     Get the number of layers in the model
     Args:
@@ -43,7 +43,7 @@ def get_num_layers(nn_model: LanguageModel):
     return len(get_layers(nn_model))
 
 
-def get_layer(nn_model: LanguageModel, layer: int) -> Envoy:
+def get_layer(nn_model: TransformersModel, layer: int) -> Envoy:
     """
     Get the layer of the model
     Args:
@@ -55,7 +55,7 @@ def get_layer(nn_model: LanguageModel, layer: int) -> Envoy:
     return get_layers(nn_model)[layer]
 
 
-def get_layer_input(nn_model: LanguageModel, layer: int) -> Union[int, Object]:
+def get_layer_input(nn_model: TransformersModel, layer: int) -> Union[int, Object]:
     """
     Get the hidden state input of a layer
     Args:
@@ -67,7 +67,7 @@ def get_layer_input(nn_model: LanguageModel, layer: int) -> Union[int, Object]:
     return get_layer(nn_model, layer).input
 
 
-def get_layer_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
+def get_layer_output(nn_model: TransformersModel, layer: int) -> TraceTensor:
     """
     Get the residual stream after the layer
     Args:
@@ -80,7 +80,7 @@ def get_layer_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
     return unpack_tuple(output)
 
 
-def get_attention(nn_model: LanguageModel, layer: int) -> Envoy:
+def get_attention(nn_model: TransformersModel, layer: int) -> Envoy:
     """
     Get the attention module of a layer
     Args:
@@ -92,7 +92,7 @@ def get_attention(nn_model: LanguageModel, layer: int) -> Envoy:
     return get_layer(nn_model, layer).self_attn
 
 
-def get_attention_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
+def get_attention_output(nn_model: TransformersModel, layer: int) -> TraceTensor:
     """
     Get the output of the attention block of a layer
     Args:
@@ -108,14 +108,14 @@ def get_attention_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
     return unpack_tuple(get_attention(nn_model, layer).output)
 
 
-def get_mlp(nn_model: LanguageModel, layer: int) -> Envoy:
+def get_mlp(nn_model: TransformersModel, layer: int) -> Envoy:
     """
     Get the MLP module of a layer
     """
     return get_layer(nn_model, layer).mlp
 
 
-def get_mlp_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
+def get_mlp_output(nn_model: TransformersModel, layer: int) -> TraceTensor:
     """
     Get the output of the MLP of a layer
     """
@@ -124,7 +124,7 @@ def get_mlp_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
     return unpack_tuple(get_mlp(nn_model, layer).output)
 
 
-def get_logits(nn_model: LanguageModel) -> TraceTensor:
+def get_logits(nn_model: TransformersModel) -> TraceTensor:
     """
     Get the logits of the model
     Args:
@@ -135,7 +135,7 @@ def get_logits(nn_model: LanguageModel) -> TraceTensor:
     return nn_model.output.logits
 
 
-def get_unembed_norm(nn_model: LanguageModel) -> Envoy:
+def get_unembed_norm(nn_model: TransformersModel) -> Envoy:
     """
     Get the last layer norm of the model
     Args:
@@ -148,7 +148,7 @@ def get_unembed_norm(nn_model: LanguageModel) -> Envoy:
     return nn_model.model.norm
 
 
-def get_unembed(nn_model: LanguageModel) -> Envoy:
+def get_unembed(nn_model: TransformersModel) -> Envoy:
     """
     Get the unembed module of the model
     Args:
@@ -159,7 +159,7 @@ def get_unembed(nn_model: LanguageModel) -> Envoy:
     return nn_model.lm_head
 
 
-def project_on_vocab(nn_model: LanguageModel, h: TraceTensor) -> TraceTensor:
+def project_on_vocab(nn_model: TransformersModel, h: TraceTensor) -> TraceTensor:
     """
     Project the hidden states on the vocabulary, after applying the model's last layer norm
     Args:
@@ -172,7 +172,7 @@ def project_on_vocab(nn_model: LanguageModel, h: TraceTensor) -> TraceTensor:
     return nn_model.lm_head(ln_out)
 
 
-def get_next_token_probs(nn_model: LanguageModel) -> TraceTensor:
+def get_next_token_probs(nn_model: TransformersModel) -> TraceTensor:
     """
     Get the probabilities of the model
     Args:
@@ -183,7 +183,7 @@ def get_next_token_probs(nn_model: LanguageModel) -> TraceTensor:
     return get_logits(nn_model)[:, -1, :].softmax(-1)
 
 
-def set_layer_output(nn_model: LanguageModel, layer: int, tensor: TraceTensor):
+def set_layer_output(nn_model: TransformersModel, layer: int, tensor: TraceTensor):
     """
     Set the output of a layer to a certain tensor.
     Args:
@@ -258,7 +258,7 @@ class ModuleAccessor:
 
 @th.no_grad
 def get_token_activations(
-    nn_model: LanguageModel,
+    nn_model: TransformersModel,
     prompts=None,
     layers=None,
     get_activations: GetModuleOutput | None = None,
@@ -379,7 +379,7 @@ def collect_last_token_activations_session(
 
 
 def collect_token_activations_batched(
-    nn_model: LanguageModel,
+    nn_model: TransformersModel,
     prompts,
     batch_size,
     layers=None,
@@ -432,7 +432,7 @@ def collect_token_activations_batched(
 
 
 def compute_next_token_probs(
-    nn_model: LanguageModel, prompt: str | list[str], remote=False
+    nn_model: TransformersModel, prompt: str | list[str], remote=False
 ) -> th.Tensor:
     """
     Get the probabilities of the next token for the prompt

@@ -10,7 +10,7 @@ from .nnsight_utils import (
     get_token_activations,
     get_attention,
     get_num_layers,
-    LanguageModel,
+    TransformersModel,
     project_on_vocab,
 )
 
@@ -27,7 +27,7 @@ __all__ = [
 
 @th.no_grad
 def logit_lens(
-    nn_model: LanguageModel,
+    nn_model: TransformersModel,
     prompts: list[str] | str,
     remote=False,
     return_inv_logits=False,
@@ -232,7 +232,7 @@ class TargetPromptBatch:
 
 @th.no_grad
 def patchscope_lens(
-    nn_model: LanguageModel,
+    nn_model: TransformersModel,
     source_prompts: list[str] | str | None = None,
     target_patch_prompts: (
         TargetPromptBatch | list[TargetPrompt] | TargetPrompt | None
@@ -302,7 +302,7 @@ def patchscope_lens(
 
 @th.no_grad
 def patchscope_generate(
-    nn_model: LanguageModel,
+    nn_model: TransformersModel,
     prompts: list[str] | str,
     target_patch_prompt: TargetPrompt,
     max_length: int = 50,
@@ -314,7 +314,7 @@ def patchscope_generate(
     Replace the hidden state of the patch_prompt.index_to_patch token in the patch_prompt.prompt with the hidden state of the last token of each prompt at each layer.
     Returns the probabilities of the next token in patch_prompt for each prompt for each layer intervention.
     Args:
-        nn_model: The NNSight LanguageModel with llama architecture
+        nn_model: The NNSight TransformersModel with llama architecture
         prompts: List of prompts or a single prompt to get the hidden states of the last token
         target_patch_prompt: A TargetPrompt object containing the prompt to patch and the index of the token to patch
         layers: List of layers to intervene on. If None, all layers are intervened on.
@@ -356,7 +356,7 @@ def patchscope_generate(
 
 
 def patch_object_attn_lens(
-    nn_model: LanguageModel,
+    nn_model: TransformersModel,
     source_prompts: list[str] | str,
     target_prompts: list[str] | str,
     attn_idx_patch: int,

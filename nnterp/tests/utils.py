@@ -14,7 +14,7 @@ from transformers import AutoModelForCausalLM
 from transformers.configuration_utils import PretrainedConfig
 from huggingface_hub import get_collection
 import nnsight
-from nnsight import LanguageModel
+from nnsight import TransformersModel
 from nnterp import StandardizedTransformer
 from nnterp.logging import logger
 from nnterp.utils import detect_automodel, dummy_inputs
@@ -70,7 +70,7 @@ def is_vlm_available(model_name: str) -> bool:
     from nnsight.modeling.vlm import VisionLanguageModel
 
     try:
-        VisionLanguageModel(model_name)
+        VisionTransformersModel(model_name, task="text-generation")
         return True
     except Exception as e:
         logger.info(f"VLM {model_name} unavailable in nnsight: {e}")
@@ -271,10 +271,10 @@ def test_model_availability(model_name):
 
     # Test nnsight availability (only if HF works)
     try:
-        nn_model = LanguageModel(model_name)
+        nn_model = TransformersModel(model_name, task="text-generation")
     except Exception:
         try:
-            nn_model = LanguageModel(hf_model)
+            nn_model = TransformersModel(hf_model, task="text-generation")
         except Exception:
             return ("available_hf", "cant_load_with_hf_in_LanguageModel")
         return ("available_hf", "cant_load_with_LanguageModel")

@@ -1,7 +1,7 @@
 import warnings
 import torch as th
 import pytest
-from nnsight import LanguageModel
+from nnsight import TransformersModel
 from nnterp import StandardizedTransformer
 from nnterp.nnsight_utils import (
     get_layer_input,
@@ -77,7 +77,7 @@ def test_model_renaming_activations_diff(model_name):
     with th.no_grad():
         # Load models with and without patching
         model_renamed = StandardizedTransformer(model_name)
-        model = LanguageModel(model_name, device_map="auto")
+        model = TransformersModel(model_name, task="text-generation", device_map="auto")
         device = "cuda" if th.cuda.is_available() else "cpu"
 
         # Set up test input
@@ -136,7 +136,7 @@ def test_renaming_forward(model_name):
     """
     with th.no_grad():
         renamed_model = StandardizedTransformer(model_name)
-        normal_model = LanguageModel(model_name, device_map="auto")
+        normal_model = TransformersModel(model_name, task="text-generation", device_map="auto")
         device = "cuda" if th.cuda.is_available() else "cpu"
 
         # Test that key attributes exist and are accessible

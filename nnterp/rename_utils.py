@@ -484,6 +484,12 @@ def bloom_attention_prob_source(attention_module, return_module_source: bool = F
     return attention_module.source.self_attention_dropout_0
 
 
+def falcon_attention_prob_source(attention_module, return_module_source: bool = False):
+    if return_module_source:
+        return attention_module.source
+    return attention_module.source.F_softmax_0
+
+
 def default_attention_prob_source(attention_module, return_module_source: bool = False):
     source = attention_module.source.attention_interface_1.source
     if return_module_source:
@@ -524,8 +530,16 @@ class AttentionProbabilitiesAccessor:
         self.attn_probs_dont_sum_to_one = False
         if rename_config is not None and rename_config.attn_prob_source is not None:
             self.source_attr = rename_config.attn_prob_source
-        elif isinstance(model._module, (BloomForCausalLM, FalconForCausalLM)):
+        elif isinstance(model._module, BloomForCausalLM):
             self.source_attr = bloom_attention_prob_source
+        elif isinstance(model._module, FalconForCausalLM):
+            # FalconAttention calls its dropout only on the alibi branch; the
+            # other softmaxes straight into what it returns
+            self.source_attr = (
+                bloom_attention_prob_source
+                if model.config.alibi
+                else falcon_attention_prob_source
+            )
         elif isinstance(model._module, GPTJForCausalLM):
             self.source_attr = gptj_attention_prob_source
         elif isinstance(model._module, (Qwen2MoeForCausalLM, MptForCausalLM)):

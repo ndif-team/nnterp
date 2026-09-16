@@ -18,11 +18,10 @@ from .utils import (
 from .utils import (
     OPTForCausalLM,
     BloomForCausalLM,
-    GPT2LMHeadModel,
+    FalconForCausalLM,
     GPTJForCausalLM,
     Qwen2MoeForCausalLM,
     DbrxForCausalLM,
-    StableLmForCausalLM,
     GptOssForCausalLM,
     MptForCausalLM,
 )
@@ -479,75 +478,24 @@ class LayerAccessor:
         return self._detected_is_tuple
 
 
-def first_available_op(source, *candidates: str):
-    """Return the first of `candidates` that exists as an operation on `source`.
-
-    nnsight names a source operation after the callee expression in the model's
-    forward, so the name changes whenever transformers rewrites that line. The
-    attention dropout is the recurring case:
-
-    - transformers <= 4.57 wrote ``module.attn_dropout(attn_weights)`` in GPT-2's
-      ``eager_attention_forward`` -> ``module_attn_dropout_0``
-    - transformers >= 5 writes ``nn.functional.dropout(...)`` there instead
-      -> ``nn_functional_dropout_0``
-
-    Trying the known spellings in order keeps one nnterp working across both.
-    """
-    for name in candidates:
-        try:
-            return getattr(source, name)
-        except AttributeError:
-            continue
-    raise RenamingError(
-        f"None of the expected attention-probability operations {list(candidates)} "
-        f"exist in this model's attention forward. This usually means the transformers "
-        f"version rewrote that line; print the available operations with "
-        f"`model.attention_probabilities.print_source()` and pass the right one via "
-        f"`RenameConfig(attn_prob_source=...)`."
-    )
-
-
-# Ordered by likelihood for the architectures each is used with; every entry is a
-# spelling of the same operation across transformers versions.
-ATTENTION_DROPOUT_OPS = ("nn_functional_dropout_0", "module_attn_dropout_0")
-
-
 def bloom_attention_prob_source(attention_module, return_module_source: bool = False):
     if return_module_source:
         return attention_module.source
-    else:
-        return first_available_op(
-            attention_module.source, "self_attention_dropout_0", *ATTENTION_DROPOUT_OPS
-        )
+    return attention_module.source.self_attention_dropout_0
 
 
 def default_attention_prob_source(attention_module, return_module_source: bool = False):
     source = attention_module.source.attention_interface_1.source
     if return_module_source:
         return source
-    else:
-        return first_available_op(source, *ATTENTION_DROPOUT_OPS)
-
-
-def gpt2_attention_prob_source(attention_module, return_module_source: bool = False):
-    source = attention_module.source.attention_interface_1.source
-    if return_module_source:
-        return source
-    else:
-        # transformers >= 5 moved GPT-2 onto nn.functional.dropout, which is what
-        # default_attention_prob_source already expects; <= 4.57 used
-        # module.attn_dropout.
-        return first_available_op(source, *ATTENTION_DROPOUT_OPS)
+    return source.nn_functional_dropout_0
 
 
 def gptj_attention_prob_source(attention_module, return_module_source: bool = False):
     source = attention_module.source.self__attn_0.source
     if return_module_source:
         return source
-    else:
-        return first_available_op(
-            source, "self_attn_dropout_0", *ATTENTION_DROPOUT_OPS
-        )
+    return source.self_attn_dropout_0
 
 
 def qwen2moe_attention_prob_source(
@@ -555,32 +503,13 @@ def qwen2moe_attention_prob_source(
 ):
     if return_module_source:
         return attention_module.source
-    else:
-        return attention_module.source.nn_functional_dropout_0
+    return attention_module.source.nn_functional_dropout_0
 
 
 def dbrx_attention_prob_source(attention_module, return_module_source: bool = False):
     if return_module_source:
         return attention_module.attn.source
-    else:
-        return attention_module.attn.source.nn_functional_dropout_0
-
-
-def stablelm_attention_prob_source(
-    attention_module, return_module_source: bool = False
-):
-    if return_module_source:
-        return attention_module.source
-    else:
-        return attention_module.source.self_attention_dropout_0
-
-
-def gptoss_attention_prob_source(attention_module, return_module_source: bool = False):
-    source = attention_module.source.attention_interface_1.source
-    if return_module_source:
-        return source
-    else:
-        return first_available_op(source, *ATTENTION_DROPOUT_OPS)
+    return attention_module.attn.source.nn_functional_dropout_0
 
 
 class AttentionProbabilitiesAccessor:
@@ -595,25 +524,18 @@ class AttentionProbabilitiesAccessor:
         self.attn_probs_dont_sum_to_one = False
         if rename_config is not None and rename_config.attn_prob_source is not None:
             self.source_attr = rename_config.attn_prob_source
-        elif isinstance(model._module, BloomForCausalLM):
+        elif isinstance(model._module, (BloomForCausalLM, FalconForCausalLM)):
             self.source_attr = bloom_attention_prob_source
-        elif isinstance(model._module, GPT2LMHeadModel):
-            self.source_attr = gpt2_attention_prob_source
         elif isinstance(model._module, GPTJForCausalLM):
             self.source_attr = gptj_attention_prob_source
-        elif isinstance(model._module, Qwen2MoeForCausalLM):
-            self.source_attr = qwen2moe_attention_prob_source
-        elif isinstance(model._module, MptForCausalLM):
-            # MptAttention: softmax then nn.functional.dropout, same as Qwen2Moe
+        elif isinstance(model._module, (Qwen2MoeForCausalLM, MptForCausalLM)):
             self.source_attr = qwen2moe_attention_prob_source
         elif isinstance(model._module, DbrxForCausalLM):
             self.source_attr = dbrx_attention_prob_source
-        elif isinstance(model._module, StableLmForCausalLM):
-            self.source_attr = stablelm_attention_prob_source
-        elif isinstance(model._module, GptOssForCausalLM):
-            self.source_attr = gptoss_attention_prob_source
-            self.attn_probs_dont_sum_to_one = True
         else:
+            if isinstance(model._module, GptOssForCausalLM):
+                # the softmax spans the keys plus a sink, and the sink is dropped
+                self.attn_probs_dont_sum_to_one = True
             self.source_attr = default_attention_prob_source
         self.enabled = True
 

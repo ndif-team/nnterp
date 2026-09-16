@@ -555,10 +555,6 @@ class StandardizedTransformer(LanguageModel, StandardizationMixin):
         attn_implementation, rename, kwargs = self._prepare_init_kwargs(
             enable_attention_probs, rename_config, **kwargs
         )
-        # nnsight 0.8 selects the model class from the pipeline `task`, and
-        # forwards anything it does not recognise to `from_pretrained` -- an
-        # `automodel=` would reach the HF model's `__init__` and raise. The
-        # detection above still runs, for the vision-language warning.
         super().__init__(
             model,
             task="text-generation",

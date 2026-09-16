@@ -14,7 +14,7 @@ import nnsight
 TraceTensor = Union[th.Tensor, Object]
 
 
-NNSIGHT_VERSION = getattr(nnsight, "__version__", "unknown")
+NNSIGHT_VERSION = nnsight.__version__
 TRANSFORMERS_VERSION = transformers.__version__
 
 
@@ -70,6 +70,11 @@ try:
     from transformers import Qwen2ForCausalLM
 except ImportError:
     Qwen2ForCausalLM = ArchitectureNotFound
+
+try:
+    from transformers import FalconForCausalLM
+except ImportError:
+    FalconForCausalLM = ArchitectureNotFound
 
 try:
     from transformers import GptOssForCausalLM

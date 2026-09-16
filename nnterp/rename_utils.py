@@ -576,12 +576,11 @@ def stablelm_attention_prob_source(
 
 
 def gptoss_attention_prob_source(attention_module, return_module_source: bool = False):
+    source = attention_module.source.attention_interface_1.source
     if return_module_source:
-        return attention_module.source.attention_interface_0.source
+        return source
     else:
-        return (
-            attention_module.source.attention_interface_0.source.nn_functional_dropout_0
-        )
+        return first_available_op(source, *ATTENTION_DROPOUT_OPS)
 
 
 class AttentionProbabilitiesAccessor:

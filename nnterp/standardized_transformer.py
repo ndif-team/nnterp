@@ -64,15 +64,20 @@ class StandardizationMixin:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
-        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp
-            for NDIF remote execution via cloudpickle serialization.
+        remote (bool, default False): If True, registers nnterp for NDIF remote execution via
+            cloudpickle serialization and keeps the checkpoint off the client: allow_dispatch
+            is set to False and every load-time check runs with scan() on the meta model.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
             tracing by setting attn_implementation="eager" (passing attn_implementation="eager"
             yourself is accepted, any other value raises). Defaults to False.
-        check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
+        check_attn_probs_with_trace (bool, default None): If True, the attention probabilities are
+            validated with a trace, which tests that they sum to 1 and that editing them changes
+            the logits. The trace dispatches the model, or runs on NDIF when remote=True. If False,
+            they are validated with scan() (shape only). Defaults to True, and to False when
+            remote=True.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
     """
 
@@ -92,14 +97,19 @@ class StandardizationMixin:
         remote: bool = False,
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
-        check_attn_probs_with_trace: bool = True,
+        check_attn_probs_with_trace: bool | None = None,
         allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
     ):
         """Initialize standardization after the base model has been initialized."""
         self.remote = remote
         if remote:
+            # The checkpoint lives on NDIF: validate on the meta model with scan()
+            # and never dispatch it on the client.
             ndif_register("nnterp")
+            allow_dispatch = False
+        if check_attn_probs_with_trace is None:
+            check_attn_probs_with_trace = not remote
         if isinstance(model, str):
             model_name = model
         else:
@@ -535,15 +545,20 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
-        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp
-            for NDIF remote execution via cloudpickle serialization.
+        remote (bool, default False): If True, registers nnterp for NDIF remote execution via
+            cloudpickle serialization and keeps the checkpoint off the client: allow_dispatch
+            is set to False and every load-time check runs with scan() on the meta model.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
             tracing by setting attn_implementation="eager" (passing attn_implementation="eager"
             yourself is accepted, any other value raises). Defaults to False.
-        check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
+        check_attn_probs_with_trace (bool, default None): If True, the attention probabilities are
+            validated with a trace, which tests that they sum to 1 and that editing them changes
+            the logits. The trace dispatches the model, or runs on NDIF when remote=True. If False,
+            they are validated with scan() (shape only). Defaults to True, and to False when
+            remote=True.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
         text_only (bool, default False): If True and the checkpoint registers a separate text-only
             causal LM class next to its multimodal one (e.g. Mllama, Llama-4, Qwen3.5), load only that
@@ -560,7 +575,7 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
         remote: bool = False,
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
-        check_attn_probs_with_trace: bool = True,
+        check_attn_probs_with_trace: bool | None = None,
         rename_config: RenameConfig | None = None,
         automodel=None,
         text_only: bool = False,
@@ -626,12 +641,15 @@ class StandardizedVLM(TransformersModel, StandardizationMixin):
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
-        remote (bool, default False): If True, registers nnterp for NDIF remote execution.
+        remote (bool, default False): If True, registers nnterp for NDIF remote execution and
+            keeps the checkpoint off the client (allow_dispatch=False, checks run with scan()).
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
-            when scan() fails during renaming checks.
+            when scan() fails during renaming checks. Set to False when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
             tracing by setting attn_implementation="eager".
-        check_attn_probs_with_trace (bool, default True): If True, validates attention probabilities.
+        check_attn_probs_with_trace (bool, default None): If True, validates attention
+            probabilities with a trace (on NDIF when remote=True), otherwise with scan().
+            Defaults to True, and to False when remote=True.
         allow_multimodal (bool, default False): Whether to allow heterogeneous layer types
             (e.g. cross-attention layers in Mllama). These layers only activate with image
             inputs, so text-only tracing will fail on them.
@@ -650,7 +668,7 @@ class StandardizedVLM(TransformersModel, StandardizationMixin):
         remote: bool = False,
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
-        check_attn_probs_with_trace: bool = True,
+        check_attn_probs_with_trace: bool | None = None,
         allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
         tokenizer_kwargs: dict | None = None,

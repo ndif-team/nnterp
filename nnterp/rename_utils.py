@@ -626,7 +626,7 @@ class AttentionProbabilitiesAccessor:
             layer (int, optional): The layer index to check. Defaults to the first
                 softmax-attention layer (``model.attention_layers[0]``).
             allow_dispatch (bool, optional): If True, allows dispatching the model when scan fails.
-            use_trace (bool, optional): If False, uses scan() to validate the attention probabilities, which means attention probabilities summing to 1 and causal effect of modifying them won't be tested. Defaults to True.
+            use_trace (bool, optional): If False, uses scan() to validate the attention probabilities, which means attention probabilities summing to 1 and causal effect of modifying them won't be tested. If True, the traces run on NDIF when the model is remote and dispatch it otherwise. Defaults to True.
 
         Raises:
             RenamingError: If the attention probabilities are not properly configured or if the number of attention heads is not available.
@@ -665,10 +665,11 @@ class AttentionProbabilitiesAccessor:
                         raise RenamingError("Attention probabilities do not sum to 1.")
 
         if use_trace:
-            with self.model.trace(dummy_inputs()):
+            remote = self.model.remote
+            with self.model.trace(dummy_inputs(), remote=remote):
                 test_prob_source()
                 corr_logits = self.model.logits.save()
-            with self.model.trace(dummy_inputs()):
+            with self.model.trace(dummy_inputs(), remote=remote):
                 clean_logits = self.model.logits.save()
 
             if th.allclose(corr_logits, clean_logits):

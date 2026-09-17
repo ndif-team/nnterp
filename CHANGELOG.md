@@ -25,6 +25,16 @@
   the per-layer record, and `detect_layer_output_type()` records the layers not
   accessed yet.
 
+- **`remote=True` keeps the checkpoint off the client.** It sets
+  `allow_dispatch=False`, so every load-time check runs with `scan()` on the meta
+  model, and no request is sent to NDIF during construction: after
+  `StandardizedTransformer(name, remote=True, enable_attention_probs=True)`,
+  `model.dispatched` is `False` and the parameters are on the `meta` device.
+  `check_attn_probs_with_trace` defaults to `None`, meaning `True` for a local
+  model and `False` for a remote one (a shape check under `scan()`); passing
+  `check_attn_probs_with_trace=True` with `remote=True` runs the full check as
+  traces on NDIF.
+
 ### Fixes
 
 - **`attn_implementation="eager"` is accepted with `enable_attention_probs=True`.**

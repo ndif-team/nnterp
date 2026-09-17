@@ -33,6 +33,11 @@ Check what's happening:
 
    model.attention_probabilities.print_source()
 
+On hybrid models (Qwen3-Next, Qwen3.5, Qwen3.6), ``attention_probabilities[i]`` is
+only defined for ``i`` in ``model.attention_layers`` and raises a ``RenamingError``
+on a linear-attention (Gated DeltaNet) layer. The load-time validation and
+``print_source()`` use the first softmax-attention layer.
+
 Using nnterp's renaming with ``LanguageModel`` or ``NNsight`` classes
 ---------------------------------------------------------------------
 

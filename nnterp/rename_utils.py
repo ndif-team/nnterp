@@ -59,7 +59,9 @@ class RenameConfig:
     Parameters
     ----------
     attn_name : str or list of str, optional
-        Name(s) of the attention module to rename to 'self_attn'.
+        Name(s) of the softmax-attention module to rename to 'self_attn'. Linear
+        attention mixers (Gated DeltaNet in Qwen3-Next / Qwen3.5 hybrids) keep
+        their ``linear_attn`` name: the attention accessors are not defined on them.
 
     mlp_name : str or list of str, optional
         Name(s) of the MLP/feed-forward module to rename to 'mlp'.
@@ -236,8 +238,11 @@ ATTENTION_NAMES = [
     "self_attention",
     "attention",
     "norm_attn_norm",
-    "linear_attn",
 ]
+# Linear-attention mixers (Gated DeltaNet in Qwen3-Next / Qwen3.5 hybrids) are not
+# renamed: a block exposes exactly one of self_attn / linear_attn, and the
+# attention accessors are only defined on self_attn blocks.
+LINEAR_ATTENTION_NAME = "linear_attn"
 LAYER_NAMES = expand_path_with_model(
     [
         "h",
@@ -389,12 +394,41 @@ class IOType(Enum):
     OUTPUT = "output"
 
 
+def get_attention_layers(layers) -> tuple[list[int], list[int]]:
+    """Split the block indices of ``layers`` by attention kind, from the block
+    structure: softmax-attention blocks expose ``self_attn``, linear-attention
+    blocks expose ``linear_attn``. Returns ``(attention_layers, linear_attention_layers)``.
+    """
+    attention_layers = [
+        i for i, layer in enumerate(layers) if hasattr(layer, "self_attn")
+    ]
+    linear_attention_layers = [
+        i for i, layer in enumerate(layers) if hasattr(layer, LINEAR_ATTENTION_NAME)
+    ]
+    return attention_layers, linear_attention_layers
+
+
+def linear_attention_error(model, layer: int) -> RenamingError:
+    mixer = type(getattr(model.layers[layer], LINEAR_ATTENTION_NAME)._module).__name__
+    return RenamingError(
+        f"layer {layer} is a linear-attention layer ({mixer}); attentions/attention_probabilities "
+        f"are only defined on softmax-attention layers (model.attention_layers = {model.attention_layers})."
+    )
+
+
 class LayerAccessor:
     """I/O accessor that provides input/output access with setter.
 
-    If ``disabled_reason`` is set, any access raises a RenamingError with that
-    message (used when no module carries the accessor's semantics, e.g.
-    attentions_output on slow_but_exact BLOOM).
+    Tuple values are unwrapped per access: ``accessor[i]`` returns the first
+    element when the value at layer ``i`` is a tuple and the value itself
+    otherwise, and ``accessor[i] = value`` rebuilds the tuple around ``value``.
+    Nothing is inferred from one layer about another, so layers whose modules
+    return different structures can be accessed in any order.
+
+    Accessors rooted at ``self_attn`` raise a RenamingError on linear-attention
+    layers (see ``linear_attention_error``). If ``disabled_reason`` is set, any
+    access raises a RenamingError with that message (used when no module carries
+    the accessor's semantics, e.g. attentions_output on slow_but_exact BLOOM).
     """
 
     def __init__(
@@ -409,11 +443,19 @@ class LayerAccessor:
         self.attr_name = attr_name
         self.io_type = io_type
         self.disabled_reason = disabled_reason
-        self._detected_is_tuple: bool | None = None
+        self._is_tuple: dict[int, bool] = {}
+
+    @property
+    def is_attention(self) -> bool:
+        return (
+            self.attr_name is not None and self.attr_name.split(".")[0] == "self_attn"
+        )
 
     def get_module(self, layer: int) -> Envoy:
         if self.disabled_reason is not None:
             raise RenamingError(self.disabled_reason)
+        if self.is_attention and layer in self.model.linear_attention_layers:
+            raise linear_attention_error(self.model, layer)
         module = self.model.layers[layer]
         if self.attr_name is not None:
             for attr in self.attr_name.split("."):
@@ -431,21 +473,9 @@ class LayerAccessor:
         else:
             raise ValueError(f"Invalid io_type: {self.io_type}")
 
-        # Detect tuple status on first access
-        if self._detected_is_tuple is None:
-            self._detected_is_tuple = isinstance(target, tuple)
-        else:
-            # Validate consistency
-            if isinstance(target, tuple) != self._detected_is_tuple:
-                raise RenamingError(
-                    f"Inconsistent tuple types detected: layer {layer} has {'tuple' if isinstance(target, tuple) else 'non-tuple'} "
-                    f"but expected {'tuple' if self._detected_is_tuple else 'non-tuple'}"
-                )
-
-        if self._detected_is_tuple:
-            return target[0]
-        else:
-            return target
+        is_tuple = isinstance(target, tuple)
+        self._is_tuple[layer] = is_tuple
+        return target[0] if is_tuple else target
 
     def __setitem__(self, layer: int, value: TraceTensor):
         if self.io_type is None:
@@ -454,28 +484,25 @@ class LayerAccessor:
                 f"Cannot set the value of a module accessor. Did you mean {name}_input/output"
             )
         module = self.get_module(layer)
-
-        if self.io_type.value == "input":
-            if self._detected_is_tuple:
-                module.input = (value, *module.input[1:])
-            else:
-                module.input = value
+        is_input = self.io_type.value == "input"
+        current = module.input if is_input else module.output
+        is_tuple = isinstance(current, tuple)
+        self._is_tuple[layer] = is_tuple
+        replacement = (value, *current[1:]) if is_tuple else value
+        if is_input:
+            module.input = replacement
         else:
-            if self._detected_is_tuple:
-                module.output = (value, *module.output[1:])
-            else:
-                module.output = value
+            module.output = replacement
 
     def __call__(self, layer: int) -> TraceTensor | Envoy:
         return self[layer]
 
-    @property
-    def returns_tuple(self) -> bool | None:
+    def returns_tuple(self, layer: int) -> bool | None:
         """
-        Returns whether the layer output is a tuple.
-        Returns None if the tuple status has not been detected yet.
+        Returns whether the value at ``layer`` is a tuple, as recorded by the last
+        access to that layer. Returns None if the layer has not been accessed yet.
         """
-        return self._detected_is_tuple
+        return self._is_tuple.get(layer)
 
 
 def bloom_attention_prob_source(attention_module, return_module_source: bool = False):
@@ -568,16 +595,24 @@ class AttentionProbabilitiesAccessor:
                     "Set enable_attention_probs=True when loading the model to enable them."
                 )
 
+    def _attention_module(self, layer: int) -> Envoy:
+        if layer in self.model.linear_attention_layers:
+            raise linear_attention_error(self.model, layer)
+        return self.model.layers[layer].self_attn
+
     def __getitem__(self, layer: int) -> TraceTensor:
         self._check_enabled()
-        return self.source_attr(self.model.layers[layer].self_attn).output
+        return self.source_attr(self._attention_module(layer)).output
 
     def __setitem__(self, layer: int, value: TraceTensor):
         self._check_enabled()
-        self.source_attr(self.model.layers[layer].self_attn).output = value
+        self.source_attr(self._attention_module(layer)).output = value
 
     def check_source(
-        self, layer: int = 0, allow_dispatch: bool = True, use_trace: bool = True
+        self,
+        layer: int | None = None,
+        allow_dispatch: bool = True,
+        use_trace: bool = True,
     ):
         """
         Check that the attention probabilities source is correctly configured.
@@ -588,9 +623,10 @@ class AttentionProbabilitiesAccessor:
         3. Modifying the probabilities affects the model's output logits
 
         Args:
-            layer (int, optional): The layer index to check. Defaults to 0.
+            layer (int, optional): The layer index to check. Defaults to the first
+                softmax-attention layer (``model.attention_layers[0]``).
             allow_dispatch (bool, optional): If True, allows dispatching the model when scan fails.
-            use_trace (bool, optional): If False, uses scan() to validate the attention probabilities, which means attention probabilities summing to 1 and causal effect of modifying them won't be tested. Defaults to True.
+            use_trace (bool, optional): If False, uses scan() to validate the attention probabilities, which means attention probabilities summing to 1 and causal effect of modifying them won't be tested. If True, the traces run on NDIF when the model is remote and dispatch it otherwise. Defaults to True.
 
         Raises:
             RenamingError: If the attention probabilities are not properly configured or if the number of attention heads is not available.
@@ -600,6 +636,8 @@ class AttentionProbabilitiesAccessor:
                 f"Can't check the shapes of the model internals because the number of attention heads is not available in {self.model.repo_id} architecture."
                 "You should pass the number of attention heads as an integer or look at the config and pass the key in the attn_head_config_key argument of a RenameConfig."
             )
+        if layer is None:
+            layer = self.model.attention_layers[0]
 
         def test_prob_source():
             batch_size, seq_len = self.model.input_size
@@ -627,10 +665,11 @@ class AttentionProbabilitiesAccessor:
                         raise RenamingError("Attention probabilities do not sum to 1.")
 
         if use_trace:
-            with self.model.trace(dummy_inputs()):
+            remote = self.model.remote
+            with self.model.trace(dummy_inputs(), remote=remote):
                 test_prob_source()
                 corr_logits = self.model.logits.save()
-            with self.model.trace(dummy_inputs()):
+            with self.model.trace(dummy_inputs(), remote=remote):
                 clean_logits = self.model.logits.save()
 
             if th.allclose(corr_logits, clean_logits):
@@ -649,7 +688,9 @@ class AttentionProbabilitiesAccessor:
             errors_to_raise=(RenamingError,),
         )
 
-    def print_source(self, layer: int = 0, allow_dispatch: bool = True):
+    def print_source(self, layer: int | None = None, allow_dispatch: bool = True):
+        if layer is None:
+            layer = self.model.attention_layers[0]
         in_notebook = is_notebook()
         if in_notebook:
             markdown_text = "## Accessing attention probabilities from:\n"
@@ -658,7 +699,7 @@ class AttentionProbabilitiesAccessor:
 
         def print_hook_source():
             nonlocal markdown_text
-            source = self.source_attr(self.model.layers[layer].self_attn)
+            source = self.source_attr(self._attention_module(layer))
             if in_notebook:
                 markdown_text += f"```py\n{source}\n```"
             else:
@@ -681,7 +722,7 @@ class AttentionProbabilitiesAccessor:
             nonlocal markdown_text
             source = str(
                 self.source_attr(
-                    self.model.layers[layer].self_attn, return_module_source=True
+                    self._attention_module(layer), return_module_source=True
                 )
             )
             if in_notebook:
@@ -745,6 +786,11 @@ def _check_tensor(tensor, name: str, expected_shape: tuple, model_name: str):
 def check_io(std_model, model_name: str, ignores: list[IgnoreType]):
     """Validate that standardized accessors return tensors with consistent shapes.
 
+    Every layer output is read in forward order (which also records, for
+    ``skip_layers``, whether each layer returns a tuple); the attention and MLP
+    probes run on the first softmax-attention layer, since the attention
+    accessors are not defined on the linear-attention layers of a hybrid.
+
     Handles both HF models (``input_size = (batch, seq)``) and vLLM models
     (``input_size = (seq,)``). Shape expectations adapt via ``(*input_size, dim)``.
 
@@ -759,6 +805,7 @@ def check_io(std_model, model_name: str, ignores: list[IgnoreType]):
             "You should pass the hidden size as an integer or look at the config and pass the key in the hidden_size_config_key argument of a RenameConfig."
         )
     expected_hidden = (*input_size, hidden_size)
+    probe = std_model.attention_layers[0] if std_model.attention_layers else 0
 
     _check_tensor(
         std_model.token_embeddings, "token_embeddings", expected_hidden, model_name
@@ -767,44 +814,48 @@ def check_io(std_model, model_name: str, ignores: list[IgnoreType]):
         std_model.layers_input[0], "layers_input[0]", expected_hidden, model_name
     )
 
-    if "attention" not in ignores:
-        _check_tensor(
-            std_model.attentions_input[0],
-            "attentions_input[0]",
-            expected_hidden,
-            model_name,
-        )
-        _check_tensor(
-            std_model.attentions_output[0],
-            "attentions_output[0]",
-            expected_hidden,
-            model_name,
-        )
+    for layer in range(std_model.num_layers):
+        if layer == probe and "attention" not in ignores:
+            _check_tensor(
+                std_model.attentions_input[layer],
+                f"attentions_input[{layer}]",
+                expected_hidden,
+                model_name,
+            )
+            _check_tensor(
+                std_model.attentions_output[layer],
+                f"attentions_output[{layer}]",
+                expected_hidden,
+                model_name,
+            )
+        if layer == probe and "mlp" not in ignores:
+            _check_tensor(
+                std_model.mlps_input[layer],
+                f"mlps_input[{layer}]",
+                expected_hidden,
+                model_name,
+            )
+            mlp_out = std_model.mlps_output[layer]
+            _check_tensor(mlp_out, f"mlps_output[{layer}]", expected_hidden, model_name)
 
-    if "mlp" not in ignores:
-        _check_tensor(
-            std_model.mlps_input[0], "mlps_input[0]", expected_hidden, model_name
-        )
-        mlp_out = std_model.mlps_output[0]
-        _check_tensor(mlp_out, "mlps_output[0]", expected_hidden, model_name)
-
-    layer_out = std_model.layers_output[0]
-    _check_tensor(layer_out, "layers_output[0]", expected_hidden, model_name)
-    # Value-based residual-semantics check (issue #51), only when the tensors hold
-    # real values (i.e. not during a scan on fake/meta tensors).
-    if (
-        "mlp" not in ignores
-        and layer_out.device != th.device("meta")
-        and th.allclose(mlp_out, layer_out)
-    ):
-        raise RenamingError(
-            f"mlps_output[0] is identical to layers_output[0] in {model_name} architecture. "
-            "This means the MLP module adds the residual stream to its output inside the module, "
-            "so mlps_output returns residual-stream states instead of the additive MLP "
-            "contribution (see https://github.com/ndif-team/nnterp/issues/51). Pass "
-            "RenameConfig(mlp_output_source='<path.to.submodule>') pointing to the submodule "
-            "whose output is the additive contribution (e.g. 'mlp.dense_4h_to_h' for BLOOM)."
-        )
+        layer_out = std_model.layers_output[layer]
+        _check_tensor(layer_out, f"layers_output[{layer}]", expected_hidden, model_name)
+        # Value-based residual-semantics check (issue #51), only when the tensors hold
+        # real values (i.e. not during a scan on fake/meta tensors).
+        if (
+            layer == probe
+            and "mlp" not in ignores
+            and layer_out.device != th.device("meta")
+            and th.allclose(mlp_out, layer_out)
+        ):
+            raise RenamingError(
+                f"mlps_output[{layer}] is identical to layers_output[{layer}] in {model_name} architecture. "
+                "This means the MLP module adds the residual stream to its output inside the module, "
+                "so mlps_output returns residual-stream states instead of the additive MLP "
+                "contribution (see https://github.com/ndif-team/nnterp/issues/51). Pass "
+                "RenameConfig(mlp_output_source='<path.to.submodule>') pointing to the submodule "
+                "whose output is the additive contribution (e.g. 'mlp.dense_4h_to_h' for BLOOM)."
+            )
     _check_tensor(
         std_model.ln_final.output, "ln_final.output", expected_hidden, model_name
     )
@@ -844,9 +895,57 @@ def _check_has_module(obj, attr: str, model_name: str, rename_arg: str):
         )
 
 
-def _warn_heterogeneous_types(accessor, num_layers: int, kind: str, model_name: str):
-    """Warn if modules accessed by ``accessor[i]`` have mixed types across layers."""
-    types = {type(accessor[i]._module) for i in range(num_layers)}
+def _check_attention_layers(std_model, model_name: str):
+    """Check that every block exposes exactly one of ``self_attn`` / ``linear_attn``,
+    that at least one block is softmax attention, and that the config's
+    ``layer_types`` (when present) agrees with the block structure."""
+    attention_layers = std_model.attention_layers
+    linear_layers = std_model.linear_attention_layers
+    if not attention_layers:
+        raise RenamingError(
+            f"Could not find a self_attn module in any layer of {model_name} architecture. "
+            "This means that it was not properly renamed.\n"
+            "Please pass the name of the self_attn module to the attn_rename argument."
+        )
+    both = sorted(set(attention_layers) & set(linear_layers))
+    neither = [
+        i
+        for i in range(std_model.num_layers)
+        if i not in attention_layers and i not in linear_layers
+    ]
+    if both or neither:
+        raise RenamingError(
+            f"Every layer must expose exactly one of self_attn / {LINEAR_ATTENTION_NAME} in "
+            f"{model_name} architecture: layers {both} expose both, layers {neither} expose "
+            "neither. This means the attention modules were not properly renamed.\n"
+            "Please pass the name of the self_attn module to the attn_rename argument."
+        )
+    cfg = text_config(std_model._module)
+    if "layer_types" in cfg:
+        config_linear = [
+            i for i, t in enumerate(cfg.layer_types) if t == "linear_attention"
+        ]
+        if config_linear != linear_layers:
+            raise RenamingError(
+                f"config.layer_types marks layers {config_linear} as linear_attention, but the "
+                f"layers with a {LINEAR_ATTENTION_NAME} module are {linear_layers} in {model_name} "
+                "architecture."
+            )
+    if linear_layers:
+        mixer = type(
+            getattr(std_model.layers[linear_layers[0]], LINEAR_ATTENTION_NAME)._module
+        ).__name__
+        logger.info(
+            f"Model {model_name} is a hybrid: layers {linear_layers} use linear attention "
+            f"({mixer}) and layers {attention_layers} use softmax attention. attentions[i], "
+            "attentions_input[i], attentions_output[i] and attention_probabilities[i] are only "
+            "defined on the softmax-attention layers (model.attention_layers)."
+        )
+
+
+def _warn_heterogeneous_types(accessor, layers: list[int], kind: str, model_name: str):
+    """Warn if modules accessed by ``accessor[i]`` have mixed types across ``layers``."""
+    types = {type(accessor[i]._module) for i in layers}
     if len(types) > 1:
         type_names = ", ".join(sorted(t.__name__ for t in types))
         logger.warning(
@@ -858,11 +957,12 @@ def _warn_heterogeneous_types(accessor, num_layers: int, kind: str, model_name: 
 def _check_output_source(
     std_model,
     kind: IgnoreType,
+    layer: int,
     model_name: str,
     rename_config: RenameConfig | None = None,
 ):
     """Check that attentions_output / mlps_output expose the additive sublayer
-    contribution, not a residual-added state (issue #51).
+    contribution, not a residual-added state (issue #51), on ``layer``.
 
     If the sublayer module takes a residual-like argument in its forward pass, it
     most likely adds the residual to its output inside the module (BLOOM, MPT), so
@@ -884,11 +984,11 @@ def _check_output_source(
             "mlp_output_source",
         )
     try:
-        module = accessor.get_module(0)._module
+        module = accessor.get_module(layer)._module
     except AttributeError as e:
         raise RenamingError(
             f"The configured {config_field}='{accessor.attr_name}' does not resolve to a module "
-            f"of layer 0 in {model_name} architecture."
+            f"of layer {layer} in {model_name} architecture."
         ) from e
     explicitly_configured = (
         rename_config is not None and getattr(rename_config, config_field) is not None
@@ -941,18 +1041,24 @@ def check_model_renaming(
     _check_has_module(std_model, "lm_head", model_name, "lm_head_rename")
 
     if "attention" not in ignores:
-        _check_has_module(std_model.layers[0], "self_attn", model_name, "attn_rename")
+        _check_attention_layers(std_model, model_name)
         _warn_heterogeneous_types(
-            std_model.attentions, std_model.num_layers, "attention", model_name
+            std_model.attentions, std_model.attention_layers, "attention", model_name
         )
-        _check_output_source(std_model, "attention", model_name, rename_config)
+        _check_output_source(
+            std_model,
+            "attention",
+            std_model.attention_layers[0],
+            model_name,
+            rename_config,
+        )
 
     if "mlp" not in ignores:
         _check_has_module(std_model.layers[0], "mlp", model_name, "mlp_rename")
         _warn_heterogeneous_types(
-            std_model.mlps, std_model.num_layers, "MLP", model_name
+            std_model.mlps, list(range(std_model.num_layers)), "MLP", model_name
         )
-        _check_output_source(std_model, "mlp", model_name, rename_config)
+        _check_output_source(std_model, "mlp", 0, model_name, rename_config)
 
     try_with_scan(
         std_model,

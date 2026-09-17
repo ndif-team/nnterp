@@ -2,7 +2,45 @@
 
 ## Unreleased
 
+### New Features
+
+- **Hybrid linear/softmax attention models (Qwen3-Next, Qwen3.5, Qwen3.6).** A
+  Gated DeltaNet mixer keeps its `linear_attn` name instead of being renamed to
+  `self_attn`, so every block exposes exactly one of `layers[i].self_attn` /
+  `layers[i].linear_attn`. `model.attention_layers` and
+  `model.linear_attention_layers` list the two kinds of blocks, computed from the
+  block structure at load and cross-checked against the config's `layer_types`.
+  `attentions[i]`, `attentions_input[i]`, `attentions_output[i]` and
+  `attention_probabilities[i]` raise a `RenamingError` on a linear-attention
+  layer; the renaming checks, the attention-probability validation and
+  `attention_probabilities.print_source()` use the first softmax-attention layer.
+
+### Changes
+
+- **Per-layer tuple detection in the accessors.** `layers_output[i]` and the
+  other I/O accessors unwrap a tuple per access instead of assuming every layer
+  returns the same structure, so layers can be accessed in any order.
+  `LayerAccessor.returns_tuple(layer)` replaces the `returns_tuple` property; the
+  renaming checks read every layer output in forward order, `skip_layers` uses
+  the per-layer record, and `detect_layer_output_type()` records the layers not
+  accessed yet.
+
+- **`remote=True` keeps the checkpoint off the client.** It sets
+  `allow_dispatch=False`, so every load-time check runs with `scan()` on the meta
+  model, and no request is sent to NDIF during construction: after
+  `StandardizedTransformer(name, remote=True, enable_attention_probs=True)`,
+  `model.dispatched` is `False` and the parameters are on the `meta` device.
+  `check_attn_probs_with_trace` defaults to `None`, meaning `True` for a local
+  model and `False` for a remote one (a shape check under `scan()`); passing
+  `check_attn_probs_with_trace=True` with `remote=True` runs the full check as
+  traces on NDIF.
+
 ### Fixes
+
+- **`attn_implementation="eager"` is accepted with `enable_attention_probs=True`.**
+  `StandardizedTransformer(name, enable_attention_probs=True,
+  attn_implementation="eager")` loads, and the keyword reaches the model once. A
+  non-eager value raises the `ValueError` naming the conflict.
 
 - **Attention probabilities work again on transformers >= 5.** GPT-2's
   `eager_attention_forward` changed from `module.attn_dropout(attn_weights)` to

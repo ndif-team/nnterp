@@ -33,6 +33,7 @@ In addition to these renamed modules, ``nnterp`` provides convenient accessors:
 - ``attentions_input[i]``, ``attentions_output[i]``: Attention input/output at layer i
 - ``mlps[i]``: MLP module at layer i
 - ``mlps_input[i]``, ``mlps_output[i]``: MLP input/output at layer i
+- ``attention_layers``, ``linear_attention_layers``: indices of the blocks with a softmax ``self_attn`` and of the blocks with a ``linear_attn`` mixer (Qwen3-Next / Qwen3.5 hybrids). A linear mixer is not renamed, and the attention accessors are only defined on ``attention_layers``
 
 Basic RenameConfig Usage
 ------------------------

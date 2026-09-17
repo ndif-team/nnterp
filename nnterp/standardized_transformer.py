@@ -20,6 +20,7 @@ from .rename_utils import (
     AttentionProbabilitiesAccessor,
     RenameConfig,
     get_rename_dict,
+    get_attention_layers,
     get_ignores,
     get_output_sources,
     check_model_renaming,
@@ -45,6 +46,11 @@ class StandardizationMixin:
     - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i
     - mlps[i]: Get MLP module at layer i
     - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
+    - attention_layers / linear_attention_layers: Indices of the softmax-attention
+      blocks (``layers[i].self_attn``) and of the linear-attention blocks
+      (``layers[i].linear_attn``, Gated DeltaNet in Qwen3-Next / Qwen3.5 hybrids).
+      The attention accessors and attention_probabilities are only defined on
+      the former and raise a RenamingError on the latter.
 
     attentions_output[i] / mlps_output[i] never include the residual stream: on
     architectures that add the residual inside the attention/MLP module (BLOOM,
@@ -58,18 +64,26 @@ class StandardizationMixin:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
-        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp
-            for NDIF remote execution via cloudpickle serialization.
+        remote (bool, default False): If True, registers nnterp for NDIF remote execution via
+            cloudpickle serialization and keeps the checkpoint off the client: allow_dispatch
+            is set to False and every load-time check runs with scan() on the meta model.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
-            tracing by setting attn_implementation="eager". Defaults to False.
-        check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
+            tracing by setting attn_implementation="eager" (passing attn_implementation="eager"
+            yourself is accepted, any other value raises). Defaults to False.
+        check_attn_probs_with_trace (bool, default None): If True, the attention probabilities are
+            validated with a trace, which tests that they sum to 1 and that editing them changes
+            the logits. The trace dispatches the model, or runs on NDIF when remote=True. If False,
+            they are validated with scan() (shape only). Defaults to True, and to False when
+            remote=True.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
     """
 
     num_layers: int
+    attention_layers: list[int]
+    linear_attention_layers: list[int]
     num_heads: int
     hidden_size: int
     vocab_size: int
@@ -83,14 +97,19 @@ class StandardizationMixin:
         remote: bool = False,
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
-        check_attn_probs_with_trace: bool = True,
+        check_attn_probs_with_trace: bool | None = None,
         allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
     ):
         """Initialize standardization after the base model has been initialized."""
         self.remote = remote
         if remote:
+            # The checkpoint lives on NDIF: validate on the meta model with scan()
+            # and never dispatch it on the client.
             ndif_register("nnterp")
+            allow_dispatch = False
+        if check_attn_probs_with_trace is None:
+            check_attn_probs_with_trace = not remote
         if isinstance(model, str):
             model_name = model
         else:
@@ -133,6 +152,12 @@ class StandardizationMixin:
         self.mlps_output = output_accessor(mlp_output_source, "mlps_output", "mlp")
 
         self.num_layers = len(self.layers)
+        # From the block structure: a softmax-attention block exposes self_attn, a
+        # linear-attention block keeps linear_attn (check_model_renaming verifies
+        # that every block exposes exactly one and cross-checks config.layer_types).
+        self.attention_layers, self.linear_attention_layers = get_attention_layers(
+            self.layers
+        )
         self.num_heads = get_num_attention_heads(
             self._module, raise_error=False, rename_config=rename_config
         )
@@ -190,34 +215,41 @@ class StandardizationMixin:
         Returns (attn_implementation, rename, kwargs) ready to pass to super().__init__.
         """
         kwargs.setdefault("device_map", "auto")
-        if "attn_implementation" in kwargs and enable_attention_probs:
-            if kwargs["attn_implementation"] != "eager":
+        attn_implementation = kwargs.pop("attn_implementation", None)
+        if enable_attention_probs:
+            if attn_implementation not in (None, "eager"):
                 raise ValueError(
-                    f"Cannot use attn_implementation='{kwargs['attn_implementation']}' with enable_attention_probs=True. "
+                    f"Cannot use attn_implementation='{attn_implementation}' with enable_attention_probs=True. "
                     "Either set enable_attention_probs=False or don't pass attn_implementation."
                 )
-        attn_implementation = (
-            "eager"
-            if enable_attention_probs
-            else kwargs.pop("attn_implementation", None)
-        )
+            attn_implementation = "eager"
         rename = self._get_rename(
             rename_config=rename_config, user_rename=kwargs.pop("rename", None)
         )
         return attn_implementation, rename, kwargs
 
     def detect_layer_output_type(self):
-        if self.layers_output.returns_tuple is None:
+        """Record, for every layer, whether its output is a tuple (``skip_layers``
+        needs it). Already done by the renaming checks; only runs the layers that
+        have not been accessed yet."""
+        missing = [
+            layer
+            for layer in range(self.num_layers)
+            if self.layers_output.returns_tuple(layer) is None
+        ]
+        if missing:
 
-            def test_layer_0():
-                _ = self.layers_output[0]
+            def read_layer_outputs():
+                for layer in missing:
+                    _ = self.layers_output[layer]
 
             try_with_scan(
                 self,
-                test_layer_0,
+                read_layer_outputs,
                 RenamingError(
                     "Unable to access layer outputs. This may indicate an unsupported model architecture."
                 ),
+                allow_dispatch=True,
                 warn_if_scan_fails=False,
             )
 
@@ -307,24 +339,26 @@ class StandardizationMixin:
             start_layer: The layer to start skipping from
             end_layer: The layer to stop skipping at (inclusive)
             skip_with: The tensor to skip the layers with, will be passed as the output of the layers. If None, the input of start_layer is used.
-            layer_returns_tuple: Whether the layer output is a tuple. Doesn't need to be provided if the model's renaming has been validated or if you ran model.detect_layer_output_type() already.
+            layer_returns_tuple: Whether the layer outputs are tuples. Doesn't need to be provided if the model's renaming has been validated or if you ran model.detect_layer_output_type() already, in which case it is known per layer.
         """
-        if layer_returns_tuple is None:
-            layer_returns_tuple = self.layers_output.returns_tuple
-        if layer_returns_tuple is None:
-            raise ValueError(
-                "Please run `model.detect_layer_output_type()` before skipping layers or provide the layer_returns_tuple argument."
-            )
         if skip_with is None:
             skip_with = self.layers_input[start_layer]
-        if layer_returns_tuple and not isinstance(skip_with, tuple):
-            skip_with = (skip_with, DummyCache())
-        elif not layer_returns_tuple and isinstance(skip_with, tuple):
-            raise ValueError(
-                "Skipping layer with a tuple while the layer output is not a tuple. This may cause unexpected behavior."
-            )
         for layer in range(start_layer, end_layer + 1):
-            self.layers[layer].skip(skip_with)
+            returns_tuple = layer_returns_tuple
+            if returns_tuple is None:
+                returns_tuple = self.layers_output.returns_tuple(layer)
+            if returns_tuple is None:
+                raise ValueError(
+                    f"Please run `model.detect_layer_output_type()` before skipping layer {layer} or provide the layer_returns_tuple argument."
+                )
+            replacement = skip_with
+            if returns_tuple and not isinstance(skip_with, tuple):
+                replacement = (skip_with, DummyCache())
+            elif not returns_tuple and isinstance(skip_with, tuple):
+                raise ValueError(
+                    f"Skipping layer {layer} with a tuple while its output is not a tuple. This may cause unexpected behavior."
+                )
+            self.layers[layer].skip(replacement)
 
     def steer(
         self,
@@ -475,6 +509,8 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
     The following properties are also available:
 
     - num_layers: int
+    - attention_layers: list[int] (blocks with a softmax ``self_attn``)
+    - linear_attention_layers: list[int] (blocks with a ``linear_attn`` mixer, e.g. Qwen3-Next / Qwen3.5 hybrids)
     - num_heads: int
     - hidden_size: int
     - vocab_size: int
@@ -491,6 +527,12 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
     - mlps[i]: Get MLP module at layer i
     - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
 
+    On hybrid models mixing linear attention (Gated DeltaNet) and softmax attention
+    blocks, the attention accessors and attention_probabilities are only defined on
+    the softmax-attention layers (``attention_layers``) and raise a RenamingError
+    on the others (``linear_attention_layers``), whose mixer stays at
+    ``layers[i].linear_attn``.
+
     attentions_output[i] / mlps_output[i] never include the residual stream: on
     architectures that add the residual inside the attention/MLP module (BLOOM,
     MPT, DBRX), they target the last pre-residual submodule instead of the module
@@ -503,14 +545,20 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
-        remote (bool, default False): If True, sets allow_dispatch=False and registers nnterp
-            for NDIF remote execution via cloudpickle serialization.
+        remote (bool, default False): If True, registers nnterp for NDIF remote execution via
+            cloudpickle serialization and keeps the checkpoint off the client: allow_dispatch
+            is set to False and every load-time check runs with scan() on the meta model.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
-            tracing by setting attn_implementation="eager". Defaults to False.
-        check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
+            tracing by setting attn_implementation="eager" (passing attn_implementation="eager"
+            yourself is accepted, any other value raises). Defaults to False.
+        check_attn_probs_with_trace (bool, default None): If True, the attention probabilities are
+            validated with a trace, which tests that they sum to 1 and that editing them changes
+            the logits. The trace dispatches the model, or runs on NDIF when remote=True. If False,
+            they are validated with scan() (shape only). Defaults to True, and to False when
+            remote=True.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
         text_only (bool, default False): If True and the checkpoint registers a separate text-only
             causal LM class next to its multimodal one (e.g. Mllama, Llama-4, Qwen3.5), load only that
@@ -527,7 +575,7 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
         remote: bool = False,
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
-        check_attn_probs_with_trace: bool = True,
+        check_attn_probs_with_trace: bool | None = None,
         rename_config: RenameConfig | None = None,
         automodel=None,
         text_only: bool = False,
@@ -593,12 +641,15 @@ class StandardizedVLM(TransformersModel, StandardizationMixin):
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
-        remote (bool, default False): If True, registers nnterp for NDIF remote execution.
+        remote (bool, default False): If True, registers nnterp for NDIF remote execution and
+            keeps the checkpoint off the client (allow_dispatch=False, checks run with scan()).
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
-            when scan() fails during renaming checks.
+            when scan() fails during renaming checks. Set to False when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
             tracing by setting attn_implementation="eager".
-        check_attn_probs_with_trace (bool, default True): If True, validates attention probabilities.
+        check_attn_probs_with_trace (bool, default None): If True, validates attention
+            probabilities with a trace (on NDIF when remote=True), otherwise with scan().
+            Defaults to True, and to False when remote=True.
         allow_multimodal (bool, default False): Whether to allow heterogeneous layer types
             (e.g. cross-attention layers in Mllama). These layers only activate with image
             inputs, so text-only tracing will fail on them.
@@ -617,7 +668,7 @@ class StandardizedVLM(TransformersModel, StandardizationMixin):
         remote: bool = False,
         allow_dispatch: bool = True,
         enable_attention_probs: bool = False,
-        check_attn_probs_with_trace: bool = True,
+        check_attn_probs_with_trace: bool | None = None,
         allow_multimodal: bool = False,
         rename_config: RenameConfig | None = None,
         tokenizer_kwargs: dict | None = None,

@@ -11,9 +11,9 @@ Automatic Testing System
 
 When loading a ``StandardizedTransformer``, ``nnterp`` automatically runs tests to ensure:
 
-- **Model renaming correctness**: All modules are properly renamed to the standardized interface
-- **Module output shapes**: Layer outputs have expected shapes (batch_size, seq_len, hidden_size)
-- **Attention probabilities**: If enabled, attention probabilities have correct shape (batch_size, num_heads, seq_len, seq_len), sum to 1 for each token, and modifying them changes model output
+- **Model renaming correctness**: All modules are properly renamed to the standardized interface. Every block exposes exactly one of ``self_attn`` / ``linear_attn``, and the split matches the config's ``layer_types`` when it has one
+- **Module output shapes**: Every layer output has the expected shape (batch_size, seq_len, hidden_size); the attention and MLP inputs/outputs are checked on the first softmax-attention layer (``model.attention_layers[0]``, layer 0 outside hybrid models)
+- **Attention probabilities**: If enabled, attention probabilities on the first softmax-attention layer have correct shape (batch_size, num_heads, seq_len, seq_len), sum to 1 for each token, and modifying them changes model output
 
 .. code-block:: python
 
@@ -35,6 +35,7 @@ What ``nnterp`` Guarantees
 - All models follow the standardized naming convention
 - ``model.layers_output[i]`` returns tensors with expected shapes
 - ``model.attention_probabilities[i]`` (if enabled) returns properly normalized attention matrices
+- ``model.attentions[i]``, ``model.attentions_input[i]``, ``model.attentions_output[i]`` and ``model.attention_probabilities[i]`` raise a ``RenamingError`` on a linear-attention layer of a hybrid model (``i`` in ``model.linear_attention_layers``) instead of returning the DeltaNet mixer's values
 - ``model.attentions_output[i]`` / ``model.mlps_output[i]`` never include the residual stream. Architectures that add it inside the attention/MLP module (BLOOM, MPT, DBRX) are remapped to the pre-residual submodule, unknown ones are rejected at load (see :doc:`adding-model-support`)
 
 What ``nnterp`` Cannot Guarantee

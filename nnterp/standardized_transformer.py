@@ -20,6 +20,7 @@ from .rename_utils import (
     AttentionProbabilitiesAccessor,
     RenameConfig,
     get_rename_dict,
+    get_attention_layers,
     get_ignores,
     get_output_sources,
     check_model_renaming,
@@ -45,6 +46,11 @@ class StandardizationMixin:
     - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i
     - mlps[i]: Get MLP module at layer i
     - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
+    - attention_layers / linear_attention_layers: Indices of the softmax-attention
+      blocks (``layers[i].self_attn``) and of the linear-attention blocks
+      (``layers[i].linear_attn``, Gated DeltaNet in Qwen3-Next / Qwen3.5 hybrids).
+      The attention accessors and attention_probabilities are only defined on
+      the former and raise a RenamingError on the latter.
 
     attentions_output[i] / mlps_output[i] never include the residual stream: on
     architectures that add the residual inside the attention/MLP module (BLOOM,
@@ -70,6 +76,8 @@ class StandardizationMixin:
     """
 
     num_layers: int
+    attention_layers: list[int]
+    linear_attention_layers: list[int]
     num_heads: int
     hidden_size: int
     vocab_size: int
@@ -133,6 +141,12 @@ class StandardizationMixin:
         self.mlps_output = output_accessor(mlp_output_source, "mlps_output", "mlp")
 
         self.num_layers = len(self.layers)
+        # From the block structure: a softmax-attention block exposes self_attn, a
+        # linear-attention block keeps linear_attn (check_model_renaming verifies
+        # that every block exposes exactly one and cross-checks config.layer_types).
+        self.attention_layers, self.linear_attention_layers = get_attention_layers(
+            self.layers
+        )
         self.num_heads = get_num_attention_heads(
             self._module, raise_error=False, rename_config=rename_config
         )
@@ -207,17 +221,27 @@ class StandardizationMixin:
         return attn_implementation, rename, kwargs
 
     def detect_layer_output_type(self):
-        if self.layers_output.returns_tuple is None:
+        """Record, for every layer, whether its output is a tuple (``skip_layers``
+        needs it). Already done by the renaming checks; only runs the layers that
+        have not been accessed yet."""
+        missing = [
+            layer
+            for layer in range(self.num_layers)
+            if self.layers_output.returns_tuple(layer) is None
+        ]
+        if missing:
 
-            def test_layer_0():
-                _ = self.layers_output[0]
+            def read_layer_outputs():
+                for layer in missing:
+                    _ = self.layers_output[layer]
 
             try_with_scan(
                 self,
-                test_layer_0,
+                read_layer_outputs,
                 RenamingError(
                     "Unable to access layer outputs. This may indicate an unsupported model architecture."
                 ),
+                allow_dispatch=True,
                 warn_if_scan_fails=False,
             )
 
@@ -307,24 +331,26 @@ class StandardizationMixin:
             start_layer: The layer to start skipping from
             end_layer: The layer to stop skipping at (inclusive)
             skip_with: The tensor to skip the layers with, will be passed as the output of the layers. If None, the input of start_layer is used.
-            layer_returns_tuple: Whether the layer output is a tuple. Doesn't need to be provided if the model's renaming has been validated or if you ran model.detect_layer_output_type() already.
+            layer_returns_tuple: Whether the layer outputs are tuples. Doesn't need to be provided if the model's renaming has been validated or if you ran model.detect_layer_output_type() already, in which case it is known per layer.
         """
-        if layer_returns_tuple is None:
-            layer_returns_tuple = self.layers_output.returns_tuple
-        if layer_returns_tuple is None:
-            raise ValueError(
-                "Please run `model.detect_layer_output_type()` before skipping layers or provide the layer_returns_tuple argument."
-            )
         if skip_with is None:
             skip_with = self.layers_input[start_layer]
-        if layer_returns_tuple and not isinstance(skip_with, tuple):
-            skip_with = (skip_with, DummyCache())
-        elif not layer_returns_tuple and isinstance(skip_with, tuple):
-            raise ValueError(
-                "Skipping layer with a tuple while the layer output is not a tuple. This may cause unexpected behavior."
-            )
         for layer in range(start_layer, end_layer + 1):
-            self.layers[layer].skip(skip_with)
+            returns_tuple = layer_returns_tuple
+            if returns_tuple is None:
+                returns_tuple = self.layers_output.returns_tuple(layer)
+            if returns_tuple is None:
+                raise ValueError(
+                    f"Please run `model.detect_layer_output_type()` before skipping layer {layer} or provide the layer_returns_tuple argument."
+                )
+            replacement = skip_with
+            if returns_tuple and not isinstance(skip_with, tuple):
+                replacement = (skip_with, DummyCache())
+            elif not returns_tuple and isinstance(skip_with, tuple):
+                raise ValueError(
+                    f"Skipping layer {layer} with a tuple while its output is not a tuple. This may cause unexpected behavior."
+                )
+            self.layers[layer].skip(replacement)
 
     def steer(
         self,
@@ -475,6 +501,8 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
     The following properties are also available:
 
     - num_layers: int
+    - attention_layers: list[int] (blocks with a softmax ``self_attn``)
+    - linear_attention_layers: list[int] (blocks with a ``linear_attn`` mixer, e.g. Qwen3-Next / Qwen3.5 hybrids)
     - num_heads: int
     - hidden_size: int
     - vocab_size: int
@@ -490,6 +518,12 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
     - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i
     - mlps[i]: Get MLP module at layer i
     - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
+
+    On hybrid models mixing linear attention (Gated DeltaNet) and softmax attention
+    blocks, the attention accessors and attention_probabilities are only defined on
+    the softmax-attention layers (``attention_layers``) and raise a RenamingError
+    on the others (``linear_attention_layers``), whose mixer stays at
+    ``layers[i].linear_attn``.
 
     attentions_output[i] / mlps_output[i] never include the residual stream: on
     architectures that add the residual inside the attention/MLP module (BLOOM,

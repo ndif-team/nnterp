@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### New Features
+
+- **Hybrid linear/softmax attention models (Qwen3-Next, Qwen3.5, Qwen3.6).** A
+  Gated DeltaNet mixer keeps its `linear_attn` name instead of being renamed to
+  `self_attn`, so every block exposes exactly one of `layers[i].self_attn` /
+  `layers[i].linear_attn`. `model.attention_layers` and
+  `model.linear_attention_layers` list the two kinds of blocks, computed from the
+  block structure at load and cross-checked against the config's `layer_types`.
+  `attentions[i]`, `attentions_input[i]`, `attentions_output[i]` and
+  `attention_probabilities[i]` raise a `RenamingError` on a linear-attention
+  layer; the renaming checks, the attention-probability validation and
+  `attention_probabilities.print_source()` use the first softmax-attention layer.
+
+### Changes
+
+- **Per-layer tuple detection in the accessors.** `layers_output[i]` and the
+  other I/O accessors unwrap a tuple per access instead of assuming every layer
+  returns the same structure, so layers can be accessed in any order.
+  `LayerAccessor.returns_tuple(layer)` replaces the `returns_tuple` property; the
+  renaming checks read every layer output in forward order, `skip_layers` uses
+  the per-layer record, and `detect_layer_output_type()` records the layers not
+  accessed yet.
+
 ### Fixes
 
 - **Attention probabilities work again on transformers >= 5.** GPT-2's

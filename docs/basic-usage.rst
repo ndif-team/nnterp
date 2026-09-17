@@ -76,6 +76,29 @@ It extends nnsight's ``VisionLanguageModel`` and supports image inputs via ``mod
    - **Heterogeneous layers** (e.g. Mllama/Llama-3.2-Vision): cross-attention layers only activate with image inputs, causing errors during text-only tracing. Pass ``allow_multimodal=True`` to opt in if you know what you're doing.
    - **AltUp models** (e.g. Gemma 3n): use 4D hidden states instead of the standard 3D ``(batch, seq, hidden)`` shape. See `issue #35 <https://github.com/ndif-team/nnterp/issues/35>`_.
 
+Hybrid Attention Models
+~~~~~~~~~~~~~~~~~~~~~~~
+
+Qwen3-Next, Qwen3.5 and Qwen3.6 mix Gated DeltaNet (linear attention) blocks with
+softmax attention blocks. The linear mixer keeps its name, so every block exposes
+exactly one of ``layers[i].self_attn`` / ``layers[i].linear_attn``, and the model
+lists the two kinds of blocks:
+
+.. code-block:: python
+
+   model = StandardizedTransformer("Qwen/Qwen3-Next-80B-A3B-Instruct")
+   model.attention_layers         # blocks with self_attn, e.g. [3, 7, 11, ...]
+   model.linear_attention_layers  # blocks with linear_attn
+
+   with model.trace("Hello world"):
+       linear_out = model.layers[0].linear_attn.output  # the DeltaNet mixer
+       attn_out = model.attentions_output[3]            # a softmax-attention block
+
+``attentions[i]``, ``attentions_input[i]``, ``attentions_output[i]`` and
+``attention_probabilities[i]`` are only defined for ``i`` in
+``model.attention_layers`` and raise a ``RenamingError`` on a linear-attention
+layer. ``layers_*``, ``mlps_*``, ``skip_layers`` and ``steer`` work on every layer.
+
 Accessing Module I/O
 --------------------
 

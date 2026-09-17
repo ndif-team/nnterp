@@ -73,6 +73,8 @@ nnterp is a mechanistic interpretability library built on top of nnsight, provid
 - `layers_input[i]` / `layers_output[i]` - Layer I/O
 - `attentions[i]` / `attentions_input[i]` / `attentions_output[i]` - Attention modules
 - `mlps[i]` / `mlps_input[i]` / `mlps_output[i]` - MLP modules
+- `attention_layers` / `linear_attention_layers` - Indices of the softmax-attention blocks (`layers[i].self_attn`) and of the linear-attention blocks (`layers[i].linear_attn`, Gated DeltaNet in Qwen3-Next / Qwen3.5 / Qwen3.6 hybrids), from the block structure at load. The attention accessors and `attention_probabilities[i]` raise `RenamingError` on a linear-attention layer; renaming checks and attention-probability validation run on `attention_layers[0]`
+- I/O accessors detect tuple outputs per layer on each access (`LayerAccessor.returns_tuple(layer)`), so layers can be accessed in any order
 - `attentions_output[i]` / `mlps_output[i]` never include the residual stream. Architectures that add the residual inside the sublayer module (BLOOM, MPT, DBRX) have their output accessors remapped to the pre-residual submodule via `rename_utils.RESIDUAL_INSIDE_SUBLAYER_SOURCES` (issue #51); unknown architectures with a `residual` forward arg are rejected at load unless `RenameConfig(attn_output_source=.../mlp_output_source=...)` is passed. (Caveat: on Gemma-2/3-style models, a post-sublayer layernorm outside the module means the added contribution is the post-LN output, not the module output these accessors return.)
 - `token_embeddings` - Token embedding layer (read/write)
 - `logits` - Final model logits
@@ -122,7 +124,7 @@ nnterp is a mechanistic interpretability library built on top of nnsight, provid
 - `check_model_renaming()` - Validate module standardization after renaming
 - `allow_multimodal` param: controls whether heterogeneous layer types (e.g. self-attn + cross-attn) are accepted
 - `attn_output_source` / `mlp_output_source` params: dotted path (relative to a layer) to the module whose output is the sublayer's additive contribution, for architectures that add the residual inside the attention/MLP module
-- **Supported Architectures**: OPT, Mixtral, Bloom, GPT-2, Qwen2Moe, Dbrx, GPT-J, LLaMA, Llama-4, Qwen3, Qwen2, Gemma-3, GLM-4v, and many more via auto-renaming
+- **Supported Architectures**: OPT, Mixtral, Bloom, GPT-2, Qwen2Moe, Dbrx, GPT-J, LLaMA, Llama-4, Qwen3, Qwen2, Gemma-3, GLM-4v, Qwen3-Next / Qwen3.5 / Qwen3.6 hybrids (linear + softmax attention), and many more via auto-renaming
 - Includes attention probability accessors for different architectures
 
 **Display** (`display.py`, optional `[display]` dependency)
@@ -218,6 +220,7 @@ display.py (optional)
 - `test_prompt_utils.py` - Prompt and target token handling
 - `test_vlm.py` - VLM support (load_model autodetection, VLM properties, interventions)
 - `test_detect_automodel.py` - AutoModel class detection for text/VLM/seq2seq models
+- `test_hybrid_models.py` - Hybrid linear/softmax attention models (`tiny-random/qwen3.5-moe`) and per-layer tuple detection
 
 **Available Fixtures** (`conftest.py`):
 - `model_name` - Parametrized fixture with test model names (e.g., "gpt2", "Maykeye/TinyLLama-v0")

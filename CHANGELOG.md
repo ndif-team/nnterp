@@ -27,6 +27,11 @@
 
 ### Fixes
 
+- **`attn_implementation="eager"` is accepted with `enable_attention_probs=True`.**
+  `StandardizedTransformer(name, enable_attention_probs=True,
+  attn_implementation="eager")` loads, and the keyword reaches the model once. A
+  non-eager value raises the `ValueError` naming the conflict.
+
 - **Attention probabilities work again on transformers >= 5.** GPT-2's
   `eager_attention_forward` changed from `module.attn_dropout(attn_weights)` to
   `nn.functional.dropout(...)` in transformers 5, which renames the nnsight source

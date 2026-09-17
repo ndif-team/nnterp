@@ -70,7 +70,8 @@ class StandardizationMixin:
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
-            tracing by setting attn_implementation="eager". Defaults to False.
+            tracing by setting attn_implementation="eager" (passing attn_implementation="eager"
+            yourself is accepted, any other value raises). Defaults to False.
         check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
     """
@@ -204,17 +205,14 @@ class StandardizationMixin:
         Returns (attn_implementation, rename, kwargs) ready to pass to super().__init__.
         """
         kwargs.setdefault("device_map", "auto")
-        if "attn_implementation" in kwargs and enable_attention_probs:
-            if kwargs["attn_implementation"] != "eager":
+        attn_implementation = kwargs.pop("attn_implementation", None)
+        if enable_attention_probs:
+            if attn_implementation not in (None, "eager"):
                 raise ValueError(
-                    f"Cannot use attn_implementation='{kwargs['attn_implementation']}' with enable_attention_probs=True. "
+                    f"Cannot use attn_implementation='{attn_implementation}' with enable_attention_probs=True. "
                     "Either set enable_attention_probs=False or don't pass attn_implementation."
                 )
-        attn_implementation = (
-            "eager"
-            if enable_attention_probs
-            else kwargs.pop("attn_implementation", None)
-        )
+            attn_implementation = "eager"
         rename = self._get_rename(
             rename_config=rename_config, user_rename=kwargs.pop("rename", None)
         )
@@ -543,7 +541,8 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
-            tracing by setting attn_implementation="eager". Defaults to False.
+            tracing by setting attn_implementation="eager" (passing attn_implementation="eager"
+            yourself is accepted, any other value raises). Defaults to False.
         check_attn_probs_with_trace (bool, default True): If True, the model will be dispatched and a test will ensure that the attention probabilities returned sum to 1.
         rename_config (RenameConfig, default None): A RenameConfig object to use for renaming the model. If None, a default RenameConfig will be used.
         text_only (bool, default False): If True and the checkpoint registers a separate text-only

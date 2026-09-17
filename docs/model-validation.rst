@@ -78,7 +78,7 @@ Attention Implementation
    # Use default HuggingFace implementation (faster, no attention tracing)
    model = StandardizedTransformer("gpt2")  # Uses default HF implementation
 
-If you try to use both ``enable_attention_probs=True`` and a non-eager ``attn_implementation``, ``nnterp`` will raise an error:
+Passing ``attn_implementation="eager"`` next to ``enable_attention_probs=True`` is accepted. If you try to use both ``enable_attention_probs=True`` and a non-eager ``attn_implementation``, ``nnterp`` will raise an error:
 
 .. code-block:: python
 

@@ -221,6 +221,7 @@ display.py (optional)
 - `test_vlm.py` - VLM support (load_model autodetection, VLM properties, interventions)
 - `test_detect_automodel.py` - AutoModel class detection for text/VLM/seq2seq models
 - `test_hybrid_models.py` - Hybrid linear/softmax attention models (`tiny-random/qwen3.5-moe`) and per-layer tuple detection
+- `test_construction.py` - Constructor behaviour: `attn_implementation` next to `enable_attention_probs`
 
 **Available Fixtures** (`conftest.py`):
 - `model_name` - Parametrized fixture with test model names (e.g., "gpt2", "Maykeye/TinyLLama-v0")

@@ -56,3 +56,64 @@ test_file_categories:
     - test_interventions.py
   prompt_utils:
     - test_prompt_utils.py
+
+# The block-invariant suite (test_block_invariants.py): one pinned tiny checkpoint
+# per family, each here for the structural fact beside it. `unavailable` is every
+# accessor the family does not have, which must be known before any trace;
+# `dense_layers` limits the MLP internals to the layers that are not mixtures of
+# experts.
+invariant_models:
+  hf-internal-testing/tiny-random-LlamaForCausalLM: {structure: pre_norm}
+  hf-internal-testing/tiny-random-gpt2: {structure: pre_norm}            # n_inner None beside a stray intermediate_size
+  hf-internal-testing/tiny-random-MistralForCausalLM: {structure: pre_norm}   # GQA
+  yujiepan/qwen2-tiny-random: {structure: pre_norm}
+  trl-internal-testing/tiny-Qwen3ForCausalLM: {structure: pre_norm}     # head_dim 128 != hidden 8 / 4 heads
+  trl-internal-testing/tiny-GemmaForCausalLM: {structure: pre_norm}
+  trl-internal-testing/tiny-Gemma2ForCausalLM: {structure: sandwich_norm}
+  hf-internal-testing/tiny-random-Gemma3ForCausalLM: {structure: sandwich_norm}
+  trl-internal-testing/tiny-Phi3ForCausalLM: {structure: pre_norm}      # fused qkv and gate_up
+  katuni4ka/tiny-random-olmo-hf: {structure: pre_norm}
+  hf-tiny-v2/tiny-random-Olmo2ForCausalLM:
+    structure: post_norm
+    unavailable: [attentions_norm_output, mlps_norm_output]
+  hf-internal-testing/tiny-random-PhiForCausalLM:
+    structure: parallel
+    unavailable: [layers_mid, mlps_norm_output]
+  hf-internal-testing/tiny-random-GPTNeoXForCausalLM:                   # its second norm EXISTS, and reads the block input
+    structure: parallel
+    unavailable: [layers_mid, mlps_norm_output]
+  hf-internal-testing/tiny-random-GPTJForCausalLM:
+    structure: parallel
+    unavailable: [layers_mid, mlps_norm_output]
+  Rocketknight1/tiny-random-falcon-7b:                                  # multi-query: one KV head
+    structure: parallel
+    unavailable: [layers_mid, mlps_norm_output]
+  Rocketknight1/tiny-random-falcon-40b:                                 # new_decoder_architecture: ln_attn / ln_mlp
+    structure: parallel
+    unavailable: [layers_mid, mlps_norm_output]
+  stabilityai/tiny-random-stablelm-2:                                   # post_attention_layernorm is None
+    structure: parallel
+    unavailable: [layers_mid, mlps_norm_output]
+  hf-internal-testing/tiny-random-BloomForCausalLM: {structure: residual_inside}
+  hf-internal-testing/tiny-random-MptForCausalLM: {structure: residual_inside}   # expansion_ratio, not an inner width
+  yujiepan/dbrx-tiny-random:                                           # norms live inside what nnterp calls self_attn
+    structure: residual_inside
+    unavailable: [mlps_activation, mlps_neurons]
+  hf-internal-testing/tiny-random-OPTForCausalLM:                       # no MLP module
+    structure: pre_norm
+    unavailable: [layers_mid, mlps, mlps_input, mlps_norm_output, mlps_activation, mlps_neurons, mlps_output]
+  trl-internal-testing/tiny-Qwen3MoeForCausalLM:
+    structure: pre_norm
+    unavailable: [mlps_activation, mlps_neurons]
+  hf-tiny-v2/tiny-random-Qwen2MoeForCausalLM:
+    structure: pre_norm
+    unavailable: [mlps_activation, mlps_neurons]
+  hf-internal-testing/tiny-random-GptOssForCausalLM:                    # MLP returns (hidden, router scores)
+    structure: pre_norm
+    unavailable: [mlps_activation, mlps_neurons]
+  hf-tiny-v2/tiny-random-DeepseekV2ForCausalLM:                         # MLA
+    structure: pre_norm
+    unavailable: [mlps_activation, mlps_neurons]
+  yujiepan/deepseek-v3-tiny-random:                                     # MLA; layer 0 dense, layer 1 a mixture of experts
+    structure: pre_norm
+    dense_layers: [0]

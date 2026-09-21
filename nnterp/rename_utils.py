@@ -351,6 +351,65 @@ def get_vocab_size(
         return None
 
 
+def get_head_dim(model) -> int:
+    """The width of one head's value, and so of its share of ``attentions_premix``.
+    The config's own ``head_dim`` where it states one: it is not always
+    ``hidden_size // num_heads`` (Qwen3, Gemma). Under multi-head latent attention
+    (DeepSeek) it is ``v_head_dim``; the query and key have ``get_qk_head_dim``."""
+    cfg = text_config(model)
+    if getattr(cfg, "v_head_dim", None) is not None:
+        return cfg.v_head_dim
+    if getattr(cfg, "head_dim", None) is not None:
+        return cfg.head_dim
+    return get_hidden_size(model) // get_num_attention_heads(model)
+
+
+def get_qk_head_dim(model) -> int:
+    """The width of one head's query and key: ``head_dim`` everywhere except under
+    multi-head latent attention, where it is ``qk_nope_head_dim + qk_rope_head_dim``."""
+    cfg = text_config(model)
+    if getattr(cfg, "qk_nope_head_dim", None) is not None:
+        return cfg.qk_nope_head_dim + cfg.qk_rope_head_dim
+    return get_head_dim(model)
+
+
+def get_num_kv_heads(model) -> int:
+    """Key/value heads: fewer than ``num_heads`` under grouped-query attention. A
+    config that does not group does not say so."""
+    cfg = text_config(model)
+    # Falcon-7B: one key/value head, and a `num_kv_heads` its modules never read
+    if getattr(cfg, "multi_query", False) and not getattr(cfg, "new_decoder_architecture", False):
+        return 1
+    for key in ("num_key_value_heads", "num_kv_heads", "n_head_kv"):
+        if getattr(cfg, key, None) is not None:
+            return getattr(cfg, key)
+    return get_num_attention_heads(model)
+
+
+def get_intermediate_size(model) -> int | None:
+    """The MLP's inner width. GPT-2 calls it ``n_inner`` and leaves it None to mean
+    four times hidden; that is asked first because a GPT-2 config can carry a stray
+    ``intermediate_size`` its modules never read (hf-internal-testing/tiny-random-gpt2
+    says 37 beside 128-wide MLPs). BLOOM states none and hard-codes four times hidden."""
+    cfg = text_config(model)
+    if "n_inner" in cfg:
+        return cfg.n_inner or 4 * get_hidden_size(model)
+    for key in ("intermediate_size", "ffn_hidden_size", "ffn_dim"):
+        if getattr(cfg, key, None) is not None:
+            return getattr(cfg, key)
+    if getattr(cfg, "ffn_config", None) is not None:  # DBRX
+        return cfg.ffn_config.ffn_hidden_size
+    if getattr(cfg, "expansion_ratio", None) is not None:  # MPT
+        return int(cfg.expansion_ratio * get_hidden_size(model))
+    if cfg.model_type == "bloom":  # hard-coded in BloomMLP
+        return 4 * get_hidden_size(model)
+    logger.warning(
+        f"Couldn't find the MLP's inner width in the {cfg.model_type} config; "
+        "model.intermediate_size is None."
+    )
+    return None
+
+
 class IOType(Enum):
     """Enum to specify input or output access"""
 
@@ -534,7 +593,15 @@ class LayerAccessor:
         module = self.model.layers[layer]
         if self.address.module:
             for attr in self.address.module.split("."):
-                module = getattr(module, attr)
+                child = getattr(module, attr, None)
+                if child is None:
+                    # layers of one model may differ: DeepSeek's first blocks are
+                    # dense and the rest mixtures of experts
+                    raise RenamingError(
+                        f"{self.name} does not exist on layer {layer}: its "
+                        f"{type(module._module).__name__} has no {attr!r}."
+                    )
+                module = child
         return module
 
     def get_operation(self, layer: int, containing_source: bool = False):
@@ -748,6 +815,68 @@ DEFAULT_ADDRESSES: dict[str, Address] = {
     "layers_output": Address("", order=60),
 }
 
+#: The accessors that live on a child nnterp does not rename. Families spell
+#: these children differently, and which spelling a model uses is a fact its
+#: module tree states, so ``structural_addresses`` reads it there: ``{name}`` is
+#: the one candidate that exists on the model. Each is defined by what it is *of*
+#: the block, so that these hold on every family that has them:
+#:
+#:     layers_mid       == layers_input + attentions_output
+#:     layers_output    == layers_mid   + mlps_output
+#:     mlps_norm_output == mlps_input
+#:
+#: ``attentions_premix`` is every head's result side by side: ``num_heads * head_dim``
+#: wide, which is not ``hidden_size`` on Qwen3 or Gemma. ``mlps_neurons`` is the
+#: down projection's input: the activation itself on an ungated MLP (GPT-2), and
+#: ``act(gate) * up`` on a gated one, which is why it is not ``mlps_activation``.
+STRUCTURAL_ADDRESSES: dict[str, tuple[Address, tuple[str, ...]]] = {
+    "attentions_norm_output": (
+        Address("{name}", order=5),
+        ("input_layernorm", "ln_1", "self_attn_layer_norm", "ln_attn", "norm_1"),
+    ),
+    "attentions_premix": (
+        Address("self_attn.{name}", IOType.INPUT, order=25),
+        ("o_proj", "c_proj", "dense", "out_proj"),
+    ),
+    "layers_mid": (
+        Address("{name}", IOType.INPUT, order=33),
+        ("post_attention_layernorm", "ln_2", "norm_2"),
+    ),
+    "mlps_norm_output": (
+        Address("{name}", order=36),
+        ("post_attention_layernorm", "ln_2", "norm_2"),
+    ),
+    "mlps_activation": (
+        Address("mlp.{name}", order=44),
+        ("act_fn", "act", "activation_fn", "gelu_impl"),
+    ),
+    "mlps_neurons": (
+        Address("mlp.{name}", IOType.INPUT, order=47),
+        ("down_proj", "c_proj", "dense_4h_to_h", "fc_out", "fc2"),
+    ),
+}
+
+BlockStructure = Literal["pre_norm", "sandwich_norm", "post_norm", "parallel", "residual_inside"]
+
+#: The pre-MLP norm of a sandwich-norm block. Such a block has a
+#: ``post_attention_layernorm`` too, which is the *attention's* post-norm there and
+#: the pre-MLP norm everywhere else: the block structure says which, not the name.
+_SANDWICH_PRE_MLP_NORM = ("pre_feedforward_layernorm",)
+
+_NO_MID_STREAM = (
+    "{name} does not exist on this model: its block is {structure!r}. {why}"
+)
+_NO_MLP_MODULE = (
+    "{name} does not exist on this model: {cls} has no MLP module, its feed-forward "
+    "layers are the block's own fc1 / fc2 (layers[i].fc1, layers[i].fc2)."
+)
+
+_WHY_NOT = {
+    "parallel": "Attention and the MLP both read the block input, so there is no residual stream "
+    "between them and no norm of it (on GPT-NeoX the second norm exists, and normalizes the block input).",
+    "post_norm": "The MLP reads the residual stream itself; the norm comes after the sublayer.",
+}
+
 _NO_CONTRIBUTION = (
     "{name} is disabled for this model: no module exposes the sublayer's "
     "additive contribution to the residual stream (see the warning logged at "
@@ -760,12 +889,38 @@ def _row(name: str, **differs) -> Address:
     return replace(DEFAULT_ADDRESSES[name], **differs)
 
 
+#: Families that normalize a sublayer's output *before* adding it to the residual
+#: stream: Gemma-2/3 (sandwich norms) and OLMo-2 (post-norm). The tensor added is
+#: the post-norm's output, not the attention/MLP module's.
+POST_SUBLAYER_NORM_MODEL_TYPES = ("gemma2", "gemma3", "gemma3_text", "olmo2")
+
+
+def post_sublayer_norm(model) -> bool:
+    return text_config(model).model_type in POST_SUBLAYER_NORM_MODEL_TYPES
+
+
 #: What differs per family: ``(model class or predicate on the model, rows)``.
 #: Later entries win. ``attentions_output`` / ``mlps_output`` mean the sublayer's
 #: additive contribution to the residual stream, so an architecture that adds the
 #: residual *inside* the sublayer module (issue #51) points them at the last
 #: pre-residual projection.
 FAMILY_ADDRESSES: list[tuple[type | Callable[[Any], bool], dict[str, Address]]] = [
+    (
+        OPTForCausalLM,
+        {
+            name: _row(name, unavailable=_NO_MLP_MODULE.format(name=name, cls="OPTDecoderLayer"))
+            for name in ("mlps", "mlps_input", "mlps_output")
+        },
+    ),
+    (
+        # layers_input + attentions_output is the mid-stream, and the mid-stream +
+        # mlps_output is layers_output, only if these are the post-norm outputs
+        post_sublayer_norm,
+        {
+            "attentions_output": _row("attentions_output", module="post_attention_layernorm"),
+            "mlps_output": _row("mlps_output", module="post_feedforward_layernorm"),
+        },
+    ),
     (
         BloomForCausalLM,
         {
@@ -794,6 +949,12 @@ FAMILY_ADDRESSES: list[tuple[type | Callable[[Any], bool], dict[str, Address]]] 
         # its output[0] is a residual-stream state, the inner attn output is the contribution.
         DbrxForCausalLM,
         {
+            # norm_1 is *inside* what nnterp calls self_attn here, so it comes after
+            # that container's input rather than before it
+            "attentions_norm_output": Address("self_attn.norm_1", order=12),
+            "attentions_premix": Address("self_attn.attn.out_proj", IOType.INPUT, order=25),
+            "layers_mid": Address("self_attn.norm_2", IOType.INPUT, order=33),
+            "mlps_norm_output": Address("self_attn.norm_2", order=36),
             "attentions_output": _row("attentions_output", module="self_attn.attn"),
             "attention_probabilities": _row(
                 "attention_probabilities", module="self_attn.attn", op=("nn_functional_dropout_0",)
@@ -824,6 +985,86 @@ FAMILY_ADDRESSES: list[tuple[type | Callable[[Any], bool], dict[str, Address]]] 
         {"attention_probabilities": _row("attention_probabilities", tags=frozenset({"sink"}))},
     ),
 ]
+
+
+def get_block_structure(model) -> BlockStructure:
+    """How a block combines its two sublayers with the residual stream. It decides
+    which accessors exist and where ``attentions_output`` / ``mlps_output`` are."""
+    cfg = text_config(model)
+    if isinstance(model, (BloomForCausalLM, MptForCausalLM, DbrxForCausalLM)):
+        return "residual_inside"
+    if (
+        cfg.model_type in ("gptj", "phi", "codegen")
+        or getattr(cfg, "use_parallel_residual", False)
+        or getattr(cfg, "parallel_attn", False)
+        or getattr(cfg, "new_decoder_architecture", False)
+    ):
+        return "parallel"
+    if cfg.model_type == "olmo2":
+        return "post_norm"
+    if post_sublayer_norm(model):
+        return "sandwich_norm"
+    return "pre_norm"
+
+
+def structural_addresses(standardized_model, structure: BlockStructure) -> dict[str, Address]:
+    """The rows of ``STRUCTURAL_ADDRESSES`` for this model: each child's name read
+    off the module tree, and a reason where the block has no such place."""
+    rows = {}
+    for name, (address, candidates) in STRUCTURAL_ADDRESSES.items():
+        if name in ("layers_mid", "mlps_norm_output") and structure in _WHY_NOT:
+            if structure == "post_norm" and name == "layers_mid":
+                # what the MLP reads is the residual stream itself
+                rows[name] = replace(address, module="mlp")
+                continue
+            rows[name] = replace(
+                address,
+                unavailable=_NO_MID_STREAM.format(
+                    name=name, structure=structure, why=_WHY_NOT[structure]
+                ),
+            )
+            continue
+        if name == "attentions_norm_output" and structure == "post_norm":
+            rows[name] = replace(
+                address,
+                unavailable=_NO_MID_STREAM.format(
+                    name=name,
+                    structure=structure,
+                    why="Attention reads the residual stream itself; the norm comes after the sublayer.",
+                ),
+            )
+            continue
+        if name in ("layers_mid", "mlps_norm_output") and structure == "sandwich_norm":
+            candidates = _SANDWICH_PRE_MLP_NORM
+        parent_path = address.module.rpartition(".")[0]
+        found = set()
+        for layer in standardized_model.layers:
+            parent = getattr(layer, parent_path, None) if parent_path else layer
+            if parent is None:  # this layer has no such sublayer (OPT's mlp, a linear-attention layer)
+                continue
+            found |= {c for c in candidates if getattr(parent._module, c, None) is not None}
+        mlps = [getattr(layer, "mlp", None) for layer in standardized_model.layers]
+        experts = parent_path == "mlp" and all(
+            mlp is not None and hasattr(mlp._module, "experts") for mlp in mlps
+        )
+        if not found and experts:
+            rows[name] = replace(
+                address,
+                unavailable=f"{name} does not exist on this model: every MLP is a mixture of experts, "
+                "where a token goes through top-k of N experts and has no single activation. "
+                "mlps_input and mlps_output are the block's boundaries and work as usual.",
+            )
+            continue
+        if len(found) != 1:
+            rows[name] = replace(
+                address,
+                unavailable=f"{name} is not available on this model: of the children "
+                f"{list(candidates)}, its {parent_path or 'layers'} have {sorted(found)}. "
+                "Name the module with RenameConfig(addresses={...}).",
+            )
+            continue
+        rows[name] = replace(address, module=address.module.format(name=found.pop()))
+    return rows
 
 
 def addresses_for(model, rename_config: RenameConfig | None = None) -> dict[str, Address]:

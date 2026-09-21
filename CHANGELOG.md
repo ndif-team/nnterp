@@ -4,6 +4,35 @@
 
 ### New Features
 
+- **Six accessors inside the block**, each defined by what it is *of* the block
+  rather than by a module name: `layers_mid` (the residual stream after
+  attention), `attentions_norm_output` and `mlps_norm_output` (what each sublayer
+  consumes), `attentions_premix` (the output projection's input: every head's
+  result side by side, `num_heads * head_dim` wide, which is not `hidden_size` on
+  Qwen3 or Gemma), `mlps_activation` and `mlps_neurons` (the down projection's
+  input; equal to the activation only on an ungated MLP). The children they live
+  on are spelled differently per family (`o_proj` / `c_proj` / `dense` /
+  `out_proj`, ...); the name is read off the model's module tree, and a family
+  or a `RenameConfig(addresses=...)` row overrides it. On every family that has
+  them, `layers_mid == layers_input + attentions_output`, `layers_output ==
+  layers_mid + mlps_output` and `mlps_norm_output == mlps_input`.
+- **`model.block_structure`**: `"pre_norm"`, `"sandwich_norm"` (Gemma-2/3),
+  `"post_norm"` (OLMo-2), `"parallel"` (GPT-NeoX, GPT-J, Falcon, Phi, StableLM-2,
+  read from the config's flags) or `"residual_inside"` (BLOOM, MPT, DBRX). It
+  decides which accessors exist: a parallel block has no `layers_mid` and no
+  pre-MLP norm, and a post-norm block no pre-sublayer norms. What a model lacks
+  is in `model.internals.status()` before any trace, with the reason; a mixture
+  of experts has no `mlps_activation` / `mlps_neurons`, per layer where a model
+  mixes dense and sparse blocks (DeepSeek), and OPT's `mlps*` accessors now say
+  that it has no MLP module instead of failing inside a trace.
+- **`model.head_dim`, `model.qk_head_dim`, `model.num_kv_heads`,
+  `model.intermediate_size`.** `head_dim` is the config's own where it states one
+  (it is not `hidden_size // num_heads` on Qwen3 or Gemma) and the value-side
+  width under multi-head latent attention (DeepSeek), where `qk_head_dim` differs.
+  `intermediate_size` follows each family's spelling (`n_inner` or four times
+  hidden on GPT-2, `ffn_hidden_size`, `ffn_dim`). All four are checked against
+  the tensors and modules of 24 families in `tests/test_block_invariants.py`.
+
 - **Hybrid linear/softmax attention models (Qwen3-Next, Qwen3.5, Qwen3.6).** A
   Gated DeltaNet mixer keeps its `linear_attn` name instead of being renamed to
   `self_attn`, so every block exposes exactly one of `layers[i].self_attn` /
@@ -16,6 +45,17 @@
   `attention_probabilities.print_source()` use the first softmax-attention layer.
 
 ### Changes
+
+- **`attentions_output` / `mlps_output` are the contributions on Gemma-2/3 and
+  OLMo-2 (behaviour change).** These families normalize a sublayer's output
+  before adding it to the residual stream, so the tensor added is
+  `post_attention_layernorm` / `post_feedforward_layernorm`'s output, and the two
+  accessors now target those. `layers_input[i] + attentions_output[i] +
+  mlps_output[i] == layers_output[i]` holds on them as it does everywhere else;
+  before, the accessors returned the pre-norm module outputs (on
+  google/gemma-2-2b the attention output has a norm 17x smaller than the stream
+  it was taken to be part of). Code that wants the raw module output reads
+  `attentions[i].output` / `mlps[i].output`.
 
 - **Per-layer tuple detection in the accessors.** `layers_output[i]` and the
   other I/O accessors unwrap a tuple per access instead of assuming every layer

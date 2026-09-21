@@ -23,6 +23,12 @@ from .rename_utils import (
     get_attention_layers,
     get_ignores,
     addresses_for,
+    get_block_structure,
+    get_head_dim,
+    get_intermediate_size,
+    get_num_kv_heads,
+    get_qk_head_dim,
+    structural_addresses,
     check_attention_probabilities,
     check_model_renaming,
     get_num_attention_heads,
@@ -56,10 +62,10 @@ class StandardizationMixin:
     attentions_output[i] / mlps_output[i] never include the residual stream: on
     architectures that add the residual inside the attention/MLP module (BLOOM,
     MPT, DBRX), they target the last pre-residual submodule instead of the module
-    output (see issue #51). Note that on architectures with post-sublayer
-    layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the
-    residual stream is the post-layernorm output, not the module output returned
-    here.
+    output (see issue #51), and on architectures that normalize the sublayer's
+    output before adding it (Gemma-2/3, OLMo-2) they target that post-sublayer
+    layernorm, whose output is the tensor added to the residual stream. The raw
+    module outputs are ``attentions[i].output`` and ``mlps[i].output``.
 
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
@@ -88,6 +94,11 @@ class StandardizationMixin:
     num_heads: int
     hidden_size: int
     vocab_size: int
+    head_dim: int
+    qk_head_dim: int
+    num_kv_heads: int
+    intermediate_size: int
+    block_structure: str
     is_vllm: bool
     remote: bool
 
@@ -122,7 +133,15 @@ class StandardizationMixin:
         # family does differently (rename_utils.FAMILY_ADDRESSES: e.g. attentions_output
         # / mlps_output target a submodule where the residual is added inside the
         # sublayer module, issue #51), then the user's RenameConfig.
-        self.internals = Internals(self, addresses_for(self._module, rename_config))
+        # The children nnterp does not rename (norms, projections, activation) are
+        # named off this model's module tree; a family or the user may still say
+        # otherwise, so their rows win.
+        self.block_structure = get_block_structure(self._module)
+        self.internals = Internals(
+            self,
+            structural_addresses(self, self.block_structure)
+            | addresses_for(self._module, rename_config),
+        )
         self.layers_input = self.internals["layers_input"]
         self.layers_output = self.internals["layers_output"]
         self.attentions = self.internals["attentions"]
@@ -132,6 +151,12 @@ class StandardizationMixin:
         self.mlps_input = self.internals["mlps_input"]
         self.mlps_output = self.internals["mlps_output"]
         self.attention_probabilities = self.internals["attention_probabilities"]
+        self.attentions_norm_output = self.internals["attentions_norm_output"]
+        self.attentions_premix = self.internals["attentions_premix"]
+        self.layers_mid = self.internals["layers_mid"]
+        self.mlps_norm_output = self.internals["mlps_norm_output"]
+        self.mlps_activation = self.internals["mlps_activation"]
+        self.mlps_neurons = self.internals["mlps_neurons"]
 
         self.num_layers = len(self.layers)
         # From the block structure: a softmax-attention block exposes self_attn, a
@@ -149,6 +174,13 @@ class StandardizationMixin:
         self.vocab_size = get_vocab_size(
             self._module, raise_error=False, rename_config=rename_config
         )
+        # like num_heads and hidden_size above, None where the config does not
+        # say (a RenameConfig key names it there)
+        known = self.num_heads is not None and self.hidden_size is not None
+        self.head_dim = get_head_dim(self._module) if known else None
+        self.qk_head_dim = get_qk_head_dim(self._module) if known else None
+        self.num_kv_heads = get_num_kv_heads(self._module) if known else None
+        self.intermediate_size = get_intermediate_size(self._module) if known else None
 
         if check_renaming:
             check_model_renaming(
@@ -521,10 +553,10 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
     attentions_output[i] / mlps_output[i] never include the residual stream: on
     architectures that add the residual inside the attention/MLP module (BLOOM,
     MPT, DBRX), they target the last pre-residual submodule instead of the module
-    output (see issue #51). Note that on architectures with post-sublayer
-    layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the
-    residual stream is the post-layernorm output, not the module output returned
-    here.
+    output (see issue #51), and on architectures that normalize the sublayer's
+    output before adding it (Gemma-2/3, OLMo-2) they target that post-sublayer
+    layernorm, whose output is the tensor added to the residual stream. The raw
+    module outputs are ``attentions[i].output`` and ``mlps[i].output``.
 
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.

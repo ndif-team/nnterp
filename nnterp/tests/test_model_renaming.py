@@ -739,11 +739,16 @@ def test_module_accessor(model_name, raw_model):
             assert len(layers_attr) == len(layers)
 
 
-# Architectures that add the residual inside the attention/MLP module (issue #51).
+# Architectures that add the residual inside the attention/MLP module (issue #51),
+# and ones that normalize the sublayer's output before adding it (Gemma-2/3
+# sandwich norms, OLMo-2 post-norm), where the module output is not what is added.
 RESIDUAL_INSIDE_MODELS = [
     "yujiepan/bloom-tiny-random",
     "hf-internal-testing/tiny-random-MptForCausalLM",
     "yujiepan/dbrx-tiny-random",
+    "trl-internal-testing/tiny-Gemma2ForCausalLM",
+    "hf-internal-testing/tiny-random-Gemma3ForCausalLM",
+    "hf-tiny-v2/tiny-random-Olmo2ForCausalLM",
 ]
 
 

@@ -786,7 +786,7 @@ def test_residual_inside_module_detection(monkeypatch):
     from nnterp import rename_utils
     from nnterp.rename_utils import RenamingError
 
-    monkeypatch.setattr(rename_utils, "RESIDUAL_INSIDE_SUBLAYER_SOURCES", {})
+    monkeypatch.setattr(rename_utils, "FAMILY_ADDRESSES", [])
     with pytest.raises(RenamingError, match="residual"):
         StandardizedTransformer("yujiepan/bloom-tiny-random")
 
@@ -797,7 +797,7 @@ def test_residual_inside_module_user_config(monkeypatch):
     source opts out of the residual-argument detection (issue #51)."""
     from nnterp import rename_utils
 
-    monkeypatch.setattr(rename_utils, "RESIDUAL_INSIDE_SUBLAYER_SOURCES", {})
+    monkeypatch.setattr(rename_utils, "FAMILY_ADDRESSES", [])
     model = StandardizedTransformer(
         "yujiepan/bloom-tiny-random",
         rename_config=RenameConfig(

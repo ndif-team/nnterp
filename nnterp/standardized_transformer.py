@@ -14,15 +14,16 @@ from .utils import (
     DummyCache,
     try_with_scan,
 )
+from .internals import Internals
 from .rename_utils import (
     IOType,
     LayerAccessor,
-    AttentionProbabilitiesAccessor,
     RenameConfig,
     get_rename_dict,
     get_attention_layers,
     get_ignores,
-    get_output_sources,
+    addresses_for,
+    check_attention_probabilities,
     check_model_renaming,
     get_num_attention_heads,
     get_hidden_size,
@@ -117,39 +118,20 @@ class StandardizationMixin:
 
         ignores = get_ignores(self._module, rename_config)
 
-        # Create accessor instances. attentions_output / mlps_output may target a
-        # submodule on architectures that add the residual inside the sublayer
-        # module (see rename_utils.RESIDUAL_INSIDE_SUBLAYER_SOURCES and issue #51),
-        # and are disabled (None source) when no module carries the contribution.
-        attn_output_source, mlp_output_source = get_output_sources(
-            self._module, rename_config
-        )
-
-        def output_accessor(source: str | None, name: str, default: str):
-            if source is not None:
-                return LayerAccessor(self, source, IOType.OUTPUT)
-            return LayerAccessor(
-                self,
-                default,
-                IOType.OUTPUT,
-                disabled_reason=(
-                    f"{name} is disabled for this model: no module exposes the sublayer's "
-                    "additive contribution to the residual stream (see the warning logged at "
-                    "load and https://github.com/ndif-team/nnterp/issues/51). Use "
-                    f"layers[i].{default}.output for the raw (residual-added) module output."
-                ),
-            )
-
-        self.layers_input = LayerAccessor(self, None, IOType.INPUT)
-        self.layers_output = LayerAccessor(self, None, IOType.OUTPUT)
-        self.attentions = LayerAccessor(self, "self_attn", None)
-        self.attentions_input = LayerAccessor(self, "self_attn", IOType.INPUT)
-        self.attentions_output = output_accessor(
-            attn_output_source, "attentions_output", "self_attn"
-        )
-        self.mlps = LayerAccessor(self, "mlp", None)
-        self.mlps_input = LayerAccessor(self, "mlp", IOType.INPUT)
-        self.mlps_output = output_accessor(mlp_output_source, "mlps_output", "mlp")
+        # One accessor per row of the address table: the defaults, what this
+        # family does differently (rename_utils.FAMILY_ADDRESSES: e.g. attentions_output
+        # / mlps_output target a submodule where the residual is added inside the
+        # sublayer module, issue #51), then the user's RenameConfig.
+        self.internals = Internals(self, addresses_for(self._module, rename_config))
+        self.layers_input = self.internals["layers_input"]
+        self.layers_output = self.internals["layers_output"]
+        self.attentions = self.internals["attentions"]
+        self.attentions_input = self.internals["attentions_input"]
+        self.attentions_output = self.internals["attentions_output"]
+        self.mlps = self.internals["mlps"]
+        self.mlps_input = self.internals["mlps_input"]
+        self.mlps_output = self.internals["mlps_output"]
+        self.attention_probabilities = self.internals["attention_probabilities"]
 
         self.num_layers = len(self.layers)
         # From the block structure: a softmax-attention block exposes self_attn, a
@@ -177,23 +159,26 @@ class StandardizationMixin:
                 allow_multimodal,
                 rename_config=rename_config,
             )
-        self.attention_probabilities = AttentionProbabilitiesAccessor(
-            self,
-            rename_config=rename_config,
-            initialized_with_enable=enable_attention_probs,
-        )
         if self.is_vllm and enable_attention_probs:
             raise NotImplementedError(
                 "nnterp VLLM wrapper doesn't support attention probabilities yet, please set enable_attention_probs=False."
             )
         if check_renaming and enable_attention_probs:
-            self.attention_probabilities.check_source(
+            check_attention_probabilities(
+                self,
                 allow_dispatch=allow_dispatch,
                 use_trace=check_attn_probs_with_trace,
             )
         else:
             # Disable attention probabilities as we can't check them without dispatching the model or not validating the sum to 1 and causal effect of modifying them
-            self.attention_probabilities.disable()
+            self.attention_probabilities.disable(
+                "Attention probabilities are disabled for this model."
+                + (
+                    ""
+                    if enable_attention_probs
+                    else " Set enable_attention_probs=True when loading the model to enable them."
+                )
+            )
         self._add_prefix_false_tokenizer = None
 
     def _get_rename(

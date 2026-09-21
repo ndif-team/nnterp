@@ -1,7 +1,7 @@
 import inspect
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, replace
+from typing import Any, Callable, Literal
 from enum import Enum
 
 import torch as th
@@ -120,6 +120,12 @@ class RenameConfig:
         Same as ``attn_output_source`` for the MLP, e.g. "mlp.dense_4h_to_h" for
         BLOOM or "mlp.down_proj" for MPT.
 
+    addresses : dict of str to Address, optional
+        Rows of the address table, by accessor name: replace where an existing
+        accessor reads on this architecture, or add an accessor of your own
+        (it appears in ``model.internals``). The general form of the three
+        fields above. See ``Address``.
+
     Example
     -------
     Custom configuration for a non-standard architecture::
@@ -145,6 +151,7 @@ class RenameConfig:
     vocab_size_config_key: str | list[str] | int | None = None
     attn_output_source: str | None = None
     mlp_output_source: str | None = None
+    addresses: "dict[str, Address] | None" = None
 
 
 MODEL_NAMES = ["transformer", "gpt_neox", "decoder", "language_model"]
@@ -178,19 +185,6 @@ def default_vocab_size_config_keys():
 # Models with no mlp module
 IGNORE_MLP_MODELS = (OPTForCausalLM,)
 
-# Architectures that add the residual stream to the sublayer output *inside* the
-# attention/MLP module, so the module output is a residual-stream state instead of
-# the additive contribution (https://github.com/ndif-team/nnterp/issues/51).
-# Maps model class -> (attn_output_source, mlp_output_source); None keeps the default.
-RESIDUAL_INSIDE_SUBLAYER_SOURCES = {
-    BloomForCausalLM: ("self_attn.dense", "mlp.dense_4h_to_h"),
-    MptForCausalLM: (None, "mlp.down_proj"),
-    # DbrxNormAttentionNorm returns (resid_mid, norm_2(resid_mid), attn_weights):
-    # its output[0] is a residual-stream state, the inner attn output is the contribution.
-    DbrxForCausalLM: ("self_attn.attn", None),
-}
-
-
 def bloom_slow_but_exact(model) -> bool:
     """BLOOM checkpoints with pretraining_tp > 1 and slow_but_exact=True (e.g.
     bigscience/bigscience-small-testing) compute the output projections with
@@ -200,36 +194,6 @@ def bloom_slow_but_exact(model) -> bool:
         and model.config.pretraining_tp > 1
         and model.config.slow_but_exact
     )
-
-
-def get_output_sources(
-    model, rename_config: RenameConfig | None = None
-) -> tuple[str | None, str | None]:
-    """Resolve the module paths targeted by attentions_output / mlps_output.
-
-    Defaults to the attention/MLP modules themselves. For architectures that add
-    the residual inside the sublayer module (BLOOM, MPT), targets the last
-    pre-residual projection so the accessors expose the additive contribution.
-    Returns None for a sublayer whose contribution is not exposed by any module
-    (slow_but_exact BLOOM): the corresponding accessor is disabled.
-    """
-    attn_source, mlp_source = "self_attn", "mlp"
-    if bloom_slow_but_exact(model):
-        attn_source = mlp_source = None
-    else:
-        for model_class, (
-            attn_override,
-            mlp_override,
-        ) in RESIDUAL_INSIDE_SUBLAYER_SOURCES.items():
-            if isinstance(model, model_class):
-                attn_source = attn_override or attn_source
-                mlp_source = mlp_override or mlp_source
-    if rename_config is not None:
-        if rename_config.attn_output_source is not None:
-            attn_source = rename_config.attn_output_source
-        if rename_config.mlp_output_source is not None:
-            mlp_source = rename_config.mlp_output_source
-    return attn_source, mlp_source
 
 
 # Alternative names for LLM layers
@@ -416,40 +380,151 @@ def linear_attention_error(model, layer: int) -> RenamingError:
     )
 
 
-class LayerAccessor:
-    """I/O accessor that provides input/output access with setter.
+@dataclass(frozen=True)
+class Lens:
+    """Where a tensor sits inside a value no path can describe: two functions,
+    because a write needs the way back as much as a read needs the way in.
+    ``get(value)`` is the tensor; ``put(value, tensor)`` is ``value`` with the
+    tensor replaced. The escape hatch of ``Address.select``."""
 
-    Tuple values are unwrapped per access: ``accessor[i]`` returns the first
-    element when the value at layer ``i`` is a tuple and the value itself
-    otherwise, and ``accessor[i] = value`` rebuilds the tuple around ``value``.
-    Nothing is inferred from one layer about another, so layers whose modules
-    return different structures can be accessed in any order.
+    get: Callable[[Any], Any]
+    put: Callable[[Any, Any], Any]
+
+
+@dataclass(frozen=True)
+class Address:
+    """Where one tensor of a layer is, as data.
+
+    Every accessor nnterp offers (``layers_output``, ``attentions_output``,
+    ``attention_probabilities``, ...) is one of these, and a family that differs
+    differs by a row of ``FAMILY_ADDRESSES`` rather than by a branch of code. A
+    model nnterp does not know is supported the same way, from outside:
+    ``RenameConfig(addresses={"attentions_output": Address("self_attn.dense")})``.
+
+    Parameters
+    ----------
+    module : str
+        Dotted path under the layer, in nnterp's standardized names. ``""`` is the
+        layer itself.
+    io : IOType or None
+        Which side of the module (or of the operation, when ``op`` is set) carries
+        the tensor. ``None`` makes the accessor return the module envoy itself.
+    op : tuple of str, or callable
+        Operations of the module's ``.source`` to descend through, outermost
+        first: ``("attention_interface_1", "nn_functional_dropout_0")`` is the
+        dropout call inside the function the attention call dispatches to. A
+        callable ``fn(module_envoy) -> operation`` is accepted for a forward no
+        name can describe (``RenameConfig.attn_prob_source``).
+    select : tuple, Lens or None
+        Where the tensor is inside the value at that place. ``None`` takes the
+        first element of a tuple and a bare value as it is, decided per access,
+        since layers of one model may differ. A path ``(1,)`` / ``(0, 2)`` /
+        ``("hidden_states",)`` is walked to read and rebuilt around the new tensor
+        to write. A ``Lens`` is for what a path cannot say.
+    order : int
+        Rank of this place in the block's forward pass. nnsight cannot reach back
+        to a value the model has passed, so ``Internals.read`` sorts by it.
+    unavailable : str or None
+        Why this family has no such tensor. Any access raises a RenamingError
+        carrying the reason.
+    tags : frozenset of str
+        Facts about the tensor a consumer or a check needs, e.g. ``"sink"``: the
+        attention probabilities of a model with attention sinks sum to less than 1.
+    """
+
+    module: str = ""
+    io: IOType | None = IOType.OUTPUT
+    op: tuple[str, ...] | Callable[[Envoy], Any] = ()
+    select: tuple[int | str, ...] | Lens | None = None
+    order: int = 0
+    unavailable: str | None = None
+    tags: frozenset[str] = frozenset()
+
+    @property
+    def is_attention(self) -> bool:
+        return self.module.split(".")[0] == "self_attn"
+
+
+def _walk(value: Any, path: tuple[int | str, ...]) -> Any:
+    for step in path:
+        value = value[step]
+    return value
+
+
+def _rebuilt(value: Any, path: tuple[int | str, ...], new: Any) -> Any:
+    """``value`` with the element at ``path`` replaced by ``new``; containers are
+    rebuilt rather than edited, since a module's return tuple is not ours to mutate."""
+    if not path:
+        return new
+    step, rest = path[0], path[1:]
+    inner = _rebuilt(value[step], rest, new)
+    if isinstance(value, tuple):
+        assert isinstance(step, int)
+        items = (*value[:step], inner, *value[step + 1 :])
+        return type(value)(*items) if hasattr(value, "_fields") else items
+    assert isinstance(value, (list, dict)), f"cannot rebuild a {type(value).__name__}"
+    copied = value.copy()
+    copied[step] = inner  # type: ignore[index]
+    return copied
+
+
+class LayerAccessor:
+    """Per-layer read/write access to the tensor an ``Address`` names.
+
+    ``accessor[i]`` reads, ``accessor[i] = value`` writes, and the address says
+    how the tensor is reached: a module's input or output, or one operation
+    inside its forward, and where in that value the tensor sits.
+
+    With no ``select`` (every accessor nnterp ships by default), tuple values are
+    unwrapped per access: ``accessor[i]`` returns the first element when the value
+    at layer ``i`` is a tuple and the value itself otherwise, and
+    ``accessor[i] = value`` rebuilds the tuple around ``value``. Nothing is
+    inferred from one layer about another, so layers whose modules return
+    different structures can be accessed in any order.
 
     Accessors rooted at ``self_attn`` raise a RenamingError on linear-attention
-    layers (see ``linear_attention_error``). If ``disabled_reason`` is set, any
-    access raises a RenamingError with that message (used when no module carries
-    the accessor's semantics, e.g. attentions_output on slow_but_exact BLOOM).
+    layers (see ``linear_attention_error``). An accessor that is unavailable, by
+    its address or because it was disabled, raises a RenamingError with the reason.
+
+    ``LayerAccessor(model, "self_attn", IOType.OUTPUT)`` is still accepted and
+    builds the address.
     """
 
     def __init__(
         self,
         model,
-        attr_name: str | None,
-        io_type: IOType | None,
+        address: "Address | str | None" = None,
+        io_type: IOType | None = None,
         disabled_reason: str | None = None,
+        name: str | None = None,
     ):
-
+        if not isinstance(address, Address):
+            address = Address(address or "", io_type)
         self.model = model
-        self.attr_name = attr_name
-        self.io_type = io_type
-        self.disabled_reason = disabled_reason
+        self.address = address
+        self.name = name or address.module or "layers"
+        self.disabled_reason = disabled_reason or address.unavailable
         self._is_tuple: dict[int, bool] = {}
+
+    # the spelling the accessor had before it took an address
+    @property
+    def attr_name(self) -> str | None:
+        return self.address.module or None
+
+    @property
+    def io_type(self) -> IOType | None:
+        return self.address.io
 
     @property
     def is_attention(self) -> bool:
-        return (
-            self.attr_name is not None and self.attr_name.split(".")[0] == "self_attn"
-        )
+        return self.address.is_attention
+
+    @property
+    def enabled(self) -> bool:
+        return self.disabled_reason is None
+
+    def disable(self, reason: str | None = None):
+        self.disabled_reason = reason or f"{self.name} is disabled for this model."
 
     def get_module(self, layer: int) -> Envoy:
         if self.disabled_reason is not None:
@@ -457,42 +532,71 @@ class LayerAccessor:
         if self.is_attention and layer in self.model.linear_attention_layers:
             raise linear_attention_error(self.model, layer)
         module = self.model.layers[layer]
-        if self.attr_name is not None:
-            for attr in self.attr_name.split("."):
+        if self.address.module:
+            for attr in self.address.module.split("."):
                 module = getattr(module, attr)
         return module
 
+    def get_operation(self, layer: int, containing_source: bool = False):
+        """The ``.source`` operation this address names, or (``containing_source``)
+        the source it is an operation of. A name the installed forward does not
+        have raises a RenamingError listing the operations it does have: a moved
+        forward is an error here, never a neighbouring tensor."""
+        module = self.get_module(layer)
+        op = self.address.op
+        if callable(op):
+            return op(module, containing_source) if containing_source else op(module)
+        target = module
+        for depth, op_name in enumerate(op):
+            source = target.source
+            if containing_source and depth == len(op) - 1:
+                return source
+            try:
+                target = getattr(source, op_name)
+            except AttributeError as e:
+                raise RenamingError(
+                    f"{self.name}: the forward of {'.'.join(('layers', str(layer), *filter(None, [self.address.module])))}"
+                    f"{''.join('.' + done for done in op[:depth])} has no operation {op_name!r} "
+                    f"with this transformers version. Its operations are:\n{source}"
+                ) from e
+        return target
+
+    def _place(self, layer: int):
+        """The object holding the value and the attribute it is under."""
+        if self.address.op:
+            place = self.get_operation(layer)
+            return place, "inputs" if self.io_type == IOType.INPUT else "output"
+        return self.get_module(layer), self.io_type.value
+
     def __getitem__(self, layer: int) -> TraceTensor | Envoy:
-        module = self.get_module(layer)
         if self.io_type is None:
-            return module
-        elif self.io_type.value == "input":
-            target = module.input
-        elif self.io_type.value == "output":
-            target = module.output
-        else:
-            raise ValueError(f"Invalid io_type: {self.io_type}")
+            return self.get_module(layer)
+        place, attribute = self._place(layer)
+        value = getattr(place, attribute)
+        select = self.address.select
+        if select is None:
+            is_tuple = isinstance(value, tuple)
+            self._is_tuple[layer] = is_tuple
+            return value[0] if is_tuple else value
+        return select.get(value) if isinstance(select, Lens) else _walk(value, select)
 
-        is_tuple = isinstance(target, tuple)
-        self._is_tuple[layer] = is_tuple
-        return target[0] if is_tuple else target
-
-    def __setitem__(self, layer: int, value: TraceTensor):
+    def __setitem__(self, layer: int, new: TraceTensor):
         if self.io_type is None:
-            name = self.attr_name or "layers"
             raise ValueError(
-                f"Cannot set the value of a module accessor. Did you mean {name}_input/output"
+                f"Cannot set the value of a module accessor. Did you mean {self.name}_input/output"
             )
-        module = self.get_module(layer)
-        is_input = self.io_type.value == "input"
-        current = module.input if is_input else module.output
-        is_tuple = isinstance(current, tuple)
-        self._is_tuple[layer] = is_tuple
-        replacement = (value, *current[1:]) if is_tuple else value
-        if is_input:
-            module.input = replacement
+        place, attribute = self._place(layer)
+        select = self.address.select
+        if select is None:
+            current = getattr(place, attribute)
+            is_tuple = isinstance(current, tuple)
+            self._is_tuple[layer] = is_tuple
+            replacement = (new, *current[1:]) if is_tuple else new
+        elif isinstance(select, Lens):
+            replacement = select.put(getattr(place, attribute), new)
         else:
-            module.output = replacement
+            replacement = _rebuilt(getattr(place, attribute), select, new)
+        setattr(place, attribute, replacement)
 
     def __call__(self, layer: int) -> TraceTensor | Envoy:
         return self[layer]
@@ -504,244 +608,244 @@ class LayerAccessor:
         """
         return self._is_tuple.get(layer)
 
-
-def bloom_attention_prob_source(attention_module, return_module_source: bool = False):
-    if return_module_source:
-        return attention_module.source
-    return attention_module.source.self_attention_dropout_0
-
-
-def falcon_attention_prob_source(attention_module, return_module_source: bool = False):
-    if return_module_source:
-        return attention_module.source
-    return attention_module.source.F_softmax_0
-
-
-def default_attention_prob_source(attention_module, return_module_source: bool = False):
-    source = attention_module.source.attention_interface_1.source
-    if return_module_source:
-        return source
-    return source.nn_functional_dropout_0
-
-
-def gptj_attention_prob_source(attention_module, return_module_source: bool = False):
-    source = attention_module.source.self__attn_0.source
-    if return_module_source:
-        return source
-    return source.self_attn_dropout_0
-
-
-def qwen2moe_attention_prob_source(
-    attention_module, return_module_source: bool = False
-):
-    if return_module_source:
-        return attention_module.source
-    return attention_module.source.nn_functional_dropout_0
-
-
-def dbrx_attention_prob_source(attention_module, return_module_source: bool = False):
-    if return_module_source:
-        return attention_module.attn.source
-    return attention_module.attn.source.nn_functional_dropout_0
-
-
-class AttentionProbabilitiesAccessor:
-    def __init__(
-        self,
-        model,
-        rename_config: RenameConfig | None = None,
-        initialized_with_enable: bool = False,
-    ):
-        self.model = model
-        self.initialized_with_enable = initialized_with_enable
-        self.attn_probs_dont_sum_to_one = False
-        if rename_config is not None and rename_config.attn_prob_source is not None:
-            self.source_attr = rename_config.attn_prob_source
-        elif isinstance(model._module, BloomForCausalLM):
-            self.source_attr = bloom_attention_prob_source
-        elif isinstance(model._module, FalconForCausalLM):
-            # FalconAttention calls its dropout only on the alibi branch; the
-            # other softmaxes straight into what it returns
-            self.source_attr = (
-                bloom_attention_prob_source
-                if model.config.alibi
-                else falcon_attention_prob_source
-            )
-        elif isinstance(model._module, GPTJForCausalLM):
-            self.source_attr = gptj_attention_prob_source
-        elif isinstance(model._module, (Qwen2MoeForCausalLM, MptForCausalLM)):
-            self.source_attr = qwen2moe_attention_prob_source
-        elif isinstance(model._module, DbrxForCausalLM):
-            self.source_attr = dbrx_attention_prob_source
-        else:
-            if isinstance(model._module, GptOssForCausalLM):
-                # the softmax spans the keys plus a sink, and the sink is dropped
-                self.attn_probs_dont_sum_to_one = True
-            self.source_attr = default_attention_prob_source
-        self.enabled = True
-
-    def disable(self):
-        self.enabled = False
-
-    def _check_enabled(self):
-        if not self.enabled:
-            if self.initialized_with_enable:
-                raise RenamingError(
-                    "Attention probabilities are disabled for this model."
-                )
-            else:
-                raise RenamingError(
-                    "Attention probabilities are disabled for this model. "
-                    "Set enable_attention_probs=True when loading the model to enable them."
-                )
-
-    def _attention_module(self, layer: int) -> Envoy:
-        if layer in self.model.linear_attention_layers:
-            raise linear_attention_error(self.model, layer)
-        return self.model.layers[layer].self_attn
-
-    def __getitem__(self, layer: int) -> TraceTensor:
-        self._check_enabled()
-        return self.source_attr(self._attention_module(layer)).output
-
-    def __setitem__(self, layer: int, value: TraceTensor):
-        self._check_enabled()
-        self.source_attr(self._attention_module(layer)).output = value
-
-    def check_source(
-        self,
-        layer: int | None = None,
-        allow_dispatch: bool = True,
-        use_trace: bool = True,
-    ):
-        """
-        Check that the attention probabilities source is correctly configured.
-
-        This method validates that:
-        1. The attention probabilities have the expected shape (batch_size, num_heads, seq_len, seq_len)
-        2. The probabilities sum to 1 along the last dimension
-        3. Modifying the probabilities affects the model's output logits
-
-        Args:
-            layer (int, optional): The layer index to check. Defaults to the first
-                softmax-attention layer (``model.attention_layers[0]``).
-            allow_dispatch (bool, optional): If True, allows dispatching the model when scan fails.
-            use_trace (bool, optional): If False, uses scan() to validate the attention probabilities, which means attention probabilities summing to 1 and causal effect of modifying them won't be tested. If True, the traces run on NDIF when the model is remote and dispatch it otherwise. Defaults to True.
-
-        Raises:
-            RenamingError: If the attention probabilities are not properly configured or if the number of attention heads is not available.
-        """
-        if self.model.num_heads is None:
-            raise RenamingError(
-                f"Can't check the shapes of the model internals because the number of attention heads is not available in {self.model.repo_id} architecture."
-                "You should pass the number of attention heads as an integer or look at the config and pass the key in the attn_head_config_key argument of a RenameConfig."
-            )
-        if layer is None:
-            layer = self.model.attention_layers[0]
-
-        def test_prob_source():
-            batch_size, seq_len = self.model.input_size
-            num_heads = self.model.num_heads
-            probs = self[layer]
-            if probs.shape != (batch_size, num_heads, seq_len, seq_len):
-                raise RenamingError(
-                    f"Attention probabilities have shape {probs.shape} != {(batch_size, num_heads, seq_len, seq_len)} (batch_size, n_head, seq_len, seq_len) in {self.model.repo_id} architecture. This means it's not properly initialized."
-                )
-            rnd = th.randn_like(probs).abs()
-            rnd = rnd / rnd.sum(dim=-1, keepdim=True)
-            self[layer] = rnd
-            if probs.device != th.device("meta"):
-                sum_last = probs.sum(dim=-1)
-                if self.attn_probs_dont_sum_to_one:
-                    if not (sum_last > 0).all():
-                        raise RenamingError("Attention probabilities should be > 0.")
-                    if not (sum_last < 1 + 1e-5).all():
-                        raise RenamingError(
-                            "Attention probabilities should sum to < 1 for models with sink tokens."
-                        )
-                else:
-                    atol = 1e-2 if probs.dtype == th.bfloat16 else 1e-5
-                    if not th.allclose(sum_last, th.ones_like(sum_last), atol=atol):
-                        raise RenamingError("Attention probabilities do not sum to 1.")
-
-        if use_trace:
-            remote = self.model.remote
-            with self.model.trace(dummy_inputs(), remote=remote):
-                test_prob_source()
-                corr_logits = self.model.logits.save()
-            with self.model.trace(dummy_inputs(), remote=remote):
-                clean_logits = self.model.logits.save()
-
-            if th.allclose(corr_logits, clean_logits):
-                raise RenamingError(
-                    "Attention probabilities are not properly initialized: changing the attention probabilities should change the logits."
-                )
-            return
-
-        try_with_scan(
-            self.model,
-            test_prob_source,
-            RenamingError(
-                "Can't access attention probabilities. It is most likely not yet supported for this architecture and transformers version."
-            ),
-            allow_dispatch=allow_dispatch,
-            errors_to_raise=(RenamingError,),
-        )
-
     def print_source(self, layer: int | None = None, allow_dispatch: bool = True):
+        """Print the operation this accessor reads, then the forward it is part of."""
+        assert self.address.op, f"{self.name} is a module boundary, not an operation of a forward"
         if layer is None:
-            layer = self.model.attention_layers[0]
-        in_notebook = is_notebook()
-        if in_notebook:
-            markdown_text = "## Accessing attention probabilities from:\n"
-        else:
-            print("Accessing attention probabilities from:")
+            layer = self.model.attention_layers[0] if self.is_attention else 0
+        sections = []
 
-        def print_hook_source():
-            nonlocal markdown_text
-            source = self.source_attr(self._attention_module(layer))
-            if in_notebook:
-                markdown_text += f"```py\n{source}\n```"
-            else:
-                print(source)
-
-        used_scan = try_with_scan(
-            self.model,
-            print_hook_source,
-            RenamingError(
-                "Can't access attention probabilities. It is most likely not yet supported for this architecture and transformers version."
-            ),
-            allow_dispatch=allow_dispatch,
-        )
-        if in_notebook:
-            markdown_text += "\n\n## Full module source:\n"
-        else:
-            print("\n\nFull module source:")
-
-        def print_attn_source():
-            nonlocal markdown_text
-            source = str(
-                self.source_attr(
-                    self._attention_module(layer), return_module_source=True
-                )
+        def collect():
+            sections.append((f"Accessing {self.name} from:", str(self.get_operation(layer))))
+            sections.append(
+                ("Full module source:", str(self.get_operation(layer, containing_source=True)))
             )
-            if in_notebook:
-                markdown_text += f"```py\n{source}\n```"
-            else:
-                print(source)
 
         try_with_scan(
             self.model,
-            print_attn_source,
+            collect,
             RenamingError(
-                "Can't access attention probabilities. It is most likely not yet supported for this architecture and transformers version."
+                f"Can't access {self.name}. It is most likely not yet supported for this architecture and transformers version."
             ),
             allow_dispatch=allow_dispatch,
-            warn_if_scan_fails=used_scan,
         )
+        if is_notebook():
+            display_markdown(
+                "\n\n".join(f"## {title}\n```py\n{source}\n```" for title, source in sections)
+            )
+        else:
+            for title, source in sections:
+                print(f"{title}\n{source}\n")
 
-        if in_notebook:
-            display_markdown(markdown_text)
+
+def check_attention_probabilities(
+    model,
+    layer: int | None = None,
+    allow_dispatch: bool = True,
+    use_trace: bool = True,
+):
+    """
+    Check that ``model.attention_probabilities`` reads the attention pattern.
+
+    This validates that:
+    1. The attention probabilities have the expected shape (batch_size, num_heads, seq_len, seq_len)
+    2. The probabilities sum to 1 along the last dimension (to at most 1 on a model with attention sinks)
+    3. Modifying the probabilities affects the model's output logits. An address can
+       read a perfectly good pattern and be causally inert (the weights a mixer
+       *returns* are one), and only a write tells the two apart.
+
+    Args:
+        layer (int, optional): The layer index to check. Defaults to the first
+            softmax-attention layer (``model.attention_layers[0]``).
+        allow_dispatch (bool, optional): If True, allows dispatching the model when scan fails.
+        use_trace (bool, optional): If False, uses scan() to validate the attention probabilities, which means attention probabilities summing to 1 and causal effect of modifying them won't be tested. If True, the traces run on NDIF when the model is remote and dispatch it otherwise. Defaults to True.
+
+    Raises:
+        RenamingError: If the attention probabilities are not properly configured or if the number of attention heads is not available.
+    """
+    accessor = model.attention_probabilities
+    if model.num_heads is None:
+        raise RenamingError(
+            f"Can't check the shapes of the model internals because the number of attention heads is not available in {model.repo_id} architecture."
+            "You should pass the number of attention heads as an integer or look at the config and pass the key in the attn_head_config_key argument of a RenameConfig."
+        )
+    if layer is None:
+        layer = model.attention_layers[0]
+
+    def test_prob_source():
+        batch_size, seq_len = model.input_size
+        num_heads = model.num_heads
+        probs = accessor[layer]
+        if probs.shape != (batch_size, num_heads, seq_len, seq_len):
+            raise RenamingError(
+                f"Attention probabilities have shape {probs.shape} != {(batch_size, num_heads, seq_len, seq_len)} (batch_size, n_head, seq_len, seq_len) in {model.repo_id} architecture. This means it's not properly initialized."
+            )
+        rnd = th.randn_like(probs).abs()
+        rnd = rnd / rnd.sum(dim=-1, keepdim=True)
+        accessor[layer] = rnd
+        if probs.device != th.device("meta"):
+            sum_last = probs.sum(dim=-1)
+            if "sink" in accessor.address.tags:
+                if not (sum_last > 0).all():
+                    raise RenamingError("Attention probabilities should be > 0.")
+                if not (sum_last < 1 + 1e-5).all():
+                    raise RenamingError(
+                        "Attention probabilities should sum to < 1 for models with sink tokens."
+                    )
+            else:
+                atol = 1e-2 if probs.dtype == th.bfloat16 else 1e-5
+                if not th.allclose(sum_last, th.ones_like(sum_last), atol=atol):
+                    raise RenamingError("Attention probabilities do not sum to 1.")
+
+    if use_trace:
+        remote = model.remote
+        with model.trace(dummy_inputs(), remote=remote):
+            test_prob_source()
+            corr_logits = model.logits.save()
+        with model.trace(dummy_inputs(), remote=remote):
+            clean_logits = model.logits.save()
+
+        if th.allclose(corr_logits, clean_logits):
+            raise RenamingError(
+                "Attention probabilities are not properly initialized: changing the attention probabilities should change the logits."
+            )
+        return
+
+    try_with_scan(
+        model,
+        test_prob_source,
+        RenamingError(
+            "Can't access attention probabilities. It is most likely not yet supported for this architecture and transformers version."
+        ),
+        allow_dispatch=allow_dispatch,
+        errors_to_raise=(RenamingError,),
+    )
+
+
+# --------------------------------------------------------------------------- #
+# The address table
+# --------------------------------------------------------------------------- #
+
+#: The accessors of a pre-norm block whose attention goes through transformers'
+#: attention interface (Llama, Mistral, Qwen, Gemma, GPT-2, ...). ``order`` is the
+#: place in the block's forward pass.
+DEFAULT_ADDRESSES: dict[str, Address] = {
+    "layers_input": Address("", IOType.INPUT, order=0),
+    "attentions": Address("self_attn", None, order=10),
+    "attentions_input": Address("self_attn", IOType.INPUT, order=10),
+    # The dropout call's output rather than the softmax's: it is the pattern the
+    # values are mixed with on every family (after the cast, and after an
+    # attention sink has been dropped), and the identity in eval mode.
+    "attention_probabilities": Address(
+        "self_attn",
+        op=("attention_interface_1", "nn_functional_dropout_0"),
+        order=20,
+    ),
+    "attentions_output": Address("self_attn", order=30),
+    "mlps": Address("mlp", None, order=40),
+    "mlps_input": Address("mlp", IOType.INPUT, order=40),
+    "mlps_output": Address("mlp", order=50),
+    "layers_output": Address("", order=60),
+}
+
+_NO_CONTRIBUTION = (
+    "{name} is disabled for this model: no module exposes the sublayer's "
+    "additive contribution to the residual stream (see the warning logged at "
+    "load and https://github.com/ndif-team/nnterp/issues/51). Use "
+    "layers[i].{module}.output for the raw (residual-added) module output."
+)
+
+
+def _row(name: str, **differs) -> Address:
+    return replace(DEFAULT_ADDRESSES[name], **differs)
+
+
+#: What differs per family: ``(model class or predicate on the model, rows)``.
+#: Later entries win. ``attentions_output`` / ``mlps_output`` mean the sublayer's
+#: additive contribution to the residual stream, so an architecture that adds the
+#: residual *inside* the sublayer module (issue #51) points them at the last
+#: pre-residual projection.
+FAMILY_ADDRESSES: list[tuple[type | Callable[[Any], bool], dict[str, Address]]] = [
+    (
+        BloomForCausalLM,
+        {
+            "attentions_output": _row("attentions_output", module="self_attn.dense"),
+            "mlps_output": _row("mlps_output", module="mlp.dense_4h_to_h"),
+            "attention_probabilities": _row(
+                "attention_probabilities", op=("self_attention_dropout_0",)
+            ),
+        },
+    ),
+    (
+        # No module carries the contribution: these checkpoints compute the
+        # output projections with F.linear, bypassing the dense modules.
+        bloom_slow_but_exact,
+        {
+            name: _row(name, unavailable=_NO_CONTRIBUTION.format(name=name, module=module))
+            for name, module in (("attentions_output", "self_attn"), ("mlps_output", "mlp"))
+        },
+    ),
+    (MptForCausalLM, {
+        "mlps_output": _row("mlps_output", module="mlp.down_proj"),
+        "attention_probabilities": _row("attention_probabilities", op=("nn_functional_dropout_0",)),
+    }),
+    (
+        # DbrxNormAttentionNorm returns (resid_mid, norm_2(resid_mid), attn_weights):
+        # its output[0] is a residual-stream state, the inner attn output is the contribution.
+        DbrxForCausalLM,
+        {
+            "attentions_output": _row("attentions_output", module="self_attn.attn"),
+            "attention_probabilities": _row(
+                "attention_probabilities", module="self_attn.attn", op=("nn_functional_dropout_0",)
+            ),
+        },
+    ),
+    (
+        # FalconAttention calls its dropout only on the alibi branch; the other
+        # softmaxes straight into what it returns
+        FalconForCausalLM,
+        {"attention_probabilities": _row("attention_probabilities", op=("F_softmax_0",))},
+    ),
+    (
+        lambda model: isinstance(model, FalconForCausalLM) and model.config.alibi,
+        {"attention_probabilities": _row("attention_probabilities", op=("self_attention_dropout_0",))},
+    ),
+    (
+        GPTJForCausalLM,
+        {"attention_probabilities": _row("attention_probabilities", op=("self__attn_0", "self_attn_dropout_0"))},
+    ),
+    (
+        Qwen2MoeForCausalLM,
+        {"attention_probabilities": _row("attention_probabilities", op=("nn_functional_dropout_0",))},
+    ),
+    (
+        # the softmax spans the keys plus a sink, and the sink is dropped
+        GptOssForCausalLM,
+        {"attention_probabilities": _row("attention_probabilities", tags=frozenset({"sink"}))},
+    ),
+]
+
+
+def addresses_for(model, rename_config: RenameConfig | None = None) -> dict[str, Address]:
+    """The address of every accessor on ``model``: the defaults, then the rows of
+    each family entry that matches, then what the user's RenameConfig says."""
+    addresses = dict(DEFAULT_ADDRESSES)
+    for matches, rows in FAMILY_ADDRESSES:
+        if isinstance(model, matches) if isinstance(matches, type) else matches(model):
+            addresses.update(rows)
+    if rename_config is not None:
+        if rename_config.attn_output_source is not None:
+            addresses["attentions_output"] = _row(
+                "attentions_output", module=rename_config.attn_output_source
+            )
+        if rename_config.mlp_output_source is not None:
+            addresses["mlps_output"] = _row("mlps_output", module=rename_config.mlp_output_source)
+        if rename_config.attn_prob_source is not None:
+            addresses["attention_probabilities"] = _row(
+                "attention_probabilities", op=rename_config.attn_prob_source
+            )
+        addresses.update(rename_config.addresses or {})
+    return addresses
 
 
 def get_ignores(model, rename_config: RenameConfig | None = None) -> list[str]:

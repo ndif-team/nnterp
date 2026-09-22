@@ -157,6 +157,9 @@ class StandardizationMixin:
         self.mlps_norm_output = self.internals["mlps_norm_output"]
         self.mlps_activation = self.internals["mlps_activation"]
         self.mlps_neurons = self.internals["mlps_neurons"]
+        # the whole-model places are properties (below): `model.lm_head_output`
+        # is the tensor inside a trace, and `model.internals["lm_head_output"]`
+        # the accessor behind it
 
         self.num_layers = len(self.layers)
         # From the block structure: a softmax-attention block exposes self_attn, a
@@ -325,6 +328,40 @@ class StandardizationMixin:
     def token_embeddings(self, value: TraceTensor):
         """Sets the token embeddings. Equivalent to self.embed_tokens.output = value"""
         self.embed_tokens.output = value
+
+    @property
+    def embeddings_input(self) -> TraceTensor:
+        """The token ids, as the embedding table receives them."""
+        return self.internals["embeddings_input"]()
+
+    @property
+    def embeddings_output(self) -> TraceTensor:
+        """The embedding table's output: the residual stream before layer 0."""
+        return self.internals["embeddings_output"]()
+
+    @embeddings_output.setter
+    def embeddings_output(self, value: TraceTensor):
+        self.internals["embeddings_output"].set(value)
+
+    @property
+    def ln_final_output(self) -> TraceTensor:
+        """The final norm's output: what the head reads."""
+        return self.internals["ln_final_output"]()
+
+    @ln_final_output.setter
+    def ln_final_output(self, value: TraceTensor):
+        self.internals["ln_final_output"].set(value)
+
+    @property
+    def lm_head_output(self) -> TraceTensor:
+        """The head module's output. On a model that caps its logits after the
+        head (Gemma-2's ``final_logit_softcapping``) this is the uncapped tensor;
+        ``model.logits`` is what the model predicts from."""
+        return self.internals["lm_head_output"]()
+
+    @lm_head_output.setter
+    def lm_head_output(self, value: TraceTensor):
+        self.internals["lm_head_output"].set(value)
 
     @property
     def next_token_probs(self) -> TraceTensor:

@@ -47,16 +47,20 @@ def read(model, layer: int, *names: str) -> dict[str, th.Tensor]:
     """Each value cloned *as it is reached*, in forward order. Falcon adds its
     attention output into its MLP output in place, so an MLP output cloned after
     the block has finished already contains the attention's."""
-    ordered = sorted(names, key=lambda name: model.internals[name].address.order)
+    ordered = sorted(names, key=lambda name: model.internals.rank(name, layer))
     with th.no_grad(), model.trace(TOKENS):
         got = nnsight.save({})
         for name in ordered:
-            got[name] = model.internals[name][layer].clone()
+            accessor = model.internals[name]
+            got[name] = accessor[layer if accessor.per_layer else None].clone()
     return dict(got)
 
 
 def tensor_accessors(model) -> list[str]:
     return [name for name in model.internals if model.internals[name].io_type is not None]
+
+
+WHOLE_MODEL = ["embeddings_input", "embeddings_output", "ln_final_output", "lm_head_output"]
 
 
 def test_the_block_structure_is_published(loaded):
@@ -74,12 +78,48 @@ def test_what_a_family_lacks_is_known_before_any_trace(loaded):
     for name in expected.get("unavailable", []):
         with pytest.raises(RenamingError):
             model.internals[name][0]
+    # and per layer, where layers differ: the dense layers have the place, the
+    # mixture-of-experts layers say why not
+    dense = expected.get("dense_layers")
+    if dense is not None:
+        for layer in range(model.num_layers):
+            reason = model.internals.status(layer=layer)["mlps_activation"]
+            assert (reason is None) == (layer in dense), (layer, reason)
+            if reason is not None:
+                assert "mixture-of-experts layer" in reason
+
+
+def test_the_whole_model_places_read_write_and_refuse_a_layer(loaded):
+    """One per model: a property on the model, the same accessor in the
+    registry, and the layer-indexed spelling refused by name."""
+    model, _ = loaded
+    got = read(model, 0, *WHOLE_MODEL, "layers_input", "layers_output")
+    assert th.equal(got["embeddings_input"], TOKENS)
+    # the table's output, which is the stream before layer 0 only where nothing
+    # sits between them (GPT-2 and OPT add position embeddings, BLOOM a norm)
+    assert got["embeddings_output"].shape == got["layers_input"].shape
+    assert got["ln_final_output"].shape == got["layers_output"].shape
+    assert got["lm_head_output"].shape[-1] == model.vocab_size
+    for name in WHOLE_MODEL:
+        assert not model.internals[name].per_layer
+        assert model.internals.status()[name] is None
+        with pytest.raises(RenamingError, match="one per model"):
+            model.internals[name][0]
+    with th.no_grad(), model.trace(TOKENS):
+        assert model.lm_head_output is not None
+        model.lm_head_output = th.zeros_like(model.lm_head_output)
+        logits = model.lm_head_output.clone().save()
+    assert float(logits.abs().max()) == 0.0
+    # forward order across kinds: the embeddings before every layer, the head after
+    names = ["lm_head_output", "layers_output", "embeddings_output"]
+    ranked = sorted(names, key=lambda name: model.internals.rank(name, model.num_layers - 1))
+    assert ranked == ["embeddings_output", "layers_output", "lm_head_output"]
 
 
 def test_every_available_accessor_reads_a_tensor_on_every_layer(loaded):
     model, expected = loaded
     status = model.internals.status()
-    names = [name for name in tensor_accessors(model) if status[name] is None]
+    names = [name for name in tensor_accessors(model) if status[name] is None and model.internals[name].per_layer]
     dense = expected.get("dense_layers")
     for layer in range(model.num_layers):
         here = [
@@ -93,7 +133,7 @@ def test_every_available_accessor_reads_a_tensor_on_every_layer(loaded):
             assert tensor.shape[:2] == TOKENS.shape, (name, tensor.shape)
     if dense is not None:
         sparse = next(layer for layer in range(model.num_layers) if layer not in dense)
-        with pytest.raises(RenamingError, match=f"does not exist on layer {sparse}"):
+        with pytest.raises(RenamingError, match="mixture-of-experts layer"):
             model.mlps_activation[sparse]
 
 

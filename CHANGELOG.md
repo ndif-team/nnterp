@@ -4,6 +4,23 @@
 
 ### New Features
 
+- **Whole-model places are accessors too.** `embeddings_input` (the token
+  ids), `embeddings_output`, `ln_final_output` and `lm_head_output` are rows of
+  the same address table as the per-layer accessors (`Address(per_layer=False)`),
+  so they carry a `select`/`Lens`, an availability reason and a place in forward
+  order like every other. Each is a property on the model — `model.lm_head_output`
+  is the tensor inside a trace, `model.lm_head_output = value` writes it — and
+  `model.internals["lm_head_output"]` is the accessor behind it; indexing one by
+  a layer is refused by name. `model.lm_head.output` keeps working for the raw
+  module. `lm_head_output` is the head module's output, uncapped on Gemma-2;
+  `model.logits` remains the capped logits the model predicts from.
+- **Availability per layer.** `Address.unavailable` may be a function of the
+  layer's module, and `model.internals.status(layer=i)` answers for one layer:
+  on DeepSeek, `mlps_activation` is available on the dense first blocks and says
+  "a mixture-of-experts layer" on the rest, before any trace. `status()` with no
+  layer is the model-wide answer. `internals.read(*names, layer=i)` reads
+  per-layer and whole-model places together in forward order
+  (`internals.rank(name, layer)`); `read(layer, *names)` still works.
 - **Six accessors inside the block**, each defined by what it is *of* the block
   rather than by a module name: `layers_mid` (the residual stream after
   attention), `attentions_norm_output` and `mlps_norm_output` (what each sublayer

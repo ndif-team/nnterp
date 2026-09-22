@@ -463,8 +463,12 @@ class Address:
     Parameters
     ----------
     module : str
-        Dotted path under the layer, in nnterp's standardized names. ``""`` is the
-        layer itself.
+        Dotted path in nnterp's standardized names: under the layer for a per-layer
+        place (``""`` is the layer itself), under the model for a whole-model one
+        (``"lm_head"``).
+    per_layer : bool
+        Whether the place is one per layer, reached as ``accessor[i]``, or one per
+        model, reached as ``accessor()`` (and ``model.<name>`` as a property).
     io : IOType or None
         Which side of the module (or of the operation, when ``op`` is set) carries
         the tensor. ``None`` makes the accessor return the module envoy itself.
@@ -483,9 +487,12 @@ class Address:
     order : int
         Rank of this place in the block's forward pass. nnsight cannot reach back
         to a value the model has passed, so ``Internals.read`` sorts by it.
-    unavailable : str or None
-        Why this family has no such tensor. Any access raises a RenamingError
-        carrying the reason.
+    unavailable : str, callable or None
+        Why this family has no such tensor: a reason, or ``fn(layer_module) ->
+        reason | None`` for a place some layers of a model have and others do not
+        (DeepSeek's first blocks are dense, the rest mixtures of experts). Any
+        access raises a RenamingError carrying the reason; ``Internals.status``
+        reports it before any trace.
     tags : frozenset of str
         Facts about the tensor a consumer or a check needs, e.g. ``"sink"``: the
         attention probabilities of a model with attention sinks sum to less than 1.
@@ -496,8 +503,9 @@ class Address:
     op: tuple[str, ...] | Callable[[Envoy], Any] = ()
     select: tuple[int | str, ...] | Lens | None = None
     order: int = 0
-    unavailable: str | None = None
+    unavailable: str | Callable[[Any], str | None] | None = None
     tags: frozenset[str] = frozenset()
+    per_layer: bool = True
 
     @property
     def is_attention(self) -> bool:
@@ -562,8 +570,39 @@ class LayerAccessor:
         self.model = model
         self.address = address
         self.name = name or address.module or "layers"
-        self.disabled_reason = disabled_reason or address.unavailable
-        self._is_tuple: dict[int, bool] = {}
+        self.disabled_reason = disabled_reason or (
+            address.unavailable if isinstance(address.unavailable, str) else None
+        )
+        self._is_tuple: dict[int | None, bool] = {}
+
+    @property
+    def per_layer(self) -> bool:
+        return self.address.per_layer
+
+    def unavailable_on(self, layer: int | None) -> str | None:
+        """Why this accessor cannot be read at ``layer`` (``None`` for a whole-model
+        place), or ``None`` if it can — decided from the address and the module
+        tree, without running the model."""
+        if self.disabled_reason is not None:
+            return self.disabled_reason
+        if self.per_layer:
+            assert layer is not None, f"{self.name} is per layer: say which"
+            if self.is_attention and layer in self.model.linear_attention_layers:
+                return str(linear_attention_error(self.model, layer))
+            module = self.model.layers[layer]
+        else:
+            assert layer is None, f"{self.name} is one per model, not per layer"
+            module = self.model
+        if callable(self.address.unavailable):
+            reason = self.address.unavailable(module._module)
+            if reason is not None:
+                return reason
+        for attr in filter(None, self.address.module.split(".")):
+            if getattr(module, attr, None) is None:
+                where = f"layer {layer}: its" if self.per_layer else "this model: its"
+                return f"{self.name} does not exist on {where} {type(module._module).__name__} has no {attr!r}."
+            module = getattr(module, attr)
+        return None
 
     # the spelling the accessor had before it took an address
     @property
@@ -585,26 +624,16 @@ class LayerAccessor:
     def disable(self, reason: str | None = None):
         self.disabled_reason = reason or f"{self.name} is disabled for this model."
 
-    def get_module(self, layer: int) -> Envoy:
-        if self.disabled_reason is not None:
-            raise RenamingError(self.disabled_reason)
-        if self.is_attention and layer in self.model.linear_attention_layers:
-            raise linear_attention_error(self.model, layer)
-        module = self.model.layers[layer]
-        if self.address.module:
-            for attr in self.address.module.split("."):
-                child = getattr(module, attr, None)
-                if child is None:
-                    # layers of one model may differ: DeepSeek's first blocks are
-                    # dense and the rest mixtures of experts
-                    raise RenamingError(
-                        f"{self.name} does not exist on layer {layer}: its "
-                        f"{type(module._module).__name__} has no {attr!r}."
-                    )
-                module = child
+    def get_module(self, layer: int | None = None) -> Envoy:
+        reason = self.unavailable_on(layer)
+        if reason is not None:
+            raise RenamingError(reason)
+        module = self.model.layers[layer] if self.per_layer else self.model
+        for attr in filter(None, self.address.module.split(".")):
+            module = getattr(module, attr)
         return module
 
-    def get_operation(self, layer: int, containing_source: bool = False):
+    def get_operation(self, layer: int | None = None, containing_source: bool = False):
         """The ``.source`` operation this address names, or (``containing_source``)
         the source it is an operation of. A name the installed forward does not
         have raises a RenamingError listing the operations it does have: a moved
@@ -628,14 +657,18 @@ class LayerAccessor:
                 ) from e
         return target
 
-    def _place(self, layer: int):
+    def _place(self, layer: int | None):
         """The object holding the value and the attribute it is under."""
         if self.address.op:
             place = self.get_operation(layer)
             return place, "inputs" if self.io_type == IOType.INPUT else "output"
         return self.get_module(layer), self.io_type.value
 
-    def __getitem__(self, layer: int) -> TraceTensor | Envoy:
+    def __getitem__(self, layer: int | None) -> TraceTensor | Envoy:
+        if layer is None and self.per_layer:
+            raise RenamingError(f"{self.name} is per layer: {self.name}[i]")
+        if layer is not None and not self.per_layer:
+            raise RenamingError(f"{self.name} is one per model, not per layer: {self.name}() or model.{self.name}")
         if self.io_type is None:
             return self.get_module(layer)
         place, attribute = self._place(layer)
@@ -647,7 +680,11 @@ class LayerAccessor:
             return value[0] if is_tuple else value
         return select.get(value) if isinstance(select, Lens) else _walk(value, select)
 
-    def __setitem__(self, layer: int, new: TraceTensor):
+    def __setitem__(self, layer: int | None, new: TraceTensor):
+        if layer is None and self.per_layer:
+            raise RenamingError(f"{self.name} is per layer: {self.name}[i] = value")
+        if layer is not None and not self.per_layer:
+            raise RenamingError(f"{self.name} is one per model, not per layer: model.{self.name} = value")
         if self.io_type is None:
             raise ValueError(
                 f"Cannot set the value of a module accessor. Did you mean {self.name}_input/output"
@@ -665,10 +702,14 @@ class LayerAccessor:
             replacement = _rebuilt(getattr(place, attribute), select, new)
         setattr(place, attribute, replacement)
 
-    def __call__(self, layer: int) -> TraceTensor | Envoy:
+    def __call__(self, layer: int | None = None) -> TraceTensor | Envoy:
         return self[layer]
 
-    def returns_tuple(self, layer: int) -> bool | None:
+    def set(self, new: TraceTensor) -> None:
+        """Write a whole-model place: ``model.lm_head_output = value`` does this."""
+        self[None] = new
+
+    def returns_tuple(self, layer: int | None = None) -> bool | None:
         """
         Returns whether the value at ``layer`` is a tuple, as recorded by the last
         access to that layer. Returns None if the layer has not been accessed yet.
@@ -797,6 +838,13 @@ def check_attention_probabilities(
 #: attention interface (Llama, Mistral, Qwen, Gemma, GPT-2, ...). ``order`` is the
 #: place in the block's forward pass.
 DEFAULT_ADDRESSES: dict[str, Address] = {
+    # the whole-model places, ranked so that with the layers' ranks offset by
+    # depth (Internals.rank) the embeddings come before every layer and the
+    # final norm and head after all of them
+    "embeddings_input": Address("embed_tokens", IOType.INPUT, order=-2, per_layer=False),
+    "embeddings_output": Address("embed_tokens", order=-1, per_layer=False),
+    "ln_final_output": Address("ln_final", order=1000, per_layer=False),
+    "lm_head_output": Address("lm_head", order=1001, per_layer=False),
     "layers_input": Address("", IOType.INPUT, order=0),
     "attentions": Address("self_attn", None, order=10),
     "attentions_input": Address("self_attn", IOType.INPUT, order=10),
@@ -1044,15 +1092,26 @@ def structural_addresses(standardized_model, structure: BlockStructure) -> dict[
                 continue
             found |= {c for c in candidates if getattr(parent._module, c, None) is not None}
         mlps = [getattr(layer, "mlp", None) for layer in standardized_model.layers]
-        experts = parent_path == "mlp" and all(
+        sparse = parent_path == "mlp" and any(
             mlp is not None and hasattr(mlp._module, "experts") for mlp in mlps
         )
-        if not found and experts:
+        if sparse:
+            # per layer: DeepSeek's first blocks are dense, the rest mixtures
+            def no_single_activation(block, name=name):
+                mlp = getattr(block, "mlp", None)
+                if mlp is not None and hasattr(mlp, "experts"):
+                    return (
+                        f"{name} does not exist on a mixture-of-experts layer, where a token goes "
+                        "through top-k of N experts and has no single activation. mlps_input and "
+                        "mlps_output are the block's boundaries and work as usual."
+                    )
+                return None
+
+            if not found:
+                rows[name] = replace(address, unavailable=no_single_activation)
+                continue
             rows[name] = replace(
-                address,
-                unavailable=f"{name} does not exist on this model: every MLP is a mixture of experts, "
-                "where a token goes through top-k of N experts and has no single activation. "
-                "mlps_input and mlps_output are the block's boundaries and work as usual.",
+                address, module=address.module.format(name=found.pop()), unavailable=no_single_activation
             )
             continue
         if len(found) != 1:

@@ -127,6 +127,16 @@
   gives the reason rather than a bool). `disable(reason)` rewrites the address, so
   a disabled place answers the same reason to a read and to `status()`.
 
+- **`remote=True` no longer ships nnterp to the server.** It used to register
+  the package for cloudpickle by-value serialization, so every request carried
+  nnterp's source and the server ran the client's copy instead of its own. The
+  registration is gone: an NDIF server must have nnterp installed at the same
+  version as the client, and nothing of nnterp travels with a request. The
+  saving is real — a request that referenced the module is several times
+  smaller — and so is the failure it removes: by-value pickling of nnterp
+  raises `TypeError: cannot pickle '_thread.RLock' object` on the module-level
+  logger as soon as a traced block names `nnterp` itself.
+
 - **`remote=True` keeps the checkpoint off the client.** It sets
   `allow_dispatch=False`, so every load-time check runs with `scan()` on the meta
   model, and no request is sent to NDIF during construction: after

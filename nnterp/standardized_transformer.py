@@ -6,7 +6,6 @@ import torch as th
 from torch.nn import Module
 from torch import Size
 from nnsight import TransformersModel
-from nnsight.ndif import register as ndif_register
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from .utils import (
@@ -87,9 +86,10 @@ class StandardizationMixin:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
-        remote (bool, default False): If True, registers nnterp for NDIF remote execution via
-            cloudpickle serialization and keeps the checkpoint off the client: allow_dispatch
-            is set to False and every load-time check runs with scan() on the meta model.
+        remote (bool, default False): If True, keeps the checkpoint off the client:
+            allow_dispatch is set to False and every load-time check runs with scan() on
+            the meta model. The NDIF server must have nnterp installed at this version;
+            nothing of nnterp is shipped with a request.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
@@ -156,8 +156,9 @@ class StandardizationMixin:
         self.remote = remote
         if remote:
             # The checkpoint lives on NDIF: validate on the meta model with scan()
-            # and never dispatch it on the client.
-            ndif_register("nnterp")
+            # and never dispatch it on the client. Nothing of nnterp is shipped
+            # with the request — the server imports its own installed copy, which
+            # has to be the same version as this one.
             allow_dispatch = False
         if check_attn_probs_with_trace is None:
             check_attn_probs_with_trace = not remote
@@ -609,9 +610,10 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
-        remote (bool, default False): If True, registers nnterp for NDIF remote execution via
-            cloudpickle serialization and keeps the checkpoint off the client: allow_dispatch
-            is set to False and every load-time check runs with scan() on the meta model.
+        remote (bool, default False): If True, keeps the checkpoint off the client:
+            allow_dispatch is set to False and every load-time check runs with scan() on
+            the meta model. The NDIF server must have nnterp installed at this version;
+            nothing of nnterp is shipped with a request.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
@@ -707,8 +709,9 @@ class StandardizedVLM(TransformersModel, StandardizationMixin):
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
-        remote (bool, default False): If True, registers nnterp for NDIF remote execution and
-            keeps the checkpoint off the client (allow_dispatch=False, checks run with scan()).
+        remote (bool, default False): If True, keeps the checkpoint off the client
+            (allow_dispatch=False, checks run with scan()). The NDIF server must have
+            nnterp installed at this version; nothing of nnterp is shipped with a request.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Set to False when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities

@@ -21,6 +21,7 @@ Changed
 ~~~~~~~
 * Accessors detect tuple outputs per layer (``LayerAccessor.returns_tuple(layer)``), so layers can be accessed in any order; the renaming checks and attention-probability validation run on the first softmax-attention layer
 * ``remote=True`` keeps the checkpoint off the client: it sets ``allow_dispatch=False``, validates with ``scan()`` and sends no request to NDIF during construction; ``check_attn_probs_with_trace`` defaults to ``None`` (``True`` for a local model, ``False`` for a remote one)
+* ``remote=True`` no longer registers ``nnterp`` for by-value serialization: nothing of ``nnterp`` is shipped with a request, and the NDIF server must have ``nnterp`` installed at the client's version
 * ``attn_implementation="eager"`` is accepted next to ``enable_attention_probs=True``; a non-eager value raises a ``ValueError``
 * ``StandardizedVLM.allow_multimodal`` defaults to ``False`` (fail loud on heterogeneous layers)
 * bfloat16 tolerance for attention probability checks (``1e-2`` instead of ``1e-5``)

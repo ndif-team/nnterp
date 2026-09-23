@@ -351,7 +351,9 @@ def test_standardized_transformer_steer_method(model_name):
         if hidden_size is None:
             pytest.fail(f"Model {model_name} has no hidden size")
 
-        steering_vector = th.randn(hidden_size) * 0.1
+        # seeded: whether a steer moves the logits must not depend on the RNG
+        # state the worker happens to be in when xdist schedules this test
+        steering_vector = th.randn(hidden_size, generator=th.Generator().manual_seed(0)) * 0.1
 
         with model.trace(prompt):
             baseline_output = model.logits.save()
@@ -415,7 +417,9 @@ def test_steer_token_positions(model_name):
         if hidden_size is None:
             pytest.fail(f"Model {model_name} has no hidden size")
 
-        steering_vector = th.randn(hidden_size) * 0.1
+        # seeded: whether a steer moves the logits must not depend on the RNG
+        # state the worker happens to be in when xdist schedules this test
+        steering_vector = th.randn(hidden_size, generator=th.Generator().manual_seed(0)) * 0.1
 
         with model.trace(prompt):
             baseline_output = model.logits.save()
@@ -451,7 +455,9 @@ def test_steer_batch_index(model_name):
         if hidden_size is None:
             pytest.fail(f"Model {model_name} has no hidden size")
 
-        steering_vector = th.randn(hidden_size) * 0.1
+        # seeded: whether a steer moves the logits must not depend on the RNG
+        # state the worker happens to be in when xdist schedules this test
+        steering_vector = th.randn(hidden_size, generator=th.Generator().manual_seed(0)) * 0.1
 
         with model.trace(prompts):
             baseline_output = model.logits.save()
@@ -491,7 +497,9 @@ def test_steer_batch_index_and_token_positions(model_name):
         if hidden_size is None:
             pytest.fail(f"Model {model_name} has no hidden size")
 
-        steering_vector = th.randn(hidden_size) * 0.1
+        # seeded: whether a steer moves the logits must not depend on the RNG
+        # state the worker happens to be in when xdist schedules this test
+        steering_vector = th.randn(hidden_size, generator=th.Generator().manual_seed(0)) * 0.1
 
         with model.trace(prompts):
             baseline_output = model.logits.save()

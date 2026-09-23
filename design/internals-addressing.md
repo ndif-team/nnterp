@@ -1,5 +1,25 @@
 # Naming and reaching tensors: a design for nnterp's internals layer
 
+## What shipped
+
+This document is the proposal as it was written. What the branch actually shipped is
+smaller, and where the two disagree the code is right:
+
+* **`Address` + `LayerAccessor` + `model.internals`** shipped, as did availability
+  answered before any trace (`internals.status()`, per layer where a model's layers
+  differ), forward order (`Address.order`, `internals.rank`), `model.block_structure`,
+  the six block-interior places, the whole-model places as rows, and the published
+  sizes. `RenameConfig(addresses=...)` is the way in from outside.
+* **`Selection` instead of `Lens`**: where a tensor sits inside a value is a
+  `Selection` — `Path(*steps)` or `FirstIfTuple()`, or one of your own — on
+  `Address.select`, not the get/put pair this document sketched.
+* **Not shipped**: `Layout`/`Axis`/`Fused` and `internals.layout(...)`, per-head
+  indexing (`[i, h]`), `attention_z` and the other attention interiors, the ordering
+  guard and `internals.read(3, *names)` (`internals.rank` sorts, and the caller reads),
+  `match_op` (operations are named literally), and the version-keyed table.
+* `design/prototype/` is the proposal's standalone prototype, not nnterp's code: its
+  `Address` has different fields from the one that shipped.
+
 Status: proposal. Branch `standardize-internals`. Nothing in `nnterp/` is changed by this
 document; the prototype under `design/prototype/` is standalone and runnable, and
 `design/prototype/demo_output.txt` is its recorded output on `Maykeye/TinyLLama-v0`, `gpt2`

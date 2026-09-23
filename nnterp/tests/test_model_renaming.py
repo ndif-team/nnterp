@@ -14,7 +14,14 @@ from nnterp.nnsight_utils import (
     get_num_layers,
     ModuleAccessor,
 )
-from nnterp.rename_utils import get_ignores, RenameConfig, RenamingError
+from nnterp.rename_utils import (
+    Address,
+    Path,
+    RenameConfig,
+    RenamingError,
+    Selection,
+    get_ignores,
+)
 from transformers import OPTForCausalLM
 import torch.nn as nn
 
@@ -170,7 +177,7 @@ def test_standardized_transformer_methods(model_name):
 
         num_layers = model.num_layers
         assert num_layers > 0
-        ignores = get_ignores(model._module)
+        ignores = get_ignores(model)
         with model.trace(prompt):
             assert model.layers[0] is not None
             # Test accessor and direct module access
@@ -183,11 +190,11 @@ def test_standardized_transformer_methods(model_name):
                 assert model.layers[0].mlp is not None
             # On architectures that add the residual inside the sublayer module
             # (BLOOM, MPT, DBRX), the output accessors target a submodule, so the
-            # direct access follows the accessor's attr_name path (issue #51).
+            # direct access follows the accessor's module path (issue #51).
             if "attention" not in ignores:
                 attn_output_accessor = model.attentions_output[0].save()
                 attn_output_direct = model.model.layers[0]
-                for attr in model.attentions_output.attr_name.split("."):
+                for attr in model.attentions_output.address.module.split("."):
                     attn_output_direct = getattr(attn_output_direct, attr)
                 attn_output_direct = attn_output_direct.output
                 if isinstance(attn_output_direct, tuple):
@@ -196,7 +203,7 @@ def test_standardized_transformer_methods(model_name):
             if "mlp" not in ignores:
                 mlps_output_accessor = model.mlps_output[0].save()
                 mlps_output_direct = model.model.layers[0]
-                for attr in model.mlps_output.attr_name.split("."):
+                for attr in model.mlps_output.address.module.split("."):
                     mlps_output_direct = getattr(mlps_output_direct, attr)
                 mlps_output_direct = mlps_output_direct.output
                 if isinstance(mlps_output_direct, tuple):
@@ -256,7 +263,7 @@ def test_renamed_model_methods(model_name):
 
         num_layers = get_num_layers(model)
         assert num_layers > 0
-        ignores = get_ignores(model._module)
+        ignores = get_ignores(model)
         with model.trace(prompt):
             batch_size = model.input_size[0].save()
             seq_len = model.input_size[1].save()
@@ -304,7 +311,7 @@ def test_standardized_transformer_input_accessors(model_name):
         model = StandardizedTransformer(model_name)
         prompt = "Hello, world!"
 
-        ignores = get_ignores(model._module)
+        ignores = get_ignores(model)
         with model.trace(prompt):
             # Test input accessors
             layer_input_accessor = model.layers_input[0].save()
@@ -657,9 +664,9 @@ def test_module_accessor(model_name, raw_model):
         unembed = accessor.get_unembed()
         assert isinstance(unembed, nn.Module)
 
-        # Test get_mlp if not ignored
-        ignores = get_ignores(pretrained_model)
-        if "mlp" not in ignores:
+        # Test get_mlp where the block has one (OPT's feed-forward is fc1 / fc2)
+        has_mlp = hasattr(accessor.nn_model.layers[0], "mlp")
+        if has_mlp:
             mlp = accessor.get_mlp(0)
             assert isinstance(mlp, nn.Module)
 
@@ -717,7 +724,7 @@ def test_module_accessor(model_name, raw_model):
         unembed_custom = accessor_custom.get_unembed()
         assert isinstance(unembed_custom, nn.Module)
 
-        if "mlp" not in ignores:
+        if has_mlp:
             mlp_custom = accessor_custom.get_mlp(0)
             assert isinstance(mlp_custom, nn.Module)
 
@@ -726,7 +733,7 @@ def test_module_accessor(model_name, raw_model):
         if num_layers > 1:
             attention_1 = accessor.get_attention(1)
             assert isinstance(attention_1, nn.Module)
-            if "mlp" not in ignores:
+            if has_mlp:
                 mlp_1 = accessor.get_mlp(1)
                 assert isinstance(mlp_1, nn.Module)
 
@@ -832,7 +839,7 @@ def test_slow_but_exact_bloom_disables_output_accessors():
     output projections with F.linear, so no module carries the sublayer
     contributions: attentions_output / mlps_output are disabled (issue #51)."""
     model = StandardizedTransformer("bigscience/bigscience-small-testing")
-    ignores = get_ignores(model._module)
+    ignores = get_ignores(model)
     assert "attention" in ignores and "mlp" in ignores
     with pytest.raises(RenamingError, match="disabled"):
         model.attentions_output[0]
@@ -844,3 +851,84 @@ def test_slow_but_exact_bloom_disables_output_accessors():
         logits = model.logits.save()
     assert attn_in.shape[-1] == model.hidden_size
     assert logits.shape[-1] == model.vocab_size
+
+
+def test_residual_inside_module_user_addresses(monkeypatch):
+    """The general form of the two output sources: a row of the address table,
+    passed as RenameConfig(addresses=...), says the same thing about BLOOM."""
+    from nnterp import rename_utils
+
+    monkeypatch.setattr(rename_utils, "FAMILY_ADDRESSES", [])
+    model = StandardizedTransformer(
+        "yujiepan/bloom-tiny-random",
+        rename_config=RenameConfig(
+            addresses={
+                "attentions_output": Address("self_attn.dense", order=30),
+                "mlps_output": Address("mlp.dense_4h_to_h", order=50),
+            }
+        ),
+    )
+    with th.no_grad(), model.trace("Hello, world!"):
+        layer_in = model.layers_input[0].save()
+        attn_out = model.attentions_output[0].save()
+        mlp_out = model.mlps_output[0].save()
+        layer_out = model.layers_output[0].save()
+    assert th.allclose(layer_in + attn_out + mlp_out, layer_out, atol=1e-5)
+
+
+def test_a_path_walks_the_value_and_rebuilds_it():
+    """A read walks in, a write rebuilds on the way out: the containers on the
+    way are copied, since a module's return value is not ours to mutate."""
+    path = Path(1, "x")
+    value = (0, {"x": 1, "y": 2})
+    assert path.get(value) == 1
+    assert path.put(value, 9) == (0, {"x": 9, "y": 2})
+    assert value == (0, {"x": 1, "y": 2})
+    assert Path().get(value) is value
+
+
+class _TheTensor(Selection):
+    """A selection of one's own, for what a path cannot say: whichever element of
+    the value is a tensor, wherever in it that element sits."""
+
+    def get(self, value):
+        return next(item for item in value if isinstance(item, th.Tensor))
+
+    def put(self, value, new):
+        return tuple(new if isinstance(item, th.Tensor) else item for item in value)
+
+
+def test_a_row_says_where_the_tensor_is_in_the_value():
+    """GPT-2's attention returns its output in a tuple. The shipped row unwraps
+    it with FirstIfTuple; the same place with no selection is the tuple itself,
+    with a path the element, and with a Selection of one's own whatever it says."""
+    model = StandardizedTransformer(
+        "gpt2",
+        rename_config=RenameConfig(
+            addresses={
+                "attn_value": Address("self_attn", order=30),
+                "attn_first": Address("self_attn", select=0, order=30),
+                "attn_tensor": Address("self_attn", select=_TheTensor(), order=30),
+            }
+        ),
+    )
+    with th.no_grad(), model.trace("Hello, world!"):
+        value = model.internals["attn_value"][0]
+        assert isinstance(value, tuple)
+        first = model.internals["attn_first"][0].save()
+        found = model.internals["attn_tensor"][0].save()
+        unwrapped = model.attentions_output[0].save()
+    assert th.equal(first, unwrapped)
+    assert th.equal(found, unwrapped)
+
+    # and a write through the path lands where the shipped row's does: the tuple
+    # is rebuilt around the new element, and the block goes on with it
+    path_accessor = model.internals["attn_first"]
+    with th.no_grad(), model.trace("Hello, world!"):
+        path_accessor[0] = th.zeros_like(path_accessor[0])
+        through_path = model.layers_output[0].clone().save()
+    with th.no_grad(), model.trace("Hello, world!"):
+        model.attentions_output[0] = th.zeros_like(model.attentions_output[0])
+        through_row = model.layers_output[0].clone().save()
+    assert th.equal(through_path, through_row)
+    assert not th.equal(through_path, unwrapped)

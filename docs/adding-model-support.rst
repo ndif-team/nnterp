@@ -109,6 +109,58 @@ module does not actually add the residual to its output, pass the default source
 (``attn_output_source="self_attn"`` / ``mlp_output_source="mlp"``) to keep the
 module output.
 
+Naming a place yourself: ``addresses``
+--------------------------------------
+
+Those two keys are special cases of ``addresses``, which replaces a row of
+nnterp's address table or adds one of your own. A row is an ``Address``: the
+module (relative to a layer, or to the model for a whole-model place), which side
+of it carries the tensor, the operations of its ``.source`` to descend through,
+and where the tensor sits inside the value found there.
+
+.. code-block:: python
+
+   from nnterp.rename_utils import Address, IOType, Path, RenameConfig
+
+   rename_config = RenameConfig(
+       addresses={
+           # the same thing attn_output_source says
+           "attentions_output": Address("self_attn.dense", order=30),
+           # an accessor of your own: it appears in model.internals and as
+           # model.attentions_gate, and reads a module this family alone has
+           "attentions_gate": Address("self_attn.gate_proj", order=25),
+       }
+   )
+
+``order`` is the row's place in the block's forward pass, which is how
+``model.internals.rank(name, layer)`` sorts several places into the order nnsight
+requires them to be read in.
+
+``Address.select`` says where the tensor is inside the value at that place, for a
+module that returns more than the tensor. It is ``None`` by default, meaning the
+value untouched; ``FirstIfTuple()`` for a module that returns its output beside a
+cache (what ``layers_output`` and ``attentions_output`` use); or a ``Path``,
+spelled ``Path(0)`` / ``0`` / ``("hidden_states",)``, walked to read and rebuilt
+around the new tensor to write. For a value neither describes, write a
+``Selection`` of your own:
+
+.. code-block:: python
+
+   from nnterp.rename_utils import Selection
+
+   class TheTensor(Selection):
+       """Whichever element of the value is a tensor."""
+
+       def get(self, value):
+           return next(item for item in value if isinstance(item, torch.Tensor))
+
+       def put(self, value, new):
+           return tuple(new if isinstance(item, torch.Tensor) else item for item in value)
+
+Such an address is defined in your own code, so a model reached through it cannot
+be traced remotely: NDIF ships an address by value, and nnterp's own selections
+are the only ones the server has.
+
 Real Example: GPT-J Support
 ----------------------------
 

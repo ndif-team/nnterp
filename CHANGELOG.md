@@ -4,23 +4,39 @@
 
 ### New Features
 
-- **Whole-model places are accessors too.** `embeddings_input` (the token
-  ids), `embeddings_output`, `ln_final_output` and `lm_head_output` are rows of
-  the same address table as the per-layer accessors (`Address(per_layer=False)`),
-  so they carry a `select`/`Lens`, an availability reason and a place in forward
-  order like every other. Each is a property on the model — `model.lm_head_output`
-  is the tensor inside a trace, `model.lm_head_output = value` writes it — and
-  `model.internals["lm_head_output"]` is the accessor behind it; indexing one by
-  a layer is refused by name. `model.lm_head.output` keeps working for the raw
-  module. `lm_head_output` is the head module's output, uncapped on Gemma-2;
-  `model.logits` remains the capped logits the model predicts from.
+- **One accessor per row of one address table.** `model.internals` is every
+  accessor of a model by name, in forward order, and each is an `Address`: the
+  module it reads (relative to a layer, or to the model), which side of it, the
+  `.source` operations to descend through, where the tensor sits in the value
+  there, why the family has no such place. Every row is an attribute of the model
+  too, so adding a place is adding a row —
+  `RenameConfig(addresses={"attentions_gate": Address("self_attn.gate_proj")})`
+  gives `model.attentions_gate[i]` and a row in `model.internals`.
+- **Whole-model places are accessors too.** `embeddings_input` (the token ids),
+  `embeddings_output`, `ln_final_output`, `lm_head_output` and `logits` are rows
+  of the same table (`Address(per_layer=False)`), so they carry a selection, an
+  availability reason and a place in forward order like every other. Each is
+  called rather than indexed: `model.lm_head_output()` inside a trace,
+  `model.lm_head_output[None] = value` to write, and indexing one by a layer is
+  refused by name. `model.token_embeddings` and `model.lm_head.output` keep
+  working. `lm_head_output` is the head module's output, uncapped on Gemma-2;
+  `model.logits` is the `logits` field of the model's output, which is what it
+  predicts from — now that row, read through `Address(select="logits")`.
+- **Where the tensor sits in the value is data: `Address.select`.** A `Selection`
+  — `FirstIfTuple()` for a module that returns its output beside a cache (what
+  `layers_output`, `attentions_output` and `mlps_output` use, decided at each
+  access so a model whose layers differ is read in any order), `Path(*steps)` for
+  a path walked in and rebuilt on the way out, or one you write yourself — instead
+  of a rule inside the accessor. With no selection the value comes back untouched,
+  tuple or not.
 - **Availability per layer.** `Address.unavailable` may be a function of the
   layer's module, and `model.internals.status(layer=i)` answers for one layer:
   on DeepSeek, `mlps_activation` is available on the dense first blocks and says
   "a mixture-of-experts layer" on the rest, before any trace. `status()` with no
-  layer is the model-wide answer. `internals.read(*names, layer=i)` reads
-  per-layer and whole-model places together in forward order
-  (`internals.rank(name, layer)`); `read(layer, *names)` still works.
+  layer is the model-wide answer, and it is where the renaming checks now read
+  what this architecture does not expose. `internals.rank(name, layer)` is a
+  place's rank in the forward pass: sort by it to read several in one trace
+  whatever order you name them in.
 - **Six accessors inside the block**, each defined by what it is *of* the block
   rather than by a module name: `layers_mid` (the residual stream after
   attention), `attentions_norm_output` and `mlps_norm_output` (what each sublayer
@@ -74,9 +90,12 @@
   it was taken to be part of). Code that wants the raw module output reads
   `attentions[i].output` / `mlps[i].output`.
 
-- **Per-layer tuple detection in the accessors.** `layers_output[i]` and the
-  other I/O accessors unwrap a tuple per access instead of assuming every layer
-  returns the same structure, so layers can be accessed in any order.
+- **Per-layer tuple detection in the accessors.** `layers_output[i]`,
+  `attentions_output[i]` and `mlps_output[i]` — the three places a module returns
+  its tensor in a tuple on some families — unwrap it per access (`FirstIfTuple`)
+  instead of assuming every layer returns the same structure, so layers can be
+  accessed in any order. An accessor whose row names a norm or a projection
+  returns what that module returns, untouched.
   `LayerAccessor.returns_tuple(layer)` replaces the `returns_tuple` property; the
   renaming checks read every layer output in forward order, `skip_layers` uses
   the per-layer record, and `detect_layer_output_type()` records the layers not

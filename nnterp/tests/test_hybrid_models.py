@@ -11,6 +11,8 @@ from nnsight import NNsight
 
 from nnterp import StandardizedTransformer
 from nnterp.rename_utils import (
+    Address,
+    FirstIfTuple,
     IOType,
     LayerAccessor,
     RenamingError,
@@ -186,13 +188,13 @@ class _Net(nn.Module):
 
 
 def test_layer_accessor_mixed_tuple_layers():
-    """LayerAccessor unwraps tuples per layer: a tuple-returning layer 0 and a
-    tensor-returning layer 1 are read and written in either order."""
+    """FirstIfTuple decides per layer, as layers_output's row does: a
+    tuple-returning layer 0 and a tensor-returning layer 1 are read and written in
+    either order."""
     net = NNsight(_Net())
     accessor = LayerAccessor(
         SimpleNamespace(layers=net.layers, linear_attention_layers=[]),
-        None,
-        IOType.OUTPUT,
+        Address("", IOType.OUTPUT, select=FirstIfTuple()),
     )
     x = th.ones(2, 3)
 

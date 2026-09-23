@@ -16,7 +16,6 @@ from .utils import (
 )
 from .internals import Internals
 from .rename_utils import (
-    IOType,
     LayerAccessor,
     RenameConfig,
     get_rename_dict,
@@ -53,6 +52,13 @@ class StandardizationMixin:
     - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i
     - mlps[i]: Get MLP module at layer i
     - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
+    - internals: every accessor of this model by name, in forward order, with what
+      it is and why a family has none (``model.internals.status()``). Each row of
+      the table is an attribute of the model like the ones above.
+    - the whole-model places — embeddings_input, embeddings_output, ln_final_output,
+      lm_head_output, logits — are called rather than indexed:
+      ``model.ln_final_output()`` reads, ``model.ln_final_output[None] = value``
+      writes, and ``model.logits`` is the property spelling of the last of them.
     - attention_layers / linear_attention_layers: Indices of the softmax-attention
       blocks (``layers[i].self_attn``) and of the linear-attention blocks
       (``layers[i].linear_attn``, Gated DeltaNet in Qwen3-Next / Qwen3.5 hybrids).
@@ -102,6 +108,29 @@ class StandardizationMixin:
     is_vllm: bool
     remote: bool
 
+    # One accessor per row of the address table, set in _init_standardization.
+    # These say so for a reader and a type checker; the table is what creates them.
+    internals: Internals
+    embeddings_input: LayerAccessor
+    embeddings_output: LayerAccessor
+    ln_final_output: LayerAccessor
+    lm_head_output: LayerAccessor
+    layers_input: LayerAccessor
+    layers_mid: LayerAccessor
+    layers_output: LayerAccessor
+    attentions: LayerAccessor
+    attentions_input: LayerAccessor
+    attentions_norm_output: LayerAccessor
+    attentions_premix: LayerAccessor
+    attentions_output: LayerAccessor
+    attention_probabilities: LayerAccessor
+    mlps: LayerAccessor
+    mlps_input: LayerAccessor
+    mlps_norm_output: LayerAccessor
+    mlps_activation: LayerAccessor
+    mlps_neurons: LayerAccessor
+    mlps_output: LayerAccessor
+
     def _init_standardization(
         self,
         model: str | Module,
@@ -127,8 +156,6 @@ class StandardizationMixin:
         else:
             model_name = model.__class__.__name__
 
-        ignores = get_ignores(self._module, rename_config)
-
         # One accessor per row of the address table: the defaults, what this
         # family does differently (rename_utils.FAMILY_ADDRESSES: e.g. attentions_output
         # / mlps_output target a submodule where the residual is added inside the
@@ -142,24 +169,13 @@ class StandardizationMixin:
             structural_addresses(self, self.block_structure)
             | addresses_for(self._module, rename_config),
         )
-        self.layers_input = self.internals["layers_input"]
-        self.layers_output = self.internals["layers_output"]
-        self.attentions = self.internals["attentions"]
-        self.attentions_input = self.internals["attentions_input"]
-        self.attentions_output = self.internals["attentions_output"]
-        self.mlps = self.internals["mlps"]
-        self.mlps_input = self.internals["mlps_input"]
-        self.mlps_output = self.internals["mlps_output"]
-        self.attention_probabilities = self.internals["attention_probabilities"]
-        self.attentions_norm_output = self.internals["attentions_norm_output"]
-        self.attentions_premix = self.internals["attentions_premix"]
-        self.layers_mid = self.internals["layers_mid"]
-        self.mlps_norm_output = self.internals["mlps_norm_output"]
-        self.mlps_activation = self.internals["mlps_activation"]
-        self.mlps_neurons = self.internals["mlps_neurons"]
-        # the whole-model places are properties (below): `model.lm_head_output`
-        # is the tensor inside a trace, and `model.internals["lm_head_output"]`
-        # the accessor behind it
+        # Every row is an attribute of the model: model.layers_output[i] for a
+        # per-layer place, model.lm_head_output() for a whole-model one. Adding a
+        # place is adding a row and nothing else. `logits` is the exception: the
+        # class reads it without parentheses, so its property wins.
+        for name, accessor in self.internals.items():
+            if not hasattr(type(self), name):
+                setattr(self, name, accessor)
 
         self.num_layers = len(self.layers)
         # From the block structure: a softmax-attention block exposes self_attn, a
@@ -185,6 +201,9 @@ class StandardizationMixin:
         self.num_kv_heads = get_num_kv_heads(self._module) if known else None
         self.intermediate_size = get_intermediate_size(self._module) if known else None
 
+        # a sublayer whose contribution the table says this model does not expose
+        # (OPT has no MLP module) is one the renaming checks cannot check
+        ignores = get_ignores(self, rename_config)
         if check_renaming:
             check_model_renaming(
                 self,
@@ -290,7 +309,9 @@ class StandardizationMixin:
 
     @property
     def attn_probs_available(self) -> bool:
-        return self.attention_probabilities.enabled
+        return (
+            self.attention_probabilities.unavailable_on(self.attention_layers[0]) is None
+        )
 
     @property
     def input_ids(self) -> TraceTensor:
@@ -328,40 +349,6 @@ class StandardizationMixin:
     def token_embeddings(self, value: TraceTensor):
         """Sets the token embeddings. Equivalent to self.embed_tokens.output = value"""
         self.embed_tokens.output = value
-
-    @property
-    def embeddings_input(self) -> TraceTensor:
-        """The token ids, as the embedding table receives them."""
-        return self.internals["embeddings_input"]()
-
-    @property
-    def embeddings_output(self) -> TraceTensor:
-        """The embedding table's output: the residual stream before layer 0."""
-        return self.internals["embeddings_output"]()
-
-    @embeddings_output.setter
-    def embeddings_output(self, value: TraceTensor):
-        self.internals["embeddings_output"].set(value)
-
-    @property
-    def ln_final_output(self) -> TraceTensor:
-        """The final norm's output: what the head reads."""
-        return self.internals["ln_final_output"]()
-
-    @ln_final_output.setter
-    def ln_final_output(self, value: TraceTensor):
-        self.internals["ln_final_output"].set(value)
-
-    @property
-    def lm_head_output(self) -> TraceTensor:
-        """The head module's output. On a model that caps its logits after the
-        head (Gemma-2's ``final_logit_softcapping``) this is the uncapped tensor;
-        ``model.logits`` is what the model predicts from."""
-        return self.internals["lm_head_output"]()
-
-    @lm_head_output.setter
-    def lm_head_output(self, value: TraceTensor):
-        self.internals["lm_head_output"].set(value)
 
     @property
     def next_token_probs(self) -> TraceTensor:
@@ -681,8 +668,10 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
 
     @property
     def logits(self) -> TraceTensor:
-        """Returns the predicted logits."""
-        return self.output.logits
+        """Returns the predicted logits: the ``logits`` field of the model's
+        output, which is what it predicts from (capped where the head's output is
+        not, on Gemma-2). The row behind it is ``model.internals["logits"]``."""
+        return self.internals["logits"]()
 
 
 class StandardizedVLM(TransformersModel, StandardizationMixin):
@@ -753,5 +742,7 @@ class StandardizedVLM(TransformersModel, StandardizationMixin):
 
     @property
     def logits(self) -> TraceTensor:
-        """Returns the predicted logits."""
-        return self.output.logits
+        """Returns the predicted logits: the ``logits`` field of the model's
+        output, which is what it predicts from (capped where the head's output is
+        not, on Gemma-2). The row behind it is ``model.internals["logits"]``."""
+        return self.internals["logits"]()

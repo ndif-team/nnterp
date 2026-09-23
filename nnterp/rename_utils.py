@@ -1,7 +1,7 @@
 import inspect
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, replace
-from typing import Any, Callable, Literal
+from typing import Any, Callable, Literal, get_args
 from enum import Enum
 
 import torch as th
@@ -181,9 +181,6 @@ def default_hidden_size_config_keys():
 def default_vocab_size_config_keys():
     return ["vocab_size", "n_vocab"]
 
-
-# Models with no mlp module
-IGNORE_MLP_MODELS = (OPTForCausalLM,)
 
 def bloom_slow_but_exact(model) -> bool:
     """BLOOM checkpoints with pretraining_tp > 1 and slow_but_exact=True (e.g.
@@ -439,15 +436,59 @@ def linear_attention_error(model, layer: int) -> RenamingError:
     )
 
 
-@dataclass(frozen=True)
-class Lens:
-    """Where a tensor sits inside a value no path can describe: two functions,
-    because a write needs the way back as much as a read needs the way in.
-    ``get(value)`` is the tensor; ``put(value, tensor)`` is ``value`` with the
-    tensor replaced. The escape hatch of ``Address.select``."""
+class Selection(ABC):
+    """Where the tensor sits inside the value at a place, when the value is not
+    the tensor itself: a module that returns its output beside a cache, an
+    operation whose inputs are an argument list, the model output's ``logits``
+    field. ``get`` is the way in and ``put`` the way back, because a write has to
+    rebuild what the read reached through.
 
-    get: Callable[[Any], Any]
-    put: Callable[[Any, Any], Any]
+    ``Path`` and ``FirstIfTuple`` are the two nnterp ships; a value neither
+    describes is a subclass of this, which ``Address.select`` takes like any
+    other. Such an address is defined in your own code, so a model reached with
+    it cannot be traced remotely: NDIF ships an address by value, and nnterp's
+    class is the only one the server has."""
+
+    @abstractmethod
+    def get(self, value: Any) -> Any:
+        """The tensor inside ``value``."""
+
+    @abstractmethod
+    def put(self, value: Any, new: Any) -> Any:
+        """``value`` with that tensor replaced by ``new``."""
+
+
+class Path(Selection):
+    """Indices and keys walked into the value: ``Path(0)`` is the first element of
+    a tuple, ``Path("logits")`` a field of the model's output, ``Path(0, 1)`` one
+    step of each. A row may spell it as the bare ``0`` or ``(0, 1)``."""
+
+    def __init__(self, *steps: int | str):
+        self.steps = steps
+
+    def get(self, value: Any) -> Any:
+        for step in self.steps:
+            value = value[step]
+        return value
+
+    def put(self, value: Any, new: Any) -> Any:
+        return _rebuilt(value, self.steps, new)
+
+    def __repr__(self) -> str:
+        return f"Path{self.steps}"
+
+
+class FirstIfTuple(Selection):
+    """The first element where the value is a tuple, and the value itself where it
+    is not — decided at each access, since the layers of one model need not agree
+    (a hybrid's blocks) and a module returns its cache or attention weights beside
+    the tensor on some families only."""
+
+    def get(self, value: Any) -> Any:
+        return value[0] if isinstance(value, tuple) else value
+
+    def put(self, value: Any, new: Any) -> Any:
+        return (new, *value[1:]) if isinstance(value, tuple) else new
 
 
 @dataclass(frozen=True)
@@ -478,15 +519,18 @@ class Address:
         dropout call inside the function the attention call dispatches to. A
         callable ``fn(module_envoy) -> operation`` is accepted for a forward no
         name can describe (``RenameConfig.attn_prob_source``).
-    select : tuple, Lens or None
-        Where the tensor is inside the value at that place. ``None`` takes the
-        first element of a tuple and a bare value as it is, decided per access,
-        since layers of one model may differ. A path ``(1,)`` / ``(0, 2)`` /
-        ``("hidden_states",)`` is walked to read and rebuilt around the new tensor
-        to write. A ``Lens`` is for what a path cannot say.
+    select : Selection, int, str, tuple or None
+        Where the tensor is inside the value at that place, when the value is not
+        the tensor itself. ``None``, the default, is the value untouched, tuple or
+        not — what the place holds is what you get, and what you write is what it
+        gets. ``FirstIfTuple()`` unwraps a module that returns its output beside a
+        cache; a ``Path`` walks in and rebuilds on the way out, spelled as a bare
+        ``0`` / ``"logits"`` / ``(0, 1)`` or as ``Path(0, 1)``. For a value neither
+        describes, write a ``Selection`` of your own.
     order : int
         Rank of this place in the block's forward pass. nnsight cannot reach back
-        to a value the model has passed, so ``Internals.read`` sorts by it.
+        to a value the model has passed, so ``Internals.rank`` reports it and a
+        read of several places sorts by it.
     unavailable : str, callable or None
         Why this family has no such tensor: a reason, or ``fn(layer_module) ->
         reason | None`` for a place some layers of a model have and others do not
@@ -501,21 +545,21 @@ class Address:
     module: str = ""
     io: IOType | None = IOType.OUTPUT
     op: tuple[str, ...] | Callable[[Envoy], Any] = ()
-    select: tuple[int | str, ...] | Lens | None = None
+    select: Selection | int | str | tuple[int | str, ...] | None = None
     order: int = 0
     unavailable: str | Callable[[Any], str | None] | None = None
     tags: frozenset[str] = frozenset()
     per_layer: bool = True
 
+    def __post_init__(self):
+        """A row may spell a path as a bare step or a tuple of them."""
+        if self.select is not None and not isinstance(self.select, Selection):
+            steps = self.select if isinstance(self.select, tuple) else (self.select,)
+            object.__setattr__(self, "select", Path(*steps))
+
     @property
     def is_attention(self) -> bool:
         return self.module.split(".")[0] == "self_attn"
-
-
-def _walk(value: Any, path: tuple[int | str, ...]) -> Any:
-    for step in path:
-        value = value[step]
-    return value
 
 
 def _rebuilt(value: Any, path: tuple[int | str, ...], new: Any) -> Any:
@@ -540,18 +584,14 @@ class LayerAccessor:
 
     ``accessor[i]`` reads, ``accessor[i] = value`` writes, and the address says
     how the tensor is reached: a module's input or output, or one operation
-    inside its forward, and where in that value the tensor sits.
-
-    With no ``select`` (every accessor nnterp ships by default), tuple values are
-    unwrapped per access: ``accessor[i]`` returns the first element when the value
-    at layer ``i`` is a tuple and the value itself otherwise, and
-    ``accessor[i] = value`` rebuilds the tuple around ``value``. Nothing is
-    inferred from one layer about another, so layers whose modules return
-    different structures can be accessed in any order.
+    inside its forward, and where in that value the tensor sits — its ``select``,
+    which for the accessors that read a module returning a tuple is a
+    ``FirstIfTuple`` and so is decided at each access, letting layers whose
+    modules return different structures be read in any order.
 
     Accessors rooted at ``self_attn`` raise a RenamingError on linear-attention
-    layers (see ``linear_attention_error``). An accessor that is unavailable, by
-    its address or because it was disabled, raises a RenamingError with the reason.
+    layers (see ``linear_attention_error``). An accessor whose address says the
+    place is unavailable raises a RenamingError with the reason.
 
     ``LayerAccessor(model, "self_attn", IOType.OUTPUT)`` is still accepted and
     builds the address.
@@ -562,7 +602,6 @@ class LayerAccessor:
         model,
         address: "Address | str | None" = None,
         io_type: IOType | None = None,
-        disabled_reason: str | None = None,
         name: str | None = None,
     ):
         if not isinstance(address, Address):
@@ -570,9 +609,6 @@ class LayerAccessor:
         self.model = model
         self.address = address
         self.name = name or address.module or "layers"
-        self.disabled_reason = disabled_reason or (
-            address.unavailable if isinstance(address.unavailable, str) else None
-        )
         self._is_tuple: dict[int | None, bool] = {}
 
     @property
@@ -583,8 +619,8 @@ class LayerAccessor:
         """Why this accessor cannot be read at ``layer`` (``None`` for a whole-model
         place), or ``None`` if it can — decided from the address and the module
         tree, without running the model."""
-        if self.disabled_reason is not None:
-            return self.disabled_reason
+        if isinstance(self.address.unavailable, str):
+            return self.address.unavailable
         if self.per_layer:
             assert layer is not None, f"{self.name} is per layer: say which"
             if self.is_attention and layer in self.model.linear_attention_layers:
@@ -604,11 +640,6 @@ class LayerAccessor:
             module = getattr(module, attr)
         return None
 
-    # the spelling the accessor had before it took an address
-    @property
-    def attr_name(self) -> str | None:
-        return self.address.module or None
-
     @property
     def io_type(self) -> IOType | None:
         return self.address.io
@@ -617,12 +648,13 @@ class LayerAccessor:
     def is_attention(self) -> bool:
         return self.address.is_attention
 
-    @property
-    def enabled(self) -> bool:
-        return self.disabled_reason is None
-
     def disable(self, reason: str | None = None):
-        self.disabled_reason = reason or f"{self.name} is disabled for this model."
+        """Make the place unavailable from here on, for a reason only the loaded
+        model knows (attention probabilities that were not validated). It is the
+        address that is rewritten, so there is one answer to what is available."""
+        self.address = replace(
+            self.address, unavailable=reason or f"{self.name} is disabled for this model."
+        )
 
     def get_module(self, layer: int | None = None) -> Envoy:
         reason = self.unavailable_on(layer)
@@ -673,12 +705,9 @@ class LayerAccessor:
             return self.get_module(layer)
         place, attribute = self._place(layer)
         value = getattr(place, attribute)
+        self._is_tuple[layer] = isinstance(value, tuple)
         select = self.address.select
-        if select is None:
-            is_tuple = isinstance(value, tuple)
-            self._is_tuple[layer] = is_tuple
-            return value[0] if is_tuple else value
-        return select.get(value) if isinstance(select, Lens) else _walk(value, select)
+        return value if select is None else select.get(value)
 
     def __setitem__(self, layer: int | None, new: TraceTensor):
         if layer is None and self.per_layer:
@@ -692,27 +721,22 @@ class LayerAccessor:
         place, attribute = self._place(layer)
         select = self.address.select
         if select is None:
-            current = getattr(place, attribute)
-            is_tuple = isinstance(current, tuple)
-            self._is_tuple[layer] = is_tuple
-            replacement = (new, *current[1:]) if is_tuple else new
-        elif isinstance(select, Lens):
-            replacement = select.put(getattr(place, attribute), new)
-        else:
-            replacement = _rebuilt(getattr(place, attribute), select, new)
-        setattr(place, attribute, replacement)
+            setattr(place, attribute, new)
+            return
+        current = getattr(place, attribute)
+        self._is_tuple[layer] = isinstance(current, tuple)
+        setattr(place, attribute, select.put(current, new))
 
     def __call__(self, layer: int | None = None) -> TraceTensor | Envoy:
+        """Read a whole-model place: ``model.lm_head_output()`` inside a trace."""
         return self[layer]
-
-    def set(self, new: TraceTensor) -> None:
-        """Write a whole-model place: ``model.lm_head_output = value`` does this."""
-        self[None] = new
 
     def returns_tuple(self, layer: int | None = None) -> bool | None:
         """
         Returns whether the value at ``layer`` is a tuple, as recorded by the last
         access to that layer. Returns None if the layer has not been accessed yet.
+        ``skip_layers`` needs it: a layer whose output is a tuple must be skipped
+        with one.
         """
         return self._is_tuple.get(layer)
 
@@ -845,6 +869,10 @@ DEFAULT_ADDRESSES: dict[str, Address] = {
     "embeddings_output": Address("embed_tokens", order=-1, per_layer=False),
     "ln_final_output": Address("ln_final", order=1000, per_layer=False),
     "lm_head_output": Address("lm_head", order=1001, per_layer=False),
+    # the model's own output, whose logits are what it predicts from (capped where
+    # the head's are not, on Gemma-2): the whole value is the output object, so the
+    # row says which field of it is the tensor
+    "logits": Address("", select="logits", order=1002, per_layer=False),
     "layers_input": Address("", IOType.INPUT, order=0),
     "attentions": Address("self_attn", None, order=10),
     "attentions_input": Address("self_attn", IOType.INPUT, order=10),
@@ -856,18 +884,33 @@ DEFAULT_ADDRESSES: dict[str, Address] = {
         op=("attention_interface_1", "nn_functional_dropout_0"),
         order=20,
     ),
-    "attentions_output": Address("self_attn", order=30),
+    # the three modules that return their tensor beside a cache or the attention
+    # weights, on the families that do (FirstIfTuple decides at each access, and
+    # a family whose row points at a norm instead returns the tensor alone)
+    "attentions_output": Address("self_attn", select=FirstIfTuple(), order=30),
     "mlps": Address("mlp", None, order=40),
     "mlps_input": Address("mlp", IOType.INPUT, order=40),
-    "mlps_output": Address("mlp", order=50),
-    "layers_output": Address("", order=60),
+    "mlps_output": Address("mlp", select=FirstIfTuple(), order=50),
+    "layers_output": Address("", select=FirstIfTuple(), order=60),
 }
+
+BlockStructure = Literal["pre_norm", "sandwich_norm", "post_norm", "parallel", "residual_inside"]
+BLOCK_STRUCTURES: tuple[BlockStructure, ...] = get_args(BlockStructure)
+
+#: What a block calls the norm the MLP reads. A sandwich-norm block spells it
+#: ``pre_feedforward_layernorm`` and has a ``post_attention_layernorm`` too, which
+#: is the *attention's* post-norm there: the block structure says which is which,
+#: not the name, which is why these are keyed by structure below.
+_PRE_MLP_NORMS = ("post_attention_layernorm", "ln_2", "norm_2")
 
 #: The accessors that live on a child nnterp does not rename. Families spell
 #: these children differently, and which spelling a model uses is a fact its
 #: module tree states, so ``structural_addresses`` reads it there: ``{name}`` is
-#: the one candidate that exists on the model. Each is defined by what it is *of*
-#: the block, so that these hold on every family that has them:
+#: the one candidate that exists on the model. Whether the place exists at all is
+#: what the block structure says, so each row's candidates are keyed by it, and a
+#: structure that has no such place holds the reason instead of the candidates.
+#: Each accessor is defined by what it is *of* the block, so that these hold on
+#: every family that has them:
 #:
 #:     layers_mid       == layers_input + attentions_output
 #:     layers_output    == layers_mid   + mlps_output
@@ -877,59 +920,73 @@ DEFAULT_ADDRESSES: dict[str, Address] = {
 #: wide, which is not ``hidden_size`` on Qwen3 or Gemma. ``mlps_neurons`` is the
 #: down projection's input: the activation itself on an ungated MLP (GPT-2), and
 #: ``act(gate) * up`` on a gated one, which is why it is not ``mlps_activation``.
-STRUCTURAL_ADDRESSES: dict[str, tuple[Address, tuple[str, ...]]] = {
+STRUCTURAL_ADDRESSES: dict[str, tuple[Address, dict[BlockStructure, tuple[str, ...] | str]]] = {
     "attentions_norm_output": (
         Address("{name}", order=5),
-        ("input_layernorm", "ln_1", "self_attn_layer_norm", "ln_attn", "norm_1"),
+        dict.fromkeys(
+            BLOCK_STRUCTURES,
+            ("input_layernorm", "ln_1", "self_attn_layer_norm", "ln_attn", "norm_1"),
+        )
+        | {
+            "post_norm": "attentions_norm_output does not exist on this model: its block is "
+            "'post_norm'. Attention reads the residual stream itself; the norm comes after "
+            "the sublayer."
+        },
     ),
     "attentions_premix": (
         Address("self_attn.{name}", IOType.INPUT, order=25),
-        ("o_proj", "c_proj", "dense", "out_proj"),
+        dict.fromkeys(BLOCK_STRUCTURES, ("o_proj", "c_proj", "dense", "out_proj")),
     ),
     "layers_mid": (
         Address("{name}", IOType.INPUT, order=33),
-        ("post_attention_layernorm", "ln_2", "norm_2"),
+        dict.fromkeys(BLOCK_STRUCTURES, _PRE_MLP_NORMS)
+        | {
+            "sandwich_norm": ("pre_feedforward_layernorm",),
+            # a post-norm block normalizes after each sublayer, so what the MLP
+            # reads is the residual stream itself
+            "post_norm": ("mlp",),
+            "parallel": "layers_mid does not exist on this model: its block is 'parallel'. "
+            "Attention and the MLP both read the block input, so there is no residual "
+            "stream between them.",
+        },
     ),
     "mlps_norm_output": (
         Address("{name}", order=36),
-        ("post_attention_layernorm", "ln_2", "norm_2"),
+        dict.fromkeys(BLOCK_STRUCTURES, _PRE_MLP_NORMS)
+        | {
+            "sandwich_norm": ("pre_feedforward_layernorm",),
+            "post_norm": "mlps_norm_output does not exist on this model: its block is "
+            "'post_norm'. The MLP reads the residual stream itself; the norm comes after "
+            "the sublayer.",
+            "parallel": "mlps_norm_output does not exist on this model: its block is "
+            "'parallel'. The MLP reads the block input, so there is no mid-stream for a "
+            "norm to read (on GPT-NeoX the second norm exists, and normalizes the block "
+            "input).",
+        },
     ),
     "mlps_activation": (
         Address("mlp.{name}", order=44),
-        ("act_fn", "act", "activation_fn", "gelu_impl"),
+        dict.fromkeys(BLOCK_STRUCTURES, ("act_fn", "act", "activation_fn", "gelu_impl")),
     ),
     "mlps_neurons": (
         Address("mlp.{name}", IOType.INPUT, order=47),
-        ("down_proj", "c_proj", "dense_4h_to_h", "fc_out", "fc2"),
+        dict.fromkeys(
+            BLOCK_STRUCTURES, ("down_proj", "c_proj", "dense_4h_to_h", "fc_out", "fc2")
+        ),
     ),
 }
 
-BlockStructure = Literal["pre_norm", "sandwich_norm", "post_norm", "parallel", "residual_inside"]
-
-#: The pre-MLP norm of a sandwich-norm block. Such a block has a
-#: ``post_attention_layernorm`` too, which is the *attention's* post-norm there and
-#: the pre-MLP norm everywhere else: the block structure says which, not the name.
-_SANDWICH_PRE_MLP_NORM = ("pre_feedforward_layernorm",)
-
-_NO_MID_STREAM = (
-    "{name} does not exist on this model: its block is {structure!r}. {why}"
-)
 _NO_MLP_MODULE = (
     "{name} does not exist on this model: {cls} has no MLP module, its feed-forward "
     "layers are the block's own fc1 / fc2 (layers[i].fc1, layers[i].fc2)."
 )
 
-_WHY_NOT = {
-    "parallel": "Attention and the MLP both read the block input, so there is no residual stream "
-    "between them and no norm of it (on GPT-NeoX the second norm exists, and normalizes the block input).",
-    "post_norm": "The MLP reads the residual stream itself; the norm comes after the sublayer.",
-}
-
 _NO_CONTRIBUTION = (
-    "{name} is disabled for this model: no module exposes the sublayer's "
-    "additive contribution to the residual stream (see the warning logged at "
-    "load and https://github.com/ndif-team/nnterp/issues/51). Use "
-    "layers[i].{module}.output for the raw (residual-added) module output."
+    "{name} is disabled for this model: no module exposes the sublayer's additive "
+    "contribution to the residual stream, because these checkpoints compute the output "
+    "projections with F.linear instead of the dense modules "
+    "(https://github.com/ndif-team/nnterp/issues/51). Use layers[i].{module}.output for "
+    "the raw (residual-added) module output."
 )
 
 
@@ -1056,34 +1113,15 @@ def get_block_structure(model) -> BlockStructure:
 
 
 def structural_addresses(standardized_model, structure: BlockStructure) -> dict[str, Address]:
-    """The rows of ``STRUCTURAL_ADDRESSES`` for this model: each child's name read
-    off the module tree, and a reason where the block has no such place."""
+    """The rows of ``STRUCTURAL_ADDRESSES`` for this model: the candidates this
+    block structure gives each place — or, where it has no such place, the reason
+    — and then the one candidate the module tree has."""
     rows = {}
-    for name, (address, candidates) in STRUCTURAL_ADDRESSES.items():
-        if name in ("layers_mid", "mlps_norm_output") and structure in _WHY_NOT:
-            if structure == "post_norm" and name == "layers_mid":
-                # what the MLP reads is the residual stream itself
-                rows[name] = replace(address, module="mlp")
-                continue
-            rows[name] = replace(
-                address,
-                unavailable=_NO_MID_STREAM.format(
-                    name=name, structure=structure, why=_WHY_NOT[structure]
-                ),
-            )
+    for name, (address, per_structure) in STRUCTURAL_ADDRESSES.items():
+        candidates = per_structure[structure]
+        if isinstance(candidates, str):
+            rows[name] = replace(address, unavailable=candidates)
             continue
-        if name == "attentions_norm_output" and structure == "post_norm":
-            rows[name] = replace(
-                address,
-                unavailable=_NO_MID_STREAM.format(
-                    name=name,
-                    structure=structure,
-                    why="Attention reads the residual stream itself; the norm comes after the sublayer.",
-                ),
-            )
-            continue
-        if name in ("layers_mid", "mlps_norm_output") and structure == "sandwich_norm":
-            candidates = _SANDWICH_PRE_MLP_NORM
         parent_path = address.module.rpartition(".")[0]
         found = set()
         for layer in standardized_model.layers:
@@ -1148,27 +1186,25 @@ def addresses_for(model, rename_config: RenameConfig | None = None) -> dict[str,
     return addresses
 
 
-def get_ignores(model, rename_config: RenameConfig | None = None) -> list[str]:
-    ignores = []
-    if isinstance(model, IGNORE_MLP_MODELS):
-        message = f"{model.__class__.__name__} does not have a mlp module."
-        if isinstance(model, OPTForCausalLM):
-            message += " You'll have to manually use layers.fc1 and layers.fc2 instead."
-        logger.warning(message)
-        ignores.append("mlp")
-    if bloom_slow_but_exact(model):
-        logger.warning(
-            f"{model.config.name_or_path} uses pretraining_tp > 1 with slow_but_exact=True, "
-            "which computes the attention/MLP output projections with F.linear instead of the "
-            "dense modules. No module exposes the sublayer contributions, so attentions_output "
-            "/ mlps_output are disabled and attention/MLP checks are skipped "
-            "(see https://github.com/ndif-team/nnterp/issues/51)."
-        )
-        ignores.extend(["attention", "mlp"])
+def get_ignores(
+    std_model, rename_config: RenameConfig | None = None
+) -> list[IgnoreType]:
+    """Which sublayers the renaming checks must skip: one whose contribution this
+    model does not expose cannot be checked against the residual identity. The
+    address table already says so, and why, so this reads it there rather than
+    listing the families again — and logs the reason, which is what a user needs
+    to see at load."""
+    status = std_model.internals.status()
+    ignores: list[IgnoreType] = []
+    for kind, names in (("attention", ("attentions_output",)), ("mlp", ("mlps", "mlps_output"))):
+        reason = next((status[name] for name in names if status[name] is not None), None)
+        if reason is not None:
+            logger.warning(reason)
+            ignores.append(kind)
     if rename_config is not None:
-        if rename_config.ignore_mlp:
+        if rename_config.ignore_mlp and "mlp" not in ignores:
             ignores.append("mlp")
-        if rename_config.ignore_attn:
+        if rename_config.ignore_attn and "attention" not in ignores:
             ignores.append("attention")
     return ignores
 
@@ -1391,13 +1427,13 @@ def _check_output_source(
         module = accessor.get_module(layer)._module
     except AttributeError as e:
         raise RenamingError(
-            f"The configured {config_field}='{accessor.attr_name}' does not resolve to a module "
+            f"The configured {config_field}='{accessor.address.module}' does not resolve to a module "
             f"of layer {layer} in {model_name} architecture."
         ) from e
     explicitly_configured = (
         rename_config is not None and getattr(rename_config, config_field) is not None
     )
-    if explicitly_configured or accessor.attr_name != default_source:
+    if explicitly_configured or accessor.address.module != default_source:
         return
     residual_params = [
         name

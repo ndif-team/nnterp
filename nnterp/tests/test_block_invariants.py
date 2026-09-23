@@ -60,7 +60,13 @@ def tensor_accessors(model) -> list[str]:
     return [name for name in model.internals if model.internals[name].io_type is not None]
 
 
-WHOLE_MODEL = ["embeddings_input", "embeddings_output", "ln_final_output", "lm_head_output"]
+WHOLE_MODEL = [
+    "embeddings_input",
+    "embeddings_output",
+    "ln_final_output",
+    "lm_head_output",
+    "logits",
+]
 
 
 def test_the_block_structure_is_published(loaded):
@@ -90,8 +96,8 @@ def test_what_a_family_lacks_is_known_before_any_trace(loaded):
 
 
 def test_the_whole_model_places_read_write_and_refuse_a_layer(loaded):
-    """One per model: a property on the model, the same accessor in the
-    registry, and the layer-indexed spelling refused by name."""
+    """One per model: the accessor is called rather than indexed, and the
+    layer-indexed spelling is refused by name."""
     model, _ = loaded
     got = read(model, 0, *WHOLE_MODEL, "layers_input", "layers_output")
     assert th.equal(got["embeddings_input"], TOKENS)
@@ -100,16 +106,17 @@ def test_the_whole_model_places_read_write_and_refuse_a_layer(loaded):
     assert got["embeddings_output"].shape == got["layers_input"].shape
     assert got["ln_final_output"].shape == got["layers_output"].shape
     assert got["lm_head_output"].shape[-1] == model.vocab_size
+    # the model's own logits: the head's output, capped where a family caps it
+    assert got["logits"].shape == got["lm_head_output"].shape
     for name in WHOLE_MODEL:
         assert not model.internals[name].per_layer
         assert model.internals.status()[name] is None
         with pytest.raises(RenamingError, match="one per model"):
             model.internals[name][0]
     with th.no_grad(), model.trace(TOKENS):
-        assert model.lm_head_output is not None
-        model.lm_head_output = th.zeros_like(model.lm_head_output)
-        logits = model.lm_head_output.clone().save()
-    assert float(logits.abs().max()) == 0.0
+        model.lm_head_output[None] = th.zeros_like(model.lm_head_output())
+        head_out = model.lm_head_output().clone().save()
+    assert float(head_out.abs().max()) == 0.0
     # forward order across kinds: the embeddings before every layer, the head after
     names = ["lm_head_output", "layers_output", "embeddings_output"]
     ranked = sorted(names, key=lambda name: model.internals.rank(name, model.num_layers - 1))
@@ -177,14 +184,21 @@ def test_the_published_sizes_are_the_tensors(loaded):
         if name in got:
             assert got[name].shape[-1] == model.intermediate_size, name
     # where the family has separate projections, they are as wide as the heads say
-    # (multi-head latent attention has none of these: its q/k/v are low-rank pairs)
+    # (multi-head latent attention has no k_proj/v_proj: its keys and values are a
+    # low-rank pair)
     attention = model.attentions[layer]._module
     projections = {name: getattr(attention, name, None) for name in ("q_proj", "k_proj", "v_proj")}
     if projections["k_proj"] is not None:
         assert projections["k_proj"].out_features == model.num_kv_heads * model.qk_head_dim
         assert projections["v_proj"].out_features == model.num_kv_heads * model.head_dim
-    if projections["q_proj"] is not None:
-        assert projections["q_proj"].out_features == model.num_heads * model.qk_head_dim
+    # the query too, and under multi-head latent attention it is the second half of
+    # the pair (q_b_proj) — DeepSeek-v3 is the one family where the query's head is
+    # wider than the value's, so guarding this on q_proj alone never checked it
+    query = projections["q_proj"]
+    if query is None:
+        query = getattr(attention, "q_b_proj", None)
+    if query is not None:
+        assert query.out_features == model.num_heads * model.qk_head_dim
     assert model.num_heads % model.num_kv_heads == 0
 
 

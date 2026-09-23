@@ -438,16 +438,13 @@ def linear_attention_error(model, layer: int) -> RenamingError:
 
 class Selection(ABC):
     """Where the tensor sits inside the value at a place, when the value is not
-    the tensor itself: a module that returns its output beside a cache, an
-    operation whose inputs are an argument list, the model output's ``logits``
-    field. ``get`` is the way in and ``put`` the way back, because a write has to
-    rebuild what the read reached through.
+    the tensor itself: a module that returns its output beside a cache, the model
+    output's ``logits`` field. ``get`` is the way in and ``put`` the way back,
+    because a write has to rebuild what the read reached through.
 
-    ``Path`` and ``FirstIfTuple`` are the two nnterp ships; a value neither
+    ``Index`` and ``FirstIfTuple`` are the two nnterp ships; a value neither
     describes is a subclass of this, which ``Address.select`` takes like any
-    other. Such an address is defined in your own code, so a model reached with
-    it cannot be traced remotely: NDIF ships an address by value, and nnterp's
-    class is the only one the server has."""
+    other."""
 
     @abstractmethod
     def get(self, value: Any) -> Any:
@@ -458,9 +455,9 @@ class Selection(ABC):
         """``value`` with that tensor replaced by ``new``."""
 
 
-class Path(Selection):
-    """Indices and keys walked into the value: ``Path(0)`` is the first element of
-    a tuple, ``Path("logits")`` a field of the model's output, ``Path(0, 1)`` one
+class Index(Selection):
+    """Indices and keys walked into the value: ``Index(0)`` is the first element of
+    a tuple, ``Index("logits")`` a field of the model's output, ``Index(0, 1)`` one
     step of each. A row may spell it as the bare ``0`` or ``(0, 1)``."""
 
     def __init__(self, *steps: int | str):
@@ -475,7 +472,7 @@ class Path(Selection):
         return _rebuilt(value, self.steps, new)
 
     def __repr__(self) -> str:
-        return f"Path{self.steps}"
+        return f"Index{self.steps}"
 
 
 class FirstIfTuple(Selection):
@@ -488,7 +485,9 @@ class FirstIfTuple(Selection):
         return value[0] if isinstance(value, tuple) else value
 
     def put(self, value: Any, new: Any) -> Any:
-        return (new, *value[1:]) if isinstance(value, tuple) else new
+        if not isinstance(value, tuple):
+            return new
+        return _rebuilt(value, (0,), new)
 
 
 @dataclass(frozen=True)
@@ -512,21 +511,23 @@ class Address:
         model, reached as ``accessor()`` (and ``model.<name>`` as a property).
     io : IOType or None
         Which side of the module (or of the operation, when ``op`` is set) carries
-        the tensor. ``None`` makes the accessor return the module envoy itself.
+        the tensor. ``INPUT`` is the first positional argument, of the module's
+        forward or of the call, and ``OUTPUT`` what it returns. ``None`` makes the
+        accessor return the module envoy itself.
     op : tuple of str, or callable
         Operations of the module's ``.source`` to descend through, outermost
         first: ``("attention_interface_1", "nn_functional_dropout_0")`` is the
         dropout call inside the function the attention call dispatches to. A
         callable ``fn(module_envoy) -> operation`` is accepted for a forward no
         name can describe (``RenameConfig.attn_prob_source``).
-    select : Selection, int, str, tuple or None
+    select : Selection or None
         Where the tensor is inside the value at that place, when the value is not
         the tensor itself. ``None``, the default, is the value untouched, tuple or
         not — what the place holds is what you get, and what you write is what it
         gets. ``FirstIfTuple()`` unwraps a module that returns its output beside a
-        cache; a ``Path`` walks in and rebuilds on the way out, spelled as a bare
-        ``0`` / ``"logits"`` / ``(0, 1)`` or as ``Path(0, 1)``. For a value neither
-        describes, write a ``Selection`` of your own.
+        cache; an ``Index`` walks in and rebuilds on the way out. For a value
+        neither describes, write a ``Selection`` of your own. A bare ``0`` /
+        ``"logits"`` / ``(0, 1)`` is accepted too and becomes an ``Index``.
     order : int
         Rank of this place in the block's forward pass. nnsight cannot reach back
         to a value the model has passed, so ``Internals.rank`` reports it and a
@@ -545,17 +546,18 @@ class Address:
     module: str = ""
     io: IOType | None = IOType.OUTPUT
     op: tuple[str, ...] | Callable[[Envoy], Any] = ()
-    select: Selection | int | str | tuple[int | str, ...] | None = None
+    # what is stored; a bare step or tuple of steps passed in is normalised below
+    select: Selection | None = None
     order: int = 0
     unavailable: str | Callable[[Any], str | None] | None = None
     tags: frozenset[str] = frozenset()
     per_layer: bool = True
 
     def __post_init__(self):
-        """A row may spell a path as a bare step or a tuple of them."""
+        """A row may spell an index as a bare step or a tuple of them."""
         if self.select is not None and not isinstance(self.select, Selection):
             steps = self.select if isinstance(self.select, tuple) else (self.select,)
-            object.__setattr__(self, "select", Path(*steps))
+            object.__setattr__(self, "select", Index(*steps))
 
     @property
     def is_attention(self) -> bool:
@@ -571,6 +573,9 @@ def _rebuilt(value: Any, path: tuple[int | str, ...], new: Any) -> Any:
     inner = _rebuilt(value[step], rest, new)
     if isinstance(value, tuple):
         assert isinstance(step, int)
+        # slicing has no notion of a negative index, where indexing does: -1 must
+        # become len - 1 here or the rebuilt tuple keeps the element it replaced
+        step = step if step >= 0 else len(value) + step
         items = (*value[:step], inner, *value[step + 1 :])
         return type(value)(*items) if hasattr(value, "_fields") else items
     assert isinstance(value, (list, dict)), f"cannot rebuild a {type(value).__name__}"
@@ -594,7 +599,9 @@ class LayerAccessor:
     place is unavailable raises a RenamingError with the reason.
 
     ``LayerAccessor(model, "self_attn", IOType.OUTPUT)`` is still accepted and
-    builds the address.
+    builds the address — with no selection, so unlike ``model.attentions_output``
+    it hands back whatever the module returns, tuple included. Pass an
+    ``Address(..., select=FirstIfTuple())`` for the unwrapping one.
     """
 
     def __init__(
@@ -610,6 +617,14 @@ class LayerAccessor:
         self.address = address
         self.name = name or address.module or "layers"
         self._is_tuple: dict[int | None, bool] = {}
+
+    def __repr__(self) -> str:
+        address = self.address
+        where = address.module or ("layers[i]" if self.per_layer else "model")
+        ops = address.op if isinstance(address.op, tuple) else ("<source>",)
+        side = address.io.value if address.io else "module"
+        kind = "per layer" if self.per_layer else "one per model"
+        return f"<{self.name}: {'.'.join((where, *ops, side))}, {kind}>"
 
     @property
     def per_layer(self) -> bool:
@@ -690,11 +705,11 @@ class LayerAccessor:
         return target
 
     def _place(self, layer: int | None):
-        """The object holding the value and the attribute it is under."""
-        if self.address.op:
-            place = self.get_operation(layer)
-            return place, "inputs" if self.io_type == IOType.INPUT else "output"
-        return self.get_module(layer), self.io_type.value
+        """The object holding the value and the attribute it is under. An
+        operation's ``input`` is its first positional argument, as a module's is,
+        so INPUT means the same thing on both kinds of row."""
+        place = self.get_operation(layer) if self.address.op else self.get_module(layer)
+        return place, self.io_type.value
 
     def __getitem__(self, layer: int | None) -> TraceTensor | Envoy:
         if layer is None and self.per_layer:
@@ -721,6 +736,8 @@ class LayerAccessor:
         place, attribute = self._place(layer)
         select = self.address.select
         if select is None:
+            # what the place will hold is what is written to it
+            self._is_tuple[layer] = isinstance(new, tuple)
             setattr(place, attribute, new)
             return
         current = getattr(place, attribute)
@@ -734,9 +751,9 @@ class LayerAccessor:
     def returns_tuple(self, layer: int | None = None) -> bool | None:
         """
         Returns whether the value at ``layer`` is a tuple, as recorded by the last
-        access to that layer. Returns None if the layer has not been accessed yet.
-        ``skip_layers`` needs it: a layer whose output is a tuple must be skipped
-        with one.
+        read or write of that layer. Returns None if the layer has not been
+        accessed yet. ``skip_layers`` needs it: a layer whose output is a tuple
+        must be skipped with one.
         """
         return self._is_tuple.get(layer)
 
@@ -1193,14 +1210,28 @@ def get_ignores(
     model does not expose cannot be checked against the residual identity. The
     address table already says so, and why, so this reads it there rather than
     listing the families again — and logs the reason, which is what a user needs
-    to see at load."""
-    status = std_model.internals.status()
+    to see at load.
+
+    Only a reason the table *states* (``Address.unavailable``) is an ignore. A
+    place that is merely unreachable because its module is missing is not: that
+    is a model nnterp failed to rename, and it has to fail the checks below with
+    the argument that fixes it, not be quietly skipped."""
     ignores: list[IgnoreType] = []
     for kind, names in (("attention", ("attentions_output",)), ("mlp", ("mlps", "mlps_output"))):
-        reason = next((status[name] for name in names if status[name] is not None), None)
-        if reason is not None:
+        for name in names:
+            declared = std_model.internals[name].address.unavailable
+            if declared is None:
+                continue
+            # a per-layer reason is a function of the layer's module; the checks
+            # run on one layer, so ask it about the one they would check
+            attention_layers = std_model.attention_layers
+            layer = attention_layers[0] if kind == "attention" and attention_layers else 0
+            reason = declared if isinstance(declared, str) else declared(std_model.layers[layer]._module)
+            if reason is None:
+                continue
             logger.warning(reason)
             ignores.append(kind)
+            break
     if rename_config is not None:
         if rename_config.ignore_mlp and "mlp" not in ignores:
             ignores.append("mlp")
@@ -1248,7 +1279,7 @@ def check_io(std_model, model_name: str, ignores: list[IgnoreType]):
     probe = std_model.attention_layers[0] if std_model.attention_layers else 0
 
     _check_tensor(
-        std_model.token_embeddings, "token_embeddings", expected_hidden, model_name
+        std_model.embeddings_output(), "embeddings_output", expected_hidden, model_name
     )
     _check_tensor(
         std_model.layers_input[0], "layers_input[0]", expected_hidden, model_name

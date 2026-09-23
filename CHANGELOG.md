@@ -11,21 +11,30 @@
   there, why the family has no such place. Every row is an attribute of the model
   too, so adding a place is adding a row —
   `RenameConfig(addresses={"attentions_gate": Address("self_attn.gate_proj")})`
-  gives `model.attentions_gate[i]` and a row in `model.internals`.
+  gives `model.attentions_gate[i]` and a row in `model.internals`. A row whose
+  name the model already uses (`tokenizer`, `layers`) is refused at load instead
+  of replacing it.
 - **Whole-model places are accessors too.** `embeddings_input` (the token ids),
-  `embeddings_output`, `ln_final_output`, `lm_head_output` and `logits` are rows
-  of the same table (`Address(per_layer=False)`), so they carry a selection, an
-  availability reason and a place in forward order like every other. Each is
-  called rather than indexed: `model.lm_head_output()` inside a trace,
+  `embeddings_output`, `ln_final_output` and `lm_head_output` are rows of the same
+  table (`Address(per_layer=False)`), so they carry a selection, an availability
+  reason and a place in forward order like every other, and each is called rather
+  than indexed: `model.lm_head_output()` inside a trace,
   `model.lm_head_output[None] = value` to write, and indexing one by a layer is
-  refused by name. `model.token_embeddings` and `model.lm_head.output` keep
-  working. `lm_head_output` is the head module's output, uncapped on Gemma-2;
-  `model.logits` is the `logits` field of the model's output, which is what it
-  predicts from — now that row, read through `Address(select="logits")`.
+  refused by name. `lm_head_output` is the head module's output, uncapped on
+  Gemma-2; `model.lm_head.output` keeps working for the raw module.
+- **`logits` and `token_embeddings` are rows too, read through the properties they
+  always were.** `model.logits` is still the tensor (`model.logits()` is not a
+  thing) and is now the `logits` row — `Address("", select="logits")` on the
+  model's own output, which is what the model predicts from, capped where the
+  head's output is not. `model.token_embeddings` is still the tensor and reads the
+  `embeddings_output` row, which the renaming checks now validate instead of the
+  property. These two names are the table's only compatibility spellings; a row
+  named either of them is theirs. A vLLM model has no `logits` row, since vLLM
+  computes the logits outside the model's forward.
 - **Where the tensor sits in the value is data: `Address.select`.** A `Selection`
   — `FirstIfTuple()` for a module that returns its output beside a cache (what
   `layers_output`, `attentions_output` and `mlps_output` use, decided at each
-  access so a model whose layers differ is read in any order), `Path(*steps)` for
+  access so a model whose layers differ is read in any order), `Index(*steps)` for
   a path walked in and rebuilt on the way out, or one you write yourself — instead
   of a rule inside the accessor. With no selection the value comes back untouched,
   tuple or not.
@@ -33,8 +42,10 @@
   layer's module, and `model.internals.status(layer=i)` answers for one layer:
   on DeepSeek, `mlps_activation` is available on the dense first blocks and says
   "a mixture-of-experts layer" on the rest, before any trace. `status()` with no
-  layer is the model-wide answer, and it is where the renaming checks now read
-  what this architecture does not expose. `internals.rank(name, layer)` is a
+  layer is the model-wide answer. What the renaming checks skip is read off the
+  table too — a place a row *declares* missing, never one that is merely
+  unreachable, so a model whose `mlp` was not renamed still fails at load naming
+  `mlp_rename`. `internals.rank(name, layer)` is a
   place's rank in the forward pass: sort by it to read several in one trace
   whatever order you name them in.
 - **Six accessors inside the block**, each defined by what it is *of* the block
@@ -92,14 +103,23 @@
 
 - **Per-layer tuple detection in the accessors.** `layers_output[i]`,
   `attentions_output[i]` and `mlps_output[i]` — the three places a module returns
-  its tensor in a tuple on some families — unwrap it per access (`FirstIfTuple`)
-  instead of assuming every layer returns the same structure, so layers can be
-  accessed in any order. An accessor whose row names a norm or a projection
-  returns what that module returns, untouched.
+  its tensor in a tuple on some families, measured over the 26 families of
+  `tests/test_block_invariants.py` — unwrap it per access (`FirstIfTuple`) instead
+  of assuming every layer returns the same structure, so layers can be accessed in
+  any order. No other place in that sweep is ever a tuple, and
+  `attention_probabilities`, which the sweep loads disabled, is a tensor on the 11
+  of 13 families whose row still resolves with the probabilities enabled. An
+  accessor whose row names a norm or a projection returns what that module
+  returns, untouched.
   `LayerAccessor.returns_tuple(layer)` replaces the `returns_tuple` property; the
   renaming checks read every layer output in forward order, `skip_layers` uses
   the per-layer record, and `detect_layer_output_type()` records the layers not
   accessed yet.
+
+- **`LayerAccessor.enabled` is gone; `model.attn_probs_available` is the question
+  it was asked** (and `model.internals.status()[name]` the general one, which
+  gives the reason rather than a bool). `disable(reason)` rewrites the address, so
+  a disabled place answers the same reason to a read and to `status()`.
 
 - **`remote=True` keeps the checkpoint off the client.** It sets
   `allow_dispatch=False`, so every load-time check runs with `scan()` on the meta

@@ -37,6 +37,13 @@ from .rename_utils import (
 )
 
 
+#: The two rows whose model attribute is a property rather than the accessor:
+#: public names older than the address table that return the tensor itself.
+#: ``model.logits`` reads the ``logits`` row and ``model.token_embeddings`` the
+#: ``embeddings_output`` row, so there is still one answer per place.
+COMPATIBILITY_PROPERTIES = ("logits", "token_embeddings")
+
+
 class StandardizationMixin:
     """
     Mixin class for standardizing the architecture of a model.
@@ -56,9 +63,12 @@ class StandardizationMixin:
       it is and why a family has none (``model.internals.status()``). Each row of
       the table is an attribute of the model like the ones above.
     - the whole-model places — embeddings_input, embeddings_output, ln_final_output,
-      lm_head_output, logits — are called rather than indexed:
-      ``model.ln_final_output()`` reads, ``model.ln_final_output[None] = value``
-      writes, and ``model.logits`` is the property spelling of the last of them.
+      lm_head_output — are accessors called rather than indexed:
+      ``model.ln_final_output()`` reads and ``model.ln_final_output[None] = value``
+      writes. ``logits`` is a row of the table too, but ``model.logits`` stays the
+      tensor property it always was, as ``model.token_embeddings`` (the
+      ``embeddings_output`` row) stays: those two are the compatibility
+      spellings, and each reads its row.
     - attention_layers / linear_attention_layers: Indices of the softmax-attention
       blocks (``layers[i].self_attn``) and of the linear-attention blocks
       (``layers[i].linear_attn``, Gated DeltaNet in Qwen3-Next / Qwen3.5 hybrids).
@@ -164,18 +174,29 @@ class StandardizationMixin:
         # named off this model's module tree; a family or the user may still say
         # otherwise, so their rows win.
         self.block_structure = get_block_structure(self._module)
-        self.internals = Internals(
-            self,
-            structural_addresses(self, self.block_structure)
-            | addresses_for(self._module, rename_config),
+        addresses = structural_addresses(self, self.block_structure) | addresses_for(
+            self._module, rename_config
         )
+        if self.is_vllm:
+            # vLLM computes the logits outside the model's forward, so model.logits
+            # is nnsight's own and not this row's object: better no row than one
+            # status() calls available and a read would take from the wrong place.
+            addresses.pop("logits", None)
+        self.internals = Internals(self, addresses)
         # Every row is an attribute of the model: model.layers_output[i] for a
         # per-layer place, model.lm_head_output() for a whole-model one. Adding a
-        # place is adding a row and nothing else. `logits` is the exception: the
-        # class reads it without parentheses, so its property wins.
+        # place is adding a row and nothing else, and a row that would take a name
+        # the model already uses is an error rather than a silent clobber.
         for name, accessor in self.internals.items():
-            if not hasattr(type(self), name):
-                setattr(self, name, accessor)
+            if name in COMPATIBILITY_PROPERTIES:
+                continue
+            if hasattr(self, name):
+                raise RenamingError(
+                    f"The address named {name!r} cannot become model.{name}: the model "
+                    f"already has one ({type(getattr(self, name)).__name__}). Name the row "
+                    "something else; it is reachable as model.internals[name] either way."
+                )
+            setattr(self, name, accessor)
 
         self.num_layers = len(self.layers)
         # From the block structure: a softmax-attention block exposes self_attn, a
@@ -309,9 +330,10 @@ class StandardizationMixin:
 
     @property
     def attn_probs_available(self) -> bool:
-        return (
-            self.attention_probabilities.unavailable_on(self.attention_layers[0]) is None
-        )
+        if not self.attention_layers:
+            return False
+        probe = self.attention_layers[0]
+        return self.attention_probabilities.unavailable_on(probe) is None
 
     @property
     def input_ids(self) -> TraceTensor:
@@ -342,13 +364,14 @@ class StandardizationMixin:
 
     @property
     def token_embeddings(self) -> TraceTensor:
-        """Returns the token embeddings. Equivalent to self.embed_tokens.output"""
-        return self.embed_tokens.output
+        """Returns the token embeddings: the ``embeddings_output`` row, which is
+        ``embed_tokens.output``."""
+        return self.embeddings_output()
 
     @token_embeddings.setter
     def token_embeddings(self, value: TraceTensor):
-        """Sets the token embeddings. Equivalent to self.embed_tokens.output = value"""
-        self.embed_tokens.output = value
+        """Sets the token embeddings, through the same row."""
+        self.embeddings_output[None] = value
 
     @property
     def next_token_probs(self) -> TraceTensor:

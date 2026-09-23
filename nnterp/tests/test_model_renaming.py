@@ -1,4 +1,6 @@
 import warnings
+from collections import namedtuple
+
 import torch as th
 import pytest
 from nnsight import TransformersModel
@@ -16,7 +18,8 @@ from nnterp.nnsight_utils import (
 )
 from nnterp.rename_utils import (
     Address,
-    Path,
+    FirstIfTuple,
+    Index,
     RenameConfig,
     RenamingError,
     Selection,
@@ -876,15 +879,29 @@ def test_residual_inside_module_user_addresses(monkeypatch):
     assert th.allclose(layer_in + attn_out + mlp_out, layer_out, atol=1e-5)
 
 
-def test_a_path_walks_the_value_and_rebuilds_it():
+def test_an_index_walks_the_value_and_rebuilds_it():
     """A read walks in, a write rebuilds on the way out: the containers on the
-    way are copied, since a module's return value is not ours to mutate."""
-    path = Path(1, "x")
+    way are copied, since a module's return value is not ours to mutate. A step
+    reads and writes the same element, negative or not, and a value that names
+    its fields keeps its type through both selections."""
+    index = Index(1, "x")
     value = (0, {"x": 1, "y": 2})
-    assert path.get(value) == 1
-    assert path.put(value, 9) == (0, {"x": 9, "y": 2})
+    assert index.get(value) == 1
+    assert index.put(value, 9) == (0, {"x": 9, "y": 2})
     assert value == (0, {"x": 1, "y": 2})
-    assert Path().get(value) is value
+    assert Index().get(value) is value
+
+    last = Index(-1)
+    assert last.get((1, 2, 3)) == 3
+    assert last.put((1, 2, 3), 9) == (1, 2, 9)
+
+    Returned = namedtuple("Returned", ["hidden", "cache"])
+    named = Returned(1, 2)
+    assert Index(0).put(named, 9) == Returned(hidden=9, cache=2)
+    assert FirstIfTuple().put(named, 9) == Returned(hidden=9, cache=2)
+    assert isinstance(FirstIfTuple().put(named, 9), Returned)
+    assert FirstIfTuple().put((1, 2), 9) == (9, 2)
+    assert FirstIfTuple().put(1, 9) == 9
 
 
 class _TheTensor(Selection):
@@ -932,3 +949,75 @@ def test_a_row_says_where_the_tensor_is_in_the_value():
         through_row = model.layers_output[0].clone().save()
     assert th.equal(through_path, through_row)
     assert not th.equal(through_path, unwrapped)
+
+
+def test_an_unrenamed_module_still_fails_at_load(monkeypatch):
+    """The renaming checks skip a sublayer the table *declares* missing (OPT has
+    no MLP module). A sublayer that is merely unreachable because it was not
+    renamed is a different thing, and has to fail at load naming the argument
+    that fixes it — MPT's feed-forward is `ffn`, so a rename table without it
+    leaves the block with no `mlp`."""
+    from nnterp import rename_utils
+
+    monkeypatch.setattr(
+        rename_utils, "MLP_NAMES", [name for name in rename_utils.MLP_NAMES if name != "ffn"]
+    )
+    with pytest.raises(RenamingError, match="mlp_rename"):
+        StandardizedTransformer("hf-internal-testing/tiny-random-MptForCausalLM")
+
+
+def test_a_row_may_not_take_a_name_the_model_uses():
+    """Every row becomes an attribute of the model, so a row named after
+    something the model already has is refused rather than replacing it. The two
+    exceptions are the compatibility properties, which read their own row."""
+    with pytest.raises(RenamingError, match="tokenizer"):
+        StandardizedTransformer(
+            "gpt2",
+            rename_config=RenameConfig(
+                addresses={"tokenizer": Address("lm_head", per_layer=False, order=2000)}
+            ),
+        )
+    model = StandardizedTransformer("gpt2")
+    assert model.internals["logits"] is not None
+    assert model.internals["embeddings_output"] is not None
+    with th.no_grad(), model.trace("Hello, world!"):
+        through_row = model.internals["embeddings_output"][None].save()
+        embeddings = model.token_embeddings.save()
+        from_row = model.internals["logits"][None].save()
+        logits = model.logits.save()
+    assert th.equal(embeddings, through_row)
+    assert th.equal(logits, from_row)
+
+
+def test_the_logits_row_is_what_the_model_predicts_from():
+    """`lm_head_output` is the head module's output and `logits` the model's own.
+    Gemma-2 caps the second with final_logit_softcapping, which is why they are
+    two rows; on a tiny checkpoint the cap only bites on a value large enough to
+    reach it, so the write is what shows the difference."""
+    model = StandardizedTransformer(
+        "trl-internal-testing/tiny-Gemma2ForCausalLM", device_map="cpu", dtype=th.float32
+    )
+    cap = model.config.final_logit_softcapping
+    assert cap is not None
+    big = 100.0
+    with th.no_grad(), model.trace("Hello, world!"):
+        model.lm_head_output[None] = th.full_like(model.lm_head_output(), big)
+        logits = model.logits.save()
+    capped = float(th.tanh(th.tensor(big / cap)) * cap)
+    assert capped < big  # the model predicts from the capped tensor
+    assert th.allclose(logits, th.full_like(logits, capped), atol=1e-4)
+
+
+def test_disable_puts_its_reason_in_the_table():
+    """disable() rewrites the address, so the reason an access raises and the
+    reason status() reports are the same string."""
+    model = StandardizedTransformer("gpt2")
+    reason = model.internals.status()["attention_probabilities"]
+    assert reason is not None and "enable_attention_probs=True" in reason
+    assert not model.attn_probs_available
+    with pytest.raises(RenamingError, match="enable_attention_probs=True"):
+        model.attention_probabilities[0]
+    model.internals["mlps_output"].disable("no MLP contribution here, for a reason")
+    assert model.internals.status()["mlps_output"] == "no MLP contribution here, for a reason"
+    with pytest.raises(RenamingError, match="for a reason"):
+        model.mlps_output[0]

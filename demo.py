@@ -595,7 +595,7 @@ with gptj.trace("Hello world!"):
 with gptj.trace("Hello world!"):
     clean_logits = gptj.logits.save()
 
-assert gptj.attention_probabilities.enabled
+assert gptj.attn_probs_available
 assert not th.allclose(clean_logits, corrupt_logits)
 summed_attn_probs = attn_probs.sum(dim=-1)
 assert th.allclose(summed_attn_probs, th.ones_like(summed_attn_probs))

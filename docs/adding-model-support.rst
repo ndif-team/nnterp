@@ -120,7 +120,7 @@ and where the tensor sits inside the value found there.
 
 .. code-block:: python
 
-   from nnterp.rename_utils import Address, IOType, Path, RenameConfig
+   from nnterp.rename_utils import Address, IOType, Index, RenameConfig
 
    rename_config = RenameConfig(
        addresses={
@@ -139,8 +139,8 @@ requires them to be read in.
 ``Address.select`` says where the tensor is inside the value at that place, for a
 module that returns more than the tensor. It is ``None`` by default, meaning the
 value untouched; ``FirstIfTuple()`` for a module that returns its output beside a
-cache (what ``layers_output`` and ``attentions_output`` use); or a ``Path``,
-spelled ``Path(0)`` / ``0`` / ``("hidden_states",)``, walked to read and rebuilt
+cache (what ``layers_output`` and ``attentions_output`` use); or an ``Index``,
+spelled ``Index(0)`` / ``0`` / ``("hidden_states",)``, walked to read and rebuilt
 around the new tensor to write. For a value neither describes, write a
 ``Selection`` of your own:
 
@@ -157,9 +157,6 @@ around the new tensor to write. For a value neither describes, write a
        def put(self, value, new):
            return tuple(new if isinstance(item, torch.Tensor) else item for item in value)
 
-Such an address is defined in your own code, so a model reached through it cannot
-be traced remotely: NDIF ships an address by value, and nnterp's own selections
-are the only ones the server has.
 
 Real Example: GPT-J Support
 ----------------------------
@@ -265,7 +262,7 @@ Testing Your Configuration
        assert layer_out.shape == (batch_size, seq_len, hidden_size)
        
        # Check attention probabilities if enabled
-       if model.attention_probabilities.enabled:
+       if model.attn_probs_available:
            attn_probs = model.attention_probabilities[0]
            assert attn_probs.shape == (batch_size, num_heads, seq_len, seq_len)
 

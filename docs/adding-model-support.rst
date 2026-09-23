@@ -136,6 +136,25 @@ and where the tensor sits inside the value found there.
 ``model.internals.rank(name, layer)`` sorts several places into the order nnsight
 requires them to be read in.
 
+``io`` is spelled as nnsight spells it, on a module and on a call alike:
+``IOType.OUTPUT`` is what is returned, ``IOType.INPUT`` the first positional
+argument, and ``IOType.INPUTS`` the whole ``(args, kwargs)`` pair, which is how a
+row names an argument that is not the first:
+
+.. code-block:: python
+
+   # the second positional argument of the attention interface call: the query
+   Address("self_attn", IOType.INPUTS, op=("attention_interface_1",),
+           select=Index(0, 1), order=15)
+
+A row that reads an operation of a forward names it the way nnsight does, and
+those names come from the transformers version you have installed. If one moves,
+the accessor raises a ``RenamingError`` naming the row, the model class, the
+transformers version and every operation that does exist at that level, so the
+fix is to replace that one row. ``nnterp/tests/test_source_ops.py`` runs every
+such row against every family nnterp pins, with the attention probabilities
+enabled, and is what catches an upgrade that moves one.
+
 ``Address.select`` says where the tensor is inside the value at that place, for a
 module that returns more than the tensor. It is ``None`` by default, meaning the
 value untouched; ``FirstIfTuple()`` for a module that returns its output beside a

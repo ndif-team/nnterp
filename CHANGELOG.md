@@ -31,6 +31,12 @@
   property. These two names are the table's only compatibility spellings; a row
   named either of them is theirs. A vLLM model has no `logits` row, since vLLM
   computes the logits outside the model's forward.
+- **`IOType.INPUTS`**, nnsight's `(args, kwargs)` pair, next to `INPUT` (the
+  first positional argument) and `OUTPUT`, with the same meaning on a module row
+  and on a row that reads a call inside a forward. It is how a row names an
+  argument that is not the first: `Address("self_attn", IOType.INPUTS,
+  op=("attention_interface_1",), select=Index(0, 1))` is the query the attention
+  interface is called with, readable and writable.
 - **Where the tensor sits in the value is data: `Address.select`.** A `Selection`
   — `FirstIfTuple()` for a module that returns its output beside a cache (what
   `layers_output`, `attentions_output` and `mlps_output` use, decided at each
@@ -132,6 +138,22 @@
   traces on NDIF.
 
 ### Fixes
+
+- **DBRX and Qwen2-MoE attention probabilities on transformers 5.17.** Both
+  families now dispatch through the shared attention interface, so their rows
+  naming a bare `nn_functional_dropout_0` no longer resolved: DBRX raised on
+  every probability test and Qwen2-MoE could not be loaded with
+  `enable_attention_probs=True` at all. DBRX keeps only its module override
+  (`self_attn.attn`, the inner attention) and Qwen2-MoE needs no row of its own.
+- **`nnterp/tests/test_source_ops.py`**: every row that reads an operation of a
+  forward, on all 26 pinned families, with the attention probabilities enabled —
+  the op resolves on every layer, the tensor is non-negative, is
+  `[batch, heads, queries, keys]`, sums to one (to less than one on a family
+  whose row is tagged `"sink"`), and equals a manual softmax of the scores where
+  the family's forward makes them reachable. A row that drifts onto the scores or
+  the values passes the shape check and fails these. When an operation moves, the
+  `RenamingError` now names the row, the model class, the transformers version
+  and every operation that does exist at that level of the source.
 
 - **`attn_implementation="eager"` is accepted with `enable_attention_probs=True`.**
   `StandardizedTransformer(name, enable_attention_probs=True,

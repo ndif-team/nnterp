@@ -19,6 +19,7 @@ from nnterp.nnsight_utils import (
 from nnterp.rename_utils import (
     Address,
     FirstIfTuple,
+    IOType,
     Index,
     RenameConfig,
     RenamingError,
@@ -1021,3 +1022,38 @@ def test_disable_puts_its_reason_in_the_table():
     assert model.internals.status()["mlps_output"] == "no MLP contribution here, for a reason"
     with pytest.raises(RenamingError, match="for a reason"):
         model.mlps_output[0]
+
+
+def test_a_row_may_name_an_argument_of_a_call():
+    """IOType.INPUTS is nnsight's ``(args, kwargs)`` pair, so a row reaches an
+    argument of a call the forward makes, not only its first: the attention
+    interface's second positional argument is the query. Zeroing it makes every
+    attention row uniform over the keys the mask leaves, which is what says the
+    write landed in that argument and not beside it."""
+    model = StandardizedTransformer(
+        "gpt2",
+        enable_attention_probs=True,
+        device_map="cpu",
+        dtype=th.float32,
+        rename_config=RenameConfig(
+            addresses={
+                "attention_queries": Address(
+                    "self_attn",
+                    IOType.INPUTS,
+                    op=("attention_interface_1",),
+                    select=Index(0, 1),
+                    order=15,
+                )
+            }
+        ),
+    )
+    tokens = th.tensor([[3, 4, 5, 6]])
+    seq = tokens.shape[1]
+    with th.no_grad(), model.trace(tokens):
+        queries = model.attention_queries[0].clone().save()
+        model.attention_queries[0] = th.zeros_like(model.attention_queries[0])
+        probs = model.attention_probabilities[0].clone().save()
+    assert queries.shape == (1, model.num_heads, seq, model.head_dim)
+    # the last query attends to every key, so with no query it attends uniformly
+    last = probs[0, :, -1, :]
+    assert th.allclose(last, th.full_like(last, 1 / seq), atol=1e-5)

@@ -5,6 +5,7 @@ from typing import Any, Callable, Literal, get_args
 from enum import Enum
 
 import torch as th
+import transformers
 
 from .logging import logger
 from nnsight.intervention.envoy import Envoy
@@ -20,7 +21,6 @@ from .utils import (
     BloomForCausalLM,
     FalconForCausalLM,
     GPTJForCausalLM,
-    Qwen2MoeForCausalLM,
     DbrxForCausalLM,
     GptOssForCausalLM,
     MptForCausalLM,
@@ -408,9 +408,18 @@ def get_intermediate_size(model) -> int | None:
 
 
 class IOType(Enum):
-    """Enum to specify input or output access"""
+    """Which side of a module, or of a call inside its forward, carries the
+    tensor — spelled as nnsight spells it, so a row means the same thing on both.
+
+    ``INPUT`` is the first positional argument, which is the tensor for a module
+    that takes one. ``INPUTS`` is the whole ``(args, kwargs)`` pair, for a call
+    whose tensor is some other argument: a row takes it with a select, e.g.
+    ``select=Index(0, 1)`` for the second positional argument. ``OUTPUT`` is what
+    the module or call returns.
+    """
 
     INPUT = "input"
+    INPUTS = "inputs"
     OUTPUT = "output"
 
 
@@ -511,9 +520,11 @@ class Address:
         model, reached as ``accessor()`` (and ``model.<name>`` as a property).
     io : IOType or None
         Which side of the module (or of the operation, when ``op`` is set) carries
-        the tensor. ``INPUT`` is the first positional argument, of the module's
-        forward or of the call, and ``OUTPUT`` what it returns. ``None`` makes the
-        accessor return the module envoy itself.
+        the tensor: ``INPUT`` is the first positional argument, ``INPUTS`` the
+        whole ``(args, kwargs)`` pair — which an argument other than the first is
+        named in, with ``select=Index(0, 1)`` for the second positional one — and
+        ``OUTPUT`` what is returned. ``None`` makes the accessor return the module
+        envoy itself.
     op : tuple of str, or callable
         Operations of the module's ``.source`` to descend through, outermost
         first: ``("attention_interface_1", "nn_functional_dropout_0")`` is the
@@ -700,7 +711,8 @@ class LayerAccessor:
                 raise RenamingError(
                     f"{self.name}: the forward of {'.'.join(('layers', str(layer), *filter(None, [self.address.module])))}"
                     f"{''.join('.' + done for done in op[:depth])} has no operation {op_name!r} "
-                    f"with this transformers version. Its operations are:\n{source}"
+                    f"with transformers {transformers.__version__} on "
+                    f"{type(self.model._module).__name__}. Its operations are:\n{source}"
                 ) from e
         return target
 
@@ -1078,8 +1090,9 @@ FAMILY_ADDRESSES: list[tuple[type | Callable[[Any], bool], dict[str, Address]]] 
             "layers_mid": Address("self_attn.norm_2", IOType.INPUT, order=33),
             "mlps_norm_output": Address("self_attn.norm_2", order=36),
             "attentions_output": _row("attentions_output", module="self_attn.attn"),
+            # the attention that dispatches through the interface is the inner one
             "attention_probabilities": _row(
-                "attention_probabilities", module="self_attn.attn", op=("nn_functional_dropout_0",)
+                "attention_probabilities", module="self_attn.attn"
             ),
         },
     ),
@@ -1096,10 +1109,6 @@ FAMILY_ADDRESSES: list[tuple[type | Callable[[Any], bool], dict[str, Address]]] 
     (
         GPTJForCausalLM,
         {"attention_probabilities": _row("attention_probabilities", op=("self__attn_0", "self_attn_dropout_0"))},
-    ),
-    (
-        Qwen2MoeForCausalLM,
-        {"attention_probabilities": _row("attention_probabilities", op=("nn_functional_dropout_0",))},
     ),
     (
         # the softmax spans the keys plus a sink, and the sink is dropped

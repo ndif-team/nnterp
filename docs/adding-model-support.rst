@@ -109,6 +109,74 @@ module does not actually add the residual to its output, pass the default source
 (``attn_output_source="self_attn"`` / ``mlp_output_source="mlp"``) to keep the
 module output.
 
+Naming a place yourself: ``addresses``
+--------------------------------------
+
+Those two keys are special cases of ``addresses``, which replaces a row of
+nnterp's address table or adds one of your own. A row is an ``Address``: the
+module (relative to a layer, or to the model for a whole-model place), which side
+of it carries the tensor, the operations of its ``.source`` to descend through,
+and where the tensor sits inside the value found there.
+
+.. code-block:: python
+
+   from nnterp.rename_utils import Address, IOType, Index, RenameConfig
+
+   rename_config = RenameConfig(
+       addresses={
+           # the same thing attn_output_source says
+           "attentions_output": Address("self_attn.dense", order=30),
+           # an accessor of your own: it appears in model.internals and as
+           # model.attentions_gate, and reads a module this family alone has
+           "attentions_gate": Address("self_attn.gate_proj", order=25),
+       }
+   )
+
+``order`` is the row's place in the block's forward pass, which is how
+``model.internals.rank(name, layer)`` sorts several places into the order nnsight
+requires them to be read in.
+
+``io`` is spelled as nnsight spells it, on a module and on a call alike:
+``IOType.OUTPUT`` is what is returned, ``IOType.INPUT`` the first positional
+argument, and ``IOType.INPUTS`` the whole ``(args, kwargs)`` pair, which is how a
+row names an argument that is not the first:
+
+.. code-block:: python
+
+   # the second positional argument of the attention interface call: the query
+   Address("self_attn", IOType.INPUTS, op=("attention_interface_1",),
+           select=Index(0, 1), order=15)
+
+A row that reads an operation of a forward names it the way nnsight does, and
+those names come from the transformers version you have installed. If one moves,
+the accessor raises a ``RenamingError`` naming the row, the model class, the
+transformers version and every operation that does exist at that level, so the
+fix is to replace that one row. ``nnterp/tests/test_source_ops.py`` runs every
+such row against every family nnterp pins, with the attention probabilities
+enabled, and is what catches an upgrade that moves one.
+
+``Address.select`` says where the tensor is inside the value at that place, for a
+module that returns more than the tensor. It is ``None`` by default, meaning the
+value untouched; ``FirstIfTuple()`` for a module that returns its output beside a
+cache (what ``layers_output`` and ``attentions_output`` use); or an ``Index``,
+spelled ``Index(0)`` / ``0`` / ``("hidden_states",)``, walked to read and rebuilt
+around the new tensor to write. For a value neither describes, write a
+``Selection`` of your own:
+
+.. code-block:: python
+
+   from nnterp.rename_utils import Selection
+
+   class TheTensor(Selection):
+       """Whichever element of the value is a tensor."""
+
+       def get(self, value):
+           return next(item for item in value if isinstance(item, torch.Tensor))
+
+       def put(self, value, new):
+           return tuple(new if isinstance(item, torch.Tensor) else item for item in value)
+
+
 Real Example: GPT-J Support
 ----------------------------
 
@@ -213,7 +281,7 @@ Testing Your Configuration
        assert layer_out.shape == (batch_size, seq_len, hidden_size)
        
        # Check attention probabilities if enabled
-       if model.attention_probabilities.enabled:
+       if model.attn_probs_available:
            attn_probs = model.attention_probabilities[0]
            assert attn_probs.shape == (batch_size, num_heads, seq_len, seq_len)
 

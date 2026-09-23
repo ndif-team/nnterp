@@ -62,7 +62,7 @@ Model Dispatch
 
 ``nnterp`` automatically dispatches your model to available devices (``device_map="auto"``) during loading. This can be inconvenient if you don't want to load model weights immediately. However you can set ``allow_dispatch=False`` to disable this (but some tests won't be run).
 
-With ``remote=True`` the checkpoint stays off the client: ``allow_dispatch`` is set to ``False``, every check runs with ``scan()`` on the meta model, and no request is sent to NDIF during construction. The attention-probability check is then a shape check; pass ``check_attn_probs_with_trace=True`` to run the full check (rows summing to 1, edits changing the logits) as traces on NDIF.
+With ``remote=True`` the checkpoint stays off the client: ``allow_dispatch`` is set to ``False``, every check runs with ``scan()`` on the meta model, and no request is sent to NDIF during construction. Nothing of ``nnterp`` travels with a request either — the server imports its own installed copy, so it must have ``nnterp`` at the same version as the client. The attention-probability check is then a shape check; pass ``check_attn_probs_with_trace=True`` to run the full check (rows summing to 1, edits changing the logits) as traces on NDIF.
 
 .. code-block:: python
 

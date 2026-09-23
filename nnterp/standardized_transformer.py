@@ -6,7 +6,6 @@ import torch as th
 from torch.nn import Module
 from torch import Size
 from nnsight import TransformersModel
-from nnsight.ndif import register as ndif_register
 from transformers import AutoTokenizer
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 from .utils import (
@@ -14,21 +13,34 @@ from .utils import (
     DummyCache,
     try_with_scan,
 )
+from .internals import Internals
 from .rename_utils import (
-    IOType,
     LayerAccessor,
-    AttentionProbabilitiesAccessor,
     RenameConfig,
     get_rename_dict,
     get_attention_layers,
     get_ignores,
-    get_output_sources,
+    addresses_for,
+    get_block_structure,
+    get_head_dim,
+    get_intermediate_size,
+    get_num_kv_heads,
+    get_qk_head_dim,
+    structural_addresses,
+    check_attention_probabilities,
     check_model_renaming,
     get_num_attention_heads,
     get_hidden_size,
     RenamingError,
     get_vocab_size,
 )
+
+
+#: The two rows whose model attribute is a property rather than the accessor:
+#: public names older than the address table that return the tensor itself.
+#: ``model.logits`` reads the ``logits`` row and ``model.token_embeddings`` the
+#: ``embeddings_output`` row, so there is still one answer per place.
+COMPATIBILITY_PROPERTIES = ("logits", "token_embeddings")
 
 
 class StandardizationMixin:
@@ -46,6 +58,16 @@ class StandardizationMixin:
     - attentions_input[i] / attentions_output[i]: Get/set attention input/output at layer i
     - mlps[i]: Get MLP module at layer i
     - mlps_input[i] / mlps_output[i]: Get/set MLP input/output at layer i
+    - internals: every accessor of this model by name, in forward order, with what
+      it is and why a family has none (``model.internals.status()``). Each row of
+      the table is an attribute of the model like the ones above.
+    - the whole-model places — embeddings_input, embeddings_output, ln_final_output,
+      lm_head_output — are accessors called rather than indexed:
+      ``model.ln_final_output()`` reads and ``model.ln_final_output[None] = value``
+      writes. ``logits`` is a row of the table too, but ``model.logits`` stays the
+      tensor property it always was, as ``model.token_embeddings`` (the
+      ``embeddings_output`` row) stays: those two are the compatibility
+      spellings, and each reads its row.
     - attention_layers / linear_attention_layers: Indices of the softmax-attention
       blocks (``layers[i].self_attn``) and of the linear-attention blocks
       (``layers[i].linear_attn``, Gated DeltaNet in Qwen3-Next / Qwen3.5 hybrids).
@@ -55,18 +77,19 @@ class StandardizationMixin:
     attentions_output[i] / mlps_output[i] never include the residual stream: on
     architectures that add the residual inside the attention/MLP module (BLOOM,
     MPT, DBRX), they target the last pre-residual submodule instead of the module
-    output (see issue #51). Note that on architectures with post-sublayer
-    layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the
-    residual stream is the post-layernorm output, not the module output returned
-    here.
+    output (see issue #51), and on architectures that normalize the sublayer's
+    output before adding it (Gemma-2/3, OLMo-2) they target that post-sublayer
+    layernorm, whose output is the tensor added to the residual stream. The raw
+    module outputs are ``attentions[i].output`` and ``mlps[i].output``.
 
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
-        remote (bool, default False): If True, registers nnterp for NDIF remote execution via
-            cloudpickle serialization and keeps the checkpoint off the client: allow_dispatch
-            is set to False and every load-time check runs with scan() on the meta model.
+        remote (bool, default False): If True, keeps the checkpoint off the client:
+            allow_dispatch is set to False and every load-time check runs with scan() on
+            the meta model. The NDIF server must have nnterp installed at this version;
+            nothing of nnterp is shipped with a request.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
@@ -87,8 +110,36 @@ class StandardizationMixin:
     num_heads: int
     hidden_size: int
     vocab_size: int
+    head_dim: int
+    qk_head_dim: int
+    num_kv_heads: int
+    intermediate_size: int
+    block_structure: str
     is_vllm: bool
     remote: bool
+
+    # One accessor per row of the address table, set in _init_standardization.
+    # These say so for a reader and a type checker; the table is what creates them.
+    internals: Internals
+    embeddings_input: LayerAccessor
+    embeddings_output: LayerAccessor
+    ln_final_output: LayerAccessor
+    lm_head_output: LayerAccessor
+    layers_input: LayerAccessor
+    layers_mid: LayerAccessor
+    layers_output: LayerAccessor
+    attentions: LayerAccessor
+    attentions_input: LayerAccessor
+    attentions_norm_output: LayerAccessor
+    attentions_premix: LayerAccessor
+    attentions_output: LayerAccessor
+    attention_probabilities: LayerAccessor
+    mlps: LayerAccessor
+    mlps_input: LayerAccessor
+    mlps_norm_output: LayerAccessor
+    mlps_activation: LayerAccessor
+    mlps_neurons: LayerAccessor
+    mlps_output: LayerAccessor
 
     def _init_standardization(
         self,
@@ -105,8 +156,9 @@ class StandardizationMixin:
         self.remote = remote
         if remote:
             # The checkpoint lives on NDIF: validate on the meta model with scan()
-            # and never dispatch it on the client.
-            ndif_register("nnterp")
+            # and never dispatch it on the client. Nothing of nnterp is shipped
+            # with the request — the server imports its own installed copy, which
+            # has to be the same version as this one.
             allow_dispatch = False
         if check_attn_probs_with_trace is None:
             check_attn_probs_with_trace = not remote
@@ -115,41 +167,37 @@ class StandardizationMixin:
         else:
             model_name = model.__class__.__name__
 
-        ignores = get_ignores(self._module, rename_config)
-
-        # Create accessor instances. attentions_output / mlps_output may target a
-        # submodule on architectures that add the residual inside the sublayer
-        # module (see rename_utils.RESIDUAL_INSIDE_SUBLAYER_SOURCES and issue #51),
-        # and are disabled (None source) when no module carries the contribution.
-        attn_output_source, mlp_output_source = get_output_sources(
+        # One accessor per row of the address table: the defaults, what this
+        # family does differently (rename_utils.FAMILY_ADDRESSES: e.g. attentions_output
+        # / mlps_output target a submodule where the residual is added inside the
+        # sublayer module, issue #51), then the user's RenameConfig.
+        # The children nnterp does not rename (norms, projections, activation) are
+        # named off this model's module tree; a family or the user may still say
+        # otherwise, so their rows win.
+        self.block_structure = get_block_structure(self._module)
+        addresses = structural_addresses(self, self.block_structure) | addresses_for(
             self._module, rename_config
         )
-
-        def output_accessor(source: str | None, name: str, default: str):
-            if source is not None:
-                return LayerAccessor(self, source, IOType.OUTPUT)
-            return LayerAccessor(
-                self,
-                default,
-                IOType.OUTPUT,
-                disabled_reason=(
-                    f"{name} is disabled for this model: no module exposes the sublayer's "
-                    "additive contribution to the residual stream (see the warning logged at "
-                    "load and https://github.com/ndif-team/nnterp/issues/51). Use "
-                    f"layers[i].{default}.output for the raw (residual-added) module output."
-                ),
-            )
-
-        self.layers_input = LayerAccessor(self, None, IOType.INPUT)
-        self.layers_output = LayerAccessor(self, None, IOType.OUTPUT)
-        self.attentions = LayerAccessor(self, "self_attn", None)
-        self.attentions_input = LayerAccessor(self, "self_attn", IOType.INPUT)
-        self.attentions_output = output_accessor(
-            attn_output_source, "attentions_output", "self_attn"
-        )
-        self.mlps = LayerAccessor(self, "mlp", None)
-        self.mlps_input = LayerAccessor(self, "mlp", IOType.INPUT)
-        self.mlps_output = output_accessor(mlp_output_source, "mlps_output", "mlp")
+        if self.is_vllm:
+            # vLLM computes the logits outside the model's forward, so model.logits
+            # is nnsight's own and not this row's object: better no row than one
+            # status() calls available and a read would take from the wrong place.
+            addresses.pop("logits", None)
+        self.internals = Internals(self, addresses)
+        # Every row is an attribute of the model: model.layers_output[i] for a
+        # per-layer place, model.lm_head_output() for a whole-model one. Adding a
+        # place is adding a row and nothing else, and a row that would take a name
+        # the model already uses is an error rather than a silent clobber.
+        for name, accessor in self.internals.items():
+            if name in COMPATIBILITY_PROPERTIES:
+                continue
+            if hasattr(self, name):
+                raise RenamingError(
+                    f"The address named {name!r} cannot become model.{name}: the model "
+                    f"already has one ({type(getattr(self, name)).__name__}). Name the row "
+                    "something else; it is reachable as model.internals[name] either way."
+                )
+            setattr(self, name, accessor)
 
         self.num_layers = len(self.layers)
         # From the block structure: a softmax-attention block exposes self_attn, a
@@ -167,7 +215,17 @@ class StandardizationMixin:
         self.vocab_size = get_vocab_size(
             self._module, raise_error=False, rename_config=rename_config
         )
+        # like num_heads and hidden_size above, None where the config does not
+        # say (a RenameConfig key names it there)
+        known = self.num_heads is not None and self.hidden_size is not None
+        self.head_dim = get_head_dim(self._module) if known else None
+        self.qk_head_dim = get_qk_head_dim(self._module) if known else None
+        self.num_kv_heads = get_num_kv_heads(self._module) if known else None
+        self.intermediate_size = get_intermediate_size(self._module) if known else None
 
+        # a sublayer whose contribution the table says this model does not expose
+        # (OPT has no MLP module) is one the renaming checks cannot check
+        ignores = get_ignores(self, rename_config)
         if check_renaming:
             check_model_renaming(
                 self,
@@ -177,23 +235,26 @@ class StandardizationMixin:
                 allow_multimodal,
                 rename_config=rename_config,
             )
-        self.attention_probabilities = AttentionProbabilitiesAccessor(
-            self,
-            rename_config=rename_config,
-            initialized_with_enable=enable_attention_probs,
-        )
         if self.is_vllm and enable_attention_probs:
             raise NotImplementedError(
                 "nnterp VLLM wrapper doesn't support attention probabilities yet, please set enable_attention_probs=False."
             )
         if check_renaming and enable_attention_probs:
-            self.attention_probabilities.check_source(
+            check_attention_probabilities(
+                self,
                 allow_dispatch=allow_dispatch,
                 use_trace=check_attn_probs_with_trace,
             )
         else:
             # Disable attention probabilities as we can't check them without dispatching the model or not validating the sum to 1 and causal effect of modifying them
-            self.attention_probabilities.disable()
+            self.attention_probabilities.disable(
+                "Attention probabilities are disabled for this model."
+                + (
+                    ""
+                    if enable_attention_probs
+                    else " Set enable_attention_probs=True when loading the model to enable them."
+                )
+            )
         self._add_prefix_false_tokenizer = None
 
     def _get_rename(
@@ -270,7 +331,10 @@ class StandardizationMixin:
 
     @property
     def attn_probs_available(self) -> bool:
-        return self.attention_probabilities.enabled
+        if not self.attention_layers:
+            return False
+        probe = self.attention_layers[0]
+        return self.attention_probabilities.unavailable_on(probe) is None
 
     @property
     def input_ids(self) -> TraceTensor:
@@ -301,13 +365,14 @@ class StandardizationMixin:
 
     @property
     def token_embeddings(self) -> TraceTensor:
-        """Returns the token embeddings. Equivalent to self.embed_tokens.output"""
-        return self.embed_tokens.output
+        """Returns the token embeddings: the ``embeddings_output`` row, which is
+        ``embed_tokens.output``."""
+        return self.embeddings_output()
 
     @token_embeddings.setter
     def token_embeddings(self, value: TraceTensor):
-        """Sets the token embeddings. Equivalent to self.embed_tokens.output = value"""
-        self.embed_tokens.output = value
+        """Sets the token embeddings, through the same row."""
+        self.embeddings_output[None] = value
 
     @property
     def next_token_probs(self) -> TraceTensor:
@@ -536,18 +601,19 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
     attentions_output[i] / mlps_output[i] never include the residual stream: on
     architectures that add the residual inside the attention/MLP module (BLOOM,
     MPT, DBRX), they target the last pre-residual submodule instead of the module
-    output (see issue #51). Note that on architectures with post-sublayer
-    layernorms outside these modules (e.g. Gemma-2/3), the tensor added to the
-    residual stream is the post-layernorm output, not the module output returned
-    here.
+    output (see issue #51), and on architectures that normalize the sublayer's
+    output before adding it (Gemma-2/3, OLMo-2) they target that post-sublayer
+    layernorm, whose output is the tensor added to the residual stream. The raw
+    module outputs are ``attentions[i].output`` and ``mlps[i].output``.
 
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load or loaded model.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
             Defaults to True.
-        remote (bool, default False): If True, registers nnterp for NDIF remote execution via
-            cloudpickle serialization and keeps the checkpoint off the client: allow_dispatch
-            is set to False and every load-time check runs with scan() on the meta model.
+        remote (bool, default False): If True, keeps the checkpoint off the client:
+            allow_dispatch is set to False and every load-time check runs with scan() on
+            the meta model. The NDIF server must have nnterp installed at this version;
+            nothing of nnterp is shipped with a request.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Defaults to True. Automatically set to False
             when remote=True.
@@ -627,8 +693,10 @@ class StandardizedTransformer(TransformersModel, StandardizationMixin):
 
     @property
     def logits(self) -> TraceTensor:
-        """Returns the predicted logits."""
-        return self.output.logits
+        """Returns the predicted logits: the ``logits`` field of the model's
+        output, which is what it predicts from (capped where the head's output is
+        not, on Gemma-2). The row behind it is ``model.internals["logits"]``."""
+        return self.internals["logits"]()
 
 
 class StandardizedVLM(TransformersModel, StandardizationMixin):
@@ -641,8 +709,9 @@ class StandardizedVLM(TransformersModel, StandardizationMixin):
     Args:
         model (str or Module): Hugging Face repository ID or path of the model to load.
         check_renaming (bool, default True): If True, the renaming of modules is validated.
-        remote (bool, default False): If True, registers nnterp for NDIF remote execution and
-            keeps the checkpoint off the client (allow_dispatch=False, checks run with scan()).
+        remote (bool, default False): If True, keeps the checkpoint off the client
+            (allow_dispatch=False, checks run with scan()). The NDIF server must have
+            nnterp installed at this version; nothing of nnterp is shipped with a request.
         allow_dispatch (bool, default True): If True, allows using trace() to dispatch the model
             when scan() fails during renaming checks. Set to False when remote=True.
         enable_attention_probs (bool, default False): If True, enables attention probabilities
@@ -699,5 +768,7 @@ class StandardizedVLM(TransformersModel, StandardizationMixin):
 
     @property
     def logits(self) -> TraceTensor:
-        """Returns the predicted logits."""
-        return self.output.logits
+        """Returns the predicted logits: the ``logits`` field of the model's
+        output, which is what it predicts from (capped where the head's output is
+        not, on Gemma-2). The row behind it is ``model.internals["logits"]``."""
+        return self.internals["logits"]()

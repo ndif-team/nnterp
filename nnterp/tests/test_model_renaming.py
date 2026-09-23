@@ -1,4 +1,6 @@
 import warnings
+from collections import namedtuple
+
 import torch as th
 import pytest
 from nnsight import TransformersModel
@@ -14,7 +16,16 @@ from nnterp.nnsight_utils import (
     get_num_layers,
     ModuleAccessor,
 )
-from nnterp.rename_utils import get_ignores, RenameConfig, RenamingError
+from nnterp.rename_utils import (
+    Address,
+    FirstIfTuple,
+    IOType,
+    Index,
+    RenameConfig,
+    RenamingError,
+    Selection,
+    get_ignores,
+)
 from transformers import OPTForCausalLM
 import torch.nn as nn
 
@@ -170,7 +181,7 @@ def test_standardized_transformer_methods(model_name):
 
         num_layers = model.num_layers
         assert num_layers > 0
-        ignores = get_ignores(model._module)
+        ignores = get_ignores(model)
         with model.trace(prompt):
             assert model.layers[0] is not None
             # Test accessor and direct module access
@@ -183,11 +194,11 @@ def test_standardized_transformer_methods(model_name):
                 assert model.layers[0].mlp is not None
             # On architectures that add the residual inside the sublayer module
             # (BLOOM, MPT, DBRX), the output accessors target a submodule, so the
-            # direct access follows the accessor's attr_name path (issue #51).
+            # direct access follows the accessor's module path (issue #51).
             if "attention" not in ignores:
                 attn_output_accessor = model.attentions_output[0].save()
                 attn_output_direct = model.model.layers[0]
-                for attr in model.attentions_output.attr_name.split("."):
+                for attr in model.attentions_output.address.module.split("."):
                     attn_output_direct = getattr(attn_output_direct, attr)
                 attn_output_direct = attn_output_direct.output
                 if isinstance(attn_output_direct, tuple):
@@ -196,7 +207,7 @@ def test_standardized_transformer_methods(model_name):
             if "mlp" not in ignores:
                 mlps_output_accessor = model.mlps_output[0].save()
                 mlps_output_direct = model.model.layers[0]
-                for attr in model.mlps_output.attr_name.split("."):
+                for attr in model.mlps_output.address.module.split("."):
                     mlps_output_direct = getattr(mlps_output_direct, attr)
                 mlps_output_direct = mlps_output_direct.output
                 if isinstance(mlps_output_direct, tuple):
@@ -256,7 +267,7 @@ def test_renamed_model_methods(model_name):
 
         num_layers = get_num_layers(model)
         assert num_layers > 0
-        ignores = get_ignores(model._module)
+        ignores = get_ignores(model)
         with model.trace(prompt):
             batch_size = model.input_size[0].save()
             seq_len = model.input_size[1].save()
@@ -304,7 +315,7 @@ def test_standardized_transformer_input_accessors(model_name):
         model = StandardizedTransformer(model_name)
         prompt = "Hello, world!"
 
-        ignores = get_ignores(model._module)
+        ignores = get_ignores(model)
         with model.trace(prompt):
             # Test input accessors
             layer_input_accessor = model.layers_input[0].save()
@@ -340,7 +351,9 @@ def test_standardized_transformer_steer_method(model_name):
         if hidden_size is None:
             pytest.fail(f"Model {model_name} has no hidden size")
 
-        steering_vector = th.randn(hidden_size) * 0.1
+        # seeded: whether a steer moves the logits must not depend on the RNG
+        # state the worker happens to be in when xdist schedules this test
+        steering_vector = th.randn(hidden_size, generator=th.Generator().manual_seed(0)) * 0.1
 
         with model.trace(prompt):
             baseline_output = model.logits.save()
@@ -404,7 +417,9 @@ def test_steer_token_positions(model_name):
         if hidden_size is None:
             pytest.fail(f"Model {model_name} has no hidden size")
 
-        steering_vector = th.randn(hidden_size) * 0.1
+        # seeded: whether a steer moves the logits must not depend on the RNG
+        # state the worker happens to be in when xdist schedules this test
+        steering_vector = th.randn(hidden_size, generator=th.Generator().manual_seed(0)) * 0.1
 
         with model.trace(prompt):
             baseline_output = model.logits.save()
@@ -440,7 +455,9 @@ def test_steer_batch_index(model_name):
         if hidden_size is None:
             pytest.fail(f"Model {model_name} has no hidden size")
 
-        steering_vector = th.randn(hidden_size) * 0.1
+        # seeded: whether a steer moves the logits must not depend on the RNG
+        # state the worker happens to be in when xdist schedules this test
+        steering_vector = th.randn(hidden_size, generator=th.Generator().manual_seed(0)) * 0.1
 
         with model.trace(prompts):
             baseline_output = model.logits.save()
@@ -480,7 +497,9 @@ def test_steer_batch_index_and_token_positions(model_name):
         if hidden_size is None:
             pytest.fail(f"Model {model_name} has no hidden size")
 
-        steering_vector = th.randn(hidden_size) * 0.1
+        # seeded: whether a steer moves the logits must not depend on the RNG
+        # state the worker happens to be in when xdist schedules this test
+        steering_vector = th.randn(hidden_size, generator=th.Generator().manual_seed(0)) * 0.1
 
         with model.trace(prompts):
             baseline_output = model.logits.save()
@@ -657,9 +676,9 @@ def test_module_accessor(model_name, raw_model):
         unembed = accessor.get_unembed()
         assert isinstance(unembed, nn.Module)
 
-        # Test get_mlp if not ignored
-        ignores = get_ignores(pretrained_model)
-        if "mlp" not in ignores:
+        # Test get_mlp where the block has one (OPT's feed-forward is fc1 / fc2)
+        has_mlp = hasattr(accessor.nn_model.layers[0], "mlp")
+        if has_mlp:
             mlp = accessor.get_mlp(0)
             assert isinstance(mlp, nn.Module)
 
@@ -717,7 +736,7 @@ def test_module_accessor(model_name, raw_model):
         unembed_custom = accessor_custom.get_unembed()
         assert isinstance(unembed_custom, nn.Module)
 
-        if "mlp" not in ignores:
+        if has_mlp:
             mlp_custom = accessor_custom.get_mlp(0)
             assert isinstance(mlp_custom, nn.Module)
 
@@ -726,7 +745,7 @@ def test_module_accessor(model_name, raw_model):
         if num_layers > 1:
             attention_1 = accessor.get_attention(1)
             assert isinstance(attention_1, nn.Module)
-            if "mlp" not in ignores:
+            if has_mlp:
                 mlp_1 = accessor.get_mlp(1)
                 assert isinstance(mlp_1, nn.Module)
 
@@ -739,11 +758,16 @@ def test_module_accessor(model_name, raw_model):
             assert len(layers_attr) == len(layers)
 
 
-# Architectures that add the residual inside the attention/MLP module (issue #51).
+# Architectures that add the residual inside the attention/MLP module (issue #51),
+# and ones that normalize the sublayer's output before adding it (Gemma-2/3
+# sandwich norms, OLMo-2 post-norm), where the module output is not what is added.
 RESIDUAL_INSIDE_MODELS = [
     "yujiepan/bloom-tiny-random",
     "hf-internal-testing/tiny-random-MptForCausalLM",
     "yujiepan/dbrx-tiny-random",
+    "trl-internal-testing/tiny-Gemma2ForCausalLM",
+    "hf-internal-testing/tiny-random-Gemma3ForCausalLM",
+    "hf-tiny-v2/tiny-random-Olmo2ForCausalLM",
 ]
 
 
@@ -786,7 +810,7 @@ def test_residual_inside_module_detection(monkeypatch):
     from nnterp import rename_utils
     from nnterp.rename_utils import RenamingError
 
-    monkeypatch.setattr(rename_utils, "RESIDUAL_INSIDE_SUBLAYER_SOURCES", {})
+    monkeypatch.setattr(rename_utils, "FAMILY_ADDRESSES", [])
     with pytest.raises(RenamingError, match="residual"):
         StandardizedTransformer("yujiepan/bloom-tiny-random")
 
@@ -797,7 +821,7 @@ def test_residual_inside_module_user_config(monkeypatch):
     source opts out of the residual-argument detection (issue #51)."""
     from nnterp import rename_utils
 
-    monkeypatch.setattr(rename_utils, "RESIDUAL_INSIDE_SUBLAYER_SOURCES", {})
+    monkeypatch.setattr(rename_utils, "FAMILY_ADDRESSES", [])
     model = StandardizedTransformer(
         "yujiepan/bloom-tiny-random",
         rename_config=RenameConfig(
@@ -827,7 +851,7 @@ def test_slow_but_exact_bloom_disables_output_accessors():
     output projections with F.linear, so no module carries the sublayer
     contributions: attentions_output / mlps_output are disabled (issue #51)."""
     model = StandardizedTransformer("bigscience/bigscience-small-testing")
-    ignores = get_ignores(model._module)
+    ignores = get_ignores(model)
     assert "attention" in ignores and "mlp" in ignores
     with pytest.raises(RenamingError, match="disabled"):
         model.attentions_output[0]
@@ -839,3 +863,205 @@ def test_slow_but_exact_bloom_disables_output_accessors():
         logits = model.logits.save()
     assert attn_in.shape[-1] == model.hidden_size
     assert logits.shape[-1] == model.vocab_size
+
+
+def test_residual_inside_module_user_addresses(monkeypatch):
+    """The general form of the two output sources: a row of the address table,
+    passed as RenameConfig(addresses=...), says the same thing about BLOOM."""
+    from nnterp import rename_utils
+
+    monkeypatch.setattr(rename_utils, "FAMILY_ADDRESSES", [])
+    model = StandardizedTransformer(
+        "yujiepan/bloom-tiny-random",
+        rename_config=RenameConfig(
+            addresses={
+                "attentions_output": Address("self_attn.dense", order=30),
+                "mlps_output": Address("mlp.dense_4h_to_h", order=50),
+            }
+        ),
+    )
+    with th.no_grad(), model.trace("Hello, world!"):
+        layer_in = model.layers_input[0].save()
+        attn_out = model.attentions_output[0].save()
+        mlp_out = model.mlps_output[0].save()
+        layer_out = model.layers_output[0].save()
+    assert th.allclose(layer_in + attn_out + mlp_out, layer_out, atol=1e-5)
+
+
+def test_an_index_walks_the_value_and_rebuilds_it():
+    """A read walks in, a write rebuilds on the way out: the containers on the
+    way are copied, since a module's return value is not ours to mutate. A step
+    reads and writes the same element, negative or not, and a value that names
+    its fields keeps its type through both selections."""
+    index = Index(1, "x")
+    value = (0, {"x": 1, "y": 2})
+    assert index.get(value) == 1
+    assert index.put(value, 9) == (0, {"x": 9, "y": 2})
+    assert value == (0, {"x": 1, "y": 2})
+    assert Index().get(value) is value
+
+    last = Index(-1)
+    assert last.get((1, 2, 3)) == 3
+    assert last.put((1, 2, 3), 9) == (1, 2, 9)
+
+    Returned = namedtuple("Returned", ["hidden", "cache"])
+    named = Returned(1, 2)
+    assert Index(0).put(named, 9) == Returned(hidden=9, cache=2)
+    assert FirstIfTuple().put(named, 9) == Returned(hidden=9, cache=2)
+    assert isinstance(FirstIfTuple().put(named, 9), Returned)
+    assert FirstIfTuple().put((1, 2), 9) == (9, 2)
+    assert FirstIfTuple().put(1, 9) == 9
+
+
+class _TheTensor(Selection):
+    """A selection of one's own, for what a path cannot say: whichever element of
+    the value is a tensor, wherever in it that element sits."""
+
+    def get(self, value):
+        return next(item for item in value if isinstance(item, th.Tensor))
+
+    def put(self, value, new):
+        return tuple(new if isinstance(item, th.Tensor) else item for item in value)
+
+
+def test_a_row_says_where_the_tensor_is_in_the_value():
+    """GPT-2's attention returns its output in a tuple. The shipped row unwraps
+    it with FirstIfTuple; the same place with no selection is the tuple itself,
+    with a path the element, and with a Selection of one's own whatever it says."""
+    model = StandardizedTransformer(
+        "gpt2",
+        rename_config=RenameConfig(
+            addresses={
+                "attn_value": Address("self_attn", order=30),
+                "attn_first": Address("self_attn", select=0, order=30),
+                "attn_tensor": Address("self_attn", select=_TheTensor(), order=30),
+            }
+        ),
+    )
+    with th.no_grad(), model.trace("Hello, world!"):
+        value = model.internals["attn_value"][0]
+        assert isinstance(value, tuple)
+        first = model.internals["attn_first"][0].save()
+        found = model.internals["attn_tensor"][0].save()
+        unwrapped = model.attentions_output[0].save()
+    assert th.equal(first, unwrapped)
+    assert th.equal(found, unwrapped)
+
+    # and a write through the path lands where the shipped row's does: the tuple
+    # is rebuilt around the new element, and the block goes on with it
+    path_accessor = model.internals["attn_first"]
+    with th.no_grad(), model.trace("Hello, world!"):
+        path_accessor[0] = th.zeros_like(path_accessor[0])
+        through_path = model.layers_output[0].clone().save()
+    with th.no_grad(), model.trace("Hello, world!"):
+        model.attentions_output[0] = th.zeros_like(model.attentions_output[0])
+        through_row = model.layers_output[0].clone().save()
+    assert th.equal(through_path, through_row)
+    assert not th.equal(through_path, unwrapped)
+
+
+def test_an_unrenamed_module_still_fails_at_load(monkeypatch):
+    """The renaming checks skip a sublayer the table *declares* missing (OPT has
+    no MLP module). A sublayer that is merely unreachable because it was not
+    renamed is a different thing, and has to fail at load naming the argument
+    that fixes it — MPT's feed-forward is `ffn`, so a rename table without it
+    leaves the block with no `mlp`."""
+    from nnterp import rename_utils
+
+    monkeypatch.setattr(
+        rename_utils, "MLP_NAMES", [name for name in rename_utils.MLP_NAMES if name != "ffn"]
+    )
+    with pytest.raises(RenamingError, match="mlp_rename"):
+        StandardizedTransformer("hf-internal-testing/tiny-random-MptForCausalLM")
+
+
+def test_a_row_may_not_take_a_name_the_model_uses():
+    """Every row becomes an attribute of the model, so a row named after
+    something the model already has is refused rather than replacing it. The two
+    exceptions are the compatibility properties, which read their own row."""
+    with pytest.raises(RenamingError, match="tokenizer"):
+        StandardizedTransformer(
+            "gpt2",
+            rename_config=RenameConfig(
+                addresses={"tokenizer": Address("lm_head", per_layer=False, order=2000)}
+            ),
+        )
+    model = StandardizedTransformer("gpt2")
+    assert model.internals["logits"] is not None
+    assert model.internals["embeddings_output"] is not None
+    with th.no_grad(), model.trace("Hello, world!"):
+        through_row = model.internals["embeddings_output"][None].save()
+        embeddings = model.token_embeddings.save()
+        from_row = model.internals["logits"][None].save()
+        logits = model.logits.save()
+    assert th.equal(embeddings, through_row)
+    assert th.equal(logits, from_row)
+
+
+def test_the_logits_row_is_what_the_model_predicts_from():
+    """`lm_head_output` is the head module's output and `logits` the model's own.
+    Gemma-2 caps the second with final_logit_softcapping, which is why they are
+    two rows; on a tiny checkpoint the cap only bites on a value large enough to
+    reach it, so the write is what shows the difference."""
+    model = StandardizedTransformer(
+        "trl-internal-testing/tiny-Gemma2ForCausalLM", device_map="cpu", dtype=th.float32
+    )
+    cap = model.config.final_logit_softcapping
+    assert cap is not None
+    big = 100.0
+    with th.no_grad(), model.trace("Hello, world!"):
+        model.lm_head_output[None] = th.full_like(model.lm_head_output(), big)
+        logits = model.logits.save()
+    capped = float(th.tanh(th.tensor(big / cap)) * cap)
+    assert capped < big  # the model predicts from the capped tensor
+    assert th.allclose(logits, th.full_like(logits, capped), atol=1e-4)
+
+
+def test_disable_puts_its_reason_in_the_table():
+    """disable() rewrites the address, so the reason an access raises and the
+    reason status() reports are the same string."""
+    model = StandardizedTransformer("gpt2")
+    reason = model.internals.status()["attention_probabilities"]
+    assert reason is not None and "enable_attention_probs=True" in reason
+    assert not model.attn_probs_available
+    with pytest.raises(RenamingError, match="enable_attention_probs=True"):
+        model.attention_probabilities[0]
+    model.internals["mlps_output"].disable("no MLP contribution here, for a reason")
+    assert model.internals.status()["mlps_output"] == "no MLP contribution here, for a reason"
+    with pytest.raises(RenamingError, match="for a reason"):
+        model.mlps_output[0]
+
+
+def test_a_row_may_name_an_argument_of_a_call():
+    """IOType.INPUTS is nnsight's ``(args, kwargs)`` pair, so a row reaches an
+    argument of a call the forward makes, not only its first: the attention
+    interface's second positional argument is the query. Zeroing it makes every
+    attention row uniform over the keys the mask leaves, which is what says the
+    write landed in that argument and not beside it."""
+    model = StandardizedTransformer(
+        "gpt2",
+        enable_attention_probs=True,
+        device_map="cpu",
+        dtype=th.float32,
+        rename_config=RenameConfig(
+            addresses={
+                "attention_queries": Address(
+                    "self_attn",
+                    IOType.INPUTS,
+                    op=("attention_interface_1",),
+                    select=Index(0, 1),
+                    order=15,
+                )
+            }
+        ),
+    )
+    tokens = th.tensor([[3, 4, 5, 6]])
+    seq = tokens.shape[1]
+    with th.no_grad(), model.trace(tokens):
+        queries = model.attention_queries[0].clone().save()
+        model.attention_queries[0] = th.zeros_like(model.attention_queries[0])
+        probs = model.attention_probabilities[0].clone().save()
+    assert queries.shape == (1, model.num_heads, seq, model.head_dim)
+    # the last query attends to every key, so with no query it attends uniformly
+    last = probs[0, :, -1, :]
+    assert th.allclose(last, th.full_like(last, 1 / seq), atol=1e-5)

@@ -1,0 +1,174 @@
+
+==============================================================================
+Maykeye/TinyLLama-v0: availability, decided before the first trace
+==============================================================================
+tree: llama_tree    capabilities: attn_eager=yes, gated_attention=no, moe=no
+  [ok]   attention_keys               (batch, kv_head, position, head_feature)  post-RoPE, pre repeat_kv
+  [ok]   attention_keys_pre_rope      (batch, position, feature[kv_head])  KV space under GQA
+  [ok]   attention_premix             (batch, position, feature[head])  attention_z, head-major flat
+  [ok]   attention_probabilities      (batch, head, position, key_position)  rows sum to 1
+  [ok]   attention_queries            (batch, head, position, head_feature)  post-RoPE
+  [ok]   attention_queries_pre_rope   (batch, position, feature[head])  q_proj is head-major flat
+  [ok]   attention_scores             (batch, head, position, key_position)  post-mask softmax input
+  [ok]   attention_values             (batch, position, feature[kv_head])  KV space under GQA
+  [ok]   attention_z                  (batch, position, head, head_feature)  per-head attention output, pre o_proj
+  [ok]   mlp_act_fn_output            (batch, position, feature)  act(gate) -- the gate branch only
+  [ok]   mlp_neuron_outputs           (batch, position, feature)  act(gate) * up
+  [ok]   probs_at_mixer_return        (batch, head, position, key_position)
+  heads=16  kv_heads=16  head_dim=4
+
+==============================================================================
+Maykeye/TinyLLama-v0: five internals in one trace, named in the WRONG forward order
+==============================================================================
+  asked for: ['attention_z', 'attention_probabilities', 'attention_queries', 'mlp_neuron_outputs', 'attention_queries_pre_rope']
+  forward order is: attention_queries_pre_rope then attention_queries then attention_probabilities then attention_z then mlp_neuron_outputs
+  [ok] manual out-of-order read refused immediately:
+       attention_probabilities[0] comes before attention_z[0] in the forward, which this trace has already read: nnsight cannot reach back to a value the model has passed.
+         this trace asked for: ['attention_z', 'attention_probabilities']
+         forward order is:     attention_probabilities then attention_z
+         either read them in that order, or let nnterp sort for you: model.internals.read
+  [ok] model.internals.read(0, *names) sorted it:
+         attention_z                  (1, 11, 16, 4)  (batch, position, head, head_feature)  per-head attention output, pre o_proj
+         attention_probabilities      (1, 16, 11, 11)  (batch, head, position, key_position)  rows sum to 1
+         attention_queries            (1, 16, 11, 4)  (batch, head, position, head_feature)  post-RoPE
+         mlp_neuron_outputs           (1, 11, 256)  (batch, position, feature)  act(gate) * up
+         attention_queries_pre_rope   (1, 11, 64)  (batch, position, feature[head])  q_proj is head-major flat
+
+==============================================================================
+Maykeye/TinyLLama-v0: writes
+==============================================================================
+  [ok] attention_z[0, head=1] = 0 moved the logits: True  (max delta 3.188)
+  [ok] attention_queries_pre_rope[0] = 0 moved the logits: True; attention_values unchanged by it: True (shares a native tensor: False)
+
+==============================================================================
+Maykeye/TinyLLama-v0: mlp_act_fn_output vs mlp_neuron_outputs -- same tensor or not?
+==============================================================================
+  act_fn output (1, 11, 256) vs neuron output (1, 11, 256): identical = False
+
+==============================================================================
+Maykeye/TinyLLama-v0: the load-time / CI check, and the inert-write trap
+==============================================================================
+  [ok ] attention_keys               shape (1, 16, 11, 4)         declared (1, 16, 11, 4)  causal=True
+  [ok ] attention_keys_pre_rope      shape (1, 11, 64)            declared (1, 11, 64)  causal=True
+  [ok ] attention_premix             shape (1, 11, 64)            declared (1, 11, 64)  causal=True
+  [ok ] attention_probabilities      shape (1, 16, 11, 11)        declared (1, 16, 11, 11)  causal=True
+  [ok ] attention_queries            shape (1, 16, 11, 4)         declared (1, 16, 11, 4)  causal=True
+  [ok ] attention_queries_pre_rope   shape (1, 11, 64)            declared (1, 11, 64)  causal=True
+  [ok ] attention_scores             shape (1, 16, 11, 11)        declared (1, 16, 11, 11)  causal=True
+  [ok ] attention_values             shape (1, 11, 64)            declared (1, 11, 64)  causal=True
+  [ok ] attention_z                  shape (1, 11, 16, 4)         declared (1, 11, 16, 4)  causal=True
+  [ok ] mlp_act_fn_output            shape (1, 11, 256)           declared (1, 11, None)  causal=True
+  [ok ] mlp_neuron_outputs           shape (1, 11, 256)           declared (1, 11, None)  causal=True
+  [!! ] probs_at_mixer_return        shape (1, 16, 11, 11)        declared (1, 16, 11, 11)  causal=False
+  inert addresses caught: ['probs_at_mixer_return']
+  cost: structural (1 trace, all rows) 0.02s; + causal (1 trace per row, 12 rows) 0.11s
+
+==============================================================================
+Maykeye/TinyLLama-v0: remote='local' -- the accessor shipped by value
+==============================================================================
+  [ok] read under remote='local': attention_z (1, 11, 16, 4), probs (1, 16, 11, 11)
+  [ok] write under remote='local' propagated: True
+
+==============================================================================
+Maykeye/TinyLLama-v0: serialization
+==============================================================================
+  [ok] accessor classes + table + layouts by reference: 53172 bytes
+  [ok] accessor classes + table + layouts by VALUE: 53489 bytes
+     (an `eproperty` on any of these classes fails the by-VALUE column with
+      TypeError: cannot pickle 'eproperty' object -- and nnsight.ndif.pull_env()
+      registers every working-tree module by value before the first request)
+
+==============================================================================
+gpt2: availability, decided before the first trace
+==============================================================================
+tree: gpt2_tree    capabilities: attn_eager=yes, gated_attention=no, moe=no
+  [ok]   attention_keys               (batch, kv_head, position, head_feature)  post-RoPE, pre repeat_kv
+  [ok]   attention_keys_pre_rope      (batch, position, feature[head][blocks 1/3])  c_attn emits [q | k | v] as contiguous blocks
+  [ok]   attention_premix             (batch, position, feature[head])
+  [ok]   attention_probabilities      (batch, head, position, key_position)  rows sum to 1
+  [ok]   attention_queries            (batch, head, position, head_feature)  post-RoPE
+  [ok]   attention_queries_pre_rope   (batch, position, feature[head][blocks 0/3])  c_attn emits [q | k | v] as contiguous blocks
+  [ok]   attention_scores             (batch, head, position, key_position)  post-mask softmax input
+  [ok]   attention_values             (batch, position, feature[head][blocks 2/3])  c_attn emits [q | k | v] as contiguous blocks
+  [ok]   attention_z                  (batch, position, head, head_feature)  per-head attention output, pre o_proj
+  [ok]   mlp_act_fn_output            (batch, position, feature)  act(c_fc(x)) -- no gate on this tree
+  [ok]   mlp_neuron_outputs           (batch, position, feature)  == mlp_act_fn_output on an ungated MLP
+  [ok]   probs_at_mixer_return        (batch, head, position, key_position)
+  heads=12  kv_heads=12  head_dim=64
+
+==============================================================================
+gpt2: five internals in one trace, named in the WRONG forward order
+==============================================================================
+  asked for: ['attention_z', 'attention_probabilities', 'attention_queries', 'mlp_neuron_outputs', 'attention_queries_pre_rope']
+  forward order is: attention_queries_pre_rope then attention_queries then attention_probabilities then attention_z then mlp_neuron_outputs
+  [ok] manual out-of-order read refused immediately:
+       attention_probabilities[0] comes before attention_z[0] in the forward, which this trace has already read: nnsight cannot reach back to a value the model has passed.
+         this trace asked for: ['attention_z', 'attention_probabilities']
+         forward order is:     attention_probabilities then attention_z
+         either read them in that order, or let nnterp sort for you: model.internals.read
+  [ok] model.internals.read(0, *names) sorted it:
+         attention_z                  (1, 10, 12, 64)  (batch, position, head, head_feature)  per-head attention output, pre o_proj
+         attention_probabilities      (1, 12, 10, 10)  (batch, head, position, key_position)  rows sum to 1
+         attention_queries            (1, 12, 10, 64)  (batch, head, position, head_feature)  post-RoPE
+         mlp_neuron_outputs           (1, 10, 3072)  (batch, position, feature)  == mlp_act_fn_output on an ungated MLP
+         attention_queries_pre_rope   (1, 10, 768)  (batch, position, feature[head][blocks 0/3])  c_attn emits [q | k | v] as contiguous blocks
+
+==============================================================================
+gpt2: writes
+==============================================================================
+  [ok] attention_z[0, head=1] = 0 moved the logits: True  (max delta 9.299)
+  [ok] attention_queries_pre_rope[0] = 0 moved the logits: True; attention_values unchanged by it: True (shares a native tensor: True)
+
+==============================================================================
+gpt2: mlp_act_fn_output vs mlp_neuron_outputs -- same tensor or not?
+==============================================================================
+  act_fn output (1, 10, 3072) vs neuron output (1, 10, 3072): identical = True
+
+==============================================================================
+gpt2: the load-time / CI check, and the inert-write trap
+==============================================================================
+  [ok ] attention_keys               shape (1, 12, 10, 64)        declared (1, 12, 10, 64)  causal=True
+  [ok ] attention_keys_pre_rope      shape (1, 10, 768)           declared (1, 10, 768)  causal=True
+  [ok ] attention_premix             shape (1, 10, 768)           declared (1, 10, 768)  causal=True
+  [ok ] attention_probabilities      shape (1, 12, 10, 10)        declared (1, 12, 10, 10)  causal=True
+  [ok ] attention_queries            shape (1, 12, 10, 64)        declared (1, 12, 10, 64)  causal=True
+  [ok ] attention_queries_pre_rope   shape (1, 10, 768)           declared (1, 10, 768)  causal=True
+  [ok ] attention_scores             shape (1, 12, 10, 10)        declared (1, 12, 10, 10)  causal=True
+  [ok ] attention_values             shape (1, 10, 768)           declared (1, 10, 768)  causal=True
+  [ok ] attention_z                  shape (1, 10, 12, 64)        declared (1, 10, 12, 64)  causal=True
+  [ok ] mlp_act_fn_output            shape (1, 10, 3072)          declared (1, 10, None)  causal=True
+  [ok ] mlp_neuron_outputs           shape (1, 10, 3072)          declared (1, 10, None)  causal=True
+  [!! ] probs_at_mixer_return        shape (1, 12, 10, 10)        declared (1, 12, 10, 10)  causal=False
+  inert addresses caught: ['probs_at_mixer_return']
+  cost: structural (1 trace, all rows) 0.02s; + causal (1 trace per row, 12 rows) 0.11s
+
+==============================================================================
+hf-internal-testing/tiny-random-MistralForCausalLM: availability, decided before the first trace
+==============================================================================
+tree: llama_tree    capabilities: attn_eager=yes, gated_attention=no, moe=no
+  [ok]   attention_keys               (batch, kv_head, position, head_feature)  post-RoPE, pre repeat_kv
+  [ok]   attention_keys_pre_rope      (batch, position, feature[kv_head])  KV space under GQA
+  [ok]   attention_premix             (batch, position, feature[head])  attention_z, head-major flat
+  [ok]   attention_probabilities      (batch, head, position, key_position)  rows sum to 1
+  [ok]   attention_queries            (batch, head, position, head_feature)  post-RoPE
+  [ok]   attention_queries_pre_rope   (batch, position, feature[head])  q_proj is head-major flat
+  [ok]   attention_scores             (batch, head, position, key_position)  post-mask softmax input
+  [ok]   attention_values             (batch, position, feature[kv_head])  KV space under GQA
+  [ok]   attention_z                  (batch, position, head, head_feature)  per-head attention output, pre o_proj
+  [ok]   mlp_act_fn_output            (batch, position, feature)  act(gate) -- the gate branch only
+  [ok]   mlp_neuron_outputs           (batch, position, feature)  act(gate) * up
+  [ok]   probs_at_mixer_return        (batch, head, position, key_position)
+  heads=4  kv_heads=2  head_dim=8
+
+==============================================================================
+hf-internal-testing/tiny-random-MistralForCausalLM: writes
+==============================================================================
+  [ok] attention_z[0, head=1] = 0 moved the logits: True  (max delta 0.1254)
+  [ok] attention_queries_pre_rope[0] = 0 moved the logits: True; attention_values unchanged by it: True (shares a native tensor: False)
+  [ok] GQA: attention_keys[0, 3] refused: attention_keys names head 3, but this component has 2 heads (kv_head space, layout (batch, kv_head, position, head_feature)  post-RoPE, pre repeat_kv)
+
+==============================================================================
+match_op: what a drifted forward looks like
+==============================================================================
+  assigned-then-called -> attention_interface_1
+  a moved forward -> pattern 'nn_functional_softmax': no op matches. The installed forward names these ops: ['attention_interface_0', 'attention_interface_1', 'attn_weights_1']. A missing or ambiguous pattern usually mean

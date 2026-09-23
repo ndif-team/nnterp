@@ -35,7 +35,7 @@ def test_access_attn_probabilities(model_name):
             logits.shape[1],
         )  # (batch_size, num_heads, seq_len, seq_len)
         summed_probs = attn_probs.sum(dim=-1)
-        if model.attention_probabilities.attn_probs_dont_sum_to_one:
+        if "sink" in model.attention_probabilities.address.tags:
             assert (summed_probs > 0).all()
             assert (summed_probs < 1 + 1e-5).all()
         else:

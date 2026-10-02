@@ -25,7 +25,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 ## By task
 
 ### "Load a model and use the standard names"
-- [docs/usage/loading.md](docs/usage/loading.md) — `StandardizedTransformer(repo_id, ...)`; pass `attn_implementation="eager"` for anything inside attention
+- [docs/usage/loading.md](docs/usage/loading.md) — `StandardizedTransformer(repo_id, ...)`; `family=` gives one load its family instead of the lookup; pass `attn_implementation="eager"` for anything inside attention
 - [docs/usage/vocabulary.md](docs/usage/vocabulary.md) — `embed_tokens`, `layers[i].self_attn`, `layers[i].mlp`, `norm`, `lm_head`; native names keep working
 - [docs/reference/families.md](docs/reference/families.md) — the 98 families, their native names and quirks
 
@@ -85,7 +85,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/extending/overriding-values.md](docs/extending/overriding-values.md) — an `EProperty` keyed on a path (`"../norm.output"`, `"source.<op>.inputs"` with `select`), `unavailable(...)`, `off_interface`, transforms
 - [docs/extending/custom-values.md](docs/extending/custom-values.md) — a new `EProperty` (a path from the host: `"output"`, `"../ln_2.output"`, `"source.<op>.output"`) through `envoys=`; annotate `-> Residual` / `-> Pattern` from `nnterp.components`
 - [docs/extending/finding-source-ops.md](docs/extending/finding-source-ops.md) — `print(envoy.source)` and how ops are named
-- [docs/extending/registering.md](docs/extending/registering.md) — `nnterp.families.register(family, *model_types)`
+- [docs/extending/registering.md](docs/extending/registering.md) — `nnterp.families.register(family, *model_types)` for every load of a type; `StandardizedTransformer(repo_id, family=my_family)` for one load (a module or a `SimpleNamespace` spread from a shipped family's `vars`)
 
 ### "The encyclopedia: a web page per family"
 - [encyclopedia/README.md](encyclopedia/README.md) — `encyclopedia/build.py` renders `encyclopedia/entries/<model_type>.py` (hand-written: block schema, quirks, notes; one entry for each of the 98 families) merged with a meta build of the family into static HTML under `encyclopedia/site/`; `entries/gemma2.py` is the reference entry; a family's hue comes from `encyclopedia/hues.py` (add the family to its `LAYOUT` and run it with `--write`, never pick a hue by hand); a page's checkpoint selector swaps every per-checkpoint part (sizes, `support()`, printout) of the entry's `CHECKPOINTS`; an entry's `WRAPPERS` describes its vision-language wrappers (`llama.py` is the reference) and `encyclopedia/vision/` holds each vision encoder two or more families host; `tests/test_encyclopedia.py` builds every entry from its pinned checkpoint and each wrapper from its pinned tiny one

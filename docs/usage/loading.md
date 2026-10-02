@@ -13,8 +13,8 @@ sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/components
 `StandardizedTransformer` is an nnsight `TransformersModel` whose envoy tree also answers
 to one set of names (`model.layers[i].self_attn`, `model.norm`, ...) and carries the
 standard values (`layer_output`, `attention_output`, `logits`, ...). Loading one is the
-same call as loading a `TransformersModel`, plus three keyword arguments of its own:
-`rename=`, `envoys=` and `tokenizer_kwargs=`. This page is what happens at load and which
+same call as loading a `TransformersModel`, plus four keyword arguments of its own:
+`family=`, `rename=`, `envoys=` and `tokenizer_kwargs=`. This page is what happens at load and which
 arguments matter for what you can read afterwards.
 
 ## Canonical pattern
@@ -40,7 +40,7 @@ with model.trace("The Eiffel Tower is in"):
     logits = model.logits.save()
 ```
 
-Every argument other than `rename`, `envoys` and `tokenizer_kwargs` goes straight to
+Every argument other than `family`, `rename`, `envoys` and `tokenizer_kwargs` goes straight to
 `TransformersModel`: `dispatch`, `dtype`, `device_map`, `attn_implementation`, `revision`,
 `trust_remote_code`, `task` and the rest. `task` defaults to `"text-generation"`;
 `task="image-text-to-text"` loads a vision-language checkpoint as its wrapper with its
@@ -75,6 +75,13 @@ pass a family to nnterp.families.register(family, 'bert').
 
 `model.family` is the module the checkpoint resolved to; `nnterp.families.known()` lists
 the shipped ones without loading anything.
+
+`family=` skips all of this for one load: `StandardizedTransformer(repo_id,
+family=my_family)` uses `my_family` (a module, or a `types.SimpleNamespace` with `RENAME`
+and `ENVOYS`) without reading the config or touching the registry, and `model.family` is
+`my_family`. On a vision-language wrapper the passed family carries the wrapper's and the
+vision tower's names, as the text family it stands in for does
+([registering](../extending/registering.md#passing-a-family-at-load)).
 
 ## Passing an already-loaded module
 

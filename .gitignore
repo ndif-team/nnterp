@@ -1,42 +1,22 @@
 # project specific
-nnterp/data/test_logs/
-nnterp/data/*.old.json
 scratch/
-nnterp/data/test_loading_status.*
-nnterp/data/toy_models_cache.*
-nnterp/data/test_logs/latest_status.json
-nnterp/data/test_logs/*_status.json
 .coverage
 .idea
-scratch
 
 # general
-.junk/**
-junk**
-.claude/settings.local.json
+.claude/
 *.log
 build/
 dist/
-public/
 *.egg-info/
 .installed.cfg
 .vscode
 __pycache__/
+.pytest_cache/
 .DS_STORE
-config.yaml
 .nfs*
 .env
 .venv
-.ipynb_checkpoints/
-# Documentation build files
-docs/_build/
-docs/build/
-_build/
-site/
-.doctrees/
-.buildinfo
-*.mo
-docs/api/
-docs/generated/
-docs/_autosummary/
-docs/llms.txt
+
+# written by setuptools_scm at install
+nnterp/_version.py

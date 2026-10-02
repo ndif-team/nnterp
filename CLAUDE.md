@@ -1,296 +1,128 @@
-## Sphinx Documentation Guidelines
-- **IMPORTANT: Respect nnsight execution order**: ALL code examples must access components in forward pass order (layers_output[1] before layers_output[2], attention before layer output of same layer, etc.)
-- **Use demo.py tone**: Keep explanations factual and concise, avoid verbose language like "core philosophy" or "research-first design"
-- **nnterp is for transformers**: Describe it as a nnsight wrapper specifically for transformer models, not general mechanistic interpretability
+# nnterp — Agent Guide
 
-## nnsight Usage
-- **Do NOT assume nnsight bugs without thorough verification.** Most "nnsight bugs" are actually incorrect usage. Before blaming nnsight, check the nnsight docs and examples for the correct pattern. Common mistakes: wrong execution order, missing `.save()`, using regular Python objects where nnsight proxies are needed.
-- **nnsight's vLLM backend works very differently from the HF backend.** When working on vLLM-related code, always check `.venv/.../nnsight/modeling/vllm/README.md` first.
+This file routes you to the right page under `docs/` for whatever the user is asking about. The
+content lives in `docs/`; **read the matching page before writing code**. The pages are
+recipe-style and every snippet in them has been run against the pinned checkpoints in `tests/`.
 
-## Code Philosophy
-- Correctness first: Ensure code is functionally correct before optimizing
-- Iterative refinement: After implementing changes, review the entire file to identify opportunities for simplification and improvement
-- Use type hints and docstrings to enhance code clarity
+nnterp is a thin layer on nnsight 0.8: `StandardizedTransformer` is an nnsight `TransformersModel`
+whose envoy tree answers to one set of names on every transformer family, with standard values
+(`layer_output`, `attention_output`, `attention_probabilities`, ...) that mean the same thing
+everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.iter`, invokes,
+`.source`, remote) works unchanged; nnsight's own guide is `~/wd/nnsight/CLAUDE.md` and its docs
+`~/wd/nnsight/docs/`. This file covers only what nnterp adds.
 
-## Research Context
-You assist me - a researcher - with a research oriented library, not production systems. This context allows for specific approaches:
-- Make reasonable assumptions based on common research practices and my instructions. Avoid writting fallbacks in case something is missing. THIS IS VERY IMPORTANT as you shouldn't create bloated code!
-- Fail fast philosophy: Design code to crash immediately when assumptions are violated rather than silently handling errors. This means that you should only use try/catch blocks if it explicitely benefits the code logic. No need to state this in comments. DON'T WRITE FALLBACKS FOR NON-COMMON INPUTS! Instead write asserts for you assumptions. This is very important!
-        - Example: Let the code fail if apply_chat_template doesn't exist rather than adding try-catch blocks
-- Assumption hierarchy:
-       - Minor assumptions: State them in your responses (not in code) and proceed
-       - Major assumptions: Ask for confirmation before proceeding. Depending on the severity state them in code using comments.
-- If you are working with tensors, INCLUDE SHAPE ASSERTIONS in your code. For example, you could write "assert x.shape = (batch_size, self.dictionary_size)".
-- It is crucial that you only implement what I asked for. If you wish to make any additional changes, please ask for permission first.
-- It is fine if you fail to implement something. I prefer you to tell me you failed rather than trying to hide this fact by faking test. Don't reward hack, Claude :<.
+---
 
-## Test Philosophy
-- Tests should FAIL! When writing tests, you should NEVER use try except blocks. Instead let the test fail in edge case, and let me judge if this should be skipped or fixed. NEVER EVER AGAIN REWARD HACKING WITH TRY CATCH IN TEST CLAUDE, OK???
-- Never try to fix a test by considering it an edge case and skipping it. I consider that reward hacking. If there is a mismatch between your assumption in the test and the actual code, fix the test, otherwise assume it's a problem with the code that needs my attention
+## How to use this file
 
-## Development Commands
+1. Find the user's intent in **"By task"** and follow the link.
+2. If the request is about one model family, check **[docs/reference/families.md](docs/reference/families.md)** for its quirks.
+3. If a value is missing or raises `Unavailable`, read **[docs/usage/availability.md](docs/usage/availability.md)**.
+4. The **inline cheat-sheet** at the bottom lists the mistakes agents make most; internalize it before writing nnterp code.
 
-### Package Management
-- `uv install` - Install dependencies
-- `uv run python -m pytest` - Run all tests
-- `uv run python -m pytest tests/test_interventions.py` - Run specific test file
-- `uv run python -m pytest tests/test_interventions.py::test_logit_lens` - Run specific test
+---
 
-### Code Quality
-- `uv run black .` - Format code with Black (line length 88)
-- `uv run python -m build` - Build package for distribution
+## By task
 
-### Documentation
-- `cd docs && make html` - Build Sphinx documentation
-- `cd docs && make clean` - Clean documentation build files
+### "Load a model and use the standard names"
+- [docs/usage/loading.md](docs/usage/loading.md) — `StandardizedTransformer(repo_id, ...)`; pass `attn_implementation="eager"` for anything inside attention
+- [docs/usage/vocabulary.md](docs/usage/vocabulary.md) — `embed_tokens`, `layers[i].self_attn`, `layers[i].mlp`, `norm`, `lm_head`; native names keep working
+- [docs/reference/families.md](docs/reference/families.md) — the 92 families, their native names and quirks
 
-## Architecture Overview
+### "Read or edit the residual stream / a sublayer's contribution"
+- [docs/usage/residual-stream.md](docs/usage/residual-stream.md) — `layer_output`, `attention_output`, `mlp_output`; `input + attention_output + mlp_output == layer_output`
 
-nnterp is a mechanistic interpretability library built on top of nnsight, providing a unified interface for transformer analysis through several key components:
+### "Read or edit attention: the pattern, queries, keys, values, scores, heads"
+- [docs/usage/attention-interior.md](docs/usage/attention-interior.md) — `attention_probabilities`, `attention_queries/keys/values/scores/head_outputs`; needs eager; per-family caveats
+- [docs/patterns/attention-patterns.md](docs/patterns/attention-patterns.md) — head metrics and pattern edits
 
-### Core Components
+### "Mixture of experts: the router, the experts, expert ablation and rerouting"
+- [docs/usage/mixture-of-experts.md](docs/usage/mixture-of-experts.md) — `layers[i].mlp` is a `Moe` on the 36 MoE families: `router_logits` (writable, before the scoring), `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs` (needs `experts_implementation="grouped_mm"`, the default), `routed_output`, `shared_expert_output`; `num_experts`, `top_k`, `SCORING`
+- [docs/patterns/expert-ablation.md](docs/patterns/expert-ablation.md) — every expert's effect on a prediction
 
-**nnsight** `nnterp` is built on top of `nnsight`. A very important thing about `nnsight` is that interventions in a trace **MUST BE WRITTEN IN ORDER**. This means e.g. you can't access the output of a layer and then access its input / its mlp output.
+### "Logits, embeddings, next-token probabilities, the input, the sizes"
+- [docs/usage/root-values.md](docs/usage/root-values.md) — `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`, `num_layers`, `head_dim`, ... (each root size a `StandardizedProperty`: the config's value, by the plain rule or the family's spelling); a block's own sizes on `layers[i].self_attn` (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) and `layers[i].mlp` (`intermediate_size`), which differ from the root's on Gemma-4 and MiMo-V2-Flash
 
-**Model Loading** (`__init__.py`)
-- `load_model(model_name)` — **Recommended entrypoint**. Auto-detects VLMs via `detect_automodel()` and returns the appropriate wrapper (`StandardizedTransformer`, `StandardizedVLM`, or `StandardizedVLLM`). `text_only=True` loads only the text tower of multimodal checkpoints that register a separate causal-LM class (Mllama, Llama-4, Qwen3.5)
-- `detect_automodel(model_name)` — Inspects model config to determine the right `AutoModel` class. Priority: `AutoModelForImageTextToText` > `AutoModelForCausalLM` > `AutoModelForSeq2SeqLM`. With `text_only=True`, returns `AutoModelForCausalLM` for configs that register a separate, buildable text-only class
+### "Does this checkpoint have that value?"
+- [docs/usage/availability.md](docs/usage/availability.md) — `model.support()` before the trace; `nnterp.Unavailable` at the read; the reasons you will see
 
-**StandardizedTransformer** (`standardized_transformer.py`)
-- Unified interface for text transformer architectures (extends `nnsight.LanguageModel`)
-- Standardizes module naming across models (layers, attention, MLP components)
-- **Attention probabilities**: Opt-in with `enable_attention_probs=True` (automatically sets `attn_implementation="eager"`)
-- If a VLM is passed to `StandardizedTransformer`, it warns and suggests using `StandardizedVLM` or `load_model()`
+### "Skip layers, steer, logit lens, top-k tokens"
+- [docs/usage/methods.md](docs/usage/methods.md) — `skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`
+- [docs/patterns/logit-lens.md](docs/patterns/logit-lens.md), [docs/patterns/steering.md](docs/patterns/steering.md)
 
-**StandardizedVLM** (`standardized_transformer.py`)
-- Unified interface for vision-language models (extends `nnsight.VisionLanguageModel`)
-- Same standardized accessors as `StandardizedTransformer` (layers, attention, MLP, logits, etc.)
-- Supports image inputs via `model.trace(prompt, images=...)`
-- `allow_multimodal=False` by default: models with heterogeneous layer types (e.g. Mllama cross-attention) are rejected unless opted in
-- **Known limitations**: Gemma 3n (AltUp 4D hidden states, see #35), Mllama (cross-attention layers only fire with image inputs)
+### "Qwen3-Next / Qwen3.5 / OLMo-Hybrid: linear attention, the recurrent state"
+- [docs/usage/delta-net.md](docs/usage/delta-net.md) — `linear_attn` values; `route_kernels(model.family, "torch")` for the per-token `state`/`states`
+- [docs/patterns/delta-net-state.md](docs/patterns/delta-net-state.md) — patch and track the state
 
-**Key Accessors**:
-- `layers_input[i]` / `layers_output[i]` - Layer I/O
-- `attentions[i]` / `attentions_input[i]` / `attentions_output[i]` - Attention modules
-- `mlps[i]` / `mlps_input[i]` / `mlps_output[i]` - MLP modules
-- `attentions_output[i]` / `mlps_output[i]` never include the residual stream. Architectures that add the residual inside the sublayer module (BLOOM, MPT, DBRX) have their output accessors remapped to the pre-residual submodule via `rename_utils.RESIDUAL_INSIDE_SUBLAYER_SOURCES` (issue #51); unknown architectures with a `residual` forward arg are rejected at load unless `RenameConfig(attn_output_source=.../mlp_output_source=...)` is passed. (Caveat: on Gemma-2/3-style models, a post-sublayer layernorm outside the module means the added contribution is the post-LN output, not the module output these accessors return.)
-- `token_embeddings` - Token embedding layer (read/write)
-- `logits` - Final model logits
-- `next_token_probs` - Softmax of last token logits
-- `input_ids`, `attention_mask`, `input_size` - Input tensor accessors
+### "Mamba / Falcon-Mamba / Jamba: the selective scan, the state-space state"
+- [docs/usage/selective-scan.md](docs/usage/selective-scan.md) — `linear_attn` on a Mamba-1 mixer (`SelectiveScan`): `C`/`B`/`x` as queries/keys/values, `betas` = `dt`, `decays` = `dt * A`; `route_kernels(model.family, "torch")` before the first trace
 
-**Key Methods**:
-- `skip_layer(layer_idx)` / `skip_layers(layer_indices)` - Skip layer computation
-- `project_on_vocab(hidden_state)` - Project to vocabulary space
-- `get_topk_closest_tokens(hidden_state, k)` - Get k closest tokens
+### "Mamba-2 / Nemotron-H / Bamba / Falcon-H1: the state-space mixer"
+- [docs/usage/state-space.md](docs/usage/state-space.md) — `linear_attn` is a `StateSpace`: `C`/`B`/`x` as queries/keys/values, `dt` as `betas`; `route_kernels(model.family, "torch")` when `mamba_ssm` is installed; `nnterp.chunk_per_token(model)` for the state after every token (`states`, `state_after`); `betas`/`decays` assignable
 
-**Intervention Framework** (`interventions.py`)
+### "What shape is this value?"
+- [docs/usage/layouts.md](docs/usage/layouts.md) — one layout per value on every family, named (`Residual`, `Pattern`, `Keys`, ... in `nnterp.components`), except `layer_output` on DeepSeek-V4 (`Streams`); `value.dims`, `value.layout is Pattern`
 
-**Key Functions**:
-- `logit_lens(model, prompts, token_idx=-1)` - Get next token probabilities at each layer
-  - Returns shape: `(num_prompts, num_layers, vocab_size)`
-- `patchscope_lens(model, target_prompts, source_prompts, layer_to_patch)` - Replace hidden states and observe output
-  - Uses `TargetPrompt(prompt, index_to_patch)` to specify patching location
-- `patchscope_generate(model, target_prompt, source_prompt, layer_to_patch, max_new_tokens)` - Generate with patched states
-- `patch_object_attn_lens(model, prompts, object_token_idx, attention_layer)` - Attention-based patching
+### "Generation, many prompts, activations datasets"
+- [docs/usage/generation.md](docs/usage/generation.md) — the values under `model.generate`, `tracer.iter` picks the step
+- [docs/usage/prompt-utils.md](docs/usage/prompt-utils.md) — `nnterp.prompt_utils`: target-token mass over prompts
+- [docs/usage/activations.md](docs/usage/activations.md) — `nnterp.nnsight_utils`: `get_token_activations` and friends
 
-**Helper Functions**:
-- `repeat_prompt(prompt, n_times)` - Create repeated prompts for patchscope
-- `it_repeat_prompt(prompt, n_times)` - Iterator version
+### "Run a research pattern across families"
+- [docs/patterns/index.md](docs/patterns/index.md) — logit lens, steering, attention patterns, ablation, activation patching, contribution decomposition, cross-family sweep, probing, DeltaNet state
 
-**Utilities** (`nnsight_utils.py`)
-- **Activation Collection**:
-  - `get_token_activations(model, prompts, token_idx, get_activations)` - Single batch, most efficient for small data, uses `tracer.stop()` for memory optimization
-  - `collect_token_activations_batched(model, prompts, token_idx, get_activations, batch_size)` - Multiple batches with session management for large datasets
-  - Both support custom extraction via `get_activations` callable (e.g., `lambda m: m.layers_output[5]`)
-- **Layer Access**: `get_layers()`, `get_num_layers()`, `get_layer()`, `get_layer_input/output()`
-- **Component Access**: `get_attention()`, `get_attention_output()`, `get_mlp()`, `get_mlp_output()`
-- **Projection**: `project_on_vocab()`, `get_next_token_probs()`, `compute_next_token_probs()`
-- **Note**: Most functions work with both `StandardizedTransformer` and raw `LanguageModel`
+### "Run remotely on NDIF"
+- [docs/usage/remote.md](docs/usage/remote.md) — `remote=True`; nnterp installed server-side, never shipped by value
 
-**Prompt Management** (`prompt_utils.py`)
-- `Prompt` class for tracking target tokens
-  - `from_strings(prompt, targets_dict, tokenizer)` - Create from string descriptions
-  - `get_target_probs(probs)` - Extract probabilities for specific targets
-  - `has_no_collisions()` - Check for token collisions
-- `get_first_tokens(tokenizer, word)` - Handles both "word" and " word" tokenization variants
-- `run_prompts(model, prompts)` - Batch process with target tracking
+### "Add a family, override a value, add my own value"
+- [docs/extending/adding-a-family.md](docs/extending/adding-a-family.md) — one module named after `model_type`, one test file; `def <size>(model)` in the module where the config spells a root size its own way
+- [docs/developing/recurrent-mixer-internals.md](docs/developing/recurrent-mixer-internals.md) — a mixer with a recurrent state read at a kernel call (DeltaNet, state-space): subclass `RecurrentMixer`, set `CHUNK_KERNEL` / `RECURRENT_KERNEL` / `STATE_OP`, declare the values
+- [docs/extending/overriding-values.md](docs/extending/overriding-values.md) — an `EProperty` keyed on a path (`"../norm.output"`, `"source.<op>.inputs"` with `select`), `unavailable(...)`, `off_interface`, transforms
+- [docs/extending/custom-values.md](docs/extending/custom-values.md) — a new `EProperty` (a path from the host: `"output"`, `"../ln_2.output"`, `"source.<op>.output"`) through `envoys=`; annotate `-> Residual` / `-> Pattern` from `nnterp.components`
+- [docs/extending/finding-source-ops.md](docs/extending/finding-source-ops.md) — `print(envoy.source)` and how ops are named
+- [docs/extending/registering.md](docs/extending/registering.md) — `nnterp.families.register(module)`
 
-**Module Renaming** (`rename_utils.py`)
-- `RenameConfig` - Dataclass for model-specific module renaming configuration
-- `get_rename_dict()` - Generate renaming dictionary for a model
-- `check_model_renaming()` - Validate module standardization after renaming
-- `allow_multimodal` param: controls whether heterogeneous layer types (e.g. self-attn + cross-attn) are accepted
-- `attn_output_source` / `mlp_output_source` params: dotted path (relative to a layer) to the module whose output is the sublayer's additive contribution, for architectures that add the residual inside the attention/MLP module
-- **Supported Architectures**: OPT, Mixtral, Bloom, GPT-2, Qwen2Moe, Dbrx, GPT-J, LLaMA, Llama-4, Qwen3, Qwen2, Gemma-3, GLM-4v, and many more via auto-renaming
-- Includes attention probability accessors for different architectures
+### "Change nnterp itself"
+- [docs/developing/index.md](docs/developing/index.md) — architecture, descriptor internals, the recurrent mixer (`RecurrentMixer`, DeltaNet) and its occurrence arithmetic, tests, transformers compatibility, gotchas, contributing
+- **Run `HF_HUB_OFFLINE=1 pytest` (about 6100 tests, ~7 min on CPU) before and after.**
 
-**Display** (`display.py`, optional `[display]` dependency)
-- `plot_topk_tokens()` - Plotly heatmap visualization of top-k tokens across layers
-- `prompts_to_df()` - Convert Prompt objects to pandas DataFrame
+### "Every symbol / every term"
+- [docs/reference/api-quick-reference.md](docs/reference/api-quick-reference.md), [docs/reference/glossary.md](docs/reference/glossary.md)
 
-### Module Relationships
+---
 
-```
-load_model() (__init__.py)
-  ├── detect_automodel() (utils.py) → picks AutoModel class
-  ├── StandardizedTransformer (text models)
-  └── StandardizedVLM (vision-language models)
+## Folders
 
-StandardizedTransformer / StandardizedVLM
-  ├── StandardizationMixin (shared accessors, steer, skip_layer, etc.)
-  ├── rename_utils (module renaming config)
-  ├── nnsight_utils (activation collection)
-  └── utils (TraceTensor type, DummyCache)
+| Folder | What it holds | Start at |
+|---|---|---|
+| `docs/usage/` | one page per feature: loading, names, every standard value, methods, hybrids, helpers, remote | [docs/usage/index.md](docs/usage/index.md) |
+| `docs/patterns/` | interpretability recipes written once against the standard values, so they run on every family | [docs/patterns/index.md](docs/patterns/index.md) |
+| `docs/extending/` | adding a family, overriding a value, adding your own values, registering from outside nnterp | [docs/extending/index.md](docs/extending/index.md) |
+| `docs/developing/` | internals: architecture, the descriptors, the recurrent mixer and its occurrence arithmetic, tests, compatibility, gotchas | [docs/developing/index.md](docs/developing/index.md) |
+| `docs/reference/` | API quick reference, the families table, glossary | [docs/reference/api-quick-reference.md](docs/reference/api-quick-reference.md) |
 
-interventions.py
-  └── nnsight_utils
+---
 
-prompt_utils.py
-  ├── nnsight_utils
-  └── standardized_transformer
+## Inline cheat-sheet (read before writing nnterp code)
 
-display.py (optional)
-  └── prompt_utils
-```
-
-**Key Pattern**: Most utility functions accept either `StandardizedTransformer` OR raw `LanguageModel` through type unions.
-
-### Critical Conventions
-
-**Type Aliases** (`utils.py`):
-- `TraceTensor = Union[torch.Tensor, nnsight.envoy.Envoy]` - Used throughout for tensors that may be traced
-- `GetModuleOutput = Callable[[LanguageModel], TraceTensor]` - Function type for extracting activations
-
-**Device Management**:
-- Results moved to CPU by default for memory efficiency
-- Use `.to(device)` for explicit device placement when needed
-
-**Execution Order** (nnsight constraint):
-- Interventions MUST be written in forward-pass order within `model.trace()` context
-- Cannot access layer output then layer input of the same layer
-- Example valid order: `layers_input[0]` → `attentions_output[0]` → `mlps_output[0]` → `layers_output[0]` → `layers_input[1]`
-
-**Token Handling** (`prompt_utils.py`):
-- `get_first_tokens(tokenizer, word)` automatically checks both "word" and " word" variants
-- Returns the first token ID found, prioritizing the variant without leading space
-- Critical for handling different tokenizer behaviors across models
-
-### Important Implementation Details
-
-**StandardizedTransformer Initialization**:
-- Automatically calls `get_rename_dict()` and renames modules on initialization
-- Runs validation via `check_model_renaming()` to ensure standardization succeeded
-- Extends `nnsight.LanguageModel`, so inherits `.trace()`, `.generate()`, `.scan()` contexts
-
-**Activation Collection Strategy**:
-- `get_token_activations()` is most efficient for single batch (uses `tracer.stop()` to halt forward pass early)
-- `collect_token_activations_batched()` uses nnsight sessions for batching across multiple prompts
-- Both return tensors on CPU by default to save GPU memory
-
-**Module Renaming Configuration**:
-- Each architecture has architecture-specific constants in `rename_utils.py` (e.g., `MODEL_NAMES`, `LAYER_NAMES`)
-- Some architectures have custom attention probability accessors (e.g., `bloom_attention_prob_source()`)
-- Renaming failures are logged but don't necessarily crash (allows partial functionality)
-
-**Test Infrastructure Design**:
-- `failed_model_cache` in `conftest.py` prevents re-attempting known failed models during test runs
-- Thread locks ensure pytest-xdist compatibility for parallel testing
-- Custom pytest options allow targeted testing of specific models/classes
-
-### Key Design Patterns
-
-1. **Batched Processing**: Most functions support both single inputs and batched operations
-2. **Fail-Fast Philosophy**: Use assertions for shape validation, no silent error handling
-3. **Standardized Interfaces**: Consistent API across different model architectures
-4. **Context Management**: Heavy use of `model.trace()` context for interventions
-5. **Memory Optimization**: `get_token_activations()` uses `tracer.stop()` to avoid full forward pass
-
-### Test Structure
-
-**Location**: `nnterp/tests/`
-
-**Test Files**:
-- `test_interventions.py` - Core intervention methods (logit lens, patchscope, steering)
-- `test_model_renaming.py` - Module standardization functionality
-- `test_nnsight_utils.py` - Core utility functions
-- `test_probabilities.py` - Probability calculations
-- `test_prompt_utils.py` - Prompt and target token handling
-- `test_vlm.py` - VLM support (load_model autodetection, VLM properties, interventions)
-- `test_detect_automodel.py` - AutoModel class detection for text/VLM/seq2seq models
-
-**Available Fixtures** (`conftest.py`):
-- `model_name` - Parametrized fixture with test model names (e.g., "gpt2", "Maykeye/TinyLLama-v0")
-- `llama_like_model_name` - Parametrized fixture for LLaMA-like models
-- `model` - `StandardizedTransformer` instance with error handling and caching
-- `raw_model` - Raw `LanguageModel` instance without standardization
-- `failed_model_cache` - Session-scoped cache of failed models (avoids retrying known failures)
-
-**Pytest Options**:
-- `--model-names MODEL1,MODEL2` - Test specific model names
-- `--class-names CLASS1,CLASS2` - Test specific model classes
-- `--save-test-logs` - Save test results to data directory
-
-**Test Infrastructure**:
-- Pytest-xdist compatible with thread-safe state management
-- Results saved to `data/test_loading_status.json` for tracking compatibility across versions
-- Uses thread locks for parallel test execution safety
-
-### Data Directory
-
-**Location**: `nnterp/data/`
-
-Contains JSON files for tracking model compatibility and test results:
-- `status.json` - Model compatibility status across transformers/nnsight versions
-- `test_loading_status.json` - Which models successfully load with nnsight
-- `toy_models_cache.json` - Cached information about small test models
-
-These files are used for test result tracking and cross-version compatibility monitoring.
-
-### Public API
-
-**Exported from `nnterp` package** (`__init__.py`):
-- `StandardizedTransformer` — text model wrapper
-- `StandardizedVLM` — vision-language model wrapper
-- `load_model()` — auto-detecting entrypoint (recommended)
-- `detect_automodel()` — detect appropriate AutoModel class for a model
-- `get_rename_dict()` — get renaming dictionary for a model
-- `ModuleAccessor` — standardized module access helper
-
-All other functions/classes must be imported from their respective modules (e.g., `from nnterp.interventions import logit_lens`).
-
-### Dependencies
-
-- **Core**: `nnsight` (the main dependency for model tracing)
-- **Visualization**: `plotly`, `pandas` (install with `pip install nnterp[display]`)
-- **Development**: `pytest`, `black`, `sphinx` (install with `pip install nnterp[dev]`)
-
-### Common Patterns
-
-**Model Loading and Usage**:
-```python
-from nnterp import load_model
-model = load_model("gpt2")  # returns StandardizedTransformer
-vlm = load_model("Qwen/Qwen2-VL-2B-Instruct")  # returns StandardizedVLM
-
-# Or explicitly:
-from nnterp import StandardizedTransformer, StandardizedVLM
-model = StandardizedTransformer("gpt2")
-vlm = StandardizedVLM("Qwen/Qwen2-VL-2B-Instruct")
-```
-
-**Intervention Structure**:
-```python
-with model.trace(prompts) as tracer:
-    # Access activations via standardized names
-    activations = model.layers_output[layer_idx].save()
-    # Apply interventions
-    model.steer(layers=layer_idx, steering_vector=vector)
-```
-
-**Target Token Tracking**:
-```python
-from nnterp.prompt_utils import Prompt, run_prompts
-prompts = [Prompt.from_strings("input", {"target": "expected"}, tokenizer)]
-results = run_prompts(model, prompts)
-```
+- **Everything nnsight's cheat-sheet says still holds**: `.save()` and bind the name, reads in forward order within an invoke, nothing assigned in a trace body survives it without a save.
+- **Load on one device with `device=`**: `device="cpu"` keeps a model on the CPU; `device_map="cpu"` does not (nnsight's pipeline passes its own `device`, and the model lands on `cuda:0`).
+- **Pass `attn_implementation="eager"` at load** if you will touch anything inside attention (`attention_probabilities`, queries, keys, values, scores, head outputs). The default is the checkpoint's, usually `sdpa`, and the values are then unavailable.
+- **Check `model.support()` outside the trace, not `hasattr` inside it.** `hasattr(envoy, "attention_probabilities")` never answers `False`: it raises `nnterp.Unavailable` when the value is unavailable, and outside a trace raises nnsight's "Cannot access ... outside of interleaving" for an available one.
+- **Target tokens: `ids = model.tokenizer(" Paris", add_special_tokens=False).input_ids` and assert `len(ids) == 1`.** `tokenizer.encode(" Paris")[0]` is BOS on Llama and Gemma (every probability then reads 0.000); Mistral's tokenizer gives `['▁', '▁Paris']` (try `"Paris"`), Granite's `['ĠPar', 'is']` (pick another word).
+- **Take KLs on log-probabilities** (`model.logits[:, -1].float().log_softmax(-1)`, `F.kl_div(..., log_target=True)`): `next_token_probs` underflows to exact zeros and `p * (p.log() - q.log())` is NaN.
+- **Pick blocks from the module lists, not from `num_layers // 2`**: on a hybrid that index is usually a `linear_attn` block with no `self_attn`, and a pure state-space model has none. Decide which blocks have `self_attn` vs `linear_attn` outside the trace; `getattr(envoy, name, None)` inside a trace can trip served values, and `if envoy:` falls through to the module's `__len__`.
+- **`layer_output`, `attention_output`, `mlp_output` are tensors on every family**; never index `[0]`. The native `.output` may be a tuple (GPT-J, GPT-Neo, BLOOM, MPT, Falcon).
+- **`attention_output` is what the block adds to the stream**, not necessarily the module's return: on Gemma-2/3/4, OLMo-2/3, EXAONE-4, FlexOlmo and OLMo-Hybrid's attention blocks it is the post-norm's output, on BLOOM/MPT/DBRX the pre-residual value. The identity `layers[i].input + attention_output + mlp_output == layer_output` is what you can rely on, except on Gemma-4 (`(... [+ per_layer_output]) * layer_scalar == layer_output`, so a term's weight in the final stream is the product of every later scalar: docs/patterns/contribution-decomposition.md), Doge and ZAYA (per-channel stream gates) and DeepSeek-V4 (parallel streams).
+- **Granite, GraniteMoE(-Shared/-Hybrid/-SWA), HyperCLOVA X and ZAYA serve computed copies** (`* residual_multiplier` and the like) and divide the whole edited copy back, so a write at one position moves the others by rounding; in bf16 that can match a small edit's own effect. Load in float32 for fine-grained edits.
+- **`layer_output` is rank 4 on DeepSeek-V4**: `[batch, seq, streams, hidden]`, and `layers[i].input` too; the contributions stay `[batch, seq, hidden]`. Rank-3 code (`resid[:, -1] @ W`, `lm_head(norm(resid))`) runs and answers per stream; `model.project_on_vocab` collapses the streams the way the model does.
+- **`model.logits` is the model's output logits (softcap applied); `lm_head.output` is the raw projection.** `next_token_probs`, `input_size` and `states` are read-only. `token_embeddings` is the embedding module's output, not always what enters block 0 (GPT-2's `wpe`, Granite's `embedding_multiplier` come after it); `layers[0].input` is.
+- **Read order traps**: on Falcon without alibi read `attention_values` before `attention_queries`/`attention_keys` (with alibi: queries, then keys, then values); `skip_layers` consumes `layers[start].input`, so read it first; a block's interior values come before its `attention_output`; on a Mamba-1 or Mamba-2 *decode step* read `state_output` before `attention_head_outputs`.
+- **An out-of-order read fails loudly only in a plain trace** (`OutOfOrderError`, naming an internal location such as `'...attention_interface_1.fn.i0'`, not the value). Inside `tracer.iter` it binds the value's *next* occurrence, the next step's, so lists come back shifted by one step without an error; only a read whose next occurrence never comes (the last step, a position past the prompt) cuts the block short with a `was never reached` warning that blames the loop. If a saved name is missing or a list looks shifted, check the read order.
+- **Two invokes cannot both touch `attention_probabilities` or `attention_scores`** today (`TypeError: 'NoneType' object is not subscriptable`, an nnsight bug); use one trace per prompt or `attention_head_outputs`, which works across invokes. Overwriting or multiplying `attention_scores` lifts the causal mask; add to them, or keep the masked entries.
+- **In-place edits on queries, keys and values: assign instead** on GPT-2, GPT-BigCode, MPT and every recurrent mixer (DeltaNet's q/k/v, Mamba-1's `C`/`B`, Mamba-2's `C`/`B`/`x`), or edit under `torch.no_grad()`. Falcon's `mlp_output` is a copy carried back by a transform; both forms reach the model.
+- **Recurrent mixers need `nnterp.route_kernels(model.family, "torch")` before the first trace of the layer** where an optimized kernel is installed: for DeltaNet's per-token `state`/`states`, and on Mamba-1 (Mamba, Falcon-Mamba, Jamba) and Mamba-2 whenever `mamba_ssm` is installed, whose CUDA kernels have no source and do not run on CPU (unrouted, even a `layer_output` read on CPU fails inside the kernel with `Expected u.is_cuda()`). DeltaNet's queries and keys are served before the kernel's l2-norm and scale; Mamba-2's `betas` and `decays` are one argument (`dt`): writing `decays` rewrites `betas`, and a write-back of unchanged values is not exact in bf16. A state write is not all a block remembers: a width-4 convolution carries the last tokens.
+- **A mixture's routing is the sparse pair `[batch, seq, top_k]`**: ablate expert `e` with `moe.expert_weights = moe.expert_weights.masked_fill(moe.expert_indices == e, 0)`; a rerouted index keeps the old slot's weight. Read a mixture's values in forward order (`router_logits`, weights/indices, `expert_outputs`, `routed_output`); where `shared_expert_output` falls differs per family. Mask pad tokens with `model.attention_mask` when counting usage (the router routes them). Under two or more invokes, edit the routing in place, and take the clean baseline from an unedited invoke of the same batch; sweep single experts in float32. ZAYA's skipped slots read as expert 0 with weight 0.
+- **`envoys=` keys match by module type or native path, never by alias**; to displace a family's envoy, key yours on the type. An `EProperty` path that goes up (`"../ln_2.output"`) takes native names only.
+- **Import nnterp (or nnsight) before any `transformers.models...` module**; the reverse order segfaults on this stack.
+- **Every snippet in `docs/` ran against a cached checkpoint**; when a page and the code disagree, the suite is the arbiter: `HF_HUB_OFFLINE=1 pytest tests/families/test_<family>.py`.

@@ -1,16 +1,8 @@
 # Exclude git-tracked files that shouldn't be distributed
-exclude demo.ipynb
-exclude demo.py
 exclude CLAUDE.md
-exclude uv.lock
-exclude .pre-commit-config.yaml
+exclude GAPS.md
 exclude .gitignore
-exclude todo
 
 # Exclude git-tracked directories
-prune scripts
 prune .github
 prune docs
-
-# Exclude data files
-recursive-exclude nnterp/data *.json 

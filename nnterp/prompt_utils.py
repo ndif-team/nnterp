@@ -1,108 +1,82 @@
+"""Prompts with target tokens to track, on the standard values.
+
+`get_first_tokens` turns words into the token ids a model would predict for
+them, `Prompt` pairs a prompt with named sets of those, and `run_prompts` runs
+many prompts and returns each target's probability mass per prompt.
+"""
+
 from __future__ import annotations
 
+import warnings
 from dataclasses import dataclass
 from typing import Callable
-import torch as th
-from tqdm.auto import tqdm
-from .nnsight_utils import LanguageModel, compute_next_token_probs
-from .standardized_transformer import StandardizedTransformer
+
+import torch
 from transformers.tokenization_utils_base import PreTrainedTokenizerBase
 
-from .logging import logger
+from .nnsight_utils import compute_next_token_probs
+from .standardized import StandardizedTransformer
 
 
 class TokenizationError(Exception):
-    pass
+    """A word could not be tokenized as a standalone first token."""
 
 
 def get_first_tokens(
     words: str | list[str],
-    llm_or_tokenizer: LanguageModel | StandardizedTransformer | PreTrainedTokenizerBase,
-    use_hacky_implementation=False,
+    model_or_tokenizer: StandardizedTransformer | PreTrainedTokenizerBase,
+    use_hacky_implementation: bool = False,
 ) -> list[int]:
-    """
-    Get the all the first tokens of a "word" and " word" for all words.
+    """The first token of ``word`` and of ``" word"`` for each word, deduplicated.
 
-    Args:
-        words: A string or a list of strings to get the first token of.
-        llm_or_tokenizer: The tokenizer to use. If a LanguageModel or StandardizedTransformer is provided,
-            the tokenizer will be extracted from it. It is recommended to use StandardizedTransformer. If you want to use your own tokenizer,
-            it's recommended to initialize it with add_prefix_space=False or to use the hacky implementation.
-        use_hacky_implementation: If True, use a hacky implementation to get the first token of a word by tokenizing "🍐word" and extracting the first token of word.
-            While hacky, it is still guaranteed to work correctly or raise an error.
-
-    Returns:
-        A list of tokens.
+    A model's `StandardizedTransformer.add_prefix_false_tokenizer` is used when
+    a model is given, so that ``"word"`` and ``" word"`` tokenize differently;
+    with a tokenizer that adds a prefix space the two collide, and the hacky
+    implementation (tokenize ``"🍐word"`` and drop the pear) is used instead,
+    or forced with ``use_hacky_implementation``.
     """
-    if isinstance(words, str):
-        words = [words]
-    if isinstance(llm_or_tokenizer, StandardizedTransformer):
-        try:
-            tokenizer = llm_or_tokenizer.add_prefix_false_tokenizer
-        except Exception as e:
-            logger.warning(
-                f"Error getting model.add_prefix_false_tokenizer, using model.tokenizer instead:\n{e}"
-            )
-            tokenizer = llm_or_tokenizer.tokenizer
-    elif isinstance(llm_or_tokenizer, LanguageModel):
-        tokenizer = llm_or_tokenizer.tokenizer
+    words = [words] if isinstance(words, str) else words
+    if isinstance(model_or_tokenizer, StandardizedTransformer):
+        tokenizer = model_or_tokenizer.add_prefix_false_tokenizer
     else:
-        tokenizer = llm_or_tokenizer
-    final_tokens = []
+        tokenizer = model_or_tokenizer
+    tokens: list[int] = []
     for word in words:
-        # If you get the value error even with add_prefix_space=False,
-        # you can use the following hacky code to get the token without the prefix
         if use_hacky_implementation:
-            hacky_token = tokenizer("🍐", add_special_tokens=False).input_ids
-            length = len(hacky_token)
-            tokens = tokenizer("🍐" + word, add_special_tokens=False).input_ids
-            if tokens[:length] != hacky_token:
+            pear = tokenizer("🍐", add_special_tokens=False).input_ids
+            both = tokenizer("🍐" + word, add_special_tokens=False).input_ids
+            if both[: len(pear)] != pear:
+                raise TokenizationError(f"the pear trick did not tokenize {word!r} as expected")
+            if len(both) > len(pear):
+                tokens.append(both[len(pear)])
+            continue
+        token = tokenizer(word, add_special_tokens=False).input_ids[0]
+        with_space = tokenizer(" " + word, add_special_tokens=False).input_ids[0]
+        if token == with_space:
+            try:
+                hacky = get_first_tokens(words, tokenizer, use_hacky_implementation=True)
+            except TokenizationError:
                 raise TokenizationError(
-                    "I didn't expect this to happen, please check this code"
-                )
-            if len(tokens) > length:
-                final_tokens.append(tokens[length])
-        else:
-            # Assuming the tokenizer was initialized with add_prefix_space=False
-            token = tokenizer(word, add_special_tokens=False).input_ids[0]
-            token_with_start_of_word = tokenizer(
-                " " + word, add_special_tokens=False
-            ).input_ids[0]
-            if token == token_with_start_of_word:
-                try:
-                    tokens = get_first_tokens(
-                        words, tokenizer, use_hacky_implementation=True
-                    )
-                    logger.warning(
-                        "Seems like you use a tokenizer that wasn't initialized with add_prefix_space=False."
-                        "add_prefix_space=False is needed to ensure proper tokenization of words without the space."
-                        "Used hacky implementation instead."
-                    )
-                except TokenizationError:
-                    raise TokenizationError(
-                        "Seems like you use a tokenizer that wasn't initialized with add_prefix_space=False."
-                        "add_prefix_space=False is needed to ensure proper tokenization of words without the space."
-                    )
-            final_tokens.append(token)
-            space_token = tokenizer(" ", add_special_tokens=False).input_ids
-            if space_token:
-                space_token = space_token[0]
-            else:
-                space_token = None
-            if token_with_start_of_word != space_token:
-                final_tokens.append(token_with_start_of_word)
-    return list(dict.fromkeys(final_tokens))
+                    "the tokenizer adds a prefix space, so 'word' and ' word' tokenize alike; "
+                    "use one initialized with add_prefix_space=False"
+                ) from None
+            warnings.warn("the tokenizer adds a prefix space; used the hacky implementation instead", stacklevel=2)
+            return hacky
+        tokens.append(token)
+        space = tokenizer(" ", add_special_tokens=False).input_ids
+        if with_space != (space[0] if space else None):
+            tokens.append(with_space)
+    return list(dict.fromkeys(tokens))
 
 
 @dataclass
 class Prompt:
-    """
-    Generic class to represent a prompt with target tokens to track during next token prediction.
+    """A prompt with named sets of target tokens to track in the next-token distribution.
 
-    Args:
-        prompt: The prompt to use
-        target_tokens: A dictionary of target tokens for each target
-        target_strings: A dictionary of target strings for each target
+    Attributes:
+        prompt: The text.
+        target_tokens: Target name -> the token ids that count for it.
+        target_strings: What those came from, when built with `from_strings`.
     """
 
     prompt: str
@@ -114,111 +88,69 @@ class Prompt:
         cls,
         prompt: str,
         target_strings: dict[str, str | list[str]] | list[str] | str,
-        tokenizer,
-    ):
-        if isinstance(target_strings, str) or isinstance(target_strings, list):
+        model_or_tokenizer: StandardizedTransformer | PreTrainedTokenizerBase,
+    ) -> "Prompt":
+        """Build from words: a string or list is one target named ``"target"``, a dict names them."""
+        if isinstance(target_strings, (str, list)):
             target_strings = {"target": target_strings}
-        target_tokens = {
-            target: get_first_tokens(words, tokenizer)
-            for target, words in target_strings.items()
-        }
-        return cls(
-            target_tokens=target_tokens,
-            target_strings=target_strings,
-            prompt=prompt,
-        )
+        target_tokens = {name: get_first_tokens(words, model_or_tokenizer) for name, words in target_strings.items()}
+        return cls(prompt=prompt, target_tokens=target_tokens, target_strings=target_strings)
 
-    def has_no_collisions(self, ignore_targets: None | str | list[str] = None):
-        if isinstance(ignore_targets, str):
-            ignore_targets = [ignore_targets]
-        if ignore_targets is None:
-            ignore_targets = []
-        # Collect all tokens for non-ignored targets
-        all_tokens = []
-        for target, tokens in self.target_tokens.items():
-            if target in ignore_targets:
-                continue
-            all_tokens.extend(tokens)
-        return len(all_tokens) == len(set(all_tokens))
+    def has_no_collisions(self, ignore_targets: str | list[str] | None = None) -> bool:
+        """Whether no token id belongs to two targets (``ignore_targets`` left out)."""
+        ignored = {ignore_targets} if isinstance(ignore_targets, str) else set(ignore_targets or [])
+        tokens = [t for name, ts in self.target_tokens.items() if name not in ignored for t in ts]
+        return len(tokens) == len(set(tokens))
 
-    def get_target_probs(self, probs, layer=None):
-        target_probs = {
-            target: probs[:, :, tokens].sum(dim=2).cpu()
-            for target, tokens in self.target_tokens.items()
-        }
+    def get_target_probs(self, probs: torch.Tensor, layer: int | None = None) -> dict[str, torch.Tensor]:
+        """Each target's probability mass from ``probs`` of shape ``[batch, layers, vocab]``; one layer if given."""
+        target_probs = {name: probs[:, :, tokens].sum(dim=2).cpu() for name, tokens in self.target_tokens.items()}
         if layer is not None:
-            target_probs = {
-                target: probs_[:, layer] for target, probs_ in target_probs.items()
-            }
+            target_probs = {name: p[:, layer] for name, p in target_probs.items()}
         return target_probs
 
-    @th.no_grad
-    def run(self, nn_model, get_probs: Callable):
-        """
-        Run the prompt through the model and return the probabilities of the next token for both the target tokens.
-        """
-        probs = get_probs(nn_model, self.prompt)
-        return self.get_target_probs(probs)
+    @torch.no_grad()
+    def run(self, model: StandardizedTransformer, get_probs: Callable) -> dict[str, torch.Tensor]:
+        """``get_probs(model, prompt)`` (``[batch, layers, vocab]``) reduced to each target's mass."""
+        return self.get_target_probs(get_probs(model, self.prompt))
 
 
-def next_token_probs_unsqueeze(
-    nn_model: LanguageModel, prompt: str | list[str], remote=False, **_kwargs
-) -> th.Tensor:
-    probs = compute_next_token_probs(nn_model, prompt, remote=remote)
-    return probs.unsqueeze(1)  # Add a fake layer dimension
+def next_token_probs_unsqueeze(model: StandardizedTransformer, prompt: str | list[str], remote: bool = False, **_) -> torch.Tensor:
+    """`compute_next_token_probs` with a layer axis of one, ``[batch, 1, vocab]``: the default ``get_probs``."""
+    return compute_next_token_probs(model, prompt, remote=remote).unsqueeze(1)
 
 
-@th.no_grad
+@torch.no_grad()
 def run_prompts(
-    nn_model: LanguageModel,
+    model: StandardizedTransformer,
     prompts: list[Prompt],
     batch_size: int = 32,
     get_probs_func: Callable | None = None,
     func_kwargs: dict | None = None,
     remote: bool = False,
-    tqdm=tqdm,
-) -> dict[str, th.Tensor]:
-    """
-    Run a list of prompts through the model and return the probabilities of the next token for the target tokens.
+    tqdm=None,
+) -> dict[str, torch.Tensor]:
+    """Run prompts in batches; each target's probability mass per prompt, ``[num_prompts, layers]``.
 
-    Args:
-        nn_model: The NNSight model
-        prompts: A list of prompts. All prompts must have the same target keys
-        batch_size: The batch size to use
-        get_probs: The function to get the probabilities of the next token, default to next token prediction
-        method_kwargs: The kwargs to pass to the get_probs function
-        tqdm: The tqdm function to use, default to tqdm.auto.tqdm. Use None to disable tqdm
-
-    Returns:
-        A dictionary of target names and the probabilities of the next token for the target tokens.
+    All prompts must name the same targets. ``get_probs_func(model, batch,
+    remote=..., **func_kwargs)`` returns ``[batch, layers, vocab]``; the
+    default is the next-token distribution with one layer. ``tqdm`` is a
+    progress-bar factory to wrap the batch loop with, or ``None``.
     """
-    if len(prompts) == 0:
+    if not prompts:
         return {}
-    keys = set(prompts[0].target_tokens.keys())
+    targets = set(prompts[0].target_tokens)
     for prompt in prompts:
-        if set(prompt.target_tokens.keys()) != keys:
-            raise ValueError(
-                f"All prompts must have the same target keys. Got {keys} and {set(prompt.target_tokens.keys())}"
-            )
-    str_prompts = [prompt.prompt for prompt in prompts]
-    probs = []
-    if get_probs_func is None:
-        get_probs_func = next_token_probs_unsqueeze
-    if func_kwargs is None:
-        func_kwargs = {}
-
-    for i in tqdm(
-        range(0, len(str_prompts), batch_size),
-        desc="Running prompts",
-    ):
-        batch = str_prompts[i : i + batch_size]
-        probs.append(get_probs_func(nn_model, batch, remote=remote, **func_kwargs))
-    probs = th.cat(probs)
-    target_probs = {target: [] for target in prompts[0].target_tokens.keys()}
-    for i, prompt in enumerate(prompts):
-        for target, tokens in prompt.target_tokens.items():
-            target_probs[target].append(probs[i, :, tokens].sum(dim=1))
-    target_probs = {
-        target: th.stack(probs).cpu() for target, probs in target_probs.items()
+        if set(prompt.target_tokens) != targets:
+            raise ValueError(f"all prompts must name the same targets; got {targets} and {set(prompt.target_tokens)}")
+    get_probs_func = get_probs_func or next_token_probs_unsqueeze
+    texts = [prompt.prompt for prompt in prompts]
+    steps = range(0, len(texts), batch_size)
+    probs = torch.cat([
+        get_probs_func(model, texts[i : i + batch_size], remote=remote, **(func_kwargs or {}))
+        for i in (tqdm(steps) if tqdm is not None else steps)
+    ])
+    return {
+        name: torch.stack([probs[i, :, prompt.target_tokens[name]].sum(dim=1) for i, prompt in enumerate(prompts)]).cpu()
+        for name in prompts[0].target_tokens
     }
-    return target_probs

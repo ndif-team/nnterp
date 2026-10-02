@@ -1,66 +1,46 @@
-from typing import TYPE_CHECKING, Union
+"""nnterp: one module vocabulary across transformer architectures.
 
-if TYPE_CHECKING:
-    from .standardized_vllm import StandardizedVLLM
-from .standardized_transformer import StandardizedTransformer, StandardizedVLM
-from .rename_utils import get_rename_dict
-from .nnsight_utils import ModuleAccessor
-from .utils import detect_automodel
+`StandardizedTransformer` is an nnsight `TransformersModel` whose envoy tree
+answers to the same names whatever the checkpoint's family. The vocabulary is
+Llama's::
 
+    model.embed_tokens
+    model.layers[i].input_layernorm
+    model.layers[i].self_attn
+    model.layers[i].post_attention_layernorm
+    model.layers[i].mlp
+    model.norm
+    model.lm_head
+
+and the root answers for the whole model: ``logits``, ``token_embeddings``,
+``next_token_probs`` and the sizes (``num_layers``, ``num_heads``, ...).
+
+Each family under `nnterp.families` says how its own names map onto those, and
+`nnterp.components` holds the envoys that give standard modules standard values
+(``layer_output``, ``attention_output``, ``mlp_output``,
+``attention_probabilities``), which each family subclasses.
+"""
+
+try:
+    from ._version import version as __version__  # written by setuptools_scm from the git tag at install
+except ImportError:  # a source tree that was never installed
+    from importlib.metadata import PackageNotFoundError, version as _version
+
+    try:
+        __version__ = _version("nnterp")
+    except PackageNotFoundError:
+        __version__ = "0+unknown"
+
+from .components import (
+    Attention, DerivedEProperty, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard,
+    StateSpace, Unavailable, chunk_per_token, route_delta_rule, route_kernels, unavailable,
+)
+from .families import UnsupportedFamily
+from .standardized import StandardizedTransformer
 
 __all__ = [
-    "StandardizedTransformer",
-    "StandardizedVLM",
-    "load_model",
-    "detect_automodel",
-    "get_rename_dict",
-    "ModuleAccessor",
+    "Attention", "DerivedEProperty", "EProperty", "Layer", "LinearAttention", "Mlp", "Moe", "RecurrentMixer", "SelectiveScan",
+    "Standard", "StandardizedTransformer", "StateSpace", "Unavailable", "UnsupportedFamily", "chunk_per_token",
+    "route_delta_rule", "route_kernels",
+    "unavailable",
 ]
-
-
-def load_model(
-    model: str,
-    use_vllm: bool = False,
-    allow_experimental_vllm: bool = False,
-    text_only: bool = False,
-    **model_kwargs,
-) -> Union[StandardizedTransformer, "StandardizedVLLM", StandardizedVLM]:
-    """Load a model using the appropriate wrapper.
-
-    Autodetects vision-language models and uses ``StandardizedVLM`` for them.
-    Use ``use_vllm=True`` to force vLLM backend.
-
-    Args:
-        model: HuggingFace model name or path.
-        use_vllm: Whether to use the vLLM wrapper.
-        allow_experimental_vllm: Acknowledge that the vLLM backend is experimental.
-            Required when ``use_vllm=True``. Can also be enabled by setting the
-            ``NNTERP_ALLOW_EXPERIMENTAL_VLLM=1`` environment variable.
-        text_only: If True and the checkpoint registers a separate text-only causal LM
-            class next to its multimodal one (e.g. Mllama, Llama-4, Qwen3.5), load only
-            that text tower as a ``StandardizedTransformer`` (no vision weights).
-            No effect otherwise. See ``detect_automodel``.
-        **model_kwargs: Keyword arguments to pass to the model wrapper.
-
-    Returns:
-        A StandardizedTransformer, StandardizedVLM, or StandardizedVLLM instance.
-    """
-    if use_vllm:
-        from .standardized_vllm import StandardizedVLLM
-
-        return StandardizedVLLM(
-            model, allow_experimental_vllm=allow_experimental_vllm, **model_kwargs
-        )
-
-    from transformers import AutoModelForImageTextToText
-
-    automodel_cls = detect_automodel(
-        model,
-        trust_remote_code=model_kwargs.get("trust_remote_code", False),
-        text_only=text_only,
-    )
-    if automodel_cls is AutoModelForImageTextToText:
-        return StandardizedVLM(model, **model_kwargs)
-
-    model_kwargs.setdefault("automodel", automodel_cls)
-    return StandardizedTransformer(model, **model_kwargs)

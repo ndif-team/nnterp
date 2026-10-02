@@ -247,6 +247,45 @@ the per-token state on `SCAN_BLOCK`, and meta-build a real checkpoint's config
 skips the pattern and interior tests and `expected_values` drops the
 `self_attn.*` names.
 
+## The vLLM suite (`tests/vllm_families/`)
+
+Collected only where `vllm.model_executor` imports and a GPU is visible
+(`conftest.py`); everywhere else the directory is ignored. `VLLMFamilySuite`
+(`vllm_suite.py`) uses the transformers engine as the oracle:
+`transformers_values` runs the checkpoint through `StandardizedTransformer` in
+float32 (without gradients, so nothing saved keeps the weights on the card),
+and the class-scoped `model` fixture then builds a `StandardizedVLLM` in
+float32. The tests hold the engine's boundary values, embeddings and logits
+against the reference within `TOLERANCE` of each value's largest magnitude;
+check the identity on every block, that a read changes no logit, that an
+in-place edit, a statement reading twice and an assignment are the same
+write, that a value of other rows is refused and the engine survives; and
+compare the logits under `steer` and `skip_layers` with transformers'.
+`test_skip_layers` is last: a skip answers for the whole step.
+
+```bash
+PYTHON=/path/to/python tests/vllm_families/run.sh          # every family, one process each
+PYTHON=/path/to/python tests/vllm_families/run.sh llama    # one
+```
+
+One process per test class (`run.sh` does it) because each class starts an
+engine, and engines sharing a card overrun their memory fractions. The
+directory is not named `vllm`: with `tests/` on the path that would be
+importable as `vllm`.
+
+A family's file names a real checkpoint both engines load (`MEMORY` is its
+engine's share of the card), because vLLM's attention kernels need a head
+width of at least 16 (32 in float32) and the tiny random checkpoints of
+`tests/families/` are narrower. The reference reads the attention's interior
+one value a trace, since each transformers family reads its own in its own
+order. Class attributes say what a family differs in: `SERVED` (the interior
+values vLLM serves; `()` on DeepSeek), `UNAVAILABLE`, `TOLERANCE` and
+`KERNEL_TOLERANCE` (set, with the measurement beside them, on the two
+checkpoints whose sharp softmax the two kernels sum differently: Qwen2.5-0.5B
+and Pythia-70m), `DTYPE` and `ENGINE`. DeepSeek's file has two classes, one
+per attention backend. 27 tests a class, 25 to 80 s each; the checkpoints are
+about 150 GB together.
+
 ## The root tests
 
 `tests/test_registry.py` (13 tests): every module under `nnterp/families/` is

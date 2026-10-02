@@ -137,6 +137,13 @@ assert model.family is gpt2
 before path keys, so displacing a family's type-keyed envoy takes a type key of your own
 ([custom-values.md](custom-values.md)).
 
+## Another engine's families
+
+`register(family, engine="vllm")` registers a family for `StandardizedVLLM`, and
+`lookup(model_type, engine="vllm")` finds it; the shipped ones are the modules under
+`nnterp/families/vllm/`. The two engines' registries do not overlap: a family registered
+without `engine` is a transformers family. See [usage/vllm](../usage/vllm.md).
+
 ## Gotchas
 
 - **Register before loading.** `lookup` runs in `StandardizedTransformer.__init__`; a

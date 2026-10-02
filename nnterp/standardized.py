@@ -1,4 +1,4 @@
-"""`StandardizedTransformer`: a `TransformersModel` renamed to the standard vocabulary."""
+"""`Standardized`, what every standardized model shares, and `StandardizedTransformer`, the `TransformersModel` one."""
 
 from __future__ import annotations
 
@@ -68,56 +68,16 @@ class StandardizedCapability(StandardizedProperty):
         return functools.partial(getattr(obj.family, self.name, None) or self.fget, obj)
 
 
-class StandardizedTransformer(TransformersModel):
-    """A causal language model whose modules answer to one set of names.
+class Standardized:
+    """What a standardized model is on any engine: a family, its sizes, its availability, and the methods over its values.
 
-    The checkpoint's config is read first (its ``model_type``), the matching
-    family toolkit is looked up in `nnterp.families.REGISTRY`, and the family's
-    ``RENAME`` is handed to nnsight's ``rename`` so every envoy in the tree also
-    answers to the standard name. The original names keep working: an alias is
-    an extra attribute on the same envoy, not a replacement.
-
-    The family's ``ENVOYS`` wraps its decoder blocks in its `Layer`
-    (``layer_output``), its attention modules in its `Attention`
-    (``attention_output``, ``attention_probabilities``) and its feed-forwards
-    in its `Mlp` (``mlp_output``). The pattern is read inside the eager
-    attention forward, so it is unavailable unless the model is loaded with
-    ``attn_implementation="eager"``; `support` says which values this
-    checkpoint has. See `nnterp.components`.
-
-    Args:
-        repo_id: A HuggingFace repo id, or an already-loaded ``torch.nn.Module``
-            (its own ``config`` is read then).
-        rename: Extra aliases, merged over the family's; a key given here wins.
-        envoys: Extra ``envoys=`` entries, merged over the family's ``ENVOYS``
-            (and nnsight's tensor-parallel envoys when the load shards); a key
-            given here wins.
-        tokenizer_kwargs: Attributes to set on the loaded tokenizer, such as
-            ``padding_side="left"`` or a ``pad_token``.
-        **kwargs: Passed through to `TransformersModel`. ``task`` defaults to
-            ``"text-generation"``.
-
-    Over the values, `skip_layers`, `steer`, `project_on_vocab` and
-    `get_topk_closest_tokens` do the common things (see each). Inside a
-    trace `input_ids`, `input_size` and `attention_mask` are what the model
-    was called with.
-
-    The root envoy also answers for the whole model, inside a trace: ``logits``
-    (the model's final logits, with any softcapping applied), ``token_embeddings``
-    (the embedding's output) and ``next_token_probs``; and outside one: the
-    sizes ``num_layers``, ``num_heads``, ``num_kv_heads``, ``head_dim``,
-    ``qk_head_dim``, ``hidden_size``, ``intermediate_size`` and ``vocab_size``,
-    read off the config, each a `StandardizedProperty` the family can define
-    instead; `project_on_vocab` is a `StandardizedCapability`, a method the family
-    can define the same way.
-
-    Attributes:
-        family: The toolkit module the checkpoint resolved to.
-        layers: The decoder blocks, each a `Layer` (the family's subclass).
-        embed_tokens, norm, lm_head: The embedding, the final norm, the unembedding.
-
-    Raises:
-        UnsupportedFamily: when no family covers the checkpoint's ``model_type``.
+    Mixed in ahead of the nnsight model class that runs the checkpoint
+    (`StandardizedTransformer` over `TransformersModel`,
+    `nnterp.StandardizedVLLM` over nnsight's ``VLLM``). The leaf resolves
+    ``family`` and hands its ``RENAME`` and ``ENVOYS`` to nnsight, and defines
+    the root's values (``logits``, ``token_embeddings``, ...), which are read
+    where its engine keeps them. Everything here is written against the
+    standard names and values only, so it holds on both.
     """
 
     family: ModuleType
@@ -125,91 +85,6 @@ class StandardizedTransformer(TransformersModel):
     embed_tokens: Envoy
     norm: Envoy
     lm_head: Envoy
-
-    def __init__(
-        self,
-        repo_id: Any,
-        *args: Any,
-        rename: dict[str, str | list[str]] | None = None,
-        envoys: dict | None = None,
-        tokenizer_kwargs: dict | None = None,
-        **kwargs: Any,
-    ) -> None:
-        kwargs.setdefault("task", "text-generation")
-        self._add_prefix_false_tokenizer = None
-        config = self._read_config(repo_id, kwargs)
-        # A multimodal checkpoint's config nests the language model's; the
-        # text-generation task builds that model, so its family is the one.
-        self.family = families.lookup(getattr(config, "text_config", config).model_type)
-        super().__init__(
-            repo_id,
-            *args,
-            rename={**self.family.RENAME, **(rename or {})},
-            envoys={
-                **self._base_envoys(repo_id, kwargs),
-                **self.family.ENVOYS,
-                **(envoys or {}),
-            },
-            **kwargs,
-        )
-        for key, value in (tokenizer_kwargs or {}).items():
-            setattr(self.tokenizer, key, value)
-
-    @staticmethod
-    def _base_envoys(repo_id: Any, kwargs: dict) -> dict:
-        """What `TransformersModel` would have installed had we passed no ``envoys``.
-
-        It only sets its tensor-parallel envoys as a default, so passing our own
-        map would silently drop them on a sharded load; start from them instead.
-        """
-        from nnsight.modeling.tp.envoys import tp_envoys, wants_tensor_parallel
-
-        return tp_envoys() if wants_tensor_parallel(repo_id, kwargs) else {}
-
-    # -- whole-model values (inside a trace) ---------------------------------
-
-    @EProperty(key="output", description="The model's final logits, softcapping applied")
-    def logits(self, value: Any) -> Logits:
-        """The logits the model returns, ``[batch, seq, vocab]``.
-
-        Read off the model's output, so a family that softcaps after
-        ``lm_head`` (Gemma-2) is already accounted for; ``lm_head.output`` is
-        the raw projection. Assigning replaces the logits in the model's output.
-        """
-        return value.logits
-
-    @logits.postprocess
-    def logits(self, value: torch.Tensor) -> Any:
-        output = self.output
-        output.logits = value
-        return output
-
-    @EProperty("embed_tokens.output", description="The token embeddings entering the first block")
-    def token_embeddings(self, value: torch.Tensor) -> Residual:
-        """The embedding module's output, ``[batch, seq, hidden]``.
-
-        Positional embeddings and embedding norms (GPT-2's ``wpe``, BLOOM's
-        ``word_embeddings_layernorm``) are applied after this by the families
-        that have them. Assign to replace it.
-        """
-        return value
-
-    @EProperty(key="output", description="The next-token distribution at the last position; derived, read-only")
-    def next_token_probs(self, value: Any) -> NextTokenProbs:
-        """The next-token distribution at the last position, ``[batch, vocab]``.
-
-        ``logits[:, -1].softmax(-1)``, derived from the model's output; the
-        last position is the last token of every row only under left padding.
-        Read-only: there is no inverse, so assign ``logits`` instead.
-        """
-        return value.logits[:, -1].softmax(-1)
-
-    @next_token_probs.postprocess
-    def next_token_probs(self, value: Any) -> Any:
-        raise AttributeError(
-            "next_token_probs is derived from the logits and cannot be assigned; "
-            "assign model.logits instead"
-        )
 
     # -- methods over the values (inside a trace unless said otherwise) ----------
 
@@ -225,7 +100,7 @@ class StandardizedTransformer(TransformersModel):
                 logits = model.logits.save()
         """
         start, end = range(self.num_layers)[start], range(self.num_layers)[end]
-        hidden = self.layers[start].input if skip_with is None else skip_with
+        hidden = self.layers[start].layer_input if skip_with is None else skip_with
         for i in range(start, end + 1):
             self.layers[i].skip_with(hidden)
 
@@ -249,25 +124,6 @@ class StandardizedTransformer(TransformersModel):
         for i in [layers] if isinstance(layers, int) else layers:
             out = self.layers[i].layer_output
             out[rows, cols] += factor * vector.to(out)
-
-    @StandardizedCapability
-    def project_on_vocab(self, hidden: torch.Tensor) -> torch.Tensor:
-        """Logits for a residual-stream tensor: the final norm, ``lm_head``, and what the model does after the head.
-
-        The logit lens: applied to a block's ``layer_output`` it reads that
-        layer's prediction; applied to the last block's, it is `logits`.
-        Works inside a trace on a live value and outside on a saved one.
-        After the head the plain case is the text config's
-        ``final_logit_softcapping``, when set (Gemma-2's own config; a
-        multimodal checkpoint's ``text_config``). A family whose model does
-        something else there (Cohere multiplies by ``logit_scale``, Granite
-        divides by ``logits_scaling``) defines
-        ``def project_on_vocab(model, hidden)`` in its module, which is bound
-        in this one's place (`StandardizedCapability`).
-        """
-        logits = self.lm_head(self.norm(hidden))
-        cap = getattr(self.config.get_text_config(), "final_logit_softcapping", None)
-        return cap * torch.tanh(logits / cap) if cap else logits
 
     def probs_to_dict(self, probs: torch.Tensor, k: int = 5) -> dict[str, float]:
         """The ``k`` most likely tokens of one ``[vocab]`` distribution, as ``{token: probability}``, most likely first.
@@ -365,51 +221,6 @@ class StandardizedTransformer(TransformersModel):
                     support[f"{module}.{name}"] = reasons.get(name, f"no {name} value on this block's {module}")
         return support
 
-    # -- the input (inside a trace) ----------------------------------------------
-
-    @EProperty(key="inputs", description="The token ids the model was called with")
-    def input_ids(self, value: Any) -> Tokens:
-        """The token ids the model was called with, ``[batch, seq]``. Assign to run the model on other ids."""
-        return value[1]["input_ids"]
-
-    @input_ids.postprocess
-    def input_ids(self, value: Tensor) -> Any:
-        args, kwargs = self.inputs
-        return args, {**kwargs, "input_ids": value}
-
-    @EProperty(key="inputs", description="The attention mask the model was called with; zeros are padding")
-    def attention_mask(self, value: Any) -> Tokens:
-        """The attention mask the model was called with, ``[batch, seq]``; zeros are padding. Assignable."""
-        return value[1]["attention_mask"]
-
-    @attention_mask.postprocess
-    def attention_mask(self, value: Tensor) -> Any:
-        args, kwargs = self.inputs
-        return args, {**kwargs, "attention_mask": value}
-
-    @EProperty(key="inputs", description="[batch, seq] of the current call; read-only")
-    def input_size(self, value: Any) -> torch.Size:
-        """``[batch, seq]`` of the current call, from the ids; read-only."""
-        return value[1]["input_ids"].shape
-
-    @input_size.postprocess
-    def input_size(self, value: Any) -> Any:
-        raise AttributeError("input_size is the ids' shape and cannot be assigned; assign input_ids")
-
-    # -- tokenizers ---------------------------------------------------------------
-
-    @property
-    def add_prefix_false_tokenizer(self) -> Any:
-        """The checkpoint's tokenizer loaded with ``add_prefix_space=False``, so ``"word"`` and ``" word"`` differ.
-
-        What `nnterp.prompt_utils.get_first_tokens` uses. Loaded once, on first use.
-        """
-        if self._add_prefix_false_tokenizer is None:
-            from transformers import AutoTokenizer
-
-            self._add_prefix_false_tokenizer = AutoTokenizer.from_pretrained(self.repo_id, add_prefix_space=False)
-        return self._add_prefix_false_tokenizer
-
     # -- sizes (from the config) ----------------------------------------------
     # Each is the plain case, read off the text config (a multimodal
     # checkpoint's ``text_config``, else the config itself); a family whose
@@ -455,19 +266,6 @@ class StandardizedTransformer(TransformersModel):
         """Width of the dense MLP's hidden layer, ``config.intermediate_size``; a mixture of experts' experts are ``moe_intermediate_size`` wide."""
         return self.config.get_text_config().intermediate_size
 
-    # -- remote ------------------------------------------------------------------
-
-    def _remoteable_class(self) -> type:
-        """The class in this model's remote key: `TransformersModel`, what a server deploys.
-
-        A remote trace re-runs the block against the client's envoy tree, so
-        the aliases and the family's envoy classes travel with the request
-        (by reference: the server needs nnterp installed). The deployed model
-        itself is a plain `TransformersModel`, so the key says so; a
-        subclass-specific key would match nothing on the server.
-        """
-        return TransformersModel
-
     # -- loading ---------------------------------------------------------------
 
     @staticmethod
@@ -487,3 +285,220 @@ class StandardizedTransformer(TransformersModel):
             revision=kwargs.get("revision"),
             trust_remote_code=bool(kwargs.get("trust_remote_code", False)),
         )
+
+
+class StandardizedTransformer(Standardized, TransformersModel):
+    """A causal language model whose modules answer to one set of names.
+
+    The checkpoint's config is read first (its ``model_type``), the matching
+    family toolkit is looked up in `nnterp.families.REGISTRY`, and the family's
+    ``RENAME`` is handed to nnsight's ``rename`` so every envoy in the tree also
+    answers to the standard name. The original names keep working: an alias is
+    an extra attribute on the same envoy, not a replacement.
+
+    The family's ``ENVOYS`` wraps its decoder blocks in its `Layer`
+    (``layer_output``), its attention modules in its `Attention`
+    (``attention_output``, ``attention_probabilities``) and its feed-forwards
+    in its `Mlp` (``mlp_output``). The pattern is read inside the eager
+    attention forward, so it is unavailable unless the model is loaded with
+    ``attn_implementation="eager"``; `support` says which values this
+    checkpoint has. See `nnterp.components`.
+
+    Args:
+        repo_id: A HuggingFace repo id, or an already-loaded ``torch.nn.Module``
+            (its own ``config`` is read then).
+        rename: Extra aliases, merged over the family's; a key given here wins.
+        envoys: Extra ``envoys=`` entries, merged over the family's ``ENVOYS``
+            (and nnsight's tensor-parallel envoys when the load shards); a key
+            given here wins.
+        tokenizer_kwargs: Attributes to set on the loaded tokenizer, such as
+            ``padding_side="left"`` or a ``pad_token``.
+        **kwargs: Passed through to `TransformersModel`. ``task`` defaults to
+            ``"text-generation"``.
+
+    Over the values, `skip_layers`, `steer`, `project_on_vocab` and
+    `get_topk_closest_tokens` do the common things (see each). Inside a
+    trace `input_ids`, `input_size` and `attention_mask` are what the model
+    was called with.
+
+    The root envoy also answers for the whole model, inside a trace: ``logits``
+    (the model's final logits, with any softcapping applied), ``token_embeddings``
+    (the embedding's output) and ``next_token_probs``; and outside one: the
+    sizes ``num_layers``, ``num_heads``, ``num_kv_heads``, ``head_dim``,
+    ``qk_head_dim``, ``hidden_size``, ``intermediate_size`` and ``vocab_size``,
+    read off the config, each a `StandardizedProperty` the family can define
+    instead; `project_on_vocab` is a `StandardizedCapability`, a method the family
+    can define the same way.
+
+    Attributes:
+        family: The toolkit module the checkpoint resolved to.
+        layers: The decoder blocks, each a `Layer` (the family's subclass).
+        embed_tokens, norm, lm_head: The embedding, the final norm, the unembedding.
+
+    Raises:
+        UnsupportedFamily: when no family covers the checkpoint's ``model_type``.
+    """
+
+    def __init__(
+        self,
+        repo_id: Any,
+        *args: Any,
+        rename: dict[str, str | list[str]] | None = None,
+        envoys: dict | None = None,
+        tokenizer_kwargs: dict | None = None,
+        **kwargs: Any,
+    ) -> None:
+        kwargs.setdefault("task", "text-generation")
+        self._add_prefix_false_tokenizer = None
+        config = self._read_config(repo_id, kwargs)
+        # A multimodal checkpoint's config nests the language model's; the
+        # text-generation task builds that model, so its family is the one.
+        self.family = families.lookup(getattr(config, "text_config", config).model_type)
+        super().__init__(
+            repo_id,
+            *args,
+            rename={**self.family.RENAME, **(rename or {})},
+            envoys={
+                **self._base_envoys(repo_id, kwargs),
+                **self.family.ENVOYS,
+                **(envoys or {}),
+            },
+            **kwargs,
+        )
+        for key, value in (tokenizer_kwargs or {}).items():
+            setattr(self.tokenizer, key, value)
+
+    @staticmethod
+    def _base_envoys(repo_id: Any, kwargs: dict) -> dict:
+        """What `TransformersModel` would have installed had we passed no ``envoys``.
+
+        It only sets its tensor-parallel envoys as a default, so passing our own
+        map would silently drop them on a sharded load; start from them instead.
+        """
+        from nnsight.modeling.tp.envoys import tp_envoys, wants_tensor_parallel
+
+        return tp_envoys() if wants_tensor_parallel(repo_id, kwargs) else {}
+
+    # -- whole-model values (inside a trace) ---------------------------------
+
+    @EProperty(key="output", description="The model's final logits, softcapping applied")
+    def logits(self, value: Any) -> Logits:
+        """The logits the model returns, ``[batch, seq, vocab]``.
+
+        Read off the model's output, so a family that softcaps after
+        ``lm_head`` (Gemma-2) is already accounted for; ``lm_head.output`` is
+        the raw projection. Assigning replaces the logits in the model's output.
+        """
+        return value.logits
+
+    @logits.postprocess
+    def logits(self, value: torch.Tensor) -> Any:
+        output = self.output
+        output.logits = value
+        return output
+
+    @EProperty("embed_tokens.output", description="The token embeddings entering the first block")
+    def token_embeddings(self, value: torch.Tensor) -> Residual:
+        """The embedding module's output, ``[batch, seq, hidden]``.
+
+        Positional embeddings and embedding norms (GPT-2's ``wpe``, BLOOM's
+        ``word_embeddings_layernorm``) are applied after this by the families
+        that have them. Assign to replace it.
+        """
+        return value
+
+    @EProperty(key="output", description="The next-token distribution at the last position; derived, read-only")
+    def next_token_probs(self, value: Any) -> NextTokenProbs:
+        """The next-token distribution at the last position, ``[batch, vocab]``.
+
+        ``logits[:, -1].softmax(-1)``, derived from the model's output; the
+        last position is the last token of every row only under left padding.
+        Read-only: there is no inverse, so assign ``logits`` instead.
+        """
+        return value.logits[:, -1].softmax(-1)
+
+    @next_token_probs.postprocess
+    def next_token_probs(self, value: Any) -> Any:
+        raise AttributeError(
+            "next_token_probs is derived from the logits and cannot be assigned; "
+            "assign model.logits instead"
+        )
+
+    # -- the logit lens -----------------------------------------------------------
+
+    @StandardizedCapability
+    def project_on_vocab(self, hidden: torch.Tensor) -> torch.Tensor:
+        """Logits for a residual-stream tensor: the final norm, ``lm_head``, and what the model does after the head.
+
+        The logit lens: applied to a block's ``layer_output`` it reads that
+        layer's prediction; applied to the last block's, it is `logits`.
+        Works inside a trace on a live value and outside on a saved one.
+        After the head the plain case is the text config's
+        ``final_logit_softcapping``, when set (Gemma-2's own config; a
+        multimodal checkpoint's ``text_config``). A family whose model does
+        something else there (Cohere multiplies by ``logit_scale``, Granite
+        divides by ``logits_scaling``) defines
+        ``def project_on_vocab(model, hidden)`` in its module, which is bound
+        in this one's place (`StandardizedCapability`).
+        """
+        logits = self.lm_head(self.norm(hidden))
+        cap = getattr(self.config.get_text_config(), "final_logit_softcapping", None)
+        return cap * torch.tanh(logits / cap) if cap else logits
+
+    # -- the input (inside a trace) ----------------------------------------------
+
+    @EProperty(key="inputs", description="The token ids the model was called with")
+    def input_ids(self, value: Any) -> Tokens:
+        """The token ids the model was called with, ``[batch, seq]``. Assign to run the model on other ids."""
+        return value[1]["input_ids"]
+
+    @input_ids.postprocess
+    def input_ids(self, value: Tensor) -> Any:
+        args, kwargs = self.inputs
+        return args, {**kwargs, "input_ids": value}
+
+    @EProperty(key="inputs", description="The attention mask the model was called with; zeros are padding")
+    def attention_mask(self, value: Any) -> Tokens:
+        """The attention mask the model was called with, ``[batch, seq]``; zeros are padding. Assignable."""
+        return value[1]["attention_mask"]
+
+    @attention_mask.postprocess
+    def attention_mask(self, value: Tensor) -> Any:
+        args, kwargs = self.inputs
+        return args, {**kwargs, "attention_mask": value}
+
+    @EProperty(key="inputs", description="[batch, seq] of the current call; read-only")
+    def input_size(self, value: Any) -> torch.Size:
+        """``[batch, seq]`` of the current call, from the ids; read-only."""
+        return value[1]["input_ids"].shape
+
+    @input_size.postprocess
+    def input_size(self, value: Any) -> Any:
+        raise AttributeError("input_size is the ids' shape and cannot be assigned; assign input_ids")
+
+    # -- tokenizers ---------------------------------------------------------------
+
+    @property
+    def add_prefix_false_tokenizer(self) -> Any:
+        """The checkpoint's tokenizer loaded with ``add_prefix_space=False``, so ``"word"`` and ``" word"`` differ.
+
+        What `nnterp.prompt_utils.get_first_tokens` uses. Loaded once, on first use.
+        """
+        if self._add_prefix_false_tokenizer is None:
+            from transformers import AutoTokenizer
+
+            self._add_prefix_false_tokenizer = AutoTokenizer.from_pretrained(self.repo_id, add_prefix_space=False)
+        return self._add_prefix_false_tokenizer
+
+    # -- remote ------------------------------------------------------------------
+
+    def _remoteable_class(self) -> type:
+        """The class in this model's remote key: `TransformersModel`, what a server deploys.
+
+        A remote trace re-runs the block against the client's envoy tree, so
+        the aliases and the family's envoy classes travel with the request
+        (by reference: the server needs nnterp installed). The deployed model
+        itself is a plain `TransformersModel`, so the key says so; a
+        subclass-specific key would match nothing on the server.
+        """
+        return TransformersModel

@@ -63,6 +63,19 @@ class Layer(Standard):
         """
         self.skip((hidden, None) if self.returns_tuple else hidden)
 
+    @EProperty(key="input", description="The residual stream entering the block")
+    def layer_input(self, value: torch.Tensor) -> Residual:
+        """The residual stream entering this block, before any of its norms.
+
+        The block's first argument where the block is called with the stream
+        (every transformers family), and the stream wherever an engine passes
+        it otherwise (vLLM's fused blocks take it in two halves). With the
+        contributions it is the identity the values are defined by:
+        ``layer_input + attention_output + mlp_output == layer_output``.
+        In-place edits and assignment reach the model.
+        """
+        return value
+
     @EProperty(key="output", description="The residual stream leaving the block, a tensor even when the block returns a tuple")
     def layer_output(self, value: Any) -> Residual:
         """The residual stream leaving this block, always a tensor.

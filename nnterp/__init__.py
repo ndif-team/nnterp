@@ -19,6 +19,9 @@ Each family under `nnterp.families` says how its own names map onto those, and
 `nnterp.components` holds the envoys that give standard modules standard values
 (``layer_output``, ``attention_output``, ``mlp_output``,
 ``attention_probabilities``), which each family subclasses.
+
+`StandardizedVLLM` is the same over nnsight's ``VLLM`` engine, with vLLM's own
+implementation of each family under `nnterp.families.vllm`.
 """
 
 try:
@@ -36,11 +39,12 @@ from .components import (
     StateSpace, Unavailable, chunk_per_token, route_delta_rule, route_kernels, unavailable,
 )
 from .families import UnsupportedFamily
-from .standardized import StandardizedTransformer
+from .standardized import Standardized, StandardizedTransformer
+from .standardized_vllm import StandardizedVLLM
 
 __all__ = [
     "Attention", "DerivedEProperty", "EProperty", "Layer", "LinearAttention", "Mlp", "Moe", "RecurrentMixer", "SelectiveScan",
-    "Standard", "StandardizedTransformer", "StateSpace", "Unavailable", "UnsupportedFamily", "chunk_per_token",
+    "Standard", "Standardized", "StandardizedTransformer", "StandardizedVLLM", "StateSpace", "Unavailable", "UnsupportedFamily", "chunk_per_token",
     "route_delta_rule", "route_kernels",
     "unavailable",
 ]

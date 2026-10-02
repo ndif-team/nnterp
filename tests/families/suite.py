@@ -26,7 +26,7 @@ PROMPT = "Hello world there"
 PROMPTS = ["The Eiffel Tower is in the city of", "Paris is the capital and largest city of"]
 
 VALUES = {
-    "logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", "layer_output",
+    "logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", "layer_input", "layer_output",
     "self_attn.attention_output", "self_attn.attention_probabilities", "mlp.mlp_output",
     "self_attn.attention_queries", "self_attn.attention_keys", "self_attn.attention_values",
     "self_attn.attention_scores", "self_attn.attention_head_outputs",
@@ -306,6 +306,18 @@ class FamilySuite:
         assert torch.equal(std, raw[0] if isinstance(raw, tuple) else raw)
         assert std.shape[-1] == model.hidden_size
 
+    def test_layer_input_is_the_block_input(self, model):
+        with model.trace(PROMPT):
+            raw = model.layers[1].input.save()
+            std = model.layers[1].layer_input.save()
+        assert torch.equal(std, raw) and std.shape[-1] == model.hidden_size
+        with model.trace(PROMPT):
+            clean = model.logits.save()
+        with model.trace(PROMPT):
+            model.layers[1].layer_input = model.layers[1].layer_input * 0
+            edited = model.logits.save()
+        assert not torch.equal(clean, edited)
+
     def test_every_value_reads_a_tensor_on_every_layer(self, model):
         read = {}  # filled inside the block: a name bound there does not survive the trace
         expected = sum(len(contributions(layer)) + 1 for layer in model.layers)
@@ -330,7 +342,7 @@ class FamilySuite:
         parts = {}
         with model.trace(PROMPT):
             for i, layer in enumerate(model.layers):
-                x = layer.input.save()
+                x = layer.layer_input.save()
                 added = [getattr(host, value).save() for host, value in contributions(layer)]
                 parts[i] = (x, added, layer.layer_output.save())
         for i, (x, added, out) in parts.items():

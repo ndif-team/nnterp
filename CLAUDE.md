@@ -9,7 +9,8 @@ whose envoy tree answers to one set of names on every transformer family, with s
 (`layer_output`, `attention_output`, `attention_probabilities`, ...) that mean the same thing
 everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.iter`, invokes,
 `.source`, remote) works unchanged; nnsight's own guide is `~/wd/nnsight/CLAUDE.md` and its docs
-`~/wd/nnsight/docs/`. This file covers only what nnterp adds.
+`~/wd/nnsight/docs/`. `StandardizedVLLM` is the same over nnsight's `VLLM` engine. This file covers
+only what nnterp adds.
 
 ---
 
@@ -30,7 +31,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/reference/families.md](docs/reference/families.md) — the 92 families, their native names and quirks
 
 ### "Read or edit the residual stream / a sublayer's contribution"
-- [docs/usage/residual-stream.md](docs/usage/residual-stream.md) — `layer_output`, `attention_output`, `mlp_output`; `input + attention_output + mlp_output == layer_output`
+- [docs/usage/residual-stream.md](docs/usage/residual-stream.md) — `layer_input`, `layer_output`, `attention_output`, `mlp_output`; `layer_input + attention_output + mlp_output == layer_output`
 
 ### "Read or edit attention: the pattern, queries, keys, values, scores, heads"
 - [docs/usage/attention-interior.md](docs/usage/attention-interior.md) — `attention_probabilities`, `attention_queries/keys/values/scores/head_outputs`; needs eager; per-family caveats
@@ -70,6 +71,9 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 
 ### "Run a research pattern across families"
 - [docs/patterns/index.md](docs/patterns/index.md) — logit lens, steering, attention patterns, ablation, activation patching, contribution decomposition, cross-family sweep, probing, DeltaNet state
+
+### "Run on the vLLM engine"
+- [docs/usage/vllm.md](docs/usage/vllm.md) — `StandardizedVLLM(repo_id, dispatch=True, ...)`: the same names, values and layouts (batch axis 1) on nnsight's `VLLM`; what is unavailable; the families under `nnterp/families/vllm/` and how to add one
 
 ### "Run remotely on NDIF"
 - [docs/usage/remote.md](docs/usage/remote.md) — `remote=True`; nnterp installed server-side, never shipped by value
@@ -123,6 +127,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - **In-place edits on queries, keys and values: assign instead** on GPT-2, GPT-BigCode, MPT and every recurrent mixer (DeltaNet's q/k/v, Mamba-1's `C`/`B`, Mamba-2's `C`/`B`/`x`), or edit under `torch.no_grad()`. Falcon's `mlp_output` is a copy carried back by a transform; both forms reach the model.
 - **Recurrent mixers need `nnterp.route_kernels(model.family, "torch")` before the first trace of the layer** where an optimized kernel is installed: for DeltaNet's per-token `state`/`states`, and on Mamba-1 (Mamba, Falcon-Mamba, Jamba) and Mamba-2 whenever `mamba_ssm` is installed, whose CUDA kernels have no source and do not run on CPU (unrouted, even a `layer_output` read on CPU fails inside the kernel with `Expected u.is_cuda()`). DeltaNet's queries and keys are served before the kernel's l2-norm and scale; Mamba-2's `betas` and `decays` are one argument (`dt`): writing `decays` rewrites `betas`, and a write-back of unchanged values is not exact in bf16. A state write is not all a block remembers: a width-4 convolution carries the last tokens.
 - **A mixture's routing is the sparse pair `[batch, seq, top_k]`**: ablate expert `e` with `moe.expert_weights = moe.expert_weights.masked_fill(moe.expert_indices == e, 0)`; a rerouted index keeps the old slot's weight. Read a mixture's values in forward order (`router_logits`, weights/indices, `expert_outputs`, `routed_output`); where `shared_expert_output` falls differs per family. Mask pad tokens with `model.attention_mask` when counting usage (the router routes them). Under two or more invokes, edit the routing in place, and take the clean baseline from an unedited invoke of the same batch; sweep single experts in float32. ZAYA's skipped slots read as expert 0 with weight 0.
+- **On `StandardizedVLLM` use `layer_input` / `layer_output`, never `layers[i].input` / `.output`**: natively the input is the positions and the output a `(hidden_states, residual)` pair on most families. Values there are `[1, tokens, ...]` private copies, `logits` is `[1, 1, vocab]`, sampling settings go on `trace` (vLLM's defaults otherwise), the pattern and scores are recomputed from the queries and keys (read-only, prefill only; `Unavailable` on a decode step), and an assigned value must keep the shape it was served with. The suite is `tests/vllm_families/` and needs vLLM and a GPU.
 - **`envoys=` keys match by module type or native path, never by alias**; to displace a family's envoy, key yours on the type. An `EProperty` path that goes up (`"../ln_2.output"`) takes native names only.
 - **Import nnterp (or nnsight) before any `transformers.models...` module**; the reverse order segfaults on this stack.
 - **Every snippet in `docs/` ran against a cached checkpoint**; when a page and the code disagree, the suite is the arbiter: `HF_HUB_OFFLINE=1 pytest tests/families/test_<family>.py`.

@@ -93,6 +93,24 @@ rest of this page says which.
    StandardizedProperty.__get__ ── family.<name>(model) if the family module defines it, else the plain rule over config
 ```
 
+## Two engines, one base
+
+`Standardized` (`nnterp/standardized.py`) holds what does not depend on the
+engine: the sizes, `support()`, `steer`, `skip_layers`,
+`get_topk_closest_tokens`, `_read_config`. `StandardizedTransformer` mixes it
+over `TransformersModel`, `StandardizedVLLM` (`nnterp/standardized_vllm.py`)
+over nnsight's `VLLM`; each leaf resolves its family, merges `rename=` /
+`envoys=`, and defines the root values where its engine keeps them.
+vLLM's families are `nnterp/families/vllm/<model_type>.py`
+(`lookup(model_type, engine="vllm")`), built from the bases in
+`nnterp/components/vllm/` (`flat.py`, `layer.py`, `attention.py`, `mlp.py`,
+mirroring `nnterp/components/`): `Flat`, an `EProperty` over a `[tokens, ...]`
+tensor served as a private `[1, tokens, ...]` copy and handed back by a
+transform, and `FusedLayer`, whose stream is the sum of the
+`(hidden_states, residual)` pair a fused block takes and returns. The block
+runs in the engine's worker against the client's envoy classes, pickled by
+reference, the way a remote trace does. [usage/vllm](../usage/vllm.md).
+
 ## Data flow through `__init__`
 
 `StandardizedTransformer.__init__` (`nnterp/standardized.py:128-155`) runs in

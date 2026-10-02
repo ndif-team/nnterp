@@ -1,40 +1,6 @@
-# project specific
-nnterp/data/test_logs/
-nnterp/data/*.old.json
-scratch/
-nnterp/data/test_loading_status.*
-nnterp/data/toy_models_cache.*
-nnterp/data/test_logs/latest_status.json
-nnterp/data/test_logs/*_status.json
-.coverage
-.idea
-
-# general
-.junk/**
-junk**
-.claude/settings.local.json
-*.log
+__pycache__/
+*.egg-info/
+.pytest_cache/
 build/
 dist/
-public/
-*.egg-info/
-.installed.cfg
-.vscode
-__pycache__/
-.DS_STORE
-config.yaml
-.nfs*
-.env
-.venv
-# Documentation build files
-docs/_build/
-docs/build/
-_build/
-site/
-.doctrees/
-.buildinfo
-*.mo
-docs/api/
-docs/generated/
-docs/_autosummary/
-docs/llms.txt
+.claude/

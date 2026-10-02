@@ -1,109 +1,22 @@
 [build-system]
-requires = ["setuptools>=45", "setuptools_scm[toml]>=6.2"]
+requires = ["setuptools>=64"]
 build-backend = "setuptools.build_meta"
-[tool.setuptools_scm]
 
 [project]
-dynamic = ["version"]
-name = "nnterp"
-authors = [
-  { name="Clément Dumas", email="butanium.contact@gmail.com" },
-]
-description = "Utils and mechanistic interpretability intervensions using nnsight"
+name = "nnter"
+version = "0.0.1"
+description = "One module vocabulary across transformer architectures, on top of nnsight."
 readme = "README.md"
 requires-python = ">=3.10"
-license = {text = "MIT"}
-classifiers = [
-    "Programming Language :: Python :: 3",
-    "Operating System :: OS Independent",
-]
-dependencies = [
-    "nnsight>=0.6",
-    "transformers",
-]
+license = { text = "MIT" }
+authors = [{ name = "Jaden Fiotto-Kaufman", email = "JadenFK@outlook.com" }]
+dependencies = ["nnsight>=0.8", "transformers", "jaxtyping"]
+
 [project.optional-dependencies]
-display = ["plotly", "pandas"]
+test = ["pytest"]
 
+[tool.setuptools.packages.find]
+include = ["nnter*"]
 
-llms = [
-    "pillow",
-    "timm",
-    "flash-attn; sys_platform != 'win32'",
-    "hf_xet",
-    "sentencepiece",
-]
-    
-vllm = [
-    "vllm",
-]
-[project.urls]
-"Homepage" = "https://github.com/ndif-team/nnterp"
-
-[dependency-groups]
-dev = [
-    "filelock>=3.19.1",
-    "pytest-cov>=6.2.1",
-    "pytest-xdist>=3.8.0",
-    "sphinx>=7.2.0",
-    "sphinx-rtd-theme>=2.0.0",
-    "sphinx-autodoc-typehints>=1.25.0",
-    "myst-parser>=2.0.0",
-    "sphinx-copybutton",
-    "pydata-sphinx-theme",
-    "sphinx-design",
-    "nbsphinx",
-    "pytest>=7.0",
-    "ipykernel",
-    "ipywidgets",
-    "pre-commit",
-    "black[jupyter]",
-    "jupytext",
-    "build",
-    "ruff",
-]
-
-docs = [
-    "sphinx>=7.2.0",
-    "sphinx-rtd-theme>=2.0.0",
-    "sphinx-autodoc-typehints>=1.25.0",
-    "myst-parser>=2.0.0",
-    "sphinx-copybutton",
-    "pydata-sphinx-theme",
-    "sphinx-design",
-    "nbsphinx",
-]
-
-[tool.setuptools]
-packages = ["nnterp"]
-include-package-data = true
-
-[tool.setuptools.package-data]
-nnterp = ["py.typed"]
-"*" = ["tests/*", "data/*"]
-
-[tool.coverage.run]
-omit = ["nnterp/tests/*"]
-
-[tool.black]
-line-length = 88
-target-version = ['py39']
-include = '\.pyi?$'
-exclude = '''
-/(
-    \.git
-  | \.hg
-  | \.mypy_cache
-  | \.tox
-  | \.venv
-  | _build
-  | buck-out
-  | build
-  | dist
-)/
-'''
-
-[tool.uv.extra-build-dependencies]
-flash-attn = [{ requirement = "torch", match-runtime = true }]
-
-[tool.uv.extra-build-variables]
-flash-attn = { FLASH_ATTENTION_SKIP_CUDA_BUILD = "TRUE" }
+[tool.pytest.ini_options]
+testpaths = ["tests"]

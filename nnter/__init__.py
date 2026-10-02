@@ -1,0 +1,36 @@
+"""nnter: one module vocabulary across transformer architectures.
+
+`StandardizedTransformer` is an nnsight `TransformersModel` whose envoy tree
+answers to the same names whatever the checkpoint's family. The vocabulary is
+Llama's::
+
+    model.embed_tokens
+    model.layers[i].input_layernorm
+    model.layers[i].self_attn
+    model.layers[i].post_attention_layernorm
+    model.layers[i].mlp
+    model.norm
+    model.lm_head
+
+and the root answers for the whole model: ``logits``, ``token_embeddings``,
+``next_token_probs`` and the sizes (``num_layers``, ``num_heads``, ...).
+
+Each family under `nnter.families` says how its own names map onto those, and
+`nnter.components` holds the envoys that give standard modules standard values
+(``layer_output``, ``attention_output``, ``mlp_output``,
+``attention_probabilities``), which each family subclasses.
+"""
+
+from .components import (
+    Attention, DerivedEProperty, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard,
+    StateSpace, Unavailable, chunk_per_token, route_delta_rule, route_kernels, unavailable,
+)
+from .families import UnsupportedFamily
+from .standardized import StandardizedTransformer
+
+__all__ = [
+    "Attention", "DerivedEProperty", "EProperty", "Layer", "LinearAttention", "Mlp", "Moe", "RecurrentMixer", "SelectiveScan",
+    "Standard", "StandardizedTransformer", "StateSpace", "Unavailable", "UnsupportedFamily", "chunk_per_token",
+    "route_delta_rule", "route_kernels",
+    "unavailable",
+]

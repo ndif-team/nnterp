@@ -21,6 +21,16 @@ Each family under `nnterp.families` says how its own names map onto those, and
 ``attention_probabilities``), which each family subclasses.
 """
 
+try:
+    from ._version import version as __version__  # written by setuptools_scm from the git tag at install
+except ImportError:  # a source tree that was never installed
+    from importlib.metadata import PackageNotFoundError, version as _version
+
+    try:
+        __version__ = _version("nnterp")
+    except PackageNotFoundError:
+        __version__ = "0+unknown"
+
 from .components import (
     Attention, DerivedEProperty, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard,
     StateSpace, Unavailable, chunk_per_token, route_delta_rule, route_kernels, unavailable,

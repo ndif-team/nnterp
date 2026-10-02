@@ -3,6 +3,7 @@ requires = ["setuptools>=64", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
+version_file = "nnterp/_version.py"
 
 [project]
 name = "nnterp"
@@ -22,13 +23,20 @@ classifiers = [
 dependencies = ["nnsight>=0.8", "transformers", "jaxtyping"]
 
 [project.optional-dependencies]
-test = ["pytest"]
+# Tokenizers and processors some families' checkpoints need beyond transformers' defaults.
+models = ["sentencepiece", "tiktoken", "protobuf", "pillow"]
+# The vLLM engine (StandardizedVLLM).
+vllm = ["vllm"]
+test = ["pytest", "pytest-xdist"]
 
 [project.urls]
 "Homepage" = "https://github.com/ndif-team/nnterp"
 
 [tool.setuptools.packages.find]
 include = ["nnterp*"]
+
+[tool.setuptools.package-data]
+nnterp = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -17,3 +17,6 @@ __pycache__/
 .nfs*
 .env
 .venv
+
+# written by setuptools_scm at install
+nnterp/_version.py

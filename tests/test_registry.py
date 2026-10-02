@@ -52,6 +52,20 @@ def test_register_adds_a_family_and_can_override():
         del families.REGISTRY["gpt2"]
 
 
+def test_an_engine_has_its_own_families():
+    """vLLM's families are a package under the transformers ones, looked up by the same model type."""
+    assert "vllm" not in families.known() and {"llama", "gpt2"} <= set(families.known("vllm"))
+    with pytest.raises(UnsupportedFamily, match="'stablelm' on vllm.*nnterp/families/vllm/stablelm.py"):
+        families.lookup("stablelm", engine="vllm")
+    custom = types.SimpleNamespace(MODEL_TYPES=("stablelm",), RENAME={}, ENVOYS={})
+    try:
+        families.register(custom, engine="vllm")
+        assert families.lookup("stablelm", engine="vllm") is custom
+        assert families.lookup("stablelm") is not custom
+    finally:
+        del families.REGISTRY["vllm.stablelm"]
+
+
 def test_preloaded_module_uses_its_own_config():
     module = AutoModelForCausalLM.from_pretrained(GPT2)
     model = StandardizedTransformer(module)

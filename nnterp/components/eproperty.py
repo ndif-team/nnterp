@@ -37,8 +37,9 @@ class EProperty(eproperty):
 
     Args:
         key: Where the value lives, relative to the host envoy: dotted segments
-            ending in ``output``, ``input`` or ``inputs``. ``"output"`` is the
-            host's own output. A leading ``"../"`` (repeatable) steps to the
+            ending in ``output``, ``input`` or ``inputs``, or in another value
+            the module at that point serves (an engine's ``logits``).
+            ``"output"`` is the host's own output. A leading ``"../"`` (repeatable) steps to the
             parent module by native name, another name to a child module
             (aliases included) or, under a ``source`` segment, to an
             operation: ``"source"`` drills into the current module's or
@@ -183,7 +184,8 @@ class EProperty(eproperty):
         while key.startswith("../"):
             up, key = up + 1, key[3:]
         *walk, attribute = key.split(".")
-        attribute = "input" if attribute in ("input", "inputs") else "output"
+        if attribute == "inputs":  # the same location as ``input``, served whole
+            attribute = "input"
         if up:
             # Above the host the path is arithmetic on names: an envoy knows its
             # own path but not its parent, and the parent's forward, when the

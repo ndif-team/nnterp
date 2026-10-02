@@ -71,6 +71,7 @@ print(model.support(layer=5)["self_attn.attention_probabilities"])
 | recurrent mixers and hybrids | `linear_attn` on gated DeltaNet, Mamba and Mamba-2 blocks: queries, keys, values, `decays`, `betas`, the recurrent state | [delta-net](docs/usage/delta-net.md), [selective-scan](docs/usage/selective-scan.md), [state-space](docs/usage/state-space.md) |
 | the whole model | `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, and the sizes (`num_layers`, `hidden_size`, `head_dim`, ...) | [root-values](docs/usage/root-values.md) |
 | methods | `steer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens` | [methods](docs/usage/methods.md) |
+| the vLLM engine | `StandardizedVLLM`: the same names, values and layouts on nnsight's `VLLM`, batch axis 1 | [vllm](docs/usage/vllm.md) |
 
 Every value has one axis layout on every family, named in `nnterp.components`
 ([layouts](docs/usage/layouts.md)).
@@ -94,7 +95,8 @@ with model.trace("The Eiffel Tower is in"):
 
 92 families, among them GPT-2, Llama, Mistral, Qwen 2/3/3.5, Gemma 1-4, Phi, OLMo, GPT-NeoX,
 DeepSeek-V2/V3, GPT-OSS, Mixtral, Falcon, BLOOM, Mamba, Jamba and Nemotron-H, developed
-against transformers 5.17. The full table, with each family's native names and quirks, is
+against transformers 5.17; 25 of them also run on vLLM ([docs/usage/vllm.md](docs/usage/vllm.md)).
+The full table, with each family's native names and quirks, is
 [docs/reference/families.md](docs/reference/families.md).
 
 ## Installation

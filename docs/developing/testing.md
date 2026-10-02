@@ -249,7 +249,7 @@ skips the pattern and interior tests and `expected_values` drops the
 
 ## The root tests
 
-`tests/test_registry.py` (13 tests): every module under `nnterp/families/` is
+`tests/test_registry.py` (18 tests): every module under `nnterp/families/` is
 named after its single `MODEL_TYPES` entry and there are at least 31
 (`:15-20`); `import nnterp` pulls in no `transformers.models.*.modeling_*`
 module and `lookup("gpt2")` imports only that family, checked in a
@@ -267,7 +267,12 @@ it (`:106-118`); a family registered with `hidden_size=lambda model: 999`
 answers `model.hidden_size` with 999 while `num_heads` keeps the root's rule,
 and a plain load reads `config.hidden_size` (`:121-131`); assigning a size
 (`model.hidden_size = 5`) raises `AttributeError` naming `def hidden_size`
-(`:134-137`).
+(`:229-232`). `family=` takes a module imported from the user's path, aliases
+and size functions included (`:160-175`), and a `SimpleNamespace` with only
+`RENAME` and `ENVOYS` that loads and traces (`:178-189`); a namespace spread
+from `vars(llama)` with an extra alias and envoy class composes with `rename=`
+(`:192-213`); size and `project_on_vocab` functions on a passed family win
+(`:216-226`); none of them touches `REGISTRY`.
 
 `tests/test_base.py` (2 tests): the base `Layer` on a plain
 `TransformersModel` over GPT-J unwraps and rewraps a tuple block output

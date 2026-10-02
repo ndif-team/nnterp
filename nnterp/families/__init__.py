@@ -19,7 +19,8 @@ A family module is named after the ``model_type`` it covers (``gemma3_text.py``
 for ``gemma3_text``), and that is the whole registry: `lookup` imports
 ``nnterp.families.<model_type>`` on first use, so ``import nnterp`` loads no
 transformers modeling module. To add a family, write the module beside these;
-to add one from elsewhere, or to override a shipped one, pass it to `register`.
+to add one from elsewhere, or to override a shipped one, pass it to `register`;
+to use one for a single load, pass it as ``StandardizedTransformer(..., family=)``.
 """
 
 from __future__ import annotations

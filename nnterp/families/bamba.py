@@ -12,7 +12,7 @@ attention blocks)::
 
 A pre-norm block, as Llama: the mixer's output and then the MLP's are added
 to the stream as the modules return them. The names are Llama's but for three:
-``mamba`` is ``linear_attn`` (`nnter.StateSpace`), ``feed_forward`` is
+``mamba`` is ``linear_attn`` (`nnterp.StateSpace`), ``feed_forward`` is
 ``mlp`` and ``pre_ff_layernorm`` is ``post_attention_layernorm``. Each block
 has ``self_attn`` or ``linear_attn``, never both. The block returns
 ``(hidden_states, attention_weights)``.

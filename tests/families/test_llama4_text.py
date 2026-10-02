@@ -26,8 +26,8 @@ import pytest
 import torch
 from suite import MOE, FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter import StandardizedTransformer, Unavailable
-from nnter.families import llama4_text
+from nnterp import StandardizedTransformer, Unavailable
+from nnterp.families import llama4_text
 
 NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.feed_forward"}
 

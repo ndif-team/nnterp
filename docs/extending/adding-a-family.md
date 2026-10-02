@@ -3,19 +3,19 @@ title: Adding a Family
 one_liner: Write one module named after `config.model_type` with `MODEL_TYPES`, `RENAME`, three envoy subclasses and `ENVOYS`, a `def <size>(model)` for any root size the config spells its own way, plus one test file subclassing `FamilySuite`.
 tags: [extending, families, rename, envoys, tests]
 related: [docs/extending/overriding-values.md, docs/extending/custom-values.md, docs/extending/finding-source-ops.md, docs/extending/registering.md]
-sources: [nnter/families/__init__.py, nnter/families/llama.py, nnter/families/gpt2.py, nnter/families/falcon.py, nnter/families/cohere.py, nnter/components/__init__.py, nnter/components/layer.py, nnter/standardized.py, tests/families/suite.py, tests/families/test_llama.py, tests/families/test_gpt2.py]
+sources: [nnterp/families/__init__.py, nnterp/families/llama.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/cohere.py, nnterp/components/__init__.py, nnterp/components/layer.py, nnterp/standardized.py, tests/families/suite.py, tests/families/test_llama.py, tests/families/test_gpt2.py]
 ---
 
 # Adding a Family
 
 ## What this is for
 
-A family is one module under `nnter/families/` that tells `StandardizedTransformer`
+A family is one module under `nnterp/families/` that tells `StandardizedTransformer`
 how a checkpoint's native module names map onto the standard vocabulary and which
 envoy classes wrap its blocks. The module's file name is the registry: `lookup`
-imports `nnter.families.<model_type>` the first time a checkpoint of that type is
+imports `nnterp.families.<model_type>` the first time a checkpoint of that type is
 loaded, so adding a family is writing one module and one test file, and nothing
-in `nnter/` core changes. A family that lives outside the package goes through
+in `nnterp/` core changes. A family that lives outside the package goes through
 `register()` instead ([registering.md](registering.md)); this page's template is the
 same either way.
 
@@ -108,7 +108,7 @@ ENVOYS = {GPT2Block: Layer, GPT2Attention: Attention, GPT2MLP: Mlp}
 
 1. Read `config.model_type` off the checkpoint (`AutoConfig.from_pretrained(repo).model_type`;
    a multimodal config nests the text model's under `text_config`, and that is the type
-   used). Create `nnter/families/<model_type>.py`. The file name is what `lookup` imports,
+   used). Create `nnterp/families/<model_type>.py`. The file name is what `lookup` imports,
    so `gemma3_text.py` covers `gemma3_text` and nothing else.
 2. Set `MODEL_TYPES = ("<model_type>",)`. The registry test asserts every shipped module
    covers exactly the type it is named after.
@@ -184,7 +184,7 @@ class Layer(Layer):
   the first element of a tuple (GPT-OSS's `(hidden_states, router_scores)`). Redefine
   `mlp_output` when the residual is added inside (BLOOM, MPT) or when a post-norm's
   output is what reaches the stream (Gemma-2/3, OLMo-2/3).
-- **`Moe`** (a mixture of experts): key a subclass of `nnter.components.Moe` on the
+- **`Moe`** (a mixture of experts): key a subclass of `nnterp.components.Moe` on the
   MoE module class. Where every MLP is a mixture, that subclass is the family's `Mlp`
   (`class Mlp(Moe)`, Mixtral); where dense blocks come first or alternate, it is a
   `Moe` beside the `Mlp`, inheriting the family's `mlp_output` (`class Moe(Moe, Mlp)`,
@@ -215,7 +215,7 @@ class Layer(Layer):
 ### `ENVOYS`
 
 A dict from transformers module class to envoy class. Import the modeling module at
-the top of the family module and nowhere else in nnter: `import nnter` loads no
+the top of the family module and nowhere else in nnterp: `import nnterp` loads no
 transformers modeling code because families are imported on first use. Several
 module types may share one envoy class (Llama's `LlamaMLP` and a shared expert of the
 same class); a mixture is keyed to its own (`DeepseekV2MLP: Mlp, DeepseekV2Moe: Moe`). `envoys=`
@@ -236,7 +236,7 @@ the descriptor calls it instead of the rule, and every size the family does not 
 keeps the root's. Falcon's:
 
 ```python
-# nnter/families/falcon.py
+# nnterp/families/falcon.py
 
 def num_kv_heads(model: "StandardizedTransformer") -> int:
     """``num_kv_heads`` on the 40B layout (``new_decoder_architecture``); 1 under ``multi_query``; else every head."""
@@ -280,7 +280,7 @@ way a size function is (`project_on_vocab` is a `StandardizedCapability`,
 `logits`:
 
 ```python
-# nnter/families/cohere.py
+# nnterp/families/cohere.py
 
 def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:
     """The logit lens as the model makes its logits: the final norm, ``lm_head``, then times ``logit_scale``."""
@@ -351,7 +351,7 @@ One file per family under `tests/families/`, subclassing `FamilySuite`
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import llama
+from nnterp.families import llama
 
 
 class TestLlama(FamilySuite):
@@ -433,10 +433,10 @@ one it does.
 ## Verified outside the package
 
 The template above, written as a standalone module for `gpt2` and passed to
-`nnter.families.register()` at the top of a test file that subclasses `FamilySuite`
+`nnterp.families.register()` at the top of a test file that subclasses `FamilySuite`
 with GPT-2's `NATIVE` and `REFUSES_IN_PLACE_QKV`, passes the whole suite (35 tests) on
 `hf-internal-testing/tiny-random-gpt2`; `model.family` is the standalone module. Nothing
-under `nnter/families/` was touched. A family that will ship is the same module moved
+under `nnterp/families/` was touched. A family that will ship is the same module moved
 into the package and the `register()` line removed.
 
 ## Gotchas
@@ -444,9 +444,9 @@ into the package and the `register()` line removed.
 - **The file name is the registry.** `MODEL_TYPES` must be `("<file stem>",)`;
   `test_every_family_module_is_named_after_its_model_type` checks it.
 - **Import the modeling module only inside the family module.** An import at
-  `nnter/__init__.py` or in `components/` would load transformers modeling code on
-  `import nnter`; `test_import_is_lazy` fails.
-- **Import nnter (or nnsight) before any `transformers.models...` import** in a script or
+  `nnterp/__init__.py` or in `components/` would load transformers modeling code on
+  `import nnterp`; `test_import_is_lazy` fails.
+- **Import nnterp (or nnsight) before any `transformers.models...` import** in a script or
   test; the reverse order segfaults at import on this stack. The suite and `conftest.py`
   do this on their first line.
 - **Define `Layer`, `Attention` and `Mlp` even when a module type has no such module.**

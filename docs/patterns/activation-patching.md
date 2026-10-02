@@ -3,7 +3,7 @@ title: Activation Patching
 one_liner: "Patch `layer_output`, `attention_output` or `mlp_output` from a clean prompt into a corrupt one at a position, from a saved value or across invokes with a barrier, and sweep the layers; the contribution identity makes a sublayer patch mean the same thing on every family."
 tags: [patterns, patching, causal, residual-stream]
 related: [docs/usage/residual-stream.md, docs/patterns/ablation.md, docs/patterns/logit-lens.md, docs/patterns/delta-net-state.md, docs/patterns/cross-family-sweep.md]
-sources: [nnter/components/layer.py, nnter/components/attention.py, nnter/components/mlp.py, nnter/standardized.py]
+sources: [nnterp/components/layer.py, nnterp/components/attention.py, nnterp/components/mlp.py, nnterp/standardized.py]
 ---
 
 # Activation Patching
@@ -31,7 +31,7 @@ run as a second invoke of that trace:
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
 clean = "The Eiffel Tower is in the city of"

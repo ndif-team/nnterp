@@ -9,7 +9,7 @@ from safetensors.torch import load_file, save_file
 from ssd import StateSpaceChecks
 from suite import LINEAR, VALUES, FamilySuite, PROMPT
 
-from nnter.families import nemotron_h
+from nnterp.families import nemotron_h
 
 KINDS = {"linear_attention": "linear_attn", "full_attention": "self_attn", "moe": "mlp", "mlp": "mlp"}
 
@@ -86,7 +86,7 @@ class TestNemotronH(StateSpaceChecks, FamilySuite):
 
     def test_aliases_survive_dispatch(self):
         """The block binds its aliases from the mixer's class at build and again when real weights arrive."""
-        from nnter import StandardizedTransformer
+        from nnterp import StandardizedTransformer
 
         lazy = StandardizedTransformer(self.REPO)
         assert lazy.layers[3].self_attn is lazy.layers[3].mixer

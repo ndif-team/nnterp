@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, rows, PROMPT
 
-from nnter.families import olmo2
+from nnterp.families import olmo2
 
 
 class TestOlmo2(FamilySuite):

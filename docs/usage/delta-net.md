@@ -3,7 +3,7 @@ title: Gated DeltaNet Hybrids
 one_liner: The `linear_attn` values on Qwen3-Next and Qwen3.5 blocks, the two kernels a prompt and a decode step run, and the per-token recurrent state behind `route_kernels`.
 tags: [usage, hybrid, delta-net, linear-attention, state, qwen3_5_text, qwen3_next]
 related: [docs/usage/vocabulary.md, docs/usage/availability.md, docs/usage/layouts.md, docs/usage/attention-interior.md, docs/usage/generation.md, docs/usage/remote.md]
-sources: [nnter/components/linear_attention.py, nnter/components/recurrent.py, nnter/components/eproperty.py, nnter/families/qwen3_5_text.py, nnter/families/qwen3_next.py, nnter/families/qwen3_5_moe_text.py, nnter/families/olmo_hybrid.py, tests/families/test_qwen3_5_text.py]
+sources: [nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/components/eproperty.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_next.py, nnterp/families/qwen3_5_moe_text.py, nnterp/families/olmo_hybrid.py, tests/families/test_qwen3_5_text.py]
 ---
 
 # Gated DeltaNet Hybrids
@@ -15,7 +15,7 @@ with a gated DeltaNet mixer, `layers[i].linear_attn`. It projects queries,
 keys and values like attention but mixes them through a per-head recurrent
 state: each token decays the state by a learned gate, writes its key/value
 pair in scaled by a beta, and the query reads against it. There is no pattern
-and no scores. `nnter.components.LinearAttention` gives such a block the same
+and no scores. `nnterp.components.LinearAttention` gives such a block the same
 names attention has where they mean the same thing, plus the gate, the beta
 and the state entering and leaving the layer; and, routed through
 transformers' token-by-token kernel, the state after every token of a prompt.
@@ -38,7 +38,7 @@ base's.
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("Qwen/Qwen3.5-9B", attn_implementation="eager")
 prompt = "The Eiffel Tower is in the city of"
@@ -82,7 +82,7 @@ block', 7: ..., ...}`. `model.support(layer=i)` is flat for one block.
 | `state_output` | the state after the call's last token: what the next decode step starts from | `State`: `batch heads key_dim value_dim` |
 | `attention_head_outputs` | each head's read of the state, before the gated norm and the output projection | `LinearV`: `batch seq heads value_dim` |
 
-The layout names are the aliases in `nnter.components` (`LinearAttention.decays.layout
+The layout names are the aliases in `nnterp.components` (`LinearAttention.decays.layout
 is Gates`); `state` is a `State` and `states` a `States`, `batch seq heads key_dim
 value_dim`. `heads` is the mixer's `num_v_heads` (the queries and keys are repeated up to
 it), `key_dim` its `head_k_dim` and `value_dim` its `head_v_dim`. The state is
@@ -155,7 +155,7 @@ The kernels have to be transformers' pure-torch ones. With
 to a compiled kernel with no Python source, and every value reports `read
 inside transformers' pure-torch torch_chunk_gated_delta_rule, but this process
 dispatches it to an optimized kernel (fla) with no Python source; uninstall it,
-or call nnter.route_kernels(model.family, 'torch'), to read these`.
+or call nnterp.route_kernels(model.family, 'torch'), to read these`.
 
 ## The state after every token
 
@@ -164,10 +164,10 @@ materializes it per token. transformers' token-by-token kernel does, at a
 cost, and like eager attention that is a choice made before tracing:
 
 ```python
-import nnter
-from nnter import StandardizedTransformer, route_kernels
+import nnterp
+from nnterp import StandardizedTransformer, route_kernels
 
-route_kernels(nnter.families.qwen3_5_text, "torch")     # process-wide, like installing a kernel
+route_kernels(nnterp.families.qwen3_5_text, "torch")     # process-wide, like installing a kernel
 model = StandardizedTransformer("Qwen/Qwen3.5-9B", attn_implementation="eager")
 mix = model.layers[0].linear_attn
 ```
@@ -176,7 +176,7 @@ mix = model.layers[0].linear_attn
 modeling module to the token-by-token torch loop (`"torch"`) or back to what
 the module bound at import (`"default"`); `route_delta_rule(family,
 "recurrent" | "chunked")` is the same switch in the delta rule's words.
-`family` is the family module (`nnter.families.qwen3_5_text`, or
+`family` is the family module (`nnterp.families.qwen3_5_text`, or
 `model.family` on a loaded model) or the modeling module. Call it before the
 layer's forward is traced: loading, then `route_kernels(model.family,
 "torch")`, then tracing works; a model
@@ -275,7 +275,7 @@ it, so a name bound later is undefined when the block exits.
 Without the switch, `state` and `states` report `the state after each token
 is materialized only by the token-by-token kernel; the chunked kernel a prompt
 runs through carries it between chunks. Call
-nnter.route_kernels(model.family, 'torch') before tracing this layer
+nnterp.route_kernels(model.family, 'torch') before tracing this layer
 (slower, like attn_implementation='eager')`, and reading one, or calling
 `state_after` / `set_state_after`, raises `Unavailable` with it. With an
 optimized kernel installed they report the kernel reason above, like every
@@ -295,7 +295,7 @@ this block`.
   `SourceNotAvailable` naming `last_recurrent_state_3` as missing under the
   chunked kernel. Route, then load or trace.
 - **`model.family` needs a loaded model.** Route with the family module
-  (`nnter.families.qwen3_5_text`) before loading, or with `model.family` after
+  (`nnterp.families.qwen3_5_text`) before loading, or with `model.family` after
   loading and before the first trace.
 - **`states` is read-only** (`AttributeError: states is derived and read-only`);
   `set_state_after` writes one position.

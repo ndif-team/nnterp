@@ -3,7 +3,7 @@ title: Cross-Family Sweep
 one_liner: "Run one experiment over several checkpoints: loop over repo ids, `StandardizedTransformer(repo)`, guard on `model.support()`, decide `self_attn` versus `linear_attn` outside the trace, and collect a per-family table."
 tags: [patterns, sweep, families, hybrids, availability]
 related: [docs/usage/loading.md, docs/usage/availability.md, docs/usage/vocabulary.md, docs/patterns/ablation.md, docs/patterns/attention-patterns.md]
-sources: [nnter/standardized.py, nnter/families/__init__.py, nnter/components/standard.py, nnter/families/opt.py, nnter/families/qwen3_5_text.py]
+sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/components/standard.py, nnterp/families/opt.py, nnterp/families/qwen3_5_text.py]
 ---
 
 # Cross-Family Sweep
@@ -12,7 +12,7 @@ sources: [nnter/standardized.py, nnter/families/__init__.py, nnter/components/st
 
 A claim about "transformers" needs more than one checkpoint. The obstacle is that
 each family spells its modules differently, returns tensors or tuples, has or lacks
-a component, and a hybrid has two kinds of block. nnter removes the spelling: one
+a component, and a hybrid has two kinds of block. nnterp removes the spelling: one
 trace body reads `layer_output`, `attention_output`, `mlp_output`,
 `attention_probabilities` and `next_token_probs` on every family. What remains is
 what genuinely differs between checkpoints, and this page is the loop that handles
@@ -29,7 +29,7 @@ attention entropy.
 ```python
 import torch
 import torch.nn.functional as F
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 REPOS = {
     "gpt2": "openai-community/gpt2",
@@ -104,7 +104,7 @@ block, and `mixer_kl` has one per block because a DeltaNet mixer's contribution 
 
 **Availability.** `model.support()` returns, for every standard value, `None` when
 every block has it or `{block: reason}` where some do not. Guard on it rather than
-on `hasattr`, which raises `nnter.Unavailable` for an unavailable value. A module no
+on `hasattr`, which raises `nnterp.Unavailable` for an unavailable value. A module no
 block has (OPT's `mlp`) has no key, so read it with `.get`. The common reasons in a
 sweep: `no self_attn module` (a hybrid's linear blocks), `runs 'sdpa'; load with attn_implementation='eager'` (the interior on a
 non-eager load), and GPT-2's `reorder_and_upcast_attn`.
@@ -160,7 +160,7 @@ top-1 grid, an [activation-patching](activation-patching.md) layer sweep, a
   reason. Its `attention_output` is a module boundary and stays available.
 - Names bound inside a trace do not survive it; every container above is made
   outside and every entry is a `.save()`.
-- A family nnter does not cover raises `nnter.families.UnsupportedFamily` at load,
+- A family nnterp does not cover raises `nnterp.families.UnsupportedFamily` at load,
   naming the known model types.
 
 ## Related

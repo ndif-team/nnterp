@@ -9,9 +9,9 @@ import pytest
 import torch
 from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, mixer
 
-from nnter import StandardizedTransformer, Unavailable, route_delta_rule
+from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
 
-from nnter.families import olmo_hybrid
+from nnterp.families import olmo_hybrid
 
 LINEAR_BLOCKS = (0,)   # ``config.layer_types``: one DeltaNet block, then one attention block
 ATTENTION_BLOCK = 1

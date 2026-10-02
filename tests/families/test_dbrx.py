@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import dbrx
+from nnterp.families import dbrx
 
 
 class TestDbrx(FamilySuite):

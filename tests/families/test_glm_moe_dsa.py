@@ -9,8 +9,8 @@ import pytest
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter import StandardizedTransformer
-from nnter.families import glm_moe_dsa
+from nnterp import StandardizedTransformer
+from nnterp.families import glm_moe_dsa
 
 REPO = "hf-tiny-v2/tiny-random-GlmMoeDsaForCausalLM"
 

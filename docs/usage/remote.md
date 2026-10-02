@@ -1,9 +1,9 @@
 ---
 title: Remote (NDIF)
-one_liner: `remote=True` on a `StandardizedTransformer`: the server deploys a plain `TransformersModel`, your block re-runs against your envoy tree, and nnter must be installed server-side at the same version.
+one_liner: `remote=True` on a `StandardizedTransformer`: the server deploys a plain `TransformersModel`, your block re-runs against your envoy tree, and nnterp must be installed server-side at the same version.
 tags: [usage, remote, ndif, serialization]
 related: [docs/usage/availability.md, docs/usage/loading.md, docs/usage/attention-interior.md, docs/usage/delta-net.md, docs/usage/activations.md, docs/usage/prompt-utils.md]
-sources: [nnter/standardized.py, nnter/components/eproperty.py]
+sources: [nnterp/standardized.py, nnterp/components/eproperty.py]
 ---
 
 # Remote (NDIF)
@@ -11,9 +11,9 @@ sources: [nnter/standardized.py, nnter/components/eproperty.py]
 ## What this is for
 
 `remote=True` on a `StandardizedTransformer` is nnsight's remote trace with
-nnter's names and values in the block (nnsight docs/remote/remote-trace.md).
+nnterp's names and values in the block (nnsight docs/remote/remote-trace.md).
 The model builds on the meta device, nothing downloads, and the block runs on
-NDIF against a model the server deployed. This page is the contract nnter
+NDIF against a model the server deployed. This page is the contract nnterp
 adds to that: which model the request reaches, what travels with it, what the
 server needs installed, and which values depend on the server's own stack.
 The mechanics are verified on the in-process simulation of the remote path
@@ -25,7 +25,7 @@ design and are marked as such.
 
 ```python
 from nnsight import CONFIG
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 CONFIG.set_default_api_key("YOUR_KEY")
 model = StandardizedTransformer("meta-llama/Llama-3.1-70B", attn_implementation="eager")   # meta device
@@ -52,22 +52,22 @@ model.to_model_key()
 `_remoteable_class` returns `TransformersModel` because that is what a server
 deploys: a plain model of that repo id. A key naming `StandardizedTransformer`
 would match nothing. So every checkpoint NDIF serves is reachable through a
-`StandardizedTransformer` without the server deploying anything nnter-specific.
+`StandardizedTransformer` without the server deploying anything nnterp-specific.
 
 ## What travels with the block
 
 The block is re-run on the server against the *client's* envoy tree, which
 carries the family's aliases (`model.layers[i].self_attn`) and the family's
-envoy classes (`nnter.families.llama.Layer`, `Attention`, `Mlp`) by
-reference. The server therefore imports `nnter` when it deserializes the
+envoy classes (`nnterp.families.llama.Layer`, `Attention`, `Mlp`) by
+reference. The server therefore imports `nnterp` when it deserializes the
 request, and needs it installed at the same version as the client: a value is
 a descriptor on those classes, and the operation names it reads inside a
 forward are what releases change.
 
-Do not ship nnter by value. `nnsight.register(nnter)` (nnsight
+Do not ship nnterp by value. `nnsight.register(nnterp)` (nnsight
 docs/remote/register-local-modules.md) is for local helper modules; an
 installed package is pickled by reference anyway, and an `eproperty` cannot be
-pickled by value, so registering nnter fails rather than helping. Register your
+pickled by value, so registering nnterp fails rather than helping. Register your
 own helper module if the block calls one.
 
 ## What works remotely
@@ -78,7 +78,7 @@ the way it does in a local trace, on the in-process simulation:
 - the boundary values (`layer_output`, `attention_output`, `mlp_output`,
   `token_embeddings`), read, edited in place or assigned;
 - the root values (`logits`, `next_token_probs`, `input_ids`);
-- the interior values, `attention_probabilities` included: nnter drills
+- the interior values, `attention_probabilities` included: nnterp drills
   `.source` on the server the way it does locally, and an in-place edit of the
   pattern moves the remote logits;
 - `skip_layers`, `steer` and `project_on_vocab`, which are plain methods over
@@ -106,7 +106,7 @@ out-of-order read is an `OutOfOrderError` from the server's run.
   `set_state_after` as unavailable remotely; the call-level values
   (`state_output`, `decays`, `betas`, ...) are ordinary source-located values
   and follow the rule above ([delta-net.md](delta-net.md)).
-- **Server-side version.** A client and server on different nnter versions may
+- **Server-side version.** A client and server on different nnterp versions may
   disagree on a value's definition; the error is whatever the mismatch
   produces on the server.
 

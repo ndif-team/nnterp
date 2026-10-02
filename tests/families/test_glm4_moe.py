@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import glm4_moe
+from nnterp.families import glm4_moe
 
 
 class TestGlm4Moe(FamilySuite):

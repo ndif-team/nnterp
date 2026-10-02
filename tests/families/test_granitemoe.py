@@ -3,7 +3,7 @@
 import test_granite
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import granitemoe
+from nnterp.families import granitemoe
 
 REPO = "hf-internal-testing/tiny-random-GraniteMoeForCausalLM"
 NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.block_sparse_moe"}
@@ -27,7 +27,7 @@ def test_router_logits_write_by_hand():
     """GraniteMoE: top-k of the written logits, then a softmax over those; the routed sum from the experts' weights."""
     from test_mixtral import routing_from_written_logits
 
-    from nnter import StandardizedTransformer
+    from nnterp import StandardizedTransformer
 
     model = StandardizedTransformer(REPO, dispatch=True)
     moe = model.layers[0].mlp

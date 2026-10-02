@@ -8,7 +8,7 @@ import tempfile
 import torch
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import ministral
+from nnterp.families import ministral
 
 
 def _with_a_tokenizer(repo="hf-tiny-v2/tiny-random-MinistralForCausalLM", tokenizer="hf-internal-testing/tiny-random-MistralForCausalLM"):

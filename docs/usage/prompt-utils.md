@@ -1,27 +1,27 @@
 ---
 title: Prompt Utils
-one_liner: Track named sets of target tokens in the next-token distribution over many prompts with `nnter.prompt_utils`.
+one_liner: Track named sets of target tokens in the next-token distribution over many prompts with `nnterp.prompt_utils`.
 tags: [usage, prompts, tokens, next-token, batching]
 related: [docs/usage/root-values.md, docs/usage/methods.md, docs/usage/loading.md, docs/usage/activations.md, docs/usage/generation.md, docs/usage/remote.md]
-sources: [nnter/prompt_utils.py, nnter/nnsight_utils.py, nnter/standardized.py]
+sources: [nnterp/prompt_utils.py, nnterp/nnsight_utils.py, nnterp/standardized.py]
 ---
 
 # Prompt Utils
 
 ## What this is for
 
-`nnter.prompt_utils` answers one question at scale: how much probability does
+`nnterp.prompt_utils` answers one question at scale: how much probability does
 the model put on *these* words next? `get_first_tokens` turns words into the
 token ids a model would emit for them, `Prompt` pairs a prompt with named sets
 of those ids, and `run_prompts` runs many prompts in batches and returns each
-target's probability mass per prompt. The names are nnterp's; everything reads
+target's probability mass per prompt. Everything reads
 `model.next_token_probs`, a standard value, so one script runs on every family.
 
 ## Canonical pattern
 
 ```python
-from nnter import StandardizedTransformer
-from nnter.prompt_utils import Prompt, run_prompts
+from nnterp import StandardizedTransformer
+from nnterp.prompt_utils import Prompt, run_prompts
 
 model = StandardizedTransformer("openai-community/gpt2")
 
@@ -141,6 +141,6 @@ mass["correct"].shape      # torch.Size([2, 2]): the target's mass at block 4 an
 - [root-values.md](root-values.md), `next_token_probs` and `add_prefix_false_tokenizer`.
 - [methods.md](methods.md), `project_on_vocab` for a layer-wise `get_probs_func`.
 - [loading.md](loading.md), `tokenizer_kwargs` and the padding side.
-- [activations.md](activations.md), `nnter.nnsight_utils`: `compute_next_token_probs` is what the default `get_probs` calls.
+- [activations.md](activations.md), `nnterp.nnsight_utils`: `compute_next_token_probs` is what the default `get_probs` calls.
 - [generation.md](generation.md), the same `next_token_probs` at every step of `generate`.
 - [remote.md](remote.md), running these on NDIF.

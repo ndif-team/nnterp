@@ -4,8 +4,8 @@ import pytest
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter import Unavailable
-from nnter.families import afmoe
+from nnterp import Unavailable
+from nnterp.families import afmoe
 
 
 class TestAfmoe(FamilySuite):

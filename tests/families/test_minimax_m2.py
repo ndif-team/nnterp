@@ -8,7 +8,7 @@ import tempfile
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import minimax_m2
+from nnterp.families import minimax_m2
 
 
 class TestMiniMaxM2(FamilySuite):

@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import vaultgemma
+from nnterp.families import vaultgemma
 
 
 class TestVaultGemma(FamilySuite):

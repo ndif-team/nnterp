@@ -1,6 +1,6 @@
 """Checks every family with a Mamba-2 (SSD) mixer passes, written once: mix into a `FamilySuite` subclass.
 
-The mixer is `nnter.StateSpace` at ``layers[i].linear_attn``. Its values are
+The mixer is `nnterp.StateSpace` at ``layers[i].linear_attn``. Its values are
 read inside transformers' pure-torch scan kernels, so the class routes the
 family's kernels to them for its whole run (``mamba_ssm`` is installed in the
 test environment, and its kernels have no Python source) and restores the
@@ -12,8 +12,8 @@ import pytest
 import torch
 from suite import LINEAR, PROMPT, listed
 
-from nnter import Unavailable, chunk_per_token, route_kernels
-from nnter.components.state_space import NO_STATE_OCCURRENCES, NO_STATE_WRITES
+from nnterp import Unavailable, chunk_per_token, route_kernels
+from nnterp.components.state_space import NO_STATE_OCCURRENCES, NO_STATE_WRITES
 
 
 class StateSpaceChecks:

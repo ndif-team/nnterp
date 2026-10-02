@@ -3,7 +3,7 @@ title: Mamba-2 State-Space Mixers
 one_liner: The `linear_attn` values on Mamba-2 (SSD) blocks — Mamba-2, Nemotron-H, Bamba, Falcon-H1 — what C, B, x and dt are called, the two kernels a prompt and a decode step run, the state handed between steps, and the state after every token with `chunk_per_token`.
 tags: [usage, hybrid, state-space, mamba2, ssd, state, nemotron_h, bamba, falcon_h1]
 related: [docs/usage/delta-net.md, docs/usage/vocabulary.md, docs/usage/availability.md, docs/usage/layouts.md, docs/usage/generation.md, docs/developing/recurrent-mixer-internals.md]
-sources: [nnter/components/state_space.py, nnter/components/eproperty.py, nnter/components/recurrent.py, nnter/components/layer.py, nnter/families/mamba2.py, nnter/families/nemotron_h.py, nnter/families/bamba.py, nnter/families/falcon_h1.py, tests/families/ssd.py, tests/families/test_mamba2.py, tests/families/test_nemotron_h.py]
+sources: [nnterp/components/state_space.py, nnterp/components/eproperty.py, nnterp/components/recurrent.py, nnterp/components/layer.py, nnterp/families/mamba2.py, nnterp/families/nemotron_h.py, nnterp/families/bamba.py, nnterp/families/falcon_h1.py, tests/families/ssd.py, tests/families/test_mamba2.py, tests/families/test_nemotron_h.py]
 ---
 
 # Mamba-2 State-Space Mixers
@@ -21,7 +21,7 @@ h = exp(dt * A) * h + dt * x B^T        # decay the state, write the token's val
 y = h C + D * x                         # read it with query C, plus a skip
 ```
 
-so `nnter.components.StateSpace` gives the mixer the names a gated DeltaNet
+so `nnterp.components.StateSpace` gives the mixer the names a gated DeltaNet
 (`LinearAttention`, [delta-net.md](delta-net.md)) has: `C` is
 `attention_queries`, `B` is `attention_keys`, `x` is `attention_values`, `dt`
 is `betas` (the write strength), `A * dt` is `decays` (the log decay), `y` is
@@ -43,10 +43,10 @@ and the routing below are the base's.
 
 ```python
 import torch
-import nnter
-from nnter import StandardizedTransformer, route_kernels
+import nnterp
+from nnterp import StandardizedTransformer, route_kernels
 
-route_kernels(nnter.families.nemotron_h, "torch")     # when mamba_ssm is installed: before the first trace
+route_kernels(nnterp.families.nemotron_h, "torch")     # when mamba_ssm is installed: before the first trace
 model = StandardizedTransformer("nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16", attn_implementation="eager")
 prompt = "The Eiffel Tower is in the city of"
 
@@ -83,7 +83,7 @@ per block; the identity is the input plus that one sublayer's contribution.
 On Falcon-H1 it has four terms, both mixers and the MLP, each mixer's
 contribution scaled by its µP multiplier ([families.md](../reference/families.md)).
 
-`states` and `state_after` need `nnter.chunk_per_token(model)` (below);
+`states` and `state_after` need `nnterp.chunk_per_token(model)` (below);
 `state` and `set_state_after` are unavailable on every Mamba-2 mixer, with the
 reasons in [The state after every token](#the-state-after-every-token).
 
@@ -173,12 +173,12 @@ limit runs clamped; a decode step does not clamp.
 The chunk scan computes the state at every chunk boundary in one tensor
 (`new_states`, `[batch, chunks + 1, heads, head_dim, state_dim]`: the state
 before each chunk and after the last). With a chunk size of 1 every token is
-a boundary. `nnter.chunk_per_token(model)` sets each Mamba-2 mixer's
+a boundary. `nnterp.chunk_per_token(model)` sets each Mamba-2 mixer's
 `chunk_size` to 1, and then `states` and `state_after(t)` read the state after
 every token of the call:
 
 ```python
-from nnter import chunk_per_token
+from nnterp import chunk_per_token
 
 chunk_per_token(model)                         # this model only; the logits are unchanged
 with model.trace(prompt):
@@ -210,7 +210,7 @@ is that step's one token, `state_output` with a sequence axis of 1, and
   tokens.
 - **Without it**, `states` reports `the chunk scan materializes the state only
   at chunk boundaries, every 256 tokens (chunk_size=256); call
-  nnter.chunk_per_token(model) to set every mixer's chunk_size to 1, so every
+  nnterp.chunk_per_token(model) to set every mixer's chunk_size to 1, so every
   token is a boundary (slower on long prompts)` (the mixer's own chunk size),
   and `state_after` raises `Unavailable` with it.
 
@@ -219,7 +219,7 @@ What stays unavailable, with or without it:
 - `state`, the per-occurrence value a `tracer.iter` walk reads on a gated
   DeltaNet: `the chunk scan computes every token's state in one tensor per
   call, not one occurrence per token to walk with tracer.iter; read states, or
-  state_after(t), after nnter.chunk_per_token(model)`.
+  state_after(t), after nnterp.chunk_per_token(model)`.
 - `set_state_after`: `the chunk scan computes every boundary state in one
   cumulative step from the initial state, so a state written at token t does
   not flow into later tokens' states; assign state_input to change where a
@@ -265,7 +265,7 @@ package is installed; they have no Python source, and every value but
 `attention_output` reports `read inside transformers' pure-torch
 mamba2_chunk_scan, but this process dispatches it to an optimized kernel
 (mamba_ssm) with no Python source; uninstall it, or call
-nnter.route_kernels(model.family, 'torch'), to read these`. `route_kernels(family,
+nnterp.route_kernels(model.family, 'torch'), to read these`. `route_kernels(family,
 "torch")` binds the family's two kernel names to transformers' pure-torch
 functions, process-wide; a prompt keeps the chunked scan. Call it before the
 first trace of the layer; `route_kernels(family, "default")` restores the
@@ -278,7 +278,7 @@ them.
 ## Gotchas
 
 - **Route before the layer is traced**, with the family module before loading
-  (`nnter.families.mamba2`) or `model.family` after; see
+  (`nnterp.families.mamba2`) or `model.family` after; see
   [recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md).
 - **`betas` and `decays` are one argument.** Writing `decays` changes `betas`
   (`decays = 0` zeroes every write); assign, an in-place edit does not land; and a

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import llama
+from nnterp.families import llama
 
 
 class TestLlama(FamilySuite):

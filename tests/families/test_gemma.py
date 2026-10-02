@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import gemma
+from nnterp.families import gemma
 
 
 class TestGemma(FamilySuite):

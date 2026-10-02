@@ -5,7 +5,7 @@ import torch
 from suite import FamilySuite, LLAMA_ROWS
 from test_granite_swa import sink_scaled_head_outputs
 
-from nnter.families import granitemoe_swa
+from nnterp.families import granitemoe_swa
 
 REPO = "hf-tiny-v2/tiny-random-GraniteMoeSWAForCausalLM"
 NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.block_sparse_moe"}

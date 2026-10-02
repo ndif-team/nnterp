@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import qwen3
+from nnterp.families import qwen3
 
 
 class TestQwen3(FamilySuite):

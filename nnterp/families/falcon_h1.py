@@ -13,7 +13,7 @@ mixer and attention side by side on the same normed input, then an MLP::
     h = x + mamba(n) * ssm_out_multiplier + self_attn(n * attention_in_multiplier) * attention_out_multiplier
     out = h + feed_forward(pre_ff_layernorm(h))          with n = input_layernorm(x)
 
-``mamba`` is ``linear_attn`` (`nnter.StateSpace`), ``feed_forward`` is
+``mamba`` is ``linear_attn`` (`nnterp.StateSpace`), ``feed_forward`` is
 ``mlp`` and ``pre_ff_layernorm`` is ``post_attention_layernorm``. Every block
 has both mixers, so the contribution identity has four terms,
 ``input + self_attn.attention_output + linear_attn.attention_output +

@@ -2,14 +2,14 @@
 
 Mamba's tree and block: ``backbone.{embeddings, layers[i].{norm, mixer},
 norm_f}`` plus ``lm_head``, a pre-norm and a selective-scan mixer per block,
-no attention and no MLP (see `nnter.families.mamba`). What differs is inside
+no attention and no MLP (see `nnterp.families.mamba`). What differs is inside
 the mixer: weightless RMS norms (``dt_layernorm``, ``b_layernorm``,
 ``c_layernorm``) on the step-size projection, ``B`` and ``C`` before the
 scan. The values are read at the kernel call, after those norms, so
 ``attention_keys`` and ``attention_queries`` are the normed ``B`` and ``C``
 the scan uses, and the base holds. The kernels are the same functions under
 the same names, in Falcon-Mamba's own modeling module:
-``nnter.route_kernels(model.family, "torch")`` routes them.
+``nnterp.route_kernels(model.family, "torch")`` routes them.
 """
 
 from typing import TYPE_CHECKING

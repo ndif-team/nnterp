@@ -1,9 +1,9 @@
 ---
 title: Availability
-one_liner: "`model.support()` says which standard values this checkpoint has and why not, before any trace; reading an unavailable one raises `nnter.Unavailable` at that line."
+one_liner: "`model.support()` says which standard values this checkpoint has and why not, before any trace; reading an unavailable one raises `nnterp.Unavailable` at that line."
 tags: [usage, support, Unavailable, SourceNotAvailable, eager, hybrids]
 related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/residual-stream.md, docs/usage/layouts.md]
-sources: [nnter/standardized.py, nnter/components/standard.py, nnter/components/eproperty.py, nnter/components/attention.py, nnter/components/linear_attention.py, nnter/components/recurrent.py, nnter/families/gpt2.py, nnter/families/falcon.py, nnter/families/opt.py]
+sources: [nnterp/standardized.py, nnterp/components/standard.py, nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/opt.py]
 ---
 
 # Availability
@@ -13,7 +13,7 @@ sources: [nnter/standardized.py, nnter/components/standard.py, nnter/components/
 Not every checkpoint has every standard value. OPT has no MLP module; a model loaded with
 `sdpa` never builds the attention pattern; a GPT-2 checkpoint with `reorder_and_upcast_attn`
 leaves the shared attention path; a hybrid's linear blocks have no softmax and its per-token
-state needs a kernel switch. Every nnter value can say when it is not there and why, and `support()`
+state needs a kernel switch. Every nnterp value can say when it is not there and why, and `support()`
 collects those reasons from the config alone, so a script can decide what to read before
 running anything.
 
@@ -22,7 +22,7 @@ running anything.
 ## Canonical pattern
 
 ```python
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("facebook/opt-125m", dispatch=True)
 
@@ -91,7 +91,7 @@ blocks 0-2 are linear and block 3 is attention):
  'linear_attn.attention_output': {3: 'no linear_attn module on this block'},
  'linear_attn.decays': {3: 'no linear_attn module on this block'},
  'linear_attn.state_output': {3: 'no linear_attn module on this block'},
- 'linear_attn.state': {0: "the state after each token is materialized only by the token-by-token kernel; the chunked kernel a prompt runs through carries it between chunks. Call nnter.route_kernels(model.family, 'torch') before tracing this layer (slower, like attn_implementation='eager')",
+ 'linear_attn.state': {0: "the state after each token is materialized only by the token-by-token kernel; the chunked kernel a prompt runs through carries it between chunks. Call nnterp.route_kernels(model.family, 'torch') before tracing this layer (slower, like attn_implementation='eager')",
                        1: ..., 2: ...,
                        3: 'no linear_attn module on this block'},
  'linear_attn.states': {0: "the state after each token is materialized only by ...", 1: ..., 2: ..., 3: 'no linear_attn module on this block'},
@@ -106,7 +106,7 @@ and mean the same thing; `attention_scores` and `attention_probabilities` exist 
 
 ## Reading an unavailable value
 
-Reading or writing one raises `nnter.Unavailable` with the same reason, at that line,
+Reading or writing one raises `nnterp.Unavailable` with the same reason, at that line,
 before the model runs:
 
 ```python
@@ -128,10 +128,10 @@ outside the trace to pick blocks.
 | `this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path` | the GPT-2 interior | `config.reorder_and_upcast_attn` is set |
 | `The attention does its own arithmetic rather than transformers' shared attention interface; not mapped for this family yet` | an interior value a family has not mapped onto its own arithmetic | a family off the shared interface that marks it `unavailable(NOT_ON_INTERFACE)` |
 | `no self_attn module on this block` / `no linear_attn module on this block` / `no mlp module on this block` | every value of that module | some other block has the module and this one does not (a hybrid's blocks); a module no block has (OPT's `mlp`) has no key instead |
-| `the state after each token is materialized only by the token-by-token kernel; the chunked kernel a prompt runs through carries it between chunks. Call nnter.route_kernels(model.family, 'torch') before tracing this layer (slower, like attn_implementation='eager')` | `linear_attn.state`, `linear_attn.states` | the family's delta rule is still the chunked kernel |
+| `the state after each token is materialized only by the token-by-token kernel; the chunked kernel a prompt runs through carries it between chunks. Call nnterp.route_kernels(model.family, 'torch') before tracing this layer (slower, like attn_implementation='eager')` | `linear_attn.state`, `linear_attn.states` | the family's delta rule is still the chunked kernel |
 | `this checkpoint has no per-layer embeddings (hidden_size_per_layer_input is 0); the block adds attention_output and mlp_output only` | `per_layer_output` (Gemma-4's `Layer` only) | a Gemma-4 checkpoint without per-layer embeddings (26B-A4B, 31B) |
 | `this mixer's kernels do not materialize the state per token` | `state`, `states` on a `RecurrentMixer` with no `STATE_OP` | the mixer has no token-by-token kernel |
-| `read inside transformers' pure-torch torch_chunk_gated_delta_rule, but this process dispatches it to an optimized kernel (fla) with no Python source; uninstall it, or call nnter.route_kernels(model.family, 'torch'), to read these` | every `linear_attn` value but `attention_output` | `flash-linear-attention` or `causal-conv1d` is installed |
+| `read inside transformers' pure-torch torch_chunk_gated_delta_rule, but this process dispatches it to an optimized kernel (fla) with no Python source; uninstall it, or call nnterp.route_kernels(model.family, 'torch'), to read these` | every `linear_attn` value but `attention_output` | `flash-linear-attention` or `causal-conv1d` is installed |
 
 BLOOM and MPT do their attention arithmetic themselves, so their pattern and interior do
 not need an eager load and are `None` under any implementation.

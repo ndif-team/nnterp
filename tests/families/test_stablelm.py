@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, rows
 
-from nnter.families import stablelm
+from nnterp.families import stablelm
 
 
 class TestStableLm(FamilySuite):

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import mistral
+from nnterp.families import mistral
 
 
 class TestMistral(FamilySuite):

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import phi3
+from nnterp.families import phi3
 
 
 class TestPhi3(FamilySuite):

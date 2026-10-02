@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, rows, PROMPT
 
-from nnter.families import flex_olmo
+from nnterp.families import flex_olmo
 
 
 class TestFlexOlmo(FamilySuite):

@@ -4,7 +4,7 @@ import test_granite
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import hyperclovax
+from nnterp.families import hyperclovax
 
 REPO = "hf-tiny-v2/tiny-random-HyperCLOVAXForCausalLM"
 

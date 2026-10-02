@@ -3,7 +3,7 @@ title: Ablation
 one_liner: "Zero or mean-ablate `attention_output`, `mlp_output`, one head via `attention_head_outputs`, a DeltaNet mixer, or whole blocks via `skip_layers`, with the clean and ablated runs as two invokes of one trace measured on `next_token_probs`."
 tags: [patterns, ablation, intervention, heads, hybrids]
 related: [docs/usage/residual-stream.md, docs/usage/root-values.md, docs/usage/availability.md, docs/patterns/activation-patching.md, docs/patterns/attention-patterns.md, docs/patterns/cross-family-sweep.md]
-sources: [nnter/standardized.py, nnter/components/attention.py, nnter/components/mlp.py, nnter/components/linear_attention.py, nnter/components/layer.py]
+sources: [nnterp/standardized.py, nnterp/components/attention.py, nnterp/components/mlp.py, nnterp/components/linear_attention.py, nnterp/components/layer.py]
 ---
 
 # Ablation
@@ -29,7 +29,7 @@ measured on the next-token distribution:
 ```python
 import torch
 import torch.nn.functional as F
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_implementation="eager")
 prompt = "The Eiffel Tower is in the city of"
@@ -143,7 +143,7 @@ with model.trace() as tracer:
 print([round(float(p), 4) for p in rows])
 ```
 
-Do this through `attention_head_outputs`, not the pattern. A value nnter reads inside a
+Do this through `attention_head_outputs`, not the pattern. A value nnterp reads inside a
 nested `.source` call (`attention_probabilities`, `attention_scores`) cannot be touched in
 two invokes of one trace today: the second invoke raises `TypeError: 'NoneType' object is
 not subscriptable` (an nnsight bug). For per-head pattern edits, use one trace per head.
@@ -205,7 +205,7 @@ or for a position other than the last.
 - `[:, -1]` is the last token of every row only under left padding.
 - A checkpoint may lack the component: OPT has no `mlp` module, a hybrid's linear
   blocks have no `self_attn`. `model.support()` says so per block before any trace;
-  reading anyway raises `nnter.Unavailable`.
+  reading anyway raises `nnterp.Unavailable`.
 - Decide `self_attn` versus `linear_attn` outside the trace, as above.
 - Head-level ablation needs `attn_implementation="eager"`; the boundary values
   (`attention_output`, `mlp_output`, `layer_output`) do not.

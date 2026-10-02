@@ -4,7 +4,7 @@ import torch
 from ssd import StateSpaceChecks
 from suite import LINEAR, FamilySuite, PROMPT
 
-from nnter.families import mamba2
+from nnterp.families import mamba2
 
 
 class TestMamba2(StateSpaceChecks, FamilySuite):

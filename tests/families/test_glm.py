@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import glm
+from nnterp.families import glm
 
 
 class TestGlm(FamilySuite):

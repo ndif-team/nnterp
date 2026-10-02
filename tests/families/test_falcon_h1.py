@@ -4,7 +4,7 @@ import torch
 from ssd import StateSpaceChecks
 from suite import LLAMA_ROWS, FamilySuite, PROMPT
 
-from nnter.families import falcon_h1
+from nnterp.families import falcon_h1
 
 
 class TestFalconH1(StateSpaceChecks, FamilySuite):

@@ -1,9 +1,9 @@
 ---
 title: Collecting Activations
-one_liner: Gather one token position's activation at chosen blocks over many prompts, `[num_layers, num_prompts, hidden]`, with `nnter.nnsight_utils`.
+one_liner: Gather one token position's activation at chosen blocks over many prompts, `[num_layers, num_prompts, hidden]`, with `nnterp.nnsight_utils`.
 tags: [usage, activations, batching, residual-stream]
 related: [docs/usage/residual-stream.md, docs/usage/loading.md, docs/usage/prompt-utils.md, docs/usage/generation.md, docs/usage/remote.md]
-sources: [nnter/nnsight_utils.py, nnter/standardized.py, nnter/components/layer.py]
+sources: [nnterp/nnsight_utils.py, nnterp/standardized.py, nnterp/components/layer.py]
 ---
 
 # Collecting Activations
@@ -12,17 +12,16 @@ sources: [nnter/nnsight_utils.py, nnter/standardized.py, nnter/components/layer.
 
 Probing, steering vectors and logit lenses all start the same way: the
 residual stream at one position of every prompt, at the blocks you care about,
-stacked into one tensor. `nnter.nnsight_utils` does that against the standard
+stacked into one tensor. `nnterp.nnsight_utils` does that against the standard
 values, so the same call runs on every family: `get_token_activations` for one
 batch, `collect_token_activations_batched` over many prompts, and
-`compute_next_token_probs` for the distribution at the end. The names are
-nnterp's.
+`compute_next_token_probs` for the distribution at the end.
 
 ## Canonical pattern
 
 ```python
-from nnter import StandardizedTransformer
-from nnter.nnsight_utils import get_token_activations
+from nnterp import StandardizedTransformer
+from nnterp.nnsight_utils import get_token_activations
 
 model = StandardizedTransformer("openai-community/gpt2", tokenizer_kwargs={"padding_side": "left"})
 

@@ -81,7 +81,7 @@ def chunk_per_token(model: Any, enabled: bool = True) -> None:
         raise ValueError(f"{type(model).__name__} has no Mamba-2 (StateSpace) mixer")
     for envoy in mixers:
         module = envoy._module
-        built = module.__dict__.setdefault("_nnter_chunk_size", module.chunk_size)
+        built = module.__dict__.setdefault("_nnterp_chunk_size", module.chunk_size)
         module.chunk_size = 1 if enabled else built
 
 
@@ -94,7 +94,7 @@ def needs_per_token_chunks(envoy: Any) -> str | None:
     if size != 1:
         return (
             f"the chunk scan materializes the state only at chunk boundaries, every {size} tokens "
-            f"(chunk_size={size}); call nnter.chunk_per_token(model) to set every mixer's chunk_size to 1, "
+            f"(chunk_size={size}); call nnterp.chunk_per_token(model) to set every mixer's chunk_size to 1, "
             "so every token is a boundary (slower on long prompts)"
         )
     return None
@@ -114,7 +114,7 @@ def _chunk_states(self: Any, value: torch.Tensor) -> States:
 #: Why `StateSpace.state` is unavailable.
 NO_STATE_OCCURRENCES = (
     "the chunk scan computes every token's state in one tensor per call, not one occurrence per token "
-    "to walk with tracer.iter; read states, or state_after(t), after nnter.chunk_per_token(model)"
+    "to walk with tracer.iter; read states, or state_after(t), after nnterp.chunk_per_token(model)"
 )
 #: Why `StateSpace.set_state_after` is unavailable.
 NO_STATE_WRITES = (
@@ -375,7 +375,7 @@ class StateSpace(RecurrentMixer):
     #: The state after each token of this call, from the chunk scan's boundaries (``chunk_size`` 1).
     states = DerivedEProperty(
         _states,
-        description="The state after every token of this call; needs nnter.chunk_per_token(model)",
+        description="The state after every token of this call; needs nnterp.chunk_per_token(model)",
         unavailable=needs_per_token_chunks,
     )
 

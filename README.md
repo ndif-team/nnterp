@@ -1,10 +1,10 @@
-# nnter
+# nnterp
 
 One module vocabulary across transformer architectures, on top of
 [nnsight](https://github.com/ndif-team/nnsight).
 
 ```python
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2")   # or a Llama, a Pythia, ...
 
@@ -63,19 +63,19 @@ a task to the right page. Every snippet in them has run against the pinned check
 
 `StandardizedTransformer` subclasses `TransformersModel`. Its `__init__` reads
 the checkpoint's config, looks up `config.model_type` in
-`nnter.families.REGISTRY`, and passes that family's `RENAME` dict as nnsight's
+`nnterp.families.REGISTRY`, and passes that family's `RENAME` dict as nnsight's
 `rename=`. A `rename=` of your own is merged on top.
 
-Each family is one module under `nnter/families/` declaring `MODEL_TYPES`,
+Each family is one module under `nnterp/families/` declaring `MODEL_TYPES`,
 `RENAME`, its `Layer`, `Attention` and `Mlp` subclasses and `ENVOYS`, plus a
 `def <size>(model)` for any root size its config spells its own way (Falcon's
 `num_kv_heads`, GPT-2's `intermediate_size` from `n_inner`); the root's
 `StandardizedProperty` calls it in place of the plain rule. To add one,
 name the module after the model type (`gemma3_text.py` covers `gemma3_text`),
 and that is the registry: a family's module is imported the first time a
-checkpoint of that type is loaded, so `import nnter` imports no transformers
+checkpoint of that type is loaded, so `import nnterp` imports no transformers
 modeling module. A family from elsewhere, or an override of a shipped one,
-goes through `nnter.families.register()`. Families whose checkpoints already use Llama's
+goes through `nnterp.families.register()`. Families whose checkpoints already use Llama's
 names (Mistral, Qwen, ...) need only the three container keys, like `llama.py`.
 
 A key with several components (`transformer.h`) binds where it resolves from,
@@ -150,7 +150,7 @@ live value and clears what it built at the start of every trace), so the
 descriptor walks the path before every read or write, then serves the
 location as an ordinary eproperty.
 
-`nnter.components` holds `Layer`, `Attention`, `Mlp` and one descriptor,
+`nnterp.components` holds `Layer`, `Attention`, `Mlp` and one descriptor,
 `EProperty`, whose key is a path from the host envoy: `"output"` for the
 host's own output, `"../post_attention_layernorm.output"` or
 `"embed_tokens.output"` for a value produced by another module named relative
@@ -190,7 +190,7 @@ Qwen3-Next and Qwen3.5/3.6 replace three blocks in four with a gated DeltaNet
 mixer, `linear_attn`. It projects queries, keys and values like attention but
 mixes them through a per-head recurrent state: each token decays the state by
 a learned gate, writes its key/value pair in scaled by a beta, and the query
-reads against it. There is no pattern and no scores. `nnter.components.LinearAttention`
+reads against it. There is no pattern and no scores. `nnterp.components.LinearAttention`
 gives such a block:
 
 | value | what it is |
@@ -218,7 +218,7 @@ The state *after every token* of a prompt is a further step, and like eager
 attention it is a choice made at load. The chunked kernel a prompt normally
 runs through carries the state between 64-token chunks and never materializes
 it per token; transformers' token-by-token kernel does, at a cost.
-`nnter.route_kernels(model.family, "torch")` routes the
+`nnterp.route_kernels(model.family, "torch")` routes the
 family's prompts through it (process-wide, like installing a kernel; call it
 before tracing a layer; `"default"` restores the default), and then:
 
@@ -280,9 +280,9 @@ which `value.layout` returns (`Layer.layer_output.layout is Residual`) and
 `isinstance(tensor, Queries)`, checks rank and dtype, and the suite checks
 every value's axes against the model's sizes on every family. A family that
 redefines a value annotates it with the same name, so it cannot drift from
-the base; a value of your own does the same (`from nnter.components import
+the base; a value of your own does the same (`from nnterp.components import
 Residual`; the root's `Logits`, `NextTokenProbs` and `Tokens` come from
-`nnter.standardized`). Layouts differ between values, not between families,
+`nnterp.standardized`). Layouts differ between values, not between families,
 with one exception: `layer_output` is `Streams` on DeepSeek-V4, whose residual is
 several parallel streams. The main ones (the Mamba and mixture-of-experts layouts are in
 `docs/usage/layouts.md`):
@@ -339,12 +339,12 @@ sets attributes on the tokenizer (`padding_side="left"`, a `pad_token`), and
 `model.add_prefix_false_tokenizer` is the checkpoint's tokenizer with
 `add_prefix_space=False`, so `"word"` and `" word"` are different tokens.
 
-Two helper modules carry nnterp's names, written against the standard values:
+Two helper modules are written against the standard values:
 
-- `nnter.prompt_utils`: `get_first_tokens(words, model)`, `Prompt.from_strings(text, targets, model)`
+- `nnterp.prompt_utils`: `get_first_tokens(words, model)`, `Prompt.from_strings(text, targets, model)`
   with `has_no_collisions` and `get_target_probs`, and `run_prompts(model, prompts, batch_size)`
   returning each target's probability mass per prompt.
-- `nnter.nnsight_utils`: `get_token_activations(model, prompts, layers, idx)` giving
+- `nnterp.nnsight_utils`: `get_token_activations(model, prompts, layers, idx)` giving
   `[num_layers, num_prompts, hidden]` at one position of every prompt (default the last, which
   needs left padding), `collect_token_activations_batched` and
   `collect_last_token_activations_session` over many prompts, and `compute_next_token_probs`.
@@ -354,7 +354,7 @@ Two helper modules carry nnterp's names, written against the standard values:
 Not every checkpoint has every value: OPT has no MLP module, a model loaded
 with sdpa cannot expose the eager pattern, a GPT-2 checkpoint with
 `reorder_and_upcast_attn` leaves the shared attention path, a hybrid's
-linear-attention blocks have no softmax. nnter
+linear-attention blocks have no softmax. nnterp
 answers that before any trace runs:
 
 ```python
@@ -374,10 +374,10 @@ keys come from the tree: the root's values and every standard module on each
 block, so a module no block has (OPT's `mlp`) is not listed, and one some
 blocks lack (a hybrid's `self_attn`) reads `no self_attn module on this block`
 there.
-Reading an unavailable value raises `nnter.Unavailable` with the same reason,
+Reading an unavailable value raises `nnterp.Unavailable` with the same reason,
 at that line, before the model runs.
 
-Every nnter descriptor takes `unavailable=`: a reason string, or a function of
+Every nnterp descriptor takes `unavailable=`: a reason string, or a function of
 the envoy returning one or `None`, evaluated on the instance so the config can
 decide (`components.needs_eager` is the one the pattern uses). A family that lacks a
 value altogether assigns `attention_probabilities = unavailable("...")` in its
@@ -391,8 +391,8 @@ tree, with nothing to declare; one no block has (OPT's `mlp`) is not listed.
 remote key names `TransformersModel`, so a model the server deploys plain is
 the one a `StandardizedTransformer` reaches. The block is re-run on the server
 against the client's envoy tree, which carries the aliases and the family's
-envoy classes by reference, so the server needs nnter installed at the same
-version. Do not ship nnter by value (`nnsight.register`): an installed package
+envoy classes by reference, so the server needs nnterp installed at the same
+version. Do not ship nnterp by value (`nnsight.register`): an installed package
 is pickled by reference anyway, and an `eproperty` cannot be pickled by value.
 
 ## transformers version
@@ -404,7 +404,7 @@ value must resolve on every layer and a written pattern must move the logits.
 
 ## Import order
 
-Import nnsight (or nnter) before `transformers.modeling_layers`. On this stack
+Import nnsight (or nnterp) before `transformers.modeling_layers`. On this stack
 the reverse order segfaults at import; a plain `import transformers` first is fine.
 
 ## Tests

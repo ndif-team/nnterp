@@ -5,7 +5,7 @@ import math
 import torch
 from suite import FamilySuite, rows, PROMPT
 
-from nnter.families import codegen
+from nnterp.families import codegen
 
 
 class TestCodeGen(FamilySuite):
@@ -31,7 +31,7 @@ class TestCodeGen(FamilySuite):
 
     def test_interior_needs_no_eager_load(self):
         """CodeGen has one attention implementation, so a default load serves the pattern."""
-        from nnter import StandardizedTransformer
+        from nnterp import StandardizedTransformer
 
         model = StandardizedTransformer(self.REPO, dispatch=True)
         assert model.support()["self_attn.attention_probabilities"] is None

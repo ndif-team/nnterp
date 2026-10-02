@@ -4,9 +4,9 @@ import pytest
 import torch
 from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed
 
-from nnter import StandardizedTransformer, Unavailable, route_delta_rule
+from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
 
-from nnter.families import qwen3_next
+from nnterp.families import qwen3_next
 
 LINEAR_BLOCKS = (0, 1, 2)   # ``config.layer_types``: three DeltaNet blocks, then one attention block
 ATTENTION_BLOCK = 3

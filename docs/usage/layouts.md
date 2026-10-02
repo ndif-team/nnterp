@@ -1,9 +1,9 @@
 ---
 title: Layouts
-one_liner: "Every standard value has one axis layout on every family (one exception: `layer_output` is `Streams` on DeepSeek-V4), one of thirty-one named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnter.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
+one_liner: "Every standard value has one axis layout on every family (one exception: `layer_output` is `Streams` on DeepSeek-V4), one of thirty-one named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
 tags: [usage, layouts, shapes, jaxtyping, dims, heads, kv_heads, Residual, Pattern, Streams, experts, top_k]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/reference/families.md, docs/usage/availability.md, docs/extending/custom-values.md]
-sources: [nnter/components/eproperty.py, nnter/components/moe.py, nnter/components/layer.py, nnter/families/deepseek_v4.py, nnter/components/attention.py, nnter/components/linear_attention.py, nnter/components/recurrent.py, nnter/standardized.py, nnter/components/__init__.py]
+sources: [nnterp/components/eproperty.py, nnterp/components/moe.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/components/__init__.py]
 ---
 
 # Layouts
@@ -11,8 +11,8 @@ sources: [nnter/components/eproperty.py, nnter/components/moe.py, nnter/componen
 ## What this is for
 
 A value's shape is part of what it means. Each standard value is annotated with one of
-thirty-one named layouts, each defined in the file of the envoy that serves it (`Residual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnter/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnter/components/attention.py`; `LinearQK`, `LinearV`, `Gates` in `nnter/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnter/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnter/components/state_space.py`; `State`, `States` in `nnter/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnter/components/moe.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnter/standardized.py`); `nnter.components`
-re-exports the twenty-eight envoy-level names, and the root's three come from `nnter.standardized`.
+thirty-one named layouts, each defined in the file of the envoy that serves it (`Residual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `LinearQK`, `LinearV`, `Gates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
+re-exports the twenty-eight envoy-level names, and the root's three come from `nnterp.standardized`.
 They are `jaxtyping` types such as `Residual = Float[Tensor, "batch seq hidden"]` and
 `Pattern = Float[Tensor, "batch heads query key"]`. `value.layout` returns that alias itself
 and `value.dims` names its axes. Layouts differ between values, not between families:
@@ -26,9 +26,9 @@ families (DeepSeek-V4), whose residual is several parallel streams: there it is 
 
 ```python
 import torch
-from nnter import Attention, Layer, StandardizedTransformer
-from nnter.components import Queries, Residual
-from nnter.standardized import Logits
+from nnterp import Attention, Layer, StandardizedTransformer
+from nnterp.components import Queries, Residual
+from nnterp.standardized import Logits
 
 Attention.attention_queries.dims        # ('batch', 'heads', 'seq', 'qk_head_dim')
 Attention.attention_queries.layout      # jaxtyping.Float[Tensor, 'batch heads seq qk_head_dim']
@@ -53,7 +53,7 @@ q.shape                                                    # (1, num_heads, seq,
 Read the layout off the class (`Attention.attention_queries`) or off the instance's type
 (`type(model.layers[0].self_attn).attention_queries`); the family's subclass inherits the
 annotation unless it redefines the value, and a redefinition is annotated with the same
-name (`nnter.families.falcon.Attention.attention_keys.layout is Keys`), so it cannot drift
+name (`nnterp.families.falcon.Attention.attention_keys.layout is Keys`), so it cannot drift
 from the base.
 
 ## The layouts
@@ -114,9 +114,9 @@ A value you define is annotated with the name, so its layout is the same object 
 base's and reads back through `.layout` and `.dims` like any standard value:
 
 ```python
-from nnter import EProperty
-from nnter.components import Pattern, interface_reason
-from nnter.families import gpt2
+from nnterp import EProperty
+from nnterp.components import Pattern, interface_reason
+from nnterp.families import gpt2
 
 
 class Attention(gpt2.Attention):
@@ -204,8 +204,8 @@ returns `[batch, seq, hidden]`, which the block writes into every stream with th
 
 ```python
 import torch
-from nnter import StandardizedTransformer
-from nnter.components import Residual, Streams
+from nnterp import StandardizedTransformer
+from nnterp.components import Residual, Streams
 
 model = StandardizedTransformer("deepseek-ai/DeepSeek-V4-Flash", dispatch=True, attn_implementation="eager")
 type(model.layers[0]).layer_output.layout is Streams    # True
@@ -265,8 +265,8 @@ On the tiny checkpoint the root says `num_heads=8`, `num_kv_heads=4`, and the mi
 - **A `.layout` is `None` for a value with no tensor annotation**; `dims` is then `None` too.
 - **`layer_output` is rank 4 on DeepSeek-V4** (`Streams`); read the layout off the family's
   class, `type(model.layers[0]).layer_output.layout`, not off the base `Layer`.
-- **The names live in `nnter.components`, not `nnter`**: `from nnter.components import Residual`;
-  the root's three (`Logits`, `NextTokenProbs`, `Tokens`) only in `nnter.standardized`.
+- **The names live in `nnterp.components`, not `nnterp`**: `from nnterp.components import Residual`;
+  the root's three (`Logits`, `NextTokenProbs`, `Tokens`) only in `nnterp.standardized`.
 - **Read one interior value per trace when in doubt.** The five interior values bind at
   different points of the forward on the off-interface families (Falcon: values before
   queries and keys).

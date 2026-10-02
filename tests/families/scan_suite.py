@@ -10,7 +10,7 @@ import pytest
 import torch
 from suite import LINEAR, PROMPT, listed
 
-from nnter import StandardizedTransformer, route_kernels
+from nnterp import StandardizedTransformer, route_kernels
 
 
 def scan(mix, values, keys, queries, betas, decays):

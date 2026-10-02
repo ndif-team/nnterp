@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import smollm3
+from nnterp.families import smollm3
 
 
 class TestSmolLM3(FamilySuite):

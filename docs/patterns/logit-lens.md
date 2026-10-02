@@ -3,7 +3,7 @@ title: Logit Lens
 one_liner: "`model.project_on_vocab(layer.layer_output)` reads each block's residual stream through the final norm, `lm_head` and any softcap, so one loop over `model.layers` is the lens on every family."
 tags: [patterns, logit-lens, residual-stream, decoding]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/patterns/contribution-decomposition.md, docs/patterns/activation-patching.md, docs/patterns/probing.md]
-sources: [nnter/standardized.py, nnter/components/layer.py, nnter/families/deepseek_v4.py]
+sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py]
 ---
 
 # Logit Lens
@@ -15,7 +15,7 @@ final norm and unembedding: what the model would predict if it stopped at block 
 Plotted over depth, it shows where an answer emerges and how the prediction is
 refined.
 
-In nnter the three things the lens needs are standard on every family: the stream
+In nnterp the three things the lens needs are standard on every family: the stream
 is `model.layers[i].layer_output` (a tensor whether the block returns a tensor or a
 tuple), and `model.project_on_vocab(hidden)` applies `model.norm`, `model.lm_head`
 and the model's logit softcapping when its config has one. So the block below runs
@@ -26,7 +26,7 @@ per-architecture work, which is why this page is short.
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
 prompt = "The Eiffel Tower is in the city of"

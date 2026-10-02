@@ -3,7 +3,7 @@ title: DeltaNet State
 one_liner: "On a Qwen3-Next / Qwen3.5 hybrid, read `state_output` and `state_input`, patch the recurrent state between prompts (`state_input` on a decode step, or `set_state_after(t, value)` inside a prompt after `route_kernels`), and track the state's norm token by token with `states`."
 tags: [patterns, hybrids, deltanet, state, generation]
 related: [docs/usage/availability.md, docs/usage/generation.md, docs/patterns/activation-patching.md, docs/patterns/ablation.md, docs/patterns/cross-family-sweep.md]
-sources: [nnter/components/linear_attention.py, nnter/components/eproperty.py, nnter/families/qwen3_5_text.py, tests/families/test_qwen3_5_text.py]
+sources: [nnterp/components/linear_attention.py, nnterp/components/eproperty.py, nnterp/families/qwen3_5_text.py, tests/families/test_qwen3_5_text.py]
 ---
 
 # DeltaNet State
@@ -30,7 +30,7 @@ The state leaving a prompt, and the one entering it (`None` on a fresh prompt):
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("Qwen/Qwen3.5-9B", dispatch=True, attn_implementation="eager")
 linear_blocks = [i for i, layer in enumerate(model.layers) if getattr(layer, "linear_attn", None) is not None]
@@ -104,7 +104,7 @@ A prompt normally runs the chunked kernel, which carries the state between
 transformers' token-by-token kernel first, then every position is a value:
 
 ```python
-from nnter import route_kernels
+from nnterp import route_kernels
 
 route_kernels(model.family, "torch")                    # process-wide; before the first trace of that layer
 model = StandardizedTransformer("Qwen/Qwen3.5-9B", dispatch=True, attn_implementation="eager")
@@ -125,7 +125,7 @@ for token, norm in zip(tokens, norms):
 The two kernels compute the same rule; `probs` equals the chunked run's to float
 error. The cost is the slower kernel, the same trade as `attn_implementation="eager"`.
 `route_kernels(model.family, "default")` restores the default. Without the
-routing, `states` raises `nnter.Unavailable` with that instruction and `support()`
+routing, `states` raises `nnterp.Unavailable` with that instruction and `support()`
 reports it under `linear_attn.states`.
 
 `state` is the same value one token at a time, walked with nnsight's own iteration:

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, rows
 
-from nnter.families import persimmon
+from nnterp.families import persimmon
 
 
 class TestPersimmon(FamilySuite):

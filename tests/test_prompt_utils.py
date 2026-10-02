@@ -3,8 +3,8 @@
 import pytest
 import torch
 
-from nnter import StandardizedTransformer
-from nnter.prompt_utils import Prompt, get_first_tokens, next_token_probs_unsqueeze, run_prompts
+from nnterp import StandardizedTransformer
+from nnterp.prompt_utils import Prompt, get_first_tokens, next_token_probs_unsqueeze, run_prompts
 
 GPT2 = "hf-internal-testing/tiny-random-gpt2"
 

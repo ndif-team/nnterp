@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import cohere, cohere2
+from nnterp.families import cohere, cohere2
 
 
 class TestCohere2(FamilySuite):

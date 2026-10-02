@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, rows, PROMPT
 
-from nnter.families import gpt_neo
+from nnterp.families import gpt_neo
 
 
 class TestGPTNeo(FamilySuite):

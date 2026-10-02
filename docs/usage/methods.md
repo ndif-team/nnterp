@@ -3,7 +3,7 @@ title: Methods over the values
 one_liner: "`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens` and `probs_to_dict`: the common operations written once against the standard values."
 tags: [usage, skip_layers, steer, project_on_vocab, logit-lens, topk]
 related: [docs/usage/residual-stream.md, docs/usage/root-values.md, docs/usage/vocabulary.md]
-sources: [nnter/standardized.py, nnter/components/layer.py, nnter/families/deepseek_v4.py]
+sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py]
 ---
 
 # Methods over the values
@@ -28,7 +28,7 @@ trace; two work on saved tensors outside.
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
 prompt = "The Eiffel Tower is in"

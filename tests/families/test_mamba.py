@@ -4,7 +4,7 @@ import torch
 from scan_suite import SelectiveScanSuite
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import mamba
+from nnterp.families import mamba
 
 NATIVE = rows("backbone", "layers", "embeddings", "norm_f", mlp=None, ln1="norm", ln2=None)
 del NATIVE["layers.0.self_attn"]

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import deepseek_v2
+from nnterp.families import deepseek_v2
 
 
 class TestDeepseekV2(FamilySuite):

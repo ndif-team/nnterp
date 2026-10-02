@@ -14,7 +14,7 @@ attention, by ``config.layers_block_type``, and then a feed-forward::
     out = h + (block_sparse_moe(n) + shared_mlp(n)) * residual_multiplier     with n = post_attention_layernorm(h)
 
 (``shared_mlp(n)`` alone on a dense checkpoint, Granite-4.0-H-Micro's.) ``mamba``
-is ``linear_attn`` (`nnter.StateSpace`) and ``shared_mlp``, the one feed-forward
+is ``linear_attn`` (`nnterp.StateSpace`) and ``shared_mlp``, the one feed-forward
 every block has, is ``mlp``; each block has ``self_attn`` or ``linear_attn``,
 never both. As on Granite (``granite.py``) the block adds each sublayer's output
 times ``residual_multiplier``: both mixers' ``attention_output`` are the module's

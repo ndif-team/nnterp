@@ -9,8 +9,8 @@ import pytest
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter import Unavailable
-from nnter.families import laguna
+from nnterp import Unavailable
+from nnterp.families import laguna
 
 REPO = "hf-tiny-v2/tiny-random-LagunaForCausalLM"
 #: The released checkpoints' shape: fewer heads on the full-attention block than on the sliding one.
@@ -29,7 +29,7 @@ def _per_layer_heads_checkpoint(repo=REPO):
     from transformers import AutoConfig, AutoModelForCausalLM
 
     snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
-    patched = os.path.join(tempfile.gettempdir(), f"nnter-laguna-heads-{os.path.basename(snapshot)}")
+    patched = os.path.join(tempfile.gettempdir(), f"nnterp-laguna-heads-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
     os.makedirs(patched, exist_ok=True)

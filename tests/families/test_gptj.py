@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, rows, PROMPT
 
-from nnter.families import gptj
+from nnterp.families import gptj
 
 
 class TestGPTJ(FamilySuite):

@@ -1,6 +1,19 @@
-__pycache__/
-*.egg-info/
-.pytest_cache/
+# project specific
+scratch/
+.coverage
+.idea
+
+# general
+.claude/
+*.log
 build/
 dist/
-.claude/
+*.egg-info/
+.installed.cfg
+.vscode
+__pycache__/
+.pytest_cache/
+.DS_STORE
+.nfs*
+.env
+.venv

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import ernie4_5
+from nnterp.families import ernie4_5
 
 
 class TestErnie45(FamilySuite):

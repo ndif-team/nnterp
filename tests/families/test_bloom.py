@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, rows, PROMPT
 
-from nnter.families import bloom
+from nnterp.families import bloom
 
 
 class TestBloom(FamilySuite):

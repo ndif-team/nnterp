@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import nemotron
+from nnterp.families import nemotron
 
 
 class TestNemotron(FamilySuite):

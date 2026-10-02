@@ -8,7 +8,7 @@ import tempfile
 import torch
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import olmo3
+from nnterp.families import olmo3
 
 
 def _patched_checkpoint(repo="yujiepan/olmo-3-tiny-random"):

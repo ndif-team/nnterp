@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import opt
+from nnterp.families import opt
 
 
 class TestOPT(FamilySuite):

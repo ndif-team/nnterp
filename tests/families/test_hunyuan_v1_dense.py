@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import hunyuan_v1_dense
+from nnterp.families import hunyuan_v1_dense
 
 
 class TestHunyuanV1Dense(FamilySuite):

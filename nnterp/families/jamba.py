@@ -8,7 +8,7 @@ pre_ff_layernorm, feed_forward}``, and one in ``attn_layer_period`` is
 ``mamba``. Both are Llama's pre-norm sequential block, so the identity is
 Llama's. Each block has one mixer, never both: on a Mamba block every
 ``self_attn`` value is reported missing and the selective-scan values live
-at ``layers[i].linear_attn`` (see `nnter.SelectiveScan`); on an attention
+at ``layers[i].linear_attn`` (see `nnterp.SelectiveScan`); on an attention
 block the reverse. ``feed_forward`` is a dense MLP or, one block in
 ``expert_layer_period``, a sparse mixture of experts; both are ``mlp``, and
 ``pre_ff_layernorm`` is ``post_attention_layernorm``.
@@ -18,7 +18,7 @@ and runs the shared eager interface, so the base holds. The Mamba mixer puts
 RMS norms on the step size, ``B`` and ``C`` before the scan (with weights,
 where Falcon-Mamba's are weightless); the values are read at the kernel
 call, after them.
-With ``mamba_ssm`` installed, call ``nnter.route_kernels(model.family,
+With ``mamba_ssm`` installed, call ``nnterp.route_kernels(model.family,
 "torch")`` before the first trace.
 """
 

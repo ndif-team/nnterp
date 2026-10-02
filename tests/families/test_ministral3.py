@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import ministral3
+from nnterp.families import ministral3
 
 
 class TestMinistral3(FamilySuite):

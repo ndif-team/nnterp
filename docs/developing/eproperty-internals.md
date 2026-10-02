@@ -1,16 +1,16 @@
 ---
 title: EProperty Internals
-one_liner: How nnter's descriptors sit on nnsight's eproperty — one `EProperty` whose key is a path (`output`, `../norm.output`, `source.<op>.inputs`), availability, `_resolve`'s walk and the per-run drill into `.source`, `select`, the once-per-access key, the `Standard.sourced` flag, and derived values.
+one_liner: How nnterp's descriptors sit on nnsight's eproperty — one `EProperty` whose key is a path (`output`, `../norm.output`, `source.<op>.inputs`), availability, `_resolve`'s walk and the per-run drill into `.source`, `select`, the once-per-access key, the `Standard.sourced` flag, and derived values.
 tags: [developing, internals, eproperty, source, descriptors]
 related: [docs/developing/architecture.md, docs/developing/recurrent-mixer-internals.md, docs/developing/gotchas.md, docs/usage/availability.md]
-sources: [nnter/components/eproperty.py, nnter/components/standard.py, nnter/components/layer.py, nnter/components/attention.py, nnter/components/linear_attention.py, nnter/components/recurrent.py, nnter/standardized.py, nnter/families/falcon.py, nnter/families/llama4_text.py, nnsight src/nnsight/intervention/eproperty.py, nnsight src/nnsight/intervention/envoy.py, nnsight src/nnsight/intervention/source.py, nnsight src/nnsight/intervention/interleaver.py, nnsight src/nnsight/intervention/iterator.py, nnsight src/nnsight/intervention/util.py]
+sources: [nnterp/components/eproperty.py, nnterp/components/standard.py, nnterp/components/layer.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/families/falcon.py, nnterp/families/llama4_text.py, nnsight src/nnsight/intervention/eproperty.py, nnsight src/nnsight/intervention/envoy.py, nnsight src/nnsight/intervention/source.py, nnsight src/nnsight/intervention/interleaver.py, nnsight src/nnsight/intervention/iterator.py, nnsight src/nnsight/intervention/util.py]
 ---
 
 # EProperty Internals
 
 ## What this is for
 
-Every standard value is a descriptor from `nnter/components/eproperty.py`,
+Every standard value is a descriptor from `nnterp/components/eproperty.py`,
 and every one of them is nnsight's `eproperty` (a `property` subclass over a
 location string) plus two things nnsight does not have: an answer, before
 anything runs, to "does this checkpoint have this value, and why not", and a
@@ -30,12 +30,12 @@ Llama-family model (run on `hf-internal-testing/tiny-random-LlamaForCausalLM`):
 import torch
 from jaxtyping import Float
 from torch import Tensor
-from transformers.models.llama.modeling_llama import LlamaAttention   # after `import nnter`
+from transformers.models.llama.modeling_llama import LlamaAttention   # after `import nnterp`
 
-import nnter
-from nnter import StandardizedTransformer
-from nnter.components import EProperty, INTERFACE, interface_reason
-from nnter.families import llama
+import nnterp
+from nnterp import StandardizedTransformer
+from nnterp.components import EProperty, INTERFACE, interface_reason
+from nnterp.families import llama
 
 
 class Attention(llama.Attention):
@@ -80,7 +80,7 @@ with model.trace("Hello world there"):
    waits, a repeated read is answered with the view it holds, so
    `x.value[...] += f(x.value)`, which reads twice, edits the tensor that
    goes back. It fires whether or not the view was edited, so a transform
-   must be an identity on an unedited view. nnter's `EProperty.__get__`
+   must be an identity on an unedited view. nnterp's `EProperty.__get__`
    binds and checks the `WriteBack` the way nnsight's does.
 4. **A location can be visited many times in one run**, and a worker asks
    for one *occurrence* of it (`Pending.iteration`, `interleaver.py:73-96`).
@@ -112,7 +112,7 @@ Everything below is a consequence of these six.
 
 ## `EProperty`: one descriptor, a path for a key
 
-`EProperty(eproperty)` (`nnter/components/eproperty.py:35-259`) takes
+`EProperty(eproperty)` (`nnterp/components/eproperty.py:35-259`) takes
 `key`, `description`, `unavailable` and `select` (`:86-96`). A string `key`
 is stored as nnsight's `key`; a callable one is stored as `locate` and the
 `key` shown in the repr and in `.key` is `<its name>` (`<kernel.inputs>`,
@@ -358,7 +358,7 @@ annotation; it is never called as a preprocess. `RecurrentMixer.states`
 
 A forward that branches names its op with a function key decided once per
 module call: `RecurrentMixer.KERNEL`, `per_call` and `pinned` live in
-`nnter/components/recurrent.py`, and
+`nnterp/components/recurrent.py`, and
 [recurrent-mixer-internals.md](recurrent-mixer-internals.md#once-per-call-kernel-and-per_call)
 describes them.
 
@@ -376,7 +376,7 @@ describes them.
 
 One thing on the root is none of these. A size (`num_layers`, `hidden_size`,
 `vocab_size`, `num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`,
-`intermediate_size`) is a `StandardizedProperty` (`nnter/standardized.py:26-50`),
+`intermediate_size`) is a `StandardizedProperty` (`nnterp/standardized.py:26-50`),
 a bare descriptor with no `eproperty` underneath: no location, nothing served
 during a trace, no `description`, `layout` or `support()` entry.
 Its `__get__` (`:43-47`) does one lookup, `getattr(obj.family, name)`, and calls

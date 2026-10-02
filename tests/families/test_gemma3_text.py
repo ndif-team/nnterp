@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT, rows
 
-from nnter.families import gemma3_text
+from nnterp.families import gemma3_text
 
 
 class TestGemma3(FamilySuite):

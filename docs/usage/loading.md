@@ -3,7 +3,7 @@ title: Loading a model
 one_liner: "`StandardizedTransformer(repo_id, ...)` picks the family from the config's `model_type`, renames the tree to the standard vocabulary, and takes every `TransformersModel` argument."
 tags: [usage, loading, families, rename, envoys, tokenizer]
 related: [docs/usage/vocabulary.md, docs/usage/availability.md, docs/usage/root-values.md, docs/usage/residual-stream.md]
-sources: [nnter/standardized.py, nnter/families/__init__.py, nnter/components/standard.py]
+sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/components/standard.py]
 ---
 
 # Loading a model
@@ -21,7 +21,7 @@ arguments matter for what you can read afterwards.
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer(
     "openai-community/gpt2",
@@ -31,7 +31,7 @@ model = StandardizedTransformer(
     device_map="auto",
 )
 
-print(model.family)                 # <module 'nnter.families.gpt2' ...>
+print(model.family)                 # <module 'nnterp.families.gpt2' ...>
 print(model.num_layers, model.hidden_size, model.num_heads)
 
 with model.trace("The Eiffel Tower is in"):
@@ -49,23 +49,23 @@ Every argument other than `rename`, `envoys` and `tokenizer_kwargs` goes straigh
 The constructor reads the checkpoint's config before any model is built, with
 `AutoConfig.from_pretrained(repo_id, revision=..., trust_remote_code=...)`, so those two
 arguments flow into the config read as well as the load. The config's `model_type` is the
-family: `nnter.families.<model_type>` is imported on first use (`gpt2.py` for `gpt2`,
+family: `nnterp.families.<model_type>` is imported on first use (`gpt2.py` for `gpt2`,
 `gemma3_text.py` for `gemma3_text`), and that module's `RENAME` and `ENVOYS` become
 nnsight's `rename=` and `envoys=`. A multimodal config nests the language model's config
 as `text_config`; the text-generation task builds that model, so its `model_type` is the
 one looked up.
 
 A `model_type` with no family raises `UnsupportedFamily` before anything loads, naming every
-known model type, the list `nnter.families.known()` returns (92 shipped families,
+known model type, the list `nnterp.families.known()` returns (92 shipped families,
 alphabetical):
 
 ```
 UnsupportedFamily: no standardization for model_type 'bert'; known: ['afmoe', 'apertus', 'arcee',
-'bamba', ..., 'xglm', 'youtu', 'zaya']. Add nnter/families/bert.py with MODEL_TYPES, RENAME and
-ENVOYS, or pass a module to nnter.families.register().
+'bamba', ..., 'xglm', 'youtu', 'zaya']. Add nnterp/families/bert.py with MODEL_TYPES, RENAME and
+ENVOYS, or pass a module to nnterp.families.register().
 ```
 
-`model.family` is the module the checkpoint resolved to; `nnter.families.known()` lists
+`model.family` is the module the checkpoint resolved to; `nnterp.families.known()` lists
 the shipped ones without loading anything.
 
 ## Passing an already-loaded module
@@ -79,7 +79,7 @@ from transformers import AutoModelForCausalLM
 
 raw = AutoModelForCausalLM.from_pretrained("openai-community/gpt2", attn_implementation="eager")
 model = StandardizedTransformer(raw)
-model.family.__name__            # 'nnter.families.gpt2'
+model.family.__name__            # 'nnterp.families.gpt2'
 
 with model.trace("Hello world"):
     x = model.layers[0].layer_output.save()
@@ -142,7 +142,7 @@ tries the type keys first, over the module's MRO, then the path keys, so:
 
 ```python
 from transformers.models.gpt2.modeling_gpt2 import GPT2MLP
-from nnter.families import gpt2
+from nnterp.families import gpt2
 
 class MyMlp(gpt2.Mlp):
     ...
@@ -175,7 +175,7 @@ model.tokenizer.padding_side       # 'left'
 
 `model.add_prefix_false_tokenizer` is the checkpoint's tokenizer loaded with
 `add_prefix_space=False`, once, on first use, so `"word"` and `" word"` tokenize to
-different first tokens. `nnter.prompt_utils.get_first_tokens` uses it.
+different first tokens. `nnterp.prompt_utils.get_first_tokens` uses it.
 
 ## What the repr shows
 
@@ -218,7 +218,7 @@ The root's own values (`logits`, `token_embeddings`, `next_token_probs`, `input_
 
 ## Gotchas
 
-- **Import `nnter` (or `nnsight`) before any `transformers.models...` or
+- **Import `nnterp` (or `nnsight`) before any `transformers.models...` or
   `transformers.modeling_layers` import.** The reverse order segfaults at import on this
   stack. A plain `import transformers` first is fine.
 - **`attn_implementation` is not defaulted to eager.** A model loaded without it runs

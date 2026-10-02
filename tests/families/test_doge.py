@@ -7,7 +7,7 @@ import tempfile
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import doge
+from nnterp.families import doge
 
 REPO = "hf-tiny-v2/tiny-random-DogeForCausalLM"
 
@@ -23,7 +23,7 @@ def _gated_checkpoint(repo=REPO):
     from safetensors.torch import load_file, save_file
 
     snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
-    patched = os.path.join(tempfile.gettempdir(), f"nnter-doge-gated-{os.path.basename(snapshot)}")
+    patched = os.path.join(tempfile.gettempdir(), f"nnterp-doge-gated-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
     os.makedirs(patched, exist_ok=True)

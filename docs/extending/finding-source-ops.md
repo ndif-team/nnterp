@@ -3,7 +3,7 @@ title: Finding Source Ops
 one_liner: Discover the operation names a `source.` path needs — `print(envoy.source)` outside a trace, `<call>.source` inside one, and how nnsight names calls and bindings.
 tags: [extending, source, operations, transformers]
 related: [docs/extending/overriding-values.md, docs/extending/custom-values.md, docs/extending/adding-a-family.md]
-sources: [nnter/components/eproperty.py, nnter/components/attention.py, nnter/families/gptj.py, nnter/families/bloom.py, nnter/families/falcon.py, nnter/families/gpt_oss.py]
+sources: [nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/families/gptj.py, nnterp/families/bloom.py, nnterp/families/falcon.py, nnterp/families/gpt_oss.py]
 ---
 
 # Finding Source Ops
@@ -24,8 +24,8 @@ Outside a trace, print the module's source; the labels on the left are the opera
 names. Trimmed from `hf-internal-testing/tiny-random-gpt2` on transformers 5.17:
 
 ```python
-import nnter
-from nnter import StandardizedTransformer
+import nnterp
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", attn_implementation="eager")
 print(model.layers[0].self_attn.source)
@@ -62,7 +62,7 @@ print(model.layers[0].self_attn.source)
 ```
 
 The interface call is `attention_interface_1` on every family that uses it, which is why
-`nnter.components.INTERFACE` is that string. Its arguments are `(self, query, key, value,
+`nnterp.components.INTERFACE` is that string. Its arguments are `(self, query, key, value,
 attention_mask, ...)`, so the base `Attention` reads the queries as
 `EProperty("source.attention_interface_1.inputs", select=1)`.
 

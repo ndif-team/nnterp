@@ -3,7 +3,7 @@ title: Generation
 one_liner: Standard values under `model.generate(..., max_new_tokens=N)` are per forward call; a decode step reads `[batch, 1, ...]`, and `tracer.iter` picks the step.
 tags: [usage, generation, iter, decode]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/usage/attention-interior.md, docs/usage/delta-net.md, docs/usage/activations.md]
-sources: [nnter/standardized.py, nnter/components/layer.py, nnter/components/attention.py]
+sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/components/attention.py]
 ---
 
 # Generation
@@ -18,12 +18,12 @@ produced each step's token; and `input_ids` is the one token the step is fed.
 `tracer.iter[...]` binds a stretch of the block to chosen steps, and
 `tracer.result` is the generated ids. How `generate` and `tracer.iter` work is
 nnsight's: nnsight docs/usage/generate.md and docs/usage/iter-all-next.md.
-This page is what nnter's values look like under them.
+This page is what nnterp's values look like under them.
 
 ## Canonical pattern
 
 ```python
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2")
 

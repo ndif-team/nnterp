@@ -72,7 +72,7 @@ class StandardizedTransformer(TransformersModel):
     """A causal language model whose modules answer to one set of names.
 
     The checkpoint's config is read first (its ``model_type``), the matching
-    family toolkit is looked up in `nnter.families.REGISTRY`, and the family's
+    family toolkit is looked up in `nnterp.families.REGISTRY`, and the family's
     ``RENAME`` is handed to nnsight's ``rename`` so every envoy in the tree also
     answers to the standard name. The original names keep working: an alias is
     an extra attribute on the same envoy, not a replacement.
@@ -83,7 +83,7 @@ class StandardizedTransformer(TransformersModel):
     in its `Mlp` (``mlp_output``). The pattern is read inside the eager
     attention forward, so it is unavailable unless the model is loaded with
     ``attn_implementation="eager"``; `support` says which values this
-    checkpoint has. See `nnter.components`.
+    checkpoint has. See `nnterp.components`.
 
     Args:
         repo_id: A HuggingFace repo id, or an already-loaded ``torch.nn.Module``
@@ -402,7 +402,7 @@ class StandardizedTransformer(TransformersModel):
     def add_prefix_false_tokenizer(self) -> Any:
         """The checkpoint's tokenizer loaded with ``add_prefix_space=False``, so ``"word"`` and ``" word"`` differ.
 
-        What `nnter.prompt_utils.get_first_tokens` uses. Loaded once, on first use.
+        What `nnterp.prompt_utils.get_first_tokens` uses. Loaded once, on first use.
         """
         if self._add_prefix_false_tokenizer is None:
             from transformers import AutoTokenizer
@@ -462,7 +462,7 @@ class StandardizedTransformer(TransformersModel):
 
         A remote trace re-runs the block against the client's envoy tree, so
         the aliases and the family's envoy classes travel with the request
-        (by reference: the server needs nnter installed). The deployed model
+        (by reference: the server needs nnterp installed). The deployed model
         itself is a plain `TransformersModel`, so the key says so; a
         subclass-specific key would match nothing on the server.
         """

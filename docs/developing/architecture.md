@@ -1,20 +1,20 @@
 ---
 title: Architecture
-one_liner: The map of nnter — how a checkpoint's model_type becomes a renamed envoy tree whose blocks carry standard values, and which layer owns what.
+one_liner: The map of nnterp — how a checkpoint's model_type becomes a renamed envoy tree whose blocks carry standard values, and which layer owns what.
 tags: [developing, architecture, internals, families, components]
 related: [docs/developing/eproperty-internals.md, docs/developing/recurrent-mixer-internals.md, docs/developing/testing.md, docs/developing/gotchas.md, docs/extending/index.md]
-sources: [nnter/standardized.py, nnter/families/__init__.py, nnter/components/__init__.py, nnter/components/standard.py, nnter/components/layer.py, nnter/components/attention.py, nnter/components/mlp.py, nnter/families/gpt2.py, nnter/families/llama.py, nnsight src/nnsight/intervention/envoy.py]
+sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/components/__init__.py, nnterp/components/standard.py, nnterp/components/layer.py, nnterp/components/attention.py, nnterp/components/mlp.py, nnterp/families/gpt2.py, nnterp/families/llama.py, nnsight src/nnsight/intervention/envoy.py]
 ---
 
 # Architecture
 
 ## What this is for
 
-nnter is three small layers on nnsight 0.8, and each owns one kind of fact.
-A **family** (`nnter/families/<model_type>.py`) knows the checkpoint's *names*
+nnterp is three small layers on nnsight 0.8, and each owns one kind of fact.
+A **family** (`nnterp/families/<model_type>.py`) knows the checkpoint's *names*
 and *which operation* in its forward each value lives at. A **component**
-(`nnter/components/`) knows *what a value means* and how to read and write
-it through nnsight. `StandardizedTransformer` (`nnter/standardized.py`) knows
+(`nnterp/components/`) knows *what a value means* and how to read and write
+it through nnsight. `StandardizedTransformer` (`nnterp/standardized.py`) knows
 the *root*: the whole-model values, the methods over the values, the sizes
 (their plain rule; a family supplies its own spelling), and the load path that wires the other two into nnsight's `rename=` and
 `envoys=`. This page is the map; the other developing pages go one level
@@ -27,13 +27,13 @@ The load path, observed on a tiny GPT-2 (run on
 types for the real model):
 
 ```python
-import nnter
-from nnter import StandardizedTransformer
-from nnter.families import gpt2
+import nnterp
+from nnterp import StandardizedTransformer
+from nnterp.families import gpt2
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_implementation="eager")
 
-model.family is gpt2                       # True: config.model_type -> nnter.families.gpt2
+model.family is gpt2                       # True: config.model_type -> nnterp.families.gpt2
 model._aliases                             # {'embed_tokens': 'transformer.wte', 'layers': 'transformer.h', 'norm': 'transformer.ln_f'}
 model.layers[0]._aliases                   # {'input_layernorm': 'ln_1', 'self_attn': 'attn', 'post_attention_layernorm': 'ln_2'}
 model.layers[0].self_attn is model.transformer.h[0].attn   # True: an alias is the same envoy
@@ -57,7 +57,7 @@ rest of this page says which.
 ```
  checkpoint / nn.Module
         │
-        ▼  StandardizedTransformer.__init__                    nnter/standardized.py:128-155
+        ▼  StandardizedTransformer.__init__                    nnterp/standardized.py:128-155
  ┌──────────────────────────────────────────────────────────────────────────────┐
  │ config = _read_config(repo_id, kwargs)            AutoConfig, before any build │
  │ family = families.lookup(config.model_type)        REGISTRY, else import module │
@@ -95,7 +95,7 @@ rest of this page says which.
 
 ## Data flow through `__init__`
 
-`StandardizedTransformer.__init__` (`nnter/standardized.py:128-155`) runs in
+`StandardizedTransformer.__init__` (`nnterp/standardized.py:128-155`) runs in
 this order, and the order matters:
 
 1. **Config first.** `_read_config` (`standardized.py:455-471`) returns a
@@ -123,8 +123,8 @@ this order, and the order matters:
 
 ## What nnsight does with the two maps
 
-Both `rename=` and `envoys=` are nnsight features; nnter only fills them in.
-The two facts nnter's design rests on:
+Both `rename=` and `envoys=` are nnsight features; nnterp only fills them in.
+The two facts nnterp's design rests on:
 
 - **The envoy class is chosen per module at construction.** `_wrap_envoy`
   calls `_resolve_envoy_class(module, child_path)` (nnsight
@@ -144,7 +144,7 @@ The two facts nnter's design rests on:
   (`:341-342`, recorded in `_aliases`), a key that does not resolve is
   skipped (`:299-301`), and an alias that would displace a child, an `Envoy`
   attribute or a module attribute raises `ValueError` (`:317-339`). The
-  consequence nnter relies on: a multi-component key (`"transformer.h"`)
+  consequence nnterp relies on: a multi-component key (`"transformer.h"`)
   resolves only from the root, which is what lifts `layers` to `model.layers`
   (`families/gpt2.py:3-6`), while a single-component key (`"attn"`) resolves
   in every block that has one. `test_no_inner_model_alias`
@@ -162,9 +162,9 @@ eproperty that carries a `description` (`envoy.py:1066-1095`), which is how
 
 | layer | owns | must not know |
 |---|---|---|
-| `nnter/families/<model_type>.py` | `MODEL_TYPES`; `RENAME` (native name → standard name); `Layer`/`Attention`/`Mlp`/`Moe`/`LinearAttention` subclasses that point a value at *this family's* op or sibling; `ENVOYS` keyed on transformers types; a module-level `def <size>(model)` for each root size *this family's* config spells its own way (`falcon.py`: `num_kv_heads`, `intermediate_size`; `deepseek_v2.py`: `head_dim`, `qk_head_dim`) | what a value means, how nnsight serves it; the plain rule for a size |
-| `nnter/components/` | what each standard value **means** (`layer_output` is the residual stream leaving the block, `attention_output` the contribution, `attention_probabilities` the post-dropout pattern); how to read/write it (`EProperty` with a path for a key, `DerivedEProperty`); availability (`unavailable=`, `support`); the default op on transformers' shared interface (`INTERFACE`, `attention.py:28`) | any one family's module names or classes |
-| `nnter/standardized.py` | the root values (`logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`); the methods (`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`); the sizes (`num_layers` … `intermediate_size`, `standardized.py:398-438`), each a `StandardizedProperty` (`:26-50`) holding the plain rule over the config and yielding on read to a same-named function in `model.family`; `support()` over the tree (`:287-348`: `_hosts` unions each block's `Standard` children under their standard names, each alias read off its own binding on the block, a mounted alias such as DBRX's `norm_attn_norm.attn` and a module another block owns (shared weights) included, so a value installed through `envoys=` is listed and a module no block has is not); the remote key (`:440-451`) | op names inside a forward; any one family's config keys |
+| `nnterp/families/<model_type>.py` | `MODEL_TYPES`; `RENAME` (native name → standard name); `Layer`/`Attention`/`Mlp`/`Moe`/`LinearAttention` subclasses that point a value at *this family's* op or sibling; `ENVOYS` keyed on transformers types; a module-level `def <size>(model)` for each root size *this family's* config spells its own way (`falcon.py`: `num_kv_heads`, `intermediate_size`; `deepseek_v2.py`: `head_dim`, `qk_head_dim`) | what a value means, how nnsight serves it; the plain rule for a size |
+| `nnterp/components/` | what each standard value **means** (`layer_output` is the residual stream leaving the block, `attention_output` the contribution, `attention_probabilities` the post-dropout pattern); how to read/write it (`EProperty` with a path for a key, `DerivedEProperty`); availability (`unavailable=`, `support`); the default op on transformers' shared interface (`INTERFACE`, `attention.py:28`) | any one family's module names or classes |
+| `nnterp/standardized.py` | the root values (`logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`); the methods (`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`); the sizes (`num_layers` … `intermediate_size`, `standardized.py:398-438`), each a `StandardizedProperty` (`:26-50`) holding the plain rule over the config and yielding on read to a same-named function in `model.family`; `support()` over the tree (`:287-348`: `_hosts` unions each block's `Standard` children under their standard names, each alias read off its own binding on the block, a mounted alias such as DBRX's `norm_attn_norm.attn` and a module another block owns (shared weights) included, so a value installed through `envoys=` is listed and a module no block has is not); the remote key (`:440-451`) | op names inside a forward; any one family's config keys |
 
 Two examples of the boundary. Gemma-2's contribution is the post-attention
 norm's output: the *family* says so with an `EProperty` keyed
@@ -231,15 +231,15 @@ page, [recurrent-mixer-internals.md](recurrent-mixer-internals.md).
 
 ## The registry
 
-`nnter/families/__init__.py` is the whole registry, and it is lazy on
-purpose: `import nnter` must import no transformers modeling module
+`nnterp/families/__init__.py` is the whole registry, and it is lazy on
+purpose: `import nnterp` must import no transformers modeling module
 (`tests/test_registry.py:23-36` runs that in a subprocess).
 
 - `known()` (`families/__init__.py:39-41`) lists the package's modules with
   `pkgutil.iter_modules`; that list is the set of shipped families, and a
   module's name *is* its `model_type` (`test_registry.py:15-20`).
 - `lookup(model_type)` (`:44-62`) returns `REGISTRY[model_type]` when
-  something was `register`ed, else `importlib.import_module(f"nnter.families.{model_type}")`.
+  something was `register`ed, else `importlib.import_module(f"nnterp.families.{model_type}")`.
   A `ModuleNotFoundError` whose `.name` is that exact module means "no such
   family" and becomes `UnsupportedFamily` with the known list; any other
   `ModuleNotFoundError` is a family module that itself failed to import, and
@@ -248,7 +248,7 @@ purpose: `import nnter` must import no transformers modeling module
   `REGISTRY` (`:32`), which `lookup` consults first, so a module from outside
   the package, or an override of a shipped one, needs no edit here
   (`test_registry.py:44-51`).
-- `__getattr__` (`:83-90`) makes `nnter.families.qwen3_5_text` import on
+- `__getattr__` (`:83-90`) makes `nnterp.families.qwen3_5_text` import on
   first attribute access, and `__dir__` (`:93-94`) lists the shipped names so
   tab completion works before anything is imported. `all_families()`
   (`:78-80`) imports everything, for tooling and tests only.
@@ -261,13 +261,13 @@ checkpoint of that type is looked up, and never earlier.
 
 | concern | file |
 |---|---|
-| load path, root values, methods, sizes and `StandardizedProperty`, `support()` | `nnter/standardized.py` |
-| registry, `lookup`, `register`, `UnsupportedFamily` | `nnter/families/__init__.py` |
-| one family | `nnter/families/<model_type>.py` |
-| descriptors | `nnter/components/eproperty.py` ([eproperty-internals.md](eproperty-internals.md)) |
-| base envoys | `nnter/components/{standard,layer,attention,mlp}.py` |
-| recurrent mixers: the base, and the DeltaNet subclass | `nnter/components/recurrent.py`, `nnter/components/linear_attention.py` ([recurrent-mixer-internals.md](recurrent-mixer-internals.md)) |
-| helpers that use the values | `nnter/prompt_utils.py`, `nnter/nnsight_utils.py` |
+| load path, root values, methods, sizes and `StandardizedProperty`, `support()` | `nnterp/standardized.py` |
+| registry, `lookup`, `register`, `UnsupportedFamily` | `nnterp/families/__init__.py` |
+| one family | `nnterp/families/<model_type>.py` |
+| descriptors | `nnterp/components/eproperty.py` ([eproperty-internals.md](eproperty-internals.md)) |
+| base envoys | `nnterp/components/{standard,layer,attention,mlp}.py` |
+| recurrent mixers: the base, and the DeltaNet subclass | `nnterp/components/recurrent.py`, `nnterp/components/linear_attention.py` ([recurrent-mixer-internals.md](recurrent-mixer-internals.md)) |
+| helpers that use the values | `nnterp/prompt_utils.py`, `nnterp/nnsight_utils.py` |
 | the executable contract | `tests/families/suite.py` ([testing.md](testing.md)) |
 
 ## Gotchas
@@ -285,7 +285,7 @@ checkpoint of that type is looked up, and never earlier.
   canonical example reads them in that order. Read out of order and the
   trace raises `OutOfOrderError` naming the attention call's `.fn`: see
   [gotchas.md](gotchas.md).
-- `import nnter` before any `transformers.models...modeling_*` import in a
+- `import nnterp` before any `transformers.models...modeling_*` import in a
   script; the reverse order segfaults on this stack
   ([transformers-compat.md](transformers-compat.md)).
 - A size override is a function on the family *module*, looked up by name on
@@ -300,5 +300,5 @@ checkpoint of that type is looked up, and never earlier.
 - [testing.md](testing.md) — `FamilySuite`, the contract every family passes
 - [transformers-compat.md](transformers-compat.md) — what a release can rename
 - [gotchas.md](gotchas.md) — contributor-facing traps
-- nnsight `docs/usage/rename-modules.md` and `docs/usage/source.md` — the two features nnter builds on
-- nnsight `docs/developing/extending-envoy.md` — the `eproperty` surface nnter's descriptors subclass
+- nnsight `docs/usage/rename-modules.md` and `docs/usage/source.md` — the two features nnterp builds on
+- nnsight `docs/developing/extending-envoy.md` — the `eproperty` surface nnterp's descriptors subclass

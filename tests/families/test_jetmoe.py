@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import jetmoe
+from nnterp.families import jetmoe
 
 
 class TestJetMoe(FamilySuite):

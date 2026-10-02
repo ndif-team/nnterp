@@ -9,8 +9,8 @@ import pytest
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT, contributions, near, rows
 
-from nnter import StandardizedTransformer
-from nnter.families import gemma4_text
+from nnterp import StandardizedTransformer
+from nnterp.families import gemma4_text
 
 
 def _ple_checkpoint(repo="hf-tiny-v2/tiny-random-Gemma4ForCausalLM"):
@@ -25,7 +25,7 @@ def _ple_checkpoint(repo="hf-tiny-v2/tiny-random-Gemma4ForCausalLM"):
     from safetensors.torch import load_file, save_file
 
     snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
-    patched = os.path.join(tempfile.gettempdir(), f"nnter-gemma4-ple-{os.path.basename(snapshot)}")
+    patched = os.path.join(tempfile.gettempdir(), f"nnterp-gemma4-ple-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
     os.makedirs(patched, exist_ok=True)
@@ -411,7 +411,7 @@ class TestGemma4KEqV(Gemma4Suite):
         assert not torch.equal(inplace, clean_logits) and torch.equal(inplace, assigned)
 
     def test_per_layer_output_is_unavailable(self, model):
-        from nnter import Unavailable
+        from nnterp import Unavailable
 
         with pytest.raises(Unavailable, match="no per-layer embeddings"):
             model.layers[0].per_layer_output

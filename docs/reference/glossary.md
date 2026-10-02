@@ -1,27 +1,27 @@
 ---
 title: Glossary
-one_liner: Alphabetical definitions of the terms the nnter docs use, one or two sentences each, with the page that explains each one.
+one_liner: Alphabetical definitions of the terms the nnterp docs use, one or two sentences each, with the page that explains each one.
 tags: [reference, glossary, vocabulary]
 related: [docs/reference/api-quick-reference.md, docs/reference/families.md, docs/usage/vocabulary.md, docs/usage/residual-stream.md, docs/usage/availability.md, docs/usage/layouts.md, docs/usage/attention-interior.md, docs/usage/delta-net.md, docs/extending/adding-a-family.md, docs/developing/eproperty-internals.md, docs/developing/recurrent-mixer-internals.md]
-sources: [nnter/__init__.py, nnter/standardized.py, nnter/components/__init__.py, nnter/components/eproperty.py, nnter/components/attention.py, nnter/components/linear_attention.py, nnter/components/recurrent.py, nnter/families/__init__.py, tests/families/suite.py]
+sources: [nnterp/__init__.py, nnterp/standardized.py, nnterp/components/__init__.py, nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/__init__.py, tests/families/suite.py]
 ---
 
 # Glossary
 
 ## What this is for
 
-The nnter docs use each of these words in exactly one sense. This page gives that sense in one or two sentences and points at the page that explains it; nnsight's own terms (envoy, eproperty, occurrence, source, `tracer.iter`) are defined here only as far as nnter leans on them, and nnsight `docs/reference/glossary.md` has the rest.
+The nnterp docs use each of these words in exactly one sense. This page gives that sense in one or two sentences and points at the page that explains it; nnsight's own terms (envoy, eproperty, occurrence, source, `tracer.iter`) are defined here only as far as nnterp leans on them, and nnsight `docs/reference/glossary.md` has the rest.
 
 ## Canonical pattern
 
 The terms in one block: a *family* resolved from the checkpoint, a *standard name* aliasing a *native name*, *availability* reported by `support()` and enforced by `Unavailable`.
 
 ```python
-from nnter import StandardizedTransformer, Unavailable
+from nnterp import StandardizedTransformer, Unavailable
 
 model = StandardizedTransformer("meta-llama/Llama-3.1-8B", dispatch=True)   # the checkpoint's own attention: sdpa
 
-print(model.family.__name__)                                                # nnter.families.llama
+print(model.family.__name__)                                                # nnterp.families.llama
 print(model.layers[0].self_attn is model.model.layers[0].self_attn)         # True: the standard name is an alias of the native one
 print(model.support()["self_attn.attention_probabilities"][0])              # read inside the eager attention forward, but this model runs 'sdpa'; ...
 
@@ -42,7 +42,7 @@ A learned per-head logit that joins the softmax as one extra key column and is d
 
 ## Availability, `Unavailable`
 
-Whether this checkpoint has a standard value. `support()` returns `None` (available) or a reason string; reading or writing an unavailable value raises `nnter.Unavailable` with the same reason, at that line, before the model runs. Decided per envoy by the descriptor's `unavailable=` (a string, or a predicate of the envoy), so a config flag or a hybrid's block type can decide. See [../usage/availability.md](../usage/availability.md).
+Whether this checkpoint has a standard value. `support()` returns `None` (available) or a reason string; reading or writing an unavailable value raises `nnterp.Unavailable` with the same reason, at that line, before the model runs. Decided per envoy by the descriptor's `unavailable=` (a string, or a predicate of the envoy), so a config flag or a hybrid's block type can decide. See [../usage/availability.md](../usage/availability.md).
 
 ## Chunked kernel, recurrent kernel
 
@@ -58,7 +58,7 @@ transformers' `attn_implementation="eager"`: the Python attention forward whose 
 
 ## Envoy
 
-nnsight's proxy for one module in the tree, reached by attribute path (`model.layers[3].self_attn`), with `.input`, `.output`, `.source`, `.skip()`. nnter's `Layer`, `Attention`, `Mlp`, `RecurrentMixer` and `LinearAttention` are `Envoy` subclasses installed through `envoys=`. See nnsight `docs/reference/glossary.md`.
+nnsight's proxy for one module in the tree, reached by attribute path (`model.layers[3].self_attn`), with `.input`, `.output`, `.source`, `.skip()`. nnterp's `Layer`, `Attention`, `Mlp`, `RecurrentMixer` and `LinearAttention` are `Envoy` subclasses installed through `envoys=`. See nnsight `docs/reference/glossary.md`.
 
 ## `envoys=`
 
@@ -66,11 +66,11 @@ The `TransformersModel` argument mapping module types (or native paths, never al
 
 ## eproperty
 
-nnsight's descriptor for a served value: reading it parks the intervention until the model reaches its location, writing it replaces the value there, and it appears in the envoy's repr with its description. nnter's `EProperty` adds availability and a path for a key (`output`, `../norm.output`, `source.<op>.inputs`), so one descriptor serves a value wherever it lives; `DerivedEProperty` computes one instead. See [../developing/eproperty-internals.md](../developing/eproperty-internals.md) and nnsight `docs/developing/extending-envoy.md`.
+nnsight's descriptor for a served value: reading it parks the intervention until the model reaches its location, writing it replaces the value there, and it appears in the envoy's repr with its description. nnterp's `EProperty` adds availability and a path for a key (`output`, `../norm.output`, `source.<op>.inputs`), so one descriptor serves a value wherever it lives; `DerivedEProperty` computes one instead. See [../developing/eproperty-internals.md](../developing/eproperty-internals.md) and nnsight `docs/developing/extending-envoy.md`.
 
 ## Family
 
-One module under `nnter/families/`, named after `config.model_type` (`gpt2.py`, `gemma3_text.py`), declaring `MODEL_TYPES`, `RENAME`, its `Layer` / `Attention` / `Mlp` (and `LinearAttention`) subclasses and `ENVOYS`. `model.family` is the one a checkpoint resolved to. See [families.md](families.md) and [../extending/adding-a-family.md](../extending/adding-a-family.md).
+One module under `nnterp/families/`, named after `config.model_type` (`gpt2.py`, `gemma3_text.py`), declaring `MODEL_TYPES`, `RENAME`, its `Layer` / `Attention` / `Mlp` (and `LinearAttention`) subclasses and `ENVOYS`. `model.family` is the one a checkpoint resolved to. See [families.md](families.md) and [../extending/adding-a-family.md](../extending/adding-a-family.md).
 
 ## Gated DeltaNet
 
@@ -90,7 +90,7 @@ The number of key/value heads, `num_kv_heads`, fewer than `num_heads` under grou
 
 ## Layout, dims
 
-The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-one named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnter.components` re-exports the twenty-eight envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families. See [../usage/layouts.md](../usage/layouts.md).
+The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-one named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the twenty-eight envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families. See [../usage/layouts.md](../usage/layouts.md).
 
 ## MLA (multi-head latent attention)
 
@@ -98,7 +98,7 @@ DeepSeek-V2/V3's attention, where queries and keys are `qk_head_dim = qk_nope_he
 
 ## Native name
 
-The module's name in the checkpoint's own architecture (`transformer.h[i].attn` on GPT-2, `gpt_neox.layers[i].attention` on Pythia). It keeps working under nnter; `RENAME` maps it onto the standard name, and `envoys=` keys match native paths only. See [../usage/vocabulary.md](../usage/vocabulary.md).
+The module's name in the checkpoint's own architecture (`transformer.h[i].attn` on GPT-2, `gpt_neox.layers[i].attention` on Pythia). It keeps working under nnterp; `RENAME` maps it onto the standard name, and `envoys=` keys match native paths only. See [../usage/vocabulary.md](../usage/vocabulary.md).
 
 ## Occurrence
 
@@ -122,11 +122,11 @@ A gated DeltaNet layer's per-head memory, `[batch, heads, key_dim, value_dim]`: 
 
 ## `RecurrentMixer`
 
-The base envoy of a recurrent mixer (`nnter.components.recurrent`): a subclass names its prompt and decode-step kernels (`CHUNK_KERNEL`, `RECURRENT_KERNEL`), the bindings the forward's test between them reads (`BRANCH`, `SEQ_OP`) and the per-token state binding (`STATE_OP`, or `None`), and declares its values at the kernel call; the base reaches them, reports their availability, holds `attention_output` and the per-token `state` / `states`, and routes the kernels (`route_kernels`). `LinearAttention` is the gated DeltaNet subclass, `SelectiveScan` the Mamba-1 one. See [../developing/recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md).
+The base envoy of a recurrent mixer (`nnterp.components.recurrent`): a subclass names its prompt and decode-step kernels (`CHUNK_KERNEL`, `RECURRENT_KERNEL`), the bindings the forward's test between them reads (`BRANCH`, `SEQ_OP`) and the per-token state binding (`STATE_OP`, or `None`), and declares its values at the kernel call; the base reaches them, reports their availability, holds `attention_output` and the per-token `state` / `states`, and routes the kernels (`route_kernels`). `LinearAttention` is the gated DeltaNet subclass, `SelectiveScan` the Mamba-1 one. See [../developing/recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md).
 
 ## Registry
 
-`nnter.families`: `lookup(model_type)` returns a family passed to `register()` (kept in `REGISTRY`), else imports `nnter.families.<model_type>` on first use, else raises `UnsupportedFamily`. The module names are the registry; `import nnter` loads no transformers modeling module. See [../extending/registering.md](../extending/registering.md).
+`nnterp.families`: `lookup(model_type)` returns a family passed to `register()` (kept in `REGISTRY`), else imports `nnterp.families.<model_type>` on first use, else raises `UnsupportedFamily`. The module names are the registry; `import nnterp` loads no transformers modeling module. See [../extending/registering.md](../extending/registering.md).
 
 ## Rename
 
@@ -138,7 +138,7 @@ The tensor a block passes to the next, `[batch, seq, hidden]`: `layers[i].input`
 
 ## `route_kernels`, `route_delta_rule`
 
-`nnter.route_kernels(family, "torch" | "default")`: binds a family's recurrent kernel names, process-wide, to transformers' pure-torch kernels (on a gated DeltaNet, both to the token-by-token loop; on Mamba-1, each to its own, the scan being the loop) or back to the module's import-time binding. The per-token `state` / `states` exist only under `"torch"`; call it before tracing the layer. `nnter.route_delta_rule(family, "recurrent" | "chunked")` is the same switch in the delta rule's words. See [../usage/delta-net.md](../usage/delta-net.md).
+`nnterp.route_kernels(family, "torch" | "default")`: binds a family's recurrent kernel names, process-wide, to transformers' pure-torch kernels (on a gated DeltaNet, both to the token-by-token loop; on Mamba-1, each to its own, the scan being the loop) or back to the module's import-time binding. The per-token `state` / `states` exist only under `"torch"`; call it before tracing the layer. `nnterp.route_delta_rule(family, "recurrent" | "chunked")` is the same switch in the delta rule's words. See [../usage/delta-net.md](../usage/delta-net.md).
 
 ## Sandwich block
 
@@ -146,7 +146,7 @@ A block that norms a sublayer's output before adding it to the residual stream, 
 
 ## Selective scan, `SelectiveScan`
 
-Mamba-1's mixer: per channel, `h = exp(dt*A) h + dt B x`, `y = C.h + D x`, with the step size `dt` and the vectors `B`, `C` computed from each token. `nnter.components.SelectiveScan` serves it as `linear_attn` on Mamba, Falcon-Mamba and Jamba, with `C` / `B` / `x` as `attention_queries` / `attention_keys` / `attention_values`, `dt` as `betas` and `dt*A` as `decays`. See [../usage/selective-scan.md](../usage/selective-scan.md).
+Mamba-1's mixer: per channel, `h = exp(dt*A) h + dt B x`, `y = C.h + D x`, with the step size `dt` and the vectors `B`, `C` computed from each token. `nnterp.components.SelectiveScan` serves it as `linear_attn` on Mamba, Falcon-Mamba and Jamba, with `C` / `B` / `x` as `attention_queries` / `attention_keys` / `attention_values`, `dt` as `betas` and `dt*A` as `decays`. See [../usage/selective-scan.md](../usage/selective-scan.md).
 
 ## Softcap
 

@@ -10,7 +10,7 @@ norm answers to ``input_layernorm``.
 
 The kernels: with ``mamba_ssm`` installed the forward dispatches the scan
 and the decode step to its compiled CUDA kernels, which have no source to
-read inside and do not run on CPU; ``nnter.route_kernels(model.family,
+read inside and do not run on CPU; ``nnterp.route_kernels(model.family,
 "torch")`` before the first trace binds them to transformers' pure-torch
 functions. With ``residual_in_fp32`` the block adds in float32, so
 ``layer_output`` is float32 whatever the load dtype; the model casts the

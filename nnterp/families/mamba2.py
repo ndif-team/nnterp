@@ -12,7 +12,7 @@ A pure state-space model: no attention and no MLP. The tree::
 Each block is ``hidden + mixer(norm(hidden))`` (the residual in float32 when
 ``residual_in_fp32``), so the block's one contribution is the mixer's output
 and ``layer.input + linear_attn.attention_output == layer_output``. The mixer
-is `nnter.StateSpace` under the standard name ``linear_attn`` (the recurrent
+is `nnterp.StateSpace` under the standard name ``linear_attn`` (the recurrent
 mixer's name on every hybrid). The block's
 ``norm`` keeps its name: a ``"norm"`` key would also match the mixer's own
 gated ``norm``, and its output is ``linear_attn.input``. There is no

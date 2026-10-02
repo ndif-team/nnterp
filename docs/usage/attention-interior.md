@@ -3,7 +3,7 @@ title: Attention Interior
 one_liner: Read, edit and assign the queries, keys, values, scores, pattern and per-head outputs inside every family's attention, under `attn_implementation="eager"`.
 tags: [usage, attention, interior, source, eager, heads]
 related: [docs/usage/residual-stream.md, docs/usage/layouts.md, docs/usage/availability.md, docs/usage/loading.md, docs/usage/generation.md, docs/usage/delta-net.md, docs/usage/remote.md]
-sources: [nnter/components/attention.py, nnter/components/eproperty.py, nnter/families/gpt2.py, nnter/families/falcon.py, nnter/families/gpt_oss.py, nnter/families/deepseek_v4.py, nnter/families/gptj.py, nnter/families/codegen.py, nnter/families/xglm.py, nnter/families/gpt_neox_japanese.py, nnter/families/bloom.py, nnter/families/mpt.py, nnter/families/deepseek_v2.py, nnter/families/gemma4_text.py, tests/families/suite.py]
+sources: [nnterp/components/attention.py, nnterp/components/eproperty.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/gpt_oss.py, nnterp/families/deepseek_v4.py, nnterp/families/gptj.py, nnterp/families/codegen.py, nnterp/families/xglm.py, nnterp/families/gpt_neox_japanese.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/deepseek_v2.py, nnterp/families/gemma4_text.py, tests/families/suite.py]
 ---
 
 # Attention Interior
@@ -16,7 +16,7 @@ queries, keys and values the softmax attention receives, the scores entering
 the softmax, the pattern the values are mixed with, and each head's output
 before the heads are concatenated and projected. Head ablation, pattern
 surgery, key-side steering and query/key patching are all reads and writes of
-these. They are source-located values: nnter reaches them through nnsight
+these. They are source-located values: nnterp reaches them through nnsight
 `.source` (nnsight docs/usage/source.md) at transformers' shared eager
 attention call, or at the family's own operations where it does its own
 arithmetic, and presents them with one layout on every family.
@@ -25,7 +25,7 @@ arithmetic, and presents them with one layout on every family.
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("meta-llama/Llama-3.1-8B", attn_implementation="eager")
 attn = model.layers[10].self_attn
@@ -62,7 +62,7 @@ Each block's sizes are on its attention, read off the module: `attn.num_heads`,
 under latent attention and on MiMo-V2-Flash). The root's `model.num_heads`, ...
 are the config's and equal every block's except on Gemma-4 and MiMo-V2-Flash,
 whose blocks differ. Every value's layout is on the descriptor, one of the named
-aliases in `nnter.components`: `Attention.attention_keys.layout is Keys`, and
+aliases in `nnterp.components`: `Attention.attention_keys.layout is Keys`, and
 `Attention.attention_keys.dims` is `("batch", "kv_heads", "seq", "qk_head_dim")`.
 The sequence axis is 2 on the queries, keys and values, the layout transformers
 hands its interface, and 1 on the head outputs.
@@ -83,7 +83,7 @@ model.support(layer=0)["self_attn.attention_probabilities"]
 # "read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"
 ```
 
-Reading one raises `nnter.Unavailable` with the same reason, before the model
+Reading one raises `nnterp.Unavailable` with the same reason, before the model
 runs. `attention_output` does not depend on the implementation and stays
 available. A load with no `attn_implementation` gets transformers' default,
 `sdpa` on every family that supports it, so pass `attn_implementation="eager"`
@@ -115,7 +115,7 @@ with model.trace(prompt):
 
 A written pattern must be `[batch, heads, query, key]` in the model dtype; a
 written argument must match the shape the interface expects for it. The
-model, not nnter, reports a mismatch, from inside the forward.
+model, not nnterp, reports a mismatch, from inside the forward.
 
 The scores already carry the causal mask: masked entries hold the dtype's minimum
 (`-inf` on GPT-Neo). So an edit that overwrites or multiplies them lifts the mask:

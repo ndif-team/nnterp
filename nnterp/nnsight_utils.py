@@ -1,7 +1,6 @@
 """Collecting activations and next-token distributions over many prompts.
 
-The same names as nnterp's ``nnsight_utils``, written against the standard
-values: a layer's activation is ``model.layers[i].layer_output`` unless a
+Written against the standard values: a layer's activation is ``model.layers[i].layer_output`` unless a
 ``get_activations(model, layer)`` of your own says otherwise.
 """
 

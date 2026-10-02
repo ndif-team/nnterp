@@ -7,7 +7,7 @@ import tempfile
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import zaya
+from nnterp.families import zaya
 
 REPO = "hf-tiny-v2/tiny-random-ZayaForCausalLM"
 
@@ -26,7 +26,7 @@ def _patched_checkpoint(merges, repo=REPO):
     from safetensors.torch import load_file, save_file
 
     snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
-    patched = os.path.join(tempfile.gettempdir(), f"nnter-zaya-{'merged' if merges else 'temp'}-{os.path.basename(snapshot)}")
+    patched = os.path.join(tempfile.gettempdir(), f"nnterp-zaya-{'merged' if merges else 'temp'}-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
     os.makedirs(patched, exist_ok=True)

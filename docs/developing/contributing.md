@@ -1,25 +1,25 @@
 ---
 title: Contributing
-one_liner: House style for nnter code and docs, the workflow for a change, and the open items nnter deliberately lacks or has not finished, distilled from GAPS.md.
+one_liner: House style for nnterp code and docs, the workflow for a change, and the open items nnterp deliberately lacks or has not finished, distilled from GAPS.md.
 tags: [developing, contributing, style, workflow, roadmap]
 related: [docs/developing/testing.md, docs/developing/architecture.md, docs/developing/transformers-compat.md, docs/developing/gotchas.md, docs/extending/index.md]
-sources: [GAPS.md, README.md, nnter/families/llama.py, nnter/families/gemma2.py, nnter/components/eproperty.py, nnter/components/layer.py, nnter/components/attention.py, nnter/components/linear_attention.py, nnter/standardized.py, tests/families/suite.py, nnsight STYLE.md]
+sources: [GAPS.md, README.md, nnterp/families/llama.py, nnterp/families/gemma2.py, nnterp/components/eproperty.py, nnterp/components/layer.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/standardized.py, tests/families/suite.py, nnsight STYLE.md]
 ---
 
 # Contributing
 
 ## What this is for
 
-How a change lands in nnter: the style the code and docs are held to, the
-steps from a branch to a passing suite, and the list of what nnter does not
+How a change lands in nnterp: the style the code and docs are held to, the
+steps from a branch to a passing suite, and the list of what nnterp does not
 do yet so a contribution can pick one up rather than rediscover it.
 
 ## Canonical pattern
 
 A new family is one module and one test file. The module for a Llama-named
 checkpoint is three container keys, three empty subclasses and the type
-keys (`nnter/families/llama.py`); a family whose block differs overrides
-only the value that differs (`nnter/families/gemma2.py:33-49`):
+keys (`nnterp/families/llama.py`); a family whose block differs overrides
+only the value that differs (`nnterp/families/gemma2.py:33-49`):
 
 ```python
 """<Model> (``<Model>ForCausalLM``).
@@ -62,7 +62,7 @@ ENVOYS = {<Mt>DecoderLayer: Layer, <Mt>Attention: Attention, <Mt>MLP: Mlp}
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import <model_type>
+from nnterp.families import <model_type>
 
 
 class Test<Model>(FamilySuite):
@@ -75,17 +75,17 @@ Then `HF_HUB_OFFLINE=1 pytest tests/families/test_<model_type>.py -q`.
 
 ## House style
 
-nnsight's `STYLE.md` applies to nnter as written, and its first rules are
+nnsight's `STYLE.md` applies to nnterp as written, and its first rules are
 the ones that matter most here:
 
 - **Present tense.** The source and the docs describe what is; no "used
   to", no "fixed", no issue numbers, no TODO in prose. When code exists
   because something once broke, write the constraint, not the incident
-  (`nnter/components/eproperty.py:116-118` says why a predicate's
+  (`nnterp/components/eproperty.py:116-118` says why a predicate's
   `AttributeError` becomes a `RuntimeError`, not when it bit).
 - **Docstrings state the contract; comments say why.** A module docstring
-  teaches the family or the concept (`nnter/families/falcon.py:1-11`,
-  `nnter/components/recurrent.py:1-14`); a value's docstring says
+  teaches the family or the concept (`nnterp/families/falcon.py:1-11`,
+  `nnterp/components/recurrent.py:1-14`); a value's docstring says
   what the tensor is, its layout, and how writes behave; an inline comment
   names the failure mode averted or the alternative rejected. A comment that
   paraphrases the line under it is deleted.
@@ -98,23 +98,23 @@ the ones that matter most here:
   `support()` show.
 - **One family per module, named after `model_type`**
   (`gemma3_text.py` covers `gemma3_text`); `MODEL_TYPES` is that one name.
-  The module *is* the registry entry (`nnter/families/__init__.py:18-22`).
+  The module *is* the registry entry (`nnterp/families/__init__.py:18-22`).
 - **Families import their modeling module only inside the family module**,
-  at the top of it, never from `nnter/components` or `nnter/standardized.py`,
-  so `import nnter` loads no modeling code (`tests/test_registry.py:23-36`).
+  at the top of it, never from `nnterp/components` or `nnterp/standardized.py`,
+  so `import nnterp` loads no modeling code (`tests/test_registry.py:23-36`).
 - **Every value is annotated with a layout name** (`-> Residual`,
   `-> Pattern`, `-> Keys`), never an inline `Float[Tensor, "..."]`. Each name
   is defined in the file of the envoy that serves it (`Residual` in
   `components/layer.py`, the attention interior's in `components/attention.py`,
   the DeltaNet ones in `components/linear_attention.py`, the recurrent state's in
   `components/recurrent.py`, the root's in
-  `standardized.py`) and re-exported from `nnter.components`, which is where a
+  `standardized.py`) and re-exported from `nnterp.components`, which is where a
   family imports it in its one components import line. A family that
   redefines a value writes the base's name, so `layout` and `dims` cannot
   drift from the base, and `test_values_match_their_annotations` checks every
   axis against the model's sizes. A new shape is a new name defined beside the
   envoy that serves it, with a comment above it, and exported from
-  `nnter.components`. Axis names are the shared set in those comments and in
+  `nnterp.components`. Axis names are the shared set in those comments and in
   `suite.py:448-454`.
 - **Every source-located value has an `unavailable=` predicate** (`needs_eager`,
   `interface_reason`, `needs_torch_kernels`, or a family's own), so `support()`
@@ -131,16 +131,16 @@ the ones that matter most here:
 
 ## Workflow
 
-1. Branch from `main` (the repository's only branch); run git from the
-   repository root and confirm `git rev-parse --show-toplevel` is
-   `~/wd/nnter` before staging ([gotchas.md](gotchas.md)).
+1. Branch from `main`; run git from the repository root and confirm
+   `git rev-parse --show-toplevel` prints your nnterp checkout before
+   staging ([gotchas.md](gotchas.md)).
 2. Make the change: a family module, a component value, or both.
 3. Run the family's file, then the whole suite
    (`HF_HUB_OFFLINE=1 pytest -q`, about 71 s; [testing.md](testing.md)).
 4. For a new family, add `tests/families/test_<model_type>.py` with a tiny
    checkpoint that is offline-cached; prefer `hf-internal-testing/`,
    `trl-internal-testing/`, `yujiepan/` or `hf-tiny-v2/` repos. If the
-   checkpoint's config does not parse on the transformers nnter is developed on, patch
+   checkpoint's config does not parse on the transformers nnterp is developed on, patch
    the config in the test file the way `tests/families/test_olmo3.py:14-32`
    does.
 5. For a new value, add a method to `FamilySuite`, and expect it to run on
@@ -153,14 +153,14 @@ the ones that matter most here:
 ## Open items
 
 Distilled from `GAPS.md` (sections 2 and 4, a read-only comparison of
-nnterp `internals-accessors` at `2db11d8` against this package), which is
-the source for everything in this list. Two kinds: things nnter
-deliberately does not do the way nnterp does, and things that remain open.
+nnterp 1.x on branch `internals-accessors` at `2db11d8` against this
+package), which is the source for everything in this list. Two kinds: things nnterp
+deliberately does not do the way nnterp 1.x does, and things that remain open.
 
 ### Deliberately absent (design choices, from GAPS.md section 3 and 2a)
 
-- **No Llama-like fallback for an unregistered `model_type`.** nnterp applies
-  global name lists to any model; nnter refuses with `UnsupportedFamily`
+- **No Llama-like fallback for an unregistered `model_type`.** nnterp 1.x applies
+  global name lists to any model; nnterp refuses with `UnsupportedFamily`
   and needs a module even for a family that spells everything like Llama.
   It never mis-binds silently, at the cost of a three-line module per
   family (`GAPS.md` §2a row 1, §3 item 4).
@@ -174,12 +174,12 @@ deliberately does not do the way nnterp does, and things that remain open.
   `tests/test_registry.py:88-92`).
 - **Nothing runs at construction** (no scan or trace validation); the suite
   carries the checks (§3 item 8).
-- **Remote runs need nnter installed on the server**; nothing is shipped by
+- **Remote runs need nnterp installed on the server**; nothing is shipped by
   value, since an `EProperty` cannot be pickled (§2a remote row, §3 item 10).
 
 ### Open (from GAPS.md sections 2 and 4)
 
-- **Forward-order ranking metadata** (nnterp's `Address.order` /
+- **Forward-order ranking metadata** (nnterp 1.x's `Address.order` /
   `Internals.rank`): a way to sort several reads into the order the forward
   reaches them, so a user does not learn Falcon's values-before-queries rule
   by an `OutOfOrderError` (§2a "Forward-order").
@@ -188,31 +188,31 @@ deliberately does not do the way nnterp does, and things that remain open.
   blocks would be plain `Envoy`s with no `layer_output`), detection of
   `reorder_and_upcast_attn` and of a sublayer that takes a `residual`
   argument (§2a "Load-time validation", §4 items 9-11).
-- **Interventions and display conveniences**: nnterp's `logit_lens`,
+- **Interventions and display conveniences**: nnterp 1.x's `logit_lens`,
   `patchscope_lens`, `patchscope_generate`, `patch_object_attn_lens`,
   `TargetPrompt(Batch)`, `repeat_prompt`, `plot_topk_tokens`, `prompts_to_df`
   (§2b).
 - **VLMs**: `detect_automodel`, `text_only`, `StandardizedVLM`, `load_model`;
-  nnter hardcodes `task="text-generation"` and would need the same container
+  nnterp hardcodes `task="text-generation"` and would need the same container
   lift for a `language_model` (§2a, §3 item 2).
 - **Real NDIF verification** of `remote=True` against a deployed
   `TransformersModel` (§2a remote row; the key is right by
   `tests/test_registry.py:80-85`, the round trip is not exercised).
 - **Optimized-kernel pinning** for hybrids: with `flash-linear-attention` or
-  `causal-conv1d` installed every DeltaNet value is unavailable; nnterp pins
+  `causal-conv1d` installed every DeltaNet value is unavailable; nnterp 1.x pins
   the reference kernels at load and re-pins on `dispatch()` (§2a "Hybrid
   Gated DeltaNet", §4 item 6).
 - **A `model.require(...)` / `model.available(...)` helper** that answers
   for a set of values at once, instead of reading `support()` by hand and
   meeting `Unavailable` from `hasattr` (§2a "Availability before any
-  trace"; the note under `Unavailable` in `nnter/components/eproperty.py:28-32`).
+  trace"; the note under `Unavailable` in `nnterp/components/eproperty.py:28-32`).
 - **Sequence-first normalization of softmax q/k/v**: the sequence axis is 2
   on `attention_queries`/`keys`/`values` and 1 everywhere else, the layout
   transformers hands its interface; a `seq_axis`-style layout fact or a view
   would make every value sequence-first (§2a "Layout facts", README
   "Layouts").
-- **Block interior beyond attention**: nnterp's `layers_mid`,
-  `attentions_premix`, `mlps_activation`, `mlps_neurons` rows have no nnter
+- **Block interior beyond attention**: nnterp 1.x's `layers_mid`,
+  `attentions_premix`, `mlps_activation`, `mlps_neurons` rows have no nnterp
   value yet (§2a "Block accessors").
 - **`device_map="auto"` default**, `linear_attention_layers` /
   `attention_layers` index lists, `block_structure` as a family constant

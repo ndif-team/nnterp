@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, rows
 
-from nnter.families import gpt2
+from nnterp.families import gpt2
 
 
 class TestGPT2(FamilySuite):

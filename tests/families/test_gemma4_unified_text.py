@@ -2,7 +2,7 @@
 
 from test_gemma4_text import Gemma4Suite
 
-from nnter.families import gemma4_unified_text
+from nnterp.families import gemma4_unified_text
 
 
 class TestGemma4Unified(Gemma4Suite):

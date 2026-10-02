@@ -3,7 +3,7 @@ title: Residual stream and contributions
 one_liner: "`layer_output`, `attention_output` and `mlp_output` are tensors on every family, defined by `layers[i].input + attention_output + mlp_output == layer_output`."
 tags: [usage, residual-stream, layer_output, attention_output, mlp_output, contributions, hyper-connections, Streams]
 related: [docs/usage/vocabulary.md, docs/usage/methods.md, docs/usage/root-values.md, docs/usage/availability.md]
-sources: [nnter/components/layer.py, nnter/families/deepseek_v4.py, nnter/components/attention.py, nnter/components/mlp.py, nnter/components/standard.py, nnter/components/eproperty.py, nnter/families/gemma2.py, nnter/families/gemma4_text.py, nnter/families/bloom.py, nnter/families/mpt.py, nnter/families/falcon.py]
+sources: [nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/mlp.py, nnterp/components/standard.py, nnterp/components/eproperty.py, nnterp/families/gemma2.py, nnterp/families/gemma4_text.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/falcon.py]
 ---
 
 # Residual stream and contributions
@@ -19,7 +19,7 @@ Three standard values give every decoder block the same three tensors:
 | `model.layers[i].mlp.mlp_output` | what the MLP sublayer adds to the residual stream |
 
 All three are `[batch, seq, hidden]`, the `Residual` layout (`Layer.layer_output.layout is
-nnter.components.Residual`; see [layouts](layouts.md)), except `layer_output` on DeepSeek-V4,
+nnterp.components.Residual`; see [layouts](layouts.md)), except `layer_output` on DeepSeek-V4,
 whose residual is several parallel streams, `[batch, seq, streams, hidden]`
 ([below](#where-the-families-differ)).
 
@@ -40,7 +40,7 @@ per-family test suite checks the identity on each.
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
 
@@ -241,7 +241,7 @@ torch.testing.assert_close((x + attn + mlp + ple) * scalar, out)
 `layer_scalar` is far from one on the released weights (0.005 to 0.99; the first block's is
 between 0.018 and 0.11 on every size), so a contribution reaches a later block's stream
 shrunk by its own block's scalar and by every later one. Compare contributions across
-blocks with that in mind; nnter computes nothing for it. On a mixture-of-experts block
+blocks with that in mind; nnterp computes nothing for it. On a mixture-of-experts block
 (26B-A4B) `mlp_output` is the dense MLP and the experts together: the block norms each and
 then their sum, and `mlp_output` is that last norm's output, while `mlp.output` is the dense
 MLP alone.
@@ -284,7 +284,7 @@ out = mlp_combᵀ · h + mlp_post ⊗ mlp_output                       # layer_o
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("deepseek-ai/DeepSeek-V4-Flash", dispatch=True)
 

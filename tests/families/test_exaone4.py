@@ -8,7 +8,7 @@ import tempfile
 import torch
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import exaone4
+from nnterp.families import exaone4
 
 
 class TestExaone4(FamilySuite):

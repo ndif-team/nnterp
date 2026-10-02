@@ -3,7 +3,7 @@ title: Root values and sizes
 one_liner: "The model answers for the whole run — `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size` — and for its sizes from the config; each block's own sizes are on its attention and MLP."
 tags: [usage, logits, token_embeddings, next_token_probs, input_ids, sizes, config]
 related: [docs/usage/residual-stream.md, docs/usage/methods.md, docs/usage/layouts.md, docs/usage/availability.md, docs/extending/adding-a-family.md]
-sources: [nnter/standardized.py, nnter/components/eproperty.py, nnter/components/attention.py, nnter/components/mlp.py, nnter/families/falcon.py, nnter/families/deepseek_v2.py, nnter/families/gpt2.py]
+sources: [nnterp/standardized.py, nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/mlp.py, nnterp/families/falcon.py, nnterp/families/deepseek_v2.py, nnterp/families/gpt2.py]
 ---
 
 # Root values and sizes
@@ -20,7 +20,7 @@ Both are the same on every family.
 ## Canonical pattern
 
 ```python
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("google/gemma-2-2b", dispatch=True)
 
@@ -107,7 +107,7 @@ Llama-3.2-1B, 1e-4 from a float32 softmax of the same logits), and on a float16 
 entries underflow to exact zeros (17,583 of 50,304 on Pythia-70m). For a precise distribution or a KL, use
 `model.logits[:, -1].float().softmax(-1)` or `.log_softmax(-1)`.
 
-`nnter.nnsight_utils.compute_next_token_probs(model, prompts)` is this read over a list of
+`nnterp.nnsight_utils.compute_next_token_probs(model, prompts)` is this read over a list of
 prompts.
 
 ## `input_ids`, `attention_mask`, `input_size`
@@ -215,7 +215,7 @@ differ; see [layouts](layouts.md), which also names each root value's layout (`L
 `config.moe_intermediate_size` wide, not `intermediate_size`; `layers[i].mlp.intermediate_size`
 is the block's own.
 
-A family of your own, shipped or passed to `nnter.families.register()`, defines a size the
+A family of your own, shipped or passed to `nnterp.families.register()`, defines a size the
 same way: [adding-a-family](../extending/adding-a-family.md#sizes).
 
 ## Gotchas

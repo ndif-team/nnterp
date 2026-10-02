@@ -6,8 +6,8 @@ from nnsight import TransformersModel  # nnsight before any transformers submodu
 from transformers.models.gptj.modeling_gptj import GPTJBlock
 from transformers.models.llama.modeling_llama import LlamaAttention
 
-from nnter import Layer, StandardizedTransformer, Unavailable, unavailable
-from nnter.components import Attention
+from nnterp import Layer, StandardizedTransformer, Unavailable, unavailable
+from nnterp.components import Attention
 
 
 @pytest.fixture(scope="module")
@@ -48,7 +48,7 @@ def test_unavailable_marker_is_listed_and_raises():
     assert model.support()["self_attn.attention_probabilities"] == {i: "no softmax: the attention is linear" for i in range(model.num_layers)}
     with pytest.raises(Unavailable, match="the attention is linear"):
         attn.attention_probabilities
-    with pytest.raises(Unavailable):  # TODO in nnter.components.Unavailable: hasattr should be False instead
+    with pytest.raises(Unavailable):  # TODO in nnterp.components.Unavailable: hasattr should be False instead
         hasattr(attn, "attention_probabilities")
 
 
@@ -57,8 +57,8 @@ def gpt2_paths():
     """A GPT-2 attention with one value per kind of path an `EProperty` key can take."""
     from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 
-    from nnter.components import EProperty, Pattern, Residual
-    from nnter.families import gpt2
+    from nnterp.components import EProperty, Pattern, Residual
+    from nnterp.families import gpt2
 
     class Paths(gpt2.Attention):
         @EProperty("../ln_2.output", description="A sibling module's output")
@@ -148,8 +148,8 @@ def test_route_kernels_binds_each_state_space_kernel_to_its_own_torch_function()
     """A mixer with no per-token state (`StateSpace`) keeps its prompt kernel: each name gets its own pure-torch function."""
     import sys
 
-    from nnter import StateSpace, route_kernels
-    from nnter.families import mamba2
+    from nnterp import StateSpace, route_kernels
+    from nnterp.families import mamba2
 
     module = sys.modules[mamba2.Mamba2Mixer.__module__]
     names = [StateSpace.CHUNK_KERNEL.rsplit("_", 1)[0], StateSpace.RECURRENT_KERNEL.rsplit("_", 1)[0]]
@@ -167,9 +167,9 @@ def test_recurrent_mixer_without_a_state_op_reports_the_state_unavailable():
     """A `RecurrentMixer` whose kernels do not materialize the state per token says so, and still serves its call's values."""
     from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5GatedDeltaNet
 
-    from nnter import LinearAttention, RecurrentMixer
-    from nnter.components import EProperty
-    from nnter.components.recurrent import kernel, needs_torch_kernels
+    from nnterp import LinearAttention, RecurrentMixer
+    from nnterp.components import EProperty
+    from nnterp.components.recurrent import kernel, needs_torch_kernels
 
     class NoState(RecurrentMixer):
         CHUNK_KERNEL = LinearAttention.CHUNK_KERNEL
@@ -201,8 +201,8 @@ def test_route_kernels_round_trips_the_bindings():
     """``"torch"`` binds both kernel names to the token-by-token loop; ``"default"`` restores what the module bound."""
     import sys
 
-    from nnter import LinearAttention, route_delta_rule, route_kernels
-    from nnter.families import qwen3_5_text
+    from nnterp import LinearAttention, route_delta_rule, route_kernels
+    from nnterp.families import qwen3_5_text
 
     module = sys.modules[qwen3_5_text.Qwen3_5GatedDeltaNet.__module__]
     chunk, recurrent = LinearAttention.CHUNK_KERNEL.rsplit("_", 1)[0], LinearAttention.RECURRENT_KERNEL.rsplit("_", 1)[0]
@@ -227,8 +227,8 @@ def test_route_kernels_binds_a_single_step_decode_kernel_to_its_own():
     """On Mamba-1 (``STEP_STATE_OP`` set) the scan is the token loop: each name is bound to its own pure-torch function."""
     import sys
 
-    from nnter import SelectiveScan, route_kernels
-    from nnter.families import mamba
+    from nnterp import SelectiveScan, route_kernels
+    from nnterp.families import mamba
 
     module = sys.modules[mamba.MambaMixer.__module__]
     names = [op.rsplit("_", 1)[0] for op in (SelectiveScan.CHUNK_KERNEL, SelectiveScan.RECURRENT_KERNEL)]
@@ -249,8 +249,8 @@ def test_decode_step_whose_first_read_is_relaxed_takes_its_own_branch():
     step's own kernel: `per_call` counts the relaxed read as the step of the last pinned one."""
     import warnings
 
-    from nnter import route_kernels
-    from nnter.families import qwen3_5_text
+    from nnterp import route_kernels
+    from nnterp.families import qwen3_5_text
 
     route_kernels(qwen3_5_text, "torch")
     try:
@@ -273,8 +273,8 @@ def test_decode_step_whose_first_read_is_relaxed_takes_its_own_branch():
 
 
 def _mamba2():
-    from nnter import route_kernels
-    from nnter.families import mamba2
+    from nnterp import route_kernels
+    from nnterp.families import mamba2
 
     route_kernels(mamba2, "torch")
     return StandardizedTransformer("yujiepan/mamba2-tiny-random", dispatch=True)
@@ -355,9 +355,9 @@ def test_support_with_a_module_another_block_owns():
 
 def test_value_repr_line_names_the_layout():
     """A value's repr line is ``(name) -> Layout [axes]: description``; a value without a layout keeps nnsight's line."""
-    from nnter.components import Attention, Layer
-    from nnter.components.linear_attention import LinearAttention
-    from nnter.standardized import StandardizedTransformer as Root
+    from nnterp.components import Attention, Layer
+    from nnterp.components.linear_attention import LinearAttention
+    from nnterp.standardized import StandardizedTransformer as Root
 
     assert str(Layer.layer_output) == (
         "(layer_output) -> Residual [batch seq hidden]: The residual stream leaving the block, a tensor even when the block returns a tuple"

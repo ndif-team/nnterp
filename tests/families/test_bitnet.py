@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import bitnet
+from nnterp.families import bitnet
 
 
 class TestBitnet(FamilySuite):

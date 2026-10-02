@@ -3,7 +3,7 @@ title: Steering
 one_liner: "Derive a direction from two contrasting prompts as a difference of `layer_output`, then `model.steer(layer, vector, factor, token_positions=-1)` adds it to the residual stream in a trace or at every step of a generate."
 tags: [patterns, steering, residual-stream, generation]
 related: [docs/usage/residual-stream.md, docs/usage/generation.md, docs/patterns/probing.md, docs/patterns/ablation.md, docs/patterns/activation-patching.md]
-sources: [nnter/standardized.py, nnter/components/layer.py]
+sources: [nnterp/standardized.py, nnterp/components/layer.py]
 ---
 
 # Steering
@@ -28,7 +28,7 @@ position:
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
 LAYER = model.num_layers // 2

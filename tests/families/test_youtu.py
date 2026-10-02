@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import youtu
+from nnterp.families import youtu
 
 
 class TestYoutu(FamilySuite):

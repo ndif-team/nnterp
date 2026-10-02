@@ -7,8 +7,8 @@ import torch
 from nnsight.intervention.envoy import Envoy
 from transformers import AutoModelForCausalLM
 
-from nnter import StandardizedTransformer, UnsupportedFamily, families
-from nnter.families import gpt2
+from nnterp import StandardizedTransformer, UnsupportedFamily, families
+from nnterp.families import gpt2
 
 GPT2 = "hf-internal-testing/tiny-random-gpt2"
 
@@ -22,16 +22,16 @@ def test_every_family_module_is_named_after_its_model_type():
 
 
 def test_import_is_lazy():
-    """`import nnter` pulls in no transformers modeling module; a family loads on first use."""
+    """`import nnterp` pulls in no transformers modeling module; a family loads on first use."""
     import subprocess
     import sys
 
     code = (
-        "import sys, nnsight, nnter\n"
+        "import sys, nnsight, nnterp\n"
         "before = sorted(m for m in sys.modules if m.startswith('transformers.models.') and 'modeling_' in m)\n"
-        "nnter.families.lookup('gpt2')\n"
+        "nnterp.families.lookup('gpt2')\n"
         "after = sorted(m for m in sys.modules if m.startswith('transformers.models.') and 'modeling_' in m)\n"
-        "print(len(before), len(after), 'nnter.families.gpt2' in sys.modules, 'nnter.families.llama' in sys.modules)\n"
+        "print(len(before), len(after), 'nnterp.families.gpt2' in sys.modules, 'nnterp.families.llama' in sys.modules)\n"
     )
     out = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, check=True).stdout.split()
     assert out[0] == "0" and int(out[1]) >= 1 and out[2] == "True" and out[3] == "False", out
@@ -108,7 +108,7 @@ def test_custom_value_through_envoys_is_in_support():
     """A value added on an envoy subclass passed through ``envoys=`` is listed by `support()` like the family's own."""
     from transformers.models.gpt2.modeling_gpt2 import GPT2Attention
 
-    from nnter.components import DerivedEProperty
+    from nnterp.components import DerivedEProperty
 
     class Attention(gpt2.Attention):
         heads = DerivedEProperty(lambda self: self._module.num_heads, description="The head count")
@@ -134,7 +134,7 @@ def test_family_defines_a_size_instead_of_the_root():
 
 def test_family_defines_project_on_vocab_instead_of_the_softcap():
     """A `project_on_vocab(model, hidden)` in the family module is bound in the root's place; the root's applies the softcap."""
-    from nnter.standardized import StandardizedCapability
+    from nnterp.standardized import StandardizedCapability
 
     custom = types.SimpleNamespace(
         MODEL_TYPES=("gpt2",), RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS,

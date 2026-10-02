@@ -3,7 +3,7 @@ title: Mixture of Experts
 one_liner: Read, ablate and reroute a mixture of experts on every MoE family — `router_logits`, `expert_weights`, `expert_indices`, `expert_outputs`, `routed_output`, `shared_expert_output` on `layers[i].mlp` (a `Moe`), the sparse `[batch, seq, top_k]` routing pair, `experts_implementation=` and the per-family caveats.
 tags: [usage, moe, mixture-of-experts, router, experts, routing, ablation, top_k]
 related: [docs/usage/residual-stream.md, docs/usage/layouts.md, docs/usage/availability.md, docs/patterns/expert-ablation.md, docs/reference/families.md]
-sources: [nnter/components/moe.py, nnter/components/eproperty.py, nnter/families/mixtral.py, nnter/families/deepseek_v3.py, nnter/families/gemma4_text.py, nnter/families/llama4_text.py, nnter/families/jetmoe.py, nnter/families/dbrx.py, nnter/families/zaya.py, nnter/families/nemotron_h.py, nnter/families/deepseek_v4.py, tests/families/suite.py]
+sources: [nnterp/components/moe.py, nnterp/components/eproperty.py, nnterp/families/mixtral.py, nnterp/families/deepseek_v3.py, nnterp/families/gemma4_text.py, nnterp/families/llama4_text.py, nnterp/families/jetmoe.py, nnterp/families/dbrx.py, nnterp/families/zaya.py, nnterp/families/nemotron_h.py, nnterp/families/deepseek_v4.py, tests/families/suite.py]
 ---
 
 # Mixture of Experts
@@ -25,7 +25,7 @@ routed = experts(x, idx, w)         # [tokens, hidden]
 out    = routed (+ shared(x))
 ```
 
-so nnter reads each value where the model consumes it: the logits inside the router's
+so nnterp reads each value where the model consumes it: the logits inside the router's
 forward before the scoring, the weights and indices as the experts module's arguments,
 the per-slot outputs inside transformers' grouped experts forward, the routed sum as the
 experts' output. Every write lands on the tensor the model uses.
@@ -34,7 +34,7 @@ experts' output. Every write lands on the tensor the model uses.
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("hf-internal-testing/tiny-random-MixtralForCausalLM")
 moe = model.layers[1].mlp

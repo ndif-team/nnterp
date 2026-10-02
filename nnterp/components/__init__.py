@@ -7,7 +7,7 @@ on the softmax-attention module, `Mlp` on the feed-forward, and
 `LinearAttention` on a hybrid's gated DeltaNet mixer, `SelectiveScan` on a
 Mamba-1 mixer and `StateSpace` on a Mamba-2 (SSD) mixer, all `RecurrentMixer`s
 (the mechanism every recurrent mixer shares). The families under
-`nnter.families` subclass these, so a family whose forward is spelled
+`nnterp.families` subclass these, so a family whose forward is spelled
 differently overrides only what differs, and key them on its own module types
 in its ``ENVOYS``.
 

@@ -42,7 +42,7 @@ def needs_kernel_source(envoy: Envoy) -> str | None:
         if _dispatch(getattr(module, _name(op), None)):
             return (
                 f"read inside transformers' pure-torch {_name(op)}, which this process reaches through its kernel "
-                "dispatcher; call nnter.route_kernels(model.family, 'torch') before tracing this layer"
+                "dispatcher; call nnterp.route_kernels(model.family, 'torch') before tracing this layer"
             )
     return None
 

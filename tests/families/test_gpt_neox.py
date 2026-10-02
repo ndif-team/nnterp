@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, rows
 
-from nnter.families import gpt_neox
+from nnterp.families import gpt_neox
 
 
 class TestGPTNeoX(FamilySuite):

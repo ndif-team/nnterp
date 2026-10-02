@@ -14,12 +14,12 @@ import torch
 from nnsight import TransformersModel  # nnsight before any transformers submodule
 from nnsight.intervention.envoy import Envoy
 
-from nnter import StandardizedTransformer, Unavailable
-from nnter.components import (
+from nnterp import StandardizedTransformer, Unavailable
+from nnterp.components import (
     Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
     first_tensor,
 )
-from nnter.components.standard import in_width
+from nnterp.components.standard import in_width
 
 PROMPT = "Hello world there"
 #: Two prompts for the batching checks: two invokes, or one invoke of both.
@@ -31,7 +31,7 @@ VALUES = {
     "self_attn.attention_queries", "self_attn.attention_keys", "self_attn.attention_values",
     "self_attn.attention_scores", "self_attn.attention_head_outputs",
 }
-#: A mixture of experts' values, on `Moe` (`nnter.components.moe`).
+#: A mixture of experts' values, on `Moe` (`nnterp.components.moe`).
 MOE = ("router_logits", "expert_weights", "expert_indices", "expert_outputs", "routed_output", "shared_expert_output")
 INTERIOR = ("attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_head_outputs")
 LINEAR = ("attention_output", "attention_queries", "attention_keys", "attention_values", "decays", "betas", "state_input", "attention_head_outputs", "state_output", "state", "states")

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import gpt_bigcode
+from nnterp.families import gpt_bigcode
 
 
 class TestGPTBigCode(FamilySuite):

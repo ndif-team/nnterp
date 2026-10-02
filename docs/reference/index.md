@@ -3,7 +3,7 @@ title: Reference Index
 one_liner: The API in tables, every family's quirks in one table, and the glossary.
 tags: [reference, index]
 related: [docs/usage/index.md, docs/developing/index.md]
-sources: [nnter/__init__.py]
+sources: [nnterp/__init__.py]
 ---
 
 # Reference Index

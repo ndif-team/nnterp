@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, rows, PROMPT
 
-from nnter.families import mpt
+from nnterp.families import mpt
 
 
 class TestMpt(FamilySuite):

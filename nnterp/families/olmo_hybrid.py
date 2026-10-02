@@ -4,7 +4,7 @@ Llama's containers over two block classes, chosen by ``config.layer_types``:
 
 - ``OlmoHybridLinearAttentionDecoderLayer`` (``linear_attention``) is pre-norm, as
   Llama: ``input_layernorm -> linear_attn`` (a gated DeltaNet, see
-  `nnter.LinearAttention`), then ``post_attention_layernorm -> mlp``, each added
+  `nnterp.LinearAttention`), then ``post_attention_layernorm -> mlp``, each added
   to the stream as the module returns it.
 - ``OlmoHybridAttentionDecoderLayer`` (``full_attention``) is OLMo-3's post-norm
   sandwich: ``self_attn -> post_attention_layernorm`` and

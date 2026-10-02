@@ -110,11 +110,11 @@ def route_kernels(family, kernel: str = "torch") -> None:
     model of the family; call it before tracing a layer, since a forward
     ``.source`` has already instrumented keeps the binding it was compiled
     with. ``family`` is the family module (``model.family``, or
-    ``nnter.families.qwen3_5_text``) or its modeling module.
+    ``nnterp.families.qwen3_5_text``) or its modeling module.
     """
     module, mixer = _mixer(family)
     names = (_name(mixer.CHUNK_KERNEL), _name(mixer.RECURRENT_KERNEL))
-    originals = module.__dict__.setdefault("_nnter_kernels", {})
+    originals = module.__dict__.setdefault("_nnterp_kernels", {})
     for name in names:
         originals.setdefault(name, getattr(module, name))
     if kernel == "torch":
@@ -155,7 +155,7 @@ def needs_torch_kernels(envoy: Envoy) -> str | None:
             return (
                 f"read inside transformers' pure-torch {_name(op)}, but this process dispatches it "
                 f"to an optimized kernel ({package.split('.')[0]}) with no Python source; "
-                "uninstall it, or call nnter.route_kernels(model.family, 'torch'), to read these"
+                "uninstall it, or call nnterp.route_kernels(model.family, 'torch'), to read these"
             )
     return None
 
@@ -174,14 +174,14 @@ def needs_recurrent_routing(envoy: Envoy) -> str | None:
     if cls.STEP_STATE_OP and (getattr(module, _name(cls.CHUNK_KERNEL)) is not loop or step is not _torch_function(step)):
         return (
             "the state after each token is read inside the kernels' pure-torch bodies, which this process "
-            "reaches through transformers' kernel dispatcher. Call nnter.route_kernels(model.family, 'torch') "
+            "reaches through transformers' kernel dispatcher. Call nnterp.route_kernels(model.family, 'torch') "
             "before tracing this layer"
         )
     if getattr(module, _name(cls.CHUNK_KERNEL)) is not loop:
         return (
             "the state after each token is materialized only by the token-by-token kernel; "
             "the chunked kernel a prompt runs through carries it between chunks. Call "
-            "nnter.route_kernels(model.family, 'torch') before tracing this layer "
+            "nnterp.route_kernels(model.family, 'torch') before tracing this layer "
             "(slower, like attn_implementation='eager')"
         )
     return None
@@ -216,7 +216,7 @@ def per_call(envoy: Envoy, key: str, compute: Callable[[], Any]) -> Any:
     call = mediator.iteration or mediator.occurrence(f"{envoy.path}.output")
 
     # One record per (module, key) on this worker: (call, value).
-    records = getcurrent().__dict__.setdefault("_nnter_per_call", {})
+    records = getcurrent().__dict__.setdefault("_nnterp_per_call", {})
     slot = (envoy.path, key)
     cached = records.get(slot)
 
@@ -284,7 +284,7 @@ class RecurrentMixer(Standard):
     The state *after every token* of a prompt exists only in the
     token-by-token kernel: a chunked kernel carries the state between chunks.
     Like eager attention, that is the user's choice:
-    ``nnter.route_kernels(model.family, "torch")`` routes the family's
+    ``nnterp.route_kernels(model.family, "torch")`` routes the family's
     prompts through the token-by-token kernel, and then `state`, `states`,
     `state_after` and `set_state_after` read and write the state at any
     position; without it, or on a mixer with no `STATE_OP`, reading one

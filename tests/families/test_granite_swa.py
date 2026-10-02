@@ -4,7 +4,7 @@ import test_granite
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import granite_swa
+from nnterp.families import granite_swa
 
 REPO = "hf-tiny-v2/tiny-random-GraniteSWAForCausalLM"
 

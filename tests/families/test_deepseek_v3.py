@@ -8,8 +8,8 @@ import tempfile
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.components import Moe
-from nnter.families import deepseek_v3
+from nnterp.components import Moe
+from nnterp.families import deepseek_v3
 
 REPO = "hf-internal-testing/tiny-random-DeepseekV3ForCausalLM"
 
@@ -30,7 +30,7 @@ def _moe_checkpoint(repo=REPO):
     from transformers import AutoConfig, AutoModelForCausalLM
 
     snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
-    patched = os.path.join(tempfile.gettempdir(), f"nnter-deepseek-v3-moe-{os.path.basename(snapshot)}")
+    patched = os.path.join(tempfile.gettempdir(), f"nnterp-deepseek-v3-moe-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
     os.makedirs(patched, exist_ok=True)

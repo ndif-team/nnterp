@@ -5,19 +5,19 @@ A toolkit is one module in this package. Each declares:
 * ``MODEL_TYPES``: the ``model_type`` values (from the checkpoint's config)
   the module covers.
 * ``RENAME``: an nnsight ``rename`` dict mapping the family's own module names
-  onto the standard vocabulary (see `nnter`). Keys are resolved relative to
+  onto the standard vocabulary (see `nnterp`). Keys are resolved relative to
   every envoy in the tree, so a single-component key such as ``"attn"`` binds
   in every block that has one, and a key that does not resolve anywhere is
   simply skipped.
 * ``Layer``, ``Attention`` and ``Mlp``, and ``LinearAttention`` on a hybrid:
-  the family's own subclasses of `nnter.components`'s, overriding only what its
+  the family's own subclasses of `nnterp.components`'s, overriding only what its
   forward spells differently.
 * ``ENVOYS``: an nnsight ``envoys`` dict keying those on the family's module
   types (``envoys=`` matches by type or *native* path, never by alias).
 
 A family module is named after the ``model_type`` it covers (``gemma3_text.py``
 for ``gemma3_text``), and that is the whole registry: `lookup` imports
-``nnter.families.<model_type>`` on first use, so ``import nnter`` loads no
+``nnterp.families.<model_type>`` on first use, so ``import nnterp`` loads no
 transformers modeling module. To add a family, write the module beside these;
 to add one from elsewhere, or to override a shipped one, pass it to `register`.
 """
@@ -57,8 +57,8 @@ def lookup(model_type: str) -> ModuleType:
             raise
         raise UnsupportedFamily(
             f"no standardization for model_type {model_type!r}; known: {sorted(set(known()) | set(REGISTRY))}. "
-            f"Add nnter/families/{model_type}.py with MODEL_TYPES, RENAME and ENVOYS, or pass a "
-            f"module to nnter.families.register()."
+            f"Add nnterp/families/{model_type}.py with MODEL_TYPES, RENAME and ENVOYS, or pass a "
+            f"module to nnterp.families.register()."
         ) from None
 
 
@@ -81,7 +81,7 @@ def all_families() -> list[ModuleType]:
 
 
 def __getattr__(name: str) -> ModuleType:
-    """``nnter.families.<model_type>``: the family module, imported on first use."""
+    """``nnterp.families.<model_type>``: the family module, imported on first use."""
     try:
         return importlib.import_module(f"{__name__}.{name}")
     except ModuleNotFoundError as error:

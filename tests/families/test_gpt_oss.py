@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import gpt_oss
+from nnterp.families import gpt_oss
 
 
 class TestGptOss(FamilySuite):

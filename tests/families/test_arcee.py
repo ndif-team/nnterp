@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import arcee
+from nnterp.families import arcee
 
 
 class TestArcee(FamilySuite):

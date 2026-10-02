@@ -3,7 +3,7 @@ title: The standard vocabulary
 one_liner: "One set of module names on every family — `embed_tokens`, `layers[i].self_attn`, `layers[i].mlp`, `norm`, `lm_head` — as nnsight aliases beside the native names."
 tags: [usage, vocabulary, rename, aliases, families]
 related: [docs/usage/loading.md, docs/usage/residual-stream.md, docs/usage/availability.md]
-sources: [nnter/families/__init__.py, nnter/families/gpt2.py, nnter/families/llama.py, nnter/families/gpt_neox.py, nnter/families/bloom.py, nnter/families/mpt.py, nnter/families/falcon.py, nnter/families/dbrx.py, nnter/families/opt.py, nnter/standardized.py]
+sources: [nnterp/families/__init__.py, nnterp/families/gpt2.py, nnterp/families/llama.py, nnterp/families/gpt_neox.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/falcon.py, nnterp/families/dbrx.py, nnterp/families/opt.py, nnterp/standardized.py]
 ---
 
 # The standard vocabulary
@@ -11,7 +11,7 @@ sources: [nnter/families/__init__.py, nnter/families/gpt2.py, nnter/families/lla
 ## What this is for
 
 Every family spells its tree differently (`transformer.h`, `model.layers`,
-`gpt_neox.layers`). nnter gives them all Llama's block names, with the containers lifted
+`gpt_neox.layers`). nnterp gives them all Llama's block names, with the containers lifted
 out of the inner `.model`, so a trace body written once runs on any registered
 checkpoint. The names are nnsight `rename` aliases: an extra attribute on the same envoy,
 not a replacement, so the native name keeps working and the two reach the same object.
@@ -19,7 +19,7 @@ not a replacement, so the native name keeps working and the two reach the same o
 ## Canonical pattern
 
 ```python
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
 
@@ -85,7 +85,7 @@ to `model.layers` on every family rather than `model.model.layers` on some. A
 single-component key (`attn`, `attention`, `ffn`) binds on every envoy that has a child of
 that name, so one entry renames the attention in every block. A key that resolves nowhere
 is skipped, which is how `embed_out` -> `lm_head` covers both spellings of GPT-NeoX's head.
-The rules are nnsight's (nnsight docs/usage/rename-modules.md); nnter only chooses the keys.
+The rules are nnsight's (nnsight docs/usage/rename-modules.md); nnterp only chooses the keys.
 
 Because a single-component key binds everywhere it resolves, OPT's block-level
 `final_layer_norm` (its pre-MLP norm) keeps its native name: an alias for it would also

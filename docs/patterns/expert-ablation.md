@@ -3,7 +3,7 @@ title: Expert Ablation
 one_liner: "Every routed expert's effect on a target token, by zeroing `expert_weights` where `expert_indices == e`: one trace per expert, or one invoke per expert with an in-place edit; the same code on every MoE family."
 tags: [patterns, moe, mixture-of-experts, ablation, experts]
 related: [docs/usage/mixture-of-experts.md, docs/patterns/ablation.md, docs/usage/availability.md]
-sources: [nnter/components/moe.py, tests/families/suite.py]
+sources: [nnterp/components/moe.py, tests/families/suite.py]
 ---
 
 # Expert Ablation
@@ -20,7 +20,7 @@ experts; that is the ablation, not a re-run of the router.
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("hf-internal-testing/tiny-random-MixtralForCausalLM", dispatch=True)
 prompt = "The Eiffel Tower is in the city of"

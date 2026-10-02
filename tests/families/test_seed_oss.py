@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import seed_oss
+from nnterp.families import seed_oss
 
 
 class TestSeedOss(FamilySuite):

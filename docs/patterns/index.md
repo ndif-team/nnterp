@@ -1,9 +1,9 @@
 ---
 title: Patterns Index
-one_liner: Interpretability recipes written once against nnter's standard values, so each runs unchanged on every family.
+one_liner: Interpretability recipes written once against nnterp's standard values, so each runs unchanged on every family.
 tags: [pattern, interpretability, index]
 related: [docs/usage/index.md, docs/reference/families.md]
-sources: [nnter/standardized.py, nnter/components/layer.py, nnter/components/attention.py]
+sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/components/attention.py]
 ---
 
 # Patterns Index
@@ -18,7 +18,7 @@ block's residual stream is `layer_output` on every family, a sublayer's contribu
 Every example loads eager, so the attention interior is available:
 
 ```python
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_implementation="eager")
 ```

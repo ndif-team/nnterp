@@ -5,7 +5,7 @@ import math
 import torch
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import xglm
+from nnterp.families import xglm
 
 
 class TestXGLM(FamilySuite):
@@ -50,7 +50,7 @@ class TestXGLM(FamilySuite):
 
     def test_interior_needs_no_eager_load(self):
         """XGLM has one attention implementation, so a default load serves the pattern."""
-        from nnter import StandardizedTransformer
+        from nnterp import StandardizedTransformer
 
         model = StandardizedTransformer(self.REPO, dispatch=True)
         assert model.support()["self_attn.attention_probabilities"] is None

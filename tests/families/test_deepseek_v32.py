@@ -8,7 +8,7 @@ import tempfile
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import deepseek_v32
+from nnterp.families import deepseek_v32
 
 REPO = "hf-tiny-v2/tiny-random-DeepseekV32ForCausalLM"
 

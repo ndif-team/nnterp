@@ -3,7 +3,7 @@ title: Recurrent Mixer Internals
 one_liner: How RecurrentMixer reaches a recurrent mixer's values — the kernel op the forward's own test picks and its once-per-call record (`KERNEL`, `per_call`), the pure-torch kernels .source needs, process-wide kernel routing, and per-token state through occurrence arithmetic — and how LinearAttention (gated DeltaNet), SelectiveScan (Mamba-1) and StateSpace (Mamba-2) sit on it.
 tags: [developing, internals, hybrids, deltanet, linear-attention, mamba, selective-scan, state-space, recurrent, occurrences]
 related: [docs/developing/eproperty-internals.md, docs/developing/architecture.md, docs/developing/gotchas.md, docs/usage/delta-net.md, docs/usage/selective-scan.md, docs/usage/state-space.md]
-sources: [nnter/components/recurrent.py, nnter/components/linear_attention.py, nnter/components/selective_scan.py, nnter/components/state_space.py, nnter/components/layer.py, nnter/families/mamba.py, nnter/families/nemotron_h.py, tests/families/scan_suite.py, tests/families/ssd.py, nnter/components/eproperty.py, nnter/families/qwen3_5_text.py, tests/families/test_qwen3_5_text.py, tests/test_base.py, nnsight src/nnsight/intervention/interleaver.py, nnsight src/nnsight/intervention/iterator.py]
+sources: [nnterp/components/recurrent.py, nnterp/components/linear_attention.py, nnterp/components/selective_scan.py, nnterp/components/state_space.py, nnterp/components/layer.py, nnterp/families/mamba.py, nnterp/families/nemotron_h.py, tests/families/scan_suite.py, tests/families/ssd.py, nnterp/components/eproperty.py, nnterp/families/qwen3_5_text.py, tests/families/test_qwen3_5_text.py, tests/test_base.py, nnsight src/nnsight/intervention/interleaver.py, nnsight src/nnsight/intervention/iterator.py]
 ---
 
 # Recurrent Mixer Internals
@@ -21,16 +21,16 @@ two kernels. How a mixer's values are reached through all three is the same
 whatever the values are, so it lives in one base class and the mixers
 declare only their values:
 
-- `RecurrentMixer` (`nnter/components/recurrent.py:257-446`) holds the
+- `RecurrentMixer` (`nnterp/components/recurrent.py:257-446`) holds the
   mechanism: the kernel choice, `attention_output`, the availability
   predicates, the per-token state machinery and the routing functions.
-- `LinearAttention` (`nnter/components/linear_attention.py:23-96`), the
+- `LinearAttention` (`nnterp/components/linear_attention.py:23-96`), the
   gated DeltaNet mixer (`linear_attn` on Qwen3-Next, Qwen3.5, Qwen3.5-MoE
   text and OLMo-Hybrid), sets the kernel constants and declares its eight
   values: `attention_queries`, `attention_keys`, `attention_values`,
   `decays`, `betas`, `state_input`, `attention_head_outputs`,
   `state_output`.
-- `SelectiveScan` (`nnter/components/selective_scan.py`), the Mamba-1 mixer
+- `SelectiveScan` (`nnterp/components/selective_scan.py`), the Mamba-1 mixer
   (`linear_attn` on Mamba, Falcon-Mamba and Jamba's Mamba blocks), declares
   the same names over a selective scan; the section
   [Mamba-1: `SelectiveScan`](#mamba-1-selectivescan) is what it adds.
@@ -50,9 +50,9 @@ Run on `yujiepan/qwen3.5-tiny-random`:
 
 ```python
 import torch
-import nnter
-from nnter import StandardizedTransformer, route_kernels
-from nnter.families import qwen3_5_text
+import nnterp
+from nnterp import StandardizedTransformer, route_kernels
+from nnterp.families import qwen3_5_text
 
 route_kernels(qwen3_5_text, "torch")                  # before any trace of a DeltaNet layer
 model = StandardizedTransformer("Qwen/Qwen3.5-9B", dispatch=True, attn_implementation="eager")
@@ -148,11 +148,11 @@ once and kept for the call:
 - `RecurrentMixer.KERNEL` (`recurrent.py:311-329`) makes its two reads and
   its choice inside `per_call`, under the key `"kernel"`.
 - `per_call(envoy, key, compute)` (`:190-228`), exported from
-  `nnter.components`, keeps one record per `(envoy.path, key)`,
+  `nnterp.components`, keeps one record per `(envoy.path, key)`,
   `(call, value)`, and runs `compute()` when there is no record or when the
   record's call is not the current one (`:226-227`). The records live on
   the worker, the greenlet running the intervention code
-  (`getcurrent().__dict__["_nnter_per_call"]`). Every run of every invoke
+  (`getcurrent().__dict__["_nnterp_per_call"]`). Every run of every invoke
   has its own worker, a replayed `model.edit` too, so two invokes reading
   one mixer do not share a record
   (`tests/test_base.py::test_two_invokes_read_one_mixers_values`), an
@@ -242,7 +242,7 @@ names in its modeling module, process-wide:
   the `RecurrentMixer` subclass a loaded family keys on one of that
   module's classes, else one whose `CHUNK_KERNEL` the module defines.
 - The module's original bindings of both names are stashed once in
-  `module.__dict__["_nnter_kernels"]`, so `"default"` restores them and
+  `module.__dict__["_nnterp_kernels"]`, so `"default"` restores them and
   repeated `"torch"` calls are idempotent.
 - `"torch"` binds each name to its own pure-torch kernel, and on a mixer
   with a `STATE_OP` the prompt's name to the token loop, `_loop_kernel()`'s
@@ -341,7 +341,7 @@ numbers.
   range(seq): with pinned(first + t): states.append(op.output)` and stacks
   on axis 1; `state_after(t)` (`:429-434`) reads one; `set_state_after`
   (`:436-446`) writes one. `pinned(n)` (`:231-244`, exported from
-  `nnter.components`) is a context manager: it sets the worker mediator's
+  `nnterp.components`) is a context manager: it sets the worker mediator's
   `iteration` to `n`, as `tracer.iter[n]` does (`None` relaxes the pin),
   and restores the pin the worker had on the way out. The first hit relaxes
   the mediator (`interleaver.py:478-483`), so a `with` holds one read, and
@@ -424,7 +424,7 @@ step's `(op, first, seq)`, not step 0's, and so does one whose first read is
 
 ## The state-space mixer: `StateSpace`
 
-`StateSpace` (`nnter/components/state_space.py`) is the Mamba-2 (SSD)
+`StateSpace` (`nnterp/components/state_space.py`) is the Mamba-2 (SSD)
 mixer on `mamba2`, `nemotron_h`, `bamba` and `falcon_h1`. Every one of these
 modeling files carries the same copy of transformers' Mamba-2 code, so one
 class serves them. The kernel choice is the base's: the forward decodes
@@ -501,7 +501,7 @@ after the last, computed in one cumulative step (a decay matrix over the
 chunk boundaries times every chunk's contribution). `chunk_size` is the
 mixer instance's attribute, read on every call, so `chunk_per_token(model)`
 sets it to 1 on each `StateSpace` module of one model (recording the built
-value in the module's `_nnter_chunk_size` for `enabled=False`), and every
+value in the module's `_nnterp_chunk_size` for `enabled=False`), and every
 token is a boundary. `states` overrides the base's: a `DerivedEProperty`
 that reads `CHUNK_STATES` through a module-level `EProperty`
 (`_chunk_states`, keyed `source.<CHUNK_KERNEL>.source.new_states_0.output`,

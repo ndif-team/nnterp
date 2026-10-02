@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, rows
 
-from nnter.families import phi
+from nnterp.families import phi
 
 
 class TestPhi(FamilySuite):

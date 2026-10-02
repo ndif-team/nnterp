@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import phimoe
+from nnterp.families import phimoe
 
 
 class TestPhimoe(FamilySuite):

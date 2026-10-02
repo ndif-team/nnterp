@@ -1,4 +1,4 @@
-"""Prompts with target tokens to track: nnterp's ``prompt_utils``, on the standard values.
+"""Prompts with target tokens to track, on the standard values.
 
 `get_first_tokens` turns words into the token ids a model would predict for
 them, `Prompt` pairs a prompt with named sets of those, and `run_prompts` runs

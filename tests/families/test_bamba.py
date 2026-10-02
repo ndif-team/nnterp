@@ -3,7 +3,7 @@
 from ssd import StateSpaceChecks
 from suite import LINEAR, LLAMA_ROWS, VALUES, FamilySuite
 
-from nnter.families import bamba
+from nnterp.families import bamba
 
 SSD_BLOCKS = (0, 2)       # ``attn_layer_indices`` = [1, 3]
 ATTENTION_BLOCKS = (1, 3)

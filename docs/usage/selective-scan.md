@@ -3,7 +3,7 @@ title: Mamba-1 Selective Scan
 one_liner: The `linear_attn` values on Mamba, Falcon-Mamba and Jamba's Mamba blocks, read at the selective-scan kernel call as tokens-first views, and the per-token state of the scan's own token loop.
 tags: [usage, state-space, mamba, selective-scan, state, mamba, falcon_mamba, jamba]
 related: [docs/usage/delta-net.md, docs/usage/vocabulary.md, docs/usage/availability.md, docs/usage/layouts.md, docs/usage/generation.md, docs/developing/recurrent-mixer-internals.md]
-sources: [nnter/components/selective_scan.py, nnter/components/recurrent.py, nnter/components/eproperty.py, nnter/families/mamba.py, nnter/families/falcon_mamba.py, nnter/families/jamba.py, tests/families/scan_suite.py, tests/families/test_mamba.py]
+sources: [nnterp/components/selective_scan.py, nnterp/components/recurrent.py, nnterp/components/eproperty.py, nnterp/families/mamba.py, nnterp/families/falcon_mamba.py, nnterp/families/jamba.py, tests/families/scan_suite.py, tests/families/test_mamba.py]
 ---
 
 # Mamba-1 Selective Scan
@@ -24,7 +24,7 @@ y_t = C_t . h_t + D * x_t
 `dt` is a per-token, per-channel step size, `B` and `C` are per-token vectors
 of `state_dim` numbers shared by every channel, `A` a learned
 `[channels, state_dim]` matrix of negative rates. The output is `y` gated by
-`silu(z)` and projected by `out_proj`. `nnter.components.SelectiveScan` gives
+`silu(z)` and projected by `out_proj`. `nnterp.components.SelectiveScan` gives
 the mixer the names a gated DeltaNet has where they mean the same thing: `C`
 reads the state as a query does, `B` writes into it as a key does, `x` is what
 is written, `dt` is how strongly (`betas`), `dt * A` how much of the state
@@ -46,10 +46,10 @@ are the base's.
 
 ```python
 import torch
-import nnter
-from nnter import StandardizedTransformer, route_kernels
+import nnterp
+from nnterp import StandardizedTransformer, route_kernels
 
-route_kernels(nnter.families.mamba, "torch")    # before the first trace; see "The kernels"
+route_kernels(nnterp.families.mamba, "torch")    # before the first trace; see "The kernels"
 model = StandardizedTransformer("state-spaces/mamba-130m-hf", dispatch=True)
 mix = model.layers[0].linear_attn
 prompt = "The Eiffel Tower is in the city of"
@@ -86,10 +86,10 @@ to its own pure-torch function, process-wide:
 - Unrouted with `mamba_ssm` installed, every kernel value reports `read inside
   transformers' pure-torch mamba_selective_scan, but this process dispatches
   it to an optimized kernel (mamba_ssm) with no Python source; uninstall it, or
-  call nnter.route_kernels(model.family, 'torch'), to read these`.
+  call nnterp.route_kernels(model.family, 'torch'), to read these`.
 - Route before the layer's forward is traced; `route_kernels(family,
   "default")` restores the module's own bindings. `family` is the family
-  module (`nnter.families.mamba`, `falcon_mamba`, `jamba`) or `model.family`.
+  module (`nnterp.families.mamba`, `falcon_mamba`, `jamba`) or `model.family`.
 
 ## The values
 

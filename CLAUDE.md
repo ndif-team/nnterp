@@ -1,15 +1,15 @@
-# nnter — Agent Guide
+# nnterp — Agent Guide
 
 This file routes you to the right page under `docs/` for whatever the user is asking about. The
 content lives in `docs/`; **read the matching page before writing code**. The pages are
 recipe-style and every snippet in them has been run against the pinned checkpoints in `tests/`.
 
-nnter is a thin layer on nnsight 0.8: `StandardizedTransformer` is an nnsight `TransformersModel`
+nnterp is a thin layer on nnsight 0.8: `StandardizedTransformer` is an nnsight `TransformersModel`
 whose envoy tree answers to one set of names on every transformer family, with standard values
 (`layer_output`, `attention_output`, `attention_probabilities`, ...) that mean the same thing
 everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.iter`, invokes,
 `.source`, remote) works unchanged; nnsight's own guide is `~/wd/nnsight/CLAUDE.md` and its docs
-`~/wd/nnsight/docs/`. This file covers only what nnter adds.
+`~/wd/nnsight/docs/`. This file covers only what nnterp adds.
 
 ---
 
@@ -18,7 +18,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 1. Find the user's intent in **"By task"** and follow the link.
 2. If the request is about one model family, check **[docs/reference/families.md](docs/reference/families.md)** for its quirks.
 3. If a value is missing or raises `Unavailable`, read **[docs/usage/availability.md](docs/usage/availability.md)**.
-4. The **inline cheat-sheet** at the bottom lists the mistakes agents make most; internalize it before writing nnter code.
+4. The **inline cheat-sheet** at the bottom lists the mistakes agents make most; internalize it before writing nnterp code.
 
 ---
 
@@ -44,7 +44,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/usage/root-values.md](docs/usage/root-values.md) — `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`, `num_layers`, `head_dim`, ... (each root size a `StandardizedProperty`: the config's value, by the plain rule or the family's spelling); a block's own sizes on `layers[i].self_attn` (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) and `layers[i].mlp` (`intermediate_size`), which differ from the root's on Gemma-4 and MiMo-V2-Flash
 
 ### "Does this checkpoint have that value?"
-- [docs/usage/availability.md](docs/usage/availability.md) — `model.support()` before the trace; `nnter.Unavailable` at the read; the reasons you will see
+- [docs/usage/availability.md](docs/usage/availability.md) — `model.support()` before the trace; `nnterp.Unavailable` at the read; the reasons you will see
 
 ### "Skip layers, steer, logit lens, top-k tokens"
 - [docs/usage/methods.md](docs/usage/methods.md) — `skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`
@@ -58,31 +58,31 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/usage/selective-scan.md](docs/usage/selective-scan.md) — `linear_attn` on a Mamba-1 mixer (`SelectiveScan`): `C`/`B`/`x` as queries/keys/values, `betas` = `dt`, `decays` = `dt * A`; `route_kernels(model.family, "torch")` before the first trace
 
 ### "Mamba-2 / Nemotron-H / Bamba / Falcon-H1: the state-space mixer"
-- [docs/usage/state-space.md](docs/usage/state-space.md) — `linear_attn` is a `StateSpace`: `C`/`B`/`x` as queries/keys/values, `dt` as `betas`; `route_kernels(model.family, "torch")` when `mamba_ssm` is installed; `nnter.chunk_per_token(model)` for the state after every token (`states`, `state_after`); `betas`/`decays` assignable
+- [docs/usage/state-space.md](docs/usage/state-space.md) — `linear_attn` is a `StateSpace`: `C`/`B`/`x` as queries/keys/values, `dt` as `betas`; `route_kernels(model.family, "torch")` when `mamba_ssm` is installed; `nnterp.chunk_per_token(model)` for the state after every token (`states`, `state_after`); `betas`/`decays` assignable
 
 ### "What shape is this value?"
-- [docs/usage/layouts.md](docs/usage/layouts.md) — one layout per value on every family, named (`Residual`, `Pattern`, `Keys`, ... in `nnter.components`), except `layer_output` on DeepSeek-V4 (`Streams`); `value.dims`, `value.layout is Pattern`
+- [docs/usage/layouts.md](docs/usage/layouts.md) — one layout per value on every family, named (`Residual`, `Pattern`, `Keys`, ... in `nnterp.components`), except `layer_output` on DeepSeek-V4 (`Streams`); `value.dims`, `value.layout is Pattern`
 
 ### "Generation, many prompts, activations datasets"
 - [docs/usage/generation.md](docs/usage/generation.md) — the values under `model.generate`, `tracer.iter` picks the step
-- [docs/usage/prompt-utils.md](docs/usage/prompt-utils.md) — `nnter.prompt_utils`: target-token mass over prompts
-- [docs/usage/activations.md](docs/usage/activations.md) — `nnter.nnsight_utils`: `get_token_activations` and friends
+- [docs/usage/prompt-utils.md](docs/usage/prompt-utils.md) — `nnterp.prompt_utils`: target-token mass over prompts
+- [docs/usage/activations.md](docs/usage/activations.md) — `nnterp.nnsight_utils`: `get_token_activations` and friends
 
 ### "Run a research pattern across families"
 - [docs/patterns/index.md](docs/patterns/index.md) — logit lens, steering, attention patterns, ablation, activation patching, contribution decomposition, cross-family sweep, probing, DeltaNet state
 
 ### "Run remotely on NDIF"
-- [docs/usage/remote.md](docs/usage/remote.md) — `remote=True`; nnter installed server-side, never shipped by value
+- [docs/usage/remote.md](docs/usage/remote.md) — `remote=True`; nnterp installed server-side, never shipped by value
 
 ### "Add a family, override a value, add my own value"
 - [docs/extending/adding-a-family.md](docs/extending/adding-a-family.md) — one module named after `model_type`, one test file; `def <size>(model)` in the module where the config spells a root size its own way
 - [docs/developing/recurrent-mixer-internals.md](docs/developing/recurrent-mixer-internals.md) — a mixer with a recurrent state read at a kernel call (DeltaNet, state-space): subclass `RecurrentMixer`, set `CHUNK_KERNEL` / `RECURRENT_KERNEL` / `STATE_OP`, declare the values
 - [docs/extending/overriding-values.md](docs/extending/overriding-values.md) — an `EProperty` keyed on a path (`"../norm.output"`, `"source.<op>.inputs"` with `select`), `unavailable(...)`, `off_interface`, transforms
-- [docs/extending/custom-values.md](docs/extending/custom-values.md) — a new `EProperty` (a path from the host: `"output"`, `"../ln_2.output"`, `"source.<op>.output"`) through `envoys=`; annotate `-> Residual` / `-> Pattern` from `nnter.components`
+- [docs/extending/custom-values.md](docs/extending/custom-values.md) — a new `EProperty` (a path from the host: `"output"`, `"../ln_2.output"`, `"source.<op>.output"`) through `envoys=`; annotate `-> Residual` / `-> Pattern` from `nnterp.components`
 - [docs/extending/finding-source-ops.md](docs/extending/finding-source-ops.md) — `print(envoy.source)` and how ops are named
-- [docs/extending/registering.md](docs/extending/registering.md) — `nnter.families.register(module)`
+- [docs/extending/registering.md](docs/extending/registering.md) — `nnterp.families.register(module)`
 
-### "Change nnter itself"
+### "Change nnterp itself"
 - [docs/developing/index.md](docs/developing/index.md) — architecture, descriptor internals, the recurrent mixer (`RecurrentMixer`, DeltaNet) and its occurrence arithmetic, tests, transformers compatibility, gotchas, contributing
 - **Run `HF_HUB_OFFLINE=1 pytest` (about 6100 tests, ~7 min on CPU) before and after.**
 
@@ -97,18 +97,18 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 |---|---|---|
 | `docs/usage/` | one page per feature: loading, names, every standard value, methods, hybrids, helpers, remote | [docs/usage/index.md](docs/usage/index.md) |
 | `docs/patterns/` | interpretability recipes written once against the standard values, so they run on every family | [docs/patterns/index.md](docs/patterns/index.md) |
-| `docs/extending/` | adding a family, overriding a value, adding your own values, registering from outside nnter | [docs/extending/index.md](docs/extending/index.md) |
+| `docs/extending/` | adding a family, overriding a value, adding your own values, registering from outside nnterp | [docs/extending/index.md](docs/extending/index.md) |
 | `docs/developing/` | internals: architecture, the descriptors, the recurrent mixer and its occurrence arithmetic, tests, compatibility, gotchas | [docs/developing/index.md](docs/developing/index.md) |
 | `docs/reference/` | API quick reference, the families table, glossary | [docs/reference/api-quick-reference.md](docs/reference/api-quick-reference.md) |
 
 ---
 
-## Inline cheat-sheet (read before writing nnter code)
+## Inline cheat-sheet (read before writing nnterp code)
 
 - **Everything nnsight's cheat-sheet says still holds**: `.save()` and bind the name, reads in forward order within an invoke, nothing assigned in a trace body survives it without a save.
 - **Load on one device with `device=`**: `device="cpu"` keeps a model on the CPU; `device_map="cpu"` does not (nnsight's pipeline passes its own `device`, and the model lands on `cuda:0`).
 - **Pass `attn_implementation="eager"` at load** if you will touch anything inside attention (`attention_probabilities`, queries, keys, values, scores, head outputs). The default is the checkpoint's, usually `sdpa`, and the values are then unavailable.
-- **Check `model.support()` outside the trace, not `hasattr` inside it.** `hasattr(envoy, "attention_probabilities")` never answers `False`: it raises `nnter.Unavailable` when the value is unavailable, and outside a trace raises nnsight's "Cannot access ... outside of interleaving" for an available one.
+- **Check `model.support()` outside the trace, not `hasattr` inside it.** `hasattr(envoy, "attention_probabilities")` never answers `False`: it raises `nnterp.Unavailable` when the value is unavailable, and outside a trace raises nnsight's "Cannot access ... outside of interleaving" for an available one.
 - **Target tokens: `ids = model.tokenizer(" Paris", add_special_tokens=False).input_ids` and assert `len(ids) == 1`.** `tokenizer.encode(" Paris")[0]` is BOS on Llama and Gemma (every probability then reads 0.000); Mistral's tokenizer gives `['▁', '▁Paris']` (try `"Paris"`), Granite's `['ĠPar', 'is']` (pick another word).
 - **Take KLs on log-probabilities** (`model.logits[:, -1].float().log_softmax(-1)`, `F.kl_div(..., log_target=True)`): `next_token_probs` underflows to exact zeros and `p * (p.log() - q.log())` is NaN.
 - **Pick blocks from the module lists, not from `num_layers // 2`**: on a hybrid that index is usually a `linear_attn` block with no `self_attn`, and a pure state-space model has none. Decide which blocks have `self_attn` vs `linear_attn` outside the trace; `getattr(envoy, name, None)` inside a trace can trip served values, and `if envoy:` falls through to the module's `__len__`.
@@ -121,8 +121,8 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - **An out-of-order read fails loudly only in a plain trace** (`OutOfOrderError`, naming an internal location such as `'...attention_interface_1.fn.i0'`, not the value). Inside `tracer.iter` it binds the value's *next* occurrence, the next step's, so lists come back shifted by one step without an error; only a read whose next occurrence never comes (the last step, a position past the prompt) cuts the block short with a `was never reached` warning that blames the loop. If a saved name is missing or a list looks shifted, check the read order.
 - **Two invokes cannot both touch `attention_probabilities` or `attention_scores`** today (`TypeError: 'NoneType' object is not subscriptable`, an nnsight bug); use one trace per prompt or `attention_head_outputs`, which works across invokes. Overwriting or multiplying `attention_scores` lifts the causal mask; add to them, or keep the masked entries.
 - **In-place edits on queries, keys and values: assign instead** on GPT-2, GPT-BigCode, MPT and every recurrent mixer (DeltaNet's q/k/v, Mamba-1's `C`/`B`, Mamba-2's `C`/`B`/`x`), or edit under `torch.no_grad()`. Falcon's `mlp_output` is a copy carried back by a transform; both forms reach the model.
-- **Recurrent mixers need `nnter.route_kernels(model.family, "torch")` before the first trace of the layer** where an optimized kernel is installed: for DeltaNet's per-token `state`/`states`, and on Mamba-1 (Mamba, Falcon-Mamba, Jamba) and Mamba-2 whenever `mamba_ssm` is installed, whose CUDA kernels have no source and do not run on CPU (unrouted, even a `layer_output` read on CPU fails inside the kernel with `Expected u.is_cuda()`). DeltaNet's queries and keys are served before the kernel's l2-norm and scale; Mamba-2's `betas` and `decays` are one argument (`dt`): writing `decays` rewrites `betas`, and a write-back of unchanged values is not exact in bf16. A state write is not all a block remembers: a width-4 convolution carries the last tokens.
+- **Recurrent mixers need `nnterp.route_kernels(model.family, "torch")` before the first trace of the layer** where an optimized kernel is installed: for DeltaNet's per-token `state`/`states`, and on Mamba-1 (Mamba, Falcon-Mamba, Jamba) and Mamba-2 whenever `mamba_ssm` is installed, whose CUDA kernels have no source and do not run on CPU (unrouted, even a `layer_output` read on CPU fails inside the kernel with `Expected u.is_cuda()`). DeltaNet's queries and keys are served before the kernel's l2-norm and scale; Mamba-2's `betas` and `decays` are one argument (`dt`): writing `decays` rewrites `betas`, and a write-back of unchanged values is not exact in bf16. A state write is not all a block remembers: a width-4 convolution carries the last tokens.
 - **A mixture's routing is the sparse pair `[batch, seq, top_k]`**: ablate expert `e` with `moe.expert_weights = moe.expert_weights.masked_fill(moe.expert_indices == e, 0)`; a rerouted index keeps the old slot's weight. Read a mixture's values in forward order (`router_logits`, weights/indices, `expert_outputs`, `routed_output`); where `shared_expert_output` falls differs per family. Mask pad tokens with `model.attention_mask` when counting usage (the router routes them). Under two or more invokes, edit the routing in place, and take the clean baseline from an unedited invoke of the same batch; sweep single experts in float32. ZAYA's skipped slots read as expert 0 with weight 0.
 - **`envoys=` keys match by module type or native path, never by alias**; to displace a family's envoy, key yours on the type. An `EProperty` path that goes up (`"../ln_2.output"`) takes native names only.
-- **Import nnter (or nnsight) before any `transformers.models...` module**; the reverse order segfaults on this stack.
+- **Import nnterp (or nnsight) before any `transformers.models...` module**; the reverse order segfaults on this stack.
 - **Every snippet in `docs/` ran against a cached checkpoint**; when a page and the code disagree, the suite is the arbiter: `HF_HUB_OFFLINE=1 pytest tests/families/test_<family>.py`.

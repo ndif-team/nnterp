@@ -3,8 +3,8 @@
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.components import Residual, StreamMixing, Streams, StreamWeights
-from nnter.families import deepseek_v4
+from nnterp.components import Residual, StreamMixing, Streams, StreamWeights
+from nnterp.families import deepseek_v4
 
 #: Long enough that the compressed-sparse blocks (compress rate 4) carry compressed entries.
 LONG = "The quick brown fox jumps over the lazy dog while the cat sleeps in the warm sun"

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import hunyuan_v1_moe
+from nnterp.families import hunyuan_v1_moe
 
 
 class TestHunyuanV1Moe(FamilySuite):

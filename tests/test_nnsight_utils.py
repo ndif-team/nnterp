@@ -3,8 +3,8 @@
 import pytest
 import torch
 
-from nnter import StandardizedTransformer
-from nnter.nnsight_utils import (
+from nnterp import StandardizedTransformer
+from nnterp.nnsight_utils import (
     collect_last_token_activations_session, collect_token_activations_batched, compute_next_token_probs,
     get_token_activations,
 )

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import dots1
+from nnterp.families import dots1
 
 
 class TestDots1(FamilySuite):

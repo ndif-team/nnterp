@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import mimo_v2_flash
+from nnterp.families import mimo_v2_flash
 
 
 def with_sink(scores, sinks):

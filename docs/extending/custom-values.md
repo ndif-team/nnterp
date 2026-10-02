@@ -3,7 +3,7 @@ title: Custom Values
 one_liner: Add a new value to an attention, block or MLP by subclassing the family's envoy with an `EProperty` (keyed on a path) or a `DerivedEProperty` and passing it through `envoys=`.
 tags: [extending, eproperty, envoys, source, support]
 related: [docs/extending/overriding-values.md, docs/extending/finding-source-ops.md, docs/extending/registering.md, docs/extending/adding-a-family.md]
-sources: [nnter/components/eproperty.py, nnter/components/layer.py, nnter/components/standard.py, nnter/components/attention.py, nnter/standardized.py, nnter/families/gpt2.py, tests/test_registry.py, tests/test_base.py]
+sources: [nnterp/components/eproperty.py, nnterp/components/layer.py, nnterp/components/standard.py, nnterp/components/attention.py, nnterp/standardized.py, nnterp/families/gpt2.py, tests/test_registry.py, tests/test_base.py]
 ---
 
 # Custom Values
@@ -11,11 +11,11 @@ sources: [nnter/components/eproperty.py, nnter/components/layer.py, nnter/compon
 ## What this is for
 
 The standard values are the ones every family has. A value your experiment needs and
-nnter does not ship (the softmax before the dropout, the entropy of each attention row,
+nnterp does not ship (the softmax before the dropout, the entropy of each attention row,
 an MLP's output at the last position) is one descriptor on a subclass of the family's
 `Attention`, `Layer` or `Mlp`, installed with `envoys=` at load. It then reads, writes
 and saves like any standard value, appears in the repr with its description, and
-answers `support()` on its envoy and in `model.support()`. Nothing in nnter changes.
+answers `support()` on its envoy and in `model.support()`. Nothing in nnterp changes.
 
 ## Canonical pattern
 
@@ -27,11 +27,11 @@ import torch
 from jaxtyping import Float
 from torch import Tensor
 
-import nnter
-from nnter import StandardizedTransformer, DerivedEProperty, EProperty
-from nnter.components import Pattern, interface_reason
-from nnter.families import gpt2
-from transformers.models.gpt2.modeling_gpt2 import GPT2Attention   # after nnter
+import nnterp
+from nnterp import StandardizedTransformer, DerivedEProperty, EProperty
+from nnterp.components import Pattern, interface_reason
+from nnterp.families import gpt2
+from transformers.models.gpt2.modeling_gpt2 import GPT2Attention   # after nnterp
 
 
 def attention_entropy(self) -> Float[Tensor, "batch heads query"]:
@@ -93,7 +93,7 @@ does, through `interface_reason`.
   `(attn_output, attn_weights)`, so the weights it returns are one line:
 
   ```python
-  from nnter import EProperty
+  from nnterp import EProperty
 
 
   class Attention(gpt2.Attention):
@@ -150,8 +150,8 @@ class Mlp(gpt2.Mlp):
 model = StandardizedTransformer("openai-community/gpt2", envoys={GPT2Attention: Attention, GPT2MLP: Mlp})
 ```
 
-Subclass the family's class (`gpt2.Mlp`) rather than `nnter.Mlp` so the family's own
-overrides stay; subclass `nnter.components.Standard` for a module that has no standard
+Subclass the family's class (`gpt2.Mlp`) rather than `nnterp.Mlp` so the family's own
+overrides stay; subclass `nnterp.components.Standard` for a module that has no standard
 values at all (a norm, an embedding). `Standard.values()` lists the descriptors by name,
 base classes first, and `Standard.support()` their reasons. `Standard.sourced` (`False`
 by default) set to `True` on a subclass instruments that envoy's forward at build, for a
@@ -162,10 +162,10 @@ is, not when its forward is instrumented.
 ## Layout: the return annotation
 
 A `jaxtyping` return annotation is the value's declared shape, and the standard shapes have
-names exported by `nnter.components`: `Residual`, `Pattern`, `Keys`, ... (each defined
+names exported by `nnterp.components`: `Residual`, `Pattern`, `Keys`, ... (each defined
 beside the envoy that serves it; [../usage/layouts.md](../usage/layouts.md) lists all
-thirty-one: twenty-eight from `nnter.components`, and the root's `Logits`, `NextTokenProbs`,
-`Tokens` from `nnter.standardized`).
+thirty-one: twenty-eight from `nnterp.components`, and the root's `Logits`, `NextTokenProbs`,
+`Tokens` from `nnterp.standardized`).
 Annotate with the name where one fits: `attention_softmax` above is `-> Pattern`, so
 `Attention.attention_softmax.layout is Pattern`, the same object the base's
 `attention_probabilities` carries, and `.dims` is `("batch", "heads", "query", "key")`.
@@ -183,7 +183,7 @@ key. nnsight tries type keys before path keys, so a path key does not beat a fam
 key: `envoys={"attn": Attention}` on GPT-2 leaves the family's `gpt2.Attention` in place,
 because the family already keyed `GPT2Attention`. Key yours on the type. The module
 classes are in the family module's namespace (`gpt2.GPT2Attention`) or the transformers
-modeling module; import them after `import nnter`.
+modeling module; import them after `import nnterp`.
 
 ## Where it shows
 
@@ -201,7 +201,7 @@ modeling module; import them after `import nnter`.
 
 ## Gotchas
 
-- **`import nnter` before `from transformers.models... import`**; the reverse order
+- **`import nnterp` before `from transformers.models... import`**; the reverse order
   segfaults at import on this stack.
 - **Key on the module type, not the alias.** `envoys=` matches type or native path; a
   path key loses to the family's type key.
@@ -227,4 +227,4 @@ modeling module; import them after `import nnter`.
 - [overriding-values.md](overriding-values.md): the same descriptor, relocating a standard value.
 - [finding-source-ops.md](finding-source-ops.md): finding the op name for a `source.` path.
 - [registering.md](registering.md): making the custom class the family's for every load of that model type in the process.
-- nnsight docs/usage/extending.md and docs/developing/extending-envoy.md: the `eproperty` descriptor nnter's are built on.
+- nnsight docs/usage/extending.md and docs/developing/extending-envoy.md: the `eproperty` descriptor nnterp's are built on.

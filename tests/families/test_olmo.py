@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import olmo
+from nnterp.families import olmo
 
 
 class TestOlmo(FamilySuite):

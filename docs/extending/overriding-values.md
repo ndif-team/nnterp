@@ -3,7 +3,7 @@ title: Overriding Values
 one_liner: How a family redefines a standard value when the base does not hold — an `EProperty` keyed on a path (`../norm.output`, `source.<op>.input`, `source.<call>.inputs` with `select`), `unavailable` markers and predicates, `off_interface`, `seq_first`, a clone with a transform, `postprocess` for writes; and a root size, which is a plain function in the family module, not a descriptor.
 tags: [extending, families, eproperty, source, availability]
 related: [docs/extending/adding-a-family.md, docs/extending/custom-values.md, docs/extending/finding-source-ops.md]
-sources: [nnter/components/eproperty.py, nnter/components/attention.py, nnter/components/layer.py, nnter/components/mlp.py, nnter/components/standard.py, nnter/families/gemma2.py, nnter/families/olmo2.py, nnter/families/bloom.py, nnter/families/mpt.py, nnter/families/gptj.py, nnter/families/falcon.py, nnter/families/gpt2.py, nnter/families/gpt_oss.py, nnter/families/llama4_text.py, nnter/families/deepseek_v2.py, nnter/families/deepseek_v3.py, nnter/standardized.py]
+sources: [nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/layer.py, nnterp/components/mlp.py, nnterp/components/standard.py, nnterp/families/gemma2.py, nnterp/families/olmo2.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/gptj.py, nnterp/families/falcon.py, nnterp/families/gpt2.py, nnterp/families/gpt_oss.py, nnterp/families/llama4_text.py, nnterp/families/deepseek_v2.py, nnterp/families/deepseek_v3.py, nnterp/standardized.py]
 ---
 
 # Overriding Values
@@ -30,7 +30,7 @@ What the block adds is the sibling norm's output, not the attention module's, so
 value points there:
 
 ```python
-# nnter/families/gemma2.py
+# nnterp/families/gemma2.py
 from ..components import Attention, EProperty, Layer, Mlp, Residual
 
 
@@ -118,7 +118,7 @@ returns its output flattened to `[batch * seq, hidden]` and the block views it b
 (`residual + hidden_states.view(residual.shape)`), so its `mlp_output` is that view:
 
 ```python
-# nnter/families/llama4_text.py
+# nnterp/families/llama4_text.py
 class Mlp(Mlp):
     @EProperty("../source.hidden_states_view_0.output", description="...", unavailable=_not_a_block_feed_forward)
     def mlp_output(self, value) -> Residual:
@@ -131,7 +131,7 @@ drill a read performs is too late. The path does not say so; the family does, on
 that owns the forward:
 
 ```python
-# nnter/families/llama4_text.py
+# nnterp/families/llama4_text.py
 class Layer(Layer):
     """Llama 4's decoder block; returns a bare tensor, so the base holds.
 
@@ -156,7 +156,7 @@ BLOOM's sublayers take the residual as an argument and add it inside the module
 a contribution. The contribution is the first argument of that call:
 
 ```python
-# nnter/families/bloom.py
+# nnterp/families/bloom.py
 class Attention(Attention):
     @EProperty(
         "source.dropout_add_0.input",
@@ -193,7 +193,7 @@ exists.
   values this way off the interface call:
 
   ```python
-  # nnter/components/attention.py
+  # nnterp/components/attention.py
   @EProperty(f"source.{INTERFACE}.inputs", select=1, description="The queries entering attention", unavailable=interface_reason)
   def attention_queries(self, value: torch.Tensor) -> Queries:
       return value
@@ -250,7 +250,7 @@ its family reads `attention_scores` one step earlier, at the masked scores bound
 before the sink joins them, and flags the sink for the suite:
 
 ```python
-# nnter/families/gpt_oss.py
+# nnterp/families/gpt_oss.py
 class Attention(Attention):
     SINK = True
 
@@ -265,11 +265,11 @@ class Attention(Attention):
 
 A marker in the class body takes the place of the inherited descriptor, keeps the name in
 the tree and the repr (`(attention_scores): Unavailable: <reason>`), makes `support()`
-report the reason, and makes any access raise `nnter.Unavailable` with it before the model
+report the reason, and makes any access raise `nnterp.Unavailable` with it before the model
 runs:
 
 ```python
-from nnter.components import NOT_ON_INTERFACE, unavailable
+from nnterp.components import NOT_ON_INTERFACE, unavailable
 
 
 class Attention(Attention):
@@ -288,7 +288,7 @@ another fused kernel). A family with another reason overrides the method rather 
 each value:
 
 ```python
-# nnter/families/gpt2.py
+# nnterp/families/gpt2.py
 class Attention(Attention):
     def off_interface(self):
         if self._module.config.reorder_and_upcast_attn:
@@ -303,7 +303,7 @@ the instance so the checkpoint's config decides. `needs_eager` is the one every 
 inside the eager attention forward uses, and it is nothing more than such a function:
 
 ```python
-# nnter/components/attention.py
+# nnterp/components/attention.py
 def needs_eager(envoy: Envoy) -> str | None:
     implementation = envoy._module.config._attn_implementation
     if implementation != "eager":
@@ -328,7 +328,7 @@ serves a transposed view on read and transposes back on write. `seq_first` is it
 inverse, so both callbacks are the same function:
 
 ```python
-# nnter/families/mpt.py
+# nnterp/families/mpt.py
 @EProperty("source.torch_matmul_1.output", description=Attention.attention_head_outputs.description)
 def attention_head_outputs(self, value) -> HeadOutputs:
     return seq_first(value)
@@ -351,7 +351,7 @@ to the model, so in-place edits to it would be lost, and an `eproperty` transfor
 the edited copy back to be swapped in once the block is done with the read:
 
 ```python
-# nnter/families/falcon.py
+# nnterp/families/falcon.py
 class Mlp(Mlp):
     @EProperty(key="output", description="What the MLP adds to the residual stream (a copy, since the block adds the attention into the live tensor in place)")
     def mlp_output(self, value) -> Residual:
@@ -387,7 +387,7 @@ attention returning `(attn_output, attn_weights)`) reads as a tensor and an assi
 puts the tensor back in its tuple with the other elements unchanged:
 
 ```python
-# nnter/components/layer.py
+# nnterp/components/layer.py
 @EProperty(key="output", description="The residual stream leaving the block, a tensor even when the block returns a tuple")
 def layer_output(self, value: Any) -> Residual:
     return first_tensor(value)
@@ -414,7 +414,7 @@ latent attention gives values and queries different widths, and the config's own
 `head_dim` key is the latent width that no served value has:
 
 ```python
-# nnter/families/deepseek_v2.py
+# nnterp/families/deepseek_v2.py
 
 def head_dim(model: "StandardizedTransformer") -> int:
     """Width of one head's values and outputs: ``v_head_dim`` (the config's ``head_dim`` is the latent width, which no served value has)."""

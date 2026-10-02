@@ -3,7 +3,7 @@ title: Attention Patterns
 one_liner: "Read `attention_probabilities` as `[batch, heads, query, key]` on any family loaded eager, score heads for entropy, previous-token and first-token behavior, and edit the pattern in place."
 tags: [patterns, attention, heads, source]
 related: [docs/usage/availability.md, docs/usage/loading.md, docs/patterns/ablation.md, docs/patterns/contribution-decomposition.md, docs/patterns/logit-lens.md]
-sources: [nnter/components/attention.py, nnter/components/eproperty.py, nnter/families/gpt_oss.py]
+sources: [nnterp/components/attention.py, nnterp/components/eproperty.py, nnterp/families/gpt_oss.py]
 ---
 
 # Attention Patterns
@@ -26,7 +26,7 @@ rest of this page is the same code on every checkpoint.
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_implementation="eager")
 prompt = "The cat sat on the mat because the cat"
@@ -53,7 +53,7 @@ sdpa.support()["self_attn.attention_probabilities"]
 # {0: "read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'", 1: ...}
 ```
 
-Reading it anyway raises `nnter.Unavailable` with the same reason, at that line.
+Reading it anyway raises `nnterp.Unavailable` with the same reason, at that line.
 
 ## Per-head metrics
 
@@ -175,7 +175,7 @@ one block of granite-swash-2b). So `attention_probabilities` there is not what r
   not attention at all (uniform over every key on GPT-2, all on key 0 on GPT-Neo), so
   mask them with `model.attention_mask` before a per-row metric such as entropy.
 - A pattern or scores read in two invokes of one trace raises `TypeError: 'NoneType'
-  object is not subscriptable` today (an nnsight bug with values nnter reads inside a
+  object is not subscriptable` today (an nnsight bug with values nnterp reads inside a
   nested `.source` call). Read one prompt's pattern per trace, or the whole batch in one
   invoke; `attention_head_outputs` works across invokes.
 - The pattern is in the model's dtype: on a bf16 checkpoint rows sum to one within

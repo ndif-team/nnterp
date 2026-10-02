@@ -3,7 +3,7 @@ title: Contribution Decomposition
 one_liner: "Direct logit attribution over the standard contributions: `model.lm_head(attention_output)` and `model.lm_head(mlp_output)` per block sum to the head of the final stream, the final norm frozen at the real stream puts them on the logits' scale, `attention_head_outputs` with the output projection's weight splits attention per head, and Gemma-4, Doge, ZAYA and DeepSeek-V4 weight each term before it sums."
 tags: [patterns, attribution, residual-stream, heads, logit-lens]
 related: [docs/usage/residual-stream.md, docs/usage/root-values.md, docs/patterns/logit-lens.md, docs/patterns/ablation.md, docs/patterns/attention-patterns.md, docs/reference/families.md]
-sources: [nnter/standardized.py, nnter/components/layer.py, nnter/components/attention.py, nnter/components/mlp.py, nnter/families/gpt2.py, nnter/families/gemma4_text.py, nnter/families/granite.py]
+sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/components/attention.py, nnterp/components/mlp.py, nnterp/families/gpt2.py, nnterp/families/gemma4_text.py, nnterp/families/granite.py]
 ---
 
 # Contribution Decomposition
@@ -14,7 +14,7 @@ The residual stream is a sum: the block input, plus what each attention sublayer
 adds, plus what each MLP adds. Direct logit attribution (DLA) pushes each term
 through the unembedding on its own and asks how much it moved a target logit.
 
-nnter defines the terms so that `layers[i].input + attention_output + mlp_output ==
+nnterp defines the terms so that `layers[i].input + attention_output + mlp_output ==
 layer_output`, checked per family by the test suite, whether the block is sequential,
 parallel, sandwich-normed or a DeltaNet hybrid. Four families scale the stream itself
 between blocks, and there the terms have to be weighted before they sum: Gemma-4 (a
@@ -30,7 +30,7 @@ last block's output:
 
 ```python
 import torch
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_implementation="eager")
 prompt = "The Eiffel Tower is in the city of"

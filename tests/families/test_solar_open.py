@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import solar_open
+from nnterp.families import solar_open
 
 
 class TestSolarOpen(FamilySuite):

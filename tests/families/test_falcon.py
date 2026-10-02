@@ -9,7 +9,7 @@ import nnsight
 import torch
 from suite import FamilySuite, rows, PROMPT
 
-from nnter.families import falcon
+from nnterp.families import falcon
 
 
 class TestFalcon(FamilySuite):

@@ -3,7 +3,7 @@ title: Probing
 one_liner: "`get_token_activations(model, prompts, layers, idx=-1)` gives `[layers, prompts, hidden]` at one position of every prompt under left padding; fit a closed-form linear probe per layer in torch and read the accuracy curve."
 tags: [patterns, probing, activations, residual-stream]
 related: [docs/usage/activations.md, docs/usage/prompt-utils.md, docs/patterns/steering.md, docs/patterns/logit-lens.md, docs/patterns/ablation.md]
-sources: [nnter/nnsight_utils.py, nnter/standardized.py, nnter/components/layer.py]
+sources: [nnterp/nnsight_utils.py, nnterp/standardized.py, nnterp/components/layer.py]
 ---
 
 # Probing
@@ -15,7 +15,7 @@ collect the activation at one position of every prompt in a labelled set, fit a
 linear classifier per layer, and report accuracy against depth. The curve says
 where the property becomes readable.
 
-Collection is the family-specific part, and nnter's
+Collection is the family-specific part, and nnterp's
 `get_token_activations` does it against the standard values: one forward over the
 whole prompt set, `model.layers[i].layer_output` at one position, on any family.
 The probe itself is a few lines of torch. That is the normalization this page
@@ -29,8 +29,8 @@ token where the tokenizer has none):
 
 ```python
 import torch
-from nnter import StandardizedTransformer
-from nnter.nnsight_utils import get_token_activations
+from nnterp import StandardizedTransformer
+from nnterp.nnsight_utils import get_token_activations
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
 assert model.tokenizer.padding_side == "left"
@@ -181,7 +181,7 @@ When you want logistic loss rather than least squares, a few Adam steps on
 
 ### Target-token probabilities instead of activations
 
-`nnter.prompt_utils` (`Prompt.from_strings`, `run_prompts`) tracks named target
+`nnterp.prompt_utils` (`Prompt.from_strings`, `run_prompts`) tracks named target
 tokens in the next-token distribution over many prompts, the read-out side of a
 behavioral dataset; see [prompt-utils](../usage/prompt-utils.md).
 

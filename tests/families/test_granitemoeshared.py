@@ -4,7 +4,7 @@ import test_granite
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import granitemoeshared
+from nnterp.families import granitemoeshared
 
 REPO = "hf-tiny-v2/tiny-random-GraniteMoeSharedForCausalLM"
 NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.block_sparse_moe"}

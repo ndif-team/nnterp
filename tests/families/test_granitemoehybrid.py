@@ -5,7 +5,7 @@ import torch
 from ssd import StateSpaceChecks
 from suite import LINEAR, LLAMA_ROWS, PROMPT, VALUES, FamilySuite
 
-from nnter.families import granitemoehybrid
+from nnterp.families import granitemoehybrid
 
 REPO = "hf-tiny-v2/tiny-random-GraniteMoeHybridForCausalLM"
 SSD_BLOCKS = (0, 2)       # ``layer_types`` = linear, full, linear, full

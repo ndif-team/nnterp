@@ -3,7 +3,7 @@ title: Developing Gotchas
 one_liner: The traps a contributor meets writing families, descriptors and tests — each as the constraint and the reason, with where it comes from.
 tags: [developing, gotchas, internals, source, tracing]
 related: [docs/developing/eproperty-internals.md, docs/developing/recurrent-mixer-internals.md, docs/developing/testing.md, docs/developing/architecture.md, docs/usage/availability.md]
-sources: [nnter/components/eproperty.py, nnter/components/attention.py, nnter/components/linear_attention.py, nnter/components/recurrent.py, nnter/families/falcon.py, nnter/families/gpt2.py, tests/families/suite.py, nnsight src/nnsight/intervention/envoy.py, nnsight src/nnsight/intervention/interleaver.py, nnsight src/nnsight/intervention/source.py]
+sources: [nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/falcon.py, nnterp/families/gpt2.py, tests/families/suite.py, nnsight src/nnsight/intervention/envoy.py, nnsight src/nnsight/intervention/interleaver.py, nnsight src/nnsight/intervention/source.py]
 ---
 
 # Developing Gotchas
@@ -23,8 +23,8 @@ The shape most entries take: bind outside, read in forward order, save what
 you keep.
 
 ```python
-import nnter
-from nnter import StandardizedTransformer
+import nnterp
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_implementation="eager")
 read = {}                                              # bound outside the block
@@ -45,9 +45,9 @@ pre-binds its containers (`tests/families/suite.py:198`, `:225`, `:472`).
 1 raises `OutOfOrderError` ('model.transformer.h.1.output.i0' was requested
 but the model already ran past it). Falcon binds values before the rotary
 that produces queries and keys, so read `attention_values` first
-(`nnter/families/falcon.py:37-41`; `tests/families/test_falcon.py:33-38`);
+(`nnterp/families/falcon.py:37-41`; `tests/families/test_falcon.py:33-38`);
 on DeltaNet, `states` reads every position, so it goes before any state
-write (`nnter/components/recurrent.py:405-422`).
+write (`nnterp/components/recurrent.py:405-422`).
 
 **An out-of-order read of a *source-located* value names the drill, not
 the value.** A value inside a call the forward makes is reached by drilling
@@ -119,10 +119,10 @@ are the same call. A subclass that sets `KERNEL` itself wraps it in
 `staticmethod` too, or reaches it through the class; a bare function reached
 through an instance passes the envoy twice and raises.
 
-**An `EProperty` is not cloudpicklable by value.** `pickle.dumps(nnter.Layer.layer_output)`
+**An `EProperty` is not cloudpicklable by value.** `pickle.dumps(nnterp.Layer.layer_output)`
 is `TypeError: cannot pickle 'EProperty' object`. A family that travels to
 NDIF travels by reference (`standardized.py:440-451`); do not
-`nnsight.register(nnter)` by value.
+`nnsight.register(nnterp)` by value.
 
 **`envoys=` matches type before path, never alias.** `_resolve_envoy_class`
 walks the module's MRO against type keys, then path-suffix keys against the
@@ -160,11 +160,11 @@ state into it; `state_input` returns a clone (`linear_attention.py:76-85`).
 
 **Run git from the repository root and check `git rev-parse --show-toplevel`.**
 The home directory on this machine is itself a git repository; a `git add
--A` from a directory without its own `.git` crawls all of home. `~/wd/nnter`
-has its own `.git`, so the toplevel must print `/home/localjadenfk/wd/nnter`
-before staging.
+-A` from a directory without its own `.git` crawls all of home. An nnterp
+checkout has its own `.git`, so the toplevel must print the checkout before
+staging.
 
-**Import nnter before transformers modeling modules.** The reverse order
+**Import nnterp before transformers modeling modules.** The reverse order
 segfaults ([transformers-compat.md](transformers-compat.md));
 `tests/conftest.py` is the one line that enforces it under pytest.
 

@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import helium
+from nnterp.families import helium
 
 
 class TestHelium(FamilySuite):

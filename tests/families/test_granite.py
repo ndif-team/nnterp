@@ -8,7 +8,7 @@ import tempfile
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnter.families import granite
+from nnterp.families import granite
 
 REPO = "hf-internal-testing/tiny-random-GraniteForCausalLM"
 

@@ -1,9 +1,9 @@
 ---
 title: Registering a Family
-one_liner: `nnter.families.register(module)` adds a family from outside the package or overrides a shipped one, process-wide, names, envoy classes and size functions included; `rename=`/`envoys=` at load are the per-model alternative.
+one_liner: `nnterp.families.register(module)` adds a family from outside the package or overrides a shipped one, process-wide, names, envoy classes and size functions included; `rename=`/`envoys=` at load are the per-model alternative.
 tags: [extending, families, registry, lookup]
 related: [docs/extending/adding-a-family.md, docs/extending/custom-values.md, docs/extending/overriding-values.md]
-sources: [nnter/families/__init__.py, nnter/standardized.py, tests/test_registry.py]
+sources: [nnterp/families/__init__.py, nnterp/standardized.py, tests/test_registry.py]
 ---
 
 # Registering a Family
@@ -11,10 +11,10 @@ sources: [nnter/families/__init__.py, nnter/standardized.py, tests/test_registry
 ## What this is for
 
 `StandardizedTransformer` resolves a checkpoint's `config.model_type` through
-`nnter.families.lookup`, which consults `REGISTRY` first and the module named after the
+`nnterp.families.lookup`, which consults `REGISTRY` first and the module named after the
 type second. `register(family)` puts a family into `REGISTRY`, so a family kept in your
 own package, or a variant of a shipped one, is what every load of that type resolves to,
-without a file under `nnter/families/`. It is process-wide, like installing a kernel.
+without a file under `nnterp/families/`. It is process-wide, like installing a kernel.
 The per-model alternatives are `rename=` and `envoys=` on one load.
 
 ## Canonical pattern
@@ -25,14 +25,14 @@ that marks the pattern unavailable and adds an alias.
 ```python
 import types
 
-import nnter
-from nnter import StandardizedTransformer, families
-from nnter.families import gpt2
-from transformers.models.gpt2.modeling_gpt2 import GPT2Attention   # after nnter
+import nnterp
+from nnterp import StandardizedTransformer, families
+from nnterp.families import gpt2
+from transformers.models.gpt2.modeling_gpt2 import GPT2Attention   # after nnterp
 
 
 class Attention(gpt2.Attention):
-    attention_probabilities = nnter.unavailable("disabled by the registered variant")
+    attention_probabilities = nnterp.unavailable("disabled by the registered variant")
 
 
 variant = types.SimpleNamespace(
@@ -81,7 +81,7 @@ shipped family spells its own way is listed in
 
 Two things do read more of the family later:
 
-- `nnter.route_delta_rule(model.family, ...)` finds a hybrid's mixer module through
+- `nnterp.route_delta_rule(model.family, ...)` finds a hybrid's mixer module through
   `family.ENVOYS`.
 - The suite's `test_envoy_classes` and `expected_values` read `FAMILY.Layer`,
   `FAMILY.Attention`, `FAMILY.Mlp` and `FAMILY.LinearAttention`, so a variant run through
@@ -98,12 +98,12 @@ config's unused `intermediate_size` key (37) instead of `n_inner`'s `4 * hidden_
 ## The lookup order
 
 1. `REGISTRY[model_type]`, if `register` put one there.
-2. `nnter.families.<model_type>`, imported on first use.
+2. `nnterp.families.<model_type>`, imported on first use.
 3. `UnsupportedFamily`, listing what exists:
 
 ```
 UnsupportedFamily: no standardization for model_type 'zamba'; known: ['afmoe', 'apertus', ..., 'zaya'].
-Add nnter/families/zamba.py with MODEL_TYPES, RENAME and ENVOYS, or pass a module to nnter.families.register().
+Add nnterp/families/zamba.py with MODEL_TYPES, RENAME and ENVOYS, or pass a module to nnterp.families.register().
 ```
 
 The list is `sorted(set(known()) | set(REGISTRY))`, so a registered type appears there.

@@ -8,7 +8,7 @@ import tempfile
 import torch
 from suite import FamilySuite, PROMPT, rows
 
-from nnter.families import cohere
+from nnterp.families import cohere
 
 
 class TestCohere(FamilySuite):

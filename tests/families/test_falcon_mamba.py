@@ -8,7 +8,7 @@ import torch
 from suite import PROMPT
 from test_mamba import TestMamba as MambaTests
 
-from nnter.families import falcon_mamba
+from nnterp.families import falcon_mamba
 
 
 class TestFalconMamba(MambaTests):

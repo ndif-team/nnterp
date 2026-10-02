@@ -1,6 +1,6 @@
 ---
 title: Testing
-one_liner: Running nnter's suite offline, what FamilySuite asserts method by method, how a family file adds its specifics, and the root tests for the registry, descriptors and helpers.
+one_liner: Running nnterp's suite offline, what FamilySuite asserts method by method, how a family file adds its specifics, and the root tests for the registry, descriptors and helpers.
 tags: [developing, testing, pytest, families]
 related: [docs/developing/contributing.md, docs/developing/architecture.md, docs/developing/transformers-compat.md, docs/extending/index.md]
 sources: [tests/conftest.py, tests/families/suite.py, tests/families/test_falcon.py, tests/families/test_olmo3.py, tests/families/test_gpt2.py, tests/test_registry.py, tests/test_base.py, tests/test_prompt_utils.py, tests/test_nnsight_utils.py, pyproject.toml]
@@ -10,7 +10,7 @@ sources: [tests/conftest.py, tests/families/suite.py, tests/families/test_falcon
 
 ## What this is for
 
-The suite is the executable contract of nnter: every statement the README
+The suite is the executable contract of nnterp: every statement the README
 makes about a value is a method in `tests/families/suite.py`, run against a
 pinned tiny checkpoint of every family. Adding a family is one test file;
 adding a value is one method here. This page is how to run it, what each
@@ -19,7 +19,7 @@ test asserts, and how a family file states its specifics.
 ## Canonical pattern
 
 ```bash
-cd ~/wd/nnter
+cd nnterp                                # the repository root
 export HF_HUB_OFFLINE=1
 pytest                                   # 5221 passed, 906 skipped in ~395 s (6 min 40 s wall) on CPU
 pytest tests/families/test_gpt2.py -q    # one family: 37 passed, 12 skipped in 3.0 s (7.1 s wall)
@@ -146,7 +146,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 
 | method | asserts |
 |---|---|
-| `test_values_match_their_annotations` | every value with a `layout`, on the root, a block, its attention, its MLP and one mixer, is an instance of its layout alias (`Residual`, `Pattern`, ... from `nnter.components`) and each named axis matches `axis_sizes` (`hidden_size`, `num_heads`, `head_k_dim`, `streams` = the text config's `hc_mult` where it has one, ...); one value per trace; at least 11 checked |
+| `test_values_match_their_annotations` | every value with a `layout`, on the root, a block, its attention, its MLP and one mixer, is an instance of its layout alias (`Residual`, `Pattern`, ... from `nnterp.components`) and each named axis matches `axis_sizes` (`hidden_size`, `num_heads`, `head_k_dim`, `streams` = the text config's `hc_mult` where it has one, ...); one value per trace; at least 11 checked |
 
 **The input** (`:489-514`)
 
@@ -249,9 +249,9 @@ skips the pattern and interior tests and `expected_values` drops the
 
 ## The root tests
 
-`tests/test_registry.py` (13 tests): every module under `nnter/families/` is
+`tests/test_registry.py` (13 tests): every module under `nnterp/families/` is
 named after its single `MODEL_TYPES` entry and there are at least 31
-(`:15-20`); `import nnter` pulls in no `transformers.models.*.modeling_*`
+(`:15-20`); `import nnterp` pulls in no `transformers.models.*.modeling_*`
 module and `lookup("gpt2")` imports only that family, checked in a
 subprocess (`:23-36`); an unknown `model_type` raises `UnsupportedFamily`
 (`:39-41`); `register` adds and overrides, and `lookup` returns it (`:44-51`);
@@ -309,7 +309,7 @@ session collector agrees; `compute_next_token_probs` rows sum to one.
 - pytest imports `tests/families/suite.py` as the bare module `suite`
   (`from suite import FamilySuite`); do not name another test helper that.
 - Run from the repository root: `git rev-parse --show-toplevel` is
-  `~/wd/nnter`, and pytest's `testpaths` is relative to it.
+  the nnterp checkout, and pytest's `testpaths` is relative to it.
 
 ## Related
 

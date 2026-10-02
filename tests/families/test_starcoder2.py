@@ -2,7 +2,7 @@
 
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import starcoder2
+from nnterp.families import starcoder2
 
 
 class TestStarcoder2(FamilySuite):

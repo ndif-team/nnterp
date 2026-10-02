@@ -1,21 +1,21 @@
 ---
 title: Usage Index
-one_liner: One page per nnter feature, recipe-style; every snippet has run against the pinned checkpoints.
+one_liner: One page per nnterp feature, recipe-style; every snippet has run against the pinned checkpoints.
 tags: [usage, index]
 related: [docs/patterns/index.md, docs/extending/index.md, docs/reference/api-quick-reference.md]
-sources: [nnter/standardized.py, nnter/components/__init__.py]
+sources: [nnterp/standardized.py, nnterp/components/__init__.py]
 ---
 
 # Usage Index
 
-nnter adds names and values to an nnsight `TransformersModel`; everything nnsight does
+nnterp adds names and values to an nnsight `TransformersModel`; everything nnsight does
 (`trace`, `generate`, `.save()`, invokes, `tracer.iter`, `.source`, `remote=True`) is unchanged
-and documented in nnsight's own `docs/usage/`. These pages cover what nnter adds.
+and documented in nnsight's own `docs/usage/`. These pages cover what nnterp adds.
 
 All examples start from:
 
 ```python
-from nnter import StandardizedTransformer
+from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_implementation="eager")
 ```
@@ -34,15 +34,15 @@ model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_imp
 - [selective-scan](selective-scan.md) — Mamba, Falcon-Mamba and Jamba's `linear_attn`: the Mamba-1 scan's `C`/`B`/`x`, step sizes and decays as tokens-first views, and the scan's own per-token state behind `route_kernels`.
 - [state-space](state-space.md) — the Mamba-2 (SSD) `linear_attn` on Mamba-2, Nemotron-H, Bamba and Falcon-H1: `C`/`B`/`x`/`dt` under the shared names, the state between steps.
 - [mixture-of-experts](mixture-of-experts.md) — a mixture's `router_logits`, `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs`, `routed_output`, `shared_expert_output` on `layers[i].mlp` (a `Moe`); ablation, rerouting, `experts_implementation=`.
-- [layouts](layouts.md) — one axis layout per value on every family, a named `jaxtyping` type from `nnter.components` (`Residual`, `Pattern`, ...; `value.dims`, `value.layout`).
-- [availability](availability.md) — `model.support()`, `nnter.Unavailable`, and the reasons a checkpoint lacks a value.
+- [layouts](layouts.md) — one axis layout per value on every family, a named `jaxtyping` type from `nnterp.components` (`Residual`, `Pattern`, ...; `value.dims`, `value.layout`).
+- [availability](availability.md) — `model.support()`, `nnterp.Unavailable`, and the reasons a checkpoint lacks a value.
 
 ## Doing things with them
 
 - [methods](methods.md) — `skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`, `probs_to_dict`.
 - [generation](generation.md) — the values under `model.generate`: per forward call, `[batch, 1, ...]` on a decode step, `tracer.iter` picks the step.
-- [prompt-utils](prompt-utils.md) — `nnter.prompt_utils`: target-token probability mass over many prompts.
-- [activations](activations.md) — `nnter.nnsight_utils`: one position's activation at chosen blocks over many prompts.
+- [prompt-utils](prompt-utils.md) — `nnterp.prompt_utils`: target-token probability mass over many prompts.
+- [activations](activations.md) — `nnterp.nnsight_utils`: one position's activation at chosen blocks over many prompts.
 - [remote](remote.md) — `remote=True`: what travels, what the server needs.
 
 ## Related

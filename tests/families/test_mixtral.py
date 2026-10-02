@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, LLAMA_ROWS
 
-from nnter.families import mixtral
+from nnterp.families import mixtral
 
 
 class TestMixtral(FamilySuite):
@@ -16,7 +16,7 @@ def test_support_reports_the_experts_implementation_a_load_runs():
     """``support`` says what ``experts_implementation=`` gives the model: loaded, always; before the weights load, where nnsight's meta build forwards the kwarg."""
     import pytest
 
-    from nnter import StandardizedTransformer
+    from nnterp import StandardizedTransformer
 
     loaded = StandardizedTransformer(TestMixtral.REPO, dispatch=True, experts_implementation="eager")
     assert "experts_implementation=" in loaded.support(layer=0)["mlp.expert_outputs"]
@@ -66,7 +66,7 @@ def _align(idx, expected_idx, expected_w):
 
 def test_router_logits_write_by_hand():
     """Mixtral: softmax over the written logits, top-k, renormalized; the routed sum from the experts' weights."""
-    from nnter import StandardizedTransformer
+    from nnterp import StandardizedTransformer
 
     model = StandardizedTransformer(TestMixtral.REPO, dispatch=True)
     moe = model.layers[1].mlp

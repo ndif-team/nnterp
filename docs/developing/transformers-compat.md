@@ -1,16 +1,16 @@
 ---
 title: transformers Compatibility
-one_liner: The versions nnter is developed against, exactly which operation names a transformers release can move, how the suite catches it, and the upgrade procedure.
+one_liner: The versions nnterp is developed against, exactly which operation names a transformers release can move, how the suite catches it, and the upgrade procedure.
 tags: [developing, compatibility, transformers, nnsight, versions, source]
 related: [docs/developing/testing.md, docs/developing/eproperty-internals.md, docs/developing/architecture.md, docs/developing/gotchas.md]
-sources: [nnter/components/attention.py, nnter/components/linear_attention.py, nnter/components/recurrent.py, nnter/families/gpt_oss.py, nnter/families/bloom.py, nnter/families/mpt.py, nnter/families/falcon.py, nnter/families/gptj.py, tests/families/suite.py, tests/conftest.py, pyproject.toml]
+sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/gpt_oss.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/falcon.py, nnterp/families/gptj.py, tests/families/suite.py, tests/conftest.py, pyproject.toml]
 ---
 
 # transformers Compatibility
 
 ## What this is for
 
-This is the one page in `docs/` that talks about versions. nnter is
+This is the one page in `docs/` that talks about versions. nnterp is
 developed on **transformers 5.17.0** and **nnsight 0.8.0** (the `dev`
 branch, at the eproperty-transform-raw merge), with torch 2.13 and
 jaxtyping 0.3.11; `pyproject.toml` requires `nnsight>=0.8`, `transformers`
@@ -26,9 +26,9 @@ What the family pins, next to what the live forward has (run on
 `hf-internal-testing/tiny-random-LlamaForCausalLM`; a Llama-family model):
 
 ```python
-import nnter
-from nnter import StandardizedTransformer
-from nnter.components import INTERFACE
+import nnterp
+from nnterp import StandardizedTransformer
+from nnterp.components import INTERFACE
 
 model = StandardizedTransformer("meta-llama/Llama-3.1-8B", dispatch=True, attn_implementation="eager")
 attn = model.layers[0].self_attn
@@ -66,7 +66,7 @@ off transformers' shared attention interface.
 
 ### The shared interface (most families)
 
-`INTERFACE = "attention_interface_1"` (`nnter/components/attention.py:26`).
+`INTERFACE = "attention_interface_1"` (`nnterp/components/attention.py:26`).
 The module binds `attention_interface = ALL_ATTENTION_FUNCTIONS.get_interface(...)`
 (`attention_interface_0`) and then calls it (`attention_interface_1`);
 `modeling_llama.py:264-268` in 5.17. Inside `eager_attention_forward`
@@ -80,12 +80,12 @@ head outputs (`:74-103`, `:149`).
 **GPT-OSS** keeps the interface but its eager forward concatenates a sink
 column before the softmax (`modeling_gpt_oss.py:247-260`); the standard
 `attention_scores` is the masked scores bound just before that,
-`attn_weights_1` (`nnter/families/gpt_oss.py:43-45`), which exists only when
+`attn_weights_1` (`nnterp/families/gpt_oss.py:43-45`), which exists only when
 an attention mask is passed, as it is on every prompt.
 
 ### Families with their own attention arithmetic
 
-| family | value → op (`nnter/families/<f>.py`) |
+| family | value → op (`nnterp/families/<f>.py`) |
 |---|---|
 | **BLOOM** (`bloom.py:44-84`, `:90-96`) | q/k/v `self__reshape_0.output[0..2]`; scores `F_softmax_0.input`; head outputs `torch_bmm_0.output`; pattern `self_attention_dropout_0.output`; both contributions `dropout_add_0.input` |
 | **MPT** (`mpt.py:45-74`, `:80-85`) | q/k/v the bindings `query_states_0`, `key_states_0`, `value_states_0`; scores `nn_functional_softmax_0.input`; head outputs `torch_matmul_1`; pattern `nn_functional_dropout_0`; MLP contribution `F_dropout_0` |
@@ -103,7 +103,7 @@ an attention mask is passed, as it is on every prompt.
 are the two kernel calls, `use_precomputed_states_0` the branch binding that
 picks between them, and `last_recurrent_state_3` the per-token state
 binding inside the recurrent loop
-(`nnter/components/linear_attention.py:45-49`;
+(`nnterp/components/linear_attention.py:45-49`;
 `modeling_qwen3_5.py:561`, `:626`, `:639`, `:474-494`). The state op's `_3`
 is the count of `last_recurrent_state = ...` bindings before the one after
 the token's update: two before the loop, the decay inside it, then the
@@ -132,7 +132,7 @@ keys, and nnsight binds whichever resolves (`gpt_neox.py:17-20`).
   every available value on the family's `Attention` whose path is inside a
   forward reads a tensor on every attention block. A renamed op fails here
   with `SourceNotAvailable` naming the missing op and the ops that exist
-  (`nnter/components/eproperty.py:186-190`).
+  (`nnterp/components/eproperty.py:186-190`).
 - `test_written_pattern_moves_the_logits` (`:303-317`): assigning a random
   pattern and zeroing a head in place both move the logits. An op that
   still resolves but is no longer what the values are mixed with (a copy, a
@@ -173,24 +173,24 @@ keys, and nnsight binds whichever resolves (`gpt_neox.py:17-20`).
 On this stack, importing a `transformers.models.*.modeling_*` module
 **before** nnsight segfaults at import. `tests/conftest.py` imports nnsight
 first in every pytest process; every family module is imported only through
-`nnter.families.lookup`, after `import nnter`; a script must `import nnter`
+`nnterp.families.lookup`, after `import nnterp`; a script must `import nnterp`
 (or `import nnsight`) before any `from transformers.models... import`. A
 plain `import transformers` first is fine.
 
-## What nnter needs from nnsight
+## What nnterp needs from nnsight
 
-Two behaviours of nnsight 0.8 as it stands, both used by nnter as current
+Two behaviours of nnsight 0.8 as it stands, both used by nnterp as current
 behaviour:
 
 - **`envoys=` chooses the envoy class per module at construction**, by type
   (MRO) first and native path suffix second, before aliases bind
-  (nnsight `envoy.py:224-230`, `:349-370`, `:177`). nnter keys every
+  (nnsight `envoy.py:224-230`, `:349-370`, `:177`). nnterp keys every
   `ENVOYS` on a transformers type; an alias never matches; a user displaces a
   family envoy by keying on the same type (`tests/test_registry.py:67-77`).
 - **`eproperty.transform` takes `(self, view, raw)`**: the edited view and
   the value as served (nnsight `eproperty.py:158-166`, `:178-184`). Falcon's
   `mlp_output` uses it to carry an in-place edit on a clone back into the
-  model (`nnter/families/falcon.py:136-148`).
+  model (`nnterp/families/falcon.py:136-148`).
 
 Also relied on: `Mediator.current`, `Mediator.iteration`, `Mediator.occurrence`,
 `Interleaver.sourced` and `Iterations` (nnsight `interleaver.py:287-334`,
@@ -211,7 +211,7 @@ exactly how.
   know an op moved, since it does not run the forward. The suite is the
   guard.
 - Do not add version conditionals to family modules; one family module
-  targets the transformers nnter is developed on, and the upgrade procedure
+  targets the transformers nnterp is developed on, and the upgrade procedure
   moves it.
 
 ## Related

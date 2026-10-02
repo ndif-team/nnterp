@@ -4,7 +4,7 @@ import torch
 from scan_suite import SelectiveScanSuite
 from suite import LINEAR, VALUES, FamilySuite, PROMPT, rows
 
-from nnter.families import jamba
+from nnterp.families import jamba
 
 ATTENTION_BLOCKS = (1,)   # ``attn_layer_offset`` 1 of ``attn_layer_period`` 8: block 1 of the two
 MOE_BLOCKS = (1,)         # ``expert_layer_offset`` 1 of ``expert_layer_period`` 2

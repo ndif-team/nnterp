@@ -30,7 +30,7 @@ from nnterp.components.vision import scatter_call, scatter_host
 #: The tower's own values, in forward order; its block values are those of a text block.
 TOWER_VALUES = ("image_token_mask", "patch_embeddings", "tower_output", "image_features")
 BLOCK_VALUES = {
-    "layer_output", "self_attn.attention_output", "self_attn.attention_probabilities", "self_attn.attention_queries",
+    "layer_input", "layer_output", "self_attn.attention_output", "self_attn.attention_probabilities", "self_attn.attention_queries",
     "self_attn.attention_keys", "self_attn.attention_values", "self_attn.attention_scores",
     "self_attn.attention_head_outputs", "mlp.mlp_output",
 }

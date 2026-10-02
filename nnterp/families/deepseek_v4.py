@@ -85,6 +85,10 @@ class Layer(Layer):
     (``ffn_hc``), float32 whatever the model's dtype.
     """
 
+    @EProperty(key="input", description="The residual streams entering the block")
+    def layer_input(self, value) -> Streams:
+        return value
+
     @EProperty(key="output", description="The residual streams leaving the block")
     def layer_output(self, value) -> Streams:
         return first_tensor(value)

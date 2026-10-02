@@ -1,4 +1,4 @@
-"""`StandardizedTransformer`: a `TransformersModel` renamed to the standard vocabulary."""
+"""`Standardized`, what every standardized model shares, and `StandardizedTransformer`, the `TransformersModel` one."""
 
 from __future__ import annotations
 
@@ -68,7 +68,196 @@ class StandardizedCapability(StandardizedProperty):
         return functools.partial(getattr(obj.family, self.name, None) or self.fget, obj)
 
 
-class StandardizedTransformer(TransformersModel):
+class Standardized:
+    """What a standardized model is on any engine: a family, its sizes, its availability, and the methods over its values.
+
+    Mixed in ahead of the nnsight model class that runs the checkpoint
+    (`StandardizedTransformer` over `TransformersModel`,
+    `nnterp.StandardizedVLLM` over nnsight's ``VLLM``). The leaf resolves
+    ``family`` and hands its ``RENAME`` and ``ENVOYS`` to nnsight, and defines
+    the root's values (``logits``, ``token_embeddings``, ...), which are read
+    where its engine keeps them. Everything here is written against the
+    standard names and values only, so it holds on both.
+    """
+
+    family: ModuleType
+    layers: Sequence[Layer]
+    embed_tokens: Envoy
+    norm: Envoy
+    lm_head: Envoy
+
+    # -- methods over the values (inside a trace unless said otherwise) ----------
+
+    def skip_layers(self, start: int, end: int, skip_with: torch.Tensor | None = None) -> None:
+        """Skip blocks ``start`` through ``end`` inclusive.
+
+        The residual stream entering block ``start`` (or ``skip_with``) is
+        handed straight to block ``end + 1``; the skipped blocks do not run.
+        Negative indices count from the end. Inside a trace::
+
+            with model.trace(prompt):
+                model.skip_layers(4, 7)
+                logits = model.logits.save()
+        """
+        start, end = range(self.num_layers)[start], range(self.num_layers)[end]
+        hidden = self.layers[start].layer_input if skip_with is None else skip_with
+        for i in range(start, end + 1):
+            self.layers[i].skip_with(hidden)
+
+    def steer(
+        self,
+        layers: int | list[int],
+        vector: torch.Tensor,
+        factor: float = 1.0,
+        token_positions: int | list[int] | slice | None = None,
+        batch_index: int | None = None,
+    ) -> None:
+        """Add ``factor * vector`` to the residual stream leaving the given blocks.
+
+        ``vector`` is ``[hidden]`` (or broadcastable to the selected slice).
+        ``token_positions`` restricts the positions and ``batch_index`` the
+        row; both default to all. The add is in place on ``layer_output``, so
+        it reaches the model. Inside a trace, with ``layers`` ascending.
+        """
+        rows = slice(None) if batch_index is None else batch_index
+        cols = slice(None) if token_positions is None else token_positions
+        for i in [layers] if isinstance(layers, int) else layers:
+            out = self.layers[i].layer_output
+            out[rows, cols] += factor * vector.to(out)
+
+    def probs_to_dict(self, probs: torch.Tensor, k: int = 5) -> dict[str, float]:
+        """The ``k`` most likely tokens of one ``[vocab]`` distribution, as ``{token: probability}``, most likely first.
+
+        Keyed by the decoded text. Where two or more of the ``k`` decode to
+        the same text (partial UTF-8 byte tokens all decode to ``'\ufffd'``),
+        those entries are keyed by the tokenizer's raw vocabulary token
+        instead (``convert_ids_to_tokens``, unique per id), with the id
+        appended should even that repeat, so the dict always holds ``k``
+        entries, each with its own probability.
+        """
+        values, indices = probs.topk(k)
+        ids = indices.tolist()
+        keys = [self.tokenizer.decode(index) for index in ids]
+        counts = Counter(keys)
+        keys = [
+            str(self.tokenizer.convert_ids_to_tokens(index)) if counts[key] > 1 else key
+            for key, index in zip(keys, ids)
+        ]
+        counts = Counter(keys)
+        keys = [f"{key}#{index}" if counts[key] > 1 else key for key, index in zip(keys, ids)]
+        return {key: value.item() for key, value in zip(keys, values)}
+
+    def get_topk_closest_tokens(self, hidden: torch.Tensor, k: int = 5) -> list[dict[str, float]]:
+        """The ``k`` most likely next tokens for each position of ``hidden``, ``[..., hidden]``.
+
+        `project_on_vocab` then softmax, one ``{token: probability}`` per
+        position, in row-major order over the leading dimensions.
+        """
+        probs = self.project_on_vocab(hidden).softmax(-1).reshape(-1, self.vocab_size)
+        return [self.probs_to_dict(row, k) for row in probs]
+
+    # -- availability ----------------------------------------------------------
+
+    def support(self, layer: int | None = None) -> dict[str, Any]:
+        """Which standard values this checkpoint has, without running anything.
+
+        With ``layer``, that block's values by dotted name (``"layer_output"``,
+        ``"self_attn.attention_probabilities"``, ``"mlp.mlp_output"``): ``None``
+        when available, else the reason, including ``"no <module> module"``
+        when the block has no such module at all (a hybrid's blocks have either
+        ``self_attn`` or ``linear_attn``). Without, the root's values
+        plus every block value: ``None`` when available on every block, else
+        ``{layer: reason}`` for the blocks where it is not, so a hybrid reads
+        as a short dict.
+
+        The tree decides what is listed: every child of a block that carries
+        standard values (a `Standard` envoy) is walked under its standard
+        name, so a value installed through ``envoys=`` or a registered family
+        appears here as it does in the envoy's own `Standard.support`, and a
+        module no block has (OPT's ``mlp``) has no entry. A standard child of
+        the root (the vision tower, `Vision`) is listed the same way, its own
+        `support` rows under its standard name (``"vision.image_features"``,
+        ``"vision.self_attn.attention_probabilities"``); a tower no image
+        reaches lists none.
+        """
+        if layer is not None:
+            return blocks_support(self.layers, layer)
+        support: dict[str, Any] = {name: value.reason(self) for name, value in values(type(self)).items()}
+        support.update(blocks_support(self.layers))
+        for host, child in standard_children(self).items():
+            support.update((f"{host}.{name}", reason) for name, reason in child.support().items())
+        return support
+
+    #: The block's children that carry standard values, by standard name (see `standard_children`).
+    _standard_children = staticmethod(standard_children)
+
+    # -- sizes (from the config) ----------------------------------------------
+    # Each is the plain case, read off the text config (a multimodal
+    # checkpoint's ``text_config``, else the config itself); a family whose
+    # config says it otherwise defines a function of the same name (see
+    # `StandardizedProperty`). Each is the model-wide value, equal to every
+    # block's where the blocks agree; where they differ (Gemma-4, MiMo-V2-Flash)
+    # it is the config's top-level value, and the block's own is on its
+    # `Attention` / `Mlp`, read off the module.
+
+    @StandardizedProperty
+    def num_layers(self) -> int:
+        return len(self.layers)
+
+    @StandardizedProperty
+    def hidden_size(self) -> int:
+        return self.config.get_text_config().hidden_size
+
+    @StandardizedProperty
+    def vocab_size(self) -> int:
+        return self.config.get_text_config().vocab_size
+
+    @StandardizedProperty
+    def num_heads(self) -> int:
+        return self.config.get_text_config().num_attention_heads
+
+    @StandardizedProperty
+    def num_kv_heads(self) -> int:
+        """Key/value heads: ``num_key_value_heads`` under grouped-query attention, else `num_heads`."""
+        return getattr(self.config.get_text_config(), "num_key_value_heads", None) or self.num_heads
+
+    @StandardizedProperty
+    def head_dim(self) -> int:
+        """Width of one attention head: the config's ``head_dim`` when it says (Qwen3, Gemma), else ``hidden_size // num_heads``."""
+        return getattr(self.config.get_text_config(), "head_dim", None) or self.hidden_size // self.num_heads
+
+    @StandardizedProperty
+    def qk_head_dim(self) -> int:
+        """Width of one head's queries and keys: `head_dim`, unless the family separates them (DeepSeek's latent attention)."""
+        return self.head_dim
+
+    @StandardizedProperty
+    def intermediate_size(self) -> int:
+        """Width of the dense MLP's hidden layer, ``config.intermediate_size``; a mixture of experts' experts are ``moe_intermediate_size`` wide."""
+        return self.config.get_text_config().intermediate_size
+
+    # -- loading ---------------------------------------------------------------
+
+    @staticmethod
+    def _read_config(repo_id: Any, kwargs: dict) -> Any:
+        """The checkpoint's config, before any model is built.
+
+        A ready module carries its own; a repo id is read with ``AutoConfig``,
+        so a config transformers cannot parse fails here with its own error.
+        The Hub caches the file, and the meta build reads it again.
+        """
+        if isinstance(repo_id, torch.nn.Module):
+            return repo_id.config
+        from transformers import AutoConfig
+
+        return AutoConfig.from_pretrained(
+            repo_id,
+            revision=kwargs.get("revision"),
+            trust_remote_code=bool(kwargs.get("trust_remote_code", False)),
+        )
+
+
+class StandardizedTransformer(Standardized, TransformersModel):
     """A causal language model whose modules answer to one set of names.
 
     The checkpoint's config is read first (its ``model_type``), the matching
@@ -138,11 +327,6 @@ class StandardizedTransformer(TransformersModel):
             and the best-effort default family cannot standardize it either.
     """
 
-    family: ModuleType
-    layers: Sequence[Layer]
-    embed_tokens: Envoy
-    norm: Envoy
-    lm_head: Envoy
     vision: Vision
     projector: Envoy
 
@@ -247,44 +431,7 @@ class StandardizedTransformer(TransformersModel):
             "assign model.logits instead"
         )
 
-    # -- methods over the values (inside a trace unless said otherwise) ----------
-
-    def skip_layers(self, start: int, end: int, skip_with: torch.Tensor | None = None) -> None:
-        """Skip blocks ``start`` through ``end`` inclusive.
-
-        The residual stream entering block ``start`` (or ``skip_with``) is
-        handed straight to block ``end + 1``; the skipped blocks do not run.
-        Negative indices count from the end. Inside a trace::
-
-            with model.trace(prompt):
-                model.skip_layers(4, 7)
-                logits = model.logits.save()
-        """
-        start, end = range(self.num_layers)[start], range(self.num_layers)[end]
-        hidden = self.layers[start].input if skip_with is None else skip_with
-        for i in range(start, end + 1):
-            self.layers[i].skip_with(hidden)
-
-    def steer(
-        self,
-        layers: int | list[int],
-        vector: torch.Tensor,
-        factor: float = 1.0,
-        token_positions: int | list[int] | slice | None = None,
-        batch_index: int | None = None,
-    ) -> None:
-        """Add ``factor * vector`` to the residual stream leaving the given blocks.
-
-        ``vector`` is ``[hidden]`` (or broadcastable to the selected slice).
-        ``token_positions`` restricts the positions and ``batch_index`` the
-        row; both default to all. The add is in place on ``layer_output``, so
-        it reaches the model. Inside a trace, with ``layers`` ascending.
-        """
-        rows = slice(None) if batch_index is None else batch_index
-        cols = slice(None) if token_positions is None else token_positions
-        for i in [layers] if isinstance(layers, int) else layers:
-            out = self.layers[i].layer_output
-            out[rows, cols] += factor * vector.to(out)
+    # -- the logit lens -----------------------------------------------------------
 
     @StandardizedCapability
     def project_on_vocab(self, hidden: torch.Tensor) -> torch.Tensor:
@@ -304,72 +451,6 @@ class StandardizedTransformer(TransformersModel):
         logits = self.lm_head(self.norm(hidden))
         cap = getattr(self.config.get_text_config(), "final_logit_softcapping", None)
         return cap * torch.tanh(logits / cap) if cap else logits
-
-    def probs_to_dict(self, probs: torch.Tensor, k: int = 5) -> dict[str, float]:
-        """The ``k`` most likely tokens of one ``[vocab]`` distribution, as ``{token: probability}``, most likely first.
-
-        Keyed by the decoded text. Where two or more of the ``k`` decode to
-        the same text (partial UTF-8 byte tokens all decode to ``'\ufffd'``),
-        those entries are keyed by the tokenizer's raw vocabulary token
-        instead (``convert_ids_to_tokens``, unique per id), with the id
-        appended should even that repeat, so the dict always holds ``k``
-        entries, each with its own probability.
-        """
-        values, indices = probs.topk(k)
-        ids = indices.tolist()
-        keys = [self.tokenizer.decode(index) for index in ids]
-        counts = Counter(keys)
-        keys = [
-            str(self.tokenizer.convert_ids_to_tokens(index)) if counts[key] > 1 else key
-            for key, index in zip(keys, ids)
-        ]
-        counts = Counter(keys)
-        keys = [f"{key}#{index}" if counts[key] > 1 else key for key, index in zip(keys, ids)]
-        return {key: value.item() for key, value in zip(keys, values)}
-
-    def get_topk_closest_tokens(self, hidden: torch.Tensor, k: int = 5) -> list[dict[str, float]]:
-        """The ``k`` most likely next tokens for each position of ``hidden``, ``[..., hidden]``.
-
-        `project_on_vocab` then softmax, one ``{token: probability}`` per
-        position, in row-major order over the leading dimensions.
-        """
-        probs = self.project_on_vocab(hidden).softmax(-1).reshape(-1, self.vocab_size)
-        return [self.probs_to_dict(row, k) for row in probs]
-
-    # -- availability ----------------------------------------------------------
-
-    def support(self, layer: int | None = None) -> dict[str, Any]:
-        """Which standard values this checkpoint has, without running anything.
-
-        With ``layer``, that block's values by dotted name (``"layer_output"``,
-        ``"self_attn.attention_probabilities"``, ``"mlp.mlp_output"``): ``None``
-        when available, else the reason, including ``"no <module> module"``
-        when the block has no such module at all (a hybrid's blocks have either
-        ``self_attn`` or ``linear_attn``). Without, the root's values
-        plus every block value: ``None`` when available on every block, else
-        ``{layer: reason}`` for the blocks where it is not, so a hybrid reads
-        as a short dict.
-
-        The tree decides what is listed: every child of a block that carries
-        standard values (a `Standard` envoy) is walked under its standard
-        name, so a value installed through ``envoys=`` or a registered family
-        appears here as it does in the envoy's own `Standard.support`, and a
-        module no block has (OPT's ``mlp``) has no entry. A standard child of
-        the root (the vision tower, `Vision`) is listed the same way, its own
-        `support` rows under its standard name (``"vision.image_features"``,
-        ``"vision.self_attn.attention_probabilities"``); a tower no image
-        reaches lists none.
-        """
-        if layer is not None:
-            return blocks_support(self.layers, layer)
-        support: dict[str, Any] = {name: value.reason(self) for name, value in values(type(self)).items()}
-        support.update(blocks_support(self.layers))
-        for host, child in standard_children(self).items():
-            support.update((f"{host}.{name}", reason) for name, reason in child.support().items())
-        return support
-
-    #: The block's children that carry standard values, by standard name (see `standard_children`).
-    _standard_children = staticmethod(standard_children)
 
     # -- the input (inside a trace) ----------------------------------------------
 
@@ -416,51 +497,6 @@ class StandardizedTransformer(TransformersModel):
             self._add_prefix_false_tokenizer = AutoTokenizer.from_pretrained(self.repo_id, add_prefix_space=False)
         return self._add_prefix_false_tokenizer
 
-    # -- sizes (from the config) ----------------------------------------------
-    # Each is the plain case, read off the text config (a multimodal
-    # checkpoint's ``text_config``, else the config itself); a family whose
-    # config says it otherwise defines a function of the same name (see
-    # `StandardizedProperty`). Each is the model-wide value, equal to every
-    # block's where the blocks agree; where they differ (Gemma-4, MiMo-V2-Flash)
-    # it is the config's top-level value, and the block's own is on its
-    # `Attention` / `Mlp`, read off the module.
-
-    @StandardizedProperty
-    def num_layers(self) -> int:
-        return len(self.layers)
-
-    @StandardizedProperty
-    def hidden_size(self) -> int:
-        return self.config.get_text_config().hidden_size
-
-    @StandardizedProperty
-    def vocab_size(self) -> int:
-        return self.config.get_text_config().vocab_size
-
-    @StandardizedProperty
-    def num_heads(self) -> int:
-        return self.config.get_text_config().num_attention_heads
-
-    @StandardizedProperty
-    def num_kv_heads(self) -> int:
-        """Key/value heads: ``num_key_value_heads`` under grouped-query attention, else `num_heads`."""
-        return getattr(self.config.get_text_config(), "num_key_value_heads", None) or self.num_heads
-
-    @StandardizedProperty
-    def head_dim(self) -> int:
-        """Width of one attention head: the config's ``head_dim`` when it says (Qwen3, Gemma), else ``hidden_size // num_heads``."""
-        return getattr(self.config.get_text_config(), "head_dim", None) or self.hidden_size // self.num_heads
-
-    @StandardizedProperty
-    def qk_head_dim(self) -> int:
-        """Width of one head's queries and keys: `head_dim`, unless the family separates them (DeepSeek's latent attention)."""
-        return self.head_dim
-
-    @StandardizedProperty
-    def intermediate_size(self) -> int:
-        """Width of the dense MLP's hidden layer, ``config.intermediate_size``; a mixture of experts' experts are ``moe_intermediate_size`` wide."""
-        return self.config.get_text_config().intermediate_size
-
     # -- remote ------------------------------------------------------------------
 
     def _remoteable_class(self) -> type:
@@ -473,23 +509,3 @@ class StandardizedTransformer(TransformersModel):
         subclass-specific key would match nothing on the server.
         """
         return TransformersModel
-
-    # -- loading ---------------------------------------------------------------
-
-    @staticmethod
-    def _read_config(repo_id: Any, kwargs: dict) -> Any:
-        """The checkpoint's config, before any model is built.
-
-        A ready module carries its own; a repo id is read with ``AutoConfig``,
-        so a config transformers cannot parse fails here with its own error.
-        The Hub caches the file, and the meta build reads it again.
-        """
-        if isinstance(repo_id, torch.nn.Module):
-            return repo_id.config
-        from transformers import AutoConfig
-
-        return AutoConfig.from_pretrained(
-            repo_id,
-            revision=kwargs.get("revision"),
-            trust_remote_code=bool(kwargs.get("trust_remote_code", False)),
-        )

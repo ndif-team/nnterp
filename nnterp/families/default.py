@@ -166,7 +166,8 @@ def _block_handling(block_type: type, child: str, dropouts: frozenset[str], fuse
     or any other arithmetic (a scale) is not. A forward that does not assign the call in a
     way this reads is given the benefit of the doubt. With ``fused``, a module
     call taking it and another argument (``self.post_attention_layernorm(x,
-    residual)``) is the add, fused into the next norm as vLLM's blocks do.
+    residual)``) is the add, fused into the next norm as vLLM's blocks do, and
+    so is returning it first in a pair, for the next block's norm to add.
     """
     try:
         tree = ast.parse(textwrap.dedent(inspect.getsource(block_type.forward)))
@@ -183,6 +184,8 @@ def _block_handling(block_type: type, child: str, dropouts: frozenset[str], fuse
     for node in statements:
         value = getattr(node, "value", None)
         if variable is not None:
+            if fused and isinstance(node, ast.Return) and isinstance(value, ast.Tuple) and value.elts and _passes(value.elts[0], variable, dropouts):
+                return None  # handed on as the hidden half of the fused pair, which the next block's norm adds
             if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and node.target.id == variable:
                 return f"the block changes it in place (`{ast.unparse(node)}`), so a read would hold the result"
             if value is not None and _uses(value, variable):

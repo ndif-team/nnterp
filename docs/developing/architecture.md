@@ -236,15 +236,23 @@ page, [recurrent-mixer-internals.md](recurrent-mixer-internals.md).
 purpose: `import nnterp` must import no transformers modeling module
 (`tests/test_registry.py:23-36` runs that in a subprocess).
 
-- `known()` (`families/__init__.py:39-41`) lists the package's modules with
-  `pkgutil.iter_modules`; that list is the set of shipped families, and a
-  module's name *is* its `model_type` (`test_registry.py:15-20`).
+- `known()` (`families/__init__.py`) lists the package's modules with
+  `pkgutil.iter_modules`, but `default`; that list is the set of shipped
+  families, and a module's name *is* its `model_type` (`test_registry.py:15-20`).
 - `lookup(model_type)` (`:44-62`) returns `REGISTRY[model_type]` when
   something was `register`ed, else `importlib.import_module(f"nnterp.families.{model_type}")`.
   A `ModuleNotFoundError` whose `.name` is that exact module means "no such
-  family" and becomes `UnsupportedFamily` with the known list; any other
+  family": `lookup` warns and returns `nnterp.families.default`; any other
   `ModuleNotFoundError` is a family module that itself failed to import, and
   is re-raised as the real error (`:55-57`).
+- `default` is a family like the others that `lookup` returns, with a warning, when
+  neither of the above has the `model_type`. Its
+  `RENAME` is the union of the shipped spellings, its `ENVOYS` are string keys
+  on the standard names (nnsight matches them on alias paths), with a `Layers`
+  container envoy wrapping the blocks, and it defines `check(model)`, which
+  `StandardizedTransformer.__init__` calls on the built tree when the family
+  is `default`: the required root modules, a shape-only `scan`, and the
+  per-sublayer reasons (read off the forwards' source) that `support()`
 - `register(family, *model_types)` (`:65-89`) writes each of `model_types`,
   or with none the last component of `family.__name__`, into `REGISTRY`
   (`:32`), which `lookup` consults first, so a module from outside the

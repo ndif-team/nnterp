@@ -258,14 +258,30 @@ load; `fix_processor` where a tiny checkpoint's processor disagrees with its mod
 on a wrapper built from a family's tiny text config where no tiny wrapper exists
 ([vision-design.md](vision-design.md)).
 
+## The default family (`tests/families/test_default.py`)
+
+The default family has no checkpoint of its own; it is tested against the
+families that do. `load_default(repo)` registers `default` under the
+checkpoint's `model_type` for one load. `forced(name)` builds a `FamilySuite`
+subclass from a shipped family's suite settings with the default forced on,
+so the whole suite runs on GPT-2, Llama, GPT-NeoX, Phi and OPT (OPT's missing
+`mlp` is listed unavailable). `test_default_reads_what_the_family_reads` loads
+every shipped family's checkpoint both ways (but the Mamba-kernel families,
+whose mixers need `route_kernels`) and asserts that every value the default
+reports available is bit-identical to the dedicated family's, and that the
+logits are. The rest pin the warning on NanoChat (a `model_type` with no
+family, compared against the raw model), the reasons for Gemma-2's post-norms
+and BLOOM's residual-taking sublayers, and the refusals (RWKV's names,
+GPT-NeoX-Japanese's container, Gemma-3n's parallel streams).
+
 ## The root tests
 
 `tests/test_registry.py` (21 tests): every module under `nnterp/families/` is
 named after its type, and there are at least 31
 (`:15-20`); `import nnterp` pulls in no `transformers.models.*.modeling_*`
 module and `lookup("gpt2")` imports only that family, checked in a
-subprocess (`:23-36`); an unknown `model_type` raises `UnsupportedFamily`
-(`:39-41`); `register` adds and overrides, and `lookup` returns it (`:44-51`);
+subprocess (`:23-36`); an unknown `model_type` falls back to the default
+family with a warning (`:39-44`); `register` adds and overrides, and `lookup` returns it (`:44-51`);
 a preloaded `nn.Module` uses its own config (`:54-58`); a user `rename`
 merges over the family's (`:61-64`); a user `envoys` type key replaces the
 family's (`:67-77`); the remote key is `TransformersModel` (`:80-85`); a

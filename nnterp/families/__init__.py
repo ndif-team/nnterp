@@ -21,12 +21,15 @@ transformers modeling module. To add a family, write the module beside these;
 to add one from elsewhere, or to override a shipped one, pass it to `register`
 with the model types it covers; to use one for a single load, pass it as
 ``StandardizedTransformer(..., family=)``.
+A ``model_type`` with neither gets `default`, the best-effort family, with a
+warning; it is not one of `known`.
 """
 
 from __future__ import annotations
 
 import importlib
 import pkgutil
+import warnings
 from types import ModuleType
 
 #: ``model_type`` -> a family passed to `register`, taking precedence over the module of that name.
@@ -34,19 +37,21 @@ REGISTRY: dict[str, ModuleType] = {}
 
 
 class UnsupportedFamily(ValueError):
-    """The checkpoint's ``model_type`` has no toolkit: no module of that name here and nothing registered."""
+    """No toolkit standardizes the checkpoint: it has no family, and the best-effort `default` cannot find what the root needs."""
 
 
 def known() -> list[str]:
-    """The shipped families' model types: the modules in this package."""
-    return sorted(info.name for info in pkgutil.iter_modules(__path__))
+    """The shipped families' model types: the modules in this package, but `default`, which covers none."""
+    return sorted(info.name for info in pkgutil.iter_modules(__path__) if info.name != "default")
 
 
 def lookup(model_type: str) -> ModuleType:
     """The toolkit for ``model_type``: a registered one, else the module of that name, imported on first use.
 
-    Raises:
-        UnsupportedFamily: when there is neither.
+    With neither, `default` with a warning: its standardization is a guess,
+    which it checks at load (raising `UnsupportedFamily` when the guess finds
+    no blocks, embedding, final norm or head), and what it could not find or
+    trust is unavailable in ``model.support()``.
     """
     if model_type in REGISTRY:
         return REGISTRY[model_type]
@@ -56,11 +61,13 @@ def lookup(model_type: str) -> ModuleType:
     except ModuleNotFoundError as error:
         if error.name != name:  # a family module that itself failed to import: a real error
             raise
-        raise UnsupportedFamily(
-            f"no standardization for model_type {model_type!r}; known: {sorted(set(known()) | set(REGISTRY))}. "
-            f"Add nnterp/families/{model_type}.py with RENAME and ENVOYS, or pass a family to "
-            f"nnterp.families.register(family, {model_type!r})."
-        ) from None
+    warnings.warn(
+        f"nnterp has no family for model_type {model_type!r}; the default family standardizes it as a best-effort "
+        f"guess. Check model.support() for what it found, and add nnterp/families/{model_type}.py (or "
+        f"nnterp.families.register(family, {model_type!r})) for a standardization you can rely on.",
+        stacklevel=2,
+    )
+    return importlib.import_module(f"{__name__}.default")
 
 
 def register(family: ModuleType, *model_types: str) -> ModuleType:

@@ -62,7 +62,7 @@ nnsight's proxy for one module in the tree, reached by attribute path (`model.la
 
 ## `envoys=`
 
-The `TransformersModel` argument mapping module types (or native paths, never aliases) to `Envoy` subclasses; a family's `ENVOYS` fills it and a user's `envoys=` merges on top, a key given there winning. nnsight tries type keys before path keys. See [../extending/custom-values.md](../extending/custom-values.md).
+The `TransformersModel` argument mapping module types (or path suffixes, native or aliased) to `Envoy` subclasses; a family's `ENVOYS` fills it and a user's `envoys=` merges on top, a key given there winning. nnsight tries type keys before path keys. See [../extending/custom-values.md](../extending/custom-values.md).
 
 ## eproperty
 
@@ -102,7 +102,7 @@ DeepSeek-V2/V3's attention, where queries and keys are `qk_head_dim = qk_nope_he
 
 ## Native name
 
-The module's name in the checkpoint's own architecture (`transformer.h[i].attn` on GPT-2, `gpt_neox.layers[i].attention` on Pythia). It keeps working under nnterp; `RENAME` maps it onto the standard name, and `envoys=` keys match native paths only. See [../usage/vocabulary.md](../usage/vocabulary.md).
+The module's name in the checkpoint's own architecture (`transformer.h[i].attn` on GPT-2, `gpt_neox.layers[i].attention` on Pythia). It keeps working under nnterp; `RENAME` maps it onto the standard name, and `envoys=` path keys match it (and an alias path where the alias's `rename` key ends it). See [../usage/vocabulary.md](../usage/vocabulary.md).
 
 ## Occurrence
 
@@ -138,7 +138,7 @@ The base envoy of a recurrent mixer (`nnterp.components.recurrent`): a subclass 
 
 ## Registry
 
-`nnterp.families`: `lookup(model_type)` returns a family passed to `register()` (kept in `REGISTRY`), else imports `nnterp.families.<model_type>` on first use, else raises `UnsupportedFamily`. The module names are the registry; `import nnterp` loads no transformers modeling module. See [../extending/registering.md](../extending/registering.md).
+`nnterp.families`: `lookup(model_type)` returns a family passed to `register()` (kept in `REGISTRY`), else imports `nnterp.families.<model_type>` on first use, else warns and returns `nnterp.families.default`, the best-effort family (whose load-time check raises `UnsupportedFamily` when it cannot standardize the checkpoint). The module names are the registry; `import nnterp` loads no transformers modeling module. See [../extending/registering.md](../extending/registering.md).
 
 ## Rename
 

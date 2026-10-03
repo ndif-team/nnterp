@@ -130,7 +130,8 @@ class StandardizedTransformer(TransformersModel):
         projector: The last module before the wrapper scatters the image features into the text stream.
 
     Raises:
-        UnsupportedFamily: when no family is passed and none covers the checkpoint's ``model_type``.
+        UnsupportedFamily: when no family is passed and none covers the checkpoint's ``model_type``
+            and the best-effort default family cannot standardize it either.
     """
 
     family: ModuleType
@@ -170,6 +171,9 @@ class StandardizedTransformer(TransformersModel):
             },
             **kwargs,
         )
+        # A family that checks its own guess (the best-effort `default`) does so on the built tree.
+        if hasattr(self.family, "check"):
+            self.family.check(self)
         for key, value in (tokenizer_kwargs or {}).items():
             setattr(self.tokenizer, key, value)
         self._source_root_scatter()

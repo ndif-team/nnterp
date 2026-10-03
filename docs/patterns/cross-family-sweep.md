@@ -160,8 +160,9 @@ top-1 grid, an [activation-patching](activation-patching.md) layer sweep, a
   reason. Its `attention_output` is a module boundary and stays available.
 - Names bound inside a trace do not survive it; every container above is made
   outside and every entry is a `.save()`.
-- A family nnterp does not cover raises `nnterp.families.UnsupportedFamily` at load,
-  naming the known model types.
+- A `model_type` nnterp has no family for loads with the best-effort default family and a
+  warning; check `model.support()` before sweeping it (or raises `UnsupportedFamily` when the
+  default cannot standardize it).
 
 ## Related
 

@@ -117,7 +117,8 @@ class StandardizedTransformer(TransformersModel):
         embed_tokens, norm, lm_head: The embedding, the final norm, the unembedding.
 
     Raises:
-        UnsupportedFamily: when no family covers the checkpoint's ``model_type``.
+        UnsupportedFamily: when no family covers the checkpoint's ``model_type`` and the
+            best-effort default family cannot standardize it either.
     """
 
     family: ModuleType
@@ -152,6 +153,9 @@ class StandardizedTransformer(TransformersModel):
             },
             **kwargs,
         )
+        # A family that checks its own guess (the best-effort `default`) does so on the built tree.
+        if hasattr(self.family, "check"):
+            self.family.check(self)
         for key, value in (tokenizer_kwargs or {}).items():
             setattr(self.tokenizer, key, value)
 

@@ -66,11 +66,11 @@ StandardizedTransformer(repo_id, *args, rename=None, envoys=None, tokenizer_kwar
 |---|---|---|
 | `repo_id` | `str` or `torch.nn.Module` | A Hub repo id, or an already-loaded module (its own `config` is read). |
 | `rename` | `dict[str, str \| list[str]] \| None` | Extra nnsight aliases, merged over the family's `RENAME`; a key given here wins. |
-| `envoys` | `dict \| None` | Extra `envoys=` entries, merged over the family's `ENVOYS` (and nnsight's tensor-parallel envoys on a sharded load); a key given here wins. Keys are module types or native paths, never aliases. |
+| `envoys` | `dict \| None` | Extra `envoys=` entries, merged over the family's `ENVOYS` (and nnsight's tensor-parallel envoys on a sharded load); a key given here wins. Keys are module types or path suffixes (native, or an alias path where its `rename` key ends the path). |
 | `tokenizer_kwargs` | `dict \| None` | Attributes set on the loaded tokenizer: `{"padding_side": "left"}`, a `pad_token`. |
 | `**kwargs` | | Passed to `TransformersModel`: `dispatch=True`, `attn_implementation="eager"`, `dtype=`, `device=` (one device; `device_map="cpu"` does not keep a model off the GPU), `device_map=`, `revision=`, `trust_remote_code=`. `task` defaults to `"text-generation"`. |
 
-The constructor reads the checkpoint's config first (`AutoConfig`; a multimodal config's `text_config`), looks up `config.model_type` in `nnterp.families`, and raises `UnsupportedFamily` before any weights load when no family covers it. `attn_implementation` is not forced: the checkpoint's own default (`sdpa` on most) stays, and the interior attention values then report unavailable in `support()`.
+The constructor reads the checkpoint's config first (`AutoConfig`; a multimodal config's `text_config`), looks up `config.model_type` in `nnterp.families`, and falls back to the best-effort `default` family, with a warning, when none covers it; the default checks its guess on the built tree and raises `UnsupportedFamily` when it cannot standardize the checkpoint. `attn_implementation` is not forced: the checkpoint's own default (`sdpa` on most) stays, and the interior attention values then report unavailable in `support()`.
 
 ### Root values, inside a trace
 
@@ -317,12 +317,13 @@ The base of the four hosts.
 
 | Name | Signature | What |
 |---|---|---|
-| `lookup` | `lookup(model_type: str) -> ModuleType` | The family for `model_type`: a registered one, else `nnterp.families.<model_type>`, imported on first use. Raises `UnsupportedFamily` when there is neither. |
+| `lookup` | `lookup(model_type: str) -> ModuleType` | The family for `model_type`: a registered one, else `nnterp.families.<model_type>`, imported on first use. With neither, warns and returns `default`. |
 | `register` | `register(family: ModuleType) -> ModuleType` | Add a family (any module or object with `MODEL_TYPES`, `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under its model types; consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
-| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (92), alphabetical. |
+| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (92), alphabetical; not `default`. |
+| `default` | module | The best-effort family for a `model_type` with none: `RENAME` over the shipped spellings, `ENVOYS` keyed on the standard names, `check(model)` at load. See [../usage/loading.md](../usage/loading.md#an-architecture-with-no-family). |
 | `all_families` | `all_families() -> list[ModuleType]` | Every shipped family, imported. For tooling and tests. |
 | `REGISTRY` | `dict[str, ModuleType]` | `model_type -> family` for what `register` added. |
-| `UnsupportedFamily` | `ValueError` subclass | No module of that name and nothing registered. |
+| `UnsupportedFamily` | `ValueError` subclass | No family covers the checkpoint and the default cannot standardize it. |
 | `nnterp.families.<model_type>` | module attribute | The family module, imported on first access (`nnterp.families.qwen3_5_text`). |
 
 A family module declares `MODEL_TYPES: tuple[str, ...]`, `RENAME: dict[str, str]`, `Layer`, `Attention`, `Mlp` (and `LinearAttention` on a DeltaNet hybrid, `SelectiveScan` on a Mamba-1 mixer, `StateSpace` on a Mamba-2 mixer; a pure state-space family such as Mamba or Mamba-2 has no `Attention` or `Mlp`) subclassing `nnterp.components`'s, and `ENVOYS: dict[type, type]` keying them on its transformers module types. It may also define a module-level function named after any root size, `def <size>(model) -> int`, which the root's `StandardizedProperty` calls in place of its plain rule (`falcon.num_kv_heads`, `deepseek_v2.head_dim`, `gpt2.intermediate_size`), and likewise `def project_on_vocab(model, hidden)`, which its `StandardizedCapability` binds in place of the root's norm, head and softcap (`cohere.project_on_vocab`, `granite.project_on_vocab`).
@@ -441,7 +442,7 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 | Exception | Raised when |
 |---|---|
 | `nnterp.Unavailable` (`RuntimeError`) | A standard value this checkpoint does not have is read or written: `"<path>.<name> is not available: <reason>"`, at that line, before the model runs. `support()` gives the same reason without raising. `hasattr(envoy, name)` also raises it. |
-| `nnterp.UnsupportedFamily` (`ValueError`) | The checkpoint's `model_type` has no family module and nothing registered; the message lists the known types. |
+| `nnterp.UnsupportedFamily` (`ValueError`) | The checkpoint's `model_type` has no family and the default family cannot standardize it (no blocks, embedding, final norm or head under a name it knows, or blocks that do not pass a `[batch, seq, hidden]` stream); the message suggests a `rename=` when the module tree gives one. |
 | `nnsight.intervention.source.SourceNotAvailable` | An `EProperty`'s path names an operation that is not under `.source` in this run: the forward took a path the family does not expect. |
 | `nnterp.prompt_utils.TokenizationError` | A word has no standalone first token under the tokenizer. |
 | `AttributeError` | Assigning a read-only value: `next_token_probs`, `input_size`, `states`, or any `DerivedEProperty`. |

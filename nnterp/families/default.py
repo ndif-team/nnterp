@@ -563,7 +563,7 @@ qk_head_dim = _attention_size("qk_head_dim")
 
 
 def intermediate_size(model: "StandardizedTransformer") -> int:
-    """The first dense MLP's width off the module (a config can carry a key the model never reads), else the config's ``intermediate_size`` / ``ffn_dim`` / ``n_inner``.
+    """The first dense MLP's width off the module (a config can carry a key the model never reads), else the config's ``intermediate_size`` / ``ffn_dim`` / ``ffn_hidden_size`` / ``n_inner``.
 
     An MLP with ``experts``, a ``router`` or a ``gate`` is a mixture, whose
     module width is one expert's, so the config answers there.
@@ -575,10 +575,10 @@ def intermediate_size(model: "StandardizedTransformer") -> int:
         except NotImplementedError:
             pass
     config = model.config.get_text_config()
-    for key in ("intermediate_size", "ffn_dim", "n_inner"):
+    for key in ("intermediate_size", "ffn_dim", "ffn_hidden_size", "n_inner"):
         if isinstance(getattr(config, key, None), int):
             return getattr(config, key)
     raise NotImplementedError(
-        f"{type(config).__name__} has no intermediate_size, ffn_dim or n_inner and no dense MLP module says; "
+        f"{type(config).__name__} has no intermediate_size, ffn_dim, ffn_hidden_size or n_inner and no dense MLP module says; "
         "a family module defines `def intermediate_size(model)`"
     )

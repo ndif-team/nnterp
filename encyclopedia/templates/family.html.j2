@@ -28,7 +28,7 @@
       {% for c in checkpoints %}
       <div class="ledger-row"><a class="mono-md" href="{{ c.url }}">{{ c.id.split('/')[1] }}</a><a class="mono" href="{{ c.url }}">{{ c.id }}</a><span class="hide-sm">{% if c.id == reference %}<span class="chip chip-sm">this page's sizes</span>{% endif %}</span></div>
       {% endfor %}
-      <div class="ledger-row"><a class="mono-md" href="https://huggingface.co/{{ pinned }}">{{ pinned.split('/')[1] }}</a><a class="mono" href="https://huggingface.co/{{ pinned }}">{{ pinned }}</a><span class="hide-sm"><span class="chip chip-sm chip-2">the test suite's</span></span></div>
+      <div class="ledger-row"><a class="mono-md" href="https://huggingface.co/{{ pinned }}">{{ pinned.split('/')[1] }}</a><a class="mono" href="https://huggingface.co/{{ pinned }}">{{ pinned }}</a><span class="hide-sm"><span class="chip chip-sm">the test suite's</span></span></div>
     </div>
   </details>
 </section>
@@ -39,15 +39,15 @@
   {% if layer_types %}The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.{% endif %}</p>
 
   <div class="strip" id="strip">
-    <div class="strip-node" data-node="strip.embed"><span class="mono">embed_tokens</span><small>token_embeddings</small></div>
+    <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
     <span class="strip-arrow">→</span>
-    <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono">layers</span><small>× {{ num_layers }}</small></div>
+    <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× {{ num_layers }}</small></div>
     <span class="strip-arrow">→</span>
-    <div class="strip-node" data-node="strip.norm"><span class="mono">norm</span><small>final norm</small></div>
+    <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final norm</small></div>
     <span class="strip-arrow">→</span>
-    <div class="strip-node" data-node="strip.head"><span class="mono">lm_head</span><small>unembedding</small></div>
+    <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>unembedding</small></div>
     <span class="strip-arrow">→</span>
-    <div class="strip-node" data-node="strip.logits"><span class="mono">logits</span><small>{% if 'logits' in strip.notes %}softcapped{% else %}the output{% endif %}</small></div>
+    <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>{% if 'logits' in strip.notes %}softcapped{% else %}the output{% endif %}</small></div>
   </div>
 
   <div class="viz">
@@ -69,7 +69,7 @@
       </div>
     </aside>
   </div>
-  <p class="identity"><span class="micro">identity</span> <code>{{ block.identity }}</code></p>
+  <p class="identity"><span class="micro">identity</span> <code>{{ identity_html }}</code></p>
 </section>
 
 <section class="frame section" id="support">
@@ -78,10 +78,10 @@
   {% if eager_only %}<p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition. Here, {{ eager_only|length }} values need <span class="mono">attn_implementation="eager"</span>.</p>{% endif %}
   {% for host, rows in values.items() %}
   <div class="ledger values">
-    <div class="ledger-head"><span>{% if host == 'root' %}model{% elif host == 'layer' %}model.layers[i]{% else %}model.layers[i].{{ host }}{% endif %}{% if rows and rows[0].module %} <span class="mono dim">{{ rows[0].module }}</span>{% endif %}</span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+    <div class="ledger-head"><span><span class="role-{{ host_roles[host] }}">{% if host == 'root' %}model{% elif host == 'layer' %}model.layers[i]{% else %}model.layers[i].{{ host }}{% endif %}</span>{% if rows and rows[0].module %} <span class="mono dim">{{ rows[0].module }}</span>{% endif %}</span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
     {% for row in rows %}
     <div class="ledger-row" data-node="{% if host == 'root' %}{{ 'strip.' ~ {'token_embeddings': 'embed', 'logits': 'logits'}.get(row.name, '') }}{% endif %}">
-      <span class="mono-md name">{% if row.condition %}<span class="warn" tabindex="0" data-tip="{{ 'Needs attn_implementation="eager". ' if row.condition.kind == 'eager' }}{{ row.condition.reason }}">&#x26A0;&#xFE0E;</span>{% endif %}{{ row.name }}</span>
+      <span class="mono-md name role-{{ host_roles[host] }}">{% if row.condition %}<span class="warn" tabindex="0" data-tip="{{ 'Needs attn_implementation="eager". ' if row.condition.kind == 'eager' }}{{ row.condition.reason }}">&#x26A0;&#xFE0E;</span>{% endif %}{{ row.name }}</span>
       <span class="hide-sm mono">{% if row.layout %}{{ row.layout }} <span class="dim">[{{ row.dims }}]</span>{% else %}<span class="dim">scalar</span>{% endif %}</span>
       <span class="body-md">{{ row.description }}</span>
       <span class="hide-sm body-md where">{{ row.where|md }}</span>
@@ -92,7 +92,7 @@
 
   <h3 class="ttl-row">Printout</h3>
   <p class="body-md dim">What <span class="mono">print(model.layers[i])</span> shows: the native modules and, among them, every standard value with its layout.{% if returns_tuple %} The block returns a tuple; <span class="mono">layer_output</span> is its first element.{% endif %}</p>
-  <pre class="repr"><code>{{ repr }}</code></pre>
+  <pre class="repr"><code>{{ repr_html }}</code></pre>
 
   <div class="card">
     <div class="topstrip"></div>

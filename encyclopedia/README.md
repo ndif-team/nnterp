@@ -39,13 +39,26 @@ Two sources, merged by `build.py`:
    with the layer slider. `topology` is `sequential` or `parallel`. Give `identity` when the block is
    not a plain sum (Gemma-4, Granite, DeepSeek-V4).
 3. `QUIRKS`: slugs from `build.QUIRKS`, which follow the themes of `docs/reference/families.md`.
-4. `PALETTE`: pick the accent by lineage so related families read alike; leave it out for a hash.
+4. `PALETTE`: `{"hue": degrees}` is the base hue the page's five colours are generated from
+   (`palette.py`); pick it by lineage so related families read alike (Gemma 2 sits at 145, so a
+   Gemma 3 entry near it reads as kin), or leave it out for a hash of the `model_type`. To bypass
+   generation give `"colors"`, five hex fills in role order (attention, MLP, norms, stream, mark),
+   and optionally `"deeps"`, their five darker partners; `"paper"` tints the page. A palette that
+   fails the contrast or distinctness checks fails the build.
 5. `NOTES`: markdown. Present tense, factual, the family's own facts: what the contributions are,
    what needs eager, what the logits are, read-order traps, which SAEs exist. Snippets are
    illustrative; the executed ones live in `docs/`.
 6. `HF_HUB_OFFLINE=1 pytest tests/test_encyclopedia.py` builds every entry's page from its pinned
    checkpoint and checks the schema against the family.
 
-The design is the Sakura Chroma system (`static/encyclopedia.css`): paper and ink, six accents, Big
-Shoulders for display, Albert Sans for body, JetBrains Mono for data; no rounded corners, no soft
-shadows. A family's page sets `--accent`, `--accent-2` and `--paper` from its `PALETTE`.
+The design is the Sakura Chroma system (`static/encyclopedia.css`): paper and ink, Big Shoulders for
+display, Albert Sans for body, JetBrains Mono for data; no rounded corners, no soft shadows. Each
+family brings five colours, one per role, and the same role takes the same colour everywhere on its
+page: attention (the box, its chips, `attention_output`, the `self_attn` host, attention names in
+ledgers and code), the MLP, the norms, the residual stream (the line, `layers[i].input`,
+`layer_output`, the root's values, `model.` and strings in code) and the family's mark (chips, the
+`em` in titles, topstrips, hover fills, keywords in code). Every colour comes in a fill tier, which
+takes ink text, and a deep tier for lines and coloured text on the paper; the page sets `--c1` …
+`--c5`, `--c1-deep` … `--c5-deep` and `--paper` on `<html>`, and the stylesheet names the roles from
+them. Code is highlighted at build time (Pygments for the snippets, a line lexer for the printout),
+with no JavaScript. The warning mark stays amber on every family: it is a status, not a role.

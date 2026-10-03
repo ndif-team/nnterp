@@ -8,7 +8,9 @@ An entry declares::
     REFERENCE    the public checkpoint whose config the page is built from (sizes, support())
     PINNED       the tiny checkpoint the tests build the page from
     CHECKPOINTS  public checkpoints of this family, linked from the page
-    PALETTE      {"accent", "accent_2", "paper"} from the design's names; any may be left out
+    PALETTE      {"hue": degrees} picks the base hue the five colours are generated from, or
+                 {"colors": [five hex fills], "deeps": [five hex, optional]} gives them outright;
+                 "paper" tints the page; any may be left out (the hue then hashes the model_type)
     VLLM         whether the family also runs on StandardizedVLLM
     QUIRKS       slugs from build.QUIRKS
     BLOCK        the block schema the visualization draws (see gemma2.py)

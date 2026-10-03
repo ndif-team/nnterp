@@ -17,7 +17,7 @@ CHECKPOINTS = [
     "google/gemma-2-27b", "google/gemma-2-27b-it",
 ]
 
-PALETTE = {"accent": "green", "accent_2": "blue", "paper": "#EFE8CE"}
+PALETTE = {"hue": 145, "paper": "#EFE8CE"}
 VLLM = True
 QUIRKS = ["sandwich-norms", "softcapped-logits", "sliding-window", "scaled-embeddings", "gain-norm"]
 

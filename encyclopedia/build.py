@@ -11,12 +11,16 @@ description, the sizes, the aliases and the native paths. What a person knows
 comes from ``entries/<model_type>.py``: the title and subtitle, the block schema
 the visualization draws, the quirk tags, the palette and the notes. The output
 is static HTML under ``site/``; ``static/`` is copied beside it.
+
+Every page colours five roles, attention, the MLP, the norms, the residual
+stream and the family's mark, from a palette ``palette.py`` generates for the
+family, and the same role takes the same colour in the diagram, the ledgers,
+the printout and the highlighted code.
 """
 
 from __future__ import annotations
 
 import datetime as dt
-import hashlib
 import html
 import importlib
 import inspect
@@ -34,6 +38,9 @@ sys.path.insert(0, str(HERE))
 import markdown  # noqa: E402
 from jinja2 import Environment, FileSystemLoader  # noqa: E402
 from markupsafe import Markup  # noqa: E402
+from pygments import highlight  # noqa: E402
+from pygments.formatters import HtmlFormatter  # noqa: E402
+from pygments.lexers import PythonLexer  # noqa: E402
 
 import nnterp  # noqa: E402  (import nnterp before any transformers.models module)
 from nnterp import StandardizedTransformer  # noqa: E402
@@ -41,11 +48,22 @@ from nnterp.components import Standard  # noqa: E402
 from nnterp.components.standard import values as class_values  # noqa: E402
 
 import entries  # noqa: E402
+import palette as palettes  # noqa: E402
 
 GITHUB = "https://github.com/ndif-team/nnterp/blob/0.8-refactor"
 
-#: The six accents of the design, in the order a hash cycles through them.
-ACCENTS = ("red", "pink", "orange", "yellow", "green", "blue")
+#: The design's ink and its default paper; an entry may tint the paper.
+INK = "#3A2516"
+PAPER = "#F1E6CB"
+
+#: The role each host's values take, and the role of the names that are not values.
+#: A sequence mixer is attention whether it is self_attn or linear_attn; the root and
+#: the block belong to the stream.
+HOST_ROLES = {"root": "stream", "layer": "stream", "self_attn": "attention", "linear_attn": "attention", "mlp": "mlp"}
+NAME_ROLES = {
+    "model": "stream", "layers": "stream", "embed_tokens": "stream", "lm_head": "stream", "logits": "stream",
+    "norm": "norm", "self_attn": "attention", "linear_attn": "attention", "mlp": "mlp",
+}
 
 #: Quirk slugs an entry may carry, with the label and one line the index and the page show.
 #: They follow the themes of docs/reference/families.md.
@@ -329,24 +347,107 @@ def strip_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
 
 # -- rendering ------------------------------------------------------------------------
 
+def name_roles(entry: ModuleType, info: dict[str, Any]) -> dict[str, str]:
+    """The role that colours each nnterp name in code and in the printout: a value takes its
+    host's role, a sublayer's own name wins over the block's, the block's norms are norms."""
+    roles = dict(NAME_ROLES)
+    for host, rows in info["values"].items():  # root and layer first, so a sublayer's value wins
+        if host in HOST_ROLES:
+            roles.update({row["name"]: HOST_ROLES[host] for row in rows})
+    for sub in entry.BLOCK["sublayers"]:
+        roles.update({sub[key]: "norm" for key in ("pre_norm", "post_norm") if sub.get(key)})
+    return roles
+
+
+LEXER = PythonLexer()
+FORMATTER = HtmlFormatter(nowrap=True)
+NAME_SPAN = re.compile(r'<span class="n">(\w+)</span>')
+FENCE = re.compile(r'<pre><code(?: class="language-(\w+)")?>(.*?)</code></pre>', re.S)
+MODULE_LINE = re.compile(r"^\((?P<name>\w+)\): (?P<cls>[\w.]+)(?P<args>\(.*)?$")
+
+
+def highlight_python(code: str, roles: dict[str, str]) -> Markup:
+    """Pygments' Python tokens as short-class spans, with nnterp's names in their role's class."""
+    out = highlight(code, LEXER, FORMATTER).rstrip("\n")
+    out = NAME_SPAN.sub(lambda m: f'<span class="n role-{roles[m[1]]}">{m[1]}</span>' if m[1] in roles else m[0], out)
+    return Markup(out)
+
+
+def highlight_repr(text: str, roles: dict[str, str]) -> Markup:
+    """The block's printout as spans: a module's name in its role, a value's name in its host's,
+    layouts in plain mono, dims, descriptions and constructor arguments dimmed."""
+    lines = []
+    for line in text.splitlines():
+        body = line.strip()
+        indent = html.escape(line[:len(line) - len(body)])
+        value = VALUE_LINE.match(body)
+        module = MODULE_LINE.match(body)
+        if value and value["layout"]:
+            role = roles.get(value["name"])
+            name = f'<span class="rn{" role-" + role if role else ""}">({html.escape(value["name"])})</span>'
+            lines.append(f'{indent}{name} -&gt; <span class="rl">{html.escape(value["layout"])}</span> '
+                         f'<span class="rd">[{html.escape(value["dims"])}]</span>: '
+                         f'<span class="rd">{html.escape(value["desc"])}</span>')
+        elif module:
+            role = roles.get(module["name"])
+            name = f'<span class="rn{" role-" + role if role else ""}">({html.escape(module["name"])})</span>'
+            args = f'<span class="rd">{html.escape(module["args"])}</span>' if module["args"] and module["args"] != "(" else html.escape(module["args"] or "")
+            lines.append(f'{indent}{name}: {html.escape(module["cls"])}{args}')
+        else:
+            lines.append(indent + html.escape(body))
+    return Markup("\n".join(lines))
+
+
 def embed_json(data: Any) -> str:
     """JSON for a <script type="application/json"> block: a closing tag inside a string must not end the block."""
     return json.dumps(data).replace("</", "<\\/")
 
 
-def md(text: str, rst: bool = False) -> Markup:
-    """Markdown to HTML; with ``rst``, a docstring's double-backtick literals become code spans first."""
+def md(text: str, rst: bool = False, roles: dict[str, str] | None = None) -> Markup:
+    """Markdown to HTML; with ``rst``, a docstring's double-backtick literals become code spans
+    first. Fenced blocks with no language or ``python`` are highlighted, with ``roles`` colouring
+    nnterp's names; inline code stays plain."""
     if rst:
         text = re.sub(r"``([^`\n]+)``", r"`\1`", text)
-    return Markup(markdown.markdown(text, extensions=["fenced_code", "tables"]))
+    out = markdown.markdown(text, extensions=["fenced_code", "tables"])
+
+    def fence(m: re.Match) -> str:
+        if m[1] not in (None, "python", "py"):
+            return m[0]
+        return f'<pre class="code"><code>{highlight_python(html.unescape(m[2]), roles or {})}</code></pre>'
+
+    return Markup(FENCE.sub(fence, out))
 
 
-def palette(entry: ModuleType) -> dict[str, str]:
+def css_variables(fills: list[str], deeps: list[str], paper: str) -> str:
+    """The ten colour variables and the paper, as an inline style."""
+    pairs = [(f"--c{k + 1}", fill) for k, fill in enumerate(fills)] + [(f"--c{k + 1}-deep", deep) for k, deep in enumerate(deeps)]
+    return "; ".join(f"{name}: {value}" for name, value in pairs + [("--paper", paper)])
+
+
+def palette(entry: ModuleType) -> dict[str, Any]:
+    """The entry's five colours in two tiers: ``PALETTE["colors"]`` as given (its ``deeps`` too,
+    or deepened), else generated from ``PALETTE["hue"]`` or a hash of the model_type. A palette
+    that fails ``palette.check`` fails the build."""
     given = getattr(entry, "PALETTE", {})
-    digest = int(hashlib.sha1(entry.MODEL_TYPE.encode()).hexdigest(), 16)
-    accent = given.get("accent", ACCENTS[digest % 6])
-    accent_2 = given.get("accent_2", ACCENTS[(ACCENTS.index(accent) + 3) % 6])
-    return {"accent": accent, "accent_2": accent_2, "paper": given.get("paper", "#F1E6CB")}
+    paper = given.get("paper", PAPER)
+    if "colors" in given:
+        fills = list(given["colors"])
+        deeps = list(given.get("deeps") or palettes.deepen(fills))
+        assert len(fills) == 5 and len(deeps) == 5, f"{entry.MODEL_TYPE}: PALETTE needs five colours"
+    else:
+        generated = palettes.generate(given.get("hue", palettes.hue_of(entry.MODEL_TYPE)))
+        fills, deeps = generated["fills"], generated["deeps"]
+    problems = palettes.check(fills, deeps, paper, INK)
+    if problems:
+        raise ValueError(f"{entry.MODEL_TYPE}: the palette does not pass:\n  " + "\n  ".join(problems))
+    return {"fills": fills, "deeps": deeps, "paper": paper, "css": css_variables(fills, deeps, paper)}
+
+
+def site_palette() -> dict[str, Any]:
+    """The index's own palette, generated like a family's from a fixed name."""
+    generated = palettes.generate(palettes.hue_of("nnterp"))
+    return {**generated, "paper": PAPER, "css": css_variables(generated["fills"], generated["deeps"], PAPER)}
 
 
 def quirks(entry: ModuleType) -> list[dict[str, str]]:
@@ -364,6 +465,7 @@ def page_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     nodes = {**block["nodes"], **strip["nodes"]}
     eager_only = [row["name"] for row in info["support"] if row["condition"] and row["condition"]["kind"] == "eager"]
     other = [row for row in info["support"] if row["condition"] and row["condition"]["kind"] == "other"]
+    roles = name_roles(entry, info)
     return {
         "model_type": entry.MODEL_TYPE,
         "title": entry.TITLE,
@@ -373,12 +475,16 @@ def page_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
         "pinned": entry.PINNED,
         "vllm": getattr(entry, "VLLM", False),
         "quirks": quirks(entry),
-        "notes": md(entry.NOTES),
-        "docstring": md(info["docstring"], rst=True),
+        "notes": md(entry.NOTES, roles=roles),
+        "docstring": md(info["docstring"], rst=True, roles=roles),
+        "host_roles": {host: HOST_ROLES.get(host, "mlp") for host in info["values"]},
+        "repr_html": highlight_repr(info["repr"], roles),
+        "identity_html": highlight_python(block["identity"], roles),
         "block": block,
         "strip": strip,
         "nodes_json": embed_json(nodes),
-        "block_json": embed_json({k: v for k, v in block.items() if k != "nodes"}),
+        "block_json": embed_json({**{k: v for k, v in block.items() if k != "nodes"},
+                                  "roles": {s["host"]: HOST_ROLES.get(s["host"], "mlp") for s in block["sublayers"]}}),
         "eager_only": eager_only,
         "other_conditions": other,
         "available": sum(1 for row in info["support"] if row["condition"] is None),
@@ -408,7 +514,7 @@ def index_model(built: list[dict[str, Any]]) -> dict[str, Any]:
     done = {page["model_type"] for page in built}
     stubs = [name for name in nnterp.families.known() if name not in done]
     return {"pages": built, "stubs": stubs, "total": len(nnterp.families.known()), "built": dt.date.today().isoformat(),
-            "quirks": [{"slug": s, "label": l} for s, (l, _) in QUIRKS.items()]}
+            "palette": site_palette(), "quirks": [{"slug": s, "label": l} for s, (l, _) in QUIRKS.items()]}
 
 
 def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path]:

@@ -1,5 +1,7 @@
 // Draws one decoder block from the schema the page embeds and wires every part, in the SVG and in the
-// model strip above it, to the side card: hover shows a part's nnterp name, click pins it.
+// model strip above it, to the side card: hover shows a part's nnterp name, click pins it. Every part
+// sits in a group carrying its role class (the stylesheet colours it from there), and the card takes
+// the role of the part it shows.
 (function () {
   var schema = JSON.parse(document.getElementById('block-schema').textContent);
   var nodes = JSON.parse(document.getElementById('nodes-json').textContent);
@@ -27,7 +29,15 @@
     t.textContent = str;
     return t;
   }
-  function group(id, cls) { return el('g', { 'data-node': id, 'class': cls || '' }); }
+  function group(id, role, cls) { return el('g', { 'data-node': id, 'class': 'role-' + role + (cls ? ' ' + cls : '') }); }
+  // the role a node's colours come from: a sublayer's parts take the sublayer's, norms are norms,
+  // the stream, the add and the root's strip nodes are the stream
+  function roleOf(id) {
+    var parts = id.split('.');
+    if (parts[0] === 'sub' || parts[0] === 'contrib' || parts[0] === 'interior') return schema.roles[parts[1]] || 'mlp';
+    if (parts[0] === 'norm' || id === 'strip.norm') return 'norm';
+    return 'stream';
+  }
   function marker(id, color) {
     var defs = svg.querySelector('defs') || el('defs', {});
     var m = el('marker', { id: id, markerWidth: 10, markerHeight: 10, refX: 8, refY: 5, orient: 'auto', markerUnits: 'userSpaceOnUse' }, defs);
@@ -41,34 +51,32 @@
   if (!parallel) for (var k = 0; k < n - 1; k++) segments.push([joinY[k], rowY[k + 1], 'stream.mid.' + k]);
   segments.push([joinY[n - 1], botY, 'stream.output']);
   // the stream between a branch and its join carries the input of that sublayer's add: same name as the segment above
-  var full = group('stream.input', 'streamline');
+  var full = el('g', { 'class': 'role-stream streamline' });
   el('line', { x1: SX, y1: topY, x2: SX, y2: botY, 'class': 'stream', 'marker-end': 'url(#arr)' }, full);
-  full.removeAttribute('data-node');
   segments.forEach(function (s) {
-    var g = group(s[2]);
+    var g = group(s[2], 'stream');
     el('line', { x1: SX, y1: s[0], x2: SX, y2: s[1], 'class': 'stream' }, g);
     el('rect', { x: SX - 18, y: s[0], width: 36, height: Math.max(s[1] - s[0], 1), 'class': 'hit' }, g);
   });
-  text(svg, SX + 16, topY + 6, 'layers[i].input', 'label-sm');
-  text(svg, SX + 16, botY - 2, 'layer_output', 'label-sm');
+  text(full, SX + 16, topY + 6, 'layers[i].input', 'label-role');
+  text(full, SX + 16, botY - 2, 'layer_output', 'label-role');
 
   // -- sublayers --------------------------------------------------------------------
   subs.forEach(function (sub, k) {
-    var y = rowY[k], exitY = parallel ? TOP : y, jY = joinY[k];
-    var cls = k % 2 ? 'alt' : '';
+    var y = rowY[k], exitY = parallel ? TOP : y, jY = joinY[k], role = schema.roles[sub.host] || 'mlp';
     // branch out of the stream
     var branch = el('path', { 'class': 'edge', d: parallel
       ? 'M' + SX + ',' + exitY + ' H' + 190 + ' V' + y + ' H' + (sub.pre_norm ? PRE.x : SUB.x)
       : 'M' + SX + ',' + exitY + ' H' + (sub.pre_norm ? PRE.x : SUB.x), 'marker-end': 'url(#arr)' });
-    el('circle', { cx: SX, cy: exitY, r: 5, fill: 'var(--ink)' });
+    el('circle', { cx: SX, cy: exitY, r: 5, fill: 'var(--stream-deep)' });
     if (sub.pre_norm) {
-      var gp = group('norm.' + sub.pre_norm);
+      var gp = group('norm.' + sub.pre_norm, 'norm');
       el('rect', { x: PRE.x, y: y - PRE.h / 2, width: PRE.w, height: PRE.h, 'class': 'box box-norm' }, gp);
       text(gp, PRE.x + PRE.w / 2, y - 4, 'norm', 'label-dim', 'middle');
       text(gp, PRE.x + PRE.w / 2, y + 12, sub.pre_norm, 'label-sm', 'middle');
       el('path', { 'class': 'edge', d: 'M' + (PRE.x + PRE.w) + ',' + y + ' H' + SUB.x, 'marker-end': 'url(#arr)' });
     }
-    var gs = group('sub.' + sub.host);
+    var gs = group('sub.' + sub.host, role);
     el('rect', { x: SUB.x, y: y - SUB.h / 2, width: SUB.w, height: SUB.h, 'class': 'box box-sub' }, gs);
     var hasChips = sub.interior && sub.interior.length;
     var top = y - SUB.h / 2;
@@ -82,7 +90,7 @@
       var cw = 86, ch = 18, gap = 8, x0 = SUB.x + 14;
       sub.interior.forEach(function (v, j) {
         var cx = x0 + (j % 3) * (cw + gap), cy = top + 56 + Math.floor(j / 3) * (ch + 6);
-        var gc = group('interior.' + sub.host + '.' + v.name, 'chipnode');
+        var gc = group('interior.' + sub.host + '.' + v.name, role, 'chipnode');
         el('rect', { x: cx, y: cy, width: cw, height: ch, 'class': 'chip-r' }, gc);
         text(gc, cx + cw / 2, cy + 13, v.short, 'chip-t', 'middle');
       });
@@ -90,21 +98,21 @@
     var outX = SUB.x + SUB.w;
     if (sub.post_norm) {
       el('path', { 'class': 'edge', d: 'M' + outX + ',' + y + ' H' + POST.x, 'marker-end': 'url(#arr)' });
-      var gq = group('norm.' + sub.post_norm);
+      var gq = group('norm.' + sub.post_norm, 'norm');
       el('rect', { x: POST.x, y: y - POST.h / 2, width: POST.w, height: POST.h, 'class': 'box box-norm' }, gq);
       text(gq, POST.x + POST.w / 2, y - 4, 'norm', 'label-dim', 'middle');
       text(gq, POST.x + POST.w / 2, y + 12, sub.post_norm, 'label-sm', 'middle');
       outX = POST.x + POST.w;
     }
     // the contribution: back into the stream
-    var gc2 = group('contrib.' + sub.host);
+    var gc2 = group('contrib.' + sub.host, role);
     var d = 'M' + outX + ',' + y + ' H' + RET + ' V' + jY + ' H' + (SX + 16);
-    el('path', { 'class': 'edge-contrib ' + cls, d: d, 'marker-end': 'url(#arr)' }, gc2);
+    el('path', { 'class': 'edge-contrib', d: d, 'marker-end': 'url(#arr)' }, gc2);
     el('path', { 'class': 'hit', d: d, 'stroke-width': 18, fill: 'none', stroke: 'transparent' }, gc2);
-    text(gc2, RET - 8, jY - 10, sub.contribution, 'label-sm', 'end');
+    text(gc2, RET - 8, jY - 10, sub.contribution, 'label-role', 'end');
     // the add
     if (!parallel || k === n - 1) {
-      var gplus = group('plus');
+      var gplus = group('plus', 'stream');
       el('circle', { cx: SX, cy: jY, r: 14, 'class': 'plus' }, gplus);
       text(gplus, SX, jY + 8, '+', 'plus-sign', 'middle');
     }
@@ -128,6 +136,8 @@
     if (node.condition) html += '<div class="cond"><b>' + (node.condition.kind === 'eager' ? 'needs eager' : 'conditional') + '</b>' + esc(node.condition.reason) + '</div>';
     html += '<p class="mono dim">' + (pinned ? 'pinned · click again to release' : 'click to pin') + '</p>';
     card.querySelector('.card-body').innerHTML = html;
+    card.style.setProperty('--role', 'var(--' + roleOf(id) + ')');
+    card.style.setProperty('--role-deep', 'var(--' + roleOf(id) + '-deep)');
   }
   function hot(id, on) {
     document.querySelectorAll('[data-node="' + id + '"]').forEach(function (e) { e.classList.toggle('hot', on); e.classList.toggle('active', on); });

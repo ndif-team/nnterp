@@ -1,6 +1,5 @@
-{% set pal = palette if palette is defined else {'accent': 'red', 'accent_2': 'blue', 'paper': '#F1E6CB'} %}
 <!doctype html>
-<html lang="en" style="--accent: var(--{{ pal.accent }}); --accent-2: var(--{{ pal.accent_2 }}); --paper: {{ pal.paper }}">
+<html lang="en" style="{{ palette.css }}">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">

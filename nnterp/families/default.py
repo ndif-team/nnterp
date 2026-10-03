@@ -189,6 +189,8 @@ def _block_handling(block_type: type, child: str, dropouts: frozenset[str], fuse
             if isinstance(node, ast.AugAssign) and isinstance(node.target, ast.Name) and node.target.id == variable:
                 return f"the block changes it in place (`{ast.unparse(node)}`), so a read would hold the result"
             if value is not None and _uses(value, variable):
+                if isinstance(node, ast.Assign) and _self_call(value) == child:
+                    continue  # the same call on another branch (`if ...: x = self.mlp(x) else: x = self.mlp(x, ...)`)
                 if isinstance(node, ast.Assign) and _passes(value, variable, dropouts):
                     target = node.targets[0]
                     if isinstance(target, ast.Tuple) and target.elts:  # `hidden_states, _ = hidden_states`

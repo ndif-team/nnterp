@@ -14,6 +14,7 @@ from nnsight.modeling.transformers import TransformersModel
 from torch import Tensor
 
 from . import families
+from .families import default
 from .components import EProperty, Layer, Residual
 from .components.standard import blocks_support, standard_children, values
 from .components.vision import Vision
@@ -171,9 +172,9 @@ class StandardizedTransformer(TransformersModel):
             },
             **kwargs,
         )
-        # A family that checks its own guess (the best-effort `default`) does so on the built tree.
-        if hasattr(self.family, "check"):
-            self.family.check(self)
+        # The default family is a guess, confirmed on the built tree.
+        if self.family is default:
+            default.check(self)
         for key, value in (tokenizer_kwargs or {}).items():
             setattr(self.tokenizer, key, value)
         self._source_root_scatter()

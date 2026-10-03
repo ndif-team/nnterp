@@ -10,7 +10,7 @@ families=("$@")
 status=0
 for family in "${families[@]}"; do
     file="tests/vllm_families/test_vllm_$family.py"
-    for class in $(grep -oE '^class Test[A-Za-z0-9_]+' "$file" | cut -d' ' -f2); do
+    for class in $(grep -oE '^(class )?Test[A-Za-z0-9_]+' "$file" | sed 's/^class //'); do
         log="${TMPDIR:-/tmp}/nnterp-vllm-$family-$class.log"
         "${PYTHON:-python}" -m pytest -q -p no:cacheprovider "$file::$class" > "$log" 2>&1 || status=1
         echo "$family $class: $(grep -E '^(FAILED|ERROR) |passed|failed' "$log" | tail -5 | tr '\n' ' ')"

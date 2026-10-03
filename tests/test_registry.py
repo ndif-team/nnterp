@@ -1,5 +1,6 @@
 """The registry and the load path, across families."""
 
+import importlib
 import types
 
 import pytest
@@ -57,8 +58,9 @@ def test_register_adds_a_family_and_can_override():
 def test_an_engine_has_its_own_families():
     """vLLM's families are a package under the transformers ones, looked up by the same model type."""
     assert "vllm" not in families.known() and {"llama", "gpt2"} <= set(families.known("vllm"))
-    with pytest.raises(UnsupportedFamily, match="'stablelm' on vllm.*nnterp/families/vllm/stablelm.py"):
-        families.lookup("stablelm", engine="vllm")
+    with pytest.warns(UserWarning, match="'stablelm' on vllm.*nnterp/families/vllm/stablelm.py"):
+        assert families.lookup("stablelm", engine="vllm") is importlib.import_module("nnterp.families.vllm.default")
+    assert "default" not in families.known("vllm")
     custom = types.SimpleNamespace(MODEL_TYPES=("stablelm",), RENAME={}, ENVOYS={})
     try:
         families.register(custom, engine="vllm")

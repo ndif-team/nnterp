@@ -131,6 +131,18 @@ button.chip.active { background: var(--accent); }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: clamp(16px, 1.8vw, 28px); align-items: start; }
 .grid-2 > *, .grid-notes > *, .viz > *, .hero > * { min-width: 0; }
 
+/* collapsible */
+.fold summary { list-style: none; display: flex; justify-content: space-between; align-items: center; gap: 1rem; padding: 10px 0; border-bottom: 1.5px solid var(--line); cursor: pointer; }
+.fold summary::-webkit-details-marker { display: none; }
+.fold summary::before { content: '+'; font-family: var(--disp); font-weight: 900; font-size: 20px; line-height: 1; margin-right: 10px; }
+.fold[open] summary::before { content: '×'; }
+.fold summary .micro { flex: 1; }
+.fold .ledger { margin-top: 0; }
+.fold .ledger-head { border-top: 0; }
+.specs-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); column-gap: 32px; row-gap: 4px; }
+.warn { display: inline-block; color: var(--accent-2); margin-right: 6px; cursor: help; font-size: 14px; line-height: 1; }
+.ledger-row .name { display: flex; align-items: center; }
+
 /* checklist */
 .checklist { list-style: none; padding: 0; margin: 0.8rem 0 0; columns: 2; column-gap: 20px; }
 .checklist li { display: flex; align-items: center; gap: 8px; padding: 4px 0; break-inside: avoid; }
@@ -144,7 +156,7 @@ button.chip.active { background: var(--accent); }
 pre { background: var(--paper-dk); border: 1.5px solid var(--line); padding: 14px 16px; overflow: auto; font-size: 12px; line-height: 1.45; margin: 0.6rem 0 1rem; }
 pre code { font-size: inherit; }
 .prose pre { margin: 1rem 0; }
-.repr { font-size: 11.5px; }
+.repr { font-size: 12px; }
 
 /* the strip and the block */
 .strip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 0 0 1.2rem; }

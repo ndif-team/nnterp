@@ -8,7 +8,7 @@
   var NS = 'http://www.w3.org/2000/svg';
 
   // -- geometry ---------------------------------------------------------------------
-  var W = 1040, SX = 150, TOP = 80, ROW = 190, RET = 990;
+  var W = 1040, SX = 150, TOP = 80, ROW = 220, RET = 990;
   var PRE = { x: 220, w: 190, h: 48 }, SUB = { x: 440, w: 300, h: 104 }, POST = { x: 770, w: 190, h: 48 };
   var subs = schema.sublayers, n = subs.length, parallel = schema.topology === 'parallel';
   var rowY = subs.map(function (_, k) { return TOP + k * (parallel ? 130 : ROW); });

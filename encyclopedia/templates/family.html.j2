@@ -17,21 +17,20 @@
   <aside class="hero-side">
     <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
     <div class="seal" title="{{ num_layers }} blocks"><span>{{ num_layers }}<small>L</small></span></div>
-    <div class="stamps">
-      {% if vllm %}<span class="stamp">runs on vLLM</span>{% endif %}
-      {% if eager_only %}<span class="stamp stamp-2">eager for the interior</span>{% endif %}
-    </div>
   </aside>
 </section>
 
 <section class="frame ledger-block">
-  <div class="ledger">
-    <div class="ledger-head"><span>checkpoints</span><span>on the Hub</span><span class="hide-sm">role</span></div>
-    {% for c in checkpoints %}
-    <div class="ledger-row"><span class="mono-md">{{ c.id.split('/')[1] }}</span><a class="mono" href="{{ c.url }}">{{ c.id }}</a><span class="hide-sm">{% if c.id == reference %}<span class="chip chip-sm">this page's sizes</span>{% endif %}</span></div>
-    {% endfor %}
-    <div class="ledger-row"><span class="mono-md">pinned tiny</span><a class="mono" href="https://huggingface.co/{{ pinned }}">{{ pinned }}</a><span class="hide-sm"><span class="chip chip-sm chip-2">the test suite's</span></span></div>
-  </div>
+  <details class="fold">
+    <summary><span class="micro">checkpoints</span><span class="mono dim">{{ checkpoints|length }} public · 1 pinned</span></summary>
+    <div class="ledger">
+      <div class="ledger-head"><span>checkpoint</span><span>on the Hub</span><span class="hide-sm">role</span></div>
+      {% for c in checkpoints %}
+      <div class="ledger-row"><span class="mono-md">{{ c.id.split('/')[1] }}</span><a class="mono" href="{{ c.url }}">{{ c.id }}</a><span class="hide-sm">{% if c.id == reference %}<span class="chip chip-sm">this page's sizes</span>{% endif %}</span></div>
+      {% endfor %}
+      <div class="ledger-row"><span class="mono-md">pinned tiny</span><a class="mono" href="https://huggingface.co/{{ pinned }}">{{ pinned }}</a><span class="hide-sm"><span class="chip chip-sm chip-2">the test suite's</span></span></div>
+    </div>
+  </details>
 </section>
 
 <section class="frame section" id="block">
@@ -75,50 +74,30 @@
 
 <section class="frame section" id="support">
   <div class="topbar"><h2 class="disp-section">What nnterp <em>gives</em> you</h2><span class="micro">02 · support()</span></div>
-  <div class="grid-2">
-    <div class="card">
-      <div class="topstrip"></div>
-      <div class="card-body">
-        <h3 class="card-name">support()</h3>
-        <p class="body-md">On <span class="mono">{{ reference }}</span> loaded with <span class="mono">attn_implementation="eager"</span>: {{ available }} of {{ total }} standard values available.
-        {% if eager_only %}Under the default <span class="mono">{{ default_impl }}</span> load the {{ eager_only|length }} marked values are unavailable.{% endif %}</p>
-        <ul class="checklist">
-          {% for row in support %}
-          <li><span class="nb {% if not row.condition %}on{% endif %}"></span><span class="mono">{{ row.name }}</span>
-            {% if row.condition and row.condition.kind == 'eager' %}<span class="chip chip-sm chip-2">eager</span>{% elif row.condition %}<span class="chip chip-sm chip-ink" title="{{ row.condition.reason }}">conditional</span>{% endif %}</li>
-          {% endfor %}
-        </ul>
-        {% if other_conditions %}
-        <dl class="reasons">
-          {% for row in other_conditions %}<dt class="mono">{{ row.name }}</dt><dd>{{ row.condition.reason }}</dd>{% endfor %}
-        </dl>
-        {% endif %}
+  <div class="card">
+    <div class="topstrip"></div>
+    <div class="card-body">
+      <h3 class="card-name">Sizes</h3>
+      <p class="body-md">Root sizes, each a <span class="mono">StandardizedProperty</span> read off the config of <span class="mono">{{ reference }}</span>; below the rule, the config keys they come from.</p>
+      <div class="specs specs-cols">
+        {% for name, value in sizes %}<div class="spec"><span>model.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
       </div>
-    </div>
-    <div class="card">
-      <div class="topstrip strip-2"></div>
-      <div class="card-body">
-        <h3 class="card-name">Sizes</h3>
-        <p class="body-md">Root sizes, each a <span class="mono">StandardizedProperty</span> read off the config of <span class="mono">{{ reference }}</span>.</p>
-        <div class="specs">
-          {% for name, value in sizes %}<div class="spec"><span>model.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
-        </div>
-        <div class="dashed"></div>
-        <div class="specs specs-dim">
-          {% for key, value in config %}<div class="spec"><span>{{ key }}</span><span>{{ value if value is not iterable or value is string else (value|length ~ ' entries' if value|length > 6 else value|join(', ')) }}</span></div>{% endfor %}
-        </div>
+      <div class="dashed"></div>
+      <div class="specs specs-cols specs-dim">
+        {% for key, value in config %}<div class="spec"><span>{{ key }}</span><span>{{ value if value is not iterable or value is string else (value|length ~ ' entries' if value|length > 6 else value|join(', ')) }}</span></div>{% endfor %}
       </div>
     </div>
   </div>
 
   <h3 class="ttl-row">Values, by host</h3>
+  {% if eager_only %}<p class="body-md dim"><span class="warn">⚠</span> marks a value this checkpoint has only under some load: hover it for the condition. Here, {{ eager_only|length }} values need <span class="mono">attn_implementation="eager"</span>.</p>{% endif %}
   {% for host, rows in values.items() %}
   <div class="ledger values">
     <div class="ledger-head"><span>{% if host == 'root' %}model{% elif host == 'layer' %}model.layers[i]{% else %}model.layers[i].{{ host }}{% endif %}{% if rows and rows[0].module %} <span class="mono dim">{{ rows[0].module }}</span>{% endif %}</span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
     {% for row in rows %}
     <div class="ledger-row" data-node="{% if host == 'root' %}{{ 'strip.' ~ {'token_embeddings': 'embed', 'logits': 'logits'}.get(row.name, '') }}{% endif %}">
-      <span class="mono-md">{{ row.name }}{% if row.condition %} <span class="chip chip-sm {% if row.condition.kind == 'eager' %}chip-2{% else %}chip-ink{% endif %}" title="{{ row.condition.reason }}">{{ 'eager' if row.condition.kind == 'eager' else 'conditional' }}</span>{% endif %}</span>
-      <span class="hide-sm">{% if row.layout %}<span class="chip chip-layout">{{ row.layout }}</span> <span class="mono dim">[{{ row.dims }}]</span>{% else %}<span class="mono dim">scalar</span>{% endif %}</span>
+      <span class="mono-md name">{% if row.condition %}<span class="warn" tabindex="0" title="{{ 'Needs attn_implementation=&quot;eager&quot;. ' if row.condition.kind == 'eager' }}{{ row.condition.reason }}">⚠</span>{% endif %}{{ row.name }}</span>
+      <span class="hide-sm mono">{% if row.layout %}{{ row.layout }} <span class="dim">[{{ row.dims }}]</span>{% else %}<span class="dim">scalar</span>{% endif %}</span>
       <span class="body-md">{{ row.description }}</span>
       <span class="hide-sm body-md where">{{ row.where|md }}</span>
     </div>
@@ -126,21 +105,9 @@
   </div>
   {% endfor %}
 
-  <div class="grid-2">
-    <div>
-      <h3 class="ttl-row">Names</h3>
-      <div class="ledger names">
-        <div class="ledger-head"><span>standard</span><span>native</span></div>
-        {% for standard, native in paths %}<div class="ledger-row"><span class="mono-md">{{ standard }}</span><span class="mono">{{ native }}</span></div>{% endfor %}
-      </div>
-      <p class="body-md dim">RENAME: {% for native, alias in rename %}<span class="mono">{{ native }} → {{ alias }}</span>{% if not loop.last %}, {% endif %}{% endfor %}. Everything else already carries the standard name.
-      {% if returns_tuple %}The block returns a tuple; <span class="mono">layer_output</span> is its first element.{% else %}The block returns a bare tensor.{% endif %}</p>
-    </div>
-    <div>
-      <h3 class="ttl-row">repr(model.layers[i])</h3>
-      <pre class="repr"><code>{{ repr }}</code></pre>
-    </div>
-  </div>
+  <h3 class="ttl-row">Printout</h3>
+  <p class="body-md dim">What <span class="mono">print(model.layers[i])</span> shows: the native modules and, among them, every standard value with its layout.{% if returns_tuple %} The block returns a tuple; <span class="mono">layer_output</span> is its first element.{% endif %}</p>
+  <pre class="repr"><code>{{ repr }}</code></pre>
 </section>
 
 <section class="frame section" id="notes">

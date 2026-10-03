@@ -159,11 +159,11 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
 
 ### Deliberately absent (design choices, from GAPS.md section 3 and 2a)
 
-- **No Llama-like fallback for an unregistered `model_type`.** nnterp 1.x applies
-  global name lists to any model; nnterp refuses with `UnsupportedFamily`
-  and needs a module even for a family that spells everything like Llama.
-  It never mis-binds silently, at the cost of a three-line module per
-  family (`GAPS.md` §2a row 1, §3 item 4).
+- **The fallback for an unregistered `model_type` checks itself.** The
+  default family applies the shipped spellings to any model, but it reports
+  unavailable what it cannot vouch for (`support()`), refuses at load what it
+  cannot standardize (`UnsupportedFamily`), and warns on every load, so a
+  model nnterp relies on still gets its own module.
 - **Accessors live on the block envoy**, `model.layers[i].layer_output`, not
   on the model as `model.layers_output[i]`; they exist inside a trace and
   appear in the repr (§3 item 1).

@@ -14,6 +14,7 @@ from nnsight.modeling.transformers import TransformersModel
 from torch import Tensor
 
 from . import families
+from .families import default
 from .components import EProperty, Layer, Residual, Standard
 from .components.standard import values
 
@@ -117,7 +118,8 @@ class StandardizedTransformer(TransformersModel):
         embed_tokens, norm, lm_head: The embedding, the final norm, the unembedding.
 
     Raises:
-        UnsupportedFamily: when no family covers the checkpoint's ``model_type``.
+        UnsupportedFamily: when no family covers the checkpoint's ``model_type`` and the
+            best-effort default family cannot standardize it either.
     """
 
     family: ModuleType
@@ -152,6 +154,9 @@ class StandardizedTransformer(TransformersModel):
             },
             **kwargs,
         )
+        # The default family is a guess, confirmed on the built tree.
+        if self.family is default:
+            default.check(self)
         for key, value in (tokenizer_kwargs or {}).items():
             setattr(self.tokenizer, key, value)
 

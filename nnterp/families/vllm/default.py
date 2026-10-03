@@ -38,6 +38,7 @@ from nnsight.intervention.envoy import Envoy
 from .. import default
 from ...components import DerivedEProperty, HeadOutputs, Keys, Queries, Residual, Values
 from ...components.vllm import Attention, Flat, FusedLayer, Layer, Mlp, on_decode_step, project
+from ...components.standard import module_int
 from ...components.vllm.attention import probabilities, scores
 
 if TYPE_CHECKING:
@@ -202,6 +203,26 @@ def project_on_vocab(model: "StandardizedVLLM", hidden: torch.Tensor) -> torch.T
         return project(model, hidden, model.embed_tokens)
     bias = getattr(head._module, "bias", None)
     return project(model, hidden, head) if bias is None else project(model, hidden, head, head.bias)
+
+
+def _attention_size(name: str, *attributes: str):
+    def size(model: "StandardizedVLLM") -> int:
+        from ...standardized import Standardized
+
+        attention = default._first(model, "self_attn")
+        value = module_int(attention._module, *attributes) if attention is not None else None
+        return value if value is not None else getattr(Standardized, name).fget(model)
+
+    size.__name__ = name
+    size.__doc__ = f"The first attention module's {' / '.join(f'``{a}``' for a in attributes)}, else the root's plain rule over the config."
+    return size
+
+
+# The module's whole-model counts (``total_*``), not one tensor-parallel rank's share; a head's width is not sharded.
+num_heads = _attention_size("num_heads", "total_num_heads")
+num_kv_heads = _attention_size("num_kv_heads", "total_num_kv_heads")
+head_dim = _attention_size("head_dim", "v_head_dim", "head_dim", "head_size")
+qk_head_dim = _attention_size("qk_head_dim", "qk_head_dim", "head_dim", "head_size")
 
 
 def intermediate_size(model: Any) -> int:

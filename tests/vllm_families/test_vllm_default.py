@@ -14,7 +14,7 @@ import os
 
 import pytest
 from transformers import AutoConfig
-from vllm_suite import VLLMFamilySuite
+from vllm_suite import SIZES, VLLMFamilySuite
 
 from nnterp import StandardizedVLLM, families
 from nnterp.components.vllm import FusedLayer
@@ -56,7 +56,7 @@ class TestVLLMDefaultNames:
 
     @pytest.mark.parametrize("name", sorted(SUITES))
     def test_default_finds_what_the_family_names(self, name):
-        """The same modules under the standard names, the same block convention, and honest availability."""
+        """The same modules under the standard names, the same block convention and sizes, and honest availability."""
         suite = SUITES[name]
         dedicated = StandardizedVLLM(suite.REPO, **suite.ENGINE)
         model = load_default(suite.REPO, **suite.ENGINE)
@@ -67,6 +67,12 @@ class TestVLLMDefaultNames:
             assert isinstance(ours, FusedLayer) == isinstance(theirs, FusedLayer), ours.path
             if not isinstance(theirs, FusedLayer):
                 assert (ours.STREAM, ours.returns_tuple) == (theirs.STREAM, theirs.returns_tuple), ours.path
+        for size in SIZES:
+            try:
+                ours = getattr(model, size)
+            except NotImplementedError:
+                continue  # said, not guessed (MPT's intermediate_size)
+            assert ours == getattr(dedicated, size), size
         support, theirs = model.support(), dedicated.support()
         for value, reason in support.items():
             if reason is None:

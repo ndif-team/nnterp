@@ -274,15 +274,16 @@ so the load-time check is the names (`embed_tokens`, `layers`, `norm`; `lm_head`
 into the embedding, which `project_on_vocab` then unembeds with) and the same per-sublayer
 reasons as on transformers, with a residual add fused into the next norm counted as the add.
 The attention interior is unavailable where the module has no `attn` child that is vLLM's
-attention layer. Sizes come from the config: `intermediate_size` reads `intermediate_size`,
-`ffn_dim`, `ffn_hidden_size` or `n_inner`, and raises where none is there (MPT).
+attention layer. The head counts and widths are the first attention module's (`total_num_heads`,
+`total_num_kv_heads`, `v_head_dim` / `head_dim`: the whole model's, not one rank's share);
+`intermediate_size` is the config's `intermediate_size`, `ffn_dim`, `ffn_hidden_size` or
+`n_inner`, and raises where none is there (MPT).
 
-Forced onto the shipped vLLM families, the default finds the same modules and block
-conventions on all 25 and reports a contribution unavailable where the family points it at a
-post-norm (Gemma-2/3, OLMo-3, EXAONE-4) or the block does more than add it (DeepSeek-V2/V3);
-on Llama, GPT-2, GPT-NeoX and Phi the whole suite passes with it
-(`tests/vllm_families/test_vllm_default.py`). The root sizes are the config's plain rule, so a
-family that spells one its own way differs: DeepSeek's `head_dim`.
+Forced onto the shipped vLLM families, the default finds the same modules, block conventions
+and sizes on all 25 (but MPT's `intermediate_size`), and reports a contribution unavailable where
+the family points it at a post-norm (Gemma-2/3, OLMo-3, EXAONE-4) or the block changes it in
+place (Falcon's bias add, DeepSeek-V2/V3's float16 rescaling); on Llama, GPT-2, GPT-NeoX and Phi
+the whole suite passes with it (`tests/vllm_families/test_vllm_default.py`).
 
 ## Adding a vLLM family
 

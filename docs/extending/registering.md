@@ -1,7 +1,7 @@
 ---
 title: Registering a Family
-one_liner: `nnterp.families.register(module)` adds a family from outside the package or overrides a shipped one, process-wide, names, envoy classes and size functions included; `rename=`/`envoys=` at load are the per-model alternative.
-tags: [extending, families, registry, lookup]
+one_liner: `nnterp.families.register(module)` adds a family from outside the package or overrides a shipped one, process-wide, names, envoy classes and size functions included; `StandardizedTransformer(..., family=module)` uses one for a single load, and `rename=`/`envoys=` layer extra names and envoys on top.
+tags: [extending, families, registry, lookup, family]
 related: [docs/extending/adding-a-family.md, docs/extending/custom-values.md, docs/extending/overriding-values.md]
 sources: [nnterp/families/__init__.py, nnterp/standardized.py, tests/test_registry.py]
 ---
@@ -15,7 +15,9 @@ sources: [nnterp/families/__init__.py, nnterp/standardized.py, tests/test_regist
 type second. `register(family)` puts a family into `REGISTRY`, so a family kept in your
 own package, or a variant of a shipped one, is what every load of that type resolves to,
 without a file under `nnterp/families/`. It is process-wide, like installing a kernel.
-The per-model alternatives are `rename=` and `envoys=` on one load.
+The per-model alternatives are `family=`, which skips the lookup for one load
+([below](#passing-a-family-at-load)), and `rename=` and `envoys=`, which layer on top of
+whichever family the load uses.
 
 ## Canonical pattern
 
@@ -95,6 +97,66 @@ behind: on `hf-internal-testing/tiny-random-gpt2` a variant without
 config's unused `intermediate_size` key (37) instead of `n_inner`'s `4 * hidden_size`
 (128).
 
+## Passing a family at load
+
+`family=` hands one load its family directly. The lookup is skipped (the config is not
+read for it) and `REGISTRY` is not touched, so other loads of the same model type keep
+theirs. The usual form is a module of your own, written like a shipped one
+([adding-a-family.md](adding-a-family.md)):
+
+```python
+from nnterp import StandardizedTransformer, families
+from nnterp.families import gpt2
+
+import my_family                    # RENAME, ENVOYS, the classes, any size functions
+
+model = StandardizedTransformer("openai-community/gpt2", family=my_family)
+assert model.family is my_family
+assert families.lookup("gpt2") is gpt2     # every other load is unchanged
+```
+
+A family built in code is a `types.SimpleNamespace`; nnterp reads it with attribute access
+only, the same as a module. It needs `RENAME` and `ENVOYS`; `MODEL_TYPES` is only read by
+`register` and is not checked against the checkpoint, so a family can be applied to a
+checkpoint whose `model_type` it does not name (a fork with the same module classes under
+a new type, say). Functions named after a root size or `project_on_vocab` win over the
+root's rule exactly as on a shipped family.
+
+Extending a shipped family is the common case. `vars(module)` copies everything the
+module defines, its size functions included, so only what changes is written:
+
+```python
+import types
+
+from nnterp import StandardizedTransformer
+from nnterp.components import DerivedEProperty
+from nnterp.families import llama
+from transformers.models.llama.modeling_llama import LlamaMLP   # after nnterp
+
+
+class Mlp(llama.Mlp):
+    width = DerivedEProperty(lambda self: self._module.intermediate_size, description="The hidden width")
+
+
+family = types.SimpleNamespace(**vars(llama))
+family.RENAME = {**llama.RENAME, "post_attention_layernorm": ["post_attention_layernorm", "ln2"]}
+family.ENVOYS = {**llama.ENVOYS, LlamaMLP: Mlp}
+
+model = StandardizedTransformer("HuggingFaceTB/SmolLM2-135M", family=family)
+assert type(model.layers[0].mlp) is Mlp
+assert model.layers[0].ln2 is model.layers[0].post_attention_layernorm
+model.support()["mlp.width"]       # None: available on every block
+```
+
+A function the shipped family does not define goes straight into the constructor,
+`types.SimpleNamespace(**vars(gpt2), num_kv_heads=lambda model: 1)`; one it does define
+(`RENAME`, `ENVOYS`, GPT-2's `intermediate_size`) is set afterwards as above, since the
+constructor refuses a keyword given twice.
+
+`rename=` and `envoys=` still apply on top: the envoys are nnsight's tensor-parallel
+defaults, then the family's `ENVOYS`, then `envoys=`; the aliases are the family's
+`RENAME`, then `rename=`.
+
 ## The lookup order
 
 1. `REGISTRY[model_type]`, if `register` put one there.
@@ -117,15 +179,16 @@ The list is `sorted(set(known()) | set(REGISTRY))`, so a registered type appears
   shipped module raises `AttributeError`.
 - `model.family` is the object the load resolved to, registered or shipped.
 
-## `register` versus `rename=` / `envoys=`
+## `register` versus `family=` versus `rename=` / `envoys=`
 
-| | `register(family)` | `rename=` / `envoys=` on a load |
-| --- | --- | --- |
-| scope | every load of those model types in this process | that one model |
-| what changes | the whole family: names, envoy classes and size functions, for every load | extra aliases merged over the family's `RENAME`; extra envoy classes merged over its `ENVOYS`; a key given wins |
-| `model.family` | the registered object | the shipped module |
-| `model.support()` | the values on the tree the registered `ENVOYS` build | the values on the tree, including any a class passed through `envoys=` adds |
-| undo | `del families.REGISTRY[model_type]` | load again without it |
+| | `register(family)` | `family=` on a load | `rename=` / `envoys=` on a load |
+| --- | --- | --- | --- |
+| scope | every load of those model types in this process | that one model | that one model |
+| what changes | the whole family: names, envoy classes and size functions, for every load | the whole family, for this load | extra aliases merged over the family's `RENAME`; extra envoy classes merged over its `ENVOYS`; a key given wins |
+| needs `MODEL_TYPES` | yes | no | no |
+| `model.family` | the registered object | the object passed | the family the load resolved to |
+| `model.support()` | the values on the tree the registered `ENVOYS` build | the values on the tree the passed `ENVOYS` build | the values on the tree, including any a class passed through `envoys=` adds |
+| undo | `del families.REGISTRY[model_type]` | load again without it | load again without it |
 
 ```python
 model = StandardizedTransformer("openai-community/gpt2", rename={"mlp": "ffn"})
@@ -152,8 +215,9 @@ before path keys, so displacing a family's type-keyed envoy takes a type key of 
   dicts to spread; `num_kv_heads`, `head_dim`, `qk_head_dim` and `intermediate_size` are
   module functions the root looks up on `model.family` by name, so a variant of Falcon,
   DeepSeek, GPT-2, GPT-J, OPT, MPT or BLOOM passes them on
-  (`intermediate_size=gpt2.intermediate_size`) or the root's plain rule answers.
-- **A registered family's classes must be importable by name where the trace runs.** A
+  (`intermediate_size=gpt2.intermediate_size`, or start from `vars(gpt2)`) or the root's
+  plain rule answers.
+- **A registered or passed family's classes must be importable by name where the trace runs.** A
   remote trace carries the envoy tree's classes by reference; a class defined in a
   script's `__main__` or a `SimpleNamespace` built inline is not importable on a server.
   For local use it is fine.
@@ -162,6 +226,6 @@ before path keys, so displacing a family's type-keyed envoy takes a type key of 
 
 ## Related
 
-- [adding-a-family.md](adding-a-family.md): the module `register` takes, and its test file.
+- [adding-a-family.md](adding-a-family.md): the module `register` and `family=` take, and its test file.
 - [custom-values.md](custom-values.md): a value on one load through `envoys=`; `model.support()` lists it either way.
 - [overriding-values.md](overriding-values.md): what to change in a variant's classes.

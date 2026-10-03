@@ -119,7 +119,8 @@ nnterp requires nnsight 0.8.0 or later. PyPI has only the 0.8.0rc1 pre-release, 
   [loading](docs/usage/loading.md) and [vocabulary](docs/usage/vocabulary.md).
 - [docs/patterns/](docs/patterns/index.md): logit lens, steering, attention patterns,
   ablation, activation patching, probing and more, written once against the standard values.
-- [docs/extending/](docs/extending/index.md): add a family, override a value, add your own value.
+- [docs/extending/](docs/extending/index.md): add a family, override a value, add your own value,
+  register a family or pass one at load (`StandardizedTransformer(repo_id, family=my_family)`).
 - [docs/reference/](docs/reference/index.md): the API quick reference, the families table, a glossary.
 - [docs/developing/](docs/developing/index.md): internals, testing, transformers compatibility.
 - [CLAUDE.md](CLAUDE.md) routes a task to the right page.

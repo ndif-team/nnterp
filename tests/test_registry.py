@@ -157,6 +157,75 @@ def test_family_defines_project_on_vocab_instead_of_the_softcap():
         plain.config.final_logit_softcapping = None
 
 
+def test_family_passed_as_a_module(tmp_path, monkeypatch):
+    """A module of the user's own, imported and passed in, is the family of that load only."""
+    (tmp_path / "my_family.py").write_text(
+        "from nnterp.families.gpt2 import *\n"
+        "from nnterp.families import gpt2\n"
+        "RENAME = {**gpt2.RENAME, 'mlp': ['mlp', 'ffn']}\n"
+    )
+    monkeypatch.syspath_prepend(str(tmp_path))
+    import my_family
+
+    model = StandardizedTransformer(GPT2, family=my_family)
+    assert model.family is my_family
+    assert model.layers[0].ffn is model.layers[0].mlp is model.transformer.h[0].mlp
+    assert model.intermediate_size == 4 * model.hidden_size  # gpt2.intermediate_size came with the star import
+    assert families.REGISTRY == {} and families.lookup("gpt2") is gpt2
+    assert StandardizedTransformer(GPT2).family is gpt2
+
+
+def test_family_passed_as_a_namespace():
+    """A namespace with only ``RENAME`` and ``ENVOYS`` loads and traces; no ``MODEL_TYPES``, nothing registered."""
+    custom = types.SimpleNamespace(RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS)
+    model = StandardizedTransformer(GPT2, family=custom)
+    assert model.family is custom
+    assert type(model.layers[0].self_attn) is gpt2.Attention
+    with model.trace("Hello world"):
+        out = model.layers[0].layer_output.save()
+        logits = model.logits.save()
+    assert out.shape[-1] == model.hidden_size and logits.shape[-1] == model.vocab_size
+    assert model.support()["mlp.mlp_output"] is None
+    assert families.REGISTRY == {} and families.lookup("gpt2") is gpt2
+
+
+def test_family_extends_a_shipped_one():
+    """Llama's family plus one alias and one envoy class, built in code; the kwargs still layer on top."""
+    from transformers.models.llama.modeling_llama import LlamaMLP
+
+    from nnterp.components import DerivedEProperty
+    from nnterp.families import llama
+
+    class Mlp(llama.Mlp):
+        width = DerivedEProperty(lambda self: self._module.intermediate_size, description="The hidden width")
+
+    custom = types.SimpleNamespace(**vars(llama))
+    custom.RENAME = {**llama.RENAME, "post_attention_layernorm": ["post_attention_layernorm", "ln2"]}
+    custom.ENVOYS = {**llama.ENVOYS, LlamaMLP: Mlp}
+    model = StandardizedTransformer(
+        "hf-internal-testing/tiny-random-LlamaForCausalLM", family=custom, rename={"input_layernorm": "ln1"}
+    )
+    block = model.layers[0]
+    assert block.ln2 is block.post_attention_layernorm is model.model.layers[0].post_attention_layernorm
+    assert block.ln1 is block.input_layernorm
+    assert type(block.mlp) is Mlp and type(block) is llama.Layer
+    assert model.support()["mlp.width"] is None
+    assert families.REGISTRY == {} and "post_attention_layernorm" not in llama.RENAME
+
+
+def test_family_passed_overrides_a_size_and_project_on_vocab():
+    """Functions on a passed family win over the root's, as on a shipped or registered one."""
+    custom = types.SimpleNamespace(
+        **vars(gpt2), num_kv_heads=lambda model: 1, project_on_vocab=lambda model, hidden: model.lm_head(model.norm(hidden)) * 2
+    )
+    model = StandardizedTransformer(GPT2, family=custom, dispatch=True)
+    plain = StandardizedTransformer(GPT2, dispatch=True)
+    assert model.num_kv_heads == 1 and plain.num_kv_heads == plain.num_heads != 1
+    assert model.intermediate_size == plain.intermediate_size  # carried by vars(gpt2)
+    hidden = torch.randn(1, 3, plain.hidden_size).to(plain.lm_head.weight)
+    torch.testing.assert_close(model.project_on_vocab(hidden), plain.project_on_vocab(hidden) * 2)
+
+
 def test_sizes_are_read_only():
     model = StandardizedTransformer(GPT2)
     with pytest.raises(AttributeError, match="def hidden_size"):

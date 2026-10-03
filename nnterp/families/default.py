@@ -154,7 +154,7 @@ def _terms(expr: ast.expr) -> list[ast.expr]:
 
 
 @functools.lru_cache(maxsize=None)
-def _block_handling(block_type: type, child: str, dropouts: frozenset[str]) -> str | None:
+def _block_handling(block_type: type, child: str, dropouts: frozenset[str], fused: bool = False) -> str | None:
     """What the block's forward does to ``self.<child>(...)``'s result before adding it to the stream, or ``None`` when it adds it as is.
 
     Reads the forward's statements in order. The sublayer's result (the first
@@ -164,7 +164,9 @@ def _block_handling(block_type: type, child: str, dropouts: frozenset[str]) -> s
     module's call (a mixture's output plus ``self.shared_mlp(...)``). A call on
     another of the block's modules (a post-sublayer norm), an in-place change
     or any other arithmetic (a scale) is not. A forward that does not assign the call in a
-    way this reads is given the benefit of the doubt.
+    way this reads is given the benefit of the doubt. With ``fused``, a module
+    call taking it and another argument (``self.post_attention_layernorm(x,
+    residual)``) is the add, fused into the next norm as vLLM's blocks do.
     """
     try:
         tree = ast.parse(textwrap.dedent(inspect.getsource(block_type.forward)))
@@ -199,6 +201,8 @@ def _block_handling(block_type: type, child: str, dropouts: frozenset[str]) -> s
                         return f"the block sums it with another module's output (`{ast.unparse(value)}`) before adding it to the stream"
                     return None
                 called = _self_call(value)
+                if called is not None and fused and len(value.args) >= 2 and _passes(value.args[0], variable, dropouts):
+                    return None
                 if called is not None:
                     return f"the block passes it through `self.{called}` before adding it to the stream"
                 return f"the block computes `{ast.unparse(value)}` from it"
@@ -213,10 +217,11 @@ def _block_handling(block_type: type, child: str, dropouts: frozenset[str]) -> s
 
 
 @functools.lru_cache(maxsize=None)
-def _after_interface(attention_type: type) -> str | None:
+def _after_interface(attention_type: type, call: str = "attention_interface") -> str | None:
     """What the attention's forward computes from the interface's output before projecting it, or ``None`` when only the layout changes.
 
-    Follows the variable the ``attention_interface(...)`` call is assigned to;
+    Follows the variable the ``attention_interface(...)`` call (or ``call``,
+    vLLM's ``self.attn(...)``) is assigned to;
     layout methods, arithmetic (an output gate) and the module's own
     projections keep it the head outputs; a free function applied to it (a
     rotation) does not.
@@ -228,7 +233,7 @@ def _after_interface(attention_type: type) -> str | None:
     variable = None
     for node in sorted((n for n in ast.walk(tree) if isinstance(n, ast.Assign)), key=lambda n: (n.lineno, n.col_offset)):
         if variable is None:
-            if _callee(node.value) == "attention_interface":
+            if _callee(node.value) == call:
                 target = node.targets[0]
                 target = target.elts[0] if isinstance(target, ast.Tuple) and target.elts else target
                 variable = target.id if isinstance(target, ast.Name) else None
@@ -247,7 +252,7 @@ def _after_interface(attention_type: type) -> str | None:
     return None
 
 
-def contribution_reason(module: torch.nn.Module, holder: torch.nn.Module, name: str) -> str | None:
+def contribution_reason(module: torch.nn.Module, holder: torch.nn.Module, name: str, fused: bool = False) -> str | None:
     """Why ``module`` (``holder.<name>``) does not output what its block adds to the stream, or ``None`` as far as the default can tell."""
     residual = _takes_residual(module)
     if residual is not None:
@@ -256,7 +261,7 @@ def contribution_reason(module: torch.nn.Module, holder: torch.nn.Module, name: 
             "output is the stream, not the contribution; a family module points this value at the right place"
         )
     dropouts = frozenset(child for child, sub in holder.named_children() if isinstance(sub, torch.nn.Dropout))
-    handling = _block_handling(type(holder), name, dropouts)
+    handling = _block_handling(type(holder), name, dropouts, fused)
     if handling is not None:
         return f"not what the block adds to the stream: {handling}; a family module points this value at the right place"
     return None
@@ -298,6 +303,16 @@ def _contribution(envoy: Standard) -> str | None:
 
 # -- the envoys ----------------------------------------------------------------------
 
+def missing_modules(block: Envoy, hosts: dict[str, type]) -> dict[str, str]:
+    """``{"<module>.<value>": reason}`` for each of ``hosts`` (standard name -> its envoy class) the block has no `Standard` child under."""
+    missing = {}
+    for name, envoy_class in hosts.items():
+        if not isinstance(block.__dict__.get(name), Standard):
+            reason = f"no {name} module found under the names the default family knows; a family module names it"
+            missing.update((f"{name}.{value}", reason) for value in envoy_class.values())
+    return missing
+
+
 class Layer(Layer):
     """A decoder block as the default finds it.
 
@@ -308,12 +323,7 @@ class Layer(Layer):
     """
 
     def support(self) -> dict[str, str | None]:
-        support = super().support()
-        for name, envoy_class in (("self_attn", Attention), ("mlp", Mlp)):
-            if not isinstance(self.__dict__.get(name), Standard):
-                reason = f"no {name} module found under the names the default family knows; a family module names it"
-                support.update((f"{name}.{value}", reason) for value in envoy_class.values())
-        return support
+        return {**super().support(), **missing_modules(self, {"self_attn": Attention, "mlp": Mlp})}
 
 
 class Layers(Envoy):
@@ -434,17 +444,16 @@ def _refuse(model: "StandardizedTransformer", what: str, rename: dict[str, str] 
     )
 
 
-def check(model: "StandardizedTransformer") -> None:
-    """Confirm the default's guess on a freshly built model; called by `StandardizedTransformer` at load.
+def check_names(model: Any, layer: type, required: tuple[str, ...] = REQUIRED, fused: bool = False) -> dict[tuple[str, type], list[Standard]]:
+    """The part of `check` that reads no activation, shared with vLLM's default.
 
-    Raises `UnsupportedFamily` when the root lacks a module it needs or the
-    blocks do not pass a ``[batch, seq, hidden]`` stream on a shape-only scan
-    (fake tensors, so nothing loads or computes). Records on each block's
-    attention and MLP why its output is not the contribution, when the forward
-    or the scan says so, so `support` and the reads report it.
+    Raises `UnsupportedFamily` when the root lacks one of ``required`` or no
+    block is a ``layer``. Records on each block's attention and MLP the
+    `contribution_reason` when there is one. Returns the sublayers by
+    (standard name, module type).
     """
-    missing = [name for name in REQUIRED if not isinstance(model.__dict__.get(name), Envoy)]
-    if not missing and not any(isinstance(block, Layer) for block in model.layers):
+    missing = [name for name in required if not isinstance(model.__dict__.get(name), Envoy)]
+    if not missing and not any(isinstance(block, layer) for block in model.layers):
         missing = ["layers"]
     if missing:
         raise _refuse(model, f"found no {', '.join(missing)} under any name it knows", _guess(model, missing))
@@ -459,11 +468,23 @@ def check(model: "StandardizedTransformer") -> None:
                 continue
             holder_path, _, native = envoy.path.removeprefix(prefix).rpartition(".")
             holder = root.get_submodule(holder_path)
-            reason = contribution_reason(envoy._module, holder, native)
+            reason = contribution_reason(envoy._module, holder, native, fused)
             if reason is not None:
                 envoy._default_reason = reason
             sublayers.setdefault((name, type(envoy._module)), []).append(envoy)
+    return sublayers
 
+
+def check(model: "StandardizedTransformer") -> None:
+    """Confirm the default's guess on a freshly built model; called by `StandardizedTransformer` at load.
+
+    Raises `UnsupportedFamily` when the root lacks a module it needs or the
+    blocks do not pass a ``[batch, seq, hidden]`` stream on a shape-only scan
+    (fake tensors, so nothing loads or computes). Records on each block's
+    attention and MLP why its output is not the contribution, when the forward
+    or the scan says so, so `support` and the reads report it.
+    """
+    sublayers = check_names(model, Layer)
     ids = torch.zeros(1, 3, dtype=torch.long)
     first, last = model.layers[0], model.layers[-1]
     seen: dict[str, Any] = {}

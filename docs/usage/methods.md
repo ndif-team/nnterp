@@ -1,6 +1,6 @@
 ---
 title: Methods over the values
-one_liner: "`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens` and `probs_to_dict`: the common operations written once against the standard values."
+one_liner: "`skip_layer(s)`, `steer`, `project_on_vocab`, `get_topk_closest_tokens` and `probs_to_dict`: the common operations written once against the standard values."
 tags: [usage, skip_layers, steer, project_on_vocab, logit-lens, topk]
 related: [docs/usage/residual-stream.md, docs/usage/root-values.md, docs/usage/vocabulary.md]
 sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py]
@@ -19,6 +19,7 @@ trace; two work on saved tensors outside.
 | method | where it runs | what it does |
 | --- | --- | --- |
 | `skip_layers(start, end, skip_with=None)` | inside a trace | blocks `start..end` inclusive do not run |
+| `skip_layer(layer, skip_with=None)` | inside a trace | `skip_layers(layer, layer, skip_with)` |
 | `steer(layers, vector, factor=1.0, token_positions=None, batch_index=None)` | inside a trace | adds `factor * vector` to `layer_output` in place |
 | `project_on_vocab(hidden)` | inside on a live value, or outside on a saved one | final norm, `lm_head`, then the model's own step after the head (softcap or scale) |
 | `get_topk_closest_tokens(hidden, k=5)` | either | `project_on_vocab` then softmax then top-k per position |

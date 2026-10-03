@@ -70,7 +70,8 @@ print(model.support(layer=5)["self_attn.attention_probabilities"])
 | mixture of experts | `router_logits`, `expert_weights`, `expert_indices`, `expert_outputs`, `routed_output`, `shared_expert_output` | [mixture-of-experts](docs/usage/mixture-of-experts.md) |
 | recurrent mixers and hybrids | `linear_attn` on gated DeltaNet, Mamba and Mamba-2 blocks: queries, keys, values, `decays`, `betas`, the recurrent state | [delta-net](docs/usage/delta-net.md), [selective-scan](docs/usage/selective-scan.md), [state-space](docs/usage/state-space.md) |
 | the whole model | `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, and the sizes (`num_layers`, `hidden_size`, `head_dim`, ...) | [root-values](docs/usage/root-values.md) |
-| methods | `steer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens` | [methods](docs/usage/methods.md) |
+| methods | `steer`, `skip_layer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens` | [methods](docs/usage/methods.md) |
+| interventions | `logit_lens`, `patchscope_lens`, `patchscope_generate`, `patch_object_attn_lens`, `TargetPrompt`, `repeat_prompt` | [interventions](docs/usage/interventions.md) |
 
 Every value has one axis layout on every family, named in `nnterp.components`
 ([layouts](docs/usage/layouts.md)).

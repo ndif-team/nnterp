@@ -1,5 +1,6 @@
 """The registry and the load path, across families."""
 
+import importlib
 import types
 
 import pytest
@@ -7,7 +8,7 @@ import torch
 from nnsight.intervention.envoy import Envoy
 from transformers import AutoModelForCausalLM
 
-from nnterp import StandardizedTransformer, UnsupportedFamily, families
+from nnterp import StandardizedTransformer, families
 from nnterp.families import gpt2
 
 GPT2 = "hf-internal-testing/tiny-random-gpt2"
@@ -37,9 +38,11 @@ def test_import_is_lazy():
     assert out[0] == "0" and int(out[1]) >= 1 and out[2] == "True" and out[3] == "False", out
 
 
-def test_unknown_family_refused():
-    with pytest.raises(UnsupportedFamily, match="zamba"):
-        StandardizedTransformer("hf-tiny-v2/tiny-random-ZambaForCausalLM")
+def test_unknown_family_falls_back_to_the_default():
+    """A model_type with no family gets the best-effort default, with a warning; tests/families/test_default.py has the rest."""
+    with pytest.warns(UserWarning, match="no family for model_type 'zamba'"):
+        model = StandardizedTransformer("hf-tiny-v2/tiny-random-ZambaForCausalLM")
+    assert model.family is families.default
 
 
 def test_register_adds_a_family_and_can_override():
@@ -55,8 +58,9 @@ def test_register_adds_a_family_and_can_override():
 def test_an_engine_has_its_own_families():
     """vLLM's families are a package under the transformers ones, looked up by the same model type."""
     assert "vllm" not in families.known() and {"llama", "gpt2"} <= set(families.known("vllm"))
-    with pytest.raises(UnsupportedFamily, match="'stablelm' on vllm.*nnterp/families/vllm/stablelm.py"):
-        families.lookup("stablelm", engine="vllm")
+    with pytest.warns(UserWarning, match="'stablelm' on vllm.*nnterp/families/vllm/stablelm.py"):
+        assert families.lookup("stablelm", engine="vllm") is importlib.import_module("nnterp.families.vllm.default")
+    assert "default" not in families.known("vllm")
     custom = types.SimpleNamespace(MODEL_TYPES=("stablelm",), RENAME={}, ENVOYS={})
     try:
         families.register(custom, engine="vllm")

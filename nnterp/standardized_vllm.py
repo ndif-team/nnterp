@@ -54,7 +54,8 @@ class StandardizedVLLM(Standardized, VLLM):
 
     Raises:
         UnsupportedFamily: when vLLM's implementation of the checkpoint's
-            ``model_type`` has no family under `nnterp.families.vllm`.
+            ``model_type`` has no family under `nnterp.families.vllm` and the
+            best-effort `nnterp.families.vllm.default` cannot standardize it.
     """
 
     def __init__(
@@ -76,6 +77,9 @@ class StandardizedVLLM(Standardized, VLLM):
             envoys={**parallel_envoys(), **self.family.ENVOYS, **(envoys or {})},
             **kwargs,
         )
+        # A family that checks its own guess (the best-effort `default`) does so on the built tree.
+        if hasattr(self.family, "check"):
+            self.family.check(self)
 
     @property
     def config(self) -> Any:

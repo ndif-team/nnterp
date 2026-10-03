@@ -23,7 +23,8 @@ nnterp adds and what differs from the transformers engine.
 Families on this engine: `llama`, `mistral`, `phi3`, `qwen2`, `qwen3`, `gemma`, `gemma2`,
 `gemma3_text`, `exaone4`, `cohere`, `cohere2`, `mixtral`, `qwen2_moe`, `qwen3_moe`, `olmoe`,
 `deepseek_v2`, `deepseek_v3`, `gpt2`, `gptj`, `gpt_neox`, `bloom`, `mpt`, `falcon`, `phi`,
-`olmo3` ([family notes](#family-notes)). Another `model_type` raises `UnsupportedFamily`.
+`olmo3` ([family notes](#family-notes)). Another `model_type` loads with the best-effort default
+family and a warning ([below](#a-model_type-with-no-vllm-family)).
 
 The snippets on this page ran on vLLM 0.27.1 with `HuggingFaceTB/SmolLM2-135M-Instruct`.
 
@@ -259,6 +260,30 @@ the same family on transformers.
 vLLM's attention kernels need a head width of at least 16 (32 for the float32 one), so the
 tiny random checkpoints nnterp's transformers suite pins do not run on this engine; the vLLM
 suite names a small real checkpoint per family.
+
+## A `model_type` with no vLLM family
+
+It loads with `nnterp.families.vllm.default`, vLLM's counterpart of the transformers default
+([loading](loading.md#an-architecture-with-no-family)), and a warning naming
+`nnterp/families/vllm/<model_type>.py`. Its `RENAME` is the transformers default's (vLLM keeps
+transformers' module names) and its `ENVOYS` are keyed on the same standard names. What a vLLM
+family states, it reads off the block's forward: a block that takes a `residual` and reads it is
+a `FusedLayer`; any other is a `Layer`, its `STREAM` the `hidden_states` argument's index and
+`returns_tuple` what its `return` says. There is no shape check (vLLM has no forward to scan),
+so the load-time check is the names (`embed_tokens`, `layers`, `norm`; `lm_head` may be tied
+into the embedding, which `project_on_vocab` then unembeds with) and the same per-sublayer
+reasons as on transformers, with a residual add fused into the next norm counted as the add.
+The attention interior is unavailable where the module has no `attn` child that is vLLM's
+attention layer. The head counts and widths are the first attention module's (`total_num_heads`,
+`total_num_kv_heads`, `v_head_dim` / `head_dim`: the whole model's, not one rank's share);
+`intermediate_size` is the config's `intermediate_size`, `ffn_dim`, `ffn_hidden_size` or
+`n_inner`, and raises where none is there (MPT).
+
+Forced onto the shipped vLLM families, the default finds the same modules, block conventions
+and sizes on all 25 (but MPT's `intermediate_size`), and reports a contribution unavailable where
+the family points it at a post-norm (Gemma-2/3, OLMo-3, EXAONE-4) or the block changes it in
+place (Falcon's bias add, DeepSeek-V2/V3's float16 rescaling); on Llama, GPT-2, GPT-NeoX and Phi
+the whole suite passes with it (`tests/vllm_families/test_vllm_default.py`).
 
 ## Adding a vLLM family
 

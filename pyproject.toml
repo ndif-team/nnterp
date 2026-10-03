@@ -27,7 +27,9 @@ dependencies = ["nnsight>=0.8", "transformers", "jaxtyping"]
 models = ["sentencepiece", "tiktoken", "protobuf", "pillow"]
 # The vLLM engine (StandardizedVLLM).
 vllm = ["vllm"]
-test = ["pytest", "pytest-xdist"]
+test = ["pytest", "pytest-xdist", "jinja2", "markdown"]
+# The encyclopedia generator (encyclopedia/build.py).
+encyclopedia = ["jinja2", "markdown"]
 
 [project.urls]
 "Homepage" = "https://github.com/ndif-team/nnterp"

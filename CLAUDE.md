@@ -82,6 +82,9 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/extending/finding-source-ops.md](docs/extending/finding-source-ops.md) — `print(envoy.source)` and how ops are named
 - [docs/extending/registering.md](docs/extending/registering.md) — `nnterp.families.register(module)`
 
+### "The encyclopedia: a web page per family"
+- [encyclopedia/README.md](encyclopedia/README.md) — `encyclopedia/build.py` renders `encyclopedia/entries/<model_type>.py` (hand-written: block schema, quirks, notes) merged with a meta build of the family into static HTML under `encyclopedia/site/`; `entries/gemma2.py` is the reference entry; `tests/test_encyclopedia.py` builds every entry from its pinned checkpoint
+
 ### "Change nnterp itself"
 - [docs/developing/index.md](docs/developing/index.md) — architecture, descriptor internals, the recurrent mixer (`RecurrentMixer`, DeltaNet) and its occurrence arithmetic, tests, transformers compatibility, gotchas, contributing
 - **Run `HF_HUB_OFFLINE=1 pytest` (about 6100 tests, ~7 min on CPU) before and after.**

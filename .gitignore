@@ -20,3 +20,6 @@ __pycache__/
 
 # written by setuptools_scm at install
 nnterp/_version.py
+
+# the encyclopedia is built into this folder
+encyclopedia/site/

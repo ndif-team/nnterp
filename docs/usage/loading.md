@@ -3,7 +3,7 @@ title: Loading a model
 one_liner: "`StandardizedTransformer(repo_id, ...)` picks the family from the config's `model_type`, renames the tree to the standard vocabulary, and takes every `TransformersModel` argument."
 tags: [usage, loading, families, rename, envoys, tokenizer]
 related: [docs/usage/vocabulary.md, docs/usage/availability.md, docs/usage/root-values.md, docs/usage/residual-stream.md]
-sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/components/standard.py]
+sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/families/default.py, nnterp/components/standard.py]
 ---
 
 # Loading a model
@@ -55,18 +55,54 @@ nnsight's `rename=` and `envoys=`. A multimodal config nests the language model'
 as `text_config`; the text-generation task builds that model, so its `model_type` is the
 one looked up.
 
-A `model_type` with no family raises `UnsupportedFamily` before anything loads, naming every
-known model type, the list `nnterp.families.known()` returns (92 shipped families,
-alphabetical):
-
-```
-UnsupportedFamily: no standardization for model_type 'bert'; known: ['afmoe', 'apertus', 'arcee',
-'bamba', ..., 'xglm', 'youtu', 'zaya']. Add nnterp/families/bert.py with MODEL_TYPES, RENAME and
-ENVOYS, or pass a module to nnterp.families.register().
-```
-
 `model.family` is the module the checkpoint resolved to; `nnterp.families.known()` lists
-the shipped ones without loading anything.
+the shipped ones (92) without loading anything.
+
+## An architecture with no family
+
+A `model_type` with no family module and nothing registered loads with
+`nnterp.families.default`, a best-effort family, and a warning:
+
+```
+UserWarning: nnterp has no family for model_type 'nanochat'; the default family standardizes it as a
+best-effort guess. Check model.support() for what it found, and add nnterp/families/nanochat.py (or
+nnterp.families.register()) for a standardization you can rely on.
+```
+
+The default knows the spellings the shipped families use (`transformer.h`, `gpt_neox.layers`,
+`model.decoder.final_layer_norm`, `attn`, `self_attention`, `feed_forward`, ...) and checks its
+guess at load: the root needs `embed_tokens`, `layers`, `norm` and `lm_head`, and the blocks must
+pass a `[batch, seq, hidden]` stream on a shape-only scan (fake tensors; nothing loads). When
+either fails it raises `UnsupportedFamily`, with a `rename=` read off the module tree when it can
+find one:
+
+```
+UnsupportedFamily: the default family cannot standardize GPTNeoXJapaneseForCausalLM: found no embed_tokens,
+layers, norm under any name it knows. Name the native modules with rename={'<native path>': '<standard
+name>'} at load; going by the module tree, perhaps rename={'gpt_neox_japanese.embed_in': 'embed_tokens',
+'gpt_neox_japanese.layers': 'layers', 'gpt_neox_japanese.final_layer_norm': 'norm'}, or add a family
+module named after the model_type (docs/extending/adding-a-family.md).
+```
+
+(GPT-NeoX-Japanese has a family; this is the default forced onto it.) Passing that `rename=`
+completes the default's names, and the load goes through. What loads is checked, not trusted:
+`model.support()` reports a value unavailable, with the reason, wherever the default cannot
+vouch for it, and every value it reports available reads what a dedicated family reads (the
+suite checks this on the shipped families' checkpoints, `tests/families/test_default.py`):
+
+- `attention_output` / `mlp_output` when the module takes the residual itself (BLOOM), or the
+  block norms, scales or sums its output with another module's before adding it to the stream
+  (Gemma-2's post-norms, Granite's `residual_multiplier`).
+- The attention interior when the forward makes no `attention_interface` call (GPT-J, Falcon),
+  when the eager forward has no `nn.functional.softmax` / `dropout` to read, or, for
+  `attention_head_outputs`, when the forward transforms the interface's output before the
+  projection (DeepSeek-V4's rotation).
+- A block's `self_attn.*` or `mlp.*` when it has no module under a name the default knows.
+
+The mixture values, the recurrent mixers (`linear_attn`) and a family's own sizes and
+`project_on_vocab` need a family module ([adding-a-family](../extending/adding-a-family.md)).
+A shape check that cannot run on fake tensors (grouped expert matmuls, CUDA-only kernels)
+warns that the guess is unchecked and the load goes on.
 
 ## Passing an already-loaded module
 
@@ -137,7 +173,7 @@ The key forms are nnsight's (nnsight docs/usage/rename-modules.md): a dotted key
 where it resolves from, the root; a single-component key binds on every envoy that has a
 child of that name; a key that resolves nowhere is skipped.
 
-`envoys=` maps a module *type* or a *native* dotted path to an `Envoy` subclass. nnsight
+`envoys=` maps a module *type* or a dotted path to an `Envoy` subclass. nnsight
 tries the type keys first, over the module's MRO, then the path keys, so:
 
 ```python
@@ -155,8 +191,9 @@ type(model.layers[0].mlp) is MyMlp                 # True
 A path key reaches only a module no type key in the merged map matches. The family keys
 its block, attention and MLP by type, so `envoys={"transformer.h.0.mlp": MyMlp}` leaves
 the family's `Mlp` in place there, while `envoys={"ln_f": MyNorm}` wraps the final norm,
-which no family keys. Paths are the native ones (`transformer.h.0.mlp`); an alias
-(`layers.0.mlp`) matches nothing, because aliases are bound after the envoys are chosen.
+which no family keys. A path key matches the native path (`transformer.h.0.mlp`) or an
+alias path where the alias's own `rename` key ends it: `"self_attn"` reaches GPT-2's `attn`,
+but `"layers.0.mlp"` matches nothing, since `layers` names the container, not the block.
 When the load shards across GPUs (`distributed_config=`), nnsight's tensor-parallel envoys
 are the base of the merge, so a family's or your own map never drops them.
 
@@ -226,8 +263,9 @@ The root's own values (`logits`, `token_embeddings`, `next_token_probs`, `input_
   still work.
 - **Your `envoys=` key must be the type to displace a family envoy.** Type keys are tried
   before path keys, and the family keys its modules by type.
-- **`envoys=` paths are native, never aliases.** `"layers.0.mlp"` matches nothing on GPT-2;
-  `"transformer.h.0.mlp"` is the path, and even that is shadowed by the family's type key.
+- **`envoys=` paths match an alias only where its `rename` key ends the path.** `"self_attn"`
+  reaches GPT-2's `attn`; `"layers.0.mlp"` matches nothing (`"transformer.h.0.mlp"` does), and
+  either is shadowed by the family's type key.
 - **A `rename=` alias that would shadow an existing name raises at construction** (an
   `Envoy` attribute, a sibling module, a name on the wrapped model). That is nnsight's rule;
   see nnsight docs/usage/rename-modules.md.

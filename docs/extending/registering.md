@@ -99,17 +99,20 @@ config's unused `intermediate_size` key (37) instead of `n_inner`'s `4 * hidden_
 
 1. `REGISTRY[model_type]`, if `register` put one there.
 2. `nnterp.families.<model_type>`, imported on first use.
-3. `UnsupportedFamily`, listing what exists:
+3. `nnterp.families.default`, the best-effort family, with a warning; it checks its guess at
+   load and raises `UnsupportedFamily` when it cannot standardize the checkpoint
+   ([loading.md](../usage/loading.md#an-architecture-with-no-family)).
 
 ```
-UnsupportedFamily: no standardization for model_type 'zamba'; known: ['afmoe', 'apertus', ..., 'zaya'].
-Add nnterp/families/zamba.py with MODEL_TYPES, RENAME and ENVOYS, or pass a module to nnterp.families.register().
+UserWarning: nnterp has no family for model_type 'zamba'; the default family standardizes it as a
+best-effort guess. Check model.support() for what it found, and add nnterp/families/zamba.py (or
+nnterp.families.register()) for a standardization you can rely on.
 ```
 
-The list is `sorted(set(known()) | set(REGISTRY))`, so a registered type appears there.
+Registering a family for the type, or shipping its module, takes it off the default.
 
 - `families.known()` is the shipped modules' names, from the package directory, without
-  importing them. It does not list registered families.
+  importing them. It does not list registered families, nor `default`.
 - `families.all_families()` imports and returns every shipped module; for tooling and
   tests, not for a load. It does not include registered families.
 - `families.<model_type>` (`families.gpt2`, `families.qwen3_5_text`) is the shipped module,
@@ -133,8 +136,8 @@ assert model.layers[0].ffn is model.layers[0].mlp
 assert model.family is gpt2
 ```
 
-`envoys=` matches by module type or native path, never by alias, and type keys are tried
-before path keys, so displacing a family's type-keyed envoy takes a type key of your own
+`envoys=` matches by module type or path, and type keys are tried before path keys, so
+displacing a family's type-keyed envoy takes a type key of your own
 ([custom-values.md](custom-values.md)).
 
 ## Another engine's families
@@ -152,8 +155,8 @@ without `engine` is a transformers family. See [usage/vllm](../usage/vllm.md).
   in the process yours; a test that registers cleans up with `del families.REGISTRY[...]`
   in a `finally`.
 - **`Layer`, `Attention`, `Mlp` on the namespace are optional.** `support()` walks the
-  tree and reads none of them; the `UnsupportedFamily` message names the three attributes
-  the load path reads, and they are enough. The suite (`FamilySuite`) does read the classes.
+  tree and reads none of them; `MODEL_TYPES`, `RENAME` and `ENVOYS` are what the load path
+  reads, and they are enough. The suite (`FamilySuite`) does read the classes.
 - **`known()` and `all_families()` are the shipped modules only.**
 - **Carry a shipped family's size functions into a variant.** `RENAME` and `ENVOYS` are
   dicts to spread; `num_kv_heads`, `head_dim`, `qk_head_dim` and `intermediate_size` are

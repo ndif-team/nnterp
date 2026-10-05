@@ -145,9 +145,10 @@ The entry states facts about a family, and each one has a source. Before writing
    | GPT-2 | hash of `gpt2` | gpt2 |
    | GPT-NeoX / Pythia | hash of `gpt_neox` | gpt_neox |
    | EXAONE | hash of `exaone4` (46) | exaone4 |
-   | GPT-J (CodeGen) | hash of `gptj` (222) | gptj |
+   | GPT-J and CodeGen | hash of `gptj` (222) | gptj (codegen 234) |
    | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (`granite` hashes to 156, beside Gemma) |
    | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron |
+   | GPT-J and CodeGen | hash of `gptj` (222) | gptj (codegen 234) |
 
    `python -c "import sys; sys.path.insert(0, 'encyclopedia'); import palette; print(palette.hue_of('olmo2'))"`
    prints a hashed hue.

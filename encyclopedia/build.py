@@ -100,7 +100,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "position-embeddings": ("Position embeddings", "A position embedding is added after embed_tokens; token_embeddings is not layers[0].input."),
     "layernorm": ("LayerNorm", "Norms subtract the mean before scaling; a shift along the all-ones direction never reaches the next sublayer or the logits."),
     "squared-relu": ("Squared ReLU", "The MLP's activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere."),
-    "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; edit the three by assignment, not in place."),
+    "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; split its output by that layout before reading a head."),
 }
 
 ROOT_NAMES = ("embed_tokens", "layers", "norm", "lm_head")

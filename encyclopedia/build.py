@@ -86,6 +86,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "parallel-blocks": ("Parallel block", "One norm feeds attention and MLP; the block sums x + attn + mlp."),
     "parallel-blocks": ("Parallel block", "Attention and MLP both read the block input, through one norm or two; the block sums x + attn + mlp."),
     "partial-rotary": ("Partial rotary", "Rotary embeddings turn only a leading fraction of each query and key head; the other dimensions carry no position."),
+    "nope-blocks": ("Blocks without rotary", "Some blocks, or all, apply no rotary embedding (NoPE): there attention_queries and attention_keys carry no position, and only the causal mask orders the tokens."),
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
     "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),
     "mamba2": ("State space (Mamba-2)", "The mixer is an SSD state-space block with a per-chunk state."),

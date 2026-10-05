@@ -164,9 +164,9 @@ button.chip.active, button.chip.active:hover { background: var(--mark); color: v
 /* checklist */
 .checklist { list-style: none; padding: 0; margin: 0.8rem 0 0; columns: 2; column-gap: 20px; }
 .checklist li { display: flex; align-items: center; gap: 8px; padding: 4px 0; break-inside: avoid; }
-.nb { width: 15px; height: 15px; border: 2px solid var(--ink); flex: none; display: grid; place-items: center; font-family: var(--disp); font-weight: 900; color: var(--paper); font-size: 12px; line-height: 1; }
-.nb.on { background: var(--ink); }
-.nb.on::after { content: '×'; }
+.checkbox { width: 15px; height: 15px; border: 2px solid var(--ink); flex: none; display: grid; place-items: center; font-family: var(--disp); font-weight: 900; color: var(--paper); font-size: 12px; line-height: 1; }
+.checkbox.on { background: var(--ink); }
+.checkbox.on::after { content: '×'; }
 .reasons { margin: 1rem 0 0; font-size: 13px; }
 .reasons dt { margin-top: 8px; } .reasons dd { margin: 2px 0 0; opacity: 0.85; }
 

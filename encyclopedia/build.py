@@ -426,7 +426,7 @@ def md(text: str, rst: bool = False, roles: dict[str, str] | None = None) -> Mar
     first. Fenced blocks with no language or ``python`` are highlighted, with ``roles`` colouring
     nnterp's names; inline code stays plain."""
     if rst:
-        text = re.sub(r"``([^`\n]+)``", r"`\1`", text)
+        text = re.sub(r"``([^`]+?)``", lambda m: "`" + " ".join(m[1].split()) + "`", text)
     out = markdown.markdown(text, extensions=["fenced_code", "tables"])
 
     def fence(m: re.Match) -> str:

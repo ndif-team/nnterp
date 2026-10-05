@@ -142,6 +142,7 @@ The entry states facts about a family, and each one has a source. Before writing
    | OLMo (olmo3, olmo_hybrid, flex_olmo) | hash of `olmo2` | olmo2 |
    | GPT-2 | hash of `gpt2` | gpt2 |
    | GPT-NeoX / Pythia | hash of `gpt_neox` | gpt_neox |
+   | GPT-J (CodeGen) | hash of `gptj` (222) | gptj |
 
    `python -c "import sys; sys.path.insert(0, 'encyclopedia'); import palette; print(palette.hue_of('olmo2'))"`
    prints a hashed hue.

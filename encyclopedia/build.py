@@ -307,7 +307,8 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
                                  "The residual stream entering the block, a tensor on every family.",
                                  layout="Residual", dims="batch seq hidden")
     nodes["stream.output"] = value_node(layer_output, "residual stream")
-    for k in range(len(sublayers) - 1):
+    # Between two sequential sublayers the stream has a value of its own; a parallel block has no such point.
+    for k in range(len(sublayers) - 1 if entry.BLOCK.get("topology", "sequential") == "sequential" else 0):
         nxt = sublayers[k + 1]
         after = sublayers[k]["label"].lower()
         if nxt["pre_norm"]:

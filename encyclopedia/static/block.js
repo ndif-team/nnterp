@@ -117,11 +117,14 @@
       outX = POST.x + POST.w;
     }
     // the contribution: back into the stream
+    // In a parallel block every contribution meets the stream at the one add, each on its own
+    // return path, the first sublayer's outermost, so no two edges or labels share a line.
+    var lane = parallel ? (n - 1 - k) : 0, retX = RET - lane * 24, inY = jY - lane * 26;
     var gc2 = group('contrib.' + sub.host, role);
-    var d = 'M' + outX + ',' + y + ' H' + RET + ' V' + jY + ' H' + (SX + 16);
+    var d = 'M' + outX + ',' + y + ' H' + retX + ' V' + inY + ' H' + (SX + 16);
     el('path', { 'class': 'edge-contrib', d: d, 'marker-end': 'url(#arr)' }, gc2);
     el('path', { 'class': 'hit', d: d, 'stroke-width': 18, fill: 'none', stroke: 'transparent' }, gc2);
-    text(gc2, RET - 8, jY - 10, sub.contribution, 'label-role', 'end');
+    text(gc2, retX - 8, inY - 10, sub.contribution, 'label-role', 'end');
     // the add
     if (!parallel || k === n - 1) {
       var gplus = group('plus', 'stream');

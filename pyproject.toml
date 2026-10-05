@@ -29,7 +29,7 @@ models = ["sentencepiece", "tiktoken", "protobuf", "pillow"]
 vllm = ["vllm"]
 test = ["pytest", "pytest-xdist", "jinja2", "markdown"]
 # The encyclopedia generator (encyclopedia/build.py).
-encyclopedia = ["jinja2", "markdown"]
+encyclopedia = ["jinja2", "markdown", "pygments"]
 
 [project.urls]
 "Homepage" = "https://github.com/ndif-team/nnterp"

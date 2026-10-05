@@ -97,8 +97,10 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "scaled-embeddings": ("Scaled embeddings", "The embedding output is multiplied before block 0; token_embeddings is the scaled tensor."),
     "embedding-multiplier": ("Embedding multiplier", "The model multiplies the embedding module's output before block 0; token_embeddings is the unscaled tensor, layers[0].input the scaled one."),
     "gain-norm": ("1 + weight norm gain", "RMSNorm multiplies by (1 + weight), so the gain is not norm.weight."),
+    "gain-norm": ("1 + weight norm gain", "The norm multiplies by (1 + weight), so the gain is not norm.weight."),
     "position-embeddings": ("Position embeddings", "A position embedding is added after embed_tokens; token_embeddings is not layers[0].input."),
     "layernorm": ("LayerNorm", "Norms subtract the mean before scaling; a shift along the all-ones direction never reaches the next sublayer or the logits."),
+    "squared-relu": ("Squared ReLU", "The MLP's activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere."),
     "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; edit the three by assignment, not in place."),
 }
 
@@ -114,6 +116,7 @@ CONFIG_KEYS = (
     "scale_attn_by_inverse_layer_idx", "reorder_and_upcast_attn",
     "rotary_dim",
     "embedding_multiplier", "residual_multiplier", "attention_multiplier", "logits_scaling",
+    "norm_eps", "partial_rotary_factor",
 )
 
 VALUE_LINE = re.compile(r"^\((?P<name>\w+)\)(?: -> (?P<layout>\w+) \[(?P<dims>[^\]]*)\])?: (?P<desc>.*)$")

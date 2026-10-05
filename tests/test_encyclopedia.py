@@ -55,3 +55,12 @@ def test_palette_colour_maths_round_trips():
     for color in (build.INK, build.PAPER, "#3D9F47"):
         assert palette.oklch_to_hex(*palette.hex_to_oklch(color)) == color
     assert palette.contrast("#000000", "#FFFFFF") == pytest.approx(21)
+
+
+def test_quirk_slugs_are_unique():
+    """A dict literal with a repeated key keeps the last one silently; the source must not repeat a slug."""
+    import re
+    source = (Path(build.__file__)).read_text()
+    body = source[source.index("QUIRKS: dict"):source.index("\n}\n", source.index("QUIRKS: dict"))]
+    slugs = re.findall(r'^\s+"([a-z0-9-]+)": \(', body, re.M)
+    assert len(slugs) == len(set(slugs)), [s for s in slugs if slugs.count(s) > 1]

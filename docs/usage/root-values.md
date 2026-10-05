@@ -28,7 +28,7 @@ with model.trace("The Eiffel Tower is in"):
     ids = model.input_ids.save()               # [batch, seq]
     emb = model.token_embeddings.save()        # [batch, seq, hidden]
     raw = model.lm_head.output.save()          # the raw projection
-    logits = model.logits.save()               # [batch, seq, vocab], softcapping applied
+    logits = model.logits.save()               # [batch, seq, vocab], after any softcap or scale past the head
     probs = model.next_token_probs.save()      # [batch, vocab]
 
 model.num_layers, model.hidden_size, model.vocab_size, model.num_heads, model.num_kv_heads
@@ -136,8 +136,8 @@ The six print with the model. The `token_embeddings` description says "entering 
 block", which holds only where the model adds nothing after the embedding module (above):
 
 ```
-  (logits): The model's final logits, [batch, seq, vocab], softcapping applied
-  (token_embeddings): The token embeddings entering the first block, [batch, seq, hidden]
+  (logits): The logits the model returns, after anything it does past lm_head (a softcap, a scale), [batch, seq, vocab]
+  (token_embeddings): The embedding module's output; layers[0].input is what enters the first block, [batch, seq, hidden]
   (next_token_probs): The next-token distribution at the last position, [batch, vocab]; derived, read-only
   (input_ids): The token ids the model was called with, [batch, seq]
   (attention_mask): The attention mask the model was called with, [batch, seq]; zeros are padding

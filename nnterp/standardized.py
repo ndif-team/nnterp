@@ -103,7 +103,7 @@ class StandardizedTransformer(TransformersModel):
     was called with.
 
     The root envoy also answers for the whole model, inside a trace: ``logits``
-    (the model's final logits, with any softcapping applied), ``token_embeddings``
+    (the logits the model returns, after any softcap or scale past the head), ``token_embeddings``
     (the embedding's output) and ``next_token_probs``; and outside one: the
     sizes ``num_layers``, ``num_heads``, ``num_kv_heads``, ``head_dim``,
     ``qk_head_dim``, ``hidden_size``, ``intermediate_size`` and ``vocab_size``,
@@ -168,7 +168,7 @@ class StandardizedTransformer(TransformersModel):
 
     # -- whole-model values (inside a trace) ---------------------------------
 
-    @EProperty(key="output", description="The model's final logits, softcapping applied")
+    @EProperty(key="output", description="The logits the model returns, after anything it does past lm_head (a softcap, a scale)")
     def logits(self, value: Any) -> Logits:
         """The logits the model returns, ``[batch, seq, vocab]``.
 
@@ -184,7 +184,7 @@ class StandardizedTransformer(TransformersModel):
         output.logits = value
         return output
 
-    @EProperty("embed_tokens.output", description="The token embeddings entering the first block")
+    @EProperty("embed_tokens.output", description="The embedding module's output; layers[0].input is what enters the first block")
     def token_embeddings(self, value: torch.Tensor) -> Residual:
         """The embedding module's output, ``[batch, seq, hidden]``.
 

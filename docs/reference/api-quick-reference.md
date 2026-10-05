@@ -78,8 +78,8 @@ Every row is an `EProperty` on the root, listed in `repr(model)` with its descri
 
 | Value | Layout | Assignable | Description (as the repr shows it) |
 |---|---|---|---|
-| `model.logits` | `Logits` | yes: replaces `output.logits` | The model's final logits, softcapping applied (Gemma-2); `model.lm_head.output` is the raw projection. |
-| `model.token_embeddings` | `Residual` | yes | The token embeddings entering the first block: `embed_tokens.output`, before positional embeddings and embedding norms. An `EProperty` keyed `"embed_tokens.output"`. |
+| `model.logits` | `Logits` | yes: replaces `output.logits` | The logits the model returns, after any softcap (Gemma-2) or scale (Granite, Cohere) past the head; `model.lm_head.output` is the raw projection. |
+| `model.token_embeddings` | `Residual` | yes | The embedding module's output, `embed_tokens.output`; `layers[0].input` is what enters block 0, after any positional embeddings and embedding norms. An `EProperty` keyed `"embed_tokens.output"`. |
 | `model.next_token_probs` | `NextTokenProbs` | no (`AttributeError`: assign `logits`) | `logits[:, -1].softmax(-1)`; the last position is every row's last token only under left padding. |
 | `model.input_ids` | `Tokens` | yes: the model runs on the ids you set | The token ids the model was called with. |
 | `model.attention_mask` | `Tokens` | yes | The attention mask the model was called with; zeros are padding. |

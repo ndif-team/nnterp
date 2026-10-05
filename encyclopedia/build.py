@@ -96,7 +96,6 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "sliding-window": ("Sliding window", "Some blocks attend over a window; config.layer_types says which."),
     "scaled-embeddings": ("Scaled embeddings", "The embedding output is multiplied before block 0; token_embeddings is the scaled tensor."),
     "embedding-multiplier": ("Embedding multiplier", "The model multiplies the embedding module's output before block 0; token_embeddings is the unscaled tensor, layers[0].input the scaled one."),
-    "gain-norm": ("1 + weight norm gain", "RMSNorm multiplies by (1 + weight), so the gain is not norm.weight."),
     "gain-norm": ("1 + weight norm gain", "The norm multiplies by (1 + weight), so the gain is not norm.weight."),
     "position-embeddings": ("Position embeddings", "A position embedding is added after embed_tokens; token_embeddings is not layers[0].input."),
     "layernorm": ("LayerNorm", "Norms subtract the mean before scaling; a shift along the all-ones direction never reaches the next sublayer or the logits."),

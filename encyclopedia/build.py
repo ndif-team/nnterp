@@ -288,7 +288,7 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
         nodes[f"sub.{host}"] = node(
             spec["label"], f"model.layers[i].{host}",
             f"{info['module_classes'][host]} under its standard name. " + spec.get("detail", "").format(**fmt),
-            extra=f"{len(by_host[host])} standard values; `.input` is what the sublayer reads.")
+            extra=f"{len(by_host[host])} standard value{'s' if len(by_host[host]) != 1 else ''}; `.input` is what the sublayer reads.")
         for name in spec.get("interior", []):
             assert name in by_host[host], f"{entry.MODEL_TYPE}: {host} has no value {name!r}"
             sub["interior"].append({"name": name, "short": INTERIOR_SHORT.get(name, name)})

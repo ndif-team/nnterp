@@ -206,7 +206,9 @@ class Layer(Layer):
   ([../usage/mixture-of-experts.md](../usage/mixture-of-experts.md)).
 - **`LinearAttention`** (hybrids only): the base holds for transformers' pure-torch gated
   delta rule; Qwen3-Next, Qwen3.5 and OLMo-Hybrid subclass it with a docstring and nothing
-  else. It is a `RecurrentMixer`: a mixer with other kernels (a state-space layer) is a new
+  else. A delta-rule mixer with its own kernels and the same values subclasses it and names
+  them: Kimi-Linear's sets `CHUNK_KERNEL`, `RECURRENT_KERNEL` and `STATE_OP` to transformers'
+  KDA kernels and redeclares `decays` with its per-channel layout. It is a `RecurrentMixer`: a mixer with other kernels (a state-space layer) is a new
   `RecurrentMixer` subclass that sets `CHUNK_KERNEL`, `RECURRENT_KERNEL` and `STATE_OP` and
   declares its own values
   ([../developing/recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md)).

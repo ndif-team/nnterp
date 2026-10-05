@@ -27,7 +27,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 ### "Load a model and use the standard names"
 - [docs/usage/loading.md](docs/usage/loading.md) — `StandardizedTransformer(repo_id, ...)`; pass `attn_implementation="eager"` for anything inside attention
 - [docs/usage/vocabulary.md](docs/usage/vocabulary.md) — `embed_tokens`, `layers[i].self_attn`, `layers[i].mlp`, `norm`, `lm_head`; native names keep working
-- [docs/reference/families.md](docs/reference/families.md) — the 92 families, their native names and quirks
+- [docs/reference/families.md](docs/reference/families.md) — the 94 families, their native names and quirks
 
 ### "Read or edit the residual stream / a sublayer's contribution"
 - [docs/usage/residual-stream.md](docs/usage/residual-stream.md) — `layer_output`, `attention_output`, `mlp_output`; `input + attention_output + mlp_output == layer_output`
@@ -37,7 +37,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/patterns/attention-patterns.md](docs/patterns/attention-patterns.md) — head metrics and pattern edits
 
 ### "Mixture of experts: the router, the experts, expert ablation and rerouting"
-- [docs/usage/mixture-of-experts.md](docs/usage/mixture-of-experts.md) — `layers[i].mlp` is a `Moe` on the 36 MoE families: `router_logits` (writable, before the scoring), `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs` (needs `experts_implementation="grouped_mm"`, the default), `routed_output`, `shared_expert_output`; `num_experts`, `top_k`, `SCORING`
+- [docs/usage/mixture-of-experts.md](docs/usage/mixture-of-experts.md) — `layers[i].mlp` is a `Moe` on the 38 MoE families: `router_logits` (writable, before the scoring), `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs` (needs `experts_implementation="grouped_mm"`, the default), `routed_output`, `shared_expert_output`; `num_experts`, `top_k`, `SCORING`
 - [docs/patterns/expert-ablation.md](docs/patterns/expert-ablation.md) — every expert's effect on a prediction
 
 ### "Logits, embeddings, next-token probabilities, the input, the sizes"
@@ -50,7 +50,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/usage/methods.md](docs/usage/methods.md) — `skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`
 - [docs/patterns/logit-lens.md](docs/patterns/logit-lens.md), [docs/patterns/steering.md](docs/patterns/steering.md)
 
-### "Qwen3-Next / Qwen3.5 / OLMo-Hybrid: linear attention, the recurrent state"
+### "Qwen3-Next / Qwen3.5 / OLMo-Hybrid / Kimi-Linear: linear attention, the recurrent state"
 - [docs/usage/delta-net.md](docs/usage/delta-net.md) — `linear_attn` values; `route_kernels(model.family, "torch")` for the per-token `state`/`states`
 - [docs/patterns/delta-net-state.md](docs/patterns/delta-net-state.md) — patch and track the state
 
@@ -61,7 +61,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/usage/state-space.md](docs/usage/state-space.md) — `linear_attn` is a `StateSpace`: `C`/`B`/`x` as queries/keys/values, `dt` as `betas`; `route_kernels(model.family, "torch")` when `mamba_ssm` is installed; `nnterp.chunk_per_token(model)` for the state after every token (`states`, `state_after`); `betas`/`decays` assignable
 
 ### "What shape is this value?"
-- [docs/usage/layouts.md](docs/usage/layouts.md) — one layout per value on every family, named (`Residual`, `Pattern`, `Keys`, ... in `nnterp.components`), except `layer_output` on DeepSeek-V4 (`Streams`); `value.dims`, `value.layout is Pattern`
+- [docs/usage/layouts.md](docs/usage/layouts.md) — one layout per value on every family, named (`Residual`, `Pattern`, `Keys`, ... in `nnterp.components`), except `layer_output` on DeepSeek-V4 (`Streams`) and `linear_attn.decays` on Kimi-Linear (`ChannelGates`); `value.dims`, `value.layout is Pattern`
 
 ### "Generation, many prompts, activations datasets"
 - [docs/usage/generation.md](docs/usage/generation.md) — the values under `model.generate`, `tracer.iter` picks the step

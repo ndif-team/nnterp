@@ -80,6 +80,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "mixture-of-experts": ("Mixture of experts", "layers[i].mlp is a Moe: router logits, expert weights and indices, expert outputs."),
     "borrowed-kv": ("Borrowed keys and values", "Later blocks attend with an earlier block's keys and values."),
     "gated-query": ("Gated query", "q_proj produces the query and a gate side by side."),
+    "qkv-bias": ("Biased q, k, v", "The query, key and value projections add a bias, so each is W·x + b, not W·x."),
     "parallel-blocks": ("Parallel block", "One norm feeds attention and MLP; the block sums x + attn + mlp."),
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
     "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),

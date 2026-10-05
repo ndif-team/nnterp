@@ -16,7 +16,6 @@
   </div>
   <aside class="hero-side">
     <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
-    <div class="seal" title="{{ num_layers }} blocks"><span>{{ num_layers }}<small>L</small></span></div>
   </aside>
 </section>
 
@@ -73,7 +72,7 @@
 </section>
 
 <section class="frame section" id="support">
-  <div class="topbar"><h2 class="disp-section">What nnterp <em>gives</em> you</h2><span class="micro">02 · support()</span></div>
+  <div class="topbar"><h2 class="disp-section">The <em>API</em></h2><span class="micro">02 · support()</span></div>
   <h3 class="ttl-row">Values, by host</h3>
   {% if eager_only %}<p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition. Here, {{ eager_only|length }} values need <span class="mono">attn_implementation="eager"</span>.</p>{% endif %}
   {% for host, rows in values.items() %}
@@ -111,14 +110,12 @@
 </section>
 
 <section class="frame section" id="notes">
-  <div class="topbar"><h2 class="disp-section">Notes for <em>interpretability</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <div class="topbar"><h2 class="disp-section"><em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
   <div class="grid-notes">
     <div class="prose">{{ notes }}</div>
     <aside class="quirk-list">
       <p class="micro">quirks</p>
       {% for q in quirks %}<div class="quirk"><span class="chip">{{ q.label }}</span><p class="body-md">{{ q.blurb }}</p></div>{% endfor %}
-      <p class="micro">snippets</p>
-      <p class="body-md dim">The code on this page is illustrative. The snippets in <a href="{{ families_url }}">docs/</a> are the ones the test suite runs.</p>
     </aside>
   </div>
 </section>

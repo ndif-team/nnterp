@@ -85,7 +85,6 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "qk-norm": ("Query/key norms", "q_norm and k_norm normalize the projected queries and keys inside the attention; attention_queries and attention_keys are read after them."),
     "parallel-blocks": ("Parallel block", "One norm feeds attention and MLP; the block sums x + attn + mlp."),
     "parallel-blocks": ("Parallel block", "Attention and MLP both read the block input, through one norm or two; the block sums x + attn + mlp."),
-    "fused-qkv": ("Fused QKV", "One linear projects queries, keys and values together; splitting its weight or output follows the family's layout."),
     "partial-rotary": ("Partial rotary", "Rotary embeddings turn only a leading fraction of each query and key head; the other dimensions carry no position."),
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
     "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),
@@ -96,6 +95,9 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "sliding-window": ("Sliding window", "Some blocks attend over a window; config.layer_types says which."),
     "scaled-embeddings": ("Scaled embeddings", "The embedding output is multiplied before block 0; token_embeddings is the scaled tensor."),
     "gain-norm": ("1 + weight norm gain", "RMSNorm multiplies by (1 + weight), so the gain is not norm.weight."),
+    "position-embeddings": ("Position embeddings", "A position embedding is added after embed_tokens; token_embeddings is not layers[0].input."),
+    "layernorm": ("LayerNorm", "Norms subtract the mean before scaling; a shift along the all-ones direction never reaches the next sublayer or the logits."),
+    "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; edit the three by assignment, not in place."),
 }
 
 ROOT_NAMES = ("embed_tokens", "layers", "norm", "lm_head")
@@ -106,6 +108,8 @@ CONFIG_KEYS = (
     "hidden_activation", "rms_norm_eps", "layer_norm_eps", "rope_theta", "query_pre_attn_scalar",
     "attn_logit_softcapping", "final_logit_softcapping", "tie_word_embeddings", "dtype",
     "use_parallel_residual",
+    "n_layer", "n_embd", "n_head", "n_inner", "n_positions", "activation_function", "layer_norm_epsilon",
+    "scale_attn_by_inverse_layer_idx", "reorder_and_upcast_attn",
 )
 
 VALUE_LINE = re.compile(r"^\((?P<name>\w+)\)(?: -> (?P<layout>\w+) \[(?P<dims>[^\]]*)\])?: (?P<desc>.*)$")

@@ -235,7 +235,7 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
         "paths": paths,
         "values": values,
         "support": support,
-        "repr": repr(block),
+        "repr": elide_native_copies(repr(eager)),
         "docstring": doc,
         "children": list(children),
         "versions": {"nnterp": nnterp.__version__, "transformers": importlib.import_module("transformers").__version__},
@@ -373,8 +373,25 @@ def highlight_python(code: str, roles: dict[str, str]) -> Markup:
     return Markup(out)
 
 
+def elide_native_copies(text: str) -> str:
+    """``print(model)`` with a subtree printed once: a module mounted on the root under its standard
+    name (``layers``) prints there in full, so its copy inside the native tree closes on the line it opens."""
+    lines = text.splitlines()
+    mounted = {line.strip() for line in lines if line.startswith("  (") and line.endswith("(")}
+    out, i = [], 0
+    while i < len(lines):
+        line = lines[i]
+        indent = len(line) - len(line.lstrip())
+        if indent > 2 and line.strip() in mounted:
+            i = lines.index(" " * indent + ")", i)
+            line += "…)"
+        out.append(line)
+        i += 1
+    return "\n".join(out)
+
+
 def highlight_repr(text: str, roles: dict[str, str]) -> Markup:
-    """The block's printout as spans: a module's name in its role, a value's name in its host's,
+    """The model's printout as spans: a module's name in its role, a value's name in its host's,
     layouts in plain mono, dims, descriptions and constructor arguments dimmed."""
     lines = []
     for line in text.splitlines():

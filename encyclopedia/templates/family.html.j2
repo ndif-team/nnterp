@@ -90,7 +90,7 @@
   {% endfor %}
 
   <h3 class="ttl-row">Printout</h3>
-  <p class="body-md dim">What <span class="mono">print(model.layers[i])</span> shows: the native modules and, among them, every standard value with its layout.{% if returns_tuple %} The block returns a tuple; <span class="mono">layer_output</span> is its first element.{% endif %}</p>
+  <p class="body-md dim">What <span class="mono">print(model)</span> shows: the native modules and, among them, the standard names and every standard value with its layout.{% if returns_tuple %} The block returns a tuple; <span class="mono">layer_output</span> is its first element.{% endif %}</p>
   <pre class="repr"><code>{{ repr_html }}</code></pre>
 
   <div class="card">

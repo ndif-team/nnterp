@@ -86,6 +86,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "parallel-blocks": ("Parallel block", "One norm feeds attention and MLP; the block sums x + attn + mlp."),
     "parallel-blocks": ("Parallel block", "Attention and MLP both read the block input, through one norm or two; the block sums x + attn + mlp."),
     "partial-rotary": ("Partial rotary", "Rotary embeddings turn only a leading fraction of each query and key head; the other dimensions carry no position."),
+    "interleaved-rotary": ("Interleaved rotary", "Rotary turns adjacent channel pairs (2i, 2i + 1), GPT-J's rotate_every_two, not the two halves that rotate_half pairs."),
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
     "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),
     "mamba2": ("State space (Mamba-2)", "The mixer is an SSD state-space block with a per-chunk state."),
@@ -110,6 +111,7 @@ CONFIG_KEYS = (
     "use_parallel_residual",
     "n_layer", "n_embd", "n_head", "n_inner", "n_positions", "activation_function", "layer_norm_epsilon",
     "scale_attn_by_inverse_layer_idx", "reorder_and_upcast_attn",
+    "rotary_dim",
 )
 
 VALUE_LINE = re.compile(r"^\((?P<name>\w+)\)(?: -> (?P<layout>\w+) \[(?P<dims>[^\]]*)\])?: (?P<desc>.*)$")

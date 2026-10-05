@@ -407,3 +407,43 @@ def test_get_topk_closest_tokens_returns_k_per_position(gpt2):
     for row in top:
         assert len(row) == k
         assert list(row.values()) == sorted(row.values(), reverse=True)
+
+
+NEOX = "hf-internal-testing/tiny-random-GPTNeoXForCausalLM"
+
+
+def _neox_config(**overrides):
+    from transformers import AutoConfig
+
+    config = AutoConfig.from_pretrained(NEOX)
+    for key, value in overrides.items():
+        setattr(config, key, value)
+    return config
+
+
+def test_family_is_read_from_a_config_argument():
+    config = _neox_config()
+    assert StandardizedTransformer._read_config(NEOX, {"config": config}) is config
+    # A path names the config to read in place of the repo's.
+    read = StandardizedTransformer._read_config("not/a-repo", {"config": NEOX})
+    assert read.model_type == "gpt_neox"
+
+
+@torch.no_grad()
+def test_config_argument_builds_the_model_it_describes():
+    """A `config=` override of a block flag changes the forward, as the keyword does."""
+    parallel = _neox_config().use_parallel_residual
+
+    def layer_output(**kwargs):
+        model = StandardizedTransformer(NEOX, dispatch=True, **kwargs)
+        assert model.family.__name__ == "nnterp.families.gpt_neox"
+        assert model.config.use_parallel_residual is parallel ^ bool(kwargs)
+        with model.trace("The Eiffel Tower is in"):
+            out = model.layers[0].layer_output.save()
+        return out
+
+    plain = layer_output()
+    by_config = layer_output(config=_neox_config(use_parallel_residual=not parallel))
+    by_keyword = layer_output(use_parallel_residual=not parallel)
+    assert not torch.allclose(plain, by_config)
+    assert torch.equal(by_config, by_keyword)

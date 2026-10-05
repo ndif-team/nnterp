@@ -48,7 +48,9 @@ Every argument other than `rename`, `envoys` and `tokenizer_kwargs` goes straigh
 
 The constructor reads the checkpoint's config before any model is built, with
 `AutoConfig.from_pretrained(repo_id, revision=..., trust_remote_code=...)`, so those two
-arguments flow into the config read as well as the load. The config's `model_type` is the
+arguments flow into the config read as well as the load. A `config=` argument (a config
+object or a path to one) is read in place of the checkpoint's and is also the config the
+model is built from. The config's `model_type` is the
 family: `nnterp.families.<model_type>` is imported on first use (`gpt2.py` for `gpt2`,
 `gemma3_text.py` for `gemma3_text`), and that module's `RENAME` and `ENVOYS` become
 nnsight's `rename=` and `envoys=`. A multimodal config nests the language model's config

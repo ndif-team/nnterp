@@ -144,6 +144,7 @@ The entry states facts about a family, and each one has a source. Before writing
    | GPT-NeoX / Pythia | hash of `gpt_neox` | gpt_neox |
    | EXAONE | hash of `exaone4` (46) | exaone4 |
    | GPT-J (CodeGen) | hash of `gptj` (222) | gptj |
+   | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (`granite` hashes to 156, beside Gemma) |
 
    `python -c "import sys; sys.path.insert(0, 'encyclopedia'); import palette; print(palette.hue_of('olmo2'))"`
    prints a hashed hue.

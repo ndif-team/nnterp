@@ -70,6 +70,7 @@ NAME_ROLES = {
 QUIRKS: dict[str, tuple[str, str]] = {
     "tuple-blocks": ("Tuple blocks", "The block returns (hidden_states, ...); layer_output is the first element."),
     "sandwich-norms": ("Sandwich norms", "Each sublayer is normed before and after; the stream receives the post-norm's output."),
+    "post-norms": ("Post-norms only", "Each sublayer is normed after, not before: it reads the raw stream, and the stream receives the post-norm's output."),
     "residual-inside-module": ("Residual inside the module", "A sublayer adds the residual itself; the contribution is the tensor before the add."),
     "scaled-residual-adds": ("Scaled residual adds", "A multiplier sits between a sublayer and the stream, or scales the whole block."),
     "hyper-connections": ("Hyper-connections", "Several parallel residual streams; layer_output is [batch, seq, streams, hidden]."),
@@ -81,6 +82,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "borrowed-kv": ("Borrowed keys and values", "Later blocks attend with an earlier block's keys and values."),
     "gated-query": ("Gated query", "q_proj produces the query and a gate side by side."),
     "qkv-bias": ("Biased q, k, v", "The query, key and value projections add a bias, so each is W·x + b, not W·x."),
+    "qk-norm": ("Query/key norms", "q_norm and k_norm normalize the projected queries and keys inside the attention; attention_queries and attention_keys are read after them."),
     "parallel-blocks": ("Parallel block", "One norm feeds attention and MLP; the block sums x + attn + mlp."),
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
     "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),

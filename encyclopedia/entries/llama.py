@@ -133,9 +133,7 @@ identity, and nowhere else. A key or query moved to another position keeps the r
 position it was read at. The cosines and sines are computed once per forward by the native
 `model.model.rotary_emb` and passed to every block; Llama-3.1, 3.2 and 3.3 use `rope_type`
 `llama3` (`rope_theta` 500000, rescaled frequencies), Llama-2 the plain rotary with
-`rope_theta` 10000. To read both sides in one trace, take the projection through the attention's
-`source`: on the first trace of a freshly loaded model, reading `q_proj.output` before an
-interior value raises `OutOfOrderError`.
+`rope_theta` 10000. Both sides can be read in one trace:
 
 ```python
 attn = model.layers[5].self_attn

@@ -132,9 +132,8 @@ in three blocks: the first `hidden_size` columns are not the queries. Split it b
 grouping.
 
 `attention_queries` and `attention_keys` are read after the rotary embedding,
-`attention_values` as split. For the queries and keys before rotary, read the projection in the
-same trace through the attention's source: reading `self_attn.query_key_value.output` together
-with any interior value raises `OutOfOrderError`, in either order.
+`attention_values` as split. For the queries and keys before the rotary, read the projection's
+output in the same trace:
 
 ```python
 with model.trace(prompt):

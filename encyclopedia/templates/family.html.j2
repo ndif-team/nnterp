@@ -113,10 +113,12 @@
   <div class="topbar"><h2 class="disp-section"><em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
   <div class="grid-notes">
     <div class="prose">{{ notes }}</div>
+    {% if quirks %}
     <aside class="quirk-list">
       <p class="micro">quirks</p>
       {% for q in quirks %}<div class="quirk"><span class="chip">{{ q.label }}</span><p class="body-md">{{ q.blurb }}</p></div>{% endfor %}
     </aside>
+    {% endif %}
   </div>
 </section>
 

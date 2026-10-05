@@ -113,7 +113,9 @@ The entry states facts about a family, and each one has a source. Before writing
        of `detail` as the slider moves, for blocks that differ only in a setting; the same length
        limit applies.
    - `identity` (and `identity_note`): the contribution identity, when it is not the plain sum
-     `layers[i].input + <contributions> == layer_output` (Gemma-4, Granite, DeepSeek-V4).
+     `layers[i].input + <contributions> == layer_output` (Gemma-4, DeepSeek-V4; Granite's scaled
+     contributions still sum exactly). `identity_note` may be given on its own, for a sum that is
+     exact but worth a word.
 
    The build checks every host, contribution and interior value against the family and fails on a
    name the family does not have.

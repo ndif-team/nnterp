@@ -89,7 +89,9 @@ The entry states facts about a family, and each one has a source. Before writing
    **`CHECKPOINTS`**: the family's public checkpoints as Hub ids, the reference among them; they are
    linked from the page and searchable on the index. **`PINNED`**: the tiny checkpoint in
    `tests/families/test_<model_type>.py` (its `REPO`).
-4. **`VLLM`**: whether the family also runs on `StandardizedVLLM`.
+4. **`VLLM`**: whether the family has a module under `nnterp/families/vllm/` on the `0.8-refactor-vllm`
+   branch (`git show origin/0.8-refactor-vllm:nnterp/families/vllm/<model_type>.py`); this branch has no
+   `StandardizedVLLM`, so the flag cannot be run here.
 5. **`BLOCK`**: what the diagram draws.
    - `topology`: `"sequential"` (each sublayer reads the stream after the one before it) or
      `"parallel"` (one read feeds every sublayer and the block sums them).
@@ -99,13 +101,15 @@ The entry states facts about a family, and each one has a source. Before writing
      - `contribution`: the standard value this sublayer adds to the stream (`attention_output`,
        `mlp_output`);
      - `pre_norm`, `post_norm`: the native names of the norms before and after it on the block, each
-       only if the block has one; `pre_norm_note` / `post_norm_note`: a sentence shown when that norm
+       only if the block has one. In a parallel block whose one norm feeds both sublayers (GPT-J,
+       CodeGen), give both sublayers the same `pre_norm`: the diagram draws it in both rows under one
+       hover node; add a `pre_norm_note` saying both read the same tensor; `pre_norm_note` / `post_norm_note`: a sentence shown when that norm
        is hovered, for a trap in its name or place;
      - `interior`: the standard values read inside the module, drawn as chips, in forward order;
      - `detail`: one line under the label (head counts, widths, activation), a format string over the
        sizes (`{num_heads}`, `{hidden_size}`, ...) and the top-level config keys in
-       `build.CONFIG_KEYS` (append a key there if the family needs one; a nested value such as
-       `rope_parameters.partial_rotary_factor` cannot be formatted, so it goes in the notes), so the
+       `build.CONFIG_KEYS` (append a key there if the family needs one; only top-level keys resolve,
+       so a value that lives only under `rope_parameters` goes in the notes), so the
        numbers come from the reference config and are not typed. The box shows about 30 characters
        beside the host's name when the sublayer has interior chips (the rest is ellipsised; the hover
        card has the whole line), so keep it short: `"12 heads × 64, fused c_attn"`;
@@ -148,7 +152,6 @@ The entry states facts about a family, and each one has a source. Before writing
    | GPT-J and CodeGen | hash of `gptj` (222) | gptj (codegen 234) |
    | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (`granite` hashes to 156, beside Gemma) |
    | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron |
-   | GPT-J and CodeGen | hash of `gptj` (222) | gptj (codegen 234) |
 
    `python -c "import sys; sys.path.insert(0, 'encyclopedia'); import palette; print(palette.hue_of('olmo2'))"`
    prints a hashed hue.
@@ -207,13 +210,13 @@ Rules:
 
 ```
 PYTHONPATH=. HF_HUB_OFFLINE=1 python encyclopedia/build.py <model_type>
-HF_HUB_OFFLINE=1 pytest tests/test_encyclopedia.py
+PYTHONPATH=. HF_HUB_OFFLINE=1 pytest tests/test_encyclopedia.py
 ```
 
 The test builds every entry's page from its pinned checkpoint and checks the schema against the
 family. Then look at the page: a headless Chromium renders it to an image
-(`chrome --headless=new --no-sandbox --hide-scrollbars --window-size=1360,5600 --screenshot=page.png file://.../site/<model_type>.html`;
-a 500px-wide window for the phone layout). Check that
+(`chrome --headless=new --no-sandbox --hide-scrollbars --window-size=1360,9000 --screenshot=page.png file://.../site/<model_type>.html`;
+a 500px-wide, 14000px-tall window for the phone layout; a page with long notes needs the height). Check that
 
 - the diagram reads in the forward's order, every norm the block has is drawn, and each contribution
   edge leaves from the right place (after the post-norm when there is one);

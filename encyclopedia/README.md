@@ -102,10 +102,15 @@ The entry states facts about a family, and each one has a source. Before writing
        is hovered, for a trap in its name or place;
      - `interior`: the standard values read inside the module, drawn as chips, in forward order;
      - `detail`: one line under the label (head counts, widths, activation), a format string over the
-       sizes (`{num_heads}`, `{hidden_size}`, ...) and the config keys in `build.CONFIG_KEYS`, so the
-       numbers come from the reference config and are not typed;
+       sizes (`{num_heads}`, `{hidden_size}`, ...) and the top-level config keys in
+       `build.CONFIG_KEYS` (append a key there if the family needs one; a nested value such as
+       `rope_parameters.partial_rotary_factor` cannot be formatted, so it goes in the notes), so the
+       numbers come from the reference config and are not typed. The box shows about 30 characters
+       beside the host's name when the sublayer has interior chips (the rest is ellipsised; the hover
+       card has the whole line), so keep it short: `"12 heads × 64, fused c_attn"`;
      - `variants`: `{layer_type: detail}` keyed on the values of `config.layer_types`, shown instead
-       of `detail` as the slider moves, for blocks that differ only in a setting.
+       of `detail` as the slider moves, for blocks that differ only in a setting; the same length
+       limit applies.
    - `identity` (and `identity_note`): the contribution identity, when it is not the plain sum
      `layers[i].input + <contributions> == layer_output` (Gemma-4, Granite, DeepSeek-V4).
 
@@ -114,16 +119,31 @@ The entry states facts about a family, and each one has a source. Before writing
 6. **`STRIP`**: sentences for the model-level strip, keyed `embed`, `layers`, `norm`, `head`,
    `logits`; each is shown when that node is hovered. Give one wherever the family does something
    there: a scaled embedding, tied weights, a softcap, a logit scale, a position embedding added after
-   `embed_tokens`.
+   `embed_tokens`. The `logits` node's own label (`softcapped`, `scaled`, `the output`) follows the
+   quirk slugs, not the note.
 7. **`QUIRKS`**: slugs from `build.QUIRKS`, in the order a reader should meet them. If the family has
    a property none covers, add a slug there with a label and one sentence, worded so it holds for
-   every family that will carry it.
-8. **`PALETTE`**: `{"hue": degrees}` is the base hue the five colours are generated from. Give a hue
-   only to place the family beside its kin: within about 15° of a related family's hue (Gemma 2 is
-   145, so Gemma 3 sits near it). Otherwise leave `PALETTE` out and the hue is a hash of the
-   `model_type`. `"paper"` tints the page and is rarely needed. `"colors"` (five hex fills in role
-   order: attention, MLP, norms, stream, mark) and `"deeps"` bypass generation; a palette that fails
-   the contrast or distinctness checks fails the build.
+   every family that will carry it (check the list first: another entry may have added it). A family
+   with nothing that departs from the plain block has `QUIRKS = []`.
+8. **`PALETTE`**: `{"hue": degrees}` is the base hue the five colours are generated from. Related
+   families sit together: the first entry of a lineage sets a hue and adds it to the table below, and
+   its kin take one within about 15° of it (not equal). A family with no kin leaves `PALETTE` out and
+   gets a hash of its `model_type` (also listed below once an entry exists, so later kin can find it).
+   `"paper"` tints the page and is rarely needed. `"colors"` (five hex fills in role order: attention,
+   MLP, norms, stream, mark) and `"deeps"` bypass generation; a palette that fails the contrast or
+   distinctness checks fails the build.
+
+   | lineage | hue | set by |
+   |---|---|---|
+   | Gemma | 145 | gemma2 (gemma3_text 157) |
+   | Qwen | 285 | qwen2 (qwen3 hashes to 288; qwen2_moe hashes to 243, so set it near 285) |
+   | Llama and its relatives (Mistral, SmolLM, ...) | hash of `llama` | llama |
+   | OLMo (olmo3, olmo_hybrid, flex_olmo) | hash of `olmo2` | olmo2 |
+   | GPT-2 | hash of `gpt2` | gpt2 |
+   | GPT-NeoX / Pythia | hash of `gpt_neox` | gpt_neox |
+
+   `python -c "import sys; sys.path.insert(0, 'encyclopedia'); import palette; print(palette.hue_of('olmo2'))"`
+   prints a hashed hue.
 9. **`NOTES`**: markdown, the part only a person can write. See below.
 
 ### The notes
@@ -153,16 +173,27 @@ Rules:
 
 - Present tense, factual, this family's own facts. No history, no comparisons of quality, no advice
   that holds for every family (that is in `docs/`).
-- Every claim is checked against the family module, its test file, the transformers source or a run
-  on the pinned checkpoint. A number is one the reference config gives; say which checkpoint it is
-  for when sizes differ (`48.0 on 2B`).
+- Every claim is checked against the family module, its test file, the transformers source or a run.
+  Shapes, identities and read orders can be checked on the pinned tiny checkpoint; anything about
+  real values (norm scales, sinks, what a scaling does, SAE reconstruction) is checked on the
+  reference checkpoint or another real one whose weights are cached, because a tiny random
+  checkpoint can contradict a true claim (its activations sit below a norm's `eps`, its random norms
+  coincide). A number is one the reference config or a run gives; say which checkpoint it is for
+  when sizes differ (`48.0 on 2B`).
+- A behaviour that holds on every family is not a family fact: generic nnterp advice is in `docs/`,
+  and an nnsight bug is reported, not written into the notes as a trap (a read that fails only on the
+  first trace of a fresh model is one).
 - `##` headings, one per topic, each a statement where possible ("The contributions are the
   post-norms' outputs"). Paragraphs of two to five sentences.
 - Snippets are short and use the standard names; they are highlighted at build time and each nnterp
   name takes its role's colour, so write `model.layers[i].self_attn.attention_output`, not an alias
   of your own. They are illustrative and are not executed, so they must be right as written: run
-  each once against the pinned checkpoint before committing.
-- Inline code for every name, path and config key.
+  each once against the reference checkpoint, and against the pinned one where it can (a pinned
+  checkpoint has two or a few blocks, so index `layers[1]`, not `layers[8]`). Inside one trace,
+  reads come in forward order: `mlp.output` before `mlp_output` on a post-norm family,
+  `lm_head.output` before `logits`; one edit per trace when the text contrasts two edits.
+- Inline code for every name, path and config key. Lists rather than Markdown tables: a table
+  overflows the page at phone width.
 
 ### Verify
 

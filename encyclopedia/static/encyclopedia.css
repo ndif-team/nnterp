@@ -11,9 +11,9 @@
   --paper: #F1E6CB;
   --paper-dk: #E5D6B0;
   --ink: #3A2516;
+  --warn: #C8711A;     /* the warning mark: a status, fixed on every family */
   --c1: #67B5E1; --c2: #DC9A6C; --c3: #AF9EE4; --c4: #DD90AE; --c5: #82BC83;
   --c1-deep: #136B94; --c2-deep: #8E5224; --c3-deep: #685796; --c4-deep: #8F4966; --c5-deep: #3B723E;
-  --orange: #F09131;   /* the warning mark: a status, fixed on every family */
   --line: var(--ink);
   --hair: rgba(58, 37, 22, 0.22);
   --tint: rgba(58, 37, 22, 0.08);
@@ -154,8 +154,8 @@ button.chip.active, button.chip.active:hover { background: var(--mark); color: v
 .fold .ledger { margin-top: 0; }
 .fold .ledger-head { border-top: 0; }
 .specs-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); column-gap: 32px; row-gap: 4px; }
-/* The warning mark: an orange tag like the chips, and its condition in a popup in the same paper-and-ink. */
-.warn { position: relative; display: inline-grid; place-items: center; width: 18px; height: 18px; margin-right: 8px; background: var(--orange); color: var(--ink); font-size: 12px; line-height: 1; cursor: help; flex: none; }
+/* The warning mark: the glyph alone, in amber, and its condition in a popup in the same paper-and-ink. */
+.warn { position: relative; display: inline-block; margin-right: 7px; color: var(--warn); font-size: 19px; font-weight: 700; line-height: 1; cursor: help; flex: none; }
 .warn::after { content: attr(data-tip); position: absolute; left: 0; top: calc(100% + 8px); z-index: 5; width: min(360px, 78vw); padding: 10px 12px; background: var(--paper); color: var(--ink); border: 1.5px solid var(--line); box-shadow: 6px 6px 0 var(--ink); font-family: var(--sans); font-size: 13px; font-weight: 400; line-height: 1.4; letter-spacing: 0; text-transform: none; white-space: normal; opacity: 0; pointer-events: none; transition: opacity 0.12s; }
 .warn[data-tip]:hover::after, .warn[data-tip]:focus-visible::after { opacity: 1; }
 .warn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
@@ -202,7 +202,7 @@ pre .rn { font-weight: 500; }
 /* every part of the diagram sits in a group with a role class: boxes take the role's fill
    and its deep as the stroke, edges and the stream the deep; hovered, a box turns deep and
    its labels paper */
-#block-svg .box { fill: var(--role, var(--paper)); stroke: var(--role-deep, var(--ink)); stroke-width: 1.5; }
+#block-svg .box { fill: var(--paper); stroke: var(--role-deep, var(--ink)); stroke-width: 1.5; }
 #block-svg .box-sub { stroke-width: 2; }
 #block-svg .stream { stroke: var(--stream-deep); stroke-width: 4; fill: none; }
 #block-svg .edge { stroke: var(--ink); stroke-width: 1.5; fill: none; }
@@ -217,11 +217,10 @@ pre .rn { font-weight: 500; }
 #block-svg .chip-t { font-family: var(--mono); font-size: 11px; fill: var(--paper); text-anchor: middle; }
 #block-svg .hit { fill: transparent; stroke: transparent; cursor: help; }
 #block-svg [data-node] { cursor: help; }
-#block-svg .hot .box { fill: var(--role-deep); }
+#block-svg .hot .box { fill: var(--role, var(--tint)); }
 #block-svg .hot .plus { fill: var(--stream); }
-#block-svg .hot .label, #block-svg .hot .label-sm, #block-svg .hot .label-dim { fill: var(--paper); opacity: 1; }
+#block-svg .hot .label-dim { opacity: 1; }
 #block-svg .hot .label-role { fill: var(--role-deep); }
-#block-svg .hot .chip-r { fill: var(--paper); } #block-svg .hot .chip-t { fill: var(--ink); }
 #block-svg .hot.chipnode .chip-r { fill: var(--role-deep); } #block-svg .hot.chipnode .chip-t { fill: var(--paper); }
 #block-svg .hot .edge-contrib, #block-svg .hot .stream { stroke-width: 6; }
 .node-card { position: sticky; top: 16px; }

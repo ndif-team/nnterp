@@ -80,7 +80,9 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "mixture-of-experts": ("Mixture of experts", "layers[i].mlp is a Moe: router logits, expert weights and indices, expert outputs."),
     "borrowed-kv": ("Borrowed keys and values", "Later blocks attend with an earlier block's keys and values."),
     "gated-query": ("Gated query", "q_proj produces the query and a gate side by side."),
-    "parallel-blocks": ("Parallel block", "One norm feeds attention and MLP; the block sums x + attn + mlp."),
+    "parallel-blocks": ("Parallel block", "Attention and MLP both read the block input, through one norm or two; the block sums x + attn + mlp."),
+    "fused-qkv": ("Fused QKV", "One linear projects queries, keys and values together; splitting its weight or output follows the family's layout."),
+    "partial-rotary": ("Partial rotary", "Rotary embeddings turn only a leading fraction of each query and key head; the other dimensions carry no position."),
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
     "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),
     "mamba2": ("State space (Mamba-2)", "The mixer is an SSD state-space block with a per-chunk state."),
@@ -99,6 +101,7 @@ CONFIG_KEYS = (
     "num_key_value_heads", "head_dim", "vocab_size", "max_position_embeddings", "sliding_window", "hidden_act",
     "hidden_activation", "rms_norm_eps", "layer_norm_eps", "rope_theta", "query_pre_attn_scalar",
     "attn_logit_softcapping", "final_logit_softcapping", "tie_word_embeddings", "dtype",
+    "use_parallel_residual",
 )
 
 VALUE_LINE = re.compile(r"^\((?P<name>\w+)\)(?: -> (?P<layout>\w+) \[(?P<dims>[^\]]*)\])?: (?P<desc>.*)$")

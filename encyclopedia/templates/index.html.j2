@@ -29,7 +29,7 @@
       <div class="topstrip"></div>
       <div class="card-body">
         <div class="petals petals-sm" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
-        <h3 class="card-name">{{ p.title }}</h3>
+        <h3 class="card-name">{% for line in p.title.split(" / ") %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</h3>
         <p class="body-md">{{ p.subtitle }}</p>
         <div class="dashed"></div>
         <div class="specs"><div class="spec"><span>model_type</span><span>{{ p.model_type }}</span></div><div class="spec"><span>blocks</span><span>{{ p.num_layers }}</span></div><div class="spec"><span>vLLM</span><span>{{ 'yes' if p.vllm else 'no' }}</span></div></div>

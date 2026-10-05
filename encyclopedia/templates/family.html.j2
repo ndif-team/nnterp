@@ -8,7 +8,7 @@
 <section class="hero frame">
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">{{ model_type }}</span> · <span class="mono">{{ architecture }}</span></p>
-    <h1 class="disp-title">{{ title }}</h1>
+    <h1 class="disp-title">{% for line in title.split(" / ") %}{{ line }}{% if not loop.last %}<br>{% endif %}{% endfor %}</h1>
     <p class="subtitle">{{ subtitle }}</p>
     <div class="chips">
       {% for q in quirks %}<a class="chip" href="#notes" title="{{ q.blurb }}">{{ q.label }}</a>{% endfor %}

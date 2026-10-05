@@ -81,7 +81,8 @@ The entry states facts about a family, and each one has a source. Before writing
 ### The fields
 
 1. **`MODEL_TYPE`**: the family's `model_type`, which is the entry's file name.
-2. **`TITLE`**, **`SUBTITLE`**: the family's public name, and one sentence saying how this family
+2. **`TITLE`**, **`SUBTITLE`**: the family's public name (several model lines separated by ` / `,
+   `"Qwen2 / Qwen2.5"`, are shown stacked, one per line), and one sentence saying how this family
    differs from a plain Llama block: what a person must know first. Present tense, no adjectives.
 3. **`REFERENCE`**: one public checkpoint whose config the page's sizes, config keys and `support()`
    are read from. Choose the one most used for interpretability (usually the smallest base model).

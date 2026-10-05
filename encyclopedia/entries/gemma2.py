@@ -105,6 +105,8 @@ actually adds:
 ```python
 with model.trace(prompt):
     model.layers[5].mlp.mlp_output[:] *= 0.5          # halves what the block adds
+
+with model.trace(prompt):
     model.layers[5].mlp.output[:] *= 0.5              # a no-op: the post-norm rescales it back
 ```
 

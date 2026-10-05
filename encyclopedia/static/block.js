@@ -9,6 +9,16 @@
   var card = document.getElementById('node-card');
   var NS = 'http://www.w3.org/2000/svg';
 
+  // A detail line longer than its room ends in an ellipsis; the node card carries it whole.
+  function fit(node, str) {
+    var room = parseFloat(node.getAttribute('data-room'));
+    node.textContent = str;
+    while (str.length > 1 && node.getComputedTextLength() > room) {
+      str = str.slice(0, -1);
+      node.textContent = str.replace(/[\s,;:]+$/, '') + '…';
+    }
+  }
+
   // -- geometry ---------------------------------------------------------------------
   var W = 1040, SX = 150, TOP = 80, ROW = 220, RET = 990;
   var PRE = { x: 220, w: 190, h: 48 }, SUB = { x: 440, w: 300, h: 104 }, POST = { x: 770, w: 190, h: 48 };
@@ -86,6 +96,8 @@
       ? text(gs, SUB.x + SUB.w - 12, top + 46, '', 'label-dim', 'end')
       : text(gs, SUB.x + 14, top + 78, '', 'label-dim');
     detail.setAttribute('data-variant-for', sub.host);
+    // The room the line has: beside the host's name when chips take the rows below, else the box's width.
+    detail.setAttribute('data-room', hasChips ? SUB.w - 40 - sub.host.length * 6.8 : SUB.w - 28);
     if (hasChips) {
       var cw = 86, ch = 18, gap = 8, x0 = SUB.x + 14;
       sub.interior.forEach(function (v, j) {
@@ -189,7 +201,7 @@
     subs.forEach(function (sub) {
       var d = svg.querySelector('[data-variant-for="' + sub.host + '"]');
       if (!d) return;
-      d.textContent = (t && sub.variants[t]) ? sub.variants[t] : sub.detail;
+      fit(d, (t && sub.variants[t]) ? sub.variants[t] : sub.detail);
     });
     if (pinned) show(pinned);
   }

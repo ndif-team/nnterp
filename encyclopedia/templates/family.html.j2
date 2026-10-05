@@ -35,7 +35,7 @@
 <section class="frame section" id="block">
   <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
   <p class="lead">One of {{ num_layers }} identical blocks. Hover any part for the nnterp name that reads it; click to pin.
-  {% if layer_types %}The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.{% endif %}</p>
+  {% if layer_types and layer_types|unique|list|length > 1 %}The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.{% endif %}</p>
 
   <div class="strip" id="strip">
     <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
@@ -46,7 +46,7 @@
     <span class="strip-arrow">→</span>
     <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>unembedding</small></div>
     <span class="strip-arrow">→</span>
-    <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>{% if 'logits' in strip.notes %}softcapped{% else %}the output{% endif %}</small></div>
+    <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>{% set slugs = quirks|map(attribute='slug')|list %}{% if 'softcapped-logits' in slugs %}softcapped{% elif 'scaled-logits' in slugs %}scaled{% else %}the output{% endif %}</small></div>
   </div>
 
   <div class="viz">

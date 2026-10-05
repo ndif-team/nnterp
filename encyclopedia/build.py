@@ -485,6 +485,7 @@ def page_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     other = [row for row in info["support"] if row["condition"] and row["condition"]["kind"] == "other"]
     roles = name_roles(entry, info)
     return {
+        **info,
         "model_type": entry.MODEL_TYPE,
         "title": entry.TITLE,
         "subtitle": entry.SUBTITLE,
@@ -511,7 +512,6 @@ def page_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
         "test_url": f"{GITHUB}/tests/families/test_{entry.MODEL_TYPE}.py",
         "families_url": f"{GITHUB}/docs/reference/families.md",
         "built": dt.date.today().isoformat(),
-        **info,
     }
 
 

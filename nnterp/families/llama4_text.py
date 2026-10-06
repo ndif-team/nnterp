@@ -46,7 +46,7 @@ What differs from Llama, inside the attention and the feed-forward:
   alternates dense and mixture blocks.
 
 On the wrapper the vision tower ``vision_model`` is ``vision`` (a `Vision`)
-and ``multi_modal_projector``, whose output is what the wrapper scatters, is
+and ``multi_modal_projector``, the last module before the scatter, is
 ``projector``. The tower is a ViT over each image tile: the patch embedding
 (``patch_embedding``, an unfold and a linear) is ``vision.patch_embed``, the
 blocks (``model.layers``, pre-norm, on the shared attention interface with a

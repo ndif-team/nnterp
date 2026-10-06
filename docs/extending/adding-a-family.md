@@ -232,7 +232,9 @@ add its root and projector keys from the model root (`"model.vision_tower": "vis
 types in `ENVOYS`, and key `ImageScatter` on the wrapper's model type (`LlavaModel:
 ImageScatter`), whose forward writes the image features into the token embeddings: that is
 where `vision.image_features` is read. A wrapper that writes them in through a helper keys a
-subclass naming the call and its argument (`llama.py`'s `InputsMerger`). Test it with a
+subclass naming the call and its argument (`llama.py`'s `InputsMerger`); a wrapper that
+scatters in its own top-level forward has no inner model to key, so the family sets
+`ROOT_SCATTER` to the operation's name (`llama4_text.py`). Test it with a
 `VisionSuite` subclass. `gemma3_text.py` and `llama.py` are the worked examples;
 [../developing/vision-design.md](../developing/vision-design.md) has the rules.
 

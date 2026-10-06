@@ -3,8 +3,8 @@
 A multimodal wrapper is a text model plus a vision tower, a projector, and a
 step that scatters the projected features into the text stream at the image
 tokens. The text model keeps the standard names it has everywhere; the tower
-answers to ``model.vision``, its blocks to ``vision.layers[i]``, and the module
-whose output is scattered to ``model.projector``. The family names them in its
+answers to ``model.vision``, its blocks to ``vision.layers[i]``, and the last
+module before the scatter to ``model.projector``. The family names them in its
 ``RENAME`` (keys that resolve only on the wrapper's tree) and keys these envoys
 on the tower's module types in its ``ENVOYS``.
 

@@ -11,8 +11,8 @@ text-generation task builds the wrapper, whose text stack sits at
 ``RENAME`` carries both spellings and whichever the tree has binds. On the
 wrapper the SigLIP tower ``model.vision_tower`` is ``vision`` (a `Vision`; its
 ``post_layernorm`` over the patches is ``vision.norm``) and the pooling
-projector ``model.multi_modal_projector``, whose output is what the wrapper
-scatters, is ``projector``; ``image_features`` is read at the scatter in
+projector ``model.multi_modal_projector``, the last module before the scatter,
+is ``projector``; ``image_features`` is read at the scatter in
 ``Gemma3Model``'s forward (`ImageScatter`). Loaded with ``task="image-text-to-text"`` (the
 processor), the tower serves ``vision.image_token_mask`` and ``vision.image_features``. Only
 ``Gemma3ForCausalLM`` softcaps its logits where the config sets

@@ -114,15 +114,15 @@ class StandardizedTransformer(TransformersModel):
     On an image-text-to-text checkpoint loaded with ``task="image-text-to-text"``
     the text names keep their meaning (the language model's), the vision tower
     is ``vision`` (a `Vision`, with its own blocks, sizes and values, among them
-    ``vision.image_token_mask`` and ``vision.image_features``) and the module
-    whose output is scattered into the text stream is ``projector``.
+    ``vision.image_token_mask`` and ``vision.image_features``) and the last
+    module before the scatter into the text stream is ``projector``.
 
     Attributes:
         family: The toolkit module the checkpoint resolved to.
         layers: The decoder blocks, each a `Layer` (the family's subclass).
         embed_tokens, norm, lm_head: The embedding, the final norm, the unembedding.
         vision: The vision tower, a `Vision`, on a multimodal wrapper whose family names it.
-        projector: The module whose output the wrapper scatters into the text stream at the image tokens.
+        projector: The last module before the wrapper scatters the image features into the text stream.
 
     Raises:
         UnsupportedFamily: when no family covers the checkpoint's ``model_type``.

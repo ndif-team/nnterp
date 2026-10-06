@@ -63,7 +63,7 @@ The block, in order::
 reads it there.
 
 On the wrapper the vision tower ``model.vision_tower`` is ``vision`` (a `Vision`)
-and ``model.embed_vision``, whose output is what the wrapper scatters, is
+and ``model.embed_vision``, the last module before the scatter, is
 ``projector``. The tower is a ViT over each image's patches: the patch embedder's
 linear over the processor's flattened patches (``patch_embedder.input_proj``) is
 ``vision.patch_embed``, so ``vision.patch_embeddings`` is before the 2D position

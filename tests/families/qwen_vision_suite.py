@@ -13,8 +13,7 @@ import numpy as np
 import pytest
 import torch
 from PIL import Image
-from suite import INTERIOR
-from vision_suite import BLOCK_VALUES, IMAGE, TOWER_VALUES, VisionSuite, image_prompt
+from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.components import (
@@ -22,18 +21,12 @@ from nnterp.components import (
 )
 
 #: The tower's pattern, unavailable on every block: the attention runs one call per image.
-PER_IMAGE_VALUES = {"self_attn.attention_scores", "self_attn.attention_probabilities"}
+PER_IMAGE_VALUES = {"self_attn.attention_scores": PER_IMAGE, "self_attn.attention_probabilities": PER_IMAGE}
 #: What a `FamilySuite` on a wrapper loaded with its processor expects of the tower's rows.
-PER_IMAGE_UNAVAILABLE = {f"vision.{name}": "one interface call per image" for name in PER_IMAGE_VALUES}
+PER_IMAGE_UNAVAILABLE = {f"vision.{name}": reason for name, reason in PER_IMAGE_VALUES.items()}
 
 #: A second image, larger and not square: more patches than `IMAGE`, and several attention windows on Qwen2.5-VL.
 WIDE = Image.fromarray((np.random.RandomState(1).rand(256, 320, 3) * 255).astype("uint8"))
-
-
-def images_prompt(model, count):
-    """A prompt with ``count`` image placeholders."""
-    content = [{"type": "image"} for _ in range(count)] + [{"type": "text", "text": "What is in these images?"}]
-    return model.processor.apply_chat_template([{"role": "user", "content": content}], add_generation_prompt=True, tokenize=False)
 
 
 class QwenVisionSuite(VisionSuite):
@@ -53,10 +46,11 @@ class QwenVisionSuite(VisionSuite):
     TEXT_REPO = None
     #: Whether the tower holds its patches in window order (Qwen2.5-VL), so the merger's output is not in scatter order.
     WINDOWED = False
+    EXPECTED_VISION_UNAVAILABLE = PER_IMAGE_VALUES
 
-    def patches_of(self, model, *images):
+    def patches_of(self, model, images):
         """How many patches the processor cuts ``images`` into: ``image_grid_thw``'s products, summed."""
-        grid = model.processor(text=images_prompt(model, len(images)), images=list(images), return_tensors="pt")["image_grid_thw"]
+        grid = model.processor(text=image_prompt(model, images=len(images)), images=images, return_tensors="pt")["image_grid_thw"]
         return int(grid.prod(-1).sum())
 
     # -- names and sizes --------------------------------------------------------------
@@ -66,23 +60,14 @@ class QwenVisionSuite(VisionSuite):
         assert all(isinstance(layer.self_attn, QwenVisionAttention) for layer in model.vision.layers)
         assert model.projector._module is model.vision._module.merger  # the projector is inside the tower
 
-    def test_sizes_are_the_towers(self, model):
+    def test_the_qwen_sizes(self, model):
+        """What only the Qwen ViT has: the merge block, the window, no fixed resolution."""
         vision, config = model.vision, model.config.vision_config
-        width = getattr(config, "embed_dim", None) or config.hidden_size
-        assert vision.num_layers == len(vision.layers) == config.depth
-        assert (vision.hidden_size, vision.num_heads, vision.patch_size, vision.spatial_merge_size) == (
-            width, config.num_heads, config.patch_size, config.spatial_merge_size)
+        assert vision.num_layers == config.depth
+        assert vision.spatial_merge_size == config.spatial_merge_size
         assert vision.window_size == getattr(config, "window_size", None)
         with pytest.raises(Unavailable, match="any resolution"):
             vision.image_size
-        assert vision.head_dim * vision.num_heads == vision.hidden_size
-        attn = vision.layers[0].self_attn
-        assert (attn.num_heads, attn.head_dim) == (vision.num_heads, vision.head_dim)
-        assert vision.layers[0].mlp.intermediate_size == vision.intermediate_size
-        assert vision.layers[0].mlp._module(torch.zeros(1, width, dtype=model.dtype, device=model.device)).shape[-1] == width
-        text = model.config.get_text_config()
-        assert model.num_layers == len(model.layers) == text.num_hidden_layers
-        assert model.hidden_size == text.hidden_size
 
     # -- availability ------------------------------------------------------------------
 
@@ -91,20 +76,10 @@ class QwenVisionSuite(VisionSuite):
             pytest.skip("transformers has no text-only class for this config: every checkpoint loads as the wrapper")
         super().test_a_text_only_checkpoint_has_no_vision_host()
 
-    def test_support_lists_the_tower_values(self, model):
-        vision = model.vision.support()
-        assert set(vision) == {*TOWER_VALUES, *BLOCK_VALUES}
-        assert all(reason is None for name, reason in vision.items() if name not in PER_IMAGE_VALUES), vision
-        for name in PER_IMAGE_VALUES:
-            assert set(vision[name]) == set(range(model.vision.num_layers)), name
-            assert all(reason == PER_IMAGE for reason in vision[name].values()), name
-        support = model.support()
-        assert {name.removeprefix("vision."): reason for name, reason in support.items() if name.startswith("vision.")} == vision
-
     def test_the_pattern_is_unavailable_with_the_per_image_reason(self, model):
         attn = model.vision.layers[0].self_attn
         for name in PER_IMAGE_VALUES:
-            with pytest.raises(Unavailable, match="one interface call per image.*image_grid_thw"):
+            with pytest.raises(Unavailable, match="one interface call per image.*cu_seqlens"):
                 getattr(attn, name.removeprefix("self_attn."))
         assert "eager" not in PER_IMAGE  # loading eager would not help: the reason does not say it would
 
@@ -113,11 +88,8 @@ class QwenVisionSuite(VisionSuite):
         sdpa = StandardizedTransformer(self.REPO, task="image-text-to-text", dispatch=True, attn_implementation="sdpa", dtype=torch.float32)
         support = sdpa.vision.support()
         assert all(reason == PER_IMAGE for name in PER_IMAGE_VALUES for reason in support[name].values())
-        assert all(support[f"self_attn.{name}"] is None for name in INTERIOR if f"self_attn.{name}" not in PER_IMAGE_VALUES)
+        assert all(support[f"self_attn.{name}"] is None for name in ("attention_queries", "attention_keys", "attention_values", "attention_head_outputs"))
         assert "attn_implementation='eager'" in str(sdpa.support()["self_attn.attention_probabilities"])
-
-    def test_tower_pattern_sums_to_one_over_keys(self, model):
-        pytest.skip("the Qwen ViT serves no pattern: test_the_pattern_is_unavailable_with_the_per_image_reason")
 
     def test_the_interior_is_the_per_image_calls_whole(self, model):
         """Two images: q/k/v are the per-image calls' arguments concatenated, the head outputs their returns concatenated,
@@ -125,7 +97,7 @@ class QwenVisionSuite(VisionSuite):
         for layer in model.vision.layers:
             attn = layer.self_attn
             calls = []
-            with model.trace(images_prompt(model, 2), images=[IMAGE, WIDE]):
+            with model.trace(image_prompt(model, images=2), images=[IMAGE, WIDE]):
                 bounds = attn.inputs[1]["cu_seqlens"].save()
                 queries = attn.attention_queries.save()
                 keys = attn.attention_keys.save()
@@ -139,7 +111,7 @@ class QwenVisionSuite(VisionSuite):
                 heads = attn.attention_head_outputs.save()
                 out = attn.attention_output.save()
             assert len(calls) == len(bounds) - 1 >= 2  # one call per image (per window on a windowed block)
-            n, width = self.patches_of(model, IMAGE, WIDE), model.vision.hidden_size
+            n, width = self.patches_of(model, [IMAGE, WIDE]), model.vision.hidden_size
             assert isinstance(queries, Queries) and isinstance(keys, Keys) and isinstance(values, Values) and isinstance(heads, HeadOutputs)
             assert queries.shape == keys.shape == values.shape == (1, model.vision.num_heads, n, model.vision.head_dim)
             assert torch.equal(queries, torch.cat([q for q, _, _, _ in calls], dim=2))
@@ -167,29 +139,11 @@ class QwenVisionSuite(VisionSuite):
             out = layer.layer_output.save()
             native_out = layer.output.save()
             tower = vision.tower_output.save()
-        n = self.patches_of(model, IMAGE)
+        n = self.patches_of(model, [IMAGE])
         for value in (patches, attn, mlp, out, tower):
             assert isinstance(value, Patches) and value.shape == (1, n, vision.hidden_size)
         assert native_out.shape == (n, vision.hidden_size)  # natively packed, no images axis
         assert torch.equal(patches[0], native_patches) and torch.equal(attn[0], native_attn) and torch.equal(out[0], native_out)
-
-    def test_patch_embeddings_and_tower_output(self, model, clean):
-        vision = model.vision
-        with model.trace(image_prompt(model), images=[IMAGE]):
-            patches = vision.patch_embeddings.save()
-            last = vision.layers[-1].layer_output.save()
-            out = vision.tower_output.save()
-        assert patches.shape == (1, self.patches_of(model, IMAGE), vision.hidden_size)
-        torch.testing.assert_close(out, last)  # no final norm over the patches: the merger norms its own input
-
-    def test_patch_embeddings_edits_land(self, model, clean):
-        vision = model.vision
-        with model.trace(image_prompt(model), images=[IMAGE]):
-            vision.patch_embeddings[:, 0] = 0
-            native = vision.patch_embed.output.save()
-            features = vision.image_features.save()
-        assert (native[0] == 0).all()
-        assert not torch.allclose(features, clean["features"])
 
     def test_writes_with_a_leading_one_land(self, model, clean):
         layer = model.vision.layers[0]
@@ -203,15 +157,12 @@ class QwenVisionSuite(VisionSuite):
 
     # -- the image features ------------------------------------------------------------------
 
-    def test_image_features_are_the_towers_pooler_output(self, model, clean):
+    def test_one_image_token_per_merge_block(self, model, clean):
+        """The merger folds each ``spatial_merge_size``-square block of patches into one image token."""
         with model.trace(image_prompt(model), images=[IMAGE]):
             merged = model.projector.output.save()
-            pooled = model.vision.output.pooler_output.save()
-            features = model.vision.image_features.save()
-        assert torch.equal(features, pooled) and torch.equal(features, clean["features"])
-        assert merged.shape == features.shape
-        n = self.patches_of(model, IMAGE)
-        assert features.shape[0] * model.vision.spatial_merge_size ** 2 == n
+        assert merged.shape == clean["features"].shape
+        assert clean["features"].shape[0] * model.vision.spatial_merge_size ** 2 == self.patches_of(model, [IMAGE])
 
     def test_the_merger_output_is_in_scatter_order_unless_windowed(self, model):
         """On a large image, Qwen2.5-VL's merger output is in window order and the tower restores the order after it."""
@@ -226,23 +177,6 @@ class QwenVisionSuite(VisionSuite):
             assert torch.equal(merged.sort(0).values, features.sort(0).values)  # the same rows, permuted
         else:
             assert torch.equal(merged, features)
-
-    def test_two_images_in_one_invoke(self, model, clean):
-        """The patches of both images in one row; the mask holds both images' tokens; the scatter still holds."""
-        with model.trace(images_prompt(model, 2), images=[IMAGE, WIDE]):
-            mask = model.vision.image_token_mask.save()
-            patches = model.vision.patch_embeddings.save()
-            out = model.vision.layers[-1].layer_output.save()
-            features = model.vision.image_features.save()
-            first = model.layers[0].input.save()
-        n = self.patches_of(model, IMAGE, WIDE)
-        assert n > self.patches_of(model, IMAGE)
-        assert patches.shape == out.shape == (1, n, model.vision.hidden_size)
-        assert int(mask.sum()) == features.shape[0] == n // model.vision.spatial_merge_size ** 2
-        assert int(mask.sum()) > int(clean["mask"].sum())
-        assert torch.equal(first[mask], features)
-        image_tokens = mask[0].nonzero().flatten()
-        assert (image_tokens.diff() > 1).sum() == 1  # two runs of image tokens: one per image
 
 
 def rotate_half(x):

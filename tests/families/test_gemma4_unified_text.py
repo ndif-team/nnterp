@@ -88,6 +88,10 @@ class TestGemma4UnifiedVision(VisionSuite):
         """The processor's patch positions for the image: ``(-1, -1)`` on the padded rows."""
         return model.processor(text=image_prompt(model), images=[IMAGE], return_tensors="pt")["image_position_ids"]
 
+    def patches_of(self, model, images):
+        """Every image padded to ``max_soft_tokens``: the rows of the processor's ``image_position_ids``."""
+        return model.processor(text=image_prompt(model, images=len(images)), images=images, return_tensors="pt")["image_position_ids"].shape[1]
+
     # -- what an encoder-free embedder has instead of a tower ---------------------------
 
     def test_tower_envoy_classes(self, model):
@@ -138,16 +142,6 @@ class TestGemma4UnifiedVision(VisionSuite):
     test_tower_pattern_sums_to_one_over_keys = None
 
     # -- the padding the wrapper strips --------------------------------------------------
-
-    def test_patch_embeddings_and_tower_output(self, model, positions):
-        vision = model.vision
-        with model.trace(image_prompt(model), images=[IMAGE]):
-            patches = vision.patch_embeddings.save()
-            dense = vision.patch_embed.output.save()
-            out = vision.tower_output.save()
-            fed = model.projector.input.save()
-        assert patches.shape == out.shape == (1, positions.shape[1], vision.hidden_size)
-        assert torch.equal(patches, dense) and torch.equal(out, fed)
 
     def test_image_features_are_the_projection_without_the_padding(self, model, positions, clean):
         """The projector runs on every padded row; the wrapper strips them: ``image_features == projector.output[valid]``."""

@@ -37,16 +37,7 @@ class TestLlavaVision(VisionSuite):
     REPO = "trl-internal-testing/tiny-LlavaForConditionalGeneration"
     FAMILY = llama
     TEXT_REPO = TestLlama.REPO
-    VISION_NATIVE = {
-        "vision": "model.vision_tower",
-        "vision.layers": "model.vision_tower.encoder.layers",
-        "vision.patch_embed": "model.vision_tower.embeddings.patch_embedding",
-        "vision.layers.0.self_attn": "model.vision_tower.encoder.layers.0.self_attn",
-        "vision.layers.0.mlp": "model.vision_tower.encoder.layers.0.mlp",
-        "vision.layers.0.input_layernorm": "model.vision_tower.encoder.layers.0.layer_norm1",
-        "vision.layers.0.post_attention_layernorm": "model.vision_tower.encoder.layers.0.layer_norm2",
-        "projector": "model.multi_modal_projector",
-    }
+    VISION_NATIVE = clip_rows()
 
     def test_clip_has_no_final_norm_over_the_patches(self, model):
         """CLIP's ``post_layernorm`` norms the pooled CLS token only, so it is not ``vision.norm``."""

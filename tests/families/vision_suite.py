@@ -37,8 +37,17 @@ BLOCK_VALUES = {
 
 #: A fixed random image; the processor resizes it to the tower's size.
 IMAGE = Image.fromarray((np.random.RandomState(0).rand(64, 64, 3) * 255).astype("uint8"))
-#: A second image of another shape, for a packed tower, which concatenates the images it is given.
+#: A second image of another shape: a packed tower concatenates the images it is given, a variable-resolution one sizes it
+#: its own way.
 IMAGE_WIDE = Image.fromarray((np.random.RandomState(1).rand(48, 96, 3) * 255).astype("uint8"))
+
+
+def as_rows(native):
+    """A patch embedding's native output as rows of patches, ``[images, patches, vision_hidden]``: a convolution's grid
+    flattened, a packed tower's ``[patches, vision_hidden]`` with a leading 1."""
+    if native.dim() == 4:
+        return native.flatten(2).transpose(1, 2)
+    return native.unsqueeze(0) if native.dim() == 2 else native
 
 
 def image_prompt(model, text="What is in this image?", images=1):
@@ -114,6 +123,14 @@ class VisionSuite:
     TEXT_REPO: str
     #: The dtype the wrapper is loaded in: float32, unless the processor hands the tower another (Llama 4's bfloat16).
     DTYPE = torch.float32
+    #: Where ``vision.patch_embeddings`` is read, from the tower: the patch embedding's output (Pixtral: ``ln_pre.input``).
+    PATCHES_AT = "patch_embed.output"
+    #: Tower block values unavailable on every block: value -> a substring of the reason (as `FamilySuite.EXPECTED_UNAVAILABLE`).
+    EXPECTED_VISION_UNAVAILABLE: dict = {}
+
+    def patches_of(self, model, images):
+        """The length of the patches axis for ``images``: the configured grid, one per row, on a fixed-resolution tower."""
+        return (model.vision.image_size // model.vision.patch_size) ** 2
 
     @pytest.fixture(scope="class")
     def model(self, request):
@@ -172,14 +189,13 @@ class VisionSuite:
         assert model.layers is not model.vision.layers
 
     def test_sizes_are_the_towers(self, model):
-        vision, config = model.vision, model.config.vision_config
-        assert vision.num_layers == len(vision.layers) == config.num_hidden_layers
-        assert (vision.hidden_size, vision.num_heads, vision.intermediate_size, vision.patch_size) == (
-            config.hidden_size, config.num_attention_heads, config.intermediate_size, config.patch_size)
-        assert vision.head_dim == (getattr(config, "head_dim", None) or vision.hidden_size // vision.num_heads)
-        attn = vision.layers[0].self_attn
-        assert (attn.num_heads, attn.head_dim) == (vision.num_heads, vision.head_dim)
-        assert vision.layers[0].mlp.intermediate_size == vision.intermediate_size
+        """The tower's sizes (off its config, whatever it calls them) are the ones its modules run with."""
+        vision, layer = model.vision, model.vision.layers[0]
+        assert vision.num_layers == len(vision.layers)
+        assert layer.input_layernorm._module.weight.shape[-1] == vision.hidden_size
+        assert (layer.self_attn.num_heads, layer.self_attn.head_dim) == (vision.num_heads, vision.head_dim)
+        assert layer.mlp.intermediate_size == vision.intermediate_size
+        assert vision.patch_size == model.config.vision_config.patch_size
         text = model.config.get_text_config()
         assert model.num_layers == len(model.layers) == text.num_hidden_layers
         assert model.hidden_size == text.hidden_size
@@ -189,7 +205,12 @@ class VisionSuite:
     def test_support_lists_the_tower_values(self, model):
         vision = model.vision.support()
         assert set(vision) == {*TOWER_VALUES, *BLOCK_VALUES}
-        assert all(reason is None for reason in vision.values()), vision
+        for name, reason in vision.items():
+            if name in self.EXPECTED_VISION_UNAVAILABLE:
+                assert set(reason) == set(range(model.vision.num_layers)), name
+                assert all(self.EXPECTED_VISION_UNAVAILABLE[name] in r for r in reason.values()), (name, reason)
+            else:
+                assert reason is None, (name, reason)
         assert set(model.vision.support(layer=0)) == BLOCK_VALUES
         support = model.support()
         assert {name.removeprefix("vision."): reason for name, reason in support.items() if name.startswith("vision.")} == vision
@@ -308,6 +329,8 @@ class VisionSuite:
             torch.testing.assert_close(stream + attn + mlp, out)
 
     def test_tower_pattern_sums_to_one_over_keys(self, model):
+        if "self_attn.attention_probabilities" in self.EXPECTED_VISION_UNAVAILABLE:
+            pytest.skip("this tower serves no pattern: test_support_lists_the_tower_values")
         for layer in model.vision.layers:
             with model.trace(image_prompt(model), images=[IMAGE]):
                 pattern = layer.self_attn.attention_probabilities.save()
@@ -315,80 +338,78 @@ class VisionSuite:
             assert pattern.shape == (out.shape[0], model.vision.num_heads, out.shape[1], out.shape[1])
             torch.testing.assert_close(pattern.sum(-1), torch.ones_like(pattern[..., 0]))
 
+    def read_patches_at(self, model):
+        """The native value ``patch_embeddings`` is read at (`PATCHES_AT`), in a trace."""
+        module, attribute = self.PATCHES_AT.rsplit(".", 1)
+        return getattr(model.vision.get(module), attribute)
+
     def test_patch_embeddings_and_tower_output(self, model, clean):
+        """``patch_embeddings`` is the rows at `PATCHES_AT`; ``tower_output`` the last block's stream after the final norm, if any."""
         vision = model.vision
         with model.trace(image_prompt(model), images=[IMAGE]):
             patches = vision.patch_embeddings.save()
-            conv = vision.patch_embed.output.save()
-            last = vision.layers[-1].layer_output.save()
+            native = self.read_patches_at(model).save()
+            # An embedder with no blocks (Gemma 4 unified) ends no stream: its tower_output is what the projector receives.
+            last = vision.layers[-1].layer_output.save() if vision.num_layers else model.projector.input.save()
             out = vision.tower_output.save()
-        side = vision.image_size // vision.patch_size
-        assert patches.shape[1:] == (side * side, vision.hidden_size)  # one row per image, crop or tile
-        assert torch.equal(patches, conv.flatten(2).transpose(1, 2) if conv.dim() == 4 else conv)
+        assert isinstance(patches, Patches) and patches.shape[1:] == (self.patches_of(model, [IMAGE]), vision.hidden_size)
+        assert torch.equal(patches, as_rows(native))
         norm = getattr(vision, "norm", None)
-        expected = norm._module(last) if norm is not None else last
-        torch.testing.assert_close(out, expected)
+        torch.testing.assert_close(out, norm._module(last) if norm is not None else last)
 
     def test_patch_embeddings_edits_land(self, model, clean):
         vision = model.vision
         with model.trace(image_prompt(model), images=[IMAGE]):
             vision.patch_embeddings[:, 0] = 0
-            conv = vision.patch_embed.output.save()
+            native = self.read_patches_at(model).save()
             features = vision.image_features.save()
-        assert (conv[:, :, 0, 0] == 0).all() if conv.dim() == 4 else (conv[:, 0] == 0).all()
+        assert (as_rows(native)[:, 0] == 0).all()
         assert not torch.allclose(features, clean["features"])
+
+    def test_two_images_in_one_invoke(self, model, clean):
+        """Two images of different shapes: the mask holds both images' tokens and the scatter identity holds; a packed
+        tower (1 in the images axis) holds both images' patches in one row, and its pattern, where served, is zero
+        between them."""
+        prompt = image_prompt(model, "Compare these images.", images=2)
+        pattern_served = model.vision.num_layers and "self_attn.attention_probabilities" not in self.EXPECTED_VISION_UNAVAILABLE
+        saved = {}  # made outside the block: names bound inside do not survive it
+        with model.trace(prompt, images=[IMAGE, IMAGE_WIDE]):
+            saved["mask"] = model.vision.image_token_mask.save()
+            saved["patches"] = model.vision.patch_embeddings.save()
+            if pattern_served:
+                saved["pattern"] = model.vision.layers[0].self_attn.attention_probabilities.save()
+            saved["features"] = model.vision.image_features.save()
+            saved["first"] = model.layers[0].input.save()
+        mask, patches, features = saved["mask"], saved["patches"], saved["features"]
+        assert torch.equal(saved["first"][mask], features)
+        assert int(mask.sum()) == features.shape[0] > int(clean["mask"].sum())
+        assert patches.shape[1] == self.patches_of(model, [IMAGE, IMAGE_WIDE])
+        if patches.shape[0] != 1:  # one row per image, crop or tile
+            return
+        counts = [self.patches_of(model, [IMAGE]), self.patches_of(model, [IMAGE_WIDE])]
+        assert counts[0] != counts[1] and patches.shape[1] == sum(counts)
+        if pattern_served:
+            pattern, one, two = saved["pattern"], slice(0, counts[0]), slice(counts[0], sum(counts))
+            assert pattern.shape == (1, model.vision.num_heads, sum(counts), sum(counts))
+            assert (pattern[..., one, two] == 0).all() and (pattern[..., two, one] == 0).all()
 
 
 class PixtralSuite(VisionSuite):
     """`VisionSuite` for Pixtral: a packed tower, every image's patches in one row under a block-diagonal mask."""
 
     VISION_NATIVE = pixtral_rows()
+    PATCHES_AT = "ln_pre.input"
 
-    def patch_counts(self, model, prompt, images):
-        """Each image's patch count, off the processor's ``image_sizes``."""
-        sizes = model.processor(text=prompt, images=images, return_tensors="pt")["image_sizes"]
+    def patches_of(self, model, images):
+        """Every image's patches, off the processor's ``image_sizes``: ``(height // patch_size) * (width // patch_size)`` each."""
+        sizes = model.processor(text=image_prompt(model, images=len(images)), images=images, return_tensors="pt")["image_sizes"]
         side = model.vision.patch_size
-        return [int(height) // side * (int(width) // side) for height, width in sizes]
+        return sum(int(height) // side * (int(width) // side) for height, width in sizes)
 
-    def test_patch_embeddings_and_tower_output(self, model, clean):
-        """``patch_embeddings`` is the packed row entering ``ln_pre``; ``tower_output`` the last block's stream (no final norm)."""
-        vision, prompt = model.vision, image_prompt(model)
-        with model.trace(prompt, images=[IMAGE]):
-            patches = vision.patch_embeddings.save()
-            fed = vision.ln_pre.input.save()
-            last = vision.layers[-1].layer_output.save()
-            out = vision.tower_output.save()
-        assert isinstance(patches, Patches)
-        assert patches.shape == (1, sum(self.patch_counts(model, prompt, [IMAGE])), vision.hidden_size)
-        assert torch.equal(patches, fed)
-        assert "norm" not in vision._aliases
-        torch.testing.assert_close(out, last)
-
-    def test_patch_embeddings_edits_land(self, model, clean):
-        with model.trace(image_prompt(model), images=[IMAGE]):
-            model.vision.patch_embeddings[:, 0] = 0
-            fed = model.vision.ln_pre.input.save()
-            features = model.vision.image_features.save()
-        assert (fed[:, 0] == 0).all()
-        assert not torch.allclose(features, clean["features"])
-
-    def test_two_images_pack_into_one_row(self, model):
-        """Two images of different shapes: one row of both images' patches, attention zero between them, and the scatter identity."""
-        prompt = image_prompt(model, "Compare.", images=2)
-        counts = self.patch_counts(model, prompt, [IMAGE, IMAGE_WIDE])
-        with model.trace(prompt, images=[IMAGE, IMAGE_WIDE]):
-            mask = model.vision.image_token_mask.save()
-            pattern = model.vision.layers[0].self_attn.attention_probabilities.save()
-            out = model.vision.layers[0].layer_output.save()
-            features = model.vision.image_features.save()
-            first = model.layers[0].input.save()
-        assert len(set(counts)) == 2 and out.shape == (1, sum(counts), model.vision.hidden_size)
-        assert pattern.shape == (1, model.vision.num_heads, sum(counts), sum(counts))
-        first_image = slice(0, counts[0])
-        second_image = slice(counts[0], sum(counts))
-        assert (pattern[..., first_image, second_image] == 0).all() and (pattern[..., second_image, first_image] == 0).all()
-        torch.testing.assert_close(pattern[..., first_image, first_image].sum(-1), torch.ones_like(pattern[..., first_image, 0]))
-        assert torch.equal(first[mask], features)
+    def test_no_final_norm_and_no_image_size(self, model):
+        assert "norm" not in model.vision._aliases
+        with pytest.raises(Unavailable, match="any resolution"):
+            model.vision.image_size
 
 
 def wrapper_of(text_repo, config_class, vision_config, **load):

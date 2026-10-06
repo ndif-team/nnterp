@@ -461,6 +461,10 @@ class TestGemma4Vision(VisionSuite):
         """The processor's patch positions for the image: ``(-1, -1)`` on the padded rows."""
         return model.processor(text=image_prompt(model), images=[IMAGE], return_tensors="pt")["image_position_ids"]
 
+    def patches_of(self, model, images):
+        """Every image padded to the processor's longest: the rows of its ``image_position_ids``."""
+        return model.processor(text=image_prompt(model, images=len(images)), images=images, return_tensors="pt")["image_position_ids"].shape[1]
+
     def test_no_final_norm_and_no_image_size(self, model):
         assert "norm" not in model.vision._aliases
         with pytest.raises(Unavailable, match="any resolution"):
@@ -475,18 +479,13 @@ class TestGemma4Vision(VisionSuite):
             post_ff = layer.post_feedforward_layernorm.output.save()
         assert torch.equal(attn, post_attn) and torch.equal(mlp, post_ff)
 
-    def test_patch_embeddings_and_tower_output(self, model, positions):
-        """``patch_embeddings`` is the linear's output over the padded patches, before the position embedding; ``tower_output`` the last block's stream."""
+    def test_the_position_embedding_comes_after_the_patches(self, model):
+        """``patch_embeddings`` is the linear's output; ``patch_embedder`` then adds the 2D position embedding."""
         vision = model.vision
         with model.trace(image_prompt(model), images=[IMAGE]):
             patches = vision.patch_embeddings.save()
-            projected = vision.patch_embed.output.save()
             embedded = vision.patch_embedder.output.save()
-            last = vision.layers[-1].layer_output.save()
-            out = vision.tower_output.save()
-        assert patches.shape == (1, positions.shape[1], vision.hidden_size) and torch.equal(patches, projected)
-        assert not torch.equal(embedded, patches)  # the 2D position embedding comes after
-        assert torch.equal(out, last)
+        assert embedded.shape == patches.shape and not torch.equal(embedded, patches)
 
     def test_padded_patches_run_through_the_tower(self, model, positions, clean):
         """The padded rows are in every block's stream; the pooler drops them, ``pooling_kernel_size**2`` patches per soft token."""

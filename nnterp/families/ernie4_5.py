@@ -9,8 +9,6 @@ from transformers.models.ernie4_5.modeling_ernie4_5 import Ernie4_5Attention, Er
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("ernie4_5",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

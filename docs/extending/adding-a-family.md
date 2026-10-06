@@ -1,6 +1,6 @@
 ---
 title: Adding a Family
-one_liner: Write one module named after `config.model_type` with `MODEL_TYPES`, `RENAME`, three envoy subclasses and `ENVOYS`, a `def <size>(model)` for any root size the config spells its own way, plus one test file subclassing `FamilySuite`.
+one_liner: Write one module named after `config.model_type` with `RENAME`, three envoy subclasses and `ENVOYS`, a `def <size>(model)` for any root size the config spells its own way, plus one test file subclassing `FamilySuite`.
 tags: [extending, families, rename, envoys, tests]
 related: [docs/extending/overriding-values.md, docs/extending/custom-values.md, docs/extending/finding-source-ops.md, docs/extending/registering.md]
 sources: [nnterp/families/__init__.py, nnterp/families/llama.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/cohere.py, nnterp/components/__init__.py, nnterp/components/layer.py, nnterp/standardized.py, tests/families/suite.py, tests/families/test_llama.py, tests/families/test_gpt2.py]
@@ -30,8 +30,6 @@ the container names:
 from transformers.models.llama.modeling_llama import LlamaAttention, LlamaDecoderLayer, LlamaMLP
 
 from ..components import Attention, Layer, Mlp
-
-MODEL_TYPES = ("llama",)
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -67,8 +65,6 @@ interface, and container keys anchored at the root:
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention, GPT2Block, GPT2MLP
 
 from ..components import Attention, Layer, Mlp
-
-MODEL_TYPES = ("gpt2",)
 
 RENAME = {
     "transformer.wte": "embed_tokens",
@@ -109,20 +105,19 @@ ENVOYS = {GPT2Block: Layer, GPT2Attention: Attention, GPT2MLP: Mlp}
 1. Read `config.model_type` off the checkpoint (`AutoConfig.from_pretrained(repo).model_type`;
    a multimodal config nests the text model's under `text_config`, and that is the type
    used). Create `nnterp/families/<model_type>.py`. The file name is what `lookup` imports,
-   so `gemma3_text.py` covers `gemma3_text` and nothing else.
-2. Set `MODEL_TYPES = ("<model_type>",)`. The registry test asserts every shipped module
-   covers exactly the type it is named after.
-3. Write `RENAME`. Print the raw model (`TransformersModel(repo)`) or its `named_modules()`
+   so `gemma3_text.py` covers `gemma3_text` and nothing else; the module declares no
+   type of its own.
+2. Write `RENAME`. Print the raw model (`TransformersModel(repo)`) or its `named_modules()`
    to see the native tree, then map the containers and any block names that differ.
-4. Subclass `Layer`, `Attention`, `Mlp` (and `LinearAttention` for a hybrid), overriding
+3. Subclass `Layer`, `Attention`, `Mlp` (and `LinearAttention` for a hybrid), overriding
    only what the family's forward spells differently
    ([overriding-values.md](overriding-values.md)).
-5. Key them in `ENVOYS` on the transformers module classes.
-6. Define `def <size>(model)` for any root size the config spells its own way
+4. Key them in `ENVOYS` on the transformers module classes.
+5. Define `def <size>(model)` for any root size the config spells its own way
    (`intermediate_size` on a config with `n_inner` or `ffn_dim`); leave the rest to the
    root ([Sizes](#sizes) below). Define `def project_on_vocab(model, hidden)` if the model
    scales the head's output ([The logits](#the-logits)).
-7. Add `tests/families/test_<model_type>.py` and run it.
+6. Add `tests/families/test_<model_type>.py` and run it.
 
 ### `RENAME`
 
@@ -321,8 +316,6 @@ from transformers.models.<module>.modeling_<module> import <X>Attention, <X>Deco
 
 from ..components import Attention, Layer, Mlp  # add LinearAttention for a hybrid
 
-MODEL_TYPES = ("<model_type>",)
-
 RENAME = {
     "<container>.<embedding>": "embed_tokens",
     "<container>.<blocks>": "layers",
@@ -450,7 +443,7 @@ one it does.
 ## Verified outside the package
 
 The template above, written as a standalone module for `gpt2` and passed to
-`nnterp.families.register()` at the top of a test file that subclasses `FamilySuite`
+`nnterp.families.register(module, "gpt2")` at the top of a test file that subclasses `FamilySuite`
 with GPT-2's `NATIVE` and `REFUSES_IN_PLACE_QKV`, passes the whole suite (35 tests) on
 `hf-internal-testing/tiny-random-gpt2`; `model.family` is the standalone module. Nothing
 under `nnterp/families/` was touched. A family that will ship is the same module moved
@@ -458,8 +451,8 @@ into the package and the `register()` line removed.
 
 ## Gotchas
 
-- **The file name is the registry.** `MODEL_TYPES` must be `("<file stem>",)`;
-  `test_every_family_module_is_named_after_its_model_type` checks it.
+- **The file name is the registry.** The module covers exactly the type it is named
+  after; `test_every_family_module_is_named_after_its_model_type` checks it.
 - **Import the modeling module only inside the family module.** An import at
   `nnterp/__init__.py` or in `components/` would load transformers modeling code on
   `import nnterp`; `test_import_is_lazy` fails.

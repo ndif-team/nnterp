@@ -9,8 +9,6 @@ from transformers.models.helium.modeling_helium import HeliumAttention, HeliumDe
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("helium",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

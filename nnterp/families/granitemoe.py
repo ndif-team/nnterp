@@ -23,8 +23,6 @@ from ..components import EProperty, Layer, Moe, Residual, first_tensor, rewrap
 from .granite import Attention as GraniteAttention
 from .granite import project_on_vocab  # noqa: F401  the logit lens divides by logits_scaling, as Granite's
 
-MODEL_TYPES = ("granitemoe",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

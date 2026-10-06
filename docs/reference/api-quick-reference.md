@@ -338,14 +338,14 @@ The base of the hosts.
 | Name | Signature | What |
 |---|---|---|
 | `lookup` | `lookup(model_type: str) -> ModuleType` | The family for `model_type`: a registered one, else `nnterp.families.<model_type>`, imported on first use. Raises `UnsupportedFamily` when there is neither. |
-| `register` | `register(family: ModuleType) -> ModuleType` | Add a family (any module or object with `MODEL_TYPES`, `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under its model types; consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
+| `register` | `register(family: ModuleType, *model_types: str) -> ModuleType` | Add a family (any module or object with `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under `model_types`, or, with none given, the type its `__name__` ends in (`TypeError` for a nameless `SimpleNamespace`); consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
 | `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (94), alphabetical. |
 | `all_families` | `all_families() -> list[ModuleType]` | Every shipped family, imported. For tooling and tests. |
 | `REGISTRY` | `dict[str, ModuleType]` | `model_type -> family` for what `register` added. |
 | `UnsupportedFamily` | `ValueError` subclass | No module of that name and nothing registered. |
 | `nnterp.families.<model_type>` | module attribute | The family module, imported on first access (`nnterp.families.qwen3_5_text`). |
 
-A family module declares `MODEL_TYPES: tuple[str, ...]`, `RENAME: dict[str, str]`, `Layer`, `Attention`, `Mlp` (and `LinearAttention` on a DeltaNet hybrid, `SelectiveScan` on a Mamba-1 mixer, `StateSpace` on a Mamba-2 mixer; a pure state-space family such as Mamba or Mamba-2 has no `Attention` or `Mlp`) subclassing `nnterp.components`'s, and `ENVOYS: dict[type, type]` keying them on its transformers module types. It may also define a module-level function named after any root size, `def <size>(model) -> int`, which the root's `StandardizedProperty` calls in place of its plain rule (`falcon.num_kv_heads`, `deepseek_v2.head_dim`, `gpt2.intermediate_size`), and likewise `def project_on_vocab(model, hidden)`, which its `StandardizedCapability` binds in place of the root's norm, head and softcap (`cohere.project_on_vocab`, `granite.project_on_vocab`).
+A family module, named after the `model_type` it covers, declares `RENAME: dict[str, str]`, `Layer`, `Attention`, `Mlp` (and `LinearAttention` on a DeltaNet hybrid, `SelectiveScan` on a Mamba-1 mixer, `StateSpace` on a Mamba-2 mixer; a pure state-space family such as Mamba or Mamba-2 has no `Attention` or `Mlp`) subclassing `nnterp.components`'s, and `ENVOYS: dict[type, type]` keying them on its transformers module types. It may also define a module-level function named after any root size, `def <size>(model) -> int`, which the root's `StandardizedProperty` calls in place of its plain rule (`falcon.num_kv_heads`, `deepseek_v2.head_dim`, `gpt2.intermediate_size`), and likewise `def project_on_vocab(model, hidden)`, which its `StandardizedCapability` binds in place of the root's norm, head and softcap (`cohere.project_on_vocab`, `granite.project_on_vocab`).
 
 ## `nnterp.components`
 

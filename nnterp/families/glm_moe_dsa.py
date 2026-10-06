@@ -29,8 +29,6 @@ from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaAttent
 from ..components import Attention, Layer, Mlp, Moe
 from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
-MODEL_TYPES = ("glm_moe_dsa",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

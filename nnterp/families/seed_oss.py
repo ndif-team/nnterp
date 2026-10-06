@@ -11,8 +11,6 @@ from transformers.models.seed_oss.modeling_seed_oss import SeedOssAttention, See
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("seed_oss",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

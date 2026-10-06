@@ -16,8 +16,6 @@ from transformers.models.starcoder2.modeling_starcoder2 import (
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("starcoder2",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

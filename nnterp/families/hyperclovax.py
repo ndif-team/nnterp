@@ -33,8 +33,6 @@ from .granitemoe import scaled_back
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("hyperclovax",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

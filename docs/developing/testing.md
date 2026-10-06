@@ -259,8 +259,8 @@ on a wrapper built from a family's tiny text config where no tiny wrapper exists
 
 ## The root tests
 
-`tests/test_registry.py` (13 tests): every module under `nnterp/families/` is
-named after its single `MODEL_TYPES` entry and there are at least 31
+`tests/test_registry.py` (17 tests): every module under `nnterp/families/` is
+named after its type, and there are at least 31
 (`:15-20`); `import nnterp` pulls in no `transformers.models.*.modeling_*`
 module and `lookup("gpt2")` imports only that family, checked in a
 subprocess (`:23-36`); an unknown `model_type` raises `UnsupportedFamily`
@@ -269,7 +269,7 @@ a preloaded `nn.Module` uses its own config (`:54-58`); a user `rename`
 merges over the family's (`:61-64`); a user `envoys` type key replaces the
 family's (`:67-77`); the remote key is `TransformersModel` (`:80-85`); a
 default load keeps the checkpoint's attention and `support()` names `eager`
-(`:88-92`); a family registered with only `MODEL_TYPES`, `RENAME` and `ENVOYS`
+(`:88-92`); a family registered with only `RENAME` and `ENVOYS`
 answers `support()` with every block value (`:95-103`); a value on an
 `Attention` subclass passed through `envoys=` is listed by `support()` and
 `support(layer=0)` as `self_attn.<name>`, and a load without it does not list
@@ -277,7 +277,10 @@ it (`:106-118`); a family registered with `hidden_size=lambda model: 999`
 answers `model.hidden_size` with 999 while `num_heads` keeps the root's rule,
 and a plain load reads `config.hidden_size` (`:121-131`); assigning a size
 (`model.hidden_size = 5`) raises `AttributeError` naming `def hidden_size`
-(`:134-137`).
+(`:160-163`); `register(module)` with no types covers the type the module's
+`__name__` ends in (`:166-175`); `register(ns, "my_type", "my_other_type")`
+covers both (`:178-184`); `register(ns)` on a `SimpleNamespace` with no types
+raises `TypeError` and registers nothing (`:187-192`).
 
 `tests/test_base.py` (2 tests): the base `Layer` on a plain
 `TransformersModel` over GPT-J unwraps and rewraps a tuple block output

@@ -10,8 +10,6 @@ from transformers.models.arcee.modeling_arcee import ArceeAttention, ArceeDecode
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("arcee",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

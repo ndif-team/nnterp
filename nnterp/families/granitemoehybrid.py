@@ -56,8 +56,6 @@ from .granitemoe import residual_multiplier, scaled_back
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("granitemoehybrid",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

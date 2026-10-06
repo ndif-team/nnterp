@@ -9,8 +9,6 @@ from transformers.models.mistral.modeling_mistral import MistralAttention, Mistr
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("mistral",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

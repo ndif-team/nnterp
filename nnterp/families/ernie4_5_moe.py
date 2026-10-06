@@ -18,8 +18,6 @@ from transformers.models.ernie4_5_moe.modeling_ernie4_5_moe import (
 
 from ..components import Attention, Layer, Mlp, Moe
 
-MODEL_TYPES = ("ernie4_5_moe",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

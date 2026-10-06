@@ -32,8 +32,6 @@ from transformers.models.mamba2.modeling_mamba2 import Mamba2Block, Mamba2Mixer
 
 from ..components import Layer, StateSpace
 
-MODEL_TYPES = ("mamba2",)
-
 RENAME = {
     "backbone.embeddings": "embed_tokens",
     "backbone.layers": "layers",

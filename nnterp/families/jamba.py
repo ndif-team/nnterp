@@ -28,8 +28,6 @@ from transformers.models.jamba.modeling_jamba import (
 
 from ..components import Attention, Layer, Mlp, Moe, RouterLogits, SelectiveScan, TokenEProperty
 
-MODEL_TYPES = ("jamba",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

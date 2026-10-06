@@ -30,8 +30,6 @@ from ..components import Attention, EProperty, Layer, Mlp, Residual, Vision, Vis
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("gemma3_text",)
-
 #: The wrappers (config ``model_type``) whose projector's output is what they scatter into the text stream.
 IMAGE_WRAPPERS = ("gemma3",)
 

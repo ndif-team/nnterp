@@ -22,8 +22,6 @@ from transformers.models.llama.modeling_llama import LlamaAttention, LlamaDecode
 
 from ..components import Attention, Layer, Mlp, Vision, VisionAttention, VisionLayer, VisionMlp
 
-MODEL_TYPES = ("llama",)
-
 #: The wrappers (config ``model_type``) whose projector's output is what they scatter into the text stream.
 #: LLaVA-NeXT binds the same names but unpads and adds newline tokens after its projector, so it is not here.
 IMAGE_WRAPPERS = ("llava",)

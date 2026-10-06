@@ -84,7 +84,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/extending/overriding-values.md](docs/extending/overriding-values.md) — an `EProperty` keyed on a path (`"../norm.output"`, `"source.<op>.inputs"` with `select`), `unavailable(...)`, `off_interface`, transforms
 - [docs/extending/custom-values.md](docs/extending/custom-values.md) — a new `EProperty` (a path from the host: `"output"`, `"../ln_2.output"`, `"source.<op>.output"`) through `envoys=`; annotate `-> Residual` / `-> Pattern` from `nnterp.components`
 - [docs/extending/finding-source-ops.md](docs/extending/finding-source-ops.md) — `print(envoy.source)` and how ops are named
-- [docs/extending/registering.md](docs/extending/registering.md) — `nnterp.families.register(module)`
+- [docs/extending/registering.md](docs/extending/registering.md) — `nnterp.families.register(family, *model_types)`
 
 ### "The encyclopedia: a web page per family"
 - [encyclopedia/README.md](encyclopedia/README.md) — `encyclopedia/build.py` renders `encyclopedia/entries/<model_type>.py` (hand-written: block schema, quirks, notes) merged with a meta build of the family into static HTML under `encyclopedia/site/`; `entries/gemma2.py` is the reference entry; `tests/test_encyclopedia.py` builds every entry from its pinned checkpoint

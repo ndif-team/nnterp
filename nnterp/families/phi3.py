@@ -9,8 +9,6 @@ from transformers.models.phi3.modeling_phi3 import Phi3Attention, Phi3DecoderLay
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("phi3",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

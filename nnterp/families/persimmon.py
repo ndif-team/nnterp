@@ -15,8 +15,6 @@ from transformers.models.persimmon.modeling_persimmon import PersimmonAttention,
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("persimmon",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

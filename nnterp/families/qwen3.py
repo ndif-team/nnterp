@@ -9,8 +9,6 @@ from transformers.models.qwen3.modeling_qwen3 import Qwen3Attention, Qwen3Decode
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("qwen3",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

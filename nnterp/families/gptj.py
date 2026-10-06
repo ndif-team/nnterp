@@ -18,8 +18,6 @@ from ..components import (
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("gptj",)
-
 RENAME = {
     "transformer.wte": "embed_tokens",
     "transformer.h": "layers",

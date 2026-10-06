@@ -12,5 +12,3 @@ because the family registry is the module's file name.
 """
 
 from .deepseek_v3 import ENVOYS, RENAME, Attention, Layer, Mlp, Moe, head_dim, qk_head_dim  # noqa: F401  DeepSeek-V3's, unchanged
-
-MODEL_TYPES = ("kimi_k2",)

@@ -32,8 +32,6 @@ from transformers.models.<mt>.modeling_<mt> import <Mt>Attention, <Mt>DecoderLay
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("<model_type>",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
@@ -97,8 +95,8 @@ the ones that matter most here:
   mixed with, [batch, heads, query, key]"`. They are what `repr(model)` and
   `support()` show.
 - **One family per module, named after `model_type`**
-  (`gemma3_text.py` covers `gemma3_text`); `MODEL_TYPES` is that one name.
-  The module *is* the registry entry (`nnterp/families/__init__.py:18-22`).
+  (`gemma3_text.py` covers `gemma3_text`); the file name is its type, declared nowhere else.
+  The module *is* the registry entry (`nnterp/families/__init__.py:17-22`).
 - **Families import their modeling module only inside the family module**,
   at the top of it, never from `nnterp/components` or `nnterp/standardized.py`,
   so `import nnterp` loads no modeling code (`tests/test_registry.py:23-36`).

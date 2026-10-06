@@ -22,8 +22,6 @@ from transformers.models.bamba.modeling_bamba import BambaAttention, BambaDecode
 
 from ..components import Attention, Layer, Mlp, StateSpace
 
-MODEL_TYPES = ("bamba",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

@@ -23,6 +23,7 @@ class TestLlavaInterleaveWrapper(TestQwen2):
 
 
 @pytest.mark.skipif(not torch.cuda.is_available(), reason="real weights: a trace per tower block of a 0.5B model is minutes on one CPU thread")
+@pytest.mark.xdist_group("llava_interleave")  # one worker, one copy of the weights on the GPU
 class TestLlavaInterleaveVision(VisionSuite):
     """llava-interleave: Llava around Qwen2 with a SigLIP tower, real weights, so it runs where CUDA is (LLaVA-OneVision's
     tiny covers the same SigLIP keys and ``LlavaModel``'s scatter is covered on ``llama``)."""

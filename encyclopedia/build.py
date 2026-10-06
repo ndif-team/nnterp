@@ -107,7 +107,6 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "dense-first-blocks": ("Dense first blocks", "The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
     "unnormalized-routing": ("Unnormalized routing", "The expert weights are the router's softmax entries for the chosen experts, not renormalized over them: a token's expert_weights sum to less than one."),
     "one-sublayer-blocks": ("One sublayer per block", "Each block is one norm and one sublayer, so it adds one contribution to the stream, and support() reports the hosts it does not hold missing on it."),
-    "dense-first-blocks": ("Dense first blocks","The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
 }
 
 ROOT_NAMES = ("embed_tokens", "layers", "norm", "lm_head")

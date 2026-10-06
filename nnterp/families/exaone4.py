@@ -21,6 +21,11 @@ RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.norm": "norm",
+    # The same text model inside a multimodal wrapper, loaded with task="image-text-to-text":
+    # Exaone4_5_ForConditionalGeneration (EXAONE 4.5).
+    "model.language_model.embed_tokens": "embed_tokens",
+    "model.language_model.layers": "layers",
+    "model.language_model.norm": "norm",
 }
 
 

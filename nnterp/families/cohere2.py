@@ -22,6 +22,11 @@ RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.norm": "norm",
+    # The same text model inside a multimodal wrapper, loaded with task="image-text-to-text":
+    # AyaVisionForConditionalGeneration, Cohere2VisionForConditionalGeneration.
+    "model.language_model.embed_tokens": "embed_tokens",
+    "model.language_model.layers": "layers",
+    "model.language_model.norm": "norm",
 }
 
 

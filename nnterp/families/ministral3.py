@@ -21,6 +21,11 @@ RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.norm": "norm",
+    # The same text model inside a multimodal wrapper, loaded with task="image-text-to-text":
+    # the mistral3 wrapper of Ministral 3 and Mistral 3.
+    "model.language_model.embed_tokens": "embed_tokens",
+    "model.language_model.layers": "layers",
+    "model.language_model.norm": "norm",
 }
 
 

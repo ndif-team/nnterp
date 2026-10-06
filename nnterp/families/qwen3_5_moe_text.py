@@ -5,6 +5,9 @@ mixer, ``linear_attn``, the fourth ordinary attention, ``self_attn``
 (``config.layer_types``). Each block has one or the other, never both, so on
 a linear block every ``self_attn`` value is reported missing and the linear
 values live at ``layers[i].linear_attn`` (see `nnterp.LinearAttention`). The MLP is a mixture of experts.
+Every released checkpoint is a ``qwen3_5_moe`` wrapper: ``task="text-generation"`` (the
+default) builds ``Qwen3_5MoeForCausalLM`` out of it, ``task="image-text-to-text"`` the
+wrapper, whose text stack sits at ``model.language_model``; ``RENAME`` carries both.
 """
 
 from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import Qwen3_5MoeAttention, Qwen3_5MoeDecoderLayer, Qwen3_5MoeGatedDeltaNet, Qwen3_5MoeMLP, Qwen3_5MoeSparseMoeBlock
@@ -17,6 +20,11 @@ RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.norm": "norm",
+    # The same text model inside a multimodal wrapper, loaded with task="image-text-to-text":
+    # Qwen3_5MoeForConditionalGeneration (every Qwen3.5-MoE / 3.6-MoE checkpoint).
+    "model.language_model.embed_tokens": "embed_tokens",
+    "model.language_model.layers": "layers",
+    "model.language_model.norm": "norm",
     "gate": "router",
     "shared_expert": "shared_experts",
 }

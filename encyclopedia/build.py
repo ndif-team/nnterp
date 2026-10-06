@@ -124,6 +124,7 @@ CONFIG_KEYS = (
     "first_k_dense_replace", "moe_intermediate_size", "num_experts", "n_routed_experts", "num_experts_per_token",
     "num_experts_per_tok", "num_shared_experts", "n_shared_experts", "routed_scaling_factor",
     "norm_topk_prob",
+    "num_local_experts",
 )
 
 #: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.

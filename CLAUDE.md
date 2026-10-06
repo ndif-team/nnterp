@@ -44,7 +44,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/usage/root-values.md](docs/usage/root-values.md) — `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`, `num_layers`, `head_dim`, ... (each root size a `StandardizedProperty`: the config's value, by the plain rule or the family's spelling); a block's own sizes on `layers[i].self_attn` (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) and `layers[i].mlp` (`intermediate_size`), which differ from the root's on Gemma-4 and MiMo-V2-Flash
 
 ### "Vision-language models: images, the vision tower, the projector"
-- [docs/usage/vision.md](docs/usage/vision.md) — load with `task="image-text-to-text"`, `model.trace(prompt, images=[image])`; `model.vision.layers[i]` (tower blocks, `Patches`), `model.projector`, the tower's `vision.image_token_mask` and `vision.image_features` (`layers[0].input[vision.image_token_mask] == vision.image_features`); SigLIP (Gemma 3) and CLIP (Llava 1.5) today
+- [docs/usage/vision.md](docs/usage/vision.md) — load with `task="image-text-to-text"`, `model.trace(prompt, images=[image])`; `model.vision.layers[i]` (tower blocks, `Patches`), `model.projector`, the tower's `vision.image_token_mask` and `vision.image_features` (`layers[0].input[vision.image_token_mask] == vision.image_features`); SigLIP (Gemma 3), CLIP (Llava 1.5), the ViTs of Llama 4 (CLS last) and Gemma 4 (padded patches), and Gemma 4 unified's encoder-free embedder (a `vision` with no blocks)
 - [docs/developing/vision-design.md](docs/developing/vision-design.md) — the design, what does not fit, the phases
 
 ### "Does this checkpoint have that value?"

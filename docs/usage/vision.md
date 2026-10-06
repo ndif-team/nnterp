@@ -1,9 +1,9 @@
 ---
 title: Vision-language models
 one_liner: "Load an image-text-to-text checkpoint with `task=\"image-text-to-text\"`, pass an image, and read the tower (`model.vision`, `vision.layers[i]`), the `projector`, and the tower's `vision.image_token_mask` and `vision.image_features`, where `layers[0].input[vision.image_token_mask] == vision.image_features`."
-tags: [usage, vision, multimodal, image-text-to-text, vision tower, projector, image_features, image_token_mask, Patches, siglip, clip, llava, gemma3]
+tags: [usage, vision, multimodal, image-text-to-text, vision tower, projector, image_features, image_token_mask, Patches, siglip, clip, llava, gemma3, llama4, gemma4, encoder-free]
 related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/root-values.md, docs/usage/availability.md, docs/usage/layouts.md, docs/developing/vision-design.md, docs/reference/families.md]
-sources: [nnterp/components/vision.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, tests/families/vision_suite.py, tests/families/test_gemma3_text.py, tests/families/test_llama.py]
+sources: [nnterp/components/vision.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/gemma4_unified_text.py, tests/families/vision_suite.py, tests/families/test_gemma3_text.py, tests/families/test_llama.py, tests/families/test_llama4_text.py, tests/families/test_gemma4_text.py, tests/families/test_gemma4_unified_text.py]
 ---
 
 # Vision-language models
@@ -51,22 +51,30 @@ with model.trace(prompt, images=[image]):
 Run on `trl-internal-testing/tiny-LlavaForConditionalGeneration`: `mask` is `(1, 592)`
 with 576 image tokens, `pattern` `(1, 4, 577, 577)`, `patches` `(1, 577, 16)` (CLIP's CLS
 token first), `features` `(576, 16)`. The same body runs on Gemma 3
-(`google/gemma-3-4b-pt`).
+(`google/gemma-3-4b-pt`) and Gemma 4 (`google/gemma-4-E2B`, whose base checkpoint has no
+chat template: write the prompt as `f"{model.processor.image_token} ..."`). On E2B with a
+red 224x224 image, under `torch.no_grad()` in bfloat16: 256 image tokens, `pattern`
+`(1, 12, 2520, 2520)` (2304 patches and 216 padded rows), `features` `(256, 1536)`, the
+scatter equality exact, the next token `" red"`, and `" of"` once `image_features` is zeroed;
+it peaked at 11 GB.
 
 ## The names
 
-| standard name | what it is | Gemma 3 (SigLIP) | Llava 1.5 (CLIP) |
-| --- | --- | --- | --- |
-| `model.vision` | the tower's root, a `Vision` | `model.model.vision_tower` | `model.model.vision_tower` |
-| `model.vision.patch_embed` | the patch embedding | `vision_tower.embeddings.patch_embedding` | same |
-| `model.vision.layers[i]` | the tower's blocks, `VisionLayer` | `vision_tower.encoder.layers[i]` | same |
-| `vision.layers[i].self_attn`, `.mlp` | `VisionAttention`, `VisionMlp` | native | native |
-| `vision.layers[i].input_layernorm`, `.post_attention_layernorm` | the pre-norms | `layer_norm1`, `layer_norm2` | same |
-| `model.vision.norm` | the final norm over the patches | `post_layernorm` | none: CLIP's `post_layernorm` norms only the pooled CLS token |
-| `model.projector` | the module whose output is scattered into the text stream | `model.multi_modal_projector` (pools 4096 patches to 256 tokens) | `model.multi_modal_projector` |
+| standard name | what it is | Gemma 3 (SigLIP) | Llava 1.5 (CLIP) | Llama 4 (ViT) | Gemma 4 (ViT) | Gemma 4 unified (encoder-free) |
+| --- | --- | --- | --- | --- | --- | --- |
+| `model.vision` | the tower's root, a `Vision` | `model.model.vision_tower` | `model.model.vision_tower` | `model.vision_model` | `model.model.vision_tower` | `model.model.embed_vision`, the image embedder |
+| `model.vision.patch_embed` | the patch embedding | `vision_tower.embeddings.patch_embedding` | same | `vision_model.patch_embedding` (unfold + linear) | `vision_tower.patch_embedder` (a linear plus 2D position embeddings) | `embed_vision.patch_dense` |
+| `model.vision.layers[i]` | the tower's blocks, `VisionLayer` | `vision_tower.encoder.layers[i]` | same | `vision_model.model.layers[i]` | `vision_tower.encoder.layers[i]` | none: no blocks |
+| `vision.layers[i].self_attn`, `.mlp` | `VisionAttention`, `VisionMlp` | native | native | native | native; the contributions are the post-norms' outputs (a sandwich block) | none |
+| `vision.layers[i].input_layernorm`, `.post_attention_layernorm` | the block's norms | `layer_norm1`, `layer_norm2` | same | native | native: `post_attention_layernorm` *follows* the attention, as on the text block | none |
+| `model.vision.norm` | the final norm over the patches | `post_layernorm` | none: CLIP's `post_layernorm` norms only the pooled CLS token | `layernorm_post` | none | none |
+| `model.projector` | the module whose output is scattered into the text stream | `model.multi_modal_projector` (pools 4096 patches to 256 tokens) | `model.multi_modal_projector` | `model.multi_modal_projector` (a linear) | `model.model.embed_vision` (an RMS norm and a linear) | `embed_vision.multimodal_embedder` (an RMS norm and a linear) |
 
 `embed_tokens`, `layers`, `norm` and `lm_head` stay the language model's
-(`model.language_model.*` on the wrapper), and native names keep working.
+(`model.language_model.*` on the wrapper; `language_model.model.*` on Llama 4's), and
+native names keep working. Gemma 4's audio tower and its embedder keep their native names
+(`model.model.audio_tower`, `model.model.embed_audio`), and an audio prompt
+(`model.trace(prompt, audio=[waveform])`) runs as before.
 
 ## The values
 
@@ -81,8 +89,23 @@ token first), `features` `(576, 16)`. The same body runs on Gemma 3
 | `image_features` | `vision` | `ImageFeatures` `[image_tokens hidden]` | the projector's output, flat over every image token in row-major order; assignable, in-place edits land |
 
 `Patches` is `[images, patches, vision_hidden]`: one row per image, the image's patches in
-raster order (CLS first on CLIP). The tower's sizes are on `model.vision`: `num_layers`,
-`hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size`.
+raster order. Per tower:
+
+| tower | rows | the patch axis |
+| --- | --- | --- |
+| SigLIP (Gemma 3) | one per image | the patches |
+| CLIP (Llava 1.5) | one per image | the CLS token *first*, then the patches |
+| Llama 4's ViT | one per image tile | the patches, then the CLS token *last* (`patches + 1` rows); the tower drops it after `vision.norm` |
+| Gemma 4's ViT | one per image | the patches *padded* to `max_soft_tokens * pooling_kernel_size**2` rows (2520 by default). The padded rows (zero pixels at position `(-1, -1)`, `image_position_ids` in the processor's encoding) are masked as keys but run through every block, so they are rows of `layer_output`, with values; the pooler zeroes and strips them |
+| Gemma 4 unified (encoder-free) | one per image | `patch_embeddings` and `tower_output` only, padded to `max_soft_tokens` rows (280) the same way; one row per image token once stripped |
+
+The tower's sizes are on `model.vision`: `num_layers`, `hidden_size`, `num_heads`,
+`head_dim`, `intermediate_size`, `patch_size`, `image_size`. Gemma 4's tower takes
+variable-resolution images, so its `image_size` raises `Unavailable`, and its `head_dim`
+is the config's (64 on E2B, with 12 heads over a 768-wide stream). The encoder-free
+embedder has `num_layers == 0`, `hidden_size` its `mm_embed_dim` and `patch_size` the
+48-pixel merged patch it embeds; its `num_heads`, `head_dim`, `intermediate_size` and
+`image_size` raise `Unavailable`.
 
 `layers[0].input[vision.image_token_mask] == vision.image_features` holds exactly: the
 wrapper writes the projector's output into the token embeddings at the image tokens and
@@ -94,7 +117,20 @@ projector, the tower's sibling.
 What feeds the projector differs per host: Gemma 3 pools `tower_output`; Llava takes
 `vision.layers[-2].layer_output` without its CLS token (`vision_feature_layer=-2`), so a
 write to `tower_output` or the last block does not reach Llava's text model.
-`model.projector.input` is what the projector actually receives.
+`model.projector.input` is what the projector actually receives. `tower_output` is always
+the last block's stream after `vision.norm` where there is one, before any pooling: on
+Llama 4 that is `layernorm_post`'s output, CLS included, and the tower then runs a
+pixel-shuffle adapter (`vision.vision_adapter`, a quarter as many rows) whose output,
+flattened over the tiles, is `projector.input`; on Gemma 4 it is the encoder's output over
+the padded patches, and the tower's `pooler` average-pools 3x3 patches into each soft
+token and strips the padding, which is `projector.input`; on the encoder-free embedder it
+is the states before the projection, `projector.input` itself.
+
+On Gemma 4 unified the projector runs on the padded rows too, and the wrapper strips them
+before scattering, so `vision.image_features` is read at the scatter
+(`inputs_embeds.masked_scatter` in the wrapper model's forward), not at the projector:
+`image_features == projector.output[valid]`, where `valid` is
+`(image_position_ids != -1).all(-1)`.
 
 ## Inputs
 
@@ -105,6 +141,8 @@ write to `tower_output` or the last block does not reach Llava's text model.
   `vision.image_features` is never reached), except on PaliGemma, whose processor demands an image;
   pass `dict(model.tokenizer(text, return_tensors="pt"))` there.
 - One invoke per trace while it carries an image; several images go in one invoke, as lists.
+- Llama 4's image processor returns bfloat16 pixels, which a float32 tower refuses (as in
+  plain transformers): load Llama 4 in bfloat16, or cast `pixel_values` in an encoding.
 
 Gemma 3's tower attends over 4096 patches, so under eager every block's pattern is
 16 x 4096 x 4096. A trace keeps them all for autograd unless it runs under
@@ -129,13 +167,15 @@ processor) has a tower that never runs, so `model.vision.support()` is empty,
 ("a text-only load").
 
 `vision.image_features` is served only on the wrappers a family lists in `IMAGE_WRAPPERS`
-(`gemma3` for `gemma3_text`, `llava` for `llama`), where the projector's output is what is
-scattered. A wrapper that binds the same names but rearranges the projector's output
+(`gemma3` for `gemma3_text`, `llava` for `llama`, `llama4` for `llama4_text`, `gemma4` for
+`gemma4_text`, `gemma4_unified` for `gemma4_unified_text`), where the suite checks that it
+is what is scattered. A wrapper that binds the same names but rearranges the projector's output
 first (LLaVA-NeXT's unpadding and newline tokens) is not listed, and the value says so.
 
 ## What is not covered yet
 
-- Towers other than SigLIP (Gemma 3) and CLIP (Llava 1.5). The text names bind on the
+- Towers other than SigLIP (Gemma 3), CLIP (Llava 1.5), Llama 4's and Gemma 4's ViTs and
+  Gemma 4 unified's embedder. The text names bind on the
   wrappers of Qwen3.5, Qwen3.5-MoE, Mistral 3, PaliGemma, LLaVA-OneVision, llava-interleave,
   Idefics 3, Aya Vision, EXAONE 4.5 and LightOnOCR, but their towers and projectors are
   native-only, and there is no `model.vision` there.

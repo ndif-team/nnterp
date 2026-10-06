@@ -67,8 +67,9 @@ envoy, or from the model's root when it starts with `/`:
 - `"output"` is the host's own output, the same location as `.output`.
 - A leading `/` anchors the path at the root (`envoy.root`, the model envoy) and walks
   down from there the way a path below the host walks, aliases and `source` included:
-  `"/inputs"` is the model's inputs and `"/projector.output"` the projector's output, read
-  from the vision tower (`vision.image_token_mask`, `vision.image_features`), and
+  `"/inputs"` is the model's inputs, read from the vision tower (`vision.image_token_mask`;
+  `vision.image_features` is read at the scatter in the wrapper model's forward,
+  `"/model.source.inputs_embeds_masked_scatter_0.inputs"`, from a key function), and
   `"/norm.output"` is the final norm's from any block. Use it for a value that lives far
   from its host; a sibling is `../name` (below).
 - A leading `../` steps to the parent module, as many times as written. After it, every

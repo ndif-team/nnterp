@@ -253,7 +253,8 @@ processor), and its vision side runs `VisionSuite`
 (`tests/families/vision_suite.py`: the tower names and identity, the tower's values
 and `support` rows, the scatter `layers[0].input[vision.image_token_mask] ==
 vision.image_features`, causal edits, no `vision` host on a text-only checkpoint or
-load). `WrapperSuite`, in the same file, checks the text names
+load; `fix_processor` where a tiny checkpoint's processor disagrees with its model;
+`PixtralSuite` for the packed tower). `WrapperSuite`, in the same file, checks the text names
 on a wrapper built from a family's tiny text config where no tiny wrapper exists
 ([vision-design.md](vision-design.md)).
 

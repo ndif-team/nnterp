@@ -190,7 +190,7 @@ behaviour:
   mixtures' `residual_multiplier`, the Gemma-4 and GraniteMoE-Hybrid `Mlp`'s
   `router` and `experts`, ZAYA's `merge`) and the model through `self.root`
   (`Vision`'s config, processor and family), and a key with a leading `/` is
-  walked from `root` (`"/projector.output"`). The link is dropped when an
+  walked from `root` (`"/inputs"`). The link is dropped when an
   envoy is pickled and rebuilt inside the payload, so a shipped tree whose top
   is the model envoy keeps its root; a remote trace ships the model's whole
   tree (checked with `remote="local"` on the Gemma 3 tiny wrapper: the

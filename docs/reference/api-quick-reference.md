@@ -51,7 +51,7 @@ Reads within one trace follow the forward: the pattern is produced inside block 
 | `unavailable`, `route_kernels`, `route_delta_rule` | A value a family lacks; the recurrent kernel switch, and its DeltaNet spelling. |
 | `chunk_per_token` | A Mamba-2 model's chunk scan with a chunk size of 1, so `StateSpace.states` reads the state after every token. |
 | `Unavailable`, `UnsupportedFamily` | The two exceptions nnterp raises itself. |
-| `Vision` | A vision tower's root envoy (`model.vision`): its blocks at `layers` (`VisionLayer`, with `VisionAttention`, `VisionMlp` from `nnterp.components`), its sizes, `image_token_mask`, `patch_embeddings`, `tower_output`, `image_features`, `support()`. See [../usage/vision.md](../usage/vision.md). |
+| `Vision` | A vision tower's root envoy (`model.vision`): its blocks at `layers` (`VisionLayer`, with `VisionAttention`, `VisionMlp` from `nnterp.components`), its sizes, `image_token_mask`, `patch_embeddings`, `tower_output`, `image_features`, `support()`; `PixtralVision` for Pixtral's packed tower, and `ImageScatter`, keyed on the wrapper's model, for where `image_features` is read. See [../usage/vision.md](../usage/vision.md). |
 
 `nnterp.families`, `nnterp.components`, `nnterp.prompt_utils` and `nnterp.nnsight_utils` are imported as modules.
 
@@ -307,14 +307,14 @@ A Mamba-2 (SSD) mixer (`layers[i].linear_attn` on Mamba-2, Nemotron-H, Bamba and
 
 ## `Vision`
 
-`model.vision`, a multimodal wrapper's vision tower, on a family that names it (Gemma 3's SigLIP, Llava 1.5's CLIP); its blocks are `VisionLayer`, `VisionAttention`, `VisionMlp` (the text components with the stream values annotated `Patches`). The two image values are the tower's although neither is read inside it: their keys are anchored at the model's root (`"/inputs"`, `"/projector.output"`), walked from `vision.root` by standard names.
+`model.vision`, a multimodal wrapper's vision tower, on a family that names it (SigLIP, CLIP, Pixtral: [../usage/vision.md](../usage/vision.md) lists the wrappers); its blocks are `VisionLayer`, `VisionAttention`, `VisionMlp` (the text components with the stream values annotated `Patches`). The two image values are the tower's although neither is read inside it: their keys are anchored at the model's root (`"/inputs"`, and the scatter in the wrapper model's forward, `"/model.source.inputs_embeds_masked_scatter_0.inputs"`), walked from `vision.root`.
 
 | Value | Layout | Read at | Assignable | Unavailable when |
 |---|---|---|---|---|
 | `image_token_mask` | `ImageTokenMask` | the model's inputs (`"/inputs"`), so first in the invoke: `input_ids == config.image_token_id` | no (`AttributeError`: assign `input_ids`) | `no_images()`, or the config names no `image_token_id` |
-| `patch_embeddings` | `Patches` | `patch_embed.output`, the grid flattened (a view) | yes | never |
+| `patch_embeddings` | `Patches` | `patch_embed.output`, the grid flattened (a view); on `PixtralVision` the packed row entering `ln_pre` | yes | never |
 | `tower_output` | `Patches` | the tower's `last_hidden_state` | yes | never |
-| `image_features` | `ImageFeatures` | the projector's output (`"/projector.output"`) flat over the batch's image tokens: `layers[0].input[image_token_mask] == image_features` | yes; in-place edits land | as `image_token_mask`, or the wrapper's `model_type` is not in the family's `IMAGE_WRAPPERS` |
+| `image_features` | `ImageFeatures` | the features argument of the scatter in the wrapper model's forward (`ImageScatter.scatter`, `.scatter_argument`) flat over the batch's image tokens: `layers[0].input[image_token_mask] == image_features` | yes; in-place edits land | as `image_token_mask`, or the family keys no `ImageScatter` on the wrapper's model |
 
 | Member | Signature | What |
 |---|---|---|

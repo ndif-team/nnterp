@@ -3,7 +3,7 @@ title: Vision design
 one_liner: How nnterp standardizes the vision side of image-text-to-text checkpoints — the tower under model.vision with its blocks and the image values, the projector, where the code lives, how loading and the suite work, what does not fit, and the phases.
 tags: [developing, design, vision, multimodal, families]
 related: [docs/usage/vision.md, docs/developing/architecture.md, docs/developing/eproperty-internals.md, docs/developing/testing.md, docs/extending/adding-a-family.md]
-sources: [nnterp/components/vision.py, nnterp/components/standard.py, nnterp/standardized.py, nnterp/components/eproperty.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, tests/families/vision_suite.py, tests/families/suite.py]
+sources: [nnterp/components/vision.py, nnterp/components/standard.py, nnterp/standardized.py, nnterp/components/eproperty.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, nnterp/families/gemma.py, nnterp/families/qwen2.py, nnterp/families/cohere2.py, nnterp/families/mistral.py, nnterp/families/ministral3.py, tests/families/vision_suite.py, tests/families/suite.py]
 ---
 
 # Vision design
@@ -30,7 +30,8 @@ The rules:
   `StandardizedTransformer` has no vision code.
 - **Shared tower classes live in `nnterp/components/vision.py`; per-family paths live in the
   family file.** A tower's names are a handful of `RENAME` lines and four `ENVOYS` entries,
-  inline where the family needs them.
+  inline where the family needs them, plus one `ENVOYS` entry per wrapper keying
+  `ImageScatter` on the wrapper's model, where the image features enter the text stream.
 
 ## The vocabulary
 
@@ -45,17 +46,43 @@ The rules:
 | `vision.norm` | the tower's final norm over the patches, where it has one | `post_layernorm` | none (CLIP's `post_layernorm` norms the pooled CLS only) | none (the merger norms) | `layernorm_post` | none | `final_layernorm` | none |
 | `projector` | the module whose output is scattered into the text stream | `model.multi_modal_projector` | `model.multi_modal_projector` | `model.visual.merger` | `multi_modal_projector` | `model.multi_modal_projector` | `model.mm_projector` | `model.embed_vision` |
 
-Gemma 3 and Llava are implemented; the other columns are what the later phases bind. The
+Gemma 3, Llava and Mistral 3 are implemented, and SigLIP and CLIP on their other hosts
+(below); the other columns are what the later phases bind. The
 text names (`embed_tokens`, `layers`, `norm`, `lm_head`) keep their meaning; on a wrapper
 they alias `model.language_model.*` (Llava's family included) or `model.text_model.*`
 (Idefics 3, SmolVLM). Native names keep working everywhere.
+
+The other hosts of the same towers:
+
+| wrapper (`model_type`) | family | tower, at | `projector` |
+|---|---|---|---|
+| PaliGemma (`paligemma`) | `gemma` | SigLIP, `model.vision_tower` | `model.multi_modal_projector` (one linear) |
+| llava-interleave (`llava`), LLaVA-OneVision (`llava_onevision`) | `qwen2` | SigLIP, `model.vision_tower` | `model.multi_modal_projector` |
+| Aya Vision (`aya_vision`), Cohere2-Vision (`cohere2_vision`) | `cohere2` | SigLIP, `model.vision_tower` | `model.multi_modal_projector` (pixel shuffle inside) |
+| DeepSeek-VL (`deepseek_vl`) | `llama` | SigLIP, `model.vision_model` | `model.aligner` |
+| Idefics 3 (`idefics3`), SmolVLM (`smolvlm`) | `llama` | their SigLIP-shaped ViT, `model.vision_model` | `model.connector` (pixel shuffle inside) |
+| VipLlava (`vipllava`), LLaVA-NeXT (`llava_next`) | `llama` | CLIP, `model.vision_tower` | `model.multi_modal_projector` |
+| LLaVA-NeXT (`llava_next`, `llava-v1.6-mistral`), BakLLaVA (`llava`) | `mistral` | CLIP, `model.vision_tower` | `model.multi_modal_projector` |
+| Mistral 3 (`mistral3`) | `mistral`, `ministral3` | Pixtral, `model.vision_tower` | `model.multi_modal_projector` (`patch_merger` inside) |
+| Pixtral-12B (`llava`) | `mistral` | Pixtral, `model.vision_tower` | `model.multi_modal_projector` |
+
+Where one family hosts a tower at two paths (`llama`: `model.vision_tower` and
+`model.vision_model`), both spellings are in `RENAME`, as the text spellings are. Where one
+family hosts two towers whose inner names differ (`mistral`: CLIP and Pixtral), both sets
+are keyed; each binds only on its own tower. In `llama` CLIP's `post_layernorm` norms the
+pooled CLS token and SigLIP's norms the patches; a rename key cannot tell them apart, so
+`llama` keys `post_layernorm` on neither and its `SiglipVision` (on SigLIP, Idefics 3's and
+SmolVLM's towers) serves `vision.norm` as a property.
 
 `projector` names the last module before the scatter. A pooling or token-merging step
 between the tower and the projector keeps its native name (Gemma 3's pooling is inside the
 projector; Llama 4's pixel-shuffle is `vision.vision_adapter`; Kimi's temporal merge is a
 method of the tower; Idefics 3's pixel shuffle is inside `model.connector`).
 `projector.input` is therefore what the host feeds its projector, which is not always the
-tower's output: Llava feeds `vision.layers[-2].layer_output` without the CLS token.
+tower's output: Llava feeds `vision.layers[-2].layer_output` without the CLS token. And
+`projector.output` is not always what the text model receives: LLaVA-NeXT and
+LLaVA-OneVision unpad it and add a newline token per row, which is why `image_features` is
+read at the scatter.
 
 ### How the tower keys bind
 
@@ -79,7 +106,7 @@ too, on that native envoy; only the root keys decide what `model.vision` is.
 | `patch_embeddings` | `vision` | `Patches` | the patch embedding's output, one row per patch (a view of the convolution's `[images, hidden, rows, columns]`) |
 | `tower_output` | `vision` | `Patches` | what the tower returns over the patches (`last_hidden_state`) |
 | `image_token_mask` | `vision` | `ImageTokenMask` `[batch seq]` | `input_ids == config.image_token_id`, off the model's inputs; read-only |
-| `image_features` | `vision` | `ImageFeatures` `[image_tokens hidden]` | the projector's output flat over every image token of the batch, in scatter order: `layers[0].input[vision.image_token_mask] == vision.image_features` |
+| `image_features` | `vision` | `ImageFeatures` `[image_tokens hidden]` | what the wrapper scatters into the token embeddings, flat over every image token of the batch, in scatter order: `layers[0].input[vision.image_token_mask] == vision.image_features` |
 
 ```python
 from jaxtyping import Bool, Float
@@ -106,7 +133,7 @@ tower whose config spells one its own way overrides the property on a `Vision` s
 | Idefics 3 / SmolVLM ViT | one row per image tile | patches |
 | Llama 4 ViT | one row per image tile | patches, then CLS last |
 | Gemma 4 ViT | one row per image | patches padded to the batch's longest; the padding is masked and stripped by the pooler |
-| Pixtral (Mistral 3, LightOnOCR, Pixtral-12B's Llava wrapper) | 1 | every image's patches concatenated (block-diagonal mask) |
+| Pixtral (Mistral 3, LightOnOCR, Pixtral-12B's Llava wrapper) | 1 | every image's patches concatenated, each image's grid in raster order (block-diagonal mask) |
 | Qwen2-VL, Qwen3-VL, Qwen3.5 ViT; MoonViT (Kimi K2.5) | 1 | every image's patches concatenated (`cu_seqlens`); natively `[patches, hidden]`, served with a leading 1 |
 | Qwen2.5-VL ViT (also EXAONE 4.5) | 1 | as Qwen2-VL, but in *window order*: the tower permutes the patches into attention windows at entry and restores raster order after the merger |
 
@@ -116,12 +143,20 @@ Kimi) or `image_sizes` (Pixtral).
 
 ### What does not fit, and how it is handled
 
-- **Attention interior on a packed tower.** Under eager attention, Qwen's ViT, MoonViT and
-  Pixtral call the attention interface once per image, inside a list comprehension (op
+- **Attention interior on a packed tower.** Under eager attention, Qwen's ViT and MoonViT
+  call the attention interface once per image, inside a list comprehension (op
   `attention_interface_2`; `_1` is the flash branch). A value at that call is one image's: a
   trace with two images served the first image's 256x256 pattern while the block held 536
   patches. The interior values are `Unavailable` on those towers, with the op named in the
-  reason; `attention_output` and the block values are whole and available.
+  reason; `attention_output` and the block values are whole and available. Pixtral is packed
+  too but calls the interface once over the whole row with a block-diagonal mask, so its
+  interior is whole: `attention_probabilities` is `[1, heads, all patches, all patches]`,
+  zero between images, and every interior value is available.
+- **Pixtral's patch embedding.** The convolution runs on the batch padded to its largest
+  image and each image is cropped to its own grid before the grids are concatenated, so the
+  convolution's output is not the tower's stream. On `PixtralVision`, `patch_embeddings` is
+  the packed row entering `ln_pre`, `[1, all patches, vision_hidden]`; `patch_embed` still
+  names the convolution.
 - **Qwen2.5-VL's window order.** The block values are served in the tower's own (window)
   order and documented as such; a raster view needs the window index, which the tower
   computes inside its forward, so nnterp does not reorder.
@@ -143,9 +178,15 @@ Kimi) or `image_sizes` (Pixtral).
 - **An encoder-free wrapper** (Gemma 4 unified, `Gemma4UnifiedForConditionalGeneration`;
   Fuyu) has no tower: raw patches go through one embedder (`model.embed_vision`) into the
   text stream. `projector` names that embedder and so does `vision`, a `Vision` with no
-  blocks that serves only the two image values, and `vision.image_features` is read at the
-  scatter, since the embedder's output still holds the
+  blocks that serves only the two image values; `vision.image_features` is read at the
+  scatter as everywhere, which matters here, since the embedder's output still holds the
   padding patches the forward strips.
+- **A wrapper that scatters in its own top-level forward** (Llama 4's
+  `Llama4ForConditionalGeneration`) has no inner model to key `ImageScatter` on: the root
+  envoy is the `StandardizedTransformer`. The root's forward can be instrumented ahead of a
+  run (`model.source` before the trace makes its operations reachable after the tower's
+  values are read); serving the scatter there needs the root to be instrumented at build
+  when the family asks for it.
 - **Gemma 4's audio tower** is a Conformer; its blocks are not `Layer`/`Attention`/`Mlp`.
   The audio tower's component gets `audio_token_mask` and `audio_features`, as `Vision`
   carries the image values (read at the audio scatter, since the embedder's output still
@@ -161,14 +202,21 @@ nnterp/
   components/
     vision.py        Patches, ImageTokenMask, ImageFeatures; Vision (the tower root: sizes, image_token_mask,
                      patch_embeddings, tower_output, image_features, no_images, support);
-                     VisionLayer, VisionAttention, VisionMlp (Layer/Attention/Mlp with Patches stream values)
+                     VisionLayer, VisionAttention, VisionMlp (Layer/Attention/Mlp with Patches stream values);
+                     ImageScatter (the wrapper's model: where image_features is read); PixtralVision
     standard.py      blocks_support: the support walk over a block list, shared by model.support()
                      and model.vision.support()
-    eproperty.py     root-anchored keys ("/projector.output"), walked from envoy.root
+    eproperty.py     root-anchored keys ("/inputs", "/model.source.<op>.inputs"), walked from envoy.root
   standardized.py    support() lists a Standard child of the root (the tower) under its name
   families/
-    gemma3_text.py   SigLIP's paths in RENAME, its module types in ENVOYS, IMAGE_WRAPPERS = ("gemma3",)
-    llama.py         CLIP's paths in RENAME, its module types in ENVOYS, IMAGE_WRAPPERS = ("llava",)
+    gemma3_text.py   SigLIP's paths in RENAME; its module types and Gemma3Model: ImageScatter in ENVOYS
+    gemma.py         the same for PaliGemma
+    qwen2.py         the same for llava-interleave and LLaVA-OneVision
+    cohere2.py       the same for Aya Vision and Cohere2-Vision
+    llama.py         CLIP (Llava, VipLlava, LLaVA-NeXT), SigLIP (DeepSeek-VL), Idefics 3's and SmolVLM's ViT
+                     (SiglipVision, InputsMerger)
+    mistral.py       Pixtral (Mistral 3, Pixtral-12B) and CLIP (LLaVA-NeXT, BakLLaVA)
+    ministral3.py    Pixtral (Mistral 3)
 ```
 
 A tower whose blocks are plain pre-norm attention + MLP on the shared attention interface
@@ -184,10 +232,7 @@ What `gemma3_text.py` carries for the tower:
 ```python
 from transformers.models.siglip.modeling_siglip import SiglipAttention, SiglipEncoderLayer, SiglipMLP, SiglipVisionModel
 
-from ..components import Vision, VisionAttention, VisionLayer, VisionMlp
-
-#: The wrappers (config ``model_type``) whose projector's output is what they scatter into the text stream.
-IMAGE_WRAPPERS = ("gemma3",)
+from ..components import ImageScatter, Vision, VisionAttention, VisionLayer, VisionMlp
 
 RENAME = {
     ...,                                             # the text stack, both spellings
@@ -203,6 +248,7 @@ RENAME = {
 ENVOYS = {
     ...,                                             # the text blocks
     SiglipVisionModel: Vision, SiglipEncoderLayer: VisionLayer, SiglipAttention: VisionAttention, SiglipMLP: VisionMlp,
+    Gemma3Model: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
 }
 ```
 
@@ -217,28 +263,41 @@ the tower, so each key is anchored at the model's root with a leading `/` and wa
   `model.input_ids` reads, so it is read before anything else in the invoke. It returns
   `input_ids == image_token_id(config)` (`image_token_id`, else `image_token_index`, off the
   wrapper's config). Assigning raises.
-- `image_features` is keyed `"/projector.output"`, `model.model.multi_modal_projector.output`
-  on both wrappers: the projector, the tower's sibling under the root. It returns the output
-  flattened to `[image_tokens, hidden]`, a view, so in-place edits land; an assignment is
-  reshaped back to the projector's output.
+- `image_features` is keyed at the scatter: `"/model.source.inputs_embeds_masked_scatter_0.inputs"`
+  with `select=1`, the features argument of `inputs_embeds.masked_scatter(image_mask,
+  image_features)` in the wrapper model's forward (the key and the selection are functions
+  of the host that read the scatter's host off the root). It returns that argument flattened
+  to `[image_tokens, hidden]`, a view, so in-place edits land; an assignment is reshaped back
+  to the argument's shape.
 
-What the tower reads outside itself (the wrapper's config, its processor, the family's
-`IMAGE_WRAPPERS`, the root's `projector` alias) it reads through `self.root`, nnsight's
-walk up the envoys' parent links to the `StandardizedTransformer`.
+What the tower reads outside itself (the wrapper's config, its processor, the scatter's
+host, the root's `projector` alias) it reads through `self.root`, nnsight's walk up the
+envoys' parent links to the `StandardizedTransformer`.
 
-**Where `image_features` is read.** At the projector's output, on the wrappers where that
-output is what the wrapper scatters into the token embeddings. The family lists those
-wrappers by config `model_type` in `IMAGE_WRAPPERS`, each one checked by the suite
-(`layers[0].input[image_token_mask] == image_features` exactly); `image_features`'
-`unavailable=` predicate reads the list through `model.family`. The projector is a module
-boundary: no instrumentation, no read-order trap. A wrapper that rearranges the projector's
-output before the scatter (LLaVA-NeXT's unpadding and newline tokens; an encoder-free
-embedder's padding) reads `image_features` at the scatter instead: the family names the
-wrapper's `inputs_embeds.masked_scatter` operation and keys a `Standard` envoy with
-`sourced = True` on the wrapper model's type (the scatter runs after the tower, inside the
-same forward). Until a family does that for a wrapper, the wrapper is not in
-`IMAGE_WRAPPERS` and `image_features` is `Unavailable` there with that reason, even where
-the names bind.
+**Where `image_features` is read.** At the scatter, on every wrapper: the tensor the
+wrapper's forward writes into the token embeddings at the image tokens, so it is what the
+text model receives whatever the wrapper did after its projector. The family keys
+`ImageScatter` on the wrapper's model type in `ENVOYS` (`LlavaModel: ImageScatter`); that
+envoy is `sourced`, so its forward is instrumented at build and the scatter is served after
+the tower's values, which run inside the same forward (instrumenting on first read is too
+late there: the read after a tower value raises `OutOfOrderError`). `ImageScatter.scatter`
+names the operation (`inputs_embeds_masked_scatter_0` on every wrapper with a
+`masked_scatter`) and `scatter_argument` the argument (1). Idefics 3 and SmolVLM write the
+features in through a helper, `self.inputs_merger(input_ids=..., inputs_embeds=...,
+image_hidden_states=...)`; SmolVLM's helper gathers rather than scatters. Their family keys
+a subclass, `InputsMerger`, naming the helper call (`self_inputs_merger_0`) and its keyword
+argument (`image_hidden_states`), whose flat row-major order is the order the helper places
+the rows in. A wrapper whose family keys no `ImageScatter` binds the tower's names but
+`image_features` is `Unavailable` there, with that reason.
+
+The scatter is right where the projector's output is not what enters the text model:
+LLaVA-NeXT and LLaVA-OneVision unpad the projector's output per image and append a newline
+token per row (`image_newline`): on `trl-internal-testing/tiny-LlavaNextForConditionalGeneration`
+with a 64x64 image the projector returns `[3, 576, 16]` (the base image and two crops,
+1728 rows) and the text model receives 1176 rows, 24 of them `image_newline`. On the
+other wrappers the scattered tensor is the projector's output, reshaped. Reading at the
+scatter costs nothing measurable: an instrumented `LlavaModel` forward traced
+`llava-hf/llava-1.5-7b-hf` in 111 ms against 110 ms without.
 
 **Availability.** `Vision.no_images()` is the one place that decides whether an image can
 reach the model: not where the family names no `projector`, nor on a load with no processor
@@ -283,11 +342,17 @@ it); several images or prompts go in one invoke, as lists. Two text-only invokes
 `tests/families/vision_suite.py` holds two bases.
 
 `VisionSuite`, subclassed per wrapper in the family's test file (`TestGemma3Vision`,
-`TestLlavaVision`), loads the pinned tiny wrapper with `task="image-text-to-text"`, eager, in
-float32, and traces a fixed random image through the processor's chat template:
+`TestLlavaVision`, ...), loads the pinned tiny wrapper with `task="image-text-to-text"`,
+eager, in float32, and traces a fixed random image through the processor's chat template
+(the processor's image token before the text where the tiny has no usable template). A
+subclass's `fix_processor` sets a tiny checkpoint's processor to its model where the two
+disagree (the hf-tiny-v2 checkpoints' processors carry the full-size models' patch sizes,
+token counts and crop grids, and their configs' `image_token_id` is not the tokenizer's
+image token); `PixtralSuite` replaces the patch-embedding checks for a packed tower:
 
 - the tower names alias the native modules; the tower's envoys are `Vision`, `VisionLayer`,
-  `VisionAttention`, `VisionMlp`; no tower alias binds on a text block;
+  `VisionAttention`, `VisionMlp`; the wrapper's model is an `ImageScatter`; no tower alias
+  binds on a text block;
 - `vision.num_layers`, `hidden_size`, `num_heads`, `intermediate_size`, `patch_size` are the
   vision config's; the root's sizes are the text config's;
 - on every tower block, `input + attention_output + mlp_output == layer_output`, and under
@@ -303,7 +368,13 @@ float32, and traces a fixed random image through the processor's chat template:
 - `patch_embeddings` is the convolution's output flattened, `tower_output` the last block's
   stream after `vision.norm` where there is one;
 - a text-only trace reads the text values with the mask all false; a text-only checkpoint
-  of the family (and Gemma 3's `text-generation` load) has no `vision` host in `support()`.
+  of the family (and Gemma 3's `text-generation` load) has no `vision` host in `support()`;
+- on Pixtral (`PixtralSuite`): `patch_embeddings` is `[1, all patches, vision_hidden]`, the
+  row entering `ln_pre`, with each image's patch count off the processor's `image_sizes`;
+  two images of different shapes make one row whose pattern is zero between the images
+  and sums to one within each, and the scatter identity holds;
+- on LLaVA-NeXT (both families) and LLaVA-OneVision, `image_features` is not the projector's
+  output: it has another row count and holds `image_newline` rows.
 
 Every `FamilySuite` test also runs on the wrappers loaded under `image-text-to-text`
 (`TestLlavaWrapper`, `TestIdefics3Wrapper`, `TestGemma3ImageTextToText`,
@@ -311,7 +382,8 @@ Every `FamilySuite` test also runs on the wrappers loaded under `image-text-to-t
 `TestQwen3_5MoeWrapper`), so the text side is checked as loaded with the processor.
 `WrapperSuite` checks the text names, `support()` and the text identity on a wrapper with
 no tiny checkpoint of its own, built from the family's tiny text config with random
-weights (Mistral 3 around Mistral, Aya Vision, EXAONE 4.5, LightOnOCR), and on PaliGemma.
+weights (Mistral 3 around Mistral, Aya Vision, EXAONE 4.5, LightOnOCR), and on PaliGemma;
+a wrapper built without a processor lists no `vision` rows, PaliGemma's lists its tower.
 
 The pinned checkpoints, all loadable offline once cached:
 
@@ -319,10 +391,14 @@ The pinned checkpoints, all loadable offline once cached:
 |---|---|---|
 | `gemma3_text` | `yujiepan/gemma-3-tiny-random` | `trl-internal-testing/tiny-Gemma3ForConditionalGeneration` (the wrapper test's) has a projector that outputs exact zeros, so no edit upstream of it shows |
 | `llama` | `trl-internal-testing/tiny-LlavaForConditionalGeneration` | real check: `llava-hf/llava-1.5-7b-hf` |
-| `qwen2` | `llava-hf/llava-interleave-qwen-0.5b-hf` (Llava with SigLIP) | |
+| `llama` | `hf-tiny-v2/tiny-random-VipLlavaForConditionalGeneration`, `hf-tiny-v2/tiny-random-LlavaNextForConditionalGeneration`, `hf-tiny-v2/tiny-random-DeepseekVLForConditionalGeneration` | processors set to the model (`fix_processor`) |
+| `llama` | `trl-internal-testing/tiny-Idefics3ForConditionalGeneration`, `trl-internal-testing/tiny-SmolVLMForConditionalGeneration` | SmolVLM's processor needs `num2words` |
+| `qwen2` | `llava-hf/llava-interleave-qwen-0.5b-hf` (Llava with SigLIP); `hf-tiny-v2/tiny-random-LlavaOnevisionForConditionalGeneration` | |
+| `cohere2` | `hf-tiny-v2/tiny-random-AyaVisionForConditionalGeneration`, `hf-tiny-v2/tiny-random-Cohere2VisionForConditionalGeneration` | |
+| `mistral` | `trl-internal-testing/tiny-LlavaNextForConditionalGeneration` (LLaVA-NeXT); `hf-tiny-v2/tiny-random-Mistral3ForConditionalGeneration`; Pixtral-12B's Llava wrapper built small from `mistral-community/pixtral-12b`'s config with its processor | no tiny Pixtral-12B or BakLLaVA checkpoint exists |
 | `qwen3_5_text`, `qwen3_5_moe_text` | `yujiepan/qwen3.5-tiny-random`, `yujiepan/qwen3.5-moe-tiny-random` | real check: `Qwen/Qwen3.5-0.8B` |
 | `ministral3` | `yujiepan/mistral-3-tiny-random` | |
-| `gemma` | `trl-internal-testing/tiny-PaliGemmaForConditionalGeneration` | |
+| `gemma` | `hf-tiny-v2/tiny-random-PaliGemmaForConditionalGeneration` | `trl-internal-testing/tiny-PaliGemmaForConditionalGeneration` (the text test's) projects to 2048 where its text model is 16 wide, so its image path fails in transformers' own forward |
 | `gemma4_text` | `trl-internal-testing/tiny-Gemma4ForConditionalGeneration`; `yujiepan/gemma-4-e-tiny-random` (with audio) | phase 2 |
 | `qwen2_vl_text`, `qwen2_5_vl_text`, `qwen3_vl_text` | `yujiepan/qwen2-vl-tiny-random`, `trl-internal-testing/tiny-Qwen2_5_VLForConditionalGeneration`, `yujiepan/qwen3-vl-tiny-random` | phase 2 |
 | `llama4_text` | `yujiepan/llama-4-tiny-random`, config-patched as its text test does | phase 2 |
@@ -338,6 +414,12 @@ The pinned checkpoints, all loadable offline once cached:
 **Phase 1, the per-image towers.** `components/vision.py` with the image values on the tower,
 `VisionSuite`; SigLIP on `gemma3_text`, CLIP on `llama` (Llava 1.5). Done.
 
+**Phase 2, part B.** SigLIP on `gemma` (PaliGemma), `qwen2` (llava-interleave,
+LLaVA-OneVision), `cohere2` (Aya Vision, Cohere2-Vision) and `llama` (DeepSeek-VL, and
+Idefics 3's and SmolVLM's ViT); CLIP on `llama` (VipLlava, LLaVA-NeXT) and `mistral`
+(LLaVA-NeXT, BakLLaVA); Pixtral on `mistral` and `ministral3`; `image_features` read at the
+scatter on every wrapper (`ImageScatter`). Done.
+
 **Phase 2, the packed and the remaining towers.**
 
 - New text families, re-exporting their base's components on the VL classes (M-RoPE), as
@@ -345,12 +427,9 @@ The pinned checkpoints, all loadable offline once cached:
   (with `deepstack_output`), `qwen3_vl_moe_text`. Today these wrappers resolve to a
   `model_type` with no family and raise `UnsupportedFamily`.
 - Qwen's ViT for `qwen3_5_text`, `qwen3_5_moe_text` and the new Qwen-VL families (packed:
-  the interior `Unavailable`); MoonViT for `kimi_k2`; Pixtral for `mistral` and
-  `ministral3`; Llama 4's ViT for `llama4_text`; Gemma 4's ViT for `gemma4_text`; Gemma 4
-  unified's embedder (no tower: a blockless `Vision` with the image values only, read at the scatter).
-- SigLIP on the other families that host it (`gemma` for PaliGemma, `qwen2` for
-  LLaVA-OneVision and llava-interleave, `cohere2` for Aya Vision), with their wrappers in
-  `IMAGE_WRAPPERS` once the suite checks the scatter.
+  the interior `Unavailable`); MoonViT for `kimi_k2`; Llama 4's ViT for `llama4_text`;
+  Gemma 4's ViT for `gemma4_text`; Gemma 4 unified's embedder (no tower: a blockless
+  `Vision` with the image values only). Each wrapper's model is keyed `ImageScatter`.
 - From nnsight: the task derived from the config (`image-text-to-text` where
   `AutoModelForImageTextToText` maps it), after which nnterp drops its `text-generation`
   default; batching several image-carrying
@@ -360,5 +439,5 @@ The pinned checkpoints, all loadable offline once cached:
 
 **Phase 3, the rest.** Video and audio values (`video_token_mask`, `video_features`,
 `audio_token_mask`, `audio_features`), Mllama's family (`mllama_text_model`) with a
-`CrossAttention` component, and the long tail (InternViT, Idefics 3's ViT, LLaVA-NeXT's
-packing read at the scatter).
+`CrossAttention` component, and the long tail (InternViT, Janus, Video-Llava's separate
+image and video towers, LLaVA-NeXT-Video).

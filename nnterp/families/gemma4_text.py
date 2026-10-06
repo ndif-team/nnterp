@@ -113,9 +113,6 @@ RENAME = {
     "encoder.layers": "layers",
 }
 
-#: The wrappers (config ``model_type``) whose projector's output is what they scatter into the text stream.
-IMAGE_WRAPPERS = ("gemma4",)
-
 
 def _no_per_layer_input(envoy: Envoy) -> str | None:
     if envoy._module.hidden_size_per_layer_input:

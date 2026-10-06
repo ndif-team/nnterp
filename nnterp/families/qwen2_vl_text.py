@@ -23,9 +23,6 @@ from transformers.models.qwen2_vl.modeling_qwen2_vl import VisionMlp as Qwen2VLV
 
 from ..components import ImageScatter, Attention, Layer, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
 
-#: The wrappers (config ``model_type``) whose tower's merged output is what they scatter into the text stream.
-IMAGE_WRAPPERS = ("qwen2_vl",)
-
 RENAME = {
     "model.language_model.embed_tokens": "embed_tokens",
     "model.language_model.layers": "layers",

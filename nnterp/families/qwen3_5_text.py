@@ -23,9 +23,6 @@ from ..components import (
     ImageScatter, Attention, Layer, LinearAttention, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision,
 )
 
-#: The wrappers (config ``model_type``) whose tower's merged output is what they scatter into the text stream.
-IMAGE_WRAPPERS = ("qwen3_5",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

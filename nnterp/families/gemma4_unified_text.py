@@ -52,9 +52,6 @@ RENAME = {
     "patch_dense": "patch_embed",
 }
 
-#: The wrappers (config ``model_type``) whose image features the suite checks at the scatter.
-IMAGE_WRAPPERS = ("gemma4_unified",)
-
 
 class Layer(Layer):
     """Gemma-4 unified's decoder block; returns a bare tensor (the sum times ``layer_scalar``), so the base holds."""

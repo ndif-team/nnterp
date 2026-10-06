@@ -39,9 +39,6 @@ from ..components import (
     QwenVision, Standard, pinned,
 )
 
-#: The wrappers (config ``model_type``) whose tower's merged output is what they scatter into the text stream.
-IMAGE_WRAPPERS = ("qwen3_vl",)
-
 #: The text model's call that adds a deepstack feature after a block: ``_deepstack_process(hidden, mask, embeds)``.
 DEEPSTACK = "self__deepstack_process_0"
 

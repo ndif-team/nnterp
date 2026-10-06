@@ -21,9 +21,6 @@ from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import (
 from ..components import ImageScatter, Attention, Mlp, Moe, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
 from . import qwen3_vl_text
 
-#: The wrappers (config ``model_type``) whose tower's merged output is what they scatter into the text stream.
-IMAGE_WRAPPERS = ("qwen3_vl_moe",)
-
 RENAME = {**qwen3_vl_text.RENAME, "gate": "router"}
 
 

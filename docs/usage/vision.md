@@ -141,7 +141,5 @@ first (LLaVA-NeXT's unpadding and newline tokens) is not listed, and the value s
   native-only, and there is no `model.vision` there.
 - Qwen2-VL, Qwen2.5-VL, Qwen3-VL and Mllama: their text models are types nnterp has no
   family for yet.
-- `model.generate` under `task="image-text-to-text"` fails in nnsight (the pipeline's
-  `generate_kwargs` reach `model.generate` as a model argument).
 - Video and audio values; batching several image-carrying invokes in one trace.
 - The design and the phases: [docs/developing/vision-design.md](../developing/vision-design.md).

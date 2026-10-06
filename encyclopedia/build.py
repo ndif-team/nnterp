@@ -91,6 +91,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
     "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),
     "mamba2": ("State space (Mamba-2)", "The mixer is an SSD state-space block with a per-chunk state."),
+    "fp32-residual": ("Float32 residual", "The blocks add in float32 (residual_in_fp32), so layer_output is float32 whatever the load dtype."),
     "no-mlp": ("No MLP module", "fc1/fc2 sit on the block, so layers[i].mlp does not exist."),
     "softcapped-logits": ("Softcapped logits", "logits is tanh-capped after lm_head; project_on_vocab applies the cap."),
     "scaled-logits": ("Scaled logits", "The head's output is multiplied or divided by a config scale."),
@@ -122,6 +123,7 @@ CONFIG_KEYS = (
     "linear_num_heads", "linear_head_dim", "linear_conv_kernel_dim",
     "first_k_dense_replace", "moe_intermediate_size", "num_experts", "n_routed_experts", "num_experts_per_token",
     "num_experts_per_tok", "num_shared_experts", "n_shared_experts", "routed_scaling_factor",
+    "state_size", "expand", "conv_kernel", "residual_in_fp32",
 )
 
 STRUCTURAL = re.compile(r"^no \w+ (module|value) on this block")

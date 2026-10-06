@@ -189,6 +189,7 @@ The entry states facts about a family, and each one has a source. Before writing
    | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (`granite` hashes to 156, beside Gemma) |
    | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron |
    | Kimi (kimi_k2, kimi_linear) | 330 | kimi_k2 (kimi_linear 342) |
+   | Mamba (mamba2, falcon_mamba, jamba's Mamba blocks) | hash of `mamba` (17) | mamba |
 
    `python -c "import sys; sys.path.insert(0, 'encyclopedia'); import palette; print(palette.hue_of('olmo2'))"`
    prints a hashed hue.

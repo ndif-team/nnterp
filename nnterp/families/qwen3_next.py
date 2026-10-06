@@ -11,8 +11,6 @@ from transformers.models.qwen3_next.modeling_qwen3_next import Qwen3NextAttentio
 
 from ..components import Attention, Layer, LinearAttention, Mlp, Moe, Residual, TokenEProperty, no_shared_expert
 
-MODEL_TYPES = ("qwen3_next",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

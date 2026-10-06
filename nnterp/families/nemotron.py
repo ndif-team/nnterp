@@ -12,8 +12,6 @@ from transformers.models.nemotron.modeling_nemotron import NemotronAttention, Ne
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("nemotron",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

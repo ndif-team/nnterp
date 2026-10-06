@@ -26,8 +26,6 @@ from ..components import (
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("gpt_neo",)
-
 RENAME = {
     "transformer.wte": "embed_tokens",
     "transformer.h": "layers",

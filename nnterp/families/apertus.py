@@ -13,8 +13,6 @@ from transformers.models.apertus.modeling_apertus import ApertusAttention, Apert
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("apertus",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

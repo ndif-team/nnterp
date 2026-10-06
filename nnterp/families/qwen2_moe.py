@@ -9,8 +9,6 @@ from transformers.models.qwen2_moe.modeling_qwen2_moe import Qwen2MoeAttention, 
 
 from ..components import Attention, Layer, Moe, Residual, TokenEProperty, no_shared_expert
 
-MODEL_TYPES = ("qwen2_moe",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

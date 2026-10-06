@@ -11,8 +11,6 @@ from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import Qwen3_5MoeAtten
 
 from ..components import Attention, Layer, LinearAttention, Mlp, Moe, Residual, TokenEProperty, no_shared_expert
 
-MODEL_TYPES = ("qwen3_5_moe_text",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

@@ -46,8 +46,6 @@ from ..components import (
     Attention, ExpertOutputs, Layer, Mlp, Moe, Residual, StateSpace, TokenEProperty, needs_grouped_experts,
 )
 
-MODEL_TYPES = ("nemotron_h",)
-
 MIXER_NAMES = {
     NemotronHMamba2Mixer: "linear_attn",
     NemotronHAttention: "self_attn",

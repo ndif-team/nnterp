@@ -29,8 +29,6 @@ from ..components import Attention, EProperty, Layer, Mlp, Residual, first_tenso
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("granite",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

@@ -15,8 +15,6 @@ from transformers.models.ministral3.modeling_ministral3 import (
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("ministral3",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

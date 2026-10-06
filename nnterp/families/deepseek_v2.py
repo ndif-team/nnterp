@@ -14,8 +14,6 @@ from ..components import Attention, Layer, Mlp, Moe
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("deepseek_v2",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

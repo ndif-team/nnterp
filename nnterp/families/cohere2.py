@@ -16,8 +16,6 @@ from transformers.models.cohere2.modeling_cohere2 import Cohere2Attention, Coher
 from ..components import Attention, Layer, Mlp
 from .cohere import project_on_vocab  # noqa: F401  the same head: the same logit_scale
 
-MODEL_TYPES = ("cohere2",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

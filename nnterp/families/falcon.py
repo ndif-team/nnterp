@@ -28,8 +28,6 @@ from ..components import (
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("falcon",)
-
 RENAME = {
     "transformer.word_embeddings": "embed_tokens",
     "transformer.h": "layers",

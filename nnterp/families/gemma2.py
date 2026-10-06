@@ -11,8 +11,6 @@ from transformers.models.gemma2.modeling_gemma2 import Gemma2Attention, Gemma2De
 
 from ..components import Attention, EProperty, Layer, Mlp, Residual
 
-MODEL_TYPES = ("gemma2",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

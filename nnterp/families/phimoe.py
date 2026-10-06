@@ -12,8 +12,6 @@ from transformers.models.phimoe.modeling_phimoe import PhimoeAttention, PhimoeDe
 
 from ..components import Attention, Layer, Moe, RouterLogits, TokenEProperty
 
-MODEL_TYPES = ("phimoe",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

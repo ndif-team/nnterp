@@ -14,8 +14,6 @@ from transformers.models.flex_olmo.modeling_flex_olmo import FlexOlmoAttention, 
 
 from ..components import Attention, EProperty, Layer, Moe, Residual
 
-MODEL_TYPES = ("flex_olmo",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

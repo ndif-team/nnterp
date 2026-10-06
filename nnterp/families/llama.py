@@ -10,8 +10,6 @@ from transformers.models.llama.modeling_llama import LlamaAttention, LlamaDecode
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("llama",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

@@ -34,8 +34,6 @@ from transformers.models.olmo_hybrid.modeling_olmo_hybrid import (
 
 from ..components import Attention, EProperty, Layer, LinearAttention, Mlp, Residual
 
-MODEL_TYPES = ("olmo_hybrid",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

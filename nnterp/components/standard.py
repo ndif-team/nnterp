@@ -75,9 +75,6 @@ class Standard(Envoy):
 
     #: Instrument this module's forward at build, ahead of any run (see the class docstring).
     sourced = False
-    #: The `StandardizedTransformer` this envoy belongs to, set when the model is built: what a value
-    #: reads the model's config, processor or family through (the vision tower's image values).
-    _root: Any = None
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)

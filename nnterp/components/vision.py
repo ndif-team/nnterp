@@ -71,7 +71,7 @@ def from_root(path: str) -> Callable[[Envoy], str]:
     """
 
     def key(vision: Envoy) -> str:
-        root = vision._root
+        root = vision.root
         up = "../" * (vision.path.count(".") - root.path.count("."))
         *walk, attribute = path.split(".")
         native = root.get(".".join(walk)).path.removeprefix(f"{root.path}.") + "." if walk else ""
@@ -84,7 +84,7 @@ def from_root(path: str) -> Callable[[Envoy], str]:
 def no_image_tokens(vision: Vision) -> str | None:
     """Why ``vision.image_token_mask`` is unavailable, or ``None``."""
     reason = vision.no_images()
-    if reason is None and image_token_id(vision._root.config) is None:
+    if reason is None and image_token_id(vision.root.config) is None:
         reason = "the config names no image_token_id"
     return reason
 
@@ -102,7 +102,7 @@ def no_image_features(vision: Vision) -> str | None:
     """
     reason = no_image_tokens(vision)
     if reason is None:
-        model = vision._root
+        model = vision.root
         wrappers = tuple(getattr(model.family, "IMAGE_WRAPPERS", ()))
         if model.config.model_type not in wrappers:
             reason = (
@@ -223,7 +223,7 @@ class Vision(Standard):
         before anything else in the invoke. All false on a text-only trace.
         Read-only.
         """
-        return value[1]["input_ids"] == image_token_id(self._root.config)
+        return value[1]["input_ids"] == image_token_id(self.root.config)
 
     @image_token_mask.postprocess
     def image_token_mask(self, value: Any) -> Any:
@@ -279,7 +279,7 @@ class Vision(Standard):
 
     @image_features.postprocess
     def image_features(self, value: torch.Tensor) -> torch.Tensor:
-        return value.reshape(self._root.projector.output.shape)
+        return value.reshape(self.root.projector.output.shape)
 
     # -- availability ------------------------------------------------------------------
 
@@ -290,8 +290,8 @@ class Vision(Standard):
         the text model is unknown), or a load without a processor (a
         ``task="text-generation"`` load of the wrapper).
         """
-        model = self._root
-        if model is None:
+        model = self.root
+        if getattr(model, "family", None) is None:  # a StandardizedTransformer's root has its family
             return "the tower is not part of a StandardizedTransformer, so the model's inputs and projector are unknown"
         if "projector" not in model._aliases:
             return f"the {model.family.__name__.rsplit('.', 1)[-1]} family names no projector on this wrapper"

@@ -14,7 +14,7 @@ from nnsight.modeling.transformers import TransformersModel
 from torch import Tensor
 
 from . import families
-from .components import EProperty, Layer, Residual, Standard
+from .components import EProperty, Layer, Residual
 from .components.standard import blocks_support, standard_children, values
 from .components.vision import Vision
 
@@ -162,8 +162,6 @@ class StandardizedTransformer(TransformersModel):
             },
             **kwargs,
         )
-        for envoy in self.modules(include_fn=lambda envoy: isinstance(envoy, Standard)):
-            envoy._root = self
         for key, value in (tokenizer_kwargs or {}).items():
             setattr(self.tokenizer, key, value)
 

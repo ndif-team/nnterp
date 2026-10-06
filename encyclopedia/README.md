@@ -159,7 +159,7 @@ The entry states facts about a family, and each one has a source. Before writing
    the variant label redraw when the slider crosses into another. The build fails when a block has
    a host the listed sublayers do not draw, when two sublayers match the same host, or when a
    sublayer matches no block of the checkpoint and is not the other half of such an `"mlp"` /
-   `"moe"` pair.
+   `"moe"` pair. When the reference and the pinned checkpoint have different block kinds (Nemotron 3 Nano is dense where its tiny checkpoint is a mixture), list both layouts (`"mlp"` and `"moe"` for the same host); each build draws the ones its checkpoint has.
 
    The build checks every host, contribution and interior value against the family and fails on a
    name the family does not have.
@@ -192,6 +192,8 @@ The entry states facts about a family, and each one has a source. Before writing
    | GPT-J and CodeGen | hash of `gptj` (222) | gptj (codegen 234) |
    | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (granitemoe 215; `granite` hashes to 156, beside Gemma) |
    | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron |
+   | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (`granite` hashes to 156, beside Gemma) |
+   | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron (nemotron_h 250) |
    | Kimi (kimi_k2, kimi_linear) | 330 | kimi_k2 (kimi_linear 342) |
    | Mamba (mamba2, falcon_mamba, jamba's Mamba blocks) | hash of `mamba` (17) | mamba |
 

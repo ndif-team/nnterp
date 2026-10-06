@@ -106,6 +106,8 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; split its output by that layout before reading a head."),
     "dense-first-blocks": ("Dense first blocks", "The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
     "unnormalized-routing": ("Unnormalized routing", "The expert weights are the router's softmax entries for the chosen experts, not renormalized over them: a token's expert_weights sum to less than one."),
+    "one-sublayer-blocks": ("One sublayer per block", "Each block is one norm and one sublayer, so it adds one contribution to the stream, and support() reports the hosts it does not hold missing on it."),
+    "dense-first-blocks": ("Dense first blocks","The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
 }
 
 ROOT_NAMES = ("embed_tokens", "layers", "norm", "lm_head")
@@ -131,6 +133,8 @@ CONFIG_KEYS = (
     "full_attention_interval",
     "state_size", "expand", "conv_kernel", "residual_in_fp32",
     "num_kv_shared_layers",
+    "mamba_num_heads", "mamba_head_dim", "n_groups", "ssm_state_size", "chunk_size", "mlp_hidden_act",
+    "moe_shared_expert_intermediate_size", "moe_latent_size",
 )
 
 #: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.
@@ -148,15 +152,18 @@ def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
         match = VALUE_LINE.match(str(value))
         assert match, str(value)
         key, select = getattr(value, "key", None), getattr(value, "select", None)
+        # `unavailable(reason)`: a value the family declares it does not have; its key falls back to its
+        # own name and names no location, so it is read nowhere.
+        nowhere = isinstance(getattr(value, "unavailable", None), str)
         rows.append({
             "name": name,
             "expr": f"{expr}.{name}",
             "layout": match["layout"],
             "dims": match["dims"],
             "description": match["desc"],
-            "key": key if isinstance(key, str) else ("computed" if key is not None else None),
+            "key": None if nowhere else key if isinstance(key, str) else ("computed" if key is not None else None),
             "select": select,
-            "where": humanize_key(key, select),
+            "where": "nowhere: the family does not serve it" if nowhere else humanize_key(key, select),
         })
     return rows
 
@@ -169,6 +176,10 @@ def humanize_key(key: Any, select: int | None) -> str:
         # a select chosen per call (a Mamba-1 kernel argument sits at a different position in each kernel)
         name = getattr(select, "__name__", "")
         element = f", argument `{name.split('.', 1)[1]}`" if name.startswith("argument.") else ", the element this call's kernel takes"
+        # a select resolved per call (a Mamba-2 value): the argument the kernel that fires takes it as,
+        # or the element of its output that call returns it in
+        named = re.fullmatch(r"argument\((\w+)\)", select.__name__)
+        element = f", argument `{named[1]}`" if named else ", the element that call returns it in"
     else:
         element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
     if key.startswith("<"):

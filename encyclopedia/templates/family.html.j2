@@ -34,8 +34,13 @@
 
 <section class="frame section" id="block">
   <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
+  {% if block.shapes %}
+  <p class="lead">One of {{ num_layers }} blocks, of {{ block.shapes|length }} shapes. Hover any part for the nnterp name that reads it; click to pin.
+  The slider picks a block, its tick's colour gives the shape, and the diagram redraws for it.</p>
+  {% else %}
   <p class="lead">One of {{ num_layers }} identical blocks. Hover any part for the nnterp name that reads it; click to pin.
   {% if layer_types and layer_types|unique|list|length > 1 %}The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.{% endif %}</p>
+  {% endif %}
 
   <div class="strip" id="strip">
     <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
@@ -77,7 +82,7 @@
   {% if eager_only %}<p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition. Here, {{ eager_only|length }} values need <span class="mono">attn_implementation="eager"</span>.</p>{% endif %}
   {% for host, rows in values.items() %}
   <div class="ledger values">
-    <div class="ledger-head"><span><span class="role-{{ host_roles[host] }}">{% if host == 'root' %}model{% elif host == 'layer' %}model.layers[i]{% else %}model.layers[i].{{ host }}{% endif %}</span>{% if rows and rows[0].module %} <span class="mono dim">{{ rows[0].module }}</span>{% endif %}</span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+    <div class="ledger-head"><span><span class="role-{{ host_roles[host] }}">{% if host == 'root' %}model{% elif host == 'layer' %}model.layers[i]{% else %}model.layers[i].{{ host }}{% endif %}</span>{% if rows and rows[0].module %} <span class="mono dim">{{ module_classes[host]|join(' / ') if host in module_classes else rows[0].module }}</span>{% endif %}</span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
     {% for row in rows %}
     <div class="ledger-row" data-node="{% if host == 'root' %}{{ 'strip.' ~ {'token_embeddings': 'embed', 'logits': 'logits'}.get(row.name, '') }}{% endif %}">
       <span class="mono-md name role-{{ host_roles[host] }}">{% if row.condition %}<span class="warn" tabindex="0" data-tip="{{ 'Needs attn_implementation="eager". ' if row.condition.kind == 'eager' }}{{ row.condition.reason }}">&#x26A0;&#xFE0E;</span>{% endif %}{{ row.name }}</span>
@@ -130,7 +135,7 @@
       <p class="micro">sources</p>
       <p class="body-md"><a href="{{ source_url }}">{{ family_file }}</a><br><a href="{{ test_url }}">tests/families/test_{{ model_type }}.py</a><br><a href="{{ families_url }}">docs/reference/families.md</a></p>
       <p class="micro">envoys</p>
-      <p class="body-md mono">{{ block_class }} → Layer{% for alias, cls in module_classes.items() %}<br>{{ cls }} → {{ alias }}{% endfor %}</p>
+      <p class="body-md mono">{{ block_class }} → Layer{% for alias, classes in module_classes.items() %}{% for cls in classes %}<br>{{ cls }} → {{ alias }}{% endfor %}{% endfor %}</p>
     </aside>
   </div>
 </section>

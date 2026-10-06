@@ -44,7 +44,8 @@ from pygments.lexers import PythonLexer  # noqa: E402
 
 import nnterp  # noqa: E402  (import nnterp before any transformers.models module)
 from nnterp import StandardizedTransformer  # noqa: E402
-from nnterp.components import Standard  # noqa: E402
+from nnterp.components import Moe, RecurrentMixer, Standard  # noqa: E402
+from nnterp.components.moe import SHARED_NAMES  # noqa: E402
 from nnterp.components.standard import values as class_values  # noqa: E402
 
 import entries  # noqa: E402
@@ -101,6 +102,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "layernorm": ("LayerNorm", "Norms subtract the mean before scaling; a shift along the all-ones direction never reaches the next sublayer or the logits."),
     "squared-relu": ("Squared ReLU", "The MLP's activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere."),
     "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; split its output by that layout before reading a head."),
+    "dense-first-blocks": ("Dense first blocks", "The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
 }
 
 ROOT_NAMES = ("embed_tokens", "layers", "norm", "lm_head")
@@ -116,9 +118,14 @@ CONFIG_KEYS = (
     "rotary_dim",
     "embedding_multiplier", "residual_multiplier", "attention_multiplier", "logits_scaling",
     "norm_eps", "partial_rotary_factor",
+    "q_lora_rank", "kv_lora_rank", "qk_nope_head_dim", "qk_rope_head_dim", "v_head_dim",
+    "linear_num_heads", "linear_head_dim", "linear_conv_kernel_dim",
+    "first_k_dense_replace", "moe_intermediate_size", "num_experts", "n_routed_experts", "num_experts_per_token",
+    "num_experts_per_tok", "num_shared_experts", "n_shared_experts", "routed_scaling_factor",
 )
 
-VALUE_LINE = re.compile(r"^\((?P<name>\w+)\)(?: -> (?P<layout>\w+) \[(?P<dims>[^\]]*)\])?: (?P<desc>.*)$")
+STRUCTURAL = re.compile(r"^no \w+ (module|value) on this block")
+VALUE_LINE = re.compile(r"^\((?P<name>\w+)\)(?: -> (?P<layout>\w+(?: \| None)?) \[(?P<dims>[^\]]*)\])?: (?P<desc>.*)$")
 
 
 # -- introspection ----------------------------------------------------------------
@@ -148,7 +155,14 @@ def humanize_key(key: Any, select: int | None) -> str:
     """Where a value is read, in words: the key is a path from the host envoy."""
     if not isinstance(key, str):
         return "computed from several served values" if key is not None else "derived"
-    element = "" if select is None else f", element {select}"
+    element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
+    if key.startswith("<"):
+        # a location the value finds per call: a recurrent mixer's kernel, whichever fires on this call
+        name = key[1:-1]
+        if name.startswith("kernel."):
+            what = {"inputs": "the arguments of", "output": "the output of"}.get(name.split(".", 1)[1], name)
+            return f"inside the forward: {what} the kernel this call runs (a prompt's chunked one or a decode step's recurrent one){element}"
+        return f"inside the forward, at the operation `{name}` finds on each call"
     if key == "output":
         return "the module's own output" + element
     if key in ("input", "inputs"):
@@ -162,6 +176,9 @@ def humanize_key(key: Any, select: int | None) -> str:
         inside = " inside ".join(f"`{op}`" for op in reversed(chain))
         what = {"inputs": "the arguments of", "input": "the input of", "output": "the output of"}.get(what, what + " of")
         return f"inside the forward: {what} {inside}{element}"
+    if ".source." in key and not key.startswith("../"):
+        module, inside = key.split(".source.", 1)
+        return humanize_key("source." + inside, select).replace("inside the forward", f"inside `{module}`'s forward", 1)
     if key.startswith("../"):
         module, attr = key[3:].rsplit(".", 1)
         return f"the sibling module `{module}`'s {attr}{element}"
@@ -175,6 +192,11 @@ def summarize_reason(reason: Any, num_layers: int) -> str | None:
         return None
     if isinstance(reason, str):
         return reason
+    # A block without the value's host (a hybrid's other mixer, a dense block's mixture) is the
+    # block's shape, which the diagram draws, not a condition on the load.
+    reason = {i: why for i, why in reason.items() if not STRUCTURAL.match(why)}
+    if not reason:
+        return None
     reasons = sorted(set(reason.values()))
     blocks = sorted(reason)
     where = "every block" if len(blocks) == num_layers else f"blocks {blocks}"
@@ -184,13 +206,32 @@ def summarize_reason(reason: Any, num_layers: int) -> str | None:
 def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any]:
     """What nnterp knows about the entry's family, read off a meta build of ``reference``."""
     reference = reference or entry.REFERENCE
-    eager = StandardizedTransformer(reference, attn_implementation="eager")
-    default = StandardizedTransformer(reference)
+    load = getattr(entry, "load", StandardizedTransformer)
+    eager = load(reference, attn_implementation="eager")
+    default = load(reference)
     family = eager.family
     assert family.__name__.rsplit(".", 1)[1] == entry.MODEL_TYPE, (family.__name__, entry.MODEL_TYPE)
     num_layers = eager.num_layers
     block = eager.layers[0]
-    children = StandardizedTransformer._standard_children(block)
+
+    # Each block's standard children, and whether each is a mixture; one block of each
+    # combination of child classes stands for the rest, so a hybrid's ledgers list every host.
+    block_hosts, shapes = [], {}
+    for layer in eager.layers:
+        found = StandardizedTransformer._standard_children(layer)
+        block_hosts.append({alias: isinstance(child, Moe) for alias, child in found.items()})
+        shapes.setdefault(tuple((alias, type(child._module)) for alias, child in found.items()), (layer, found))
+    hosts_found: dict[str, list[tuple[int, Any]]] = {}
+    for layer, found in shapes.values():
+        natives = list(layer._module.children())
+        for alias, child in found.items():
+            seen = hosts_found.setdefault(alias, [])
+            if all(type(c._module) is not type(child._module) for _, c in seen):
+                position = next((k for k, m in enumerate(natives) if m is child._module), len(natives))
+                seen.append((position, child))
+    # in the block's native order: a hybrid's two mixers sit where its one native mixer does
+    order = sorted(hosts_found, key=lambda alias: hosts_found[alias][0][0])
+    children = {alias: [child for _, child in hosts_found[alias]] for alias in order}
 
     support_eager = eager.support()
     support_default = default.support()
@@ -208,26 +249,33 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
         support.append({"name": name, "condition": condition})
     conditions = {row["name"]: row["condition"] for row in support}
 
-    hosts = [("root", "model", eager), ("layer", "model.layers[i]", block)]
-    hosts += [(alias, f"model.layers[i].{alias}", child) for alias, child in children.items()]
+    hosts = [("root", "model", [eager]), ("layer", "model.layers[i]", [block])]
+    hosts += [(alias, f"model.layers[i].{alias}", found) for alias, found in children.items()]
     values: dict[str, list[dict[str, Any]]] = {}
-    for alias, expr, host in hosts:
-        rows = value_rows(host, expr)
+    for alias, expr, found in hosts:
+        # a host of several classes (a dense MLP and a mixture) lists the union, the fullest class's order first
+        merged: dict[str, dict[str, Any]] = {}
+        for host in sorted(found, key=lambda h: -len(value_rows(h, expr))):
+            for row in value_rows(host, expr):
+                row["module"] = type(host._module).__name__ if alias != "root" else type(eager._module).__name__
+                merged.setdefault(row["name"], row)
         prefix = "" if alias in ("root", "layer") else alias + "."
-        for row in rows:
+        for row in merged.values():
             row["condition"] = conditions.get(prefix + row["name"])
             row["host"] = alias
-            row["module"] = type(host._module).__name__ if alias != "root" else type(eager._module).__name__
-        values[alias] = rows
+        values[alias] = list(merged.values())
+
+    moe = next((child for found in children.values() for child in found if isinstance(child, Moe)), None)
+    mixer = next((child for found in children.values() for child in found if isinstance(child, RecurrentMixer)), None)
 
     paths = []
     for name in ROOT_NAMES:
         paths.append((f"model.{name}", eager.get(name).path))
     paths.append(("model.layers[i]", eager.get("layers.0").path))
-    for name, _ in block._named_children():
-        alias = next((a for a, child in children.items() if child is block.__dict__.get(name)), None)
+    for name, child in block._named_children():
+        alias = next((a for a, found in children.items() if any(c is child for c in found)), None)
         shown = alias or name
-        paths.append((f"model.layers[i].{shown}", eager.get(f"layers.0.{name}").path))
+        paths.append((f"model.layers[i].{shown}", child.path))
 
     text_config = eager.config.get_text_config()
     config = text_config.to_dict()
@@ -239,7 +287,12 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
         "family_module": family.__name__,
         "family_file": f"nnterp/families/{entry.MODEL_TYPE}.py",
         "architecture": type(eager._module).__name__,
-        "module_classes": {alias: type(child._module).__name__ for alias, child in children.items()},
+        "module_classes": {alias: [type(child._module).__name__ for child in found] for alias, found in children.items()},
+        "host_classes": {alias: [(type(child._module).__name__, isinstance(child, Moe), len(child.values())) for child in found]
+                         for alias, found in children.items()},
+        "block_hosts": block_hosts,
+        "moe": moe_sizes(moe),
+        "mixer": mixer_kernels(mixer),
         "block_class": type(block._module).__name__,
         "returns_tuple": type(block).returns_tuple,
         "reference": reference,
@@ -259,6 +312,29 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
     }
 
 
+def moe_sizes(moe: Any) -> dict[str, Any] | None:
+    """A mixture's sizes, its scoring and its parts' classes, off the first `Moe` the blocks have."""
+    if moe is None:
+        return None
+    modules = moe._module._modules
+    router = next((modules[name] for name in ("router", "gate") if modules.get(name) is not None), None)
+    shared = next((modules[name] for name in SHARED_NAMES if modules.get(name) is not None), None)
+    return {
+        "num_experts": moe.num_experts, "top_k": moe.top_k, "scoring": type(moe).SCORING,
+        "router": type(router).__name__ if router is not None else None,
+        "experts": type(modules["experts"]).__name__ if modules.get("experts") is not None else None,
+        "shared": type(shared).__name__ if shared is not None else None,
+    }
+
+
+def mixer_kernels(mixer: Any) -> dict[str, str] | None:
+    """A recurrent mixer's two kernels, by the functions' names: the one a prompt runs and the one a decode step runs."""
+    if mixer is None:
+        return None
+    cls = type(mixer)
+    return {"chunk": re.sub(r"_\d+$", "", cls.CHUNK_KERNEL), "recurrent": re.sub(r"_\d+$", "", cls.RECURRENT_KERNEL)}
+
+
 # -- the block schema ----------------------------------------------------------------
 
 def node(eyebrow: str, expr: str, desc: str, *, layout: str | None = None, dims: str | None = None,
@@ -272,34 +348,96 @@ def value_node(row: dict[str, Any], eyebrow: str) -> dict[str, Any]:
                 condition=row["condition"])
 
 
+#: The sublayer kinds a BLOCK may draw. A "moe" sublayer is drawn on the blocks whose host is a
+#: `Moe` and an "mlp" one on the blocks whose host is not, so a family with dense first blocks
+#: lists both; every kind is drawn only on the blocks that have its host.
+KINDS = ("attention", "mixer", "mlp", "moe")
+#: Where each of a mixture's values is drawn: in the router's box, the experts' or the shared expert's.
+MOE_PARTS = {
+    "router_logits": "router", "expert_weights": "router", "expert_indices": "router",
+    "expert_outputs": "experts", "routed_output": "experts", "shared_expert_output": "shared",
+}
+
+
+def drawn(specs: list[dict[str, Any]], hosts: dict[str, bool]) -> tuple[int, ...]:
+    """The sublayers one block draws, as indices into ``specs``: ``hosts`` maps each of the block's
+    standard children to whether it is a mixture."""
+    return tuple(k for k, spec in enumerate(specs) if spec["host"] in hosts
+                 and (spec["kind"] not in ("mlp", "moe") or hosts[spec["host"]] == (spec["kind"] == "moe")))
+
+
 def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
-    """The entry's BLOCK, checked against the family and enriched with every node's hover card."""
+    """The entry's BLOCK, checked against the family and enriched with every node's hover card.
+
+    The sublayers are listed once, in forward order; each block draws the ones its children
+    match (`drawn`), and the distinct combinations are the block's shapes. A family with one
+    shape gets the schema as it always has; a hybrid gets ``shapes`` and ``shape_of`` too, and
+    the diagram redraws when the slider crosses into another shape."""
     by_host = {alias: {row["name"]: row for row in rows} for alias, rows in info["values"].items()}
     sizes = dict(info["sizes"])
-    fmt = {**sizes, **{k: v for k, v in info["config"]}}
+    moe = info["moe"] or {}
+    fmt = {**sizes, **{k: v for k, v in info["config"]}, **{k: moe[k] for k in ("num_experts", "top_k") if k in moe}}
+    specs = entry.BLOCK["sublayers"]
+    hosts = [s["host"] for s in specs]
+    # A host drawn by two sublayers (a dense MLP and a mixture) keys its nodes by kind as well.
+    keys = [s["host"] if hosts.count(s["host"]) == 1 else f"{s['host']}-{s['kind']}" for s in specs]
     nodes: dict[str, dict[str, Any]] = {}
     sublayers = []
-    hosts = [s["host"] for s in entry.BLOCK["sublayers"]]
-    for k, spec in enumerate(entry.BLOCK["sublayers"]):
-        host = spec["host"]
+    for k, spec in enumerate(specs):
+        host, key, kind = spec["host"], keys[k], spec["kind"]
         assert host in by_host, f"{entry.MODEL_TYPE}: BLOCK names host {host!r}; the block has {list(by_host)}"
+        assert kind in KINDS, f"{entry.MODEL_TYPE}: kind {kind!r}; known: {KINDS}"
         contribution = by_host[host][spec["contribution"]]
         sub = {
-            "host": host, "kind": spec["kind"], "label": spec["label"],
+            "host": host, "kind": kind, "label": spec["label"],
             "detail": spec.get("detail", "").format(**fmt),
             "variants": {k2: v.format(**fmt) for k2, v in spec.get("variants", {}).items()},
             "pre_norm": spec.get("pre_norm"), "post_norm": spec.get("post_norm"),
             "contribution": spec["contribution"], "interior": [],
         }
-        nodes[f"sub.{host}"] = node(
+        if key != host:
+            sub["key"] = key
+        matched = [(c, n) for c, is_moe, n in info["host_classes"][host] if kind not in ("mlp", "moe") or is_moe == (kind == "moe")]
+        classes, count = [c for c, _ in matched], max(n for _, n in matched)
+        extra = f"{count} standard value{'s' if count != 1 else ''}; `.input` is what the sublayer reads."
+        if kind == "mixer" and info["mixer"]:
+            kernels = info["mixer"]
+            extra += f" A prompt runs `{kernels['chunk']}`, a decode step `{kernels['recurrent']}`; the values are read at that call."
+            routed = [row["name"] for row in info["support"] if row["name"].startswith(host + ".") and row["condition"]
+                      and "route_kernels" in row["condition"]["reason"]]
+            if routed:
+                extra += f" `{'`, `'.join(name.split('.', 1)[1] for name in routed)}` need `nnterp.route_kernels(model.family, \"torch\")` before the first trace."
+        nodes[f"sub.{key}"] = node(
             spec["label"], f"model.layers[i].{host}",
-            f"{info['module_classes'][host]} under its standard name. " + spec.get("detail", "").format(**fmt),
-            extra=f"{len(by_host[host])} standard value{'s' if len(by_host[host]) != 1 else ''}; `.input` is what the sublayer reads.")
+            f"{' / '.join(classes)} under its standard name. " + spec.get("detail", "").format(**fmt), extra=extra)
         for name in spec.get("interior", []):
             assert name in by_host[host], f"{entry.MODEL_TYPE}: {host} has no value {name!r}"
-            sub["interior"].append({"name": name, "short": INTERIOR_SHORT.get(name, name)})
-            nodes[f"interior.{host}.{name}"] = value_node(by_host[host][name], "inside the sublayer")
-        nodes[f"contrib.{host}"] = value_node(contribution, "contribution")
+            chip = {"name": name, "short": INTERIOR_SHORT.get(name, name)}
+            if kind == "moe":
+                assert name in MOE_PARTS, f"{entry.MODEL_TYPE}: {name!r} is not a mixture's value; a moe sublayer draws {list(MOE_PARTS)}"
+                chip["part"] = MOE_PARTS[name]
+            sub["interior"].append(chip)
+            nodes[f"interior.{key}.{name}"] = value_node(by_host[host][name], "inside the sublayer")
+        if kind == "moe":
+            parts = {chip["part"] for chip in sub["interior"]}
+            assert "shared" not in parts or moe.get("shared"), f"{entry.MODEL_TYPE}: the mixture has no shared expert to draw"
+            sub["moe"] = {"num_experts": moe["num_experts"], "top_k": moe["top_k"], "scoring": moe["scoring"]}
+            expr = f"model.layers[i].{host}"
+            if "router" in parts:
+                nodes[f"moe.{key}.router"] = node(
+                    "the router", f"{expr}.router",
+                    f"`{moe['router']}`. It scores all {moe['num_experts']} experts for each token by `{moe['scoring']}` and picks "
+                    f"{moe['top_k']}: `expert_indices`, each weighted by its `expert_weights`.")
+            if "experts" in parts:
+                nodes[f"moe.{key}.experts"] = node(
+                    "the routed experts", f"{expr}.experts",
+                    f"`{moe['experts']}`, {moe['num_experts']} experts. Each token runs through the {moe['top_k']} it is routed to; "
+                    "`expert_outputs` holds each slot's weighted output and `routed_output` their sum.")
+            if "shared" in parts:
+                nodes[f"moe.{key}.shared"] = node(
+                    "the shared expert", f"{expr}.shared_experts",
+                    f"`{moe['shared']}`. Every token runs through it; `shared_expert_output` is what it adds beside `routed_output`.")
+        nodes[f"contrib.{key}"] = value_node(contribution, "contribution")
         if spec.get("pre_norm"):
             nodes[f"norm.{spec['pre_norm']}"] = node(
                 "pre-norm", f"model.layers[i].{spec['pre_norm']}",
@@ -312,38 +450,66 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
                 extra=spec.get("post_norm_note"))
         sublayers.append(sub)
 
+    shape_of = [drawn(specs, hosts) for hosts in info["block_hosts"]]
+    for i, (shape, block_hosts) in enumerate(zip(shape_of, info["block_hosts"])):
+        named = [h for h in block_hosts if h in hosts]
+        assert sorted(named) == sorted(specs[k]["host"] for k in shape), \
+            f"{entry.MODEL_TYPE}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
+    shapes = list(dict.fromkeys(shape_of))
+    for k in range(len(specs)):
+        assert any(k in shape for shape in shapes), f"{entry.MODEL_TYPE}: no block has BLOCK's {keys[k]!r} sublayer"
+    single = len(shapes) == 1
+    assert single or "identity" not in entry.BLOCK, f"{entry.MODEL_TYPE}: a BLOCK with several shapes takes no identity"
+
     layer_output = by_host["layer"]["layer_output"]
     nodes["stream.input"] = node("residual stream", "model.layers[i].input",
                                  "The residual stream entering the block, a tensor on every family.",
                                  layout="Residual", dims="batch seq hidden")
     nodes["stream.output"] = value_node(layer_output, "residual stream")
-    # Between two sequential sublayers the stream has a value of its own; a parallel block has no such point.
-    for k in range(len(sublayers) - 1 if entry.BLOCK.get("topology", "sequential") == "sequential" else 0):
-        nxt = sublayers[k + 1]
-        after = sublayers[k]["label"].lower()
-        if nxt["pre_norm"]:
-            nodes[f"stream.mid.{k}"] = node("residual stream", f"model.layers[i].{nxt['pre_norm']}.input",
-                                            f"The stream after the {after} add, as the next pre-norm receives it. No standard value of its own.")
-        else:
-            nodes[f"stream.mid.{k}"] = node("residual stream", f"model.layers[i].{nxt['host']}.input",
-                                            f"The stream after the {after} add, as the next sublayer receives it. No standard value of its own.")
-    terms = " + ".join(f"{s['host']}.{s['contribution']}" for s in sublayers)
-    identity = entry.BLOCK.get("identity", f"layers[i].input + {terms} == layer_output")
-    nodes["plus"] = node("the add", identity, entry.BLOCK.get("identity_note", "The contribution identity nnterp's suite checks on this family."))
+    drawn_shapes = []
+    for s, shape in enumerate(shapes):
+        subs = [sublayers[k] for k in shape]
+        mids = []
+        # Between two sequential sublayers the stream has a value of its own; a parallel block has no such point.
+        for k in range(len(subs) - 1 if entry.BLOCK.get("topology", "sequential") == "sequential" else 0):
+            nxt = subs[k + 1]
+            after = subs[k]["label"].lower()
+            mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
+            if nxt["pre_norm"]:
+                nodes[mid] = node("residual stream", f"model.layers[i].{nxt['pre_norm']}.input",
+                                  f"The stream after the {after} add, as the next pre-norm receives it. No standard value of its own.")
+            else:
+                nodes[mid] = node("residual stream", f"model.layers[i].{nxt['host']}.input",
+                                  f"The stream after the {after} add, as the next sublayer receives it. No standard value of its own.")
+            mids.append(mid)
+        terms = " + ".join(f"{sub['host']}.{sub['contribution']}" for sub in subs)
+        identity = entry.BLOCK.get("identity", f"layers[i].input + {terms} == layer_output")
+        plus = "plus" if single else f"plus.{s}"
+        nodes[plus] = node("the add", identity, entry.BLOCK.get("identity_note", "The contribution identity nnterp's suite checks on this family."))
+        drawn_shapes.append({"subs": list(shape), "mids": mids, "plus": plus, "identity": identity,
+                             "label": " + ".join(sub["label"] for sub in subs)})
 
-    return {
+    schema = {
         "topology": entry.BLOCK.get("topology", "sequential"),
         "sublayers": sublayers,
-        "identity": identity,
+        "identity": drawn_shapes[0]["identity"],  # block 0's; a hybrid's page swaps it as the slider moves
         "num_layers": info["num_layers"],
         "layer_types": info["layer_types"],
         "nodes": nodes,
     }
+    if not single:
+        schema["shapes"] = drawn_shapes
+        schema["shape_of"] = [shapes.index(shape) for shape in shape_of]
+    return schema
 
 
 INTERIOR_SHORT = {
     "attention_queries": "q", "attention_keys": "k", "attention_values": "v", "attention_scores": "scores",
     "attention_probabilities": "pattern", "attention_head_outputs": "heads",
+    "betas": "beta", "decays": "decay", "state_input": "state in", "state_output": "state out",
+    "state": "state", "states": "states",
+    "router_logits": "logits", "expert_weights": "weights", "expert_indices": "indices",
+    "expert_outputs": "per slot", "routed_output": "routed", "shared_expert_output": "shared",
 }
 
 
@@ -502,6 +668,8 @@ def page_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     eager_only = [row["name"] for row in info["support"] if row["condition"] and row["condition"]["kind"] == "eager"]
     other = [row for row in info["support"] if row["condition"] and row["condition"]["kind"] == "other"]
     roles = name_roles(entry, info)
+    for shape in block.get("shapes", []):
+        shape["identity_html"] = str(highlight_python(shape["identity"], roles))
     return {
         **info,
         "model_type": entry.MODEL_TYPE,
@@ -521,7 +689,7 @@ def page_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
         "strip": strip,
         "nodes_json": embed_json(nodes),
         "block_json": embed_json({**{k: v for k, v in block.items() if k != "nodes"},
-                                  "roles": {s["host"]: HOST_ROLES.get(s["host"], "mlp") for s in block["sublayers"]}}),
+                                  "roles": {s.get("key", s["host"]): HOST_ROLES.get(s["host"], "mlp") for s in block["sublayers"]}}),
         "eager_only": eager_only,
         "other_conditions": other,
         "available": sum(1 for row in info["support"] if row["condition"] is None),

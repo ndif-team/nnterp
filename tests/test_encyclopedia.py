@@ -1,16 +1,34 @@
 """Every encyclopedia entry names a shipped family and builds a page from its pinned tiny checkpoint."""
 
+import importlib
+import json
+import os
+import re
 import sys
 from pathlib import Path
 
 import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "encyclopedia"))
+sys.path.insert(0, str(Path(__file__).resolve().parent / "families"))
 
 import build  # noqa: E402
 import entries  # noqa: E402
 import palette  # noqa: E402
 import nnterp.families  # noqa: E402
+
+
+def pinned(entry):
+    """The checkpoint the family's own suite runs on: its ``REPO``, which is ``PINNED`` or, where the
+    suite rewrites the tiny checkpoint's config, a local copy of it."""
+    module = importlib.import_module(f"test_{entry.MODEL_TYPE}")
+    repo = next(cls.REPO for cls in vars(module).values() if isinstance(cls, type) and "REPO" in vars(cls))
+    assert repo == entry.PINNED or os.path.isdir(repo), (repo, entry.PINNED)
+    return repo
+
+
+def embedded(page, name):
+    return json.loads(re.search(rf'id="{name}">(.*?)</script>', page, re.S)[1].replace("<\\/", "</"))
 
 
 @pytest.mark.parametrize("name", entries.names())
@@ -19,12 +37,27 @@ def test_entry_builds_a_page(name):
     assert name in nnterp.families.known()
     for slug in entry.QUIRKS:
         assert slug in build.QUIRKS, slug
-    page = build.build_page(entry, reference=entry.PINNED)
+    page = build.build_page(entry, reference=pinned(entry))
     assert entry.TITLE in page
+    schema, nodes = embedded(page, "block-schema"), embedded(page, "nodes-json")
+    hosts = [sub["host"] for sub in entry.BLOCK["sublayers"]]
     for sub in entry.BLOCK["sublayers"]:
-        assert f"model.layers[i].{sub['host']}.{sub['contribution']}" in page
+        key = sub["host"] if hosts.count(sub["host"]) == 1 else f"{sub['host']}-{sub['kind']}"
+        assert nodes[f"contrib.{key}"]["expr"] == f"model.layers[i].{sub['host']}.{sub['contribution']}"
         for value in sub.get("interior", []):
-            assert f"interior.{sub['host']}.{value}" in page
+            assert f"interior.{key}.{value}" in nodes
+        if sub["kind"] == "moe":
+            assert {f"moe.{key}.router", f"moe.{key}.experts"} <= set(nodes)
+    # A family with several block shapes is checked per shape: every block has one, every
+    # sublayer is drawn on some block, and each shape's identity sums the contributions it draws.
+    shapes = schema.get("shapes", [{"subs": list(range(len(hosts))), "identity": schema["identity"]}])
+    if "shapes" in schema:
+        assert len(schema["shape_of"]) == schema["num_layers"] and len(shapes) > 1
+    assert sorted({k for shape in shapes for k in shape["subs"]}) == list(range(len(hosts)))
+    for shape in shapes:
+        for k in shape["subs"]:
+            sub = entry.BLOCK["sublayers"][k]
+            assert "identity" in entry.BLOCK or f"{sub['host']}.{sub['contribution']}" in shape["identity"]
     assert '"identity"' in page and "stream.output" in page
     for k in range(1, 6):
         assert f"--c{k}: #" in page and f"--c{k}-deep: #" in page

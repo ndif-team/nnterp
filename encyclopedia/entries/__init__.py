@@ -13,7 +13,9 @@ An entry declares::
                  "paper" tints the page; any may be left out (the hue then hashes the model_type)
     VLLM         whether the family also runs on StandardizedVLLM
     QUIRKS       slugs from build.QUIRKS
-    BLOCK        the block schema the visualization draws (see gemma2.py)
+    BLOCK        the block schema the visualization draws (see gemma2.py; kimi_linear.py for blocks that differ)
+    load         optional: load(checkpoint, **kwargs) -> StandardizedTransformer, for a checkpoint a
+                 repo id alone does not build on the meta device
     STRIP        notes on the model-level strip, keyed embed / layers / norm / head / logits
     NOTES        markdown: the open-form notes for interpretability
 

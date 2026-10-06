@@ -208,6 +208,7 @@ pre .rn { font-weight: 500; }
    its labels paper */
 #block-svg .box { fill: var(--paper); stroke: var(--role-deep, var(--ink)); stroke-width: 1.5; }
 #block-svg .box-sub { stroke-width: 2; }
+#block-svg .box-part { stroke-width: 1; }
 #block-svg .stream { stroke: var(--stream-deep); stroke-width: 4; fill: none; }
 #block-svg .edge { stroke: var(--ink); stroke-width: 1.5; fill: none; }
 #block-svg .edge-contrib { stroke: var(--role-deep); stroke-width: 3; fill: none; }

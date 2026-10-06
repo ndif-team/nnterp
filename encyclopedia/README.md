@@ -30,9 +30,12 @@ rearrange them.
    linking to the Hub; the reference checkpoint is tagged "this page's sizes", and the last row is
    the suite's pinned tiny checkpoint, tagged "the test suite's".
 3. **The block** (`01`). The model-level strip (`embed_tokens → layers → norm → lm_head → logits`),
-   a slider over the blocks with one tick per block coloured by `config.layer_types`, and the block
-   diagram: the residual stream as a vertical line, each sublayer as a row (pre-norm, the module with
-   its interior values as chips, post-norm) whose contribution returns to an `⊕` on the stream. Boxes
+   a slider over the blocks with one tick per block coloured by `config.layer_types` (by the block's
+   shape on a family whose blocks come in several), and the block diagram: the residual stream as a
+   vertical line, each sublayer as a row (pre-norm, the module with its interior values as chips,
+   post-norm) whose contribution returns to an `⊕` on the stream. A mixture of experts draws a panel
+   each for the router, the routed experts and the shared expert inside its box. On a family with
+   several block shapes the diagram and the identity under it redraw for the slider's block. Boxes
    are outlines in their role's colour, clear inside. Hovering any part fills it lightly and shows, in
    the card beside the diagram, the nnterp expression that reads it, its layout and where it is read;
    clicking pins it. Under the diagram, the contribution identity as highlighted code.
@@ -88,7 +91,12 @@ The entry states facts about a family, and each one has a source. Before writing
    are read from. Choose the one most used for interpretability (usually the smallest base model).
    **`CHECKPOINTS`**: the family's public checkpoints as Hub ids, the reference among them; they are
    linked from the page and searchable on the index. **`PINNED`**: the tiny checkpoint in
-   `tests/families/test_<model_type>.py` (its `REPO`).
+   `tests/families/test_<model_type>.py` (its `REPO`; where the suite rewrites the tiny checkpoint's
+   config into a local copy, `PINNED` is the Hub id and the test builds the page from the copy).
+   **`load`** (optional): `def load(checkpoint, **kwargs)` returning the `StandardizedTransformer`
+   the page reads, for a checkpoint a repo id alone does not build on the meta device (a tokenizer
+   that is not cached, a config `AutoConfig` maps only through remote code). It receives the
+   reference, the pinned checkpoint and `attn_implementation`; say in its docstring why it exists.
 4. **`VLLM`**: whether the family has a module under `nnterp/families/vllm/` on the `0.8-refactor-vllm`
    branch (`git show origin/0.8-refactor-vllm:nnterp/families/vllm/<model_type>.py`); this branch has no
    `StandardizedVLLM`, so the flag cannot be run here.
@@ -97,7 +105,9 @@ The entry states facts about a family, and each one has a source. Before writing
      `"parallel"` (one read feeds every sublayer and the block sums them).
    - `sublayers`: in forward order, each a dict with
      - `host`: the standard name the sublayer has on the block (`self_attn`, `linear_attn`, `mlp`);
-     - `kind`: `"attention"` or `"mlp"`; `label`: the box's title (`"Attention"`, `"MLP"`, `"MoE"`);
+     - `kind`: `"attention"`, `"mixer"` (a recurrent mixer, `linear_attn`: DeltaNet, KDA, a
+       selective scan), `"mlp"` or `"moe"` (a mixture of experts, `mlp` where it is a `Moe`);
+       `label`: the box's title (`"Attention"`, `"Linear attention"`, `"MLP"`, `"MoE"`);
      - `contribution`: the standard value this sublayer adds to the stream (`attention_output`,
        `mlp_output`);
      - `pre_norm`, `post_norm`: the native names of the norms before and after it on the block, each
@@ -105,12 +115,25 @@ The entry states facts about a family, and each one has a source. Before writing
        CodeGen), give both sublayers the same `pre_norm`: the diagram draws it in both rows under one
        hover node; add a `pre_norm_note` saying both read the same tensor; `pre_norm_note` / `post_norm_note`: a sentence shown when that norm
        is hovered, for a trap in its name or place;
-     - `interior`: the standard values read inside the module, drawn as chips, in forward order;
+     - `interior`: the standard values read inside the module, drawn as chips, in forward order
+       (three to a row; a box with more than six grows a row at a time). On a `"moe"` sublayer the
+       chips are the mixture's values and each is drawn in its part's panel: `router_logits`,
+       `expert_weights`, `expert_indices` in the router's, `expert_outputs`, `routed_output` in the
+       routed experts', `shared_expert_output` in the shared expert's (list it only where the
+       mixture has one: the build checks). The panels show the scoring, `top_k of num_experts` and
+       the parts' classes, all read off the family's first `Moe`. On a `"mixer"` sublayer the
+       chips are the mixer's values (`attention_queries`/`keys`/`values` as the family maps them,
+       `decays`, `betas`, `state_input`, `attention_head_outputs`, `state_output`, `states`), and
+       its hover card names the two kernels the values are read at and which values need
+       `route_kernels`, from the family's mixer class and `support()`;
      - `detail`: one line under the label (head counts, widths, activation), a format string over the
        sizes (`{num_heads}`, `{hidden_size}`, ...) and the top-level config keys in
        `build.CONFIG_KEYS` (append a key there if the family needs one; only top-level keys resolve,
        so a value that lives only under `rope_parameters` goes in the notes), so the
-       numbers come from the reference config and are not typed. The box shows about 30 characters
+       numbers come from the reference config and are not typed; on a mixture `{num_experts}` and
+       `{top_k}` are the `Moe`'s own. Where a config key and a root size share a name the config's
+       value wins, so name the key you mean (`{v_head_dim}` on latent attention, whose config
+       `head_dim` need not be the values' width). The box shows about 30 characters
        beside the host's name when the sublayer has interior chips (the rest is ellipsised; the hover
        card has the whole line), so keep it short: `"12 heads × 64, fused c_attn"`;
      - `variants`: `{layer_type: detail}` keyed on the values of `config.layer_types`, shown instead
@@ -119,7 +142,20 @@ The entry states facts about a family, and each one has a source. Before writing
    - `identity` (and `identity_note`): the contribution identity, when it is not the plain sum
      `layers[i].input + <contributions> == layer_output` (Gemma-4, DeepSeek-V4; Granite's scaled
      contributions still sum exactly). `identity_note` may be given on its own, for a sum that is
-     exact but worth a word.
+     exact but worth a word. A family with several block shapes takes no `identity`: each
+     shape's is the plain sum of what it draws.
+
+   **Blocks that differ.** `sublayers` lists every sublayer any block has, once, in forward order,
+   and each block draws the ones that match its own children: a sublayer is drawn where its `host`
+   exists, a `"moe"` only where that host is a `Moe` and an `"mlp"` only where it is not. A hybrid
+   lists both mixers (`linear_attn` as `"mixer"`, `self_attn` as `"attention"`); a family with
+   dense first blocks lists `mlp` twice, as `"mlp"` and as `"moe"`. Nothing is keyed on a config
+   key: the matching reads the built model, so `layer_types`, `mlp_layer_types`,
+   `first_k_dense_replace` and their kin all come out the same way. The distinct combinations are
+   the block's shapes; the slider's ticks are coloured by shape, and the diagram, the identity and
+   the variant label redraw when the slider crosses into another. The build fails when a block has
+   a host the listed sublayers do not draw, when two sublayers match the same host, or when a
+   sublayer matches no block of the checkpoint.
 
    The build checks every host, contribution and interior value against the family and fails on a
    name the family does not have.
@@ -152,6 +188,7 @@ The entry states facts about a family, and each one has a source. Before writing
    | GPT-J and CodeGen | hash of `gptj` (222) | gptj (codegen 234) |
    | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (`granite` hashes to 156, beside Gemma) |
    | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron |
+   | Kimi (kimi_k2, kimi_linear) | 330 | kimi_k2 (kimi_linear 342) |
 
    `python -c "import sys; sys.path.insert(0, 'encyclopedia'); import palette; print(palette.hue_of('olmo2'))"`
    prints a hashed hue.
@@ -231,9 +268,11 @@ a 500px-wide, 14000px-tall window for the phone layout; a page with long notes n
 
 An entry is `entries/<model_type>.py`, plus, when needed, a new slug in `build.QUIRKS` or a config
 key appended to `build.CONFIG_KEYS`. It does not change the templates, the stylesheet, `block.js`
-or the page's sections. The diagram draws one block shape per family: sublayers in sequence or in
-parallel, with optional norms around each. When a family's block does not fit that (blocks whose
-sublayers differ from one index to the next, several parallel streams, a sublayer with no module),
+or the page's sections. The diagram draws sublayers in sequence or in parallel, with optional norms
+around each; attention, a recurrent mixer, an MLP or a mixture of experts; and blocks whose
+sublayers differ from one index to the next (see *Blocks that differ*). When a family's block does
+not fit that (several parallel streams, a sublayer with no module, a block whose sublayers change
+order),
 do not approximate it: write the rest of the entry, say what the schema lacks, and extend the
 generator as its own change, so every family with that shape gains it.
 

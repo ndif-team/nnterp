@@ -155,7 +155,12 @@ def humanize_key(key: Any, select: int | None) -> str:
     """Where a value is read, in words: the key is a path from the host envoy."""
     if not isinstance(key, str):
         return "computed from several served values" if key is not None else "derived"
-    element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
+    if callable(select):
+        # a select chosen per call (a Mamba-1 kernel argument sits at a different position in each kernel)
+        name = getattr(select, "__name__", "")
+        element = f", argument `{name.split('.', 1)[1]}`" if name.startswith("argument.") else ", the element this call's kernel takes"
+    else:
+        element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
     if key.startswith("<"):
         # a location the value finds per call: a recurrent mixer's kernel, whichever fires on this call
         name = key[1:-1]
@@ -299,7 +304,8 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
         "default_impl": default_impl,
         "num_layers": num_layers,
         "layer_types": layer_types,
-        "sizes": [(name, getattr(eager, name)) for name in SIZE_NAMES],
+        # a size the family has nothing to read for (no attention heads on a pure state-space model) is left out
+        "sizes": [(name, getattr(eager, name)) for name in SIZE_NAMES if getattr(eager, name, None) is not None],
         "config": config_rows,
         "rename": list(family.RENAME.items()),
         "paths": paths,

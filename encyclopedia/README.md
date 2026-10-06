@@ -186,7 +186,7 @@ The entry states facts about a family, and each one has a source. Before writing
    | GPT-NeoX / Pythia | hash of `gpt_neox` | gpt_neox |
    | EXAONE | hash of `exaone4` (46) | exaone4 |
    | GPT-J and CodeGen | hash of `gptj` (222) | gptj (codegen 234) |
-   | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (`granite` hashes to 156, beside Gemma) |
+   | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (granitemoe 215; `granite` hashes to 156, beside Gemma) |
    | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron |
    | Kimi (kimi_k2, kimi_linear) | 330 | kimi_k2 (kimi_linear 342) |
 

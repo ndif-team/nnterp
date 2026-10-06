@@ -199,10 +199,11 @@ class Layer(Layer):
   (`"source.hidden_states_2.output"`, Laguna, with `sourced = True` since the read
   follows a child's), `unavailable(...)` where no tensor holds the value (DBRX's
   `expert_outputs`), and set `SCORING`. A mixture with no module of its own is hosted on
-  `layers[i].mlp`: the family's `Layer.__init__` hands the block's `router` and
-  `experts` envoys down (`self.mlp.router = self.router`, Gemma-4) and the `Mlp`
-  overrides `no_mixture()` for the checkpoints without one. A family never looks its
-  parent up through the interleaver's envoys
+  `layers[i].mlp`: the `Mlp` reads the block's `router` and `experts` through its
+  parent (a property returning `self.parent.router`, Gemma-4) and overrides
+  `no_mixture()` for the checkpoints without one. A value that needs something of its
+  block reads it through `self.parent`, and something of the model through `self.root`;
+  a family never looks its parent up through the interleaver's envoys
   ([../usage/mixture-of-experts.md](../usage/mixture-of-experts.md)).
 - **`LinearAttention`** (hybrids only): the base holds for transformers' pure-torch gated
   delta rule; Qwen3-Next, Qwen3.5 and OLMo-Hybrid subclass it with a docstring and nothing

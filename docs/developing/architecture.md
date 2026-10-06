@@ -87,6 +87,7 @@ rest of this page says which.
    EProperty.__get__ ── _check(unavailable) ── _resolve(path) ── Mediator.value(location) ── _pick(select)
         key "output"                              → "{path}.output"                        (boundary values)
         key "../post_attention_layernorm.output"  → the sibling's ".output"                (a sibling's value)
+        key "/projector.output"                   → walked from envoy.root                 (a value far from the host)
         key "source.<call>.source.<op>.output"    → drilled per run → the op's location    (values inside a forward)
         │
         ▼  outside a trace, a size read

@@ -162,10 +162,10 @@ nnterp/
     vision.py        Patches, ImageTokenMask, ImageFeatures; Vision (the tower root: sizes, image_token_mask,
                      patch_embeddings, tower_output, image_features, no_images, support);
                      VisionLayer, VisionAttention, VisionMlp (Layer/Attention/Mlp with Patches stream values)
-    standard.py      Standard._root, the model an envoy belongs to; blocks_support: the support walk
-                     over a block list, shared by model.support() and model.vision.support()
-  standardized.py    sets every Standard envoy's _root; support() lists a Standard child of the root
-                     (the tower) under its name
+    standard.py      blocks_support: the support walk over a block list, shared by model.support()
+                     and model.vision.support()
+    eproperty.py     root-anchored keys ("/projector.output"), walked from envoy.root
+  standardized.py    support() lists a Standard child of the root (the tower) under its name
   families/
     gemma3_text.py   SigLIP's paths in RENAME, its module types in ENVOYS, IMAGE_WRAPPERS = ("gemma3",)
     llama.py         CLIP's paths in RENAME, its module types in ENVOYS, IMAGE_WRAPPERS = ("llava",)
@@ -210,23 +210,21 @@ ENVOYS = {
 
 `image_token_mask` and `image_features` are `EProperty`s on `Vision`, so they read as
 `model.vision.image_token_mask` and `model.vision.image_features`. Neither is read inside
-the tower, so each is keyed `from_root(path)`: a path named from the model's root, aliases
-included, which the key function turns into one that climbs from the tower and descends by
-native names (a path that goes up takes native names only).
+the tower, so each key is anchored at the model's root with a leading `/` and walked from
+`vision.root` by standard names, aliases included.
 
-- `image_token_mask` is keyed `from_root("inputs")`, which on both wrappers is
-  `"../../inputs"` from `model.model.vision_tower`: the root's inputs, the location
+- `image_token_mask` is keyed `"/inputs"`: the root's inputs, the location
   `model.input_ids` reads, so it is read before anything else in the invoke. It returns
   `input_ids == image_token_id(config)` (`image_token_id`, else `image_token_index`, off the
   wrapper's config). Assigning raises.
-- `image_features` is keyed `from_root("projector.output")`, `"../multi_modal_projector.output"`
-  on both: the projector, the tower's sibling under the root. It returns the output
+- `image_features` is keyed `"/projector.output"`, `model.model.multi_modal_projector.output`
+  on both wrappers: the projector, the tower's sibling under the root. It returns the output
   flattened to `[image_tokens, hidden]`, a view, so in-place edits land; an assignment is
   reshaped back to the projector's output.
 
 What the tower reads outside itself (the wrapper's config, its processor, the family's
-`IMAGE_WRAPPERS`, the root's `projector` alias) it reads through `Standard._root`, the
-`StandardizedTransformer` every standard envoy is handed when the model is built.
+`IMAGE_WRAPPERS`, the root's `projector` alias) it reads through `self.root`, nnsight's
+walk up the envoys' parent links to the `StandardizedTransformer`.
 
 **Where `image_features` is read.** At the projector's output, on the wrappers where that
 output is what the wrapper scatters into the token embeddings. The family lists those

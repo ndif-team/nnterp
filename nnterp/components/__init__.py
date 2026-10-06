@@ -37,6 +37,8 @@ One descriptor, `EProperty`, whose key is a path from the host envoy:
 * ``"../post_attention_layernorm.output"``, ``"embed_tokens.output"``: a value
   produced by a module named relative to this one (a sandwich block's
   post-sublayer norm, the root's embedding).
+* ``"/projector.output"``: a path walked from the model's root, by standard
+  names, whatever the host (the vision tower's ``image_features``).
 * ``"source.attention_interface_1.inputs"``: an operation inside a forward,
   reached through ``.source``, optionally one element of it (``select``).
 * Computed from several served values, a `DerivedEProperty` (a DeltaNet

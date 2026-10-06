@@ -106,6 +106,11 @@ does, through `interface_reason`.
   in-place edit to it needs a `transform` to land, and an assignment needs a `postprocess`
   that rebuilds the served shape (`rewrap`). See [overriding-values.md](overriding-values.md).
   `key="input"` is the call's first argument, `key="inputs"` the raw `(args, kwargs)` pair.
+- **A module named from the model's root.** A leading `/` walks from the root envoy
+  instead of the host, by standard names: `EProperty("/norm.output", ...)` on a block's
+  attention is the final norm's output, `EProperty("/inputs", select="input_ids", ...)` the
+  ids the model was called with (verified on tiny GPT-2, `tests/test_base.py::test_root_anchored_keys`:
+  equal to `transformer.ln_f.output` and `model.input_ids`, and an assignment lands).
 - **A module named relative to the host.** A leading `../` steps to the parent, any other
   segment to a child. A path that goes up takes native names only after the `../`
   (`"../post_attention_layernorm.output"` fails on GPT-2 with `OutOfOrderError`; its native

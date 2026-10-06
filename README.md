@@ -92,7 +92,7 @@ with model.trace("The Eiffel Tower is in"):
 
 ## Supported families
 
-92 families, among them GPT-2, Llama, Mistral, Qwen 2/3/3.5, Gemma 1-4, Phi, OLMo, GPT-NeoX,
+94 families, among them GPT-2, Llama, Mistral, Qwen 2/3/3.5, Gemma 1-4, Phi, OLMo, GPT-NeoX,
 DeepSeek-V2/V3, GPT-OSS, Mixtral, Falcon, BLOOM, Mamba, Jamba and Nemotron-H, developed
 against transformers 5.17. The full table, with each family's native names and quirks, is
 [docs/reference/families.md](docs/reference/families.md).

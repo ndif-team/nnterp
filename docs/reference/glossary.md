@@ -78,7 +78,7 @@ The linear-attention mixer of Qwen3-Next and Qwen3.5 (`linear_attn`): queries, k
 
 ## Hybrid
 
-A family whose blocks are of two kinds: Qwen3-Next, Qwen3.5 (text) and Qwen3.5-MoE (text) have `linear_attn` (gated DeltaNet, a `LinearAttention`, a `RecurrentMixer`) on three blocks in four and `self_attn` on the fourth, per `config.layer_types`; never both on one block. `support()` reads per block there. See [families.md](families.md#hybrids).
+A family whose blocks are of two kinds: Qwen3-Next, Qwen3.5 (text), Qwen3.5-MoE (text), OLMo-Hybrid and Kimi-Linear have `linear_attn` (gated DeltaNet, a `LinearAttention`, a `RecurrentMixer`) on three blocks in four and `self_attn` on the fourth, per `config.layer_types`; never both on one block. `support()` reads per block there. See [families.md](families.md#hybrids).
 
 ## Interface (`attention_interface_1`)
 
@@ -90,7 +90,7 @@ The number of key/value heads, `num_kv_heads`, fewer than `num_heads` under grou
 
 ## Layout, dims
 
-The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-one named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the twenty-eight envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families. See [../usage/layouts.md](../usage/layouts.md).
+The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-two named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the twenty-nine envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`) and `linear_attn.decays` on Kimi-Linear (`ChannelGates`). See [../usage/layouts.md](../usage/layouts.md).
 
 ## MLA (multi-head latent attention)
 

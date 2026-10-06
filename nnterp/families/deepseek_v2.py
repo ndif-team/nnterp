@@ -48,9 +48,10 @@ ENVOYS = {DeepseekV2DecoderLayer: Layer, DeepseekV2Attention: Attention, Deepsee
 
 def head_dim(model: "StandardizedTransformer") -> int:
     """Width of one head's values and outputs: ``v_head_dim`` (the config's ``head_dim`` is the latent width, which no served value has)."""
-    return model.config.v_head_dim
+    return model.config.get_text_config().v_head_dim
 
 
 def qk_head_dim(model: "StandardizedTransformer") -> int:
     """Width of one head's queries and keys: the non-rotary part plus the rotary part."""
-    return model.config.qk_nope_head_dim + model.config.qk_rope_head_dim
+    config = model.config.get_text_config()  # a multimodal wrapper's (Kimi K2.5) nests it
+    return config.qk_nope_head_dim + config.qk_rope_head_dim

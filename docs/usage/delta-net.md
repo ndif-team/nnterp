@@ -1,9 +1,9 @@
 ---
 title: Gated DeltaNet Hybrids
-one_liner: The `linear_attn` values on Qwen3-Next and Qwen3.5 blocks, the two kernels a prompt and a decode step run, and the per-token recurrent state behind `route_kernels`.
-tags: [usage, hybrid, delta-net, linear-attention, state, qwen3_5_text, qwen3_next]
+one_liner: The `linear_attn` values on Qwen3-Next, Qwen3.5, OLMo-Hybrid and Kimi-Linear blocks, the two kernels a prompt and a decode step run, and the per-token recurrent state behind `route_kernels`.
+tags: [usage, hybrid, delta-net, linear-attention, state, qwen3_5_text, qwen3_next, kimi_linear]
 related: [docs/usage/vocabulary.md, docs/usage/availability.md, docs/usage/layouts.md, docs/usage/attention-interior.md, docs/usage/generation.md, docs/usage/remote.md]
-sources: [nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/components/eproperty.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_next.py, nnterp/families/qwen3_5_moe_text.py, nnterp/families/olmo_hybrid.py, tests/families/test_qwen3_5_text.py]
+sources: [nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/components/eproperty.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_next.py, nnterp/families/qwen3_5_moe_text.py, nnterp/families/olmo_hybrid.py, nnterp/families/kimi_linear.py, tests/families/test_qwen3_5_text.py, tests/families/test_kimi_linear.py]
 ---
 
 # Gated DeltaNet Hybrids
@@ -11,7 +11,9 @@ sources: [nnterp/components/linear_attention.py, nnterp/components/recurrent.py,
 ## What this is for
 
 Qwen3-Next, Qwen3.5 (text), Qwen3.5-MoE (text) and OLMo-Hybrid replace three blocks in four
-with a gated DeltaNet mixer, `layers[i].linear_attn`. It projects queries,
+with a gated DeltaNet mixer, `layers[i].linear_attn`; Kimi-Linear does the same with Kimi Delta
+Attention, a gated DeltaNet whose decay is one per key channel
+([below](#kimi-linear-kimi-delta-attention)). It projects queries,
 keys and values like attention but mixes them through a per-head recurrent
 state: each token decays the state by a learned gate, writes its key/value
 pair in scaled by a beta, and the query reads against it. There is no pattern
@@ -76,7 +78,7 @@ block', 7: ..., ...}`. `model.support(layer=i)` is flat for one block.
 | `attention_output` | what the mixer adds to the residual stream | `Residual`: `batch seq hidden` |
 | `attention_queries`, `attention_keys` | what the delta rule receives: after the short convolution, the activation and the repeat to the value heads, before the kernel's l2-norm (and, for the queries, its `1/sqrt(key_dim)` scale) | `LinearQK`: `batch seq heads key_dim` |
 | `attention_values` | the values the delta rule receives | `LinearV`: `batch seq heads value_dim` |
-| `decays` | the gate: the log of how much of the state each token keeps; float32, non-positive | `Gates`: `batch seq heads` |
+| `decays` | the gate: the log of how much of the state each token keeps; float32, non-positive | `Gates`: `batch seq heads`; on Kimi-Linear `ChannelGates`: `batch seq heads key_dim`, one per key channel |
 | `betas` | how strongly each token's key/value pair is written into the state; in `(0, 1)`, or `(0, 2)` on OLMo-Hybrid with `linear_allow_neg_eigval` (the released checkpoints) | `Gates`: `batch seq heads` |
 | `state_input` | the state the call starts from: `None` on a fresh prompt, the cached state on a decode step (a copy) | `State`: `batch heads key_dim value_dim` |
 | `state_output` | the state after the call's last token: what the next decode step starts from | `State`: `batch heads key_dim value_dim` |
@@ -85,7 +87,8 @@ block', 7: ..., ...}`. `model.support(layer=i)` is flat for one block.
 The layout names are the aliases in `nnterp.components` (`LinearAttention.decays.layout
 is Gates`); `state` is a `State` and `states` a `States`, `batch seq heads key_dim
 value_dim`. `heads` is the mixer's `num_v_heads` (the queries and keys are repeated up to
-it), `key_dim` its `head_k_dim` and `value_dim` its `head_v_dim`. The state is
+it), `key_dim` its `head_k_dim` and `value_dim` its `head_v_dim` (on Kimi-Linear, `heads` is
+`num_heads` and `key_dim` and `value_dim` are both `head_dim`). The state is
 float32 in the torch kernels. Everything but `attention_output` is read at the
 delta-rule kernel call, so these are `EProperty` values keyed inside the
 forward (`kernel("inputs")`, the kernel that fires on this call); assign to
@@ -125,6 +128,44 @@ for t in range(q.shape[1]):
     outs.append((S * q[:, t, ..., None]).sum(-2))                     # the query's read
 torch.testing.assert_close(torch.stack(outs, 1), y.float(), rtol=1e-4, atol=1e-4)
 ```
+
+## Kimi-Linear: Kimi Delta Attention
+
+Kimi-Linear's mixer (`KimiLinearDeltaAttention`) runs the gated DeltaNet's forward with
+transformers' own kernels, `chunk_kimi_delta_attention` on a prompt and
+`recurrent_kimi_delta_attention` on a decode step, so every value above means the same
+thing and `route_kernels(model.family, "torch")` gives `state` and `states` as on
+Qwen3.5. What differs is the decay: the forget gate gives one log decay per key channel,
+so `decays` is `[batch, seq, heads, key_dim]` (`ChannelGates`) and each row of the state
+decays on its own. The recurrence above changes in that one line, `S = S *
+g[:, t].exp()[..., None]`, and matches `attention_head_outputs` with it (on the pinned
+tiny checkpoint's copy):
+
+```python
+l2norm = lambda t: t * torch.rsqrt((t * t).sum(-1, keepdim=True) + 1e-6)
+
+with model.trace(prompt):
+    q, k, v = mix.attention_queries.save(), mix.attention_keys.save(), mix.attention_values.save()
+    g, b = mix.decays.save(), mix.betas.save()                        # g: [batch, seq, heads, key_dim]
+    y = mix.attention_head_outputs.save()
+
+q, k, v = l2norm(q.float()) / q.shape[-1] ** 0.5, l2norm(k.float()), v.float()
+S = torch.zeros(q.shape[0], q.shape[2], q.shape[3], v.shape[3], device=q.device)
+outs = []
+for t in range(q.shape[1]):
+    S = S * g[:, t].exp()[..., None]                                   # decay, one factor per key channel
+    write = (v[:, t] - (S * k[:, t, ..., None]).sum(-2)) * b[:, t, :, None]
+    S = S + k[:, t, ..., None] * write[..., None, :]
+    outs.append((S * q[:, t, ..., None]).sum(-2))
+torch.testing.assert_close(torch.stack(outs, 1), y.float(), rtol=1e-2, atol=1e-5)
+```
+
+transformers names both of Kimi-Linear's mixers `self_attn`. The family aliases the KDA
+module `linear_attn` and sets `self_attn` to `None` on its blocks, so, as on the other
+hybrids, a block has `self_attn` (the latent attention) or `linear_attn`, and
+`getattr(layer, "self_attn", None) is not None` picks the attention blocks. The KDA
+module's own path is still `model.model.layers[i].self_attn` in error messages and
+`.path`; reach it as `layers[i].linear_attn`.
 
 ## Two kernels, one value
 

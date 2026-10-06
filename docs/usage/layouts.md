@@ -1,6 +1,6 @@
 ---
 title: Layouts
-one_liner: "Every standard value has one axis layout on every family (one exception: `layer_output` is `Streams` on DeepSeek-V4), one of thirty-one named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
+one_liner: "Every standard value has one axis layout on every family (two exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear), one of thirty-two named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
 tags: [usage, layouts, shapes, jaxtyping, dims, heads, kv_heads, Residual, Pattern, Streams, experts, top_k]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/reference/families.md, docs/usage/availability.md, docs/extending/custom-values.md]
 sources: [nnterp/components/eproperty.py, nnterp/components/moe.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/components/__init__.py]
@@ -11,8 +11,8 @@ sources: [nnterp/components/eproperty.py, nnterp/components/moe.py, nnterp/compo
 ## What this is for
 
 A value's shape is part of what it means. Each standard value is annotated with one of
-thirty-one named layouts, each defined in the file of the envoy that serves it (`Residual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `LinearQK`, `LinearV`, `Gates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
-re-exports the twenty-eight envoy-level names, and the root's three come from `nnterp.standardized`.
+thirty-two named layouts, each defined in the file of the envoy that serves it (`Residual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
+re-exports the twenty-nine envoy-level names, and the root's three come from `nnterp.standardized`.
 They are `jaxtyping` types such as `Residual = Float[Tensor, "batch seq hidden"]` and
 `Pattern = Float[Tensor, "batch heads query key"]`. `value.layout` returns that alias itself
 and `value.dims` names its axes. Layouts differ between values, not between families:
@@ -20,7 +20,9 @@ and `value.dims` names its axes. Layouts differ between values, not between fami
 BLOOM alike, and the per-family suite checks every value's axes against the model's sizes.
 One layout per value on every family, except `layer_output` on the hyper-connection
 families (DeepSeek-V4), whose residual is several parallel streams: there it is `Streams`,
-`[batch, seq, streams, hidden]` ([below](#streams-on-deepseek-v4)).
+`[batch, seq, streams, hidden]` ([below](#streams-on-deepseek-v4)), and `linear_attn.decays` on
+Kimi-Linear, whose Kimi Delta Attention decays each key channel of the state on its own:
+there it is `ChannelGates`, `[batch, seq, heads, key_dim]`.
 
 ## Canonical pattern
 
@@ -58,7 +60,7 @@ from the base.
 
 ## The layouts
 
-The thirty-one names, their axes, and the values that carry each:
+The thirty-two names, their axes, and the values that carry each:
 
 | layout | axes | values |
 | --- | --- | --- |
@@ -77,6 +79,7 @@ The thirty-one names, their axes, and the values that carry each:
 | `LinearQK` | `batch seq heads key_dim` | `linear_attn.attention_queries`, `attention_keys` |
 | `LinearV` | `batch seq heads value_dim` | `linear_attn.attention_values`, `attention_head_outputs` |
 | `Gates` | `batch seq heads` | `linear_attn.decays`, `betas` |
+| `ChannelGates` | `batch seq heads key_dim` | `linear_attn.decays` on Kimi-Linear (one decay per key channel) |
 | `State` | `batch heads key_dim value_dim` | `state_input`, `state_output`, `state` |
 | `States` | `batch seq heads key_dim value_dim` | `states` |
 | `ScanQK` | `batch seq groups state_dim` | a Mamba-1 `linear_attn.attention_queries` (`C`), `attention_keys` (`B`) |

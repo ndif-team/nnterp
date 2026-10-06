@@ -103,6 +103,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "squared-relu": ("Squared ReLU", "The MLP's activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere."),
     "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; split its output by that layout before reading a head."),
     "dense-first-blocks": ("Dense first blocks", "The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
+    "unnormalized-routing": ("Unnormalized routing", "The expert weights are the router's softmax entries for the chosen experts, not renormalized over them: a token's expert_weights sum to less than one."),
 }
 
 ROOT_NAMES = ("embed_tokens", "layers", "norm", "lm_head")
@@ -122,6 +123,7 @@ CONFIG_KEYS = (
     "linear_num_heads", "linear_head_dim", "linear_conv_kernel_dim",
     "first_k_dense_replace", "moe_intermediate_size", "num_experts", "n_routed_experts", "num_experts_per_token",
     "num_experts_per_tok", "num_shared_experts", "n_shared_experts", "routed_scaling_factor",
+    "norm_topk_prob",
 )
 
 STRUCTURAL = re.compile(r"^no \w+ (module|value) on this block")

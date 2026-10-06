@@ -86,6 +86,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "qk-norm": ("Query/key norms", "q_norm and k_norm normalize the projected queries and keys inside the attention; attention_queries and attention_keys are read after them."),
     "parallel-blocks": ("Parallel block", "Attention and MLP both read the block input, through one norm or two; the block sums x + attn + mlp."),
     "partial-rotary": ("Partial rotary", "Rotary embeddings turn only a leading fraction of each query and key head; the other dimensions carry no position."),
+    "proportional-rotary": ("Proportional rotary", "Some blocks turn only the first dimensions of each half of a query and key head, at frequencies spaced over the whole head; the other dimensions carry no position."),
     "nope-blocks": ("Blocks without rotary", "Some blocks, or all, apply no rotary embedding (NoPE): there attention_queries and attention_keys carry no position, and only the causal mask orders the tokens."),
     "interleaved-rotary": ("Interleaved rotary", "Rotary turns adjacent pairs of dimensions (2i, 2i + 1) rather than i with i + rot/2 (rotate_half), so query and key dimensions are ordered differently from a rotate_half family's."),
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
@@ -129,6 +130,7 @@ CONFIG_KEYS = (
     "linear_num_key_heads", "linear_num_value_heads", "linear_key_head_dim", "linear_value_head_dim",
     "full_attention_interval",
     "state_size", "expand", "conv_kernel", "residual_in_fp32",
+    "num_kv_shared_layers",
 )
 
 #: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.
@@ -216,6 +218,12 @@ def summarize_reason(reason: Any, num_layers: int) -> str | None:
     return f"{where}: " + " / ".join(reasons)
 
 
+def runs_mixture(child: Any) -> bool:
+    """Whether a block's child runs a mixture of experts: a `Moe` whose family does not say otherwise
+    (Gemma-4's MLP is a `Moe` on every checkpoint and runs a mixture only under ``enable_moe_block``)."""
+    return isinstance(child, Moe) and child.no_mixture() is None
+
+
 def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any]:
     """What nnterp knows about the entry's family, read off a meta build of ``reference``."""
     reference = reference or entry.REFERENCE
@@ -232,7 +240,7 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
     block_hosts, shapes = [], {}
     for layer in eager.layers:
         found = StandardizedTransformer._standard_children(layer)
-        block_hosts.append({alias: isinstance(child, Moe) for alias, child in found.items()})
+        block_hosts.append({alias: runs_mixture(child) for alias, child in found.items()})
         shapes.setdefault(tuple((alias, type(child._module)) for alias, child in found.items()), (layer, found))
     hosts_found: dict[str, list[tuple[int, Any]]] = {}
     for layer, found in shapes.values():
@@ -284,7 +292,7 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
             row["host"] = alias
         values[alias] = [row for row in merged.values() if prefix + row["name"] not in absent]
 
-    moe = next((child for found in children.values() for child in found if isinstance(child, Moe)), None)
+    moe = next((child for found in children.values() for child in found if runs_mixture(child)), None)
     mixer = next((child for found in children.values() for child in found if isinstance(child, RecurrentMixer)), None)
 
     paths = []
@@ -307,7 +315,7 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
         "family_file": f"nnterp/families/{entry.MODEL_TYPE}.py",
         "architecture": type(eager._module).__name__,
         "module_classes": {alias: [type(child._module).__name__ for child in found] for alias, found in children.items()},
-        "host_classes": {alias: [(type(child._module).__name__, isinstance(child, Moe), len(child.values())) for child in found]
+        "host_classes": {alias: [(type(child._module).__name__, runs_mixture(child), len(child.values())) for child in found]
                          for alias, found in children.items()},
         "block_hosts": block_hosts,
         "moe": moe_sizes(moe),
@@ -368,9 +376,10 @@ def value_node(row: dict[str, Any], eyebrow: str) -> dict[str, Any]:
                 condition=row["condition"])
 
 
-#: The sublayer kinds a BLOCK may draw. A "moe" sublayer is drawn on the blocks whose host is a
-#: `Moe` and an "mlp" one on the blocks whose host is not, so a family with dense first blocks
-#: lists both; every kind is drawn only on the blocks that have its host.
+#: The sublayer kinds a BLOCK may draw. A "moe" sublayer is drawn on the blocks whose host runs a
+#: mixture (`runs_mixture`) and an "mlp" one on the blocks whose host does not, so a family with
+#: dense first blocks, or with dense and mixture checkpoints, lists both; every kind is drawn only
+#: on the blocks that have its host.
 KINDS = ("attention", "mixer", "mlp", "moe")
 #: Where each of a mixture's values is drawn: in the router's box, the experts' or the shared expert's.
 MOE_PARTS = {
@@ -392,7 +401,11 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     The sublayers are listed once, in forward order; each block draws the ones its children
     match (`drawn`), and the distinct combinations are the block's shapes. A family with one
     shape gets the schema as it always has; a hybrid gets ``shapes`` and ``shape_of`` too, and
-    the diagram redraws when the slider crosses into another shape."""
+    the diagram redraws when the slider crosses into another shape.
+
+    A host that runs a mixture on some checkpoints of the family and not on others (Gemma-4's
+    ``mlp``) lists both sublayers; a checkpoint draws the one its blocks have, and the other is
+    left out of the schema."""
     by_host = {alias: {row["name"]: row for row in rows} for alias, rows in info["values"].items()}
     sizes = dict(info["sizes"])
     moe = info["moe"] or {}
@@ -401,6 +414,20 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     hosts = [s["host"] for s in specs]
     # A host drawn by two sublayers (a dense MLP and a mixture) keys its nodes by kind as well.
     keys = [s["host"] if hosts.count(s["host"]) == 1 else f"{s['host']}-{s['kind']}" for s in specs]
+
+    shape_of = [drawn(specs, hosts) for hosts in info["block_hosts"]]
+    for i, (shape, block_hosts) in enumerate(zip(shape_of, info["block_hosts"])):
+        named = [h for h in block_hosts if h in hosts]
+        assert sorted(named) == sorted(specs[k]["host"] for k in shape), \
+            f"{entry.MODEL_TYPE}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
+    shown = sorted({k for shape in shape_of for k in shape})
+    for k in range(len(specs)):
+        assert k in shown or any(hosts[j] == hosts[k] for j in shown), \
+            f"{entry.MODEL_TYPE}: no block has BLOCK's {keys[k]!r} sublayer"
+    # Only the sublayers this checkpoint's blocks draw: the shapes index into what is left.
+    position = {k: n for n, k in enumerate(shown)}
+    shape_of = [tuple(position[k] for k in shape) for shape in shape_of]
+    specs, keys = [specs[k] for k in shown], [keys[k] for k in shown]
     nodes: dict[str, dict[str, Any]] = {}
     sublayers = []
     for k, spec in enumerate(specs):
@@ -470,14 +497,7 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
                 extra=spec.get("post_norm_note"))
         sublayers.append(sub)
 
-    shape_of = [drawn(specs, hosts) for hosts in info["block_hosts"]]
-    for i, (shape, block_hosts) in enumerate(zip(shape_of, info["block_hosts"])):
-        named = [h for h in block_hosts if h in hosts]
-        assert sorted(named) == sorted(specs[k]["host"] for k in shape), \
-            f"{entry.MODEL_TYPE}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
     shapes = list(dict.fromkeys(shape_of))
-    for k in range(len(specs)):
-        assert any(k in shape for shape in shapes), f"{entry.MODEL_TYPE}: no block has BLOCK's {keys[k]!r} sublayer"
     single = len(shapes) == 1
     assert single or "identity" not in entry.BLOCK, f"{entry.MODEL_TYPE}: a BLOCK with several shapes takes no identity"
 

@@ -147,15 +147,19 @@ The entry states facts about a family, and each one has a source. Before writing
 
    **Blocks that differ.** `sublayers` lists every sublayer any block has, once, in forward order,
    and each block draws the ones that match its own children: a sublayer is drawn where its `host`
-   exists, a `"moe"` only where that host is a `Moe` and an `"mlp"` only where it is not. A hybrid
+   exists, a `"moe"` only where that host runs a mixture (a `Moe` whose `no_mixture()` gives no
+   reason) and an `"mlp"` only where it does not. A hybrid
    lists both mixers (`linear_attn` as `"mixer"`, `self_attn` as `"attention"`); a family with
-   dense first blocks lists `mlp` twice, as `"mlp"` and as `"moe"`. Nothing is keyed on a config
+   dense first blocks lists `mlp` twice, as `"mlp"` and as `"moe"`, and so does a family whose
+   checkpoints differ (Gemma-4: dense on E2B, a mixture on 26B-A4B), each checkpoint drawing the
+   one its blocks have. Nothing is keyed on a config
    key: the matching reads the built model, so `layer_types`, `mlp_layer_types`,
    `first_k_dense_replace` and their kin all come out the same way. The distinct combinations are
    the block's shapes; the slider's ticks are coloured by shape, and the diagram, the identity and
    the variant label redraw when the slider crosses into another. The build fails when a block has
    a host the listed sublayers do not draw, when two sublayers match the same host, or when a
-   sublayer matches no block of the checkpoint.
+   sublayer matches no block of the checkpoint and is not the other half of such an `"mlp"` /
+   `"moe"` pair.
 
    The build checks every host, contribution and interior value against the family and fails on a
    name the family does not have.
@@ -180,6 +184,8 @@ The entry states facts about a family, and each one has a source. Before writing
    |---|---|---|
    | Gemma | 145 | gemma2 (gemma3_text 157) |
    | Qwen | 285 | qwen2 (qwen3 297, qwen3_5_text 273; qwen2_moe hashes to 243, so set it near 285) |
+   | Gemma | 145 | gemma2 (gemma3_text 157, gemma4_text 133) |
+   | Qwen | 285 | qwen2 (qwen3 297; qwen2_moe hashes to 243, so set it near 285) |
    | Llama and its relatives (Mistral, SmolLM, ...) | hash of `llama` | llama |
    | OLMo (olmo3, olmo_hybrid, flex_olmo, olmoe) | hash of `olmo2` (58) | olmo2 (olmoe 70) |
    | GPT-2 | hash of `gpt2` | gpt2 |

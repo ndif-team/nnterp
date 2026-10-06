@@ -37,8 +37,8 @@ One descriptor, `EProperty`, whose key is a path from the host envoy:
 * ``"../post_attention_layernorm.output"``, ``"embed_tokens.output"``: a value
   produced by a module named relative to this one (a sandwich block's
   post-sublayer norm, the root's embedding).
-* ``"/projector.output"``: a path walked from the model's root, by standard
-  names, whatever the host (the vision tower's ``image_features``).
+* ``"/inputs"``: a path walked from the model's root, by standard names,
+  whatever the host (the vision tower's ``image_token_mask``).
 * ``"source.attention_interface_1.inputs"``: an operation inside a forward,
   reached through ``.source``, optionally one element of it (``select``).
 * Computed from several served values, a `DerivedEProperty` (a DeltaNet
@@ -79,12 +79,14 @@ from .state_space import (
 )
 from .vision import ImageFeatures, ImageTokenMask, Patches, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id
 from .vision import PACKED, PackedVision, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
+from .vision import ImageScatter, PixtralVision
 
 __all__ = [
     "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "ImageFeatures", "ImageTokenMask", "Keys", "Layer", "LinearAttention", "Patches",
     "LOGITS", "LinearQK", "LinearV", "Mlp", "Moe", "PER_SLOT", "Pattern", "Queries", "RecurrentMixer", "Residual", "RouterLogits", "ScanDecays", "ScanQK", "ScanState",
     "ScanStates", "ScanSteps", "ScanValues", "SelectiveScan", "State", "States", "StreamMixing", "StreamWeights", "Streams", "TokenEProperty",
     "Values", "Vision", "VisionAttention", "VisionLayer", "VisionMlp", "blocks_support",
+    "ImageScatter", "PixtralVision",
     "NOT_ON_INTERFACE", "SSDHeadOutputs", "SSDKeys", "SSDQueries", "SSDValues", "Standard", "StateSpace", "Unavailable",
     "chunk_per_token", "first_tensor", "image_token_id", "interface_reason", "mixture_reason", "needs_eager",
     "needs_grouped_experts", "needs_kernel_source", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert",

@@ -7,6 +7,9 @@ sources: [nnterp/components/vision.py, nnterp/families/gemma3_text.py, nnterp/fa
 tags: [usage, vision, multimodal, image-text-to-text, vision tower, projector, image_features, image_token_mask, Patches, siglip, clip, llava, gemma3, qwen-vl, packed tower, deepstack, m-rope]
 related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/root-values.md, docs/usage/availability.md, docs/usage/layouts.md, docs/developing/vision-design.md, docs/reference/families.md]
 sources: [nnterp/components/vision.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, nnterp/families/qwen2_vl_text.py, nnterp/families/qwen2_5_vl_text.py, nnterp/families/qwen3_vl_text.py, nnterp/families/qwen3_vl_moe_text.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_5_moe_text.py, tests/families/vision_suite.py, tests/families/qwen_vision_suite.py, tests/families/test_gemma3_text.py, tests/families/test_llama.py, tests/families/test_qwen3_vl_text.py]
+tags: [usage, vision, multimodal, image-text-to-text, vision tower, projector, image_features, image_token_mask, Patches, siglip, clip, pixtral, llava, llava-next, llava-onevision, paligemma, idefics3, smolvlm, aya-vision, mistral3, gemma3]
+related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/root-values.md, docs/usage/availability.md, docs/usage/layouts.md, docs/developing/vision-design.md, docs/reference/families.md]
+sources: [nnterp/components/vision.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, nnterp/families/gemma.py, nnterp/families/qwen2.py, nnterp/families/cohere2.py, nnterp/families/mistral.py, nnterp/families/ministral3.py, tests/families/vision_suite.py, tests/families/test_gemma3_text.py, tests/families/test_llama.py, tests/families/test_mistral.py]
 ---
 
 # Vision-language models
@@ -81,6 +84,23 @@ it peaked at 11 GB.
 | `vision.layers[i].input_layernorm`, `.post_attention_layernorm` | the pre-norms | `layer_norm1`, `layer_norm2` | same | `norm1`, `norm2` |
 | `model.vision.norm` | the final norm over the patches | `post_layernorm` | none: CLIP's `post_layernorm` norms only the pooled CLS token | none: the merger norms its own input |
 | `model.projector` | the module whose output is scattered into the text stream | `model.multi_modal_projector` (pools 4096 patches to 256 tokens) | `model.multi_modal_projector` | `visual.merger`, inside the tower (folds each 2x2 block of patches into one token) |
+token first), `features` `(576, 16)`. The same body runs on every wrapper in
+[the coverage list](#which-wrappers), from Gemma 3 (`google/gemma-3-4b-pt`) to Mistral 3.
+
+## The names
+
+| standard name | what it is | SigLIP (Gemma 3, PaliGemma, llava-interleave, LLaVA-OneVision, Aya Vision, Cohere2-Vision) | CLIP (Llava 1.5, VipLlava, LLaVA-NeXT, BakLLaVA) | Pixtral (Mistral 3, Pixtral-12B) |
+| --- | --- | --- | --- | --- |
+| `model.vision` | the tower's root, a `Vision` | `model.model.vision_tower` (DeepSeek-VL, Idefics 3, SmolVLM: `model.model.vision_model`) | `model.model.vision_tower` | `model.model.vision_tower`, a `PixtralVision` |
+| `model.vision.patch_embed` | the patch embedding | `embeddings.patch_embedding` | same | `patch_conv` |
+| `model.vision.layers[i]` | the tower's blocks, `VisionLayer` | `encoder.layers[i]` | same | `transformer.layers[i]` |
+| `vision.layers[i].self_attn`, `.mlp` | `VisionAttention`, `VisionMlp` | native | native | `attention`, `feed_forward` |
+| `vision.layers[i].input_layernorm`, `.post_attention_layernorm` | the pre-norms | `layer_norm1`, `layer_norm2` | same | `attention_norm`, `ffn_norm` |
+| `model.vision.norm` | the final norm over the patches | `post_layernorm` | none: CLIP's `post_layernorm` norms only the pooled CLS token | none |
+| `model.projector` | the last module before the scatter | `model.multi_modal_projector` (Gemma 3's pools 4096 patches to 256 tokens; Aya Vision's and Cohere2-Vision's pixel-shuffle); DeepSeek-VL: `model.aligner`; Idefics 3, SmolVLM: `model.connector` (pixel shuffle) | `model.multi_modal_projector` | `model.multi_modal_projector` (merges each 2x2 block of patches on Mistral 3) |
+
+Idefics 3's and SmolVLM's ViT is SigLIP-shaped and named as SigLIP. A family that hosts the
+tower at two paths keys both, as it keys both spellings of the text stack.
 
 `embed_tokens`, `layers`, `norm` and `lm_head` stay the language model's
 (`model.language_model.*` on the wrapper; `language_model.model.*` on Llama 4's), and
@@ -118,13 +138,27 @@ is the config's (64 on E2B, with 12 heads over a 768-wide stream). The encoder-f
 embedder has `num_layers == 0`, `hidden_size` its `mm_embed_dim` and `patch_size` the
 48-pixel merged patch it embeds; its `num_heads`, `head_dim`, `intermediate_size` and
 `image_size` raise `Unavailable`.
+| `image_features` | `vision` | `ImageFeatures` `[image_tokens hidden]` | what the wrapper scatters into the token embeddings, flat over every image token in row-major order; assignable, in-place edits land |
 
-`layers[0].input[vision.image_token_mask] == vision.image_features` holds exactly: the
-wrapper writes the projector's output into the token embeddings at the image tokens and
-nothing touches it before block 0. So `vision.image_features` is the place to ablate, patch
-or steer the image as the text model sees it. Both values are the tower's although neither
-is read inside it: the mask comes off the model's inputs and the features off the
-projector, the tower's sibling.
+`Patches` is `[images, patches, vision_hidden]`: one row per image (per crop on LLaVA-NeXT
+and LLaVA-OneVision, per tile on Idefics 3 and SmolVLM), the image's patches in raster
+order (CLS first on CLIP). Pixtral is *packed*: one row holding every image's patches, image
+after image, `[1, all patches, vision_hidden]`; each image has `(height // patch_size) *
+(width // patch_size)` of them, its `image_sizes` entry from the processor. Its blocks
+attend under a block-diagonal mask, so `attention_probabilities` is `[1, heads, all patches,
+all patches]`, zero between images, and its `patch_embeddings` is the packed row as it
+enters `ln_pre` (the convolution's output, `patch_embed.output`, is the padded grid). The tower's sizes are on `model.vision`: `num_layers`,
+`hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size`.
+
+`layers[0].input[vision.image_token_mask] == vision.image_features` holds exactly:
+`image_features` is read at the scatter, the tensor the wrapper's forward writes into the
+token embeddings at the image tokens, and nothing touches it before block 0. So
+`vision.image_features` is the place to ablate, patch or steer the image as the text model
+sees it. On most wrappers it is the projector's output, reshaped; on LLaVA-NeXT and
+LLaVA-OneVision it is not, since they unpad the projector's output and add a newline token
+per row (`model.model.image_newline`), so `projector.output` has another row count there.
+Both values are the tower's although neither is read inside it: the mask comes off the
+model's inputs and the features off the wrapper's forward.
 
 What feeds the projector differs per host: Gemma 3 pools `tower_output`; Llava takes
 `vision.layers[-2].layer_output` without its CLS token (`vision_feature_layer=-2`), so a
@@ -143,6 +177,9 @@ before scattering, so `vision.image_features` is read at the scatter
 (`inputs_embeds.masked_scatter` in the wrapper model's forward), not at the projector:
 `image_features == projector.output[valid]`, where `valid` is
 `(image_position_ids != -1).all(-1)`.
+write to `tower_output` or the last block does not reach Llava's text model; VipLlava
+concatenates several blocks' streams. `model.projector.input` is what the projector
+actually receives.
 
 ## Inputs
 
@@ -262,6 +299,29 @@ first (LLaVA-NeXT's unpadding and newline tokens) is not listed, and the value s
   Gemma 4 unified's embedder. The text names bind on the
   wrappers of Qwen3.5, Qwen3.5-MoE, Mistral 3, PaliGemma, LLaVA-OneVision, llava-interleave,
   Idefics 3, Aya Vision, EXAONE 4.5 and LightOnOCR, but their towers and projectors are
+`vision.image_features` needs the family to know where the wrapper writes the features in
+(an `ImageScatter` keyed on the wrapper's model); on a wrapper whose family does not, the
+tower's names bind but `image_features` is `Unavailable` and says so.
+
+## Which wrappers
+
+| family | wrapper (`model_type`) | tower |
+| --- | --- | --- |
+| `gemma3_text` | Gemma 3 (`gemma3`) | SigLIP |
+| `gemma` | PaliGemma (`paligemma`) | SigLIP |
+| `qwen2` | llava-interleave (`llava`), LLaVA-OneVision (`llava_onevision`) | SigLIP |
+| `cohere2` | Aya Vision (`aya_vision`), Cohere2-Vision (`cohere2_vision`) | SigLIP |
+| `llama` | Llava 1.5 (`llava`), VipLlava (`vipllava`), LLaVA-NeXT (`llava_next`) | CLIP |
+| `llama` | DeepSeek-VL (`deepseek_vl`) | SigLIP |
+| `llama` | Idefics 3 (`idefics3`), SmolVLM (`smolvlm`) | their SigLIP-shaped ViT, one row per tile |
+| `mistral` | LLaVA-NeXT (`llava_next`, `llava-v1.6-mistral`), BakLLaVA (`llava`; no tiny checkpoint, so untested: the keys are LLaVA-NeXT's tower and Llava's scatter) | CLIP |
+| `mistral` | Mistral 3 (`mistral3`, Mistral Small 3.1 / 3.2), Pixtral-12B (`llava`) | Pixtral |
+| `ministral3` | Mistral 3 (`mistral3`, Ministral 3) | Pixtral |
+
+## What is not covered yet
+
+- Towers other than SigLIP, CLIP and Pixtral. The text names bind on the wrappers of
+  Qwen3.5, Qwen3.5-MoE, EXAONE 4.5 and LightOnOCR, but their towers and projectors are
   native-only, and there is no `model.vision` there.
 - Qwen2-VL, Qwen2.5-VL, Qwen3-VL and Mllama: their text models are types nnterp has no
   family for yet.

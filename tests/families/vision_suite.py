@@ -23,7 +23,7 @@ from suite import PROMPT, contributions
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.components import (
-    ImageFeatures, ImageTokenMask, Patches, Pattern, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id,
+    ImageFeatures, ImageScatter, ImageTokenMask, Patches, Pattern, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id,
 )
 
 #: The tower's own values, in forward order; its block values are those of a text block.
@@ -36,12 +36,68 @@ BLOCK_VALUES = {
 
 #: A fixed random image; the processor resizes it to the tower's size.
 IMAGE = Image.fromarray((np.random.RandomState(0).rand(64, 64, 3) * 255).astype("uint8"))
+#: A second image of another shape, for a packed tower, which concatenates the images it is given.
+IMAGE_WIDE = Image.fromarray((np.random.RandomState(1).rand(48, 96, 3) * 255).astype("uint8"))
 
 
-def image_prompt(model, text="What is in this image?"):
-    """A prompt with the image placeholder where the processor's chat template puts it."""
-    messages = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": text}]}]
-    return model.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+def image_prompt(model, text="What is in this image?", images=1):
+    """A prompt with ``images`` image placeholders where the processor's chat template puts them.
+
+    A tiny checkpoint without a usable template (VipLlava's, LLaVA-NeXT's) gets the processor's image tokens first.
+    """
+    messages = [{"role": "user", "content": [*[{"type": "image"}] * images, {"type": "text", "text": text}]}]
+    try:
+        return model.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+    except (ValueError, TypeError):
+        return model.processor.image_token * images + f"\n{text}"
+
+
+def siglip_rows(tower="model.vision_tower"):
+    """Standard path -> native path for a SigLIP tower at ``tower`` and the projector beside it."""
+    return {
+        "vision": tower,
+        "vision.layers": f"{tower}.encoder.layers",
+        "vision.patch_embed": f"{tower}.embeddings.patch_embedding",
+        "vision.norm": f"{tower}.post_layernorm",
+        "vision.layers.0.self_attn": f"{tower}.encoder.layers.0.self_attn",
+        "vision.layers.0.mlp": f"{tower}.encoder.layers.0.mlp",
+        "vision.layers.0.input_layernorm": f"{tower}.encoder.layers.0.layer_norm1",
+        "vision.layers.0.post_attention_layernorm": f"{tower}.encoder.layers.0.layer_norm2",
+        "projector": "model.multi_modal_projector",
+    }
+
+
+
+def pixtral_rows(tower="model.vision_tower"):
+    """Standard path -> native path for a Pixtral tower at ``tower`` and the projector beside it."""
+    return {
+        "vision": tower,
+        "vision.layers": f"{tower}.transformer.layers",
+        "vision.patch_embed": f"{tower}.patch_conv",
+        "vision.layers.0.self_attn": f"{tower}.transformer.layers.0.attention",
+        "vision.layers.0.mlp": f"{tower}.transformer.layers.0.feed_forward",
+        "vision.layers.0.input_layernorm": f"{tower}.transformer.layers.0.attention_norm",
+        "vision.layers.0.post_attention_layernorm": f"{tower}.transformer.layers.0.ffn_norm",
+        "projector": "model.multi_modal_projector",
+    }
+
+
+def clip_rows(tower="model.vision_tower"):
+    """Standard path -> native path for a CLIP tower at ``tower`` (no ``vision.norm``: CLIP's ``post_layernorm`` norms
+    the pooled CLS token only) and the projector beside it."""
+    rows = siglip_rows(tower)
+    del rows["vision.norm"]
+    return rows
+
+
+def align_processor(model, image_processor=None, **processor):
+    """Set a tiny checkpoint's processor to its model: the given processor and image-processor attributes, and the
+    config's ``image_token_id`` to the processor's image token (the hf-tiny-v2 checkpoints disagree on all three)."""
+    for name, value in processor.items():
+        setattr(model.processor, name, value)
+    for name, value in (image_processor or {}).items():
+        setattr(model.processor.image_processor, name, value)
+    model.config.image_token_id = model.processor.image_token_id
 
 
 class VisionSuite:
@@ -65,7 +121,15 @@ class VisionSuite:
         cls = request.cls
         return StandardizedTransformer(
             cls.REPO, task="image-text-to-text", dispatch=True, attn_implementation="eager", dtype=cls.DTYPE,
+        model = StandardizedTransformer(
+            cls.REPO, task="image-text-to-text", dispatch=True, attn_implementation="eager", dtype=torch.float32,
         )
+        cls.fix_processor(model)
+        return model
+
+    @staticmethod
+    def fix_processor(model):
+        """Where a tiny checkpoint's processor disagrees with its model, set it to the model's (a subclass says how)."""
 
     @pytest.fixture(scope="class")
     def clean(self, model):
@@ -82,7 +146,10 @@ class VisionSuite:
 
     def test_family_resolved(self, model):
         assert model.family is self.FAMILY
-        assert model.config.model_type in self.FAMILY.IMAGE_WRAPPERS
+
+    def test_the_scatter_host_is_keyed(self, model):
+        """The wrapper's model, whose forward writes the image features in, is an `ImageScatter`."""
+        assert isinstance(model.get("model"), ImageScatter)
 
     def test_tower_names_alias_native_envoys(self, model):
         for standard, native in self.VISION_NATIVE.items():
@@ -200,8 +267,12 @@ class VisionSuite:
             with model.trace(image_prompt(model), images=[IMAGE]):
                 model.vision.image_token_mask = torch.zeros(1, 1, dtype=torch.bool)
 
+    def text_input(self, model):
+        """What a text-only trace is given: the prompt, or its encoding where the processor demands an image (PaliGemma)."""
+        return PROMPT
+
     def test_a_text_only_trace(self, model):
-        with model.trace(PROMPT):
+        with model.trace(self.text_input(model)):
             mask = model.vision.image_token_mask.save()
             out = model.layers[-1].layer_output.save()
             logits = model.logits.save()
@@ -238,6 +309,8 @@ class VisionSuite:
         side = vision.image_size // vision.patch_size
         assert patches.shape == (1, side * side, vision.hidden_size)
         assert torch.equal(patches, conv.flatten(2).transpose(1, 2) if conv.dim() == 4 else conv)
+        assert patches.shape[1:] == (side * side, vision.hidden_size)  # one row per image, crop or tile
+        assert torch.equal(patches, conv.flatten(2).transpose(1, 2))
         norm = getattr(vision, "norm", None)
         expected = norm._module(last) if norm is not None else last
         torch.testing.assert_close(out, expected)
@@ -250,6 +323,58 @@ class VisionSuite:
             features = vision.image_features.save()
         assert (conv[:, :, 0, 0] == 0).all() if conv.dim() == 4 else (conv[:, 0] == 0).all()
         assert not torch.allclose(features, clean["features"])
+
+
+class PixtralSuite(VisionSuite):
+    """`VisionSuite` for Pixtral: a packed tower, every image's patches in one row under a block-diagonal mask."""
+
+    VISION_NATIVE = pixtral_rows()
+
+    def patch_counts(self, model, prompt, images):
+        """Each image's patch count, off the processor's ``image_sizes``."""
+        sizes = model.processor(text=prompt, images=images, return_tensors="pt")["image_sizes"]
+        side = model.vision.patch_size
+        return [int(height) // side * (int(width) // side) for height, width in sizes]
+
+    def test_patch_embeddings_and_tower_output(self, model, clean):
+        """``patch_embeddings`` is the packed row entering ``ln_pre``; ``tower_output`` the last block's stream (no final norm)."""
+        vision, prompt = model.vision, image_prompt(model)
+        with model.trace(prompt, images=[IMAGE]):
+            patches = vision.patch_embeddings.save()
+            fed = vision.ln_pre.input.save()
+            last = vision.layers[-1].layer_output.save()
+            out = vision.tower_output.save()
+        assert isinstance(patches, Patches)
+        assert patches.shape == (1, sum(self.patch_counts(model, prompt, [IMAGE])), vision.hidden_size)
+        assert torch.equal(patches, fed)
+        assert "norm" not in vision._aliases
+        torch.testing.assert_close(out, last)
+
+    def test_patch_embeddings_edits_land(self, model, clean):
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            model.vision.patch_embeddings[:, 0] = 0
+            fed = model.vision.ln_pre.input.save()
+            features = model.vision.image_features.save()
+        assert (fed[:, 0] == 0).all()
+        assert not torch.allclose(features, clean["features"])
+
+    def test_two_images_pack_into_one_row(self, model):
+        """Two images of different shapes: one row of both images' patches, attention zero between them, and the scatter identity."""
+        prompt = image_prompt(model, "Compare.", images=2)
+        counts = self.patch_counts(model, prompt, [IMAGE, IMAGE_WIDE])
+        with model.trace(prompt, images=[IMAGE, IMAGE_WIDE]):
+            mask = model.vision.image_token_mask.save()
+            pattern = model.vision.layers[0].self_attn.attention_probabilities.save()
+            out = model.vision.layers[0].layer_output.save()
+            features = model.vision.image_features.save()
+            first = model.layers[0].input.save()
+        assert len(set(counts)) == 2 and out.shape == (1, sum(counts), model.vision.hidden_size)
+        assert pattern.shape == (1, model.vision.num_heads, sum(counts), sum(counts))
+        first_image = slice(0, counts[0])
+        second_image = slice(counts[0], sum(counts))
+        assert (pattern[..., first_image, second_image] == 0).all() and (pattern[..., second_image, first_image] == 0).all()
+        torch.testing.assert_close(pattern[..., first_image, first_image].sum(-1), torch.ones_like(pattern[..., first_image, 0]))
+        assert torch.equal(first[mask], features)
 
 
 def wrapper_of(text_repo, config_class, vision_config, **load):
@@ -300,10 +425,12 @@ class WrapperSuite:
         assert all(type(layer) is self.FAMILY.Layer for layer in model.layers)
         assert all(type(layer.self_attn) is self.FAMILY.Attention for layer in model.layers)
 
-    def test_support_runs_and_lists_no_vision_host_without_a_vision_family(self, model):
+    def test_support_runs_and_lists_vision_rows_only_where_an_image_reaches(self, model):
+        """A wrapper built here has no processor, so its tower never runs; PaliGemma's, loaded with one, lists its tower."""
         support = model.support()
         assert "layer_output" in support and "self_attn.attention_output" in support
-        assert not any(name.startswith("vision.") for name in support)
+        reaches = "vision" in model._aliases and model.vision.no_images() is None
+        assert any(name.startswith("vision.") for name in support) == reaches
 
     def test_text_only_trace_keeps_the_identity(self, model):
         layer = model.layers[0]

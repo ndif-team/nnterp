@@ -21,8 +21,10 @@ root's sizes stay the text model's.
 
 Where the image meets the text model is the tower's too: ``vision.image_token_mask``
 (which positions of the text batch hold an image token, off the root's inputs)
-and ``vision.image_features`` (the projector's output, flat over those tokens),
-so ``layers[0].input[vision.image_token_mask] == vision.image_features``.
+and ``vision.image_features`` (what the wrapper scatters into the token
+embeddings, flat over those tokens, read at the scatter in the forward of the
+module the family keys `ImageScatter` on), so
+``layers[0].input[vision.image_token_mask] == vision.image_features``.
 """
 
 from __future__ import annotations
@@ -67,27 +69,60 @@ def no_image_tokens(vision: Vision) -> str | None:
     return reason
 
 
+def scatter_host(model: Any) -> tuple[str, ImageScatter] | None:
+    """The root's child whose forward scatters the image features (an `ImageScatter`), with its name, or ``None``."""
+    return next(((name, child) for name, child in model._named_children() if isinstance(child, ImageScatter)), None)
+
+
 def no_image_features(vision: Vision) -> str | None:
     """Why ``vision.image_features`` is unavailable, or ``None``.
 
-    ``image_features`` is the projector's output, which is what the wrapper
-    scatters into the text stream on the wrappers the family lists in
-    ``IMAGE_WRAPPERS`` (each verified by the suite:
-    ``layers[0].input[image_token_mask] == image_features``). A wrapper that
-    rearranges the projector's output before the scatter (LLaVA-NeXT's
-    unpadding and newline tokens) binds the same names but is not listed, so
-    the value says so rather than serving the wrong tensor.
+    ``image_features`` is read at the scatter, in the forward of the module the
+    family keys `ImageScatter` on; a wrapper whose family keys none there binds
+    the tower's names but does not serve the value.
     """
     reason = no_image_tokens(vision)
-    if reason is None:
+    if reason is None and scatter_host(vision.root) is None:
         model = vision.root
-        wrappers = tuple(getattr(model.family, "IMAGE_WRAPPERS", ()))
-        if model.config.model_type not in wrappers:
-            reason = (
-                f"the {model.config.model_type!r} wrapper is not one whose projector output is known to be what it "
-                f"scatters into the text stream (the {model.family.__name__.rsplit('.', 1)[-1]} family lists {wrappers})"
-            )
+        reason = (
+            f"the {model.family.__name__.rsplit('.', 1)[-1]} family keys no ImageScatter on the "
+            f"{model.config.model_type!r} wrapper, so where its image features enter the text stream is unknown"
+        )
     return reason
+
+
+def image_scatter(vision: Vision) -> str:
+    """The path of the scatter's arguments, from the root: ``"/model.source.inputs_embeds_masked_scatter_0.inputs"``."""
+    name, host = scatter_host(vision.root)
+    return f"/{name}.source.{host.scatter}.inputs"
+
+
+def scattered_argument(vision: Vision) -> int | str:
+    """Which argument of the scatter is the image features: `ImageScatter.scatter_argument`."""
+    return scatter_host(vision.root)[1].scatter_argument
+
+
+class ImageScatter(Standard):
+    """The wrapper's inner model (``model.model``): the module whose forward scatters the image features into the token embeddings.
+
+    A family keys it on the wrapper model's type (``LlavaModel: ImageScatter``);
+    `Vision.image_features` reads the `scatter_argument` of the `scatter`
+    operation, the features in ``inputs_embeds.masked_scatter(image_mask,
+    image_features)``, which is what the text model receives at the image
+    tokens whatever the wrapper did after its projector (LLaVA-NeXT's
+    unpadding and newline tokens). A wrapper that writes the features in
+    elsewhere subclasses it with its own operation and argument. The forward
+    is instrumented at build (``sourced``), so the scatter is served after the
+    tower's values, which run inside the same forward. Carries no values of
+    its own.
+    """
+
+    sourced = True
+    #: The operation of this module's forward that writes the image features into the token embeddings
+    #: (Idefics 3 and SmolVLM: ``"self_inputs_merger_0"``, the helper call).
+    scatter = "inputs_embeds_masked_scatter_0"
+    #: Which of its arguments is the image features: a position, or a keyword's name (``"image_hidden_states"``).
+    scatter_argument: int | str = 1
 
 
 class VisionLayer(Layer):
@@ -140,7 +175,7 @@ class Vision(Standard):
     drops the CLS token, so what reaches the projector is ``projector.input``,
     not necessarily ``tower_output``. Where the image meets the text model:
     ``image_token_mask``, read off the model's inputs, and ``image_features``,
-    the projector's output (keyed ``"/projector.output"``, from the root), so
+    read at the scatter (`ImageScatter`, keyed from the root), so
     ``layers[0].input[image_token_mask] == image_features``. Both need an image
     to reach the model (`no_images`).
 
@@ -242,22 +277,25 @@ class Vision(Standard):
             return output
         return rewrap(self, value)
 
-    @EProperty("/projector.output", description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
+    @EProperty(image_scatter, select=scattered_argument, description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
     def image_features(self, value: torch.Tensor) -> ImageFeatures:
         """The image features the text model receives, ``[image_tokens, hidden]``, flat over every image token of the batch.
 
-        The projector's output, which the wrapper scatters into the token
-        embeddings at the image tokens in row-major order, so
-        ``layers[0].input[image_token_mask] == image_features``. A view of the
-        projector's output: in-place edits land, and an assigned tensor of the
-        same shape replaces it. Read after the tower's values and before
+        Read at the scatter: the tensor the wrapper's forward writes into the
+        token embeddings at the image tokens in row-major order (`ImageScatter`),
+        so ``layers[0].input[image_token_mask] == image_features``. A view of
+        it: in-place edits land, and an assigned tensor of the same shape
+        replaces it. Read after the tower's values and before
         ``layers[0].input``. Never reached on a text-only trace.
         """
         return value.reshape(-1, value.shape[-1])
 
     @image_features.postprocess
     def image_features(self, value: torch.Tensor) -> torch.Tensor:
-        return value.reshape(self.root.projector.output.shape)
+        name, host = scatter_host(self.root)
+        args, kwargs = self.root.get(f"{name}.source.{host.scatter}").inputs
+        argument = host.scatter_argument
+        return value.reshape((kwargs[argument] if isinstance(argument, str) else args[argument]).shape)
 
     # -- availability ------------------------------------------------------------------
 
@@ -467,3 +505,27 @@ class QwenVision(PackedVision):
         output = self.output
         output.pooler_output = value
         return output
+class PixtralVision(Vision):
+    """Pixtral's tower (Mistral 3, Llava-Pixtral): *packed*, every image's patches in one row.
+
+    The convolution runs on the batch padded to its largest image, each image
+    is cropped to its own grid, and the grids are flattened and concatenated
+    into ``[1, all patches, vision_hidden]`` before ``ln_pre``; the blocks
+    attend under a block-diagonal mask, so no patch sees another image's. So
+    `Patches` has a leading 1 here, and ``patch_embeddings`` is that packed
+    row as it enters ``ln_pre`` (the convolution's own output, ``patch_embed.output``,
+    is still the padded grid). The processor's ``image_sizes`` split the row
+    per image: ``(height // patch_size) * (width // patch_size)`` patches each,
+    in order. The attention interior is whole: one interface call over the
+    packed row, so ``attention_probabilities`` is ``[1, heads, all patches,
+    all patches]``, zero between images.
+    """
+
+    @EProperty("ln_pre.input", description="Every image's patch embeddings packed in one row, entering the pre-norm")
+    def patch_embeddings(self, value: torch.Tensor) -> Patches:
+        """Every image's patch embeddings, ``[1, all patches, vision_hidden]``, image after image, each in raster order.
+
+        What enters ``ln_pre``: the convolution's output cropped per image and
+        concatenated. Assign a tensor of the same shape to replace it.
+        """
+        return value

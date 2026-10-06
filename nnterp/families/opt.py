@@ -18,8 +18,6 @@ from ..components import Attention, Layer, Mlp
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("opt",)
-
 RENAME = {
     "model.decoder.embed_tokens": "embed_tokens",
     "model.decoder.layers": "layers",

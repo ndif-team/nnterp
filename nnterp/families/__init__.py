@@ -1,9 +1,8 @@
 """The registry: ``config.model_type`` -> the family's standardization toolkit.
 
-A toolkit is one module in this package. Each declares:
+A toolkit is one module in this package, named after the ``model_type``
+(from the checkpoint's config) it covers. Each declares:
 
-* ``MODEL_TYPES``: the ``model_type`` values (from the checkpoint's config)
-  the module covers.
 * ``RENAME``: an nnsight ``rename`` dict mapping the family's own module names
   onto the standard vocabulary (see `nnterp`). Keys are resolved relative to
   every envoy in the tree, so a single-component key such as ``"attn"`` binds
@@ -15,11 +14,12 @@ A toolkit is one module in this package. Each declares:
 * ``ENVOYS``: an nnsight ``envoys`` dict keying those on the family's module
   types (``envoys=`` matches by type or *native* path, never by alias).
 
-A family module is named after the ``model_type`` it covers (``gemma3_text.py``
-for ``gemma3_text``), and that is the whole registry: `lookup` imports
+The module's name is its ``model_type`` (``gemma3_text.py`` covers
+``gemma3_text``), and that is the whole registry: `lookup` imports
 ``nnterp.families.<model_type>`` on first use, so ``import nnterp`` loads no
 transformers modeling module. To add a family, write the module beside these;
-to add one from elsewhere, or to override a shipped one, pass it to `register`.
+to add one from elsewhere, or to override a shipped one, pass it to `register`
+with the model types it covers.
 """
 
 from __future__ import annotations
@@ -57,20 +57,34 @@ def lookup(model_type: str) -> ModuleType:
             raise
         raise UnsupportedFamily(
             f"no standardization for model_type {model_type!r}; known: {sorted(set(known()) | set(REGISTRY))}. "
-            f"Add nnterp/families/{model_type}.py with MODEL_TYPES, RENAME and ENVOYS, or pass a "
-            f"module to nnterp.families.register()."
+            f"Add nnterp/families/{model_type}.py with RENAME and ENVOYS, or pass a family to "
+            f"nnterp.families.register(family, {model_type!r})."
         ) from None
 
 
-def register(family: ModuleType) -> ModuleType:
+def register(family: ModuleType, *model_types: str) -> ModuleType:
     """Add a family toolkit without editing this package.
 
-    ``family`` is any module (or object) with ``MODEL_TYPES``, ``RENAME`` and
-    ``ENVOYS`` like the ones here. Its model types go into `REGISTRY`, which
-    `lookup` consults before the shipped modules, so a user can also override
-    a shipped family. Returns ``family``.
+    ``family`` is any module (or object) with ``RENAME`` and ``ENVOYS`` like
+    the ones here. It covers ``model_types``; with none given, the type its
+    ``__name__`` names, as a shipped module's file name does
+    (``register(my_pkg.zamba)`` covers ``zamba``). The types go into
+    `REGISTRY`, which `lookup` consults before the shipped modules, so a user
+    can also override a shipped family. Returns ``family``.
+
+    Raises:
+        TypeError: when no type is given and ``family`` has no ``__name__``
+            (a ``types.SimpleNamespace``): pass them, ``register(ns, "zamba")``.
     """
-    for model_type in family.MODEL_TYPES:
+    if not model_types:
+        name = getattr(family, "__name__", None)
+        if not name:
+            raise TypeError(
+                f"register() needs the model types the family covers: a {type(family).__name__} has no __name__ "
+                f"to take one from. Pass them: register(family, 'my_model_type')."
+            )
+        model_types = (name.rsplit(".", 1)[-1],)
+    for model_type in model_types:
         REGISTRY[model_type] = family
     return family
 

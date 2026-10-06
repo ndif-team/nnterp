@@ -25,8 +25,6 @@ from transformers.models.glm4_moe_lite.modeling_glm4_moe_lite import (
 from ..components import Attention, Layer, Mlp, Moe
 from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
-MODEL_TYPES = ("glm4_moe_lite",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

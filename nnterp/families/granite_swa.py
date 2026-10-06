@@ -22,8 +22,6 @@ from .granite import Attention as GraniteAttention
 from .granite import Mlp as GraniteMlp
 from .granite import project_on_vocab  # noqa: F401  the logit lens divides by logits_scaling, as Granite's
 
-MODEL_TYPES = ("granite_swa",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

@@ -10,8 +10,6 @@ from transformers.models.mixtral.modeling_mixtral import MixtralAttention, Mixtr
 
 from ..components import Attention, Layer, Moe
 
-MODEL_TYPES = ("mixtral",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

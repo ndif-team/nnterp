@@ -25,8 +25,6 @@ from ..components import Attention, Layer, Moe, RouterLogits, TokenEProperty, un
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("dbrx",)
-
 RENAME = {
     "transformer.wte": "embed_tokens",
     "transformer.blocks": "layers",

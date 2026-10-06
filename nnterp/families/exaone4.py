@@ -15,8 +15,6 @@ from transformers.models.exaone4.modeling_exaone4 import Exaone4Attention, Exaon
 
 from ..components import Attention, EProperty, Layer, Mlp, Residual
 
-MODEL_TYPES = ("exaone4",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

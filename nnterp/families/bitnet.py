@@ -12,8 +12,6 @@ from transformers.models.bitnet.modeling_bitnet import BitNetAttention, BitNetDe
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("bitnet",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

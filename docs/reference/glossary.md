@@ -70,7 +70,7 @@ nnsight's descriptor for a served value: reading it parks the intervention until
 
 ## Family
 
-One module under `nnterp/families/`, named after `config.model_type` (`gpt2.py`, `gemma3_text.py`), declaring `MODEL_TYPES`, `RENAME`, its `Layer` / `Attention` / `Mlp` (and `LinearAttention`) subclasses and `ENVOYS`. `model.family` is the one a checkpoint resolved to. See [families.md](families.md) and [../extending/adding-a-family.md](../extending/adding-a-family.md).
+One module under `nnterp/families/`, named after `config.model_type` (`gpt2.py`, `gemma3_text.py`), declaring `RENAME`, its `Layer` / `Attention` / `Mlp` (and `LinearAttention`) subclasses and `ENVOYS`. `model.family` is the one a checkpoint resolved to. See [families.md](families.md) and [../extending/adding-a-family.md](../extending/adding-a-family.md).
 
 ## Gated DeltaNet
 

@@ -10,8 +10,6 @@ from transformers.models.stablelm.modeling_stablelm import StableLmAttention, St
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("stablelm",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

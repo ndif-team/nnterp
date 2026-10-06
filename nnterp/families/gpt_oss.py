@@ -14,8 +14,6 @@ from transformers.models.gpt_oss.modeling_gpt_oss import GptOssAttention, GptOss
 
 from ..components import Attention, EProperty, INTERFACE, Layer, Moe, Pattern, interface_reason
 
-MODEL_TYPES = ("gpt_oss",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

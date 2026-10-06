@@ -9,8 +9,6 @@ from transformers.models.gemma.modeling_gemma import GemmaAttention, GemmaDecode
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("gemma",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

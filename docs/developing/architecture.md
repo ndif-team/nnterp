@@ -162,7 +162,7 @@ eproperty that carries a `description` (`envoy.py:1066-1095`), which is how
 
 | layer | owns | must not know |
 |---|---|---|
-| `nnterp/families/<model_type>.py` | `MODEL_TYPES`; `RENAME` (native name → standard name); `Layer`/`Attention`/`Mlp`/`Moe`/`LinearAttention` subclasses that point a value at *this family's* op or sibling; `ENVOYS` keyed on transformers types; a module-level `def <size>(model)` for each root size *this family's* config spells its own way (`falcon.py`: `num_kv_heads`, `intermediate_size`; `deepseek_v2.py`: `head_dim`, `qk_head_dim`) | what a value means, how nnsight serves it; the plain rule for a size |
+| `nnterp/families/<model_type>.py` | `RENAME` (native name → standard name); `Layer`/`Attention`/`Mlp`/`Moe`/`LinearAttention` subclasses that point a value at *this family's* op or sibling; `ENVOYS` keyed on transformers types; a module-level `def <size>(model)` for each root size *this family's* config spells its own way (`falcon.py`: `num_kv_heads`, `intermediate_size`; `deepseek_v2.py`: `head_dim`, `qk_head_dim`) | what a value means, how nnsight serves it; the plain rule for a size |
 | `nnterp/components/` | what each standard value **means** (`layer_output` is the residual stream leaving the block, `attention_output` the contribution, `attention_probabilities` the post-dropout pattern); how to read/write it (`EProperty` with a path for a key, `DerivedEProperty`); availability (`unavailable=`, `support`); the default op on transformers' shared interface (`INTERFACE`, `attention.py:28`) | any one family's module names or classes |
 | `nnterp/standardized.py` | the root values (`logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`); the methods (`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`); the sizes (`num_layers` … `intermediate_size`, `standardized.py:398-438`), each a `StandardizedProperty` (`:26-50`) holding the plain rule over the config and yielding on read to a same-named function in `model.family`; `support()` over the tree (`:287-348`: `_hosts` unions each block's `Standard` children under their standard names, each alias read off its own binding on the block, a mounted alias such as DBRX's `norm_attn_norm.attn` and a module another block owns (shared weights) included, so a value installed through `envoys=` is listed and a module no block has is not); the remote key (`:440-451`) | op names inside a forward; any one family's config keys |
 
@@ -244,14 +244,15 @@ purpose: `import nnterp` must import no transformers modeling module
   family" and becomes `UnsupportedFamily` with the known list; any other
   `ModuleNotFoundError` is a family module that itself failed to import, and
   is re-raised as the real error (`:55-57`).
-- `register(family)` (`:65-75`) writes every `MODEL_TYPES` entry into
-  `REGISTRY` (`:32`), which `lookup` consults first, so a module from outside
-  the package, or an override of a shipped one, needs no edit here
-  (`test_registry.py:44-51`).
-- `__getattr__` (`:83-90`) makes `nnterp.families.qwen3_5_text` import on
-  first attribute access, and `__dir__` (`:93-94`) lists the shipped names so
+- `register(family, *model_types)` (`:65-89`) writes each of `model_types`,
+  or with none the last component of `family.__name__`, into `REGISTRY`
+  (`:32`), which `lookup` consults first, so a module from outside the
+  package, or an override of a shipped one, needs no edit here
+  (`test_registry.py:44-51`, `:166-192`).
+- `__getattr__` (`:97-104`) makes `nnterp.families.qwen3_5_text` import on
+  first attribute access, and `__dir__` (`:107-108`) lists the shipped names so
   tab completion works before anything is imported. `all_families()`
-  (`:78-80`) imports everything, for tooling and tests only.
+  (`:92-94`) imports everything, for tooling and tests only.
 
 A family module imports its transformers modeling module at the top
 (`families/gpt2.py:14`), so the modeling module loads exactly when the first

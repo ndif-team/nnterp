@@ -18,8 +18,6 @@ from transformers.models.solar_open.modeling_solar_open import (
 
 from ..components import Attention, Layer, Mlp, Moe
 
-MODEL_TYPES = ("solar_open",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

@@ -18,8 +18,6 @@ from transformers.models.glm4_moe.modeling_glm4_moe import Glm4MoeAttention, Glm
 
 from ..components import Attention, Layer, Mlp, Moe
 
-MODEL_TYPES = ("glm4_moe",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

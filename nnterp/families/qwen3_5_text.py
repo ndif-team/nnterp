@@ -11,8 +11,6 @@ from transformers.models.qwen3_5.modeling_qwen3_5 import Qwen3_5Attention, Qwen3
 
 from ..components import Attention, Layer, LinearAttention, Mlp
 
-MODEL_TYPES = ("qwen3_5_text",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

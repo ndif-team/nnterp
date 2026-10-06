@@ -21,8 +21,6 @@ from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pa
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("codegen",)
-
 RENAME = {
     "transformer.wte": "embed_tokens",
     "transformer.h": "layers",

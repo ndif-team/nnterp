@@ -14,8 +14,6 @@ from transformers.models.olmoe.modeling_olmoe import OlmoeAttention, OlmoeDecode
 
 from ..components import Attention, Layer, Moe
 
-MODEL_TYPES = ("olmoe",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

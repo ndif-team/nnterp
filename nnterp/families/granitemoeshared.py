@@ -32,8 +32,6 @@ from .granite import Attention as GraniteAttention
 from .granite import project_on_vocab  # noqa: F401  the logit lens divides by logits_scaling, as Granite's
 from .granitemoe import hand_residual_multiplier, scaled_back
 
-MODEL_TYPES = ("granitemoeshared",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

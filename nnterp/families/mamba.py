@@ -31,8 +31,6 @@ from ..components import Layer, SelectiveScan
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("mamba",)
-
 RENAME = {
     "backbone.embeddings": "embed_tokens",
     "backbone.layers": "layers",

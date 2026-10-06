@@ -12,8 +12,6 @@ from transformers.models.glm.modeling_glm import GlmAttention, GlmDecoderLayer, 
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("glm",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

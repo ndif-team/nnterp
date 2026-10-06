@@ -19,8 +19,6 @@ from .granite_swa import Attention as GraniteSWAAttention
 from .granitemoe import Layer as GraniteMoeLayer
 from .granitemoe import Mlp as GraniteMoeMlp
 
-MODEL_TYPES = ("granitemoe_swa",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

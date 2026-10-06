@@ -15,11 +15,11 @@ merger, so the blocks' values and ``projector.output`` are in window order while
 """
 
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    Qwen2_5_VisionTransformerPretrainedModel, Qwen2_5_VLAttention, Qwen2_5_VLDecoderLayer, Qwen2_5_VLMLP,
+    Qwen2_5_VLModel, Qwen2_5_VisionTransformerPretrainedModel, Qwen2_5_VLAttention, Qwen2_5_VLDecoderLayer, Qwen2_5_VLMLP,
     Qwen2_5_VLVisionAttention, Qwen2_5_VLVisionBlock, Qwen2MLP,
 )
 
-from ..components import Attention, Layer, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
+from ..components import ImageScatter, Attention, Layer, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
 
 #: The wrappers (config ``model_type``) whose tower's merged output is what they scatter into the text stream.
 IMAGE_WRAPPERS = ("qwen2_5_vl",)
@@ -52,6 +52,7 @@ class Mlp(Mlp):
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
 ENVOYS = {
+    Qwen2_5_VLModel: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Qwen2_5_VLDecoderLayer: Layer, Qwen2_5_VLAttention: Attention, Qwen2MLP: Mlp,
     # The packed Qwen ViT: one attention call per window, so the interior is unavailable.
     Qwen2_5_VisionTransformerPretrainedModel: QwenVision, Qwen2_5_VLVisionBlock: PackedVisionLayer,

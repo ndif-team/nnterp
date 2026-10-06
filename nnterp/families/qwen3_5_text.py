@@ -16,11 +16,11 @@ and no deepstack), its blocks ``vision.layers``; its ``merger`` is ``projector``
 """
 
 from transformers.models.qwen3_5.modeling_qwen3_5 import (
-    Qwen3_5Attention, Qwen3_5DecoderLayer, Qwen3_5GatedDeltaNet, Qwen3_5MLP, Qwen3_5VisionAttention, Qwen3_5VisionBlock, Qwen3_5VisionMLP, Qwen3_5VisionModel,
+    Qwen3_5Model, Qwen3_5Attention, Qwen3_5DecoderLayer, Qwen3_5GatedDeltaNet, Qwen3_5MLP, Qwen3_5VisionAttention, Qwen3_5VisionBlock, Qwen3_5VisionMLP, Qwen3_5VisionModel,
 )
 
 from ..components import (
-    Attention, Layer, LinearAttention, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision,
+    ImageScatter, Attention, Layer, LinearAttention, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision,
 )
 
 #: The wrappers (config ``model_type``) whose tower's merged output is what they scatter into the text stream.
@@ -63,6 +63,7 @@ class Mlp(Mlp):
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
 ENVOYS = {
+    Qwen3_5Model: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Qwen3_5DecoderLayer: Layer, Qwen3_5Attention: Attention, Qwen3_5GatedDeltaNet: LinearAttention, Qwen3_5MLP: Mlp,
     # The wrapper's packed Qwen ViT: one attention call per image, so the interior is unavailable.
     Qwen3_5VisionModel: QwenVision, Qwen3_5VisionBlock: PackedVisionLayer, Qwen3_5VisionAttention: PackedVisionAttention, Qwen3_5VisionMLP: PackedVisionMlp,

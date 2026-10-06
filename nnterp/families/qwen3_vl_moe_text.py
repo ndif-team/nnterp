@@ -13,12 +13,12 @@ The wrapper's Qwen ViT ``model.visual`` is ``vision`` (a `QwenVision`, as on
 """
 
 from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import (
-    Qwen3VLMoeTextAttention, Qwen3VLMoeTextDecoderLayer, Qwen3VLMoeTextMLP, Qwen3VLMoeTextModel,
+    Qwen3VLMoeModel, Qwen3VLMoeTextAttention, Qwen3VLMoeTextDecoderLayer, Qwen3VLMoeTextMLP, Qwen3VLMoeTextModel,
     Qwen3VLMoeTextSparseMoeBlock, Qwen3VLMoeVisionAttention, Qwen3VLMoeVisionBlock, Qwen3VLMoeVisionMLP,
     Qwen3VLMoeVisionModel,
 )
 
-from ..components import Attention, Mlp, Moe, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
+from ..components import ImageScatter, Attention, Mlp, Moe, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
 from . import qwen3_vl_text
 
 #: The wrappers (config ``model_type``) whose tower's merged output is what they scatter into the text stream.
@@ -49,6 +49,7 @@ class Moe(Moe, Mlp):
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
 ENVOYS = {
+    Qwen3VLMoeModel: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Qwen3VLMoeTextModel: TextModel, Qwen3VLMoeTextDecoderLayer: Layer, Qwen3VLMoeTextAttention: Attention,
     Qwen3VLMoeTextMLP: Mlp, Qwen3VLMoeTextSparseMoeBlock: Moe,
     # The packed Qwen ViT: one attention call per image, so the interior is unavailable.

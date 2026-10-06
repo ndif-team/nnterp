@@ -445,11 +445,6 @@ class QwenVision(PackedVision):
     output are in window order, and the tower restores the merge-block order
     after the merger.
 
-    ``image_features`` is the tower's ``pooler_output``, the merged output in
-    the order the wrapper scatters it (on Qwen2.5-VL, after the restore the
-    merger's output has not had), so it is read at the tower's output rather
-    than at the projector's.
-
     Sizes, off the vision config: ``hidden_size`` is the tower's width
     (``embed_dim`` on Qwen2-VL, whose config's ``hidden_size`` is the merger's
     output width), ``num_heads``, ``intermediate_size`` (Qwen2-VL's is
@@ -488,23 +483,7 @@ class QwenVision(PackedVision):
         """Side of an attention window in pixels (Qwen2.5-VL), or ``None`` on a tower without windows."""
         return getattr(self._module.config, "window_size", None)
 
-    @EProperty("output", description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
-    def image_features(self, value: Any) -> ImageFeatures:
-        """The image features the text model receives, ``[image_tokens, hidden]``: the tower's ``pooler_output``.
 
-        The merger's output in scatter order, so
-        ``layers[0].input[image_token_mask] == image_features``; the same tensor
-        as ``projector.output`` except on Qwen2.5-VL, whose merger output is in
-        window order. In-place edits land, and an assigned tensor of the same
-        shape replaces it. Never reached on a text-only trace.
-        """
-        return value.pooler_output
-
-    @image_features.postprocess
-    def image_features(self, value: torch.Tensor) -> Any:
-        output = self.output
-        output.pooler_output = value
-        return output
 class PixtralVision(Vision):
     """Pixtral's tower (Mistral 3, Llava-Pixtral): *packed*, every image's patches in one row.
 

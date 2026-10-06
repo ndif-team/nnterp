@@ -24,7 +24,7 @@ image's patches to ``max_soft_tokens`` rows at position ``(-1, -1)``, and the
 embedder runs on every row; the wrapper strips the padded rows of the
 projector's output before scattering, so ``vision.image_features`` is read at
 the scatter (the first ``inputs_embeds.masked_scatter`` of
-``Gemma4UnifiedModel.forward``, which `Model` instruments at build).
+``Gemma4UnifiedModel.forward``, an `ImageScatter`).
 """
 
 from typing import Any
@@ -34,8 +34,7 @@ from transformers.models.gemma4_unified.modeling_gemma4_unified import (
     Gemma4UnifiedVisionEmbedder,
 )
 
-from ..components import EProperty, ImageFeatures, Layer, Mlp, Patches, Residual, Standard, Unavailable, Vision
-from ..components.vision import no_image_features
+from ..components import EProperty, ImageScatter, Layer, Mlp, Patches, Residual, Standard, Unavailable, Vision
 from . import gemma4_text
 from .gemma4_text import head_dim, num_kv_heads  # noqa: F401  the sizes read the same config keys
 
@@ -55,9 +54,6 @@ RENAME = {
 
 #: The wrappers (config ``model_type``) whose image features the suite checks at the scatter.
 IMAGE_WRAPPERS = ("gemma4_unified",)
-
-#: The wrapper model's scatter of the image features into the token embeddings (the video's is ``_1``, the audio's ``_2``).
-IMAGE_SCATTER = "inputs_embeds_masked_scatter_0"
 
 
 class Layer(Layer):
@@ -134,16 +130,6 @@ class Vision(Vision):
         """
         return value
 
-    @EProperty(f"/model.source.{IMAGE_SCATTER}.inputs", select=1, description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
-    def image_features(self, value) -> ImageFeatures:
-        """The image features the text model receives, ``[image_tokens, hidden]``: the projector's output with the padded rows stripped.
-
-        Read at the wrapper's scatter, so ``layers[0].input[image_token_mask]
-        == image_features``. In-place edits land, and an assigned tensor of
-        the same shape replaces it.
-        """
-        return value
-
     def support(self, layer: int | None = None) -> dict[str, Any]:
         """The embedder's values (no block values: it has no blocks); empty on a load no image reaches."""
         if layer is not None:
@@ -151,18 +137,9 @@ class Vision(Vision):
         return {} if self.no_images() else Standard.support(self)
 
 
-class Model(Standard):
-    """The wrapper's model: its forward scatters the image features, read there as ``vision.image_features``.
-
-    The read comes after the embedder has run, inside this forward, so the
-    forward is instrumented at build.
-    """
-
-    sourced = True
-
-
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
 ENVOYS = {
     Gemma4UnifiedTextDecoderLayer: Layer, Gemma4UnifiedTextAttention: Attention, Gemma4UnifiedTextMLP: Mlp,
-    Gemma4UnifiedVisionEmbedder: Vision, Gemma4UnifiedModel: Model,
+    Gemma4UnifiedVisionEmbedder: Vision,
+    Gemma4UnifiedModel: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
 }

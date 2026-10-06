@@ -30,12 +30,12 @@ their native path, ``vision.deepstack_merger_list[k]``.
 from typing import Any
 
 from transformers.models.qwen3_vl.modeling_qwen3_vl import (
-    Qwen3VLTextAttention, Qwen3VLTextDecoderLayer, Qwen3VLTextMLP, Qwen3VLTextModel, Qwen3VLVisionAttention,
+    Qwen3VLModel, Qwen3VLTextAttention, Qwen3VLTextDecoderLayer, Qwen3VLTextMLP, Qwen3VLTextModel, Qwen3VLVisionAttention,
     Qwen3VLVisionBlock, Qwen3VLVisionMLP, Qwen3VLVisionModel,
 )
 
 from ..components import (
-    Attention, EProperty, ImageFeatures, Layer, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp,
+    ImageScatter, Attention, EProperty, ImageFeatures, Layer, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp,
     QwenVision, Standard, pinned,
 )
 
@@ -148,6 +148,7 @@ class Mlp(Mlp):
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
 ENVOYS = {
+    Qwen3VLModel: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Qwen3VLTextModel: TextModel, Qwen3VLTextDecoderLayer: Layer, Qwen3VLTextAttention: Attention, Qwen3VLTextMLP: Mlp,
     # The packed Qwen ViT: one attention call per image, so the interior is unavailable.
     Qwen3VLVisionModel: QwenVision, Qwen3VLVisionBlock: PackedVisionLayer,

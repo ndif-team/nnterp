@@ -85,12 +85,12 @@ from typing import TYPE_CHECKING
 
 from nnsight.intervention.envoy import Envoy
 from transformers.models.gemma4.modeling_gemma4 import (
-    Gemma4TextAttention, Gemma4TextDecoderLayer, Gemma4TextMLP, Gemma4VisionAttention, Gemma4VisionEncoderLayer,
+    Gemma4Model, Gemma4TextAttention, Gemma4TextDecoderLayer, Gemma4TextMLP, Gemma4VisionAttention, Gemma4VisionEncoderLayer,
     Gemma4VisionMLP, Gemma4VisionModel,
 )
 
 from ..components import (
-    INTERFACE, Attention, EProperty, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty, Unavailable,
+    ImageScatter, INTERFACE, Attention, EProperty, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty, Unavailable,
     Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
 )
 
@@ -301,6 +301,7 @@ class VisionMlp(VisionMlp):
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
 ENVOYS = {
+    Gemma4Model: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Gemma4TextDecoderLayer: Layer, Gemma4TextAttention: Attention, Gemma4TextMLP: Mlp,
     # The ViT's sandwich blocks on the shared attention interface: the contributions point at the post-norms.
     Gemma4VisionModel: Vision, Gemma4VisionEncoderLayer: VisionLayer, Gemma4VisionAttention: VisionAttention,

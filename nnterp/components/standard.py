@@ -1,4 +1,4 @@
-"""`Standard`, the envoy every component derives from, and the two helpers for tuple outputs."""
+"""`Standard`, the envoy every component derives from, the two helpers for tuple outputs, and the walk `support` makes over a block list."""
 
 from __future__ import annotations
 
@@ -94,3 +94,60 @@ class Standard(Envoy):
     def support(self) -> dict[str, str | None]:
         """Each standard value here -> ``None`` when available, else the reason."""
         return {name: value.reason(self) for name, value in self.values().items()}
+
+
+def standard_children(block: Envoy) -> dict[str, Standard]:
+    """The block's children that carry standard values, by standard name (the alias where one is bound)."""
+    bound = {alias: block.__dict__[alias] for alias in block._aliases}  # what each alias is bound to, however deep
+    names = {id(child): alias for alias, child in bound.items()}
+    found = {names.get(id(child), name): child for name, child in block._named_children() if isinstance(child, Standard)}
+    found.update((alias, child) for alias, child in bound.items() if isinstance(child, Standard) and alias not in found)
+    return found
+
+
+def block_hosts(blocks: Any) -> dict[str, list[str]]:
+    """Standard-value hosts across every block: module name -> value names, in first-seen order.
+
+    The union over the blocks, so a hybrid lists both ``self_attn`` and
+    ``linear_attn`` and a block lacking one reports it as missing; a
+    module no block has (OPT's ``mlp``) is not listed.
+    """
+    hosts: dict[str, dict[str, None]] = {}
+    for block in blocks:
+        for module, child in standard_children(block).items():
+            hosts.setdefault(module, {}).update(dict.fromkeys(child.values()))
+    return {module: list(names) for module, names in hosts.items()}
+
+
+def block_support(block: Any, hosts: dict[str, list[str]]) -> dict[str, str | None]:
+    """One block's values by dotted name, over ``hosts``: ``None`` when available, else the reason."""
+    support: dict[str, str | None] = dict(block.support())
+    present = standard_children(block)
+    for module, names in hosts.items():
+        envoy = present.get(module)
+        reasons = envoy.support() if envoy is not None else {}
+        for name in names:
+            if envoy is None:
+                support[f"{module}.{name}"] = f"no {module} module on this block"
+            else:
+                support[f"{module}.{name}"] = reasons.get(name, f"no {name} value on this block's {module}")
+    return support
+
+
+def blocks_support(blocks: Any, layer: int | None = None) -> dict[str, Any]:
+    """The block values of a block list, the way ``support`` reports them.
+
+    With ``layer``, that block's values by dotted name (``"layer_output"``,
+    ``"self_attn.attention_probabilities"``). Without, each value -> ``None``
+    when available on every block, else ``{layer: reason}`` for the blocks
+    where it is not. Shared by the text model's blocks and a vision tower's.
+    """
+    hosts = block_hosts(blocks)
+    if layer is not None:
+        return block_support(blocks[layer], hosts)
+    per_layer = [block_support(block, hosts) for block in blocks]
+    support: dict[str, Any] = {}
+    for name in per_layer[0]:
+        missing = {i: reasons[name] for i, reasons in enumerate(per_layer) if reasons[name]}
+        support[name] = missing or None
+    return support

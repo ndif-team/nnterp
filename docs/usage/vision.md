@@ -69,7 +69,7 @@ it peaked at 11 GB.
 | standard name | what it is | Gemma 3 (SigLIP) | Llava 1.5 (CLIP) | Llama 4 (ViT) | Gemma 4 (ViT) | Gemma 4 unified (encoder-free) |
 | --- | --- | --- | --- | --- | --- | --- |
 | `model.vision` | the tower's root, a `Vision` | `model.model.vision_tower` | `model.model.vision_tower` | `model.vision_model` | `model.model.vision_tower` | `model.model.embed_vision`, the image embedder |
-| `model.vision.patch_embed` | the patch embedding | `vision_tower.embeddings.patch_embedding` | same | `vision_model.patch_embedding` (unfold + linear) | `vision_tower.patch_embedder` (a linear plus 2D position embeddings) | `embed_vision.patch_dense` |
+| `model.vision.patch_embed` | the patch embedding | `vision_tower.embeddings.patch_embedding` | same | `vision_model.patch_embedding` (unfold + linear) | `vision_tower.patch_embedder.input_proj` (a linear; the 2D position embeddings come after) | `embed_vision.patch_dense` |
 | `model.vision.layers[i]` | the tower's blocks, `VisionLayer` | `vision_tower.encoder.layers[i]` | same | `vision_model.model.layers[i]` | `vision_tower.encoder.layers[i]` | none: no blocks |
 | `vision.layers[i].self_attn`, `.mlp` | `VisionAttention`, `VisionMlp` | native | native | native | native; the contributions are the post-norms' outputs (a sandwich block) | none |
 | `vision.layers[i].input_layernorm`, `.post_attention_layernorm` | the block's norms | `layer_norm1`, `layer_norm2` | same | native | native: `post_attention_layernorm` *follows* the attention, as on the text block | none |

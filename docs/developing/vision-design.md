@@ -41,7 +41,7 @@ The rules:
 | standard name | what it is | Gemma 3 | Llava | Qwen3.5 / Qwen-VL | Llama 4 | Mistral 3 | Kimi K2.5 | Gemma 4 |
 |---|---|---|---|---|---|---|---|---|
 | `vision` | the tower's root module | `model.vision_tower` | `model.vision_tower` | `model.visual` | `vision_model` | `model.vision_tower` | `model.vision_tower` | `model.vision_tower` |
-| `vision.patch_embed` | the patch embedding | `embeddings.patch_embedding` | `embeddings.patch_embedding` | `patch_embed` (native) | `patch_embedding` | `patch_conv` | `patch_embed` (native) | `patch_embedder` |
+| `vision.patch_embed` | the patch embedding | `embeddings.patch_embedding` | `embeddings.patch_embedding` | `patch_embed` (native) | `patch_embedding` | `patch_conv` | `patch_embed` (native) | `patch_embedder.input_proj` |
 | `vision.layers` | the tower's blocks | `encoder.layers` | `encoder.layers` | `blocks` | `model.layers` | `transformer.layers` | `layers` (native) | `encoder.layers` |
 | `vision.layers[i].self_attn`, `.mlp`, `.input_layernorm`, `.post_attention_layernorm` | the block's sublayers and norms | `self_attn`, `mlp`, `layer_norm1`, `layer_norm2` | same as Gemma 3 | `attn`, `mlp`, `norm1`, `norm2` | native | `attention`, `feed_forward`, `attention_norm`, `ffn_norm` | `attn`, `mlp`, `norm1`, `norm2` | native (sandwich) |
 | `vision.norm` | the tower's final norm over the patches, where it has one | `post_layernorm` | none (CLIP's `post_layernorm` norms the pooled CLS only) | none (the merger norms) | `layernorm_post` | none | `final_layernorm` | none |

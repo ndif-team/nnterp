@@ -64,10 +64,11 @@ reads it there.
 
 On the wrapper the vision tower ``model.vision_tower`` is ``vision`` (a `Vision`)
 and ``model.embed_vision``, whose output is what the wrapper scatters, is
-``projector``. The tower is a ViT over each image's patches: the patch embedder
-(``patch_embedder``, a linear over the processor's flattened patches plus a 2D
-position embedding) is ``vision.patch_embed`` and the blocks
-(``encoder.layers``) are ``vision.layers``. Each block is the text block's
+``projector``. The tower is a ViT over each image's patches: the patch embedder's
+linear over the processor's flattened patches (``patch_embedder.input_proj``) is
+``vision.patch_embed``, so ``vision.patch_embeddings`` is before the 2D position
+embedding ``patch_embedder`` adds, and the blocks (``encoder.layers``) are
+``vision.layers``. Each block is the text block's
 sandwich, so its contributions are the post-norms' outputs too
 (`VisionAttention`, `VisionMlp`). The processor pads every image's patches to
 ``max_soft_tokens * pooling_kernel_size**2`` rows with zero pixels at position
@@ -109,7 +110,7 @@ RENAME = {
     # (multi-component, or a name no text block has), so they bind on it alone.
     "model.vision_tower": "vision",
     "model.embed_vision": "projector",
-    "patch_embedder": "patch_embed",
+    "patch_embedder.input_proj": "patch_embed",
     "encoder.layers": "layers",
 }
 

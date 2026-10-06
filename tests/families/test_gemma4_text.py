@@ -449,7 +449,7 @@ class TestGemma4Vision(VisionSuite):
     VISION_NATIVE = {
         "vision": "model.vision_tower",
         "vision.layers": "model.vision_tower.encoder.layers",
-        "vision.patch_embed": "model.vision_tower.patch_embedder",
+        "vision.patch_embed": "model.vision_tower.patch_embedder.input_proj",
         "vision.layers.0.self_attn": "model.vision_tower.encoder.layers.0.self_attn",
         "vision.layers.0.mlp": "model.vision_tower.encoder.layers.0.mlp",
         "vision.layers.0.input_layernorm": "model.vision_tower.encoder.layers.0.input_layernorm",
@@ -477,14 +477,16 @@ class TestGemma4Vision(VisionSuite):
         assert torch.equal(attn, post_attn) and torch.equal(mlp, post_ff)
 
     def test_patch_embeddings_and_tower_output(self, model, positions):
-        """``patch_embeddings`` is the embedder's output over the padded patches; ``tower_output`` the last block's stream."""
+        """``patch_embeddings`` is the linear's output over the padded patches, before the position embedding; ``tower_output`` the last block's stream."""
         vision = model.vision
         with model.trace(image_prompt(model), images=[IMAGE]):
             patches = vision.patch_embeddings.save()
-            embedded = vision.patch_embed.output.save()
+            projected = vision.patch_embed.output.save()
+            embedded = vision.patch_embedder.output.save()
             last = vision.layers[-1].layer_output.save()
             out = vision.tower_output.save()
-        assert patches.shape == (1, positions.shape[1], vision.hidden_size) and torch.equal(patches, embedded)
+        assert patches.shape == (1, positions.shape[1], vision.hidden_size) and torch.equal(patches, projected)
+        assert not torch.equal(embedded, patches)  # the 2D position embedding comes after
         assert torch.equal(out, last)
 
     def test_padded_patches_run_through_the_tower(self, model, positions, clean):

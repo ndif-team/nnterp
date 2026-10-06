@@ -119,10 +119,8 @@ class VisionSuite:
     @pytest.fixture(scope="class")
     def model(self, request):
         cls = request.cls
-        return StandardizedTransformer(
-            cls.REPO, task="image-text-to-text", dispatch=True, attn_implementation="eager", dtype=cls.DTYPE,
         model = StandardizedTransformer(
-            cls.REPO, task="image-text-to-text", dispatch=True, attn_implementation="eager", dtype=torch.float32,
+            cls.REPO, task="image-text-to-text", dispatch=True, attn_implementation="eager", dtype=cls.DTYPE,
         )
         cls.fix_processor(model)
         return model

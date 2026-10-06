@@ -308,10 +308,8 @@ class VisionSuite:
             last = vision.layers[-1].layer_output.save()
             out = vision.tower_output.save()
         side = vision.image_size // vision.patch_size
-        assert patches.shape == (1, side * side, vision.hidden_size)
-        assert torch.equal(patches, conv.flatten(2).transpose(1, 2) if conv.dim() == 4 else conv)
         assert patches.shape[1:] == (side * side, vision.hidden_size)  # one row per image, crop or tile
-        assert torch.equal(patches, conv.flatten(2).transpose(1, 2))
+        assert torch.equal(patches, conv.flatten(2).transpose(1, 2) if conv.dim() == 4 else conv)
         norm = getattr(vision, "norm", None)
         expected = norm._module(last) if norm is not None else last
         torch.testing.assert_close(out, expected)

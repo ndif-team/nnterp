@@ -77,19 +77,19 @@ from .tokens import TokenEProperty
 from .state_space import (
     SSDHeadOutputs, SSDKeys, SSDQueries, SSDValues, StateSpace, chunk_per_token, needs_per_token_chunks,
 )
-from .vision import ImageFeatures, ImageTokenMask, Patches, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id
-from .vision import PACKED, PackedVision, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
-from .vision import ImageScatter, PixtralVision
+from .vision import (
+    PACKED, ImageFeatures, ImageScatter, ImageTokenMask, PackedVision, PackedVisionAttention, PackedVisionLayer,
+    PackedVisionMlp, Patches, PixtralVision, QwenVision, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id,
+)
 
 __all__ = [
     "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "ImageFeatures", "ImageTokenMask", "Keys", "Layer", "LinearAttention", "Patches",
     "LOGITS", "LinearQK", "LinearV", "Mlp", "Moe", "PER_SLOT", "Pattern", "Queries", "RecurrentMixer", "Residual", "RouterLogits", "ScanDecays", "ScanQK", "ScanState",
     "ScanStates", "ScanSteps", "ScanValues", "SelectiveScan", "State", "States", "StreamMixing", "StreamWeights", "Streams", "TokenEProperty",
     "Values", "Vision", "VisionAttention", "VisionLayer", "VisionMlp", "blocks_support",
-    "ImageScatter", "PixtralVision",
+    "ImageScatter", "PACKED", "PackedVision", "PackedVisionAttention", "PackedVisionLayer", "PackedVisionMlp", "PixtralVision", "QwenVision",
     "NOT_ON_INTERFACE", "SSDHeadOutputs", "SSDKeys", "SSDQueries", "SSDValues", "Standard", "StateSpace", "Unavailable",
     "chunk_per_token", "first_tensor", "image_token_id", "interface_reason", "mixture_reason", "needs_eager",
     "needs_grouped_experts", "needs_kernel_source", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert",
     "per_call", "pinned", "rewrap", "route_delta_rule", "route_kernels", "seq_first", "unavailable",
 ]
-__all__ += ["PACKED", "PackedVision", "PackedVisionAttention", "PackedVisionLayer", "PackedVisionMlp", "QwenVision"]

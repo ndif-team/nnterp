@@ -36,6 +36,8 @@ BLOCK_VALUES = {
 
 #: A fixed random image; the processor resizes it to the tower's size.
 IMAGE = Image.fromarray((np.random.RandomState(0).rand(64, 64, 3) * 255).astype("uint8"))
+#: A second image of another shape, for a packed tower, which concatenates the images it is given.
+IMAGE_WIDE = Image.fromarray((np.random.RandomState(1).rand(48, 96, 3) * 255).astype("uint8"))
 
 
 def image_prompt(model, text="What is in this image?", images=1):
@@ -61,6 +63,21 @@ def siglip_rows(tower="model.vision_tower"):
         "vision.layers.0.mlp": f"{tower}.encoder.layers.0.mlp",
         "vision.layers.0.input_layernorm": f"{tower}.encoder.layers.0.layer_norm1",
         "vision.layers.0.post_attention_layernorm": f"{tower}.encoder.layers.0.layer_norm2",
+        "projector": "model.multi_modal_projector",
+    }
+
+
+
+def pixtral_rows(tower="model.vision_tower"):
+    """Standard path -> native path for a Pixtral tower at ``tower`` and the projector beside it."""
+    return {
+        "vision": tower,
+        "vision.layers": f"{tower}.transformer.layers",
+        "vision.patch_embed": f"{tower}.patch_conv",
+        "vision.layers.0.self_attn": f"{tower}.transformer.layers.0.attention",
+        "vision.layers.0.mlp": f"{tower}.transformer.layers.0.feed_forward",
+        "vision.layers.0.input_layernorm": f"{tower}.transformer.layers.0.attention_norm",
+        "vision.layers.0.post_attention_layernorm": f"{tower}.transformer.layers.0.ffn_norm",
         "projector": "model.multi_modal_projector",
     }
 
@@ -300,6 +317,58 @@ class VisionSuite:
             features = vision.image_features.save()
         assert (conv[:, :, 0, 0] == 0).all()
         assert not torch.allclose(features, clean["features"])
+
+
+class PixtralSuite(VisionSuite):
+    """`VisionSuite` for Pixtral: a packed tower, every image's patches in one row under a block-diagonal mask."""
+
+    VISION_NATIVE = pixtral_rows()
+
+    def patch_counts(self, model, prompt, images):
+        """Each image's patch count, off the processor's ``image_sizes``."""
+        sizes = model.processor(text=prompt, images=images, return_tensors="pt")["image_sizes"]
+        side = model.vision.patch_size
+        return [int(height) // side * (int(width) // side) for height, width in sizes]
+
+    def test_patch_embeddings_and_tower_output(self, model, clean):
+        """``patch_embeddings`` is the packed row entering ``ln_pre``; ``tower_output`` the last block's stream (no final norm)."""
+        vision, prompt = model.vision, image_prompt(model)
+        with model.trace(prompt, images=[IMAGE]):
+            patches = vision.patch_embeddings.save()
+            fed = vision.ln_pre.input.save()
+            last = vision.layers[-1].layer_output.save()
+            out = vision.tower_output.save()
+        assert isinstance(patches, Patches)
+        assert patches.shape == (1, sum(self.patch_counts(model, prompt, [IMAGE])), vision.hidden_size)
+        assert torch.equal(patches, fed)
+        assert "norm" not in vision._aliases
+        torch.testing.assert_close(out, last)
+
+    def test_patch_embeddings_edits_land(self, model, clean):
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            model.vision.patch_embeddings[:, 0] = 0
+            fed = model.vision.ln_pre.input.save()
+            features = model.vision.image_features.save()
+        assert (fed[:, 0] == 0).all()
+        assert not torch.allclose(features, clean["features"])
+
+    def test_two_images_pack_into_one_row(self, model):
+        """Two images of different shapes: one row of both images' patches, attention zero between them, and the scatter identity."""
+        prompt = image_prompt(model, "Compare.", images=2)
+        counts = self.patch_counts(model, prompt, [IMAGE, IMAGE_WIDE])
+        with model.trace(prompt, images=[IMAGE, IMAGE_WIDE]):
+            mask = model.vision.image_token_mask.save()
+            pattern = model.vision.layers[0].self_attn.attention_probabilities.save()
+            out = model.vision.layers[0].layer_output.save()
+            features = model.vision.image_features.save()
+            first = model.layers[0].input.save()
+        assert len(set(counts)) == 2 and out.shape == (1, sum(counts), model.vision.hidden_size)
+        assert pattern.shape == (1, model.vision.num_heads, sum(counts), sum(counts))
+        first_image = slice(0, counts[0])
+        second_image = slice(counts[0], sum(counts))
+        assert (pattern[..., first_image, second_image] == 0).all() and (pattern[..., second_image, first_image] == 0).all()
+        torch.testing.assert_close(pattern[..., first_image, first_image].sum(-1), torch.ones_like(pattern[..., first_image, 0]))
+        assert torch.equal(first[mask], features)
 
 
 def wrapper_of(text_repo, config_class, vision_config, **load):

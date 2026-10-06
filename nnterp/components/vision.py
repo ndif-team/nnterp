@@ -331,3 +331,29 @@ class Vision(Standard):
         if self.no_images():
             return {}
         return {**super().support(), **blocks_support(self.layers)}
+
+
+class PixtralVision(Vision):
+    """Pixtral's tower (Mistral 3, Llava-Pixtral): *packed*, every image's patches in one row.
+
+    The convolution runs on the batch padded to its largest image, each image
+    is cropped to its own grid, and the grids are flattened and concatenated
+    into ``[1, all patches, vision_hidden]`` before ``ln_pre``; the blocks
+    attend under a block-diagonal mask, so no patch sees another image's. So
+    `Patches` has a leading 1 here, and ``patch_embeddings`` is that packed
+    row as it enters ``ln_pre`` (the convolution's own output, ``patch_embed.output``,
+    is still the padded grid). The processor's ``image_sizes`` split the row
+    per image: ``(height // patch_size) * (width // patch_size)`` patches each,
+    in order. The attention interior is whole: one interface call over the
+    packed row, so ``attention_probabilities`` is ``[1, heads, all patches,
+    all patches]``, zero between images.
+    """
+
+    @EProperty("ln_pre.input", description="Every image's patch embeddings packed in one row, entering the pre-norm")
+    def patch_embeddings(self, value: torch.Tensor) -> Patches:
+        """Every image's patch embeddings, ``[1, all patches, vision_hidden]``, image after image, each in raster order.
+
+        What enters ``ln_pre``: the convolution's output cropped per image and
+        concatenated. Assign a tensor of the same shape to replace it.
+        """
+        return value

@@ -1,6 +1,6 @@
 ---
 title: Registering a Family
-one_liner: `nnterp.families.register(module)` adds a family from outside the package or overrides a shipped one, process-wide, names, envoy classes and size functions included; `rename=`/`envoys=` at load are the per-model alternative.
+one_liner: `nnterp.families.register(family, *model_types)` adds a family from outside the package or overrides a shipped one, process-wide, names, envoy classes and size functions included; `rename=`/`envoys=` at load are the per-model alternative.
 tags: [extending, families, registry, lookup]
 related: [docs/extending/adding-a-family.md, docs/extending/custom-values.md, docs/extending/overriding-values.md]
 sources: [nnterp/families/__init__.py, nnterp/standardized.py, tests/test_registry.py]
@@ -12,7 +12,8 @@ sources: [nnterp/families/__init__.py, nnterp/standardized.py, tests/test_regist
 
 `StandardizedTransformer` resolves a checkpoint's `config.model_type` through
 `nnterp.families.lookup`, which consults `REGISTRY` first and the module named after the
-type second. `register(family)` puts a family into `REGISTRY`, so a family kept in your
+type second. `register(family, *model_types)` puts a family into `REGISTRY` under those
+types, so a family kept in your
 own package, or a variant of a shipped one, is what every load of that type resolves to,
 without a file under `nnterp/families/`. It is process-wide, like installing a kernel.
 The per-model alternatives are `rename=` and `envoys=` on one load.
@@ -36,13 +37,12 @@ class Attention(gpt2.Attention):
 
 
 variant = types.SimpleNamespace(
-    MODEL_TYPES=("gpt2",),
     RENAME={**gpt2.RENAME, "mlp": ["mlp", "ffn"]},
     ENVOYS={**gpt2.ENVOYS, GPT2Attention: Attention},
     Layer=gpt2.Layer, Attention=Attention, Mlp=gpt2.Mlp,   # optional: support() walks the tree
     intermediate_size=gpt2.intermediate_size,               # GPT-2's size spelling (n_inner), or the root's plain rule answers
 )
-families.register(variant)
+families.register(variant, "gpt2")
 
 model = StandardizedTransformer("openai-community/gpt2", attn_implementation="eager")
 assert model.family is variant
@@ -55,15 +55,21 @@ del families.REGISTRY["gpt2"]          # back to the shipped module
 assert families.lookup("gpt2") is gpt2
 ```
 
-A family module written as a file ([adding-a-family.md](adding-a-family.md)) registers the
-same way: `families.register(my_package.my_family)`. `register` returns the family, so it
-works as a decorator-style one-liner at the module's end or at import of your package.
+The types come from the call. With none given, `register` takes the one the family's
+`__name__` ends in, as the shipped modules' file names do: a family module written as a
+file ([adding-a-family.md](adding-a-family.md)) and named after its type registers as
+`families.register(my_package.families.zamba)`, which covers `zamba`. A module named
+otherwise, or one covering several types, names them:
+`families.register(my_package.my_family, "zamba", "zamba2")`. A `SimpleNamespace` has no
+`__name__`, so it always names them; `families.register(variant)` raises `TypeError`
+saying so. `register` returns the family, so it works as a one-liner at the module's end
+or at import of your package.
 
 ## What a registered family needs
 
-`register` takes any module or object with `MODEL_TYPES`, `RENAME` and `ENVOYS`, and
-those three are all a load needs: `types.SimpleNamespace(MODEL_TYPES=("gpt2",),
-RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS)` loads, traces, and answers `support()` with every
+`register` takes any module or object with `RENAME` and `ENVOYS`, and those two are
+all a load needs: `types.SimpleNamespace(RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS)`,
+registered with `register(ns, "gpt2")`, loads, traces, and answers `support()` with every
 block value (`tests/test_registry.py::test_register_needs_only_names_and_envoys_for_support`).
 `StandardizedTransformer.support()` walks the envoy tree the `ENVOYS` build, so the
 `self_attn.*` / `mlp.*` / `linear_attn.*` names are whatever the blocks' `Standard`
@@ -103,7 +109,7 @@ config's unused `intermediate_size` key (37) instead of `n_inner`'s `4 * hidden_
 
 ```
 UnsupportedFamily: no standardization for model_type 'zamba'; known: ['afmoe', 'apertus', ..., 'zaya'].
-Add nnterp/families/zamba.py with MODEL_TYPES, RENAME and ENVOYS, or pass a module to nnterp.families.register().
+Add nnterp/families/zamba.py with RENAME and ENVOYS, or pass a family to nnterp.families.register(family, 'zamba').
 ```
 
 The list is `sorted(set(known()) | set(REGISTRY))`, so a registered type appears there.
@@ -119,7 +125,7 @@ The list is `sorted(set(known()) | set(REGISTRY))`, so a registered type appears
 
 ## `register` versus `rename=` / `envoys=`
 
-| | `register(family)` | `rename=` / `envoys=` on a load |
+| | `register(family, *model_types)` | `rename=` / `envoys=` on a load |
 | --- | --- | --- |
 | scope | every load of those model types in this process | that one model |
 | what changes | the whole family: names, envoy classes and size functions, for every load | extra aliases merged over the family's `RENAME`; extra envoy classes merged over its `ENVOYS`; a key given wins |
@@ -141,11 +147,11 @@ before path keys, so displacing a family's type-keyed envoy takes a type key of 
 
 - **Register before loading.** `lookup` runs in `StandardizedTransformer.__init__`; a
   model built earlier keeps the family it resolved to.
-- **`register` overrides silently.** Registering `("gpt2",)` makes every later GPT-2 load
+- **`register` overrides silently.** Registering under `"gpt2"` makes every later GPT-2 load
   in the process yours; a test that registers cleans up with `del families.REGISTRY[...]`
   in a `finally`.
 - **`Layer`, `Attention`, `Mlp` on the namespace are optional.** `support()` walks the
-  tree and reads none of them; the `UnsupportedFamily` message names the three attributes
+  tree and reads none of them; the `UnsupportedFamily` message names the two attributes
   the load path reads, and they are enough. The suite (`FamilySuite`) does read the classes.
 - **`known()` and `all_families()` are the shipped modules only.**
 - **Carry a shipped family's size functions into a variant.** `RENAME` and `ENVOYS` are

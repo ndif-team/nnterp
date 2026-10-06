@@ -61,8 +61,8 @@ alphabetical):
 
 ```
 UnsupportedFamily: no standardization for model_type 'bert'; known: ['afmoe', 'apertus', 'arcee',
-'bamba', ..., 'xglm', 'youtu', 'zaya']. Add nnterp/families/bert.py with MODEL_TYPES, RENAME and
-ENVOYS, or pass a module to nnterp.families.register().
+'bamba', ..., 'xglm', 'youtu', 'zaya']. Add nnterp/families/bert.py with RENAME and ENVOYS, or
+pass a family to nnterp.families.register(family, 'bert').
 ```
 
 `model.family` is the module the checkpoint resolved to; `nnterp.families.known()` lists

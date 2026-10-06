@@ -91,6 +91,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
     "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),
     "mamba2": ("State space (Mamba-2)", "The mixer is an SSD state-space block with a per-chunk state."),
+    "fp32-residual": ("Float32 residual", "The blocks add in float32 (residual_in_fp32), so layer_output is float32 whatever the load dtype."),
     "no-mlp": ("No MLP module", "fc1/fc2 sit on the block, so layers[i].mlp does not exist."),
     "softcapped-logits": ("Softcapped logits", "logits is tanh-capped after lm_head; project_on_vocab applies the cap."),
     "scaled-logits": ("Scaled logits", "The head's output is multiplied or divided by a config scale."),
@@ -127,6 +128,7 @@ CONFIG_KEYS = (
     "num_local_experts",
     "linear_num_key_heads", "linear_num_value_heads", "linear_key_head_dim", "linear_value_head_dim",
     "full_attention_interval",
+    "state_size", "expand", "conv_kernel", "residual_in_fp32",
 )
 
 #: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.
@@ -161,7 +163,12 @@ def humanize_key(key: Any, select: int | None) -> str:
     """Where a value is read, in words: the key is a path from the host envoy."""
     if not isinstance(key, str):
         return "computed from several served values" if key is not None else "derived"
-    element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
+    if callable(select):
+        # a select chosen per call (a Mamba-1 kernel argument sits at a different position in each kernel)
+        name = getattr(select, "__name__", "")
+        element = f", argument `{name.split('.', 1)[1]}`" if name.startswith("argument.") else ", the element this call's kernel takes"
+    else:
+        element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
     if key.startswith("<"):
         # a location the value finds per call: a recurrent mixer's kernel, whichever fires on this call
         name = key[1:-1]
@@ -311,7 +318,8 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
         "default_impl": default_impl,
         "num_layers": num_layers,
         "layer_types": layer_types,
-        "sizes": [(name, getattr(eager, name)) for name in SIZE_NAMES],
+        # a size the family has nothing to read for (no attention heads on a pure state-space model) is left out
+        "sizes": [(name, getattr(eager, name)) for name in SIZE_NAMES if getattr(eager, name, None) is not None],
         "config": config_rows,
         "rename": list(family.RENAME.items()),
         "paths": paths,

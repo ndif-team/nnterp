@@ -353,8 +353,7 @@ The pinned checkpoints, all loadable offline once cached:
   `IMAGE_WRAPPERS` once the suite checks the scatter.
 - From nnsight: the task derived from the config (`image-text-to-text` where
   `AutoModelForImageTextToText` maps it), after which nnterp drops its `text-generation`
-  default; `model.generate` under `image-text-to-text` (the pipeline's `generate_kwargs`
-  reach `model.generate` as a model argument today); batching several image-carrying
+  default; batching several image-carrying
   invokes in one trace; `mm_token_type_ids` padded as a row field, so two text invokes on
   Gemma 4's wrapper batch; the image-text-to-text mapping checked first when inferring a
   pre-loaded wrapper module's task.

@@ -436,8 +436,8 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
             if "router" in parts:
                 nodes[f"moe.{key}.router"] = node(
                     "the router", f"{expr}.router",
-                    f"`{moe['router']}`. It scores all {moe['num_experts']} experts for each token by `{moe['scoring']}` and picks "
-                    f"{moe['top_k']}: `expert_indices`, each weighted by its `expert_weights`.")
+                    f"`{moe['router']}`. One logit per expert ({moe['num_experts']}) for each token; the scoring is "
+                    f"`{moe['scoring']}`, and {moe['top_k']} are picked: `expert_indices`, each weighted by its `expert_weights`.")
             if "experts" in parts:
                 nodes[f"moe.{key}.experts"] = node(
                     "the routed experts", f"{expr}.experts",

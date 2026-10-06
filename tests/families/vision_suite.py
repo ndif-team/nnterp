@@ -25,6 +25,7 @@ from nnterp import StandardizedTransformer, Unavailable
 from nnterp.components import (
     ImageFeatures, ImageScatter, ImageTokenMask, Patches, Pattern, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id,
 )
+from nnterp.components.vision import scatter_call, scatter_host
 
 #: The tower's own values, in forward order; its block values are those of a text block.
 TOWER_VALUES = ("image_token_mask", "patch_embeddings", "tower_output", "image_features")
@@ -146,8 +147,10 @@ class VisionSuite:
         assert model.family is self.FAMILY
 
     def test_the_scatter_host_is_keyed(self, model):
-        """The wrapper's model, whose forward writes the image features in, is an `ImageScatter`."""
-        assert isinstance(model.get("model"), ImageScatter)
+        """The module whose forward writes the image features in: an `ImageScatter`, or the root where the family names ``ROOT_SCATTER``."""
+        name, host = scatter_host(model)
+        assert isinstance(host, ImageScatter) if name else (host is model and model.family.ROOT_SCATTER)
+        assert model.get(scatter_call(model)[0]) is not None  # the operation is in the host's forward
 
     def test_tower_names_alias_native_envoys(self, model):
         for standard, native in self.VISION_NATIVE.items():

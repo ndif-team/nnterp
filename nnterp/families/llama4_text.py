@@ -98,8 +98,9 @@ RENAME = {
     "layernorm_post": "norm",
 }
 
-#: The wrappers (config ``model_type``) whose projector's output is what they scatter into the text stream.
-IMAGE_WRAPPERS = ("llama4",)
+#: The wrapper's own forward scatters the image features (``Llama4ForConditionalGeneration`` has no inner
+#: model to key `ImageScatter` on): ``inputs_embeds.masked_scatter(mask, projected_vision_flat)``.
+ROOT_SCATTER = "inputs_embeds_masked_scatter_0"
 
 #: The block's ``hidden_states.view(residual.shape)``: the feed-forward's output in the residual's shape.
 FEED_FORWARD_VIEW = "hidden_states_view_0"

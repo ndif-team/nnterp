@@ -164,6 +164,16 @@ class StandardizedTransformer(TransformersModel):
         )
         for key, value in (tokenizer_kwargs or {}).items():
             setattr(self.tokenizer, key, value)
+        self._source_root_scatter()
+
+    def _update(self, module: Any) -> None:
+        super()._update(module)  # real weights replacing meta ones reinstall the plain forward
+        self._source_root_scatter()
+
+    def _source_root_scatter(self) -> None:
+        """Instrument the root's forward ahead of any run where it scatters the image features (the family's ``ROOT_SCATTER``)."""
+        if getattr(self.family, "ROOT_SCATTER", None) and "projector" in self._aliases:
+            self.source
 
     @staticmethod
     def _base_envoys(repo_id: Any, kwargs: dict) -> dict:

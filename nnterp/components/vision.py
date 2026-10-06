@@ -69,9 +69,24 @@ def no_image_tokens(vision: Vision) -> str | None:
     return reason
 
 
-def scatter_host(model: Any) -> tuple[str, ImageScatter] | None:
-    """The root's child whose forward scatters the image features (an `ImageScatter`), with its name, or ``None``."""
+def scatter_host(model: Any) -> tuple[str, Any] | None:
+    """The module whose forward scatters the image features, with its path from the root, or ``None``.
+
+    The root's child the family keys `ImageScatter` on, or the root itself
+    (path ``""``) on a wrapper that scatters in its own forward, whose family
+    names the operation in ``ROOT_SCATTER`` (Llama 4).
+    """
+    if getattr(model.family, "ROOT_SCATTER", None) and "projector" in model._aliases:
+        return "", model
     return next(((name, child) for name, child in model._named_children() if isinstance(child, ImageScatter)), None)
+
+
+def scatter_call(model: Any) -> tuple[str, int | str]:
+    """The scatter's path from the root (``"model.source.inputs_embeds_masked_scatter_0"``) and which argument is the image features."""
+    name, host = scatter_host(model)
+    if not name:
+        return f"source.{model.family.ROOT_SCATTER}", 1
+    return f"{name}.source.{host.scatter}", host.scatter_argument
 
 
 def no_image_features(vision: Vision) -> str | None:
@@ -93,13 +108,12 @@ def no_image_features(vision: Vision) -> str | None:
 
 def image_scatter(vision: Vision) -> str:
     """The path of the scatter's arguments, from the root: ``"/model.source.inputs_embeds_masked_scatter_0.inputs"``."""
-    name, host = scatter_host(vision.root)
-    return f"/{name}.source.{host.scatter}.inputs"
+    return f"/{scatter_call(vision.root)[0]}.inputs"
 
 
 def scattered_argument(vision: Vision) -> int | str:
     """Which argument of the scatter is the image features: `ImageScatter.scatter_argument`."""
-    return scatter_host(vision.root)[1].scatter_argument
+    return scatter_call(vision.root)[1]
 
 
 class ImageScatter(Standard):
@@ -115,6 +129,12 @@ class ImageScatter(Standard):
     is instrumented at build (``sourced``), so the scatter is served after the
     tower's values, which run inside the same forward. Carries no values of
     its own.
+
+    A wrapper that scatters in the root's own forward (Llama 4's
+    ``Llama4ForConditionalGeneration``) has no child to key: its family sets
+    ``ROOT_SCATTER`` to the operation's name, the root is the host
+    (`scatter_host`), and `StandardizedTransformer` instruments its own
+    forward at build.
     """
 
     sourced = True
@@ -292,9 +312,8 @@ class Vision(Standard):
 
     @image_features.postprocess
     def image_features(self, value: torch.Tensor) -> torch.Tensor:
-        name, host = scatter_host(self.root)
-        args, kwargs = self.root.get(f"{name}.source.{host.scatter}").inputs
-        argument = host.scatter_argument
+        path, argument = scatter_call(self.root)
+        args, kwargs = self.root.get(path).inputs
         return value.reshape((kwargs[argument] if isinstance(argument, str) else args[argument]).shape)
 
     # -- availability ------------------------------------------------------------------

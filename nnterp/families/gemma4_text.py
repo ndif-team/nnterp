@@ -22,8 +22,8 @@ The block, in order::
   post_feedforward_layernorm_2(experts(pre_feedforward_layernorm_2(x1)))``, and
   ``post_feedforward_layernorm`` norms that sum, so ``mlp_output`` is the dense
   MLP and the experts together, what the block adds. The mixture has no module
-  of its own, so ``mlp`` (a `Moe`) hosts its values: the block hands its
-  ``router`` and ``experts`` envoys down to it when it is built. The router
+  of its own, so ``mlp`` (a `Moe`) hosts its values, reading the block's
+  ``router`` and ``experts`` through its parent. The router
   runs on the block's *input* (``residual``), with its own norm, and returns
   probabilities; ``router_logits`` are its projection's output
   (``router.proj``). ``shared_expert_output`` is the dense MLP's output, before
@@ -100,17 +100,9 @@ class Layer(Layer):
 
     Adds ``per_layer_output``, the third thing the block adds on a checkpoint
     with per-layer embeddings. On a mixture-of-experts checkpoint the block's
-    ``router`` and ``experts`` have no module of their own to host their values,
-    so the block hands their envoys to its `Mlp` when it is built; the envoys
-    outlive a weight swap.
+    ``router`` and ``experts`` have no module of their own to host their values;
+    its `Mlp` hosts them.
     """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mlp.has_experts = bool(self._module.enable_moe_block)
-        if self.mlp.has_experts:
-            self.mlp.router = self.router
-            self.mlp.experts = self.experts
 
     @EProperty(
         "post_per_layer_input_norm.output",
@@ -175,13 +167,25 @@ class Mlp(Moe):
     """Gemma-4's MLP: what reaches the residual stream is the post-feedforward norm's output (with the experts', on a mixture block).
 
     On a mixture block it hosts the block's mixture of experts, whose
-    ``router`` and ``experts`` the block hands it; the dense MLP itself is the
-    shared expert. Read order: ``shared_expert_output`` (the dense MLP runs
+    ``router`` and ``experts`` it reads off its parent block; the dense MLP
+    itself is the shared expert. Read order: ``shared_expert_output`` (the dense MLP runs
     first), then the routing values, then ``routed_output``.
     """
 
-    #: Set by the block: whether it runs a mixture of experts beside this MLP.
-    has_experts: bool
+    @property
+    def has_experts(self) -> bool:
+        """Whether the block runs a mixture of experts beside this MLP (``enable_moe_block``)."""
+        return bool(self.parent._module.enable_moe_block)
+
+    @property
+    def router(self) -> Envoy:
+        """The block's router."""
+        return self.parent.router
+
+    @property
+    def experts(self) -> Envoy:
+        """The block's experts."""
+        return self.parent.experts
 
     def no_mixture(self) -> str | None:
         if self.has_experts:

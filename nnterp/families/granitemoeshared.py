@@ -12,9 +12,9 @@ on assignment and carried back by a transform after an in-place edit; the write
 lands on the sum, so it replaces both experts' contribution. ``mlp.output`` is the
 mixture's output alone and ``layers[i].shared_mlp.output`` the shared expert's.
 The binding is in the block's forward, read after the block has started, so the
-family's `Layer` sets ``sourced``; the mixture keeps no config, so the `Layer` also
-hands its `Mlp` the multiplier and whether the block has a shared expert
-(``residual_multiplier``, ``shared``) when it is built. The attention, ``embedding_multiplier`` and
+family's `Layer` sets ``sourced``; the mixture keeps no config, so its `Mlp` reads
+the multiplier and whether the block has a shared expert off its parent block
+(``residual_multiplier``, ``shared``). The attention, ``embedding_multiplier`` and
 ``logits_scaling`` are as on Granite. The mixture is a `Moe` (GraniteMoE's routing);
 its ``shared_expert_output`` is the block's ``shared_mlp``'s output, unscaled, so
 ``routed_output + shared_expert_output == mlp_output / residual_multiplier``.
@@ -30,7 +30,7 @@ from transformers.models.granitemoeshared.modeling_granitemoeshared import (
 from ..components import EProperty, Layer, Moe, Residual
 from .granite import Attention as GraniteAttention
 from .granite import project_on_vocab  # noqa: F401  the logit lens divides by logits_scaling, as Granite's
-from .granitemoe import hand_residual_multiplier, scaled_back
+from .granitemoe import residual_multiplier, scaled_back
 
 MODEL_TYPES = ("granitemoeshared",)
 
@@ -60,16 +60,11 @@ class Layer(Layer):
 
     `Mlp.mlp_output` is a binding in this forward, read after the block has
     started (its attention has returned), so the forward is instrumented at build.
-    The mixture's module keeps no config, so the block hands its `Mlp` the
-    multiplier and whether a shared expert runs beside it.
+    The mixture's module keeps no config, so its `Mlp` reads the multiplier,
+    and whether a shared expert runs beside it, off this block.
     """
 
     sourced = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        hand_residual_multiplier(self)
-        self.mlp.shared = self._module.shared_mlp is not None
 
 
 class Attention(GraniteAttention):
@@ -81,9 +76,12 @@ class Mlp(Moe):
 
     SCORING = "topk_softmax"
 
-    #: Set by the block: its multiplier, and whether a shared expert runs beside the mixture.
-    residual_multiplier: float
-    shared: bool
+    residual_multiplier = property(residual_multiplier)
+
+    @property
+    def shared(self) -> bool:
+        """Whether a shared expert runs beside the mixture: the block's ``shared_mlp``."""
+        return self.parent._module.shared_mlp is not None
 
     @EProperty(_experts_sum, description="What the MLP adds to the residual stream: the mixture plus the shared expert, times residual_multiplier")
     def mlp_output(self, value) -> Residual:

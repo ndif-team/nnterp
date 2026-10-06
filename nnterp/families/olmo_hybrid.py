@@ -64,8 +64,7 @@ class LinearAttention(LinearAttention):
 
 def by_block(envoy) -> str:
     """The key of this MLP's contribution: the post-feedforward norm on an attention block, the MLP's own output on a linear one."""
-    index = int(envoy.path.rsplit(".", 2)[-2])
-    if envoy._module.config.layer_types[index] == "full_attention":
+    if isinstance(envoy.parent._module, OlmoHybridAttentionDecoderLayer):
         return "../post_feedforward_layernorm.output"
     return "output"
 

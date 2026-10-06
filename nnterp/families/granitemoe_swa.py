@@ -30,7 +30,7 @@ RENAME = {
 
 
 class Layer(GraniteMoeLayer):
-    """GraniteMoE SWA's decoder block: GraniteMoE's, which hands its mixture the multiplier."""
+    """GraniteMoE SWA's decoder block: GraniteMoE's."""
 
 
 class Attention(GraniteSWAAttention):

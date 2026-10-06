@@ -1,6 +1,6 @@
 """Qwen3-VL text, end to end: Qwen3's block under interleaved M-RoPE, DeepStack after the first blocks; and the packed Qwen ViT."""
 
-from qwen_vision_suite import PACKED_UNAVAILABLE, DeepstackSuite, MRopeSuite, QwenVisionSuite
+from qwen_vision_suite import PER_IMAGE_UNAVAILABLE, DeepstackSuite, MRopeSuite, QwenVisionSuite
 from suite import FamilySuite, rows
 
 from nnterp.families import qwen3_vl_text
@@ -13,7 +13,7 @@ class TestQwen3VL(DeepstackSuite, MRopeSuite, FamilySuite):
     FAMILY = qwen3_vl_text
     NATIVE = rows("model.language_model", "layers", "embed_tokens", "norm")
     LOAD_KWARGS = {"task": "image-text-to-text"}
-    EXPECTED_UNAVAILABLE = PACKED_UNAVAILABLE
+    EXPECTED_UNAVAILABLE = PER_IMAGE_UNAVAILABLE
 
 
 class TestQwen3VLVision(QwenVisionSuite):

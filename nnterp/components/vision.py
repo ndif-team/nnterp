@@ -37,7 +37,7 @@ import torch
 from jaxtyping import Bool, Float
 from torch import Tensor
 
-from .attention import Attention
+from .attention import Attention, HeadOutputs, Keys, Queries, Values
 from .eproperty import EProperty, Unavailable
 from .layer import Layer
 from .mlp import Mlp
@@ -127,6 +127,23 @@ def scattered_argument(vision: Vision) -> int | str:
     return scatter_call(vision.root)[1]
 
 
+def no_tower_run(envoy: Any) -> str | None:
+    """Why the tower ``envoy`` belongs to never runs (`Vision.no_images`), or ``None``: the gate on every tower value."""
+    while envoy is not None and not isinstance(envoy, Vision):
+        envoy = envoy.parent
+    return envoy.no_images() if envoy is not None else None
+
+
+def as_patches(value: torch.Tensor) -> torch.Tensor:
+    """A tower's stream as `Patches`: a packed tower's ``[patches, vision_hidden]`` gets a leading images axis of 1 (a view)."""
+    return value.unsqueeze(0) if value.dim() == 2 else value
+
+
+def as_native(current: torch.Tensor, value: torch.Tensor) -> torch.Tensor:
+    """`Patches` back in the shape of the module's own tensor ``current``: a packed tower's drops the leading 1."""
+    return value.squeeze(0) if current.dim() == 2 and value.dim() == 3 else value
+
+
 class ImageScatter(Standard):
     """The wrapper's inner model (``model.model``): the module whose forward scatters the image features into the token embeddings.
 
@@ -159,40 +176,43 @@ class ImageScatter(Standard):
 class VisionLayer(Layer):
     """A vision tower's block: ``layer_output`` is the tower's stream, `Patches`."""
 
-    @EProperty(key="output", description="The tower's stream leaving the block")
+    @EProperty(key="output", description="The tower's stream leaving the block", unavailable=no_tower_run)
     def layer_output(self, value: Any) -> Patches:
-        """The tower's stream leaving this block, ``[images, patches, vision_hidden]``; assign or edit in place."""
-        return first_tensor(value)
+        """The tower's stream leaving this block, ``[images, patches, vision_hidden]``: a view; assign or edit in place."""
+        return as_patches(first_tensor(value))
 
     @layer_output.postprocess
     def layer_output(self, value: torch.Tensor) -> Any:
-        return rewrap(self, value)
+        return rewrap(self, as_native(first_tensor(self.output), value))
 
 
 class VisionAttention(Attention):
     """A vision tower block's attention: what it adds to the tower's stream is `Patches`; the interior is `Attention`'s."""
 
-    @EProperty(key="output", description="What the attention adds to the tower's stream")
+    def off_interface(self) -> str | None:
+        return no_tower_run(self) or super().off_interface()
+
+    @EProperty(key="output", description="What the attention adds to the tower's stream", unavailable=no_tower_run)
     def attention_output(self, value: Any) -> Patches:
         """The attention sublayer's contribution to the tower's stream, ``[images, patches, vision_hidden]``."""
-        return first_tensor(value)
+        return as_patches(first_tensor(value))
 
     @attention_output.postprocess
     def attention_output(self, value: torch.Tensor) -> Any:
-        return rewrap(self, value)
+        return rewrap(self, as_native(first_tensor(self.output), value))
 
 
 class VisionMlp(Mlp):
     """A vision tower block's MLP: what it adds to the tower's stream is `Patches`."""
 
-    @EProperty(key="output", description="What the MLP adds to the tower's stream")
+    @EProperty(key="output", description="What the MLP adds to the tower's stream", unavailable=no_tower_run)
     def mlp_output(self, value: Any) -> Patches:
         """The MLP sublayer's contribution to the tower's stream, ``[images, patches, vision_hidden]``."""
-        return first_tensor(value)
+        return as_patches(first_tensor(value))
 
     @mlp_output.postprocess
     def mlp_output(self, value: torch.Tensor) -> Any:
-        return rewrap(self, value)
+        return rewrap(self, as_native(first_tensor(self.output), value))
 
 
 class Vision(Standard):
@@ -275,7 +295,7 @@ class Vision(Standard):
     def image_token_mask(self, value: Any) -> Any:
         raise AttributeError("image_token_mask is derived from the ids and cannot be assigned; assign input_ids")
 
-    @EProperty("patch_embed.output", description="The patch embedding's output, one row per patch")
+    @EProperty("patch_embed.output", description="The patch embedding's output, one row per patch", unavailable=no_tower_run)
     def patch_embeddings(self, value: torch.Tensor) -> Patches:
         """The patch embedding's output, ``[images, patches, vision_hidden]``, patches in raster order.
 
@@ -285,14 +305,14 @@ class Vision(Standard):
         Assign a tensor of the same shape to replace it. Position embeddings,
         a CLS token and a pre-norm come after.
         """
-        return value.flatten(2).transpose(1, 2) if value.dim() == 4 else value
+        return value.flatten(2).transpose(1, 2) if value.dim() == 4 else as_patches(value)
 
     @patch_embeddings.postprocess
     def patch_embeddings(self, value: torch.Tensor) -> torch.Tensor:
         current = self.patch_embed.output
-        return value.transpose(1, 2).reshape(current.shape) if current.dim() == 4 else value
+        return value.transpose(1, 2).reshape(current.shape) if current.dim() == 4 else as_native(current, value)
 
-    @EProperty(key="output", description="The last block's stream after the tower's final norm, before any pooling or adapter")
+    @EProperty(key="output", description="The last block's stream after the tower's final norm, before any pooling or adapter", unavailable=no_tower_run)
     def tower_output(self, value: Any) -> Patches:
         """The last block's stream after the final norm where the tower has one (`norm`), ``[images, patches, vision_hidden]``.
 
@@ -302,15 +322,15 @@ class Vision(Standard):
         whether that reaches the text model depends on what the host reads
         (see the class docstring).
         """
-        return value.last_hidden_state if hasattr(value, "last_hidden_state") else first_tensor(value)
+        return as_patches(value.last_hidden_state if hasattr(value, "last_hidden_state") else first_tensor(value))
 
     @tower_output.postprocess
     def tower_output(self, value: torch.Tensor) -> Any:
         output = self.output
         if hasattr(output, "last_hidden_state"):
-            output.last_hidden_state = value
+            output.last_hidden_state = as_native(output.last_hidden_state, value)
             return output
-        return rewrap(self, value)
+        return rewrap(self, as_native(first_tensor(output), value))
 
     @EProperty(image_scatter, select=scattered_argument, description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
     def image_features(self, value: torch.Tensor) -> ImageFeatures:
@@ -367,106 +387,71 @@ class Vision(Standard):
         return {**super().support(), **blocks_support(self.layers)}
 
 
-# -- packed towers ------------------------------------------------------------------------
-# A packed tower (the Qwen ViT) runs on ``[patches, vision_hidden]``: every image's patches
-# concatenated, one attention call per image (or window) over its own run of rows. Its
-# stream values are served with a leading images axis of 1, as `Patches`; the attention
-# interior is unavailable, since no one tensor is the block's pattern.
+# -- the Qwen ViT ------------------------------------------------------------------------
 
-#: Why the attention interior is unavailable on a packed tower.
-PACKED = (
-    "a packed tower: the attention makes one interface call per image (attention_interface_2; one per window "
-    "on Qwen2.5-VL's windowed blocks), so the block's pattern is not one tensor; attention_output and the block "
-    "values are whole"
+#: Why the Qwen ViT's pattern is unavailable: its attention runs per image.
+PER_IMAGE = (
+    "the Qwen ViT's attention makes one interface call per image (attention_interface_2; one per window on "
+    "Qwen2.5-VL's windowed blocks), so no one tensor is the block's pattern; read attention_queries and "
+    "attention_keys, whole, and split them where the calls do: at the attention's cu_seqlens argument "
+    "(self_attn.inputs[1]['cu_seqlens']), which per image is the processor's image_grid_thw"
 )
 
 
-def unpack(value: torch.Tensor) -> torch.Tensor:
-    """A packed tower's ``[patches, vision_hidden]`` as `Patches`, ``[1, patches, vision_hidden]``: a view."""
-    return value.unsqueeze(0) if value.dim() == 2 else value
+def no_concatenated_heads(envoy: Any) -> str | None:
+    """Why the Qwen ViT's ``attention_head_outputs`` is unavailable, or ``None``: flash attention takes the other branch."""
+    if "flash" in envoy._module.config._attn_implementation:
+        return (
+            "flash attention runs every image in one call over cu_seqlens, with no concatenation to read; "
+            "load with attn_implementation='eager' or 'sdpa'"
+        )
+    return no_tower_run(envoy)
 
 
-def pack(value: torch.Tensor) -> torch.Tensor:
-    """`Patches` ``[1, patches, vision_hidden]`` back to the packed tower's ``[patches, vision_hidden]``."""
-    return value.squeeze(0) if value.dim() == 3 else value
+class QwenVisionAttention(VisionAttention):
+    """The Qwen ViT's attention: one interface call per image (or window), so the interior is read whole around them.
 
-
-class PackedVisionLayer(VisionLayer):
-    """A packed tower's block: ``layer_output`` is ``[1, patches, vision_hidden]``, every image's patches in one row."""
-
-    @EProperty(key="output", description="The tower's stream leaving the block, every image's patches in one row")
-    def layer_output(self, value: Any) -> Patches:
-        """The tower's stream leaving this block, ``[1, patches, vision_hidden]``: a view; assign or edit in place."""
-        return unpack(first_tensor(value))
-
-    @layer_output.postprocess
-    def layer_output(self, value: torch.Tensor) -> Any:
-        return rewrap(self, pack(value))
-
-
-class PackedVisionAttention(VisionAttention):
-    """A packed tower block's attention: ``attention_output`` is whole; the interior is unavailable (`PACKED`).
-
-    The module calls the attention interface once per image, inside a list
-    comprehension, whatever ``attn_implementation`` (flash takes one call with
-    ``cu_seqlens`` instead), so a value read at a call is one image's and
-    loading eager does not help: `off_interface` says so, ahead of `needs_eager`.
+    ``attention_queries``, ``attention_keys`` and ``attention_values`` are the
+    whole ``[1, heads, patches, head_dim]`` tensors (the queries and keys after
+    the 2D rotary embedding) before the module splits them per image, and
+    ``attention_head_outputs`` is the per-image outputs concatenated back,
+    ``[1, patches, heads, head_dim]``, under any implementation but flash.
+    ``attention_scores`` and ``attention_probabilities`` are `Unavailable`
+    (`PER_IMAGE`): loading eager does not help, since the module splits
+    under every implementation.
     """
 
     def off_interface(self) -> str | None:
-        return PACKED
+        return no_tower_run(self) or PER_IMAGE
 
-    @EProperty(key="output", description="What the attention adds to the tower's stream")
-    def attention_output(self, value: Any) -> Patches:
-        """The attention sublayer's contribution to the tower's stream, ``[1, patches, vision_hidden]``."""
-        return unpack(first_tensor(value))
+    @EProperty("source.unsqueeze_0.output", description=Attention.attention_queries.description, unavailable=no_tower_run)
+    def attention_queries(self, value: torch.Tensor) -> Queries:
+        """Every image's queries, ``[1, heads, patches, head_dim]``, before the per-image split; assign or edit in place."""
+        return value
 
-    @attention_output.postprocess
-    def attention_output(self, value: torch.Tensor) -> Any:
-        return rewrap(self, pack(value))
+    @EProperty("source.unsqueeze_1.output", description=Attention.attention_keys.description, unavailable=no_tower_run)
+    def attention_keys(self, value: torch.Tensor) -> Keys:
+        """Every image's keys, ``[1, heads, patches, head_dim]``, before the per-image split; assign or edit in place."""
+        return value
 
+    @EProperty("source.unsqueeze_2.output", description=Attention.attention_values.description, unavailable=no_tower_run)
+    def attention_values(self, value: torch.Tensor) -> Values:
+        """Every image's values, ``[1, heads, patches, head_dim]``, before the per-image split; assign or edit in place."""
+        return value
 
-class PackedVisionMlp(VisionMlp):
-    """A packed tower block's MLP: ``mlp_output`` is ``[1, patches, vision_hidden]``."""
-
-    @EProperty(key="output", description="What the MLP adds to the tower's stream")
-    def mlp_output(self, value: Any) -> Patches:
-        """The MLP sublayer's contribution to the tower's stream, ``[1, patches, vision_hidden]``."""
-        return unpack(first_tensor(value))
-
-    @mlp_output.postprocess
-    def mlp_output(self, value: torch.Tensor) -> Any:
-        return rewrap(self, pack(value))
+    @EProperty("source.torch_cat_0.output", description=Attention.attention_head_outputs.description, unavailable=no_concatenated_heads)
+    def attention_head_outputs(self, value: torch.Tensor) -> HeadOutputs:
+        """Every image's per-head outputs concatenated back, ``[1, patches, heads, head_dim]``, before the output projection."""
+        return value
 
 
-class PackedVision(Vision):
-    """A packed tower's root: ``patch_embeddings`` and ``tower_output`` are ``[1, patches, vision_hidden]``."""
-
-    @EProperty("patch_embed.output", description="The patch embedding's output, one row per patch")
-    def patch_embeddings(self, value: torch.Tensor) -> Patches:
-        """The patch embedding's output, ``[1, patches, vision_hidden]``, every image's patches in one row: a view."""
-        return unpack(value)
-
-    @patch_embeddings.postprocess
-    def patch_embeddings(self, value: torch.Tensor) -> torch.Tensor:
-        return pack(value)
-
-    @EProperty(key="output", description="What the tower returns over the patches: its last_hidden_state")
-    def tower_output(self, value: Any) -> Patches:
-        """The last block's stream as the tower returns it (``last_hidden_state``), ``[1, patches, vision_hidden]``."""
-        return unpack(value.last_hidden_state if hasattr(value, "last_hidden_state") else first_tensor(value))
-
-    @tower_output.postprocess
-    def tower_output(self, value: torch.Tensor) -> Any:
-        output = self.output
-        if hasattr(output, "last_hidden_state"):
-            output.last_hidden_state = pack(value)
-            return output
-        return rewrap(self, pack(value))
-
-
-class QwenVision(PackedVision):
+class QwenVision(Vision):
     """The Qwen ViT (Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3.5): packed, its merger inside, at ``model.visual``.
+
+    The tower runs on ``[patches, vision_hidden]``, every image's patches
+    concatenated, so its stream values are `Patches` with 1 in the images
+    axis, ``[1, patches, vision_hidden]``, and its blocks' attention is a
+    `QwenVisionAttention`.
 
     The processor cuts each image into ``patch_size`` squares (two frames
     deep), and lays them out in ``spatial_merge_size`` x ``spatial_merge_size``
@@ -535,7 +520,7 @@ class PixtralVision(Vision):
 
     image_size = property(variable_resolution)
 
-    @EProperty("ln_pre.input", description="Every image's patch embeddings packed in one row, entering the pre-norm")
+    @EProperty("ln_pre.input", description="Every image's patch embeddings packed in one row, entering the pre-norm", unavailable=no_tower_run)
     def patch_embeddings(self, value: torch.Tensor) -> Patches:
         """Every image's patch embeddings, ``[1, all patches, vision_hidden]``, image after image, each in raster order.
 

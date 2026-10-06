@@ -18,7 +18,7 @@ from transformers.models.qwen3_vl_moe.modeling_qwen3_vl_moe import (
     Qwen3VLMoeVisionModel,
 )
 
-from ..components import ImageScatter, Attention, Mlp, Moe, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
+from ..components import Attention, ImageScatter, Mlp, Moe, QwenVision, QwenVisionAttention, VisionLayer, VisionMlp
 from . import qwen3_vl_text
 
 RENAME = {**qwen3_vl_text.RENAME, "gate": "router"}
@@ -49,7 +49,7 @@ ENVOYS = {
     Qwen3VLMoeModel: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Qwen3VLMoeTextModel: TextModel, Qwen3VLMoeTextDecoderLayer: Layer, Qwen3VLMoeTextAttention: Attention,
     Qwen3VLMoeTextMLP: Mlp, Qwen3VLMoeTextSparseMoeBlock: Moe,
-    # The packed Qwen ViT: one attention call per image, so the interior is unavailable.
-    Qwen3VLMoeVisionModel: QwenVision, Qwen3VLMoeVisionBlock: PackedVisionLayer,
-    Qwen3VLMoeVisionAttention: PackedVisionAttention, Qwen3VLMoeVisionMLP: PackedVisionMlp,
+    # The Qwen ViT: one attention call per image, so its attention is a QwenVisionAttention.
+    Qwen3VLMoeVisionModel: QwenVision, Qwen3VLMoeVisionBlock: VisionLayer,
+    Qwen3VLMoeVisionAttention: QwenVisionAttention, Qwen3VLMoeVisionMLP: VisionMlp,
 }

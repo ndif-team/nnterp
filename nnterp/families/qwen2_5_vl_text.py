@@ -15,11 +15,11 @@ merger, so the blocks' values and ``projector.output`` are in window order while
 """
 
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
-    Qwen2_5_VLModel, Qwen2_5_VisionTransformerPretrainedModel, Qwen2_5_VLAttention, Qwen2_5_VLDecoderLayer, Qwen2_5_VLMLP,
-    Qwen2_5_VLVisionAttention, Qwen2_5_VLVisionBlock, Qwen2MLP,
+    Qwen2MLP, Qwen2_5_VLAttention, Qwen2_5_VLDecoderLayer, Qwen2_5_VLMLP, Qwen2_5_VLModel, Qwen2_5_VLVisionAttention,
+    Qwen2_5_VLVisionBlock, Qwen2_5_VisionTransformerPretrainedModel,
 )
 
-from ..components import ImageScatter, Attention, Layer, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
+from ..components import Attention, ImageScatter, Layer, Mlp, QwenVision, QwenVisionAttention, VisionLayer, VisionMlp
 
 RENAME = {
     "model.language_model.embed_tokens": "embed_tokens",
@@ -51,7 +51,7 @@ class Mlp(Mlp):
 ENVOYS = {
     Qwen2_5_VLModel: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Qwen2_5_VLDecoderLayer: Layer, Qwen2_5_VLAttention: Attention, Qwen2MLP: Mlp,
-    # The packed Qwen ViT: one attention call per window, so the interior is unavailable.
-    Qwen2_5_VisionTransformerPretrainedModel: QwenVision, Qwen2_5_VLVisionBlock: PackedVisionLayer,
-    Qwen2_5_VLVisionAttention: PackedVisionAttention, Qwen2_5_VLMLP: PackedVisionMlp,
+    # The Qwen ViT: one attention call per window, so its attention is a QwenVisionAttention.
+    Qwen2_5_VisionTransformerPretrainedModel: QwenVision, Qwen2_5_VLVisionBlock: VisionLayer,
+    Qwen2_5_VLVisionAttention: QwenVisionAttention, Qwen2_5_VLMLP: VisionMlp,
 }

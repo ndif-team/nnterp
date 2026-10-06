@@ -35,7 +35,7 @@ from transformers.models.gemma4_unified.modeling_gemma4_unified import (
 )
 
 from ..components import EProperty, ImageScatter, Layer, Mlp, Patches, Residual, Standard, Unavailable, Vision
-from ..components.vision import variable_resolution
+from ..components.vision import no_tower_run, variable_resolution
 from . import gemma4_text
 from .gemma4_text import head_dim, num_kv_heads  # noqa: F401  the sizes read the same config keys
 
@@ -116,7 +116,7 @@ class Vision(Vision):
 
     image_size = property(variable_resolution)
 
-    @EProperty("multimodal_embedder.input", description="The embedder's states over the patches before the projection")
+    @EProperty("multimodal_embedder.input", description="The embedder's states over the patches before the projection", unavailable=no_tower_run)
     def tower_output(self, value) -> Patches:
         """The embedder's states before the projection, ``[images, max_soft_tokens, mm_embed_dim]``, padded rows included.
 

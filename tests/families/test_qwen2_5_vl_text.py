@@ -1,6 +1,6 @@
 """Qwen2.5-VL text, end to end: Qwen2's block under M-RoPE, inside the wrapper; and the packed, windowed Qwen ViT."""
 
-from qwen_vision_suite import PACKED_UNAVAILABLE, MRopeSuite, QwenVisionSuite
+from qwen_vision_suite import PER_IMAGE_UNAVAILABLE, MRopeSuite, QwenVisionSuite
 from suite import FamilySuite, rows
 
 from nnterp.families import qwen2_5_vl_text
@@ -13,7 +13,7 @@ class TestQwen2_5VL(MRopeSuite, FamilySuite):
     FAMILY = qwen2_5_vl_text
     NATIVE = rows("model.language_model", "layers", "embed_tokens", "norm")
     LOAD_KWARGS = {"task": "image-text-to-text"}
-    EXPECTED_UNAVAILABLE = PACKED_UNAVAILABLE
+    EXPECTED_UNAVAILABLE = PER_IMAGE_UNAVAILABLE
 
 
 class TestQwen2_5VLVision(QwenVisionSuite):

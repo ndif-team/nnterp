@@ -15,11 +15,14 @@ and no deepstack), its blocks ``vision.layers``; its ``merger`` is ``projector``
 """
 
 from transformers.models.qwen3_5_moe.modeling_qwen3_5_moe import (
-    Qwen3_5MoeModel, Qwen3_5MoeAttention, Qwen3_5MoeDecoderLayer, Qwen3_5MoeGatedDeltaNet, Qwen3_5MoeMLP, Qwen3_5MoeSparseMoeBlock, Qwen3_5MoeVisionAttention, Qwen3_5MoeVisionBlock, Qwen3_5MoeVisionMLP, Qwen3_5MoeVisionModel,
+    Qwen3_5MoeAttention, Qwen3_5MoeDecoderLayer, Qwen3_5MoeGatedDeltaNet, Qwen3_5MoeMLP, Qwen3_5MoeModel,
+    Qwen3_5MoeSparseMoeBlock, Qwen3_5MoeVisionAttention, Qwen3_5MoeVisionBlock, Qwen3_5MoeVisionMLP,
+    Qwen3_5MoeVisionModel,
 )
 
 from ..components import (
-    ImageScatter, Attention, Layer, LinearAttention, Mlp, Moe, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision, Residual, TokenEProperty, no_shared_expert,
+    Attention, ImageScatter, Layer, LinearAttention, Mlp, Moe, QwenVision, QwenVisionAttention, Residual,
+    TokenEProperty, VisionLayer, VisionMlp, no_shared_expert,
 )
 
 RENAME = {
@@ -79,6 +82,6 @@ class Moe(Moe, Mlp):
 ENVOYS = {
     Qwen3_5MoeModel: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Qwen3_5MoeDecoderLayer: Layer, Qwen3_5MoeAttention: Attention, Qwen3_5MoeGatedDeltaNet: LinearAttention, Qwen3_5MoeMLP: Mlp, Qwen3_5MoeSparseMoeBlock: Moe,
-    # The wrapper's packed Qwen ViT: one attention call per image, so the interior is unavailable.
-    Qwen3_5MoeVisionModel: QwenVision, Qwen3_5MoeVisionBlock: PackedVisionLayer, Qwen3_5MoeVisionAttention: PackedVisionAttention, Qwen3_5MoeVisionMLP: PackedVisionMlp,
+    # The wrapper's Qwen ViT: one attention call per image, so its attention is a QwenVisionAttention.
+    Qwen3_5MoeVisionModel: QwenVision, Qwen3_5MoeVisionBlock: VisionLayer, Qwen3_5MoeVisionAttention: QwenVisionAttention, Qwen3_5MoeVisionMLP: VisionMlp,
 }

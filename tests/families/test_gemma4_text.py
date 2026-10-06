@@ -445,7 +445,6 @@ class TestGemma4Vision(VisionSuite):
     REPO = "yujiepan/gemma-4-e-tiny-random"
     FAMILY = gemma4_text
     TEXT_REPO = _ple_checkpoint()
-    TEXT_GENERATION_BUILDS_WRAPPER = True
     VISION_NATIVE = {
         "vision": "model.vision_tower",
         "vision.layers": "model.vision_tower.encoder.layers",

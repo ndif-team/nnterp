@@ -17,11 +17,14 @@ its patches ``[1, patches, vision_hidden]``) with its blocks ``vision.layers``;
 its ``merger`` is ``projector``, inside the tower.
 """
 
-from transformers.models.qwen2_vl.modeling_qwen2_vl import Qwen2VLModel, Qwen2MLP, Qwen2VisionTransformerPretrainedModel, Qwen2VLAttention, Qwen2VLDecoderLayer, Qwen2VLVisionBlock
+from transformers.models.qwen2_vl.modeling_qwen2_vl import (
+    Qwen2MLP, Qwen2VLAttention, Qwen2VLDecoderLayer, Qwen2VLModel, Qwen2VLVisionBlock,
+    Qwen2VisionTransformerPretrainedModel,
+)
 from transformers.models.qwen2_vl.modeling_qwen2_vl import VisionAttention as Qwen2VLVisionAttention
 from transformers.models.qwen2_vl.modeling_qwen2_vl import VisionMlp as Qwen2VLVisionMlp
 
-from ..components import ImageScatter, Attention, Layer, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
+from ..components import Attention, ImageScatter, Layer, Mlp, QwenVision, QwenVisionAttention, VisionLayer, VisionMlp
 
 RENAME = {
     "model.language_model.embed_tokens": "embed_tokens",
@@ -53,7 +56,7 @@ class Mlp(Mlp):
 ENVOYS = {
     Qwen2VLModel: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Qwen2VLDecoderLayer: Layer, Qwen2VLAttention: Attention, Qwen2MLP: Mlp,
-    # The packed Qwen ViT: one attention call per image, so the interior is unavailable.
-    Qwen2VisionTransformerPretrainedModel: QwenVision, Qwen2VLVisionBlock: PackedVisionLayer,
-    Qwen2VLVisionAttention: PackedVisionAttention, Qwen2VLVisionMlp: PackedVisionMlp,
+    # The Qwen ViT: one attention call per image, so its attention is a QwenVisionAttention.
+    Qwen2VisionTransformerPretrainedModel: QwenVision, Qwen2VLVisionBlock: VisionLayer,
+    Qwen2VLVisionAttention: QwenVisionAttention, Qwen2VLVisionMlp: VisionMlp,
 }

@@ -86,15 +86,15 @@ from typing import TYPE_CHECKING
 
 from nnsight.intervention.envoy import Envoy
 from transformers.models.gemma4.modeling_gemma4 import (
-    Gemma4Model, Gemma4TextAttention, Gemma4TextDecoderLayer, Gemma4TextMLP, Gemma4VisionAttention, Gemma4VisionEncoderLayer,
-    Gemma4VisionMLP, Gemma4VisionModel,
+    Gemma4Model, Gemma4TextAttention, Gemma4TextDecoderLayer, Gemma4TextMLP, Gemma4VisionAttention,
+    Gemma4VisionEncoderLayer, Gemma4VisionMLP, Gemma4VisionModel,
 )
 
 from ..components import (
-    ImageScatter, INTERFACE, Attention, EProperty, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty, Unavailable,
-    Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
+    INTERFACE, Attention, EProperty, ImageScatter, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty,
+    Unavailable, Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
 )
-from ..components.vision import variable_resolution
+from ..components.vision import no_tower_run, variable_resolution
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -253,7 +253,7 @@ class Vision(Vision):
 
     image_size = property(variable_resolution)
 
-    @EProperty("encoder.output", description=Vision.tower_output.description)
+    @EProperty("encoder.output", description=Vision.tower_output.description, unavailable=no_tower_run)
     def tower_output(self, value) -> Patches:
         """The encoder's output, ``[images, max_patches, vision_hidden]``: the last block's stream, padded rows included.
 
@@ -280,7 +280,11 @@ class VisionAttention(VisionAttention):
     def num_heads(self) -> int:
         return self._module.config.num_attention_heads
 
-    @EProperty("../post_attention_layernorm.output", description="What the attention adds to the tower's stream: the post-attention norm's output")
+    @EProperty(
+        "../post_attention_layernorm.output",
+        description="What the attention adds to the tower's stream: the post-attention norm's output",
+        unavailable=no_tower_run,
+    )
     def attention_output(self, value) -> Patches:
         return value
 
@@ -288,7 +292,11 @@ class VisionAttention(VisionAttention):
 class VisionMlp(VisionMlp):
     """Gemma-4's ViT MLP: what reaches the tower's stream is the post-feedforward norm's output."""
 
-    @EProperty("../post_feedforward_layernorm.output", description="What the MLP adds to the tower's stream: the post-feedforward norm's output")
+    @EProperty(
+        "../post_feedforward_layernorm.output",
+        description="What the MLP adds to the tower's stream: the post-feedforward norm's output",
+        unavailable=no_tower_run,
+    )
     def mlp_output(self, value) -> Patches:
         return value
 

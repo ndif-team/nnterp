@@ -112,8 +112,6 @@ class VisionSuite:
     VISION_NATIVE: dict
     #: A text-only checkpoint of the same family: it must list no image values.
     TEXT_REPO: str
-    #: Whether ``task="text-generation"`` builds the wrapper itself (Gemma 3), so that load too is checked.
-    TEXT_GENERATION_BUILDS_WRAPPER = False
     #: The dtype the wrapper is loaded in: float32, unless the processor hands the tower another (Llama 4's bfloat16).
     DTYPE = torch.float32
 
@@ -208,15 +206,32 @@ class VisionSuite:
         assert "vision" not in text._aliases and "projector" not in text._aliases
         assert not any(name.startswith("vision.") for name in text.support())
 
-    def test_a_text_generation_load_of_the_wrapper_has_no_vision_host(self):
-        if not self.TEXT_GENERATION_BUILDS_WRAPPER:
-            pytest.skip("text-generation builds the text-only class or refuses the config")
-        text = StandardizedTransformer(self.REPO)
+    def text_generation_load(self):
+        """The wrapper loaded for text generation: no processor (dispatched, transformers builds the wrapper for a config
+        it has no text-only class for)."""
+        return StandardizedTransformer(self.REPO, dispatch=True, dtype=self.DTYPE)
+
+    def test_a_text_generation_load_serves_no_tower_value(self):
+        """No image reaches a load without a processor: the tower never runs, so every tower and block value is
+        `Unavailable` saying how to load, inside a trace too, rather than failing out of order."""
+        text = self.text_generation_load()
+        if "vision" not in text._aliases:
+            pytest.skip(f"text-generation builds the text-only class, {type(text._module).__name__}")
         assert "projector" in text._aliases and text.processor is None
         assert isinstance(text.vision, Vision) and text.vision.support() == {}
         assert not any(name.startswith("vision.") for name in text.support())
+        reads = [(text.vision, name) for name in TOWER_VALUES]
+        if text.vision.num_layers:
+            layer = text.vision.layers[0]
+            reads += [(layer, "layer_output"), (layer.mlp, "mlp_output")]
+            reads += [(layer.self_attn, name.removeprefix("self_attn.")) for name in BLOCK_VALUES if name.startswith("self_attn.")]
+        for host, name in reads:
+            with pytest.raises(Unavailable, match="text-only load.*task='image-text-to-text'"):
+                getattr(host, name)
+        host, name = reads[-1]
         with pytest.raises(Unavailable, match="text-only load"):
-            text.vision.image_token_mask
+            with text.trace(dict(text.tokenizer(PROMPT, return_tensors="pt"))):
+                getattr(host, name)
 
     def test_layouts(self, model):
         assert type(model.vision).image_token_mask.layout is ImageTokenMask

@@ -77,7 +77,6 @@ class TestGemma4UnifiedVision(VisionSuite):
     REPO = _unified_checkpoint()
     FAMILY = gemma4_unified_text
     TEXT_REPO = TEXT_REPO
-    TEXT_GENERATION_BUILDS_WRAPPER = True
     VISION_NATIVE = {
         "vision": "model.embed_vision",
         "vision.patch_embed": "model.embed_vision.patch_dense",

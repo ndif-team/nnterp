@@ -78,8 +78,8 @@ from .state_space import (
     SSDHeadOutputs, SSDKeys, SSDQueries, SSDValues, StateSpace, chunk_per_token, needs_per_token_chunks,
 )
 from .vision import (
-    PACKED, ImageFeatures, ImageScatter, ImageTokenMask, PackedVision, PackedVisionAttention, PackedVisionLayer,
-    PackedVisionMlp, Patches, PixtralVision, QwenVision, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id,
+    PER_IMAGE, ImageFeatures, ImageScatter, ImageTokenMask, Patches, PixtralVision, QwenVision, QwenVisionAttention, Vision,
+    VisionAttention, VisionLayer, VisionMlp, image_token_id,
 )
 
 __all__ = [
@@ -87,7 +87,7 @@ __all__ = [
     "LOGITS", "LinearQK", "LinearV", "Mlp", "Moe", "PER_SLOT", "Pattern", "Queries", "RecurrentMixer", "Residual", "RouterLogits", "ScanDecays", "ScanQK", "ScanState",
     "ScanStates", "ScanSteps", "ScanValues", "SelectiveScan", "State", "States", "StreamMixing", "StreamWeights", "Streams", "TokenEProperty",
     "Values", "Vision", "VisionAttention", "VisionLayer", "VisionMlp", "blocks_support",
-    "ImageScatter", "PACKED", "PackedVision", "PackedVisionAttention", "PackedVisionLayer", "PackedVisionMlp", "PixtralVision", "QwenVision",
+    "ImageScatter", "PER_IMAGE", "PixtralVision", "QwenVision", "QwenVisionAttention",
     "NOT_ON_INTERFACE", "SSDHeadOutputs", "SSDKeys", "SSDQueries", "SSDValues", "Standard", "StateSpace", "Unavailable",
     "chunk_per_token", "first_tensor", "image_token_id", "interface_reason", "mixture_reason", "needs_eager",
     "needs_grouped_experts", "needs_kernel_source", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert",

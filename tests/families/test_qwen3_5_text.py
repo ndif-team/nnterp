@@ -2,7 +2,7 @@
 
 import pytest
 import torch
-from qwen_vision_suite import PACKED_UNAVAILABLE, QwenVisionSuite
+from qwen_vision_suite import PER_IMAGE_UNAVAILABLE, QwenVisionSuite
 from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed
 
 from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
@@ -211,7 +211,7 @@ class TestQwen3_5Wrapper(TestQwen3_5):
 
     NATIVE = {k: v.replace("model.", "model.language_model.", 1) if v.startswith("model.") else v for k, v in TestQwen3_5.NATIVE.items()}
     LOAD_KWARGS = {"task": "image-text-to-text"}
-    EXPECTED_UNAVAILABLE = {**TestQwen3_5.EXPECTED_UNAVAILABLE, **PACKED_UNAVAILABLE}
+    EXPECTED_UNAVAILABLE = {**TestQwen3_5.EXPECTED_UNAVAILABLE, **PER_IMAGE_UNAVAILABLE}
 
     def test_values_follow_the_step_under_generate(self, model):
         pytest.skip("nnsight's generate passes the image-text-to-text pipeline's generate_kwargs to model.generate as a model kwarg")

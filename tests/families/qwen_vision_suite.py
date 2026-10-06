@@ -2,10 +2,11 @@
 
 `QwenVisionSuite` is `VisionSuite` on a packed tower: the tower runs on
 ``[patches, vision_hidden]`` over every image of the invoke, so its stream
-values are served ``[1, patches, vision_hidden]``, the attention interior is
-`Unavailable` with the packed reason, the sizes are the Qwen vision config's
-spellings, ``image_grid_thw`` says how many patches each image has, and the
-features the text model receives are the tower's ``pooler_output``.
+values are served ``[1, patches, vision_hidden]``; its attention runs one call
+per image, so the queries, keys, values and head outputs are served whole
+around those calls and the pattern is `Unavailable` (`PER_IMAGE`); the sizes are
+the Qwen vision config's spellings, and ``image_grid_thw`` says how many
+patches each image has.
 """
 
 import numpy as np
@@ -16,12 +17,14 @@ from suite import INTERIOR
 from vision_suite import BLOCK_VALUES, IMAGE, TOWER_VALUES, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
-from nnterp.components import PACKED, ImageFeatures, PackedVisionAttention, Patches, QwenVision
+from nnterp.components import (
+    PER_IMAGE, HeadOutputs, ImageFeatures, Keys, Patches, Queries, QwenVision, QwenVisionAttention, Values, pinned,
+)
 
-#: The tower's attention interior, unavailable on every block of a packed tower.
-PACKED_VALUES = {f"self_attn.{name}" for name in (*INTERIOR, "attention_probabilities")}
+#: The tower's pattern, unavailable on every block: the attention runs one call per image.
+PER_IMAGE_VALUES = {"self_attn.attention_scores", "self_attn.attention_probabilities"}
 #: What a `FamilySuite` on a wrapper loaded with its processor expects of the tower's rows.
-PACKED_UNAVAILABLE = {f"vision.{name}": "a packed tower" for name in PACKED_VALUES}
+PER_IMAGE_UNAVAILABLE = {f"vision.{name}": "one interface call per image" for name in PER_IMAGE_VALUES}
 
 #: A second image, larger and not square: more patches than `IMAGE`, and several attention windows on Qwen2.5-VL.
 WIDE = Image.fromarray((np.random.RandomState(1).rand(256, 320, 3) * 255).astype("uint8"))
@@ -60,7 +63,7 @@ class QwenVisionSuite(VisionSuite):
 
     def test_the_tower_is_packed(self, model):
         assert isinstance(model.vision, QwenVision)
-        assert all(isinstance(layer.self_attn, PackedVisionAttention) for layer in model.vision.layers)
+        assert all(isinstance(layer.self_attn, QwenVisionAttention) for layer in model.vision.layers)
         assert model.projector._module is model.vision._module.merger  # the projector is inside the tower
 
     def test_sizes_are_the_towers(self, model):
@@ -91,29 +94,65 @@ class QwenVisionSuite(VisionSuite):
     def test_support_lists_the_tower_values(self, model):
         vision = model.vision.support()
         assert set(vision) == {*TOWER_VALUES, *BLOCK_VALUES}
-        assert all(reason is None for name, reason in vision.items() if name not in PACKED_VALUES), vision
-        for name in PACKED_VALUES:
+        assert all(reason is None for name, reason in vision.items() if name not in PER_IMAGE_VALUES), vision
+        for name in PER_IMAGE_VALUES:
             assert set(vision[name]) == set(range(model.vision.num_layers)), name
-            assert all(reason == PACKED for reason in vision[name].values()), name
+            assert all(reason == PER_IMAGE for reason in vision[name].values()), name
         support = model.support()
         assert {name.removeprefix("vision."): reason for name, reason in support.items() if name.startswith("vision.")} == vision
 
-    def test_the_interior_is_unavailable_with_the_packed_reason(self, model):
+    def test_the_pattern_is_unavailable_with_the_per_image_reason(self, model):
         attn = model.vision.layers[0].self_attn
-        for name in PACKED_VALUES:
-            with pytest.raises(Unavailable, match="one interface call per image"):
+        for name in PER_IMAGE_VALUES:
+            with pytest.raises(Unavailable, match="one interface call per image.*image_grid_thw"):
                 getattr(attn, name.removeprefix("self_attn."))
-        assert "eager" not in PACKED  # loading eager would not help: the reason does not say it would
+        assert "eager" not in PER_IMAGE  # loading eager would not help: the reason does not say it would
 
-    def test_the_packed_reason_holds_whatever_the_attention_implementation(self):
-        """Under sdpa the tower's reason is still the packed one (loading eager would not help); the text side's says eager."""
+    def test_the_interior_holds_whatever_the_attention_implementation(self):
+        """Under sdpa the pattern's reason is still the per-image one and the whole q/k/v/head outputs are served; the text side's says eager."""
         sdpa = StandardizedTransformer(self.REPO, task="image-text-to-text", dispatch=True, attn_implementation="sdpa", dtype=torch.float32)
         support = sdpa.vision.support()
-        assert all(reason == PACKED for name in PACKED_VALUES for reason in support[name].values())
+        assert all(reason == PER_IMAGE for name in PER_IMAGE_VALUES for reason in support[name].values())
+        assert all(support[f"self_attn.{name}"] is None for name in INTERIOR if f"self_attn.{name}" not in PER_IMAGE_VALUES)
         assert "attn_implementation='eager'" in str(sdpa.support()["self_attn.attention_probabilities"])
 
     def test_tower_pattern_sums_to_one_over_keys(self, model):
-        pytest.skip("a packed tower serves no pattern: test_the_interior_is_unavailable_with_the_packed_reason")
+        pytest.skip("the Qwen ViT serves no pattern: test_the_pattern_is_unavailable_with_the_per_image_reason")
+
+    def test_the_interior_is_the_per_image_calls_whole(self, model):
+        """Two images: q/k/v are the per-image calls' arguments concatenated, the head outputs their returns concatenated,
+        and the output projection of the head outputs is ``attention_output``; edits to the whole queries land."""
+        for layer in model.vision.layers:
+            attn = layer.self_attn
+            calls = []
+            with model.trace(images_prompt(model, 2), images=[IMAGE, WIDE]):
+                bounds = attn.inputs[1]["cu_seqlens"].save()
+                queries = attn.attention_queries.save()
+                keys = attn.attention_keys.save()
+                values = attn.attention_values.save()
+                for i in range(len(bounds) - 1):  # one read per pin: the i-th call's arguments, then its return
+                    with pinned(i):
+                        args = attn.source.attention_interface_2.inputs[0]
+                    with pinned(i):
+                        returned = attn.source.attention_interface_2.output[0]
+                    calls.append((args[1].save(), args[2].save(), args[3].save(), returned.save()))
+                heads = attn.attention_head_outputs.save()
+                out = attn.attention_output.save()
+            assert len(calls) == len(bounds) - 1 >= 2  # one call per image (per window on a windowed block)
+            n, width = self.patches_of(model, IMAGE, WIDE), model.vision.hidden_size
+            assert isinstance(queries, Queries) and isinstance(keys, Keys) and isinstance(values, Values) and isinstance(heads, HeadOutputs)
+            assert queries.shape == keys.shape == values.shape == (1, model.vision.num_heads, n, model.vision.head_dim)
+            assert torch.equal(queries, torch.cat([q for q, _, _, _ in calls], dim=2))
+            assert torch.equal(keys, torch.cat([k for _, k, _, _ in calls], dim=2))
+            assert torch.equal(values, torch.cat([v for _, _, v, _ in calls], dim=2))
+            assert heads.shape == (1, n, model.vision.num_heads, model.vision.head_dim)
+            assert torch.equal(heads, torch.cat([o for _, _, _, o in calls], dim=1))
+            torch.testing.assert_close(out[0], attn.proj._module(heads.reshape(n, width)))
+        attn = model.vision.layers[0].self_attn
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            attn.attention_queries[:] = 0
+            first = attn.source.attention_interface_2.inputs[0][1].save()
+        assert (first == 0).all()
 
     # -- the packed layout -----------------------------------------------------------------
 

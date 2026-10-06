@@ -73,6 +73,7 @@ from ..components import (
     Attention, EProperty, ExpertIndices, Layer, Mlp, Moe, Patches, Residual, RouterLogits, TokenEProperty, Vision,
     VisionAttention, VisionLayer, VisionMlp, unavailable,
 )
+from ..components.vision import no_tower_run
 
 if TYPE_CHECKING:
     from nnsight.intervention.envoy import Envoy
@@ -201,7 +202,7 @@ class Vision(Vision):
     ``projector_output_dim`` wide; that is ``projector.input``, flattened.
     """
 
-    @EProperty("norm.output", description=Vision.tower_output.description)
+    @EProperty("norm.output", description=Vision.tower_output.description, unavailable=no_tower_run)
     def tower_output(self, value) -> Patches:
         """The last block's stream after ``layernorm_post``, ``[tiles, patches + 1, vision_hidden]``, the CLS token last.
 

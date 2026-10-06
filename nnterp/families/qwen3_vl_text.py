@@ -30,13 +30,13 @@ their native path, ``vision.deepstack_merger_list[k]``.
 from typing import Any
 
 from transformers.models.qwen3_vl.modeling_qwen3_vl import (
-    Qwen3VLModel, Qwen3VLTextAttention, Qwen3VLTextDecoderLayer, Qwen3VLTextMLP, Qwen3VLTextModel, Qwen3VLVisionAttention,
-    Qwen3VLVisionBlock, Qwen3VLVisionMLP, Qwen3VLVisionModel,
+    Qwen3VLModel, Qwen3VLTextAttention, Qwen3VLTextDecoderLayer, Qwen3VLTextMLP, Qwen3VLTextModel,
+    Qwen3VLVisionAttention, Qwen3VLVisionBlock, Qwen3VLVisionMLP, Qwen3VLVisionModel,
 )
 
 from ..components import (
-    ImageScatter, Attention, EProperty, ImageFeatures, Layer, Mlp, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp,
-    QwenVision, Standard, pinned,
+    Attention, EProperty, ImageFeatures, ImageScatter, Layer, Mlp, QwenVision, QwenVisionAttention, Standard,
+    VisionLayer, VisionMlp, pinned,
 )
 
 #: The text model's call that adds a deepstack feature after a block: ``_deepstack_process(hidden, mask, embeds)``.
@@ -147,7 +147,7 @@ class Mlp(Mlp):
 ENVOYS = {
     Qwen3VLModel: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
     Qwen3VLTextModel: TextModel, Qwen3VLTextDecoderLayer: Layer, Qwen3VLTextAttention: Attention, Qwen3VLTextMLP: Mlp,
-    # The packed Qwen ViT: one attention call per image, so the interior is unavailable.
-    Qwen3VLVisionModel: QwenVision, Qwen3VLVisionBlock: PackedVisionLayer,
-    Qwen3VLVisionAttention: PackedVisionAttention, Qwen3VLVisionMLP: PackedVisionMlp,
+    # The Qwen ViT: one attention call per image, so its attention is a QwenVisionAttention.
+    Qwen3VLVisionModel: QwenVision, Qwen3VLVisionBlock: VisionLayer,
+    Qwen3VLVisionAttention: QwenVisionAttention, Qwen3VLVisionMLP: VisionMlp,
 }

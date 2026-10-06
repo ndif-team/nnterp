@@ -52,16 +52,26 @@ class TestLlavaPixtralVision(PixtralSuite):
     FAMILY = mistral
     TEXT_REPO = TestMistral.REPO
 
-    @pytest.fixture(scope="class")
-    def model(self):
-        from transformers import AutoConfig, AutoModelForImageTextToText, AutoProcessor
+    def small(self):
+        """The wrapper from the checkpoint's config, shrunk, with random weights."""
+        from transformers import AutoConfig, AutoModelForImageTextToText
 
         config = AutoConfig.from_pretrained(self.REPO)
         config.text_config.update(dict(hidden_size=16, intermediate_size=32, num_hidden_layers=2, num_attention_heads=2, num_key_value_heads=1, head_dim=8))
         config.vision_config.update(dict(hidden_size=32, intermediate_size=64, num_hidden_layers=2, num_attention_heads=2, head_dim=16))
         torch.manual_seed(0)
-        module = AutoModelForImageTextToText.from_config(config, attn_implementation="eager").eval()
-        return StandardizedTransformer(module, processor=AutoProcessor.from_pretrained(self.REPO), task="image-text-to-text")
+        return AutoModelForImageTextToText.from_config(config, attn_implementation="eager").eval()
+
+    @pytest.fixture(scope="class")
+    def model(self):
+        from transformers import AutoProcessor
+
+        return StandardizedTransformer(self.small(), processor=AutoProcessor.from_pretrained(self.REPO), task="image-text-to-text")
+
+    def text_generation_load(self):
+        from transformers import AutoTokenizer
+
+        return StandardizedTransformer(self.small(), tokenizer=AutoTokenizer.from_pretrained(self.REPO))
 
     def test_the_wrapper_is_llava(self, model):
         assert model.config.model_type == "llava" and model.config.vision_config.model_type == "pixtral"

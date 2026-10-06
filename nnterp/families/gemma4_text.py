@@ -61,16 +61,37 @@ The block, in order::
 
 ``final_logit_softcapping`` is in the text config; the root's ``project_on_vocab``
 reads it there.
+
+On the wrapper the vision tower ``model.vision_tower`` is ``vision`` (a `Vision`)
+and ``model.embed_vision``, whose output is what the wrapper scatters, is
+``projector``. The tower is a ViT over each image's patches: the patch embedder
+(``patch_embedder``, a linear over the processor's flattened patches plus a 2D
+position embedding) is ``vision.patch_embed`` and the blocks
+(``encoder.layers``) are ``vision.layers``. Each block is the text block's
+sandwich, so its contributions are the post-norms' outputs too
+(`VisionAttention`, `VisionMlp`). The processor pads every image's patches to
+``max_soft_tokens * pooling_kernel_size**2`` rows with zero pixels at position
+``(-1, -1)``; the padded rows run through every block (masked as keys only), so
+they are present in ``vision.layers[i].layer_output``. There is no final norm:
+the tower's ``pooler`` zeroes the padded rows, average-pools the patches
+``pooling_kernel_size`` by ``pooling_kernel_size`` and strips the padding, so
+``vision.tower_output`` is the encoder's output (the last block's stream,
+padded) and ``projector.input`` is the pooled soft tokens, flat over the
+images. The audio tower (``model.audio_tower``, a Conformer) and its embedder
+``model.embed_audio`` keep their native names.
 """
 
 from typing import TYPE_CHECKING
 
 from nnsight.intervention.envoy import Envoy
-from transformers.models.gemma4.modeling_gemma4 import Gemma4TextAttention, Gemma4TextDecoderLayer, Gemma4TextMLP
+from transformers.models.gemma4.modeling_gemma4 import (
+    Gemma4TextAttention, Gemma4TextDecoderLayer, Gemma4TextMLP, Gemma4VisionAttention, Gemma4VisionEncoderLayer,
+    Gemma4VisionMLP, Gemma4VisionModel,
+)
 
 from ..components import (
-    INTERFACE, Attention, EProperty, Keys, Layer, Moe, Residual, RouterLogits, TokenEProperty, Unavailable, Values,
-    interface_reason, mixture_reason,
+    INTERFACE, Attention, EProperty, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty, Unavailable,
+    Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
 )
 
 if TYPE_CHECKING:
@@ -84,7 +105,16 @@ RENAME = {
     "model.language_model.embed_tokens": "embed_tokens",
     "model.language_model.layers": "layers",
     "model.language_model.norm": "norm",
+    # The wrapper's tower and projector. The tower's inner keys are relative to the tower
+    # (multi-component, or a name no text block has), so they bind on it alone.
+    "model.vision_tower": "vision",
+    "model.embed_vision": "projector",
+    "patch_embedder": "patch_embed",
+    "encoder.layers": "layers",
 }
+
+#: The wrappers (config ``model_type``) whose projector's output is what they scatter into the text stream.
+IMAGE_WRAPPERS = ("gemma4",)
 
 
 def _no_per_layer_input(envoy: Envoy) -> str | None:
@@ -214,8 +244,68 @@ class Mlp(Moe):
         return value
 
 
+class Vision(Vision):
+    """Gemma-4's ViT: ``tower_output`` is the encoder's output over the padded patches; the tower's own return is pooled.
+
+    Images are variable-resolution (the processor sizes each to at most
+    ``max_soft_tokens * pooling_kernel_size**2`` patches), so there is no
+    ``image_size``.
+    """
+
+    @property
+    def image_size(self) -> int:
+        raise Unavailable(
+            f"{self.path}.image_size is not available: the tower takes variable-resolution images, each sized by the "
+            "processor to at most max_soft_tokens * pooling_kernel_size**2 patches"
+        )
+
+    @EProperty("encoder.output", description="The last block's stream over the padded patches: the encoder's output")
+    def tower_output(self, value) -> Patches:
+        """The encoder's output, ``[images, max_patches, vision_hidden]``: the last block's stream, padded rows included.
+
+        The tower then pools it in ``pooler`` and strips the padding, which is
+        what reaches the projector (``projector.input``). Assign to replace it.
+        """
+        return value.last_hidden_state
+
+    @tower_output.postprocess
+    def tower_output(self, value):
+        output = self.encoder.output
+        output.last_hidden_state = value
+        return output
+
+
+class VisionAttention(VisionAttention):
+    """Gemma-4's ViT attention: what reaches the tower's stream is the post-attention norm's output.
+
+    Its heads are the tower config's ``num_attention_heads`` (the module keeps
+    no count, and its output projection is wrapped in a clippable linear).
+    """
+
+    @property
+    def num_heads(self) -> int:
+        return self._module.config.num_attention_heads
+
+    @EProperty("../post_attention_layernorm.output", description="What the attention adds to the tower's stream: the post-attention norm's output")
+    def attention_output(self, value) -> Patches:
+        return value
+
+
+class VisionMlp(VisionMlp):
+    """Gemma-4's ViT MLP: what reaches the tower's stream is the post-feedforward norm's output."""
+
+    @EProperty("../post_feedforward_layernorm.output", description="What the MLP adds to the tower's stream: the post-feedforward norm's output")
+    def mlp_output(self, value) -> Patches:
+        return value
+
+
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
-ENVOYS = {Gemma4TextDecoderLayer: Layer, Gemma4TextAttention: Attention, Gemma4TextMLP: Mlp}
+ENVOYS = {
+    Gemma4TextDecoderLayer: Layer, Gemma4TextAttention: Attention, Gemma4TextMLP: Mlp,
+    # The ViT's sandwich blocks on the shared attention interface: the contributions point at the post-norms.
+    Gemma4VisionModel: Vision, Gemma4VisionEncoderLayer: VisionLayer, Gemma4VisionAttention: VisionAttention,
+    Gemma4VisionMLP: VisionMlp,
+}
 
 
 # -- sizes: per-layer on this config ---------------------------------------------

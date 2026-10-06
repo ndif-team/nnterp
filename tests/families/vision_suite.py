@@ -57,12 +57,14 @@ class VisionSuite:
     TEXT_REPO: str
     #: Whether ``task="text-generation"`` builds the wrapper itself (Gemma 3), so that load too is checked.
     TEXT_GENERATION_BUILDS_WRAPPER = False
+    #: The dtype the wrapper is loaded in: float32, unless the processor hands the tower another (Llama 4's bfloat16).
+    DTYPE = torch.float32
 
     @pytest.fixture(scope="class")
     def model(self, request):
         cls = request.cls
         return StandardizedTransformer(
-            cls.REPO, task="image-text-to-text", dispatch=True, attn_implementation="eager", dtype=torch.float32,
+            cls.REPO, task="image-text-to-text", dispatch=True, attn_implementation="eager", dtype=cls.DTYPE,
         )
 
     @pytest.fixture(scope="class")
@@ -108,7 +110,7 @@ class VisionSuite:
         assert vision.num_layers == len(vision.layers) == config.num_hidden_layers
         assert (vision.hidden_size, vision.num_heads, vision.intermediate_size, vision.patch_size) == (
             config.hidden_size, config.num_attention_heads, config.intermediate_size, config.patch_size)
-        assert vision.head_dim * vision.num_heads == vision.hidden_size
+        assert vision.head_dim == (getattr(config, "head_dim", None) or vision.hidden_size // vision.num_heads)
         attn = vision.layers[0].self_attn
         assert (attn.num_heads, attn.head_dim) == (vision.num_heads, vision.head_dim)
         assert vision.layers[0].mlp.intermediate_size == vision.intermediate_size
@@ -235,7 +237,7 @@ class VisionSuite:
             out = vision.tower_output.save()
         side = vision.image_size // vision.patch_size
         assert patches.shape == (1, side * side, vision.hidden_size)
-        assert torch.equal(patches, conv.flatten(2).transpose(1, 2))
+        assert torch.equal(patches, conv.flatten(2).transpose(1, 2) if conv.dim() == 4 else conv)
         norm = getattr(vision, "norm", None)
         expected = norm._module(last) if norm is not None else last
         torch.testing.assert_close(out, expected)
@@ -246,7 +248,7 @@ class VisionSuite:
             vision.patch_embeddings[:, 0] = 0
             conv = vision.patch_embed.output.save()
             features = vision.image_features.save()
-        assert (conv[:, :, 0, 0] == 0).all()
+        assert (conv[:, :, 0, 0] == 0).all() if conv.dim() == 4 else (conv[:, 0] == 0).all()
         assert not torch.allclose(features, clean["features"])
 
 

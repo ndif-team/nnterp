@@ -44,16 +44,34 @@ What differs from Llama, inside the attention and the feed-forward:
   the root's ``intermediate_size`` reports. Scout has a mixture on every block,
   so there it names a width the model never uses, as on Qwen3-MoE; Maverick
   alternates dense and mixture blocks.
+
+On the wrapper the vision tower ``vision_model`` is ``vision`` (a `Vision`)
+and ``multi_modal_projector``, whose output is what the wrapper scatters, is
+``projector``. The tower is a ViT over each image tile: the patch embedding
+(``patch_embedding``, an unfold and a linear) is ``vision.patch_embed``, the
+blocks (``model.layers``, pre-norm, on the shared attention interface with a
+2D rotary embedding) are ``vision.layers``, and ``layernorm_post`` is
+``vision.norm``. A CLS token is appended *after* the patches, so the tower's
+stream is ``[tiles, patches + 1, vision_hidden]`` with the CLS last (CLIP's is
+first); the tower drops it after ``layernorm_post``, then pixel-shuffles and
+projects the patches in ``vision.vision_adapter``, so ``vision.tower_output``
+is ``layernorm_post``'s output, CLS included, and ``projector.input`` is the
+adapter's output, flattened over the tiles. Loaded with
+``task="image-text-to-text"`` (the processor), the tower serves
+``vision.image_token_mask`` and ``vision.image_features``. The text-generation
+task builds ``Llama4ForCausalLM``, which has no tower.
 """
 
 from typing import TYPE_CHECKING
 
 from transformers.models.llama4.modeling_llama4 import (
-    Llama4TextAttention, Llama4TextDecoderLayer, Llama4TextMLP, Llama4TextMoe,
+    Llama4TextAttention, Llama4TextDecoderLayer, Llama4TextMLP, Llama4TextMoe, Llama4VisionAttention,
+    Llama4VisionEncoderLayer, Llama4VisionMLP, Llama4VisionModel,
 )
 
 from ..components import (
-    Attention, EProperty, ExpertIndices, Layer, Mlp, Moe, Residual, RouterLogits, TokenEProperty, unavailable,
+    Attention, EProperty, ExpertIndices, Layer, Mlp, Moe, Patches, Residual, RouterLogits, TokenEProperty, Vision,
+    VisionAttention, VisionLayer, VisionMlp, unavailable,
 )
 
 if TYPE_CHECKING:
@@ -72,7 +90,16 @@ RENAME = {
     "language_model.lm_head": "lm_head",
     "feed_forward": "mlp",
     "shared_expert": "shared_experts",
+    # The wrapper's tower and projector. The tower's blocks are its ``model.layers``, which
+    # the text key above binds on the tower; its other keys are names no text block has.
+    "vision_model": "vision",
+    "multi_modal_projector": "projector",
+    "patch_embedding": "patch_embed",
+    "layernorm_post": "norm",
 }
+
+#: The wrappers (config ``model_type``) whose projector's output is what they scatter into the text stream.
+IMAGE_WRAPPERS = ("llama4",)
 
 #: The block's ``hidden_states.view(residual.shape)``: the feed-forward's output in the residual's shape.
 FEED_FORWARD_VIEW = "hidden_states_view_0"
@@ -165,12 +192,35 @@ class Moe(Moe, Mlp):
         return value.clone()
 
 
+class Vision(Vision):
+    """Llama 4's ViT: ``tower_output`` is the stream after ``layernorm_post``, before the CLS is dropped and the adapter runs.
+
+    The tower's own return is the pixel-shuffle adapter's output
+    (``vision.vision_adapter``), a quarter as many rows as patches and
+    ``projector_output_dim`` wide; that is ``projector.input``, flattened.
+    """
+
+    @EProperty("norm.output", description="The tower's stream after its final norm, CLS last")
+    def tower_output(self, value) -> Patches:
+        """The last block's stream after ``layernorm_post``, ``[tiles, patches + 1, vision_hidden]``, the CLS token last.
+
+        The tower then drops the CLS and runs ``vision_adapter`` on the
+        patches; an assignment here reaches the adapter and the text model.
+        """
+        return value
+
+
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
-ENVOYS = {Llama4TextDecoderLayer: Layer, Llama4TextAttention: Attention, Llama4TextMLP: Mlp, Llama4TextMoe: Moe}
+ENVOYS = {
+    Llama4TextDecoderLayer: Layer, Llama4TextAttention: Attention, Llama4TextMLP: Mlp, Llama4TextMoe: Moe,
+    # The ViT's pre-norm blocks on the shared attention interface: the vision components hold as they are.
+    Llama4VisionModel: Vision, Llama4VisionEncoderLayer: VisionLayer, Llama4VisionAttention: VisionAttention,
+    Llama4VisionMLP: VisionMlp,
+}
 
 
 # -- sizes: what Llama 4's config calls them ------------------------------------
 
 def intermediate_size(model: "StandardizedTransformer") -> int:
     """The dense MLP's width, ``intermediate_size_mlp``; this config's ``intermediate_size`` is the experts'."""
-    return model.config.intermediate_size_mlp
+    return model.config.get_text_config().intermediate_size_mlp

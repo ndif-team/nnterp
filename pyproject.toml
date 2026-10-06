@@ -42,3 +42,5 @@ nnterp = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# With -n, tests marked xdist_group(...) stay on one worker: a class around real weights loads its model once.
+addopts = "--dist loadgroup"

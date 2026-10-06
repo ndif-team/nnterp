@@ -4,7 +4,7 @@ import pytest
 
 import torch
 from suite import FamilySuite, PROMPT, rows
-from vision_suite import WrapperSuite, wrapper_of
+from vision_suite import VisionSuite, WrapperSuite, align_processor, siglip_rows, wrapper_of
 
 from nnterp.families import cohere, cohere2
 
@@ -45,3 +45,32 @@ class TestAyaVisionWrapper(WrapperSuite):
     @pytest.fixture(scope="class")
     def model(self):
         return wrapper_of(TestCohere2.REPO, "AyaVisionConfig", dict(hidden_size=16, num_hidden_layers=1, num_attention_heads=2, intermediate_size=32))
+
+
+class TestAyaVisionVision(VisionSuite):
+    """Aya Vision's SigLIP tower and pixel-shuffling projector, and the tower's image values."""
+
+    REPO = "hf-tiny-v2/tiny-random-AyaVisionForConditionalGeneration"
+    FAMILY = cohere2
+    TEXT_REPO = TestCohere2.REPO
+    VISION_NATIVE = siglip_rows()
+
+    @staticmethod
+    def fix_processor(model):
+        """The processor counts image tokens with Aya Vision 8B's 364-pixel image and 28-pixel merged patch; the tiny
+        tower takes 64 pixels in 8-pixel patches merged 2x2."""
+        vision = model.config.vision_config
+        align_processor(model, img_size=vision.image_size, patch_size=vision.patch_size * model.config.downsample_factor)
+
+
+class TestCohere2VisionVision(TestAyaVisionVision):
+    """Cohere2-Vision (Command-A Vision): Aya Vision's layout."""
+
+    REPO = "hf-tiny-v2/tiny-random-Cohere2VisionForConditionalGeneration"
+
+    @staticmethod
+    def fix_processor(model):
+        """The processor's ``patch_size`` is the side of a tile's token grid: 16 where the tiny tower's 64-pixel tile in
+        8-pixel patches merged 2x2 makes 4."""
+        vision = model.config.vision_config
+        align_processor(model, patch_size=vision.image_size // (vision.patch_size * model.config.downsample_factor))

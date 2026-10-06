@@ -11,8 +11,9 @@ text-generation task builds the wrapper, whose text stack sits at
 ``RENAME`` carries both spellings and whichever the tree has binds. On the
 wrapper the SigLIP tower ``model.vision_tower`` is ``vision`` (a `Vision`; its
 ``post_layernorm`` over the patches is ``vision.norm``) and the pooling
-projector ``model.multi_modal_projector``, whose output is what the wrapper
-scatters, is ``projector``. Loaded with ``task="image-text-to-text"`` (the
+projector ``model.multi_modal_projector``, the last module before the scatter,
+is ``projector``; ``image_features`` is read at the scatter in
+``Gemma3Model``'s forward (`ImageScatter`). Loaded with ``task="image-text-to-text"`` (the
 processor), the tower serves ``vision.image_token_mask`` and ``vision.image_features``. Only
 ``Gemma3ForCausalLM`` softcaps its logits where the config sets
 ``final_logit_softcapping`` (no released checkpoint does); the wrapper never
@@ -22,16 +23,13 @@ does, and `project_on_vocab` follows the class.
 from typing import TYPE_CHECKING
 
 import torch
-from transformers.models.gemma3.modeling_gemma3 import Gemma3Attention, Gemma3DecoderLayer, Gemma3ForCausalLM, Gemma3MLP
+from transformers.models.gemma3.modeling_gemma3 import Gemma3Attention, Gemma3DecoderLayer, Gemma3ForCausalLM, Gemma3MLP, Gemma3Model
 from transformers.models.siglip.modeling_siglip import SiglipAttention, SiglipEncoderLayer, SiglipMLP, SiglipVisionModel
 
-from ..components import Attention, EProperty, Layer, Mlp, Residual, Vision, VisionAttention, VisionLayer, VisionMlp
+from ..components import Attention, EProperty, ImageScatter, Layer, Mlp, Residual, Vision, VisionAttention, VisionLayer, VisionMlp
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
-
-#: The wrappers (config ``model_type``) whose projector's output is what they scatter into the text stream.
-IMAGE_WRAPPERS = ("gemma3",)
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -84,6 +82,7 @@ ENVOYS = {
     Gemma3DecoderLayer: Layer, Gemma3Attention: Attention, Gemma3MLP: Mlp,
     # SigLIP's pre-norm blocks on the shared attention interface: the vision components hold as they are.
     SiglipVisionModel: Vision, SiglipEncoderLayer: VisionLayer, SiglipAttention: VisionAttention, SiglipMLP: VisionMlp,
+    Gemma3Model: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
 }
 
 

@@ -24,7 +24,8 @@ import tempfile
 
 import pytest
 import torch
-from suite import MOE, FamilySuite, LLAMA_ROWS, PROMPT
+from suite import MOE, FamilySuite, LLAMA_ROWS, PROMPT, rows
+from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.families import llama4_text
@@ -54,7 +55,7 @@ class TestLlama4Text(FamilySuite):
 
     def test_the_checkpoint_has_every_kind_of_block(self, model):
         """Dense and MoE blocks, RoPE and NoPE blocks, chunked and full attention: the quirks are all exercised."""
-        config = model.config
+        config = model.config.get_text_config()
         assert config.model_type == "llama4_text"
         assert config.moe_layers == [1, 3] and config.no_rope_layers == [1, 1, 1, 0]
         assert config.layer_types == ["chunked_attention"] * 3 + ["full_attention"]
@@ -86,8 +87,8 @@ class TestLlama4Text(FamilySuite):
             shared.mlp_output
 
     def test_intermediate_size_is_the_dense_width(self, model):
-        assert model.intermediate_size == model.config.intermediate_size_mlp == model.layers[0].mlp._module.gate_proj.out_features
-        assert model.layers[1].mlp._module.shared_expert.gate_proj.out_features == model.config.intermediate_size
+        assert model.intermediate_size == model.config.get_text_config().intermediate_size_mlp == model.layers[0].mlp._module.gate_proj.out_features
+        assert model.layers[1].mlp._module.shared_expert.gate_proj.out_features == model.config.get_text_config().intermediate_size
 
     def test_nope_block_interior(self, model):
         """On the NoPE block the queries are temperature-scaled and the keys carry no rotary embedding or qk-norm.
@@ -144,7 +145,7 @@ class TestLlama4Text(FamilySuite):
 
     def test_chunked_attention_across_a_chunk_boundary(self, model):
         """A prompt longer than ``attention_chunk_size``: a chunked block attends within its chunk, the NoPE block across."""
-        chunk = model.config.attention_chunk_size
+        chunk = model.config.get_text_config().attention_chunk_size
         prompt = " ".join(["word"] * (chunk + 20))
         assert len(model.tokenizer(prompt).input_ids) > chunk
         with model.trace(prompt):
@@ -186,3 +187,73 @@ def test_a_wrapper_module_binds_through_language_model():
     torch.testing.assert_close(logits, expected)
     for x, attn, mlp, out in parts:
         torch.testing.assert_close(x + attn + mlp, out)
+
+
+class TestLlama4Vision(VisionSuite):
+    """Llama 4's ViT over the image tiles, its pixel-shuffle adapter and its linear projector.
+
+    Loaded in bfloat16: Llama 4's image processor returns bfloat16 pixels,
+    which a float32 tower refuses (as in plain transformers).
+    """
+
+    REPO = TestLlama4Text.REPO
+    FAMILY = llama4_text
+    TEXT_REPO = TestLlama4Text.REPO  # text-generation builds Llama4ForCausalLM out of the same checkpoint
+    DTYPE = torch.bfloat16
+    VISION_NATIVE = {
+        "vision": "vision_model",
+        "vision.layers": "vision_model.model.layers",
+        "vision.patch_embed": "vision_model.patch_embedding",
+        "vision.norm": "vision_model.layernorm_post",
+        "vision.layers.0.self_attn": "vision_model.model.layers.0.self_attn",
+        "vision.layers.0.mlp": "vision_model.model.layers.0.mlp",
+        "vision.layers.0.input_layernorm": "vision_model.model.layers.0.input_layernorm",
+        "vision.layers.0.post_attention_layernorm": "vision_model.model.layers.0.post_attention_layernorm",
+        "projector": "multi_modal_projector",
+    }
+
+    def test_text_generation_builds_the_text_only_class(self):
+        text = StandardizedTransformer(self.REPO)
+        assert type(text._module).__name__ == "Llama4ForCausalLM"
+        assert not hasattr(text._module, "vision_model") and "vision" not in text._aliases
+
+    def test_the_cls_token_is_last(self, model):
+        """The tower appends a CLS token after the patches: one more row than patches, the last, dropped after the final norm."""
+        vision = model.vision
+        tower = vision._module
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            patches = vision.patch_embeddings.save()
+            stream = vision.layers[0].input.save()
+            out = vision.layers[-1].layer_output.save()
+            tower_output = vision.tower_output.save()
+            adapted = vision.vision_adapter.input.save()
+        tiles, rows, _ = patches.shape
+        assert rows == (vision.image_size // vision.patch_size) ** 2
+        assert out.shape == tower_output.shape == (tiles, rows + 1, vision.hidden_size)
+        cls = tower.layernorm_pre(tower.class_embedding + tower.positional_embedding_vlm[-1])
+        torch.testing.assert_close(stream[:, -1], cls.expand(tiles, -1))
+        assert torch.equal(adapted, tower_output[:, :-1])
+
+    def test_the_projector_reads_the_adapter(self, model, clean):
+        """``projector.input`` is the pixel-shuffle adapter's output flattened over the tiles: a quarter as many rows as patches."""
+        vision = model.vision
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            adapter = vision.vision_adapter.output.save()
+            out = vision.output.save()
+            fed = model.projector.input.save()
+        ratio = model.config.vision_config.pixel_shuffle_ratio
+        assert adapter.shape[1] == int((vision.image_size // vision.patch_size) ** 2 * ratio**2)
+        assert torch.equal(fed, adapter.reshape(-1, adapter.shape[-1]))
+        assert torch.equal(out.last_hidden_state, adapter)
+        assert fed.shape[0] == clean["features"].shape[0]
+
+
+class TestLlama4ImageTextToText(TestLlama4Text):
+    """The wrapper loaded with its processor: the whole suite on the text side, under ``language_model``."""
+
+    LOAD_KWARGS = {"task": "image-text-to-text"}
+    NATIVE = {
+        **rows("language_model.model", "layers", "embed_tokens", "norm"),
+        "lm_head": "language_model.lm_head",
+        "layers.0.mlp": "language_model.model.layers.0.feed_forward",
+    }

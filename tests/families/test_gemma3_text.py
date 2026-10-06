@@ -67,7 +67,6 @@ class TestGemma3Vision(VisionSuite):
     REPO = "yujiepan/gemma-3-tiny-random"
     FAMILY = gemma3_text
     TEXT_REPO = TestGemma3.REPO
-    TEXT_GENERATION_BUILDS_WRAPPER = True
     VISION_NATIVE = {
         "vision": "model.vision_tower",
         "vision.layers": "model.vision_tower.encoder.layers",

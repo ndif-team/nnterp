@@ -229,9 +229,13 @@ add its root and projector keys from the model root (`"model.vision_tower": "vis
 `"model.multi_modal_projector": "projector"`), its inner names keyed relative to the tower
 (`"encoder.layers": "layers"`, never a bare name a text block has), key `Vision`,
 `VisionLayer`, `VisionAttention`, `VisionMlp` from `nnterp.components` on the tower's module
-types in `ENVOYS`, and list the wrapper's `model_type` in `IMAGE_WRAPPERS` once the suite
-checks that its projector's output is what it scatters. Test it with a `VisionSuite`
-subclass. `gemma3_text.py` and `llama.py` are the two worked examples;
+types in `ENVOYS`, and key `ImageScatter` on the wrapper's model type (`LlavaModel:
+ImageScatter`), whose forward writes the image features into the token embeddings: that is
+where `vision.image_features` is read. A wrapper that writes them in through a helper keys a
+subclass naming the call and its argument (`llama.py`'s `InputsMerger`); a wrapper that
+scatters in its own top-level forward has no inner model to key, so the family sets
+`ROOT_SCATTER` to the operation's name (`llama4_text.py`). Test it with a
+`VisionSuite` subclass. `gemma3_text.py` and `llama.py` are the worked examples;
 [../developing/vision-design.md](../developing/vision-design.md) has the rules.
 
 ### Sizes

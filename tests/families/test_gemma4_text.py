@@ -5,11 +5,14 @@ import json
 import os
 import tempfile
 
+import numpy as np
+
 import pytest
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT, contributions, near, rows
+from vision_suite import IMAGE, VisionSuite, image_prompt
 
-from nnterp import StandardizedTransformer
+from nnterp import StandardizedTransformer, Unavailable
 from nnterp.families import gemma4_text
 
 
@@ -372,6 +375,12 @@ class TestGemma4Wrapper(Gemma4Suite):
         assert model.num_layers == model.config.text_config.num_hidden_layers
 
 
+
+class TestGemma4ImageTextToText(TestGemma4Wrapper):
+    """The wrapper loaded with its processor: the whole suite on the text side, the image values listed."""
+
+    LOAD_KWARGS = {"task": "image-text-to-text"}
+
 class TestGemma4KEqV(Gemma4Suite):
     """A 26B-A4B-shaped wrapper: no per-layer embeddings, a mixture of experts, values from ``k_proj`` on full blocks,
     and full blocks with their own ``num_key_value_heads``."""
@@ -415,3 +424,106 @@ class TestGemma4KEqV(Gemma4Suite):
 
         with pytest.raises(Unavailable, match="no per-layer embeddings"):
             model.layers[0].per_layer_output
+
+
+#: One second of noise at 16 kHz: Gemma 4's audio feature extractor's rate.
+WAVE = np.random.RandomState(0).randn(16000).astype("float32") * 0.1
+
+
+def audio_prompt(processor, text="What is this?"):
+    messages = [{"role": "user", "content": [{"type": "audio"}, {"type": "text", "text": text}]}]
+    return processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+
+
+class TestGemma4Vision(VisionSuite):
+    """Gemma 4's ViT (sandwich blocks, padded patches, a pooler) and ``embed_vision``; the audio path beside it.
+
+    ``yujiepan/gemma-4-e-tiny-random``: an E2B-shaped wrapper with per-layer
+    embeddings and an audio tower, so the audio path is checked on the same load.
+    """
+
+    REPO = "yujiepan/gemma-4-e-tiny-random"
+    FAMILY = gemma4_text
+    TEXT_REPO = _ple_checkpoint()
+    VISION_NATIVE = {
+        "vision": "model.vision_tower",
+        "vision.layers": "model.vision_tower.encoder.layers",
+        "vision.patch_embed": "model.vision_tower.patch_embedder.input_proj",
+        "vision.layers.0.self_attn": "model.vision_tower.encoder.layers.0.self_attn",
+        "vision.layers.0.mlp": "model.vision_tower.encoder.layers.0.mlp",
+        "vision.layers.0.input_layernorm": "model.vision_tower.encoder.layers.0.input_layernorm",
+        "vision.layers.0.post_attention_layernorm": "model.vision_tower.encoder.layers.0.post_attention_layernorm",
+        "projector": "model.embed_vision",
+    }
+
+    @pytest.fixture(scope="class")
+    def positions(self, model):
+        """The processor's patch positions for the image: ``(-1, -1)`` on the padded rows."""
+        return model.processor(text=image_prompt(model), images=[IMAGE], return_tensors="pt")["image_position_ids"]
+
+    def patches_of(self, model, images):
+        """Every image padded to the processor's longest: the rows of its ``image_position_ids``."""
+        return model.processor(text=image_prompt(model, images=len(images)), images=images, return_tensors="pt")["image_position_ids"].shape[1]
+
+    def test_no_final_norm_and_no_image_size(self, model):
+        assert "norm" not in model.vision._aliases
+        with pytest.raises(Unavailable, match="any resolution"):
+            model.vision.image_size
+
+    def test_contributions_are_the_post_norms(self, model):
+        layer = model.vision.layers[0]
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            attn = layer.self_attn.attention_output.save()
+            post_attn = layer.post_attention_layernorm.output.save()
+            mlp = layer.mlp.mlp_output.save()
+            post_ff = layer.post_feedforward_layernorm.output.save()
+        assert torch.equal(attn, post_attn) and torch.equal(mlp, post_ff)
+
+    def test_the_position_embedding_comes_after_the_patches(self, model):
+        """``patch_embeddings`` is the linear's output; ``patch_embedder`` then adds the 2D position embedding."""
+        vision = model.vision
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            patches = vision.patch_embeddings.save()
+            embedded = vision.patch_embedder.output.save()
+        assert embedded.shape == patches.shape and not torch.equal(embedded, patches)
+
+    def test_padded_patches_run_through_the_tower(self, model, positions, clean):
+        """The padded rows are in every block's stream; the pooler drops them, ``pooling_kernel_size**2`` patches per soft token."""
+        padded = (positions == -1).all(-1)
+        assert padded.any() and not padded.all()
+        k = model.config.vision_config.pooling_kernel_size
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            stream = model.vision.layers[0].layer_output.save()
+            out = model.vision.tower_output.save()
+            pooled = model.projector.input.save()
+        assert stream.shape[1] == positions.shape[1] and stream[padded].abs().sum() > 0
+        assert pooled.dim() == 2 and pooled.shape[0] == int((~padded).sum()) // k**2 == clean["features"].shape[0]
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            model.vision.tower_output[padded] = 0  # the pooler zeroes them anyway
+            unchanged = model.vision.image_features.save()
+        assert torch.equal(unchanged, clean["features"])
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            model.vision.tower_output[~padded] = 0
+            zeroed = model.vision.image_features.save()
+        assert not torch.allclose(zeroed, clean["features"])
+
+    def test_the_audio_path_still_works(self, model):
+        """An audio prompt runs: the audio embedder's output is what enters the text model at the audio tokens, and no image value fires."""
+        with model.trace(audio_prompt(model.processor), audio=[WAVE]):
+            ids = model.input_ids.save()
+            mask = model.vision.image_token_mask.save()
+            audio = model.model.embed_audio.output.save()
+            first = model.layers[0].input.save()
+            logits = model.logits.save()
+        tokens = ids == model.config.audio_token_id
+        assert not mask.any() and int(tokens.sum()) == audio.shape[1]
+        assert torch.equal(first[tokens], audio.reshape(-1, audio.shape[-1]))
+        assert logits.shape[-1] == model.vocab_size
+
+    def test_an_audio_prompt_runs_on_a_text_generation_load(self, model):
+        """Without the processor the audio is not encoded, but the trace runs (the placeholders embed as padding)."""
+        text = StandardizedTransformer(self.REPO, attn_implementation="eager", dtype=torch.float32)
+        assert text.processor is None
+        with text.trace(audio_prompt(model.processor), audio=[WAVE]):
+            logits = text.logits.save()
+        assert logits.shape[-1] == text.vocab_size and torch.isfinite(logits).all()

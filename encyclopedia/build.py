@@ -125,6 +125,8 @@ CONFIG_KEYS = (
     "num_experts_per_tok", "num_shared_experts", "n_shared_experts", "routed_scaling_factor",
     "norm_topk_prob",
     "num_local_experts",
+    "linear_num_key_heads", "linear_num_value_heads", "linear_key_head_dim", "linear_value_head_dim",
+    "full_attention_interval",
 )
 
 #: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.

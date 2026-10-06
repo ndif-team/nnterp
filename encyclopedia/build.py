@@ -122,6 +122,8 @@ CONFIG_KEYS = (
     "linear_num_heads", "linear_head_dim", "linear_conv_kernel_dim",
     "first_k_dense_replace", "moe_intermediate_size", "num_experts", "n_routed_experts", "num_experts_per_token",
     "num_experts_per_tok", "num_shared_experts", "n_shared_experts", "routed_scaling_factor",
+    "linear_num_key_heads", "linear_num_value_heads", "linear_key_head_dim", "linear_value_head_dim",
+    "full_attention_interval",
 )
 
 STRUCTURAL = re.compile(r"^no \w+ (module|value) on this block")

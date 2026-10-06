@@ -179,7 +179,7 @@ The entry states facts about a family, and each one has a source. Before writing
    | lineage | hue | set by |
    |---|---|---|
    | Gemma | 145 | gemma2 (gemma3_text 157) |
-   | Qwen | 285 | qwen2 (qwen3 297; qwen2_moe hashes to 243, so set it near 285) |
+   | Qwen | 285 | qwen2 (qwen3 297, qwen3_5_text 273; qwen2_moe hashes to 243, so set it near 285) |
    | Llama and its relatives (Mistral, SmolLM, ...) | hash of `llama` | llama |
    | OLMo (olmo3, olmo_hybrid, flex_olmo) | hash of `olmo2` | olmo2 |
    | GPT-2 | hash of `gpt2` | gpt2 |

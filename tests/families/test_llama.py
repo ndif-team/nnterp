@@ -3,7 +3,7 @@
 import pytest
 import torch
 from suite import FamilySuite, LLAMA_ROWS, rows
-from vision_suite import IMAGE, VisionSuite, align_processor, clip_rows, image_prompt
+from vision_suite import IMAGE, VisionSuite, align_processor, clip_rows, image_prompt, siglip_rows
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.families import llama
@@ -74,6 +74,16 @@ def tiny_v2_processor(model):
     )
 
 
+class TestVipLlavaVision(VisionSuite):
+    """VipLlava: Llava's CLIP tower, a projector over several blocks' streams concatenated."""
+
+    REPO = "hf-tiny-v2/tiny-random-VipLlavaForConditionalGeneration"
+    FAMILY = llama
+    TEXT_REPO = TestLlama.REPO
+    VISION_NATIVE = clip_rows()
+    fix_processor = staticmethod(tiny_v2_processor)
+
+
 class TestLlavaNextVision(VisionSuite):
     """LLaVA-NeXT around Llama: CLIP over the image's crops, and a projector output the wrapper unpads and adds newline tokens to."""
 
@@ -97,6 +107,39 @@ class TestLlavaNextVision(VisionSuite):
         assert features.shape[0] != projected.shape[0] * projected.shape[1]
         newline = model.get("model").image_newline.detach()
         assert (features == newline).all(-1).any()
+
+
+class TestDeepseekVLVision(VisionSuite):
+    """DeepSeek-VL: a SigLIP tower at ``model.vision_model``, ``post_layernorm`` as ``vision.norm``, the projector ``model.aligner``."""
+
+    REPO = "hf-tiny-v2/tiny-random-DeepseekVLForConditionalGeneration"
+    FAMILY = llama
+    TEXT_REPO = TestLlama.REPO
+    VISION_NATIVE = {**siglip_rows("model.vision_model"), "projector": "model.aligner"}
+
+    @staticmethod
+    def fix_processor(model):
+        """The tiny checkpoint's processor upsizes to ``min_size`` 14 where the tower takes 8 pixels and expands the image to
+        the default 576 tokens where the projector makes 4."""
+        vision = model.config.vision_config
+        align_processor(
+            model, num_image_tokens=(vision.image_size // vision.patch_size) ** 2, image_processor={"min_size": vision.image_size},
+        )
+
+
+class TestIdefics3Vision(VisionSuite):
+    """Idefics 3: its ViT at ``model.vision_model`` over the image's tiles, the pixel-shuffling connector as ``projector``."""
+
+    REPO = "trl-internal-testing/tiny-Idefics3ForConditionalGeneration"
+    FAMILY = llama
+    TEXT_REPO = TestLlama.REPO
+    VISION_NATIVE = {**siglip_rows("model.vision_model"), "projector": "model.connector"}
+
+
+class TestSmolVLMVision(TestIdefics3Vision):
+    """SmolVLM: Idefics 3's layout."""
+
+    REPO = "trl-internal-testing/tiny-SmolVLMForConditionalGeneration"
 
 
 def test_image_features_need_an_image_scatter():

@@ -126,7 +126,8 @@ CONFIG_KEYS = (
     "norm_topk_prob",
 )
 
-STRUCTURAL = re.compile(r"^no \w+ (module|value) on this block")
+#: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.
+STRUCTURAL = re.compile(r"^(no \w+ (module|value) on this block|this mixture has no shared expert)")
 VALUE_LINE = re.compile(r"^\((?P<name>\w+)\)(?: -> (?P<layout>\w+(?: \| None)?) \[(?P<dims>[^\]]*)\])?: (?P<desc>.*)$")
 
 
@@ -238,8 +239,14 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
     support_eager = eager.support()
     support_default = default.support()
     default_impl = default.config._attn_implementation
+    # A value that no block of this checkpoint has, for a structural reason on every one, is not
+    # a value of this model: it is left off the page rather than marked as conditional.
+    absent = {name for name, why in support_eager.items()
+              if isinstance(why, dict) and len(why) == num_layers and all(STRUCTURAL.match(w) for w in why.values())}
     support = []
     for name in support_eager:
+        if name in absent:
+            continue
         under_eager = summarize_reason(support_eager[name], num_layers)
         under_default = summarize_reason(support_default.get(name), num_layers)
         if under_eager is None and under_default is not None:
@@ -265,7 +272,7 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
         for row in merged.values():
             row["condition"] = conditions.get(prefix + row["name"])
             row["host"] = alias
-        values[alias] = list(merged.values())
+        values[alias] = [row for row in merged.values() if prefix + row["name"] not in absent]
 
     moe = next((child for found in children.values() for child in found if isinstance(child, Moe)), None)
     mixer = next((child for found in children.values() for child in found if isinstance(child, RecurrentMixer)), None)

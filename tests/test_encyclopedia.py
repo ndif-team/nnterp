@@ -40,23 +40,28 @@ def test_entry_builds_a_page(name):
     page = build.build_page(entry, reference=pinned(entry))
     assert entry.TITLE in page
     schema, nodes = embedded(page, "block-schema"), embedded(page, "nodes-json")
-    hosts = [sub["host"] for sub in entry.BLOCK["sublayers"]]
-    for sub in entry.BLOCK["sublayers"]:
-        key = sub["host"] if hosts.count(sub["host"]) == 1 else f"{sub['host']}-{sub['kind']}"
+    # The schema holds the sublayers this checkpoint's blocks draw: every one the entry lists, but
+    # where a host runs a mixture on some checkpoints only (Gemma-4), the one of the pair it has.
+    drawn = schema["sublayers"]
+    listed = {(sub["host"], sub["kind"]) for sub in entry.BLOCK["sublayers"]}
+    assert {(sub["host"], sub["kind"]) for sub in drawn} <= listed
+    assert {sub["host"] for sub in drawn} == {host for host, _ in listed}
+    for sub in drawn:
+        key = sub.get("key", sub["host"])
         assert nodes[f"contrib.{key}"]["expr"] == f"model.layers[i].{sub['host']}.{sub['contribution']}"
-        for value in sub.get("interior", []):
-            assert f"interior.{key}.{value}" in nodes
+        for value in sub["interior"]:
+            assert f"interior.{key}.{value['name']}" in nodes
         if sub["kind"] == "moe":
             assert {f"moe.{key}.router", f"moe.{key}.experts"} <= set(nodes)
     # A family with several block shapes is checked per shape: every block has one, every
     # sublayer is drawn on some block, and each shape's identity sums the contributions it draws.
-    shapes = schema.get("shapes", [{"subs": list(range(len(hosts))), "identity": schema["identity"]}])
+    shapes = schema.get("shapes", [{"subs": list(range(len(drawn))), "identity": schema["identity"]}])
     if "shapes" in schema:
         assert len(schema["shape_of"]) == schema["num_layers"] and len(shapes) > 1
-    assert sorted({k for shape in shapes for k in shape["subs"]}) == list(range(len(hosts)))
+    assert sorted({k for shape in shapes for k in shape["subs"]}) == list(range(len(drawn)))
     for shape in shapes:
         for k in shape["subs"]:
-            sub = entry.BLOCK["sublayers"][k]
+            sub = drawn[k]
             assert "identity" in entry.BLOCK or f"{sub['host']}.{sub['contribution']}" in shape["identity"]
     assert '"identity"' in page and "stream.output" in page
     for k in range(1, 6):

@@ -34,3 +34,17 @@ class TestGemma3Wrapper(TestGemma3):
         text = model.config.text_config
         assert (model.hidden_size, model.num_heads, model.num_kv_heads, model.head_dim) == (
             text.hidden_size, text.num_attention_heads, text.num_key_value_heads, text.head_dim)
+
+
+class TestGemma3WrapperWithACap(TestGemma3Wrapper):
+    """A wrapper whose text config sets a softcap: the model does not apply it, so the lens does not either."""
+
+    def test_the_lens_matches_the_uncapped_logits(self, model):
+        model.config.text_config.final_logit_softcapping = 30.0
+        try:
+            with model.trace(PROMPT):
+                out = model.layers[-1].layer_output.save()
+                logits = model.logits.save()
+            torch.testing.assert_close(model.project_on_vocab(out), logits)
+        finally:
+            model.config.text_config.final_logit_softcapping = None

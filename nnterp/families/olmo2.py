@@ -1,6 +1,6 @@
 """OLMo 2 (``Olmo2ForCausalLM``).
 
-Llama's names plus a *sandwich* block: every sublayer is normed after,
+Llama's names with the norms moved after the sublayers,
 ``x + post_attention_layernorm(attn(x))`` and then
 ``+ post_feedforward_layernorm(mlp(x))``. What the
 block adds is the post-norm's output, not the module's, so the contributions

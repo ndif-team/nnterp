@@ -84,5 +84,5 @@ class TokenEProperty(EProperty):
     def __set__(self, obj: Envoy, value: Any) -> None:
         self._check(obj)
         key = self.path(obj)
-        whole = self._pick(key.rsplit(".", 1)[-1], Mediator.value(self._resolve(obj, key)), self._selection(obj))
+        whole = self._pick(self.attribute(key), Mediator.value(self._resolve(obj, key)), self._selection(obj))
         super().__set__(obj, splice(whole, value, self._rank()))

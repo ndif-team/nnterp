@@ -27,11 +27,10 @@ so ``layers[0].input[vision.image_token_mask] == vision.image_features``.
 
 from __future__ import annotations
 
-from typing import Any, Callable, Sequence
+from typing import Any, Sequence
 
 import torch
 from jaxtyping import Bool, Float
-from nnsight.intervention.envoy import Envoy
 from torch import Tensor
 
 from .attention import Attention
@@ -58,27 +57,6 @@ def image_token_id(config: Any) -> int | None:
         if isinstance(value, int):
             return value
     return None
-
-
-def from_root(path: str) -> Callable[[Envoy], str]:
-    """A key for a tower value served outside the tower: ``path`` named from the model's root, aliases included.
-
-    ``from_root("inputs")`` is the root's inputs and ``from_root("projector.output")``
-    the projector's output, the tower's sibling under the root: the key the
-    function returns climbs from the tower to the root (``"../../inputs"``)
-    and descends by the native names the aliases stand for, since a path that
-    goes up takes native names only.
-    """
-
-    def key(vision: Envoy) -> str:
-        root = vision.root
-        up = "../" * (vision.path.count(".") - root.path.count("."))
-        *walk, attribute = path.split(".")
-        native = root.get(".".join(walk)).path.removeprefix(f"{root.path}.") + "." if walk else ""
-        return f"{up}{native}{attribute}"
-
-    key.__name__ = path
-    return key
 
 
 def no_image_tokens(vision: Vision) -> str | None:
@@ -162,7 +140,7 @@ class Vision(Standard):
     drops the CLS token, so what reaches the projector is ``projector.input``,
     not necessarily ``tower_output``. Where the image meets the text model:
     ``image_token_mask``, read off the model's inputs, and ``image_features``,
-    the projector's output (`from_root`), so
+    the projector's output (keyed ``"/projector.output"``, from the root), so
     ``layers[0].input[image_token_mask] == image_features``. Both need an image
     to reach the model (`no_images`).
 
@@ -215,7 +193,7 @@ class Vision(Standard):
 
     # -- values ----------------------------------------------------------------------
 
-    @EProperty(from_root("inputs"), description="Which positions hold image tokens: input_ids == the config's image_token_id; read-only", unavailable=no_image_tokens)
+    @EProperty("/inputs", description="Which positions hold image tokens: input_ids == the config's image_token_id; read-only", unavailable=no_image_tokens)
     def image_token_mask(self, value: Any) -> ImageTokenMask:
         """Which positions of the text batch hold an image token, ``[batch, seq]`` bool: ``input_ids == config.image_token_id``.
 
@@ -264,7 +242,7 @@ class Vision(Standard):
             return output
         return rewrap(self, value)
 
-    @EProperty(from_root("projector.output"), description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
+    @EProperty("/projector.output", description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
     def image_features(self, value: torch.Tensor) -> ImageFeatures:
         """The image features the text model receives, ``[image_tokens, hidden]``, flat over every image token of the batch.
 

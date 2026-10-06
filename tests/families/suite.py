@@ -20,6 +20,7 @@ from nnterp.components import (
     first_tensor,
 )
 from nnterp.components.standard import in_width
+from nnterp.standardized import IMAGE_VALUES, text_only
 
 PROMPT = "Hello world there"
 #: Two prompts for the batching checks: two invokes, or one invoke of both.
@@ -179,7 +180,7 @@ class FamilySuite:
     def raw_model(self, request):
         """The same checkpoint with no standardization, loaded the same way."""
         cls = request.cls
-        return TransformersModel(cls.REPO, task="text-generation", dispatch=True, attn_implementation="eager", **cls.LOAD_KWARGS)
+        return TransformersModel(cls.REPO, **{"task": "text-generation", "dispatch": True, "attn_implementation": "eager", **cls.LOAD_KWARGS})
 
     def has_mlp(self, model):
         """Every block has an MLP."""
@@ -210,6 +211,8 @@ class FamilySuite:
             values.discard("mlp.mlp_output")
         if any(isinstance(getattr(layer, "mlp", None), Moe) for layer in model.layers):
             values |= {f"mlp.{name}" for name in MOE}
+        if text_only(model) is None:  # a multimodal wrapper loaded with its processor
+            values |= set(IMAGE_VALUES)
         return values
 
     # -- names ------------------------------------------------------------------
@@ -268,7 +271,7 @@ class FamilySuite:
         support = model.support()
         expected = self.expected_values(model)
         assert set(support) == expected
-        assert set(model.support(layer=0)) == expected - {"logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size"}
+        assert set(model.support(layer=0)) == expected - {"logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", *IMAGE_VALUES}
 
     def test_support_is_what_this_family_expects(self, model):
         for name, reason in model.support().items():
@@ -609,8 +612,8 @@ class FamilySuite:
         for host in hosts:
             unavailable = root_support if host is model else host.support()
             for name, value in Standard.values.__func__(type(host)).items():
-                if value.layout is None or unavailable.get(name):
-                    continue
+                if value.layout is None or unavailable.get(name) or name in IMAGE_VALUES:
+                    continue  # the image values need an image: VisionSuite
                 saved = None  # bound outside: a name bound inside the block does not survive it
                 with model.trace(PROMPT):
                     tensor = getattr(host, name)

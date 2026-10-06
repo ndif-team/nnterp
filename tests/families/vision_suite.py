@@ -1,0 +1,301 @@
+"""Every check a family's vision side must pass, written once; and the text-stack checks on a wrapper built from a config.
+
+`VisionSuite`: a family's test file subclasses it per multimodal wrapper,
+names the pinned tiny wrapper, the native paths of the tower and projector
+and the family's text-only checkpoint, and inherits end-to-end statements:
+the tower names alias the native modules, the tower's blocks keep the
+contribution identity, the root's ``image_token_mask`` and ``image_features``
+mean what they say (``layers[0].input[image_token_mask] == image_features``),
+edits are causal, and a text-only checkpoint lists no image values.
+
+`WrapperSuite`: the text names on a multimodal wrapper of a text family, for a
+family whose wrapper has no tiny checkpoint to run the whole `FamilySuite` on
+(the wrapper is built from the family's tiny text config) or whose processor
+refuses a text-only prompt (PaliGemma).
+"""
+
+import numpy as np
+import pytest
+import torch
+from nnsight.intervention.envoy import Envoy
+from PIL import Image
+from suite import PROMPT, contributions
+
+from nnterp import StandardizedTransformer, Unavailable
+from nnterp.components import Patches, Pattern, Vision, VisionAttention, VisionLayer, VisionMlp
+from nnterp.standardized import IMAGE_VALUES, ImageFeatures, ImageTokenMask, image_token_id
+
+#: A fixed random image; the processor resizes it to the tower's size.
+IMAGE = Image.fromarray((np.random.RandomState(0).rand(64, 64, 3) * 255).astype("uint8"))
+
+
+def image_prompt(model, text="What is in this image?"):
+    """A prompt with the image placeholder where the processor's chat template puts it."""
+    messages = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": text}]}]
+    return model.processor.apply_chat_template(messages, add_generation_prompt=True, tokenize=False)
+
+
+class VisionSuite:
+    """Subclass per multimodal wrapper: set the class attributes, add the tower's own tests."""
+
+    #: The pinned tiny wrapper checkpoint.
+    REPO: str
+    #: The family module it must resolve to.
+    FAMILY = None
+    #: Standard path -> native path, for the tower and the projector.
+    VISION_NATIVE: dict
+    #: A text-only checkpoint of the same family: it must list no image values.
+    TEXT_REPO: str
+    #: Whether ``task="text-generation"`` builds the wrapper itself (Gemma 3), so that load too is checked.
+    TEXT_GENERATION_BUILDS_WRAPPER = False
+
+    @pytest.fixture(scope="class")
+    def model(self, request):
+        cls = request.cls
+        return StandardizedTransformer(
+            cls.REPO, task="image-text-to-text", dispatch=True, attn_implementation="eager", dtype=torch.float32,
+        )
+
+    @pytest.fixture(scope="class")
+    def clean(self, model):
+        """One traced run on the image: the values every test compares against."""
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            ids = model.input_ids.save()
+            mask = model.image_token_mask.save()
+            features = model.image_features.save()
+            first = model.layers[0].input.save()
+            logits = model.logits.save()
+        return {"ids": ids, "mask": mask, "features": features, "first": first, "logits": logits}
+
+    # -- names ------------------------------------------------------------------------
+
+    def test_family_resolved(self, model):
+        assert model.family is self.FAMILY
+        assert model.config.model_type in self.FAMILY.IMAGE_WRAPPERS
+
+    def test_tower_names_alias_native_envoys(self, model):
+        for standard, native in self.VISION_NATIVE.items():
+            assert isinstance(model.get(standard), Envoy), standard
+            assert model.get(standard) is model.get(native), (standard, native)
+
+    def test_tower_envoy_classes(self, model):
+        assert isinstance(model.vision, Vision)
+        assert len(model.vision.layers) > 1
+        for layer in model.vision.layers:
+            assert isinstance(layer, VisionLayer)
+            assert isinstance(layer.self_attn, VisionAttention) and isinstance(layer.mlp, VisionMlp)
+            assert isinstance(layer.input_layernorm, Envoy) and isinstance(layer.post_attention_layernorm, Envoy)
+
+    def test_no_tower_name_binds_on_the_text_model(self, model):
+        """The tower's keys bind on the tower alone: the text blocks keep the family's classes and names."""
+        assert all(type(layer) is self.FAMILY.Layer for layer in model.layers)
+        tower = {"vision", "projector", "patch_embed"}
+        assert not tower & set(model.layers[0]._aliases)
+        assert not tower & set(model.layers._aliases)
+        assert model.layers is not model.vision.layers
+
+    def test_sizes_are_the_towers(self, model):
+        vision, config = model.vision, model.config.vision_config
+        assert vision.num_layers == len(vision.layers) == config.num_hidden_layers
+        assert (vision.hidden_size, vision.num_heads, vision.intermediate_size, vision.patch_size) == (
+            config.hidden_size, config.num_attention_heads, config.intermediate_size, config.patch_size)
+        assert vision.head_dim * vision.num_heads == vision.hidden_size
+        attn = vision.layers[0].self_attn
+        assert (attn.num_heads, attn.head_dim) == (vision.num_heads, vision.head_dim)
+        assert vision.layers[0].mlp.intermediate_size == vision.intermediate_size
+        text = model.config.get_text_config()
+        assert model.num_layers == len(model.layers) == text.num_hidden_layers
+        assert model.hidden_size == text.hidden_size
+
+    # -- availability ------------------------------------------------------------------
+
+    def test_support_lists_the_image_values(self, model):
+        support = model.support()
+        assert {name: support[name] for name in IMAGE_VALUES} == dict.fromkeys(IMAGE_VALUES)
+        assert all(reason is None for reason in model.vision.support().values()), model.vision.support()
+        assert set(model.vision.support(layer=0)) == set(model.vision.support()) - {"patch_embeddings", "tower_output"}
+
+    def test_a_text_only_checkpoint_lists_no_image_values(self):
+        text = StandardizedTransformer(self.TEXT_REPO)
+        assert text.family is self.FAMILY
+        assert not set(IMAGE_VALUES) & set(text.support())
+        assert "vision" not in text._aliases and "projector" not in text._aliases
+        with pytest.raises(Unavailable, match="text-only checkpoint"):
+            text.image_features
+
+    def test_a_text_generation_load_of_the_wrapper_lists_no_image_values(self):
+        if not self.TEXT_GENERATION_BUILDS_WRAPPER:
+            pytest.skip("text-generation builds the text-only class or refuses the config")
+        text = StandardizedTransformer(self.REPO)
+        assert "projector" in text._aliases and text.processor is None
+        assert not set(IMAGE_VALUES) & set(text.support())
+        with pytest.raises(Unavailable, match="text-only load"):
+            text.image_token_mask
+
+    def test_layouts(self, model):
+        assert type(model).image_token_mask.layout is ImageTokenMask
+        assert type(model).image_features.layout is ImageFeatures
+        layer = model.vision.layers[0]
+        assert type(layer).layer_output.layout is Patches
+        assert type(layer.self_attn).attention_output.layout is Patches
+        assert type(layer.mlp).mlp_output.layout is Patches
+        assert type(layer.self_attn).attention_probabilities.layout is Pattern
+        assert type(model.vision).patch_embeddings.layout is Patches
+
+    # -- the root values ---------------------------------------------------------------
+
+    def test_image_token_mask_is_the_image_tokens(self, model, clean):
+        mask, ids = clean["mask"], clean["ids"]
+        assert isinstance(mask, ImageTokenMask) and mask.dtype == torch.bool
+        assert torch.equal(mask, ids == image_token_id(model.config))
+        assert int(mask.sum()) == clean["features"].shape[0] > 0
+
+    def test_image_features_are_what_enters_the_text_model(self, model, clean):
+        features = clean["features"]
+        assert isinstance(features, ImageFeatures) and features.shape[-1] == model.hidden_size
+        assert torch.equal(clean["first"][clean["mask"]], features)
+
+    def test_zeroing_image_features_lands_and_moves_the_logits(self, model, clean):
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            model.image_features[:] = 0
+            first = model.layers[0].input.save()
+            logits = model.logits.save()
+        assert (first[clean["mask"]] == 0).all()
+        assert torch.equal(first[~clean["mask"]], clean["first"][~clean["mask"]])
+        assert not torch.allclose(logits, clean["logits"])
+
+    def test_assigning_image_features_lands(self, model, clean):
+        replacement = torch.randn_like(clean["features"])
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            model.image_features = replacement
+            first = model.layers[0].input.save()
+        assert torch.equal(first[clean["mask"]], replacement)
+
+    def test_a_tower_write_moves_the_image_features(self, model, clean):
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            model.vision.layers[0].layer_output = torch.randn_like(model.vision.layers[0].layer_output)
+            features = model.image_features.save()
+        assert not torch.allclose(features, clean["features"])
+
+    def test_mask_and_features_are_read_only_where_derived(self, model):
+        with pytest.raises(AttributeError, match="assign input_ids"):
+            with model.trace(image_prompt(model), images=[IMAGE]):
+                model.image_token_mask = torch.zeros(1, 1, dtype=torch.bool)
+
+    def test_a_text_only_trace(self, model):
+        with model.trace(PROMPT):
+            mask = model.image_token_mask.save()
+            out = model.layers[-1].layer_output.save()
+            logits = model.logits.save()
+        assert not mask.any()
+        assert out.shape[-1] == model.hidden_size and logits.shape[-1] == model.vocab_size
+
+    # -- the tower ------------------------------------------------------------------------
+
+    def test_tower_contribution_identity(self, model):
+        for layer in model.vision.layers:
+            with model.trace(image_prompt(model), images=[IMAGE]):
+                stream = layer.input.save()
+                attn = layer.self_attn.attention_output.save()
+                mlp = layer.mlp.mlp_output.save()
+                out = layer.layer_output.save()
+            assert isinstance(out, Patches) and out.shape[-1] == model.vision.hidden_size
+            torch.testing.assert_close(stream + attn + mlp, out)
+
+    def test_tower_pattern_sums_to_one_over_keys(self, model):
+        for layer in model.vision.layers:
+            with model.trace(image_prompt(model), images=[IMAGE]):
+                pattern = layer.self_attn.attention_probabilities.save()
+                out = layer.layer_output.save()
+            assert pattern.shape == (out.shape[0], model.vision.num_heads, out.shape[1], out.shape[1])
+            torch.testing.assert_close(pattern.sum(-1), torch.ones_like(pattern[..., 0]))
+
+    def test_patch_embeddings_and_tower_output(self, model, clean):
+        vision = model.vision
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            patches = vision.patch_embeddings.save()
+            conv = vision.patch_embed.output.save()
+            last = vision.layers[-1].layer_output.save()
+            out = vision.tower_output.save()
+        side = vision.image_size // vision.patch_size
+        assert patches.shape == (1, side * side, vision.hidden_size)
+        assert torch.equal(patches, conv.flatten(2).transpose(1, 2))
+        norm = getattr(vision, "norm", None)
+        expected = norm._module(last) if norm is not None else last
+        torch.testing.assert_close(out, expected)
+
+    def test_patch_embeddings_edits_land(self, model, clean):
+        vision = model.vision
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            vision.patch_embeddings[:, 0] = 0
+            conv = vision.patch_embed.output.save()
+            features = model.image_features.save()
+        assert (conv[:, :, 0, 0] == 0).all()
+        assert not torch.allclose(features, clean["features"])
+
+
+def wrapper_of(text_repo, config_class, vision_config, **load):
+    """A multimodal wrapper around a text family's tiny checkpoint config, random weights, loaded as a module.
+
+    For a family whose wrapper has no tiny checkpoint: the wrapper (the class
+    ``AutoModelForImageTextToText`` maps ``config_class`` to) is built from the tiny
+    text config and a small ``vision_config`` (an ``out_hidden_size`` of ``None``
+    takes the text width), and handed to `StandardizedTransformer` with the text
+    checkpoint's tokenizer, so the task is text generation and the tree is the
+    wrapper's.
+    """
+    import transformers
+    from transformers import AutoConfig, AutoModelForImageTextToText, AutoTokenizer
+
+    text = AutoConfig.from_pretrained(text_repo)
+    if "out_hidden_size" in vision_config and vision_config["out_hidden_size"] is None:  # a merger projecting onto the text width
+        vision_config = {**vision_config, "out_hidden_size": text.hidden_size}
+    config = getattr(transformers, config_class)(text_config=text.to_dict(), vision_config=vision_config)
+    torch.manual_seed(0)
+    module = AutoModelForImageTextToText.from_config(config, attn_implementation="eager").eval()
+    return StandardizedTransformer(module, tokenizer=AutoTokenizer.from_pretrained(text_repo), **load)
+
+
+class WrapperSuite:
+    """The text names on a family's multimodal wrapper: they bind, `support` runs, a text-only trace keeps the identity."""
+
+    FAMILY = None
+    #: Where the wrapper keeps the text model.
+    CONTAINER = "model.language_model"
+
+    @pytest.fixture(scope="class")
+    def model(self, request):
+        raise NotImplementedError("a WrapperSuite subclass defines the model fixture")
+
+    def text_input(self, model):
+        """What a text-only trace is given: the prompt, or its encoding where the processor demands an image."""
+        return PROMPT
+
+    def test_family_resolved(self, model):
+        assert model.family is self.FAMILY
+        assert hasattr(model.config, "text_config")
+
+    def test_text_names_alias_the_wrapper_text_stack(self, model):
+        for standard in ("embed_tokens", "layers", "norm"):
+            assert model.get(standard) is model.get(f"{self.CONTAINER}.{standard}"), standard
+        assert model.lm_head is model.get("lm_head")
+        assert all(type(layer) is self.FAMILY.Layer for layer in model.layers)
+        assert all(type(layer.self_attn) is self.FAMILY.Attention for layer in model.layers)
+
+    def test_support_runs_and_lists_no_image_values_without_a_vision_family(self, model):
+        support = model.support()
+        assert "layer_output" in support and "self_attn.attention_output" in support
+        assert not set(IMAGE_VALUES) & set(support)
+
+    def test_text_only_trace_keeps_the_identity(self, model):
+        layer = model.layers[0]
+        hosts = contributions(layer)
+        parts = []  # made outside the block: names bound inside do not survive it
+        with model.trace(self.text_input(model)):
+            stream = layer.input.save()
+            for host, value in hosts:
+                parts.append(getattr(host, value).save())
+            out = layer.layer_output.save()
+            logits = model.logits.save()
+        torch.testing.assert_close(stream + sum(parts), out)
+        assert logits.shape[-1] == model.vocab_size

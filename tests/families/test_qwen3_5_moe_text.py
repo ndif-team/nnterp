@@ -33,7 +33,7 @@ class TestQwen3_5Moe(FamilySuite):
 
     def test_layer_types_match_the_tree(self, model):
         kinds = ["linear_attention" if hasattr(layer, "linear_attn") else "full_attention" for layer in model.layers]
-        assert kinds == list(model.config.layer_types)
+        assert kinds == list(model.config.get_text_config().layer_types)
 
     def test_support_is_per_block_on_a_hybrid(self, model):
         support = model.support()
@@ -203,3 +203,13 @@ class TestQwen3_5Moe(FamilySuite):
             assert all(not torch.equal(per_token[k], per_token[k - 1]) for k in range(1, n + 2))
         finally:
             route_delta_rule(self.FAMILY, "chunked")
+
+
+class TestQwen3_5MoeWrapper(TestQwen3_5Moe):
+    """The same checkpoint loaded as the wrapper with its processor (Qwen ViT not named yet): the text stack at ``model.language_model``."""
+
+    NATIVE = {k: v.replace("model.", "model.language_model.", 1) if v.startswith("model.") else v for k, v in TestQwen3_5Moe.NATIVE.items()}
+    LOAD_KWARGS = {"task": "image-text-to-text"}
+
+    def test_values_follow_the_step_under_generate(self, model):
+        pytest.skip("nnsight's generate passes the image-text-to-text pipeline's generate_kwargs to model.generate as a model kwarg")

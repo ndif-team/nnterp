@@ -1,9 +1,9 @@
 ---
 title: Vision design
-one_liner: How nnterp standardizes the vision side of image-text-to-text checkpoints — the tower under model.vision, the projector, the root image values, where the code lives, how loading and the suite work, what does not fit, and the phases.
+one_liner: How nnterp standardizes the vision side of image-text-to-text checkpoints — the tower under model.vision with its blocks and the image values, the projector, where the code lives, how loading and the suite work, what does not fit, and the phases.
 tags: [developing, design, vision, multimodal, families]
 related: [docs/usage/vision.md, docs/developing/architecture.md, docs/developing/eproperty-internals.md, docs/developing/testing.md, docs/extending/adding-a-family.md]
-sources: [nnterp/components/vision.py, nnterp/components/standard.py, nnterp/standardized.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, tests/families/vision_suite.py, tests/families/suite.py]
+sources: [nnterp/components/vision.py, nnterp/components/standard.py, nnterp/standardized.py, nnterp/components/eproperty.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, tests/families/vision_suite.py, tests/families/suite.py]
 ---
 
 # Vision design
@@ -14,7 +14,7 @@ An image-text-to-text checkpoint is a text model plus a vision tower, a projecto
 step that puts the projected features into the text stream. nnterp standardizes the text
 model already; this page is how the vision side is standardized so the same names and
 values hold on every wrapper: what the tower and projector are called, which values the
-root serves, where the code lives, and how loading and the suite work. Facts quoted here
+tower serves, where the code lives, and how loading and the suite work. Facts quoted here
 were run on transformers 5.17 and nnsight `dev` on the tiny checkpoints named in
 [the suite section](#the-suite).
 
@@ -25,7 +25,9 @@ The rules:
   the tower and the projector, and the tower's own names, keyed so that on a text-only
   checkpoint none of them resolve.
 - **The root stays the text model's.** `model.num_layers`, `model.hidden_size`,
-  `model.layers` are the language model's; the tower's sizes are on `model.vision`.
+  `model.layers` are the language model's; the tower's sizes are on `model.vision`, and so
+  are the values where the image meets the text model. Vision is a component, like `Moe`:
+  `StandardizedTransformer` has no vision code.
 - **Shared tower classes live in `nnterp/components/vision.py`; per-family paths live in the
   family file.** A tower's names are a handful of `RENAME` lines and four `ENVOYS` entries,
   inline where the family needs them.
@@ -76,8 +78,8 @@ too, on that native envoy; only the root keys decide what `model.vision` is.
 | `attention_probabilities`, `attention_queries`, `attention_keys`, `attention_values`, `attention_scores`, `attention_head_outputs` | `vision.layers[i].self_attn` | `Pattern`, `Queries`, ... | as on the text blocks, read inside the shared eager interface; the `batch` axis is the tower's images; need `attn_implementation="eager"` |
 | `patch_embeddings` | `vision` | `Patches` | the patch embedding's output, one row per patch (a view of the convolution's `[images, hidden, rows, columns]`) |
 | `tower_output` | `vision` | `Patches` | what the tower returns over the patches (`last_hidden_state`) |
-| `image_token_mask` | root | `ImageTokenMask` `[batch seq]` | `input_ids == config.image_token_id`; read-only |
-| `image_features` | root | `ImageFeatures` `[image_tokens hidden]` | the projector's output flat over every image token of the batch, in scatter order: `layers[0].input[image_token_mask] == image_features` |
+| `image_token_mask` | `vision` | `ImageTokenMask` `[batch seq]` | `input_ids == config.image_token_id`, off the model's inputs; read-only |
+| `image_features` | `vision` | `ImageFeatures` `[image_tokens hidden]` | the projector's output flat over every image token of the batch, in scatter order: `layers[0].input[vision.image_token_mask] == vision.image_features` |
 
 ```python
 from jaxtyping import Bool, Float
@@ -86,9 +88,9 @@ from torch import Tensor
 #: A tower's stream: the tower's own batch (images, tiles, frames; 1 on a packed tower) by its tokens.
 Patches = Float[Tensor, "images patches vision_hidden"]                 # nnterp/components/vision.py
 #: What the text model receives at the image positions, flat in scatter (row-major) order.
-ImageFeatures = Float[Tensor, "image_tokens hidden"]                     # nnterp/standardized.py
+ImageFeatures = Float[Tensor, "image_tokens hidden"]                     # nnterp/components/vision.py
 #: Which positions of the text batch hold image tokens.
-ImageTokenMask = Bool[Tensor, "batch seq"]                               # nnterp/standardized.py
+ImageTokenMask = Bool[Tensor, "batch seq"]                               # nnterp/components/vision.py
 ```
 
 The sizes are the tower's, read off its own config on `model.vision`: `num_layers`,
@@ -140,12 +142,14 @@ Kimi) or `image_sizes` (Pixtral).
   tiles and concatenates intermediate layers' outputs.
 - **An encoder-free wrapper** (Gemma 4 unified, `Gemma4UnifiedForConditionalGeneration`;
   Fuyu) has no tower: raw patches go through one embedder (`model.embed_vision`) into the
-  text stream. `projector` names that embedder, `vision` does not exist, and
-  `image_features` is read at the scatter, since the embedder's output still holds the
+  text stream. `projector` names that embedder and so does `vision`, a `Vision` with no
+  blocks that serves only the two image values, and `vision.image_features` is read at the
+  scatter, since the embedder's output still holds the
   padding patches the forward strips.
 - **Gemma 4's audio tower** is a Conformer; its blocks are not `Layer`/`Attention`/`Mlp`.
-  The root gets `audio_token_mask` and `audio_features` (read at the audio scatter, since
-  the embedder's output still holds padding); the tower stays native.
+  The audio tower's component gets `audio_token_mask` and `audio_features`, as `Vision`
+  carries the image values (read at the audio scatter, since the embedder's output still
+  holds padding); the tower's blocks stay native.
 - **InternVL's ViT** scales each sublayer by a learned `lambda_1`/`lambda_2` before the
   residual add, so its `attention_output`/`mlp_output` point at those products, the way
   Gemma's point at the post-norms.
@@ -155,11 +159,13 @@ Kimi) or `image_sizes` (Pixtral).
 ```
 nnterp/
   components/
-    vision.py        Patches; Vision (the tower root: sizes, patch_embeddings, tower_output, support);
+    vision.py        Patches, ImageTokenMask, ImageFeatures; Vision (the tower root: sizes, image_token_mask,
+                     patch_embeddings, tower_output, image_features, no_images, support);
                      VisionLayer, VisionAttention, VisionMlp (Layer/Attention/Mlp with Patches stream values)
-    standard.py      blocks_support: the support walk over a block list, shared by model.support()
-                     and model.vision.support()
-  standardized.py    ImageTokenMask, ImageFeatures; the root's image_token_mask and image_features
+    standard.py      Standard._root, the model an envoy belongs to; blocks_support: the support walk
+                     over a block list, shared by model.support() and model.vision.support()
+  standardized.py    sets every Standard envoy's _root; support() lists a Standard child of the root
+                     (the tower) under its name
   families/
     gemma3_text.py   SigLIP's paths in RENAME, its module types in ENVOYS, IMAGE_WRAPPERS = ("gemma3",)
     llama.py         CLIP's paths in RENAME, its module types in ENVOYS, IMAGE_WRAPPERS = ("llava",)
@@ -200,20 +206,33 @@ ENVOYS = {
 }
 ```
 
-## The root values
+## The image values
 
-`image_token_mask` and `image_features` are `EProperty`s on `StandardizedTransformer`:
+`image_token_mask` and `image_features` are `EProperty`s on `Vision`, so they read as
+`model.vision.image_token_mask` and `model.vision.image_features`. Neither is read inside
+the tower, so each is keyed `from_root(path)`: a path named from the model's root, aliases
+included, which the key function turns into one that climbs from the tower and descends by
+native names (a path that goes up takes native names only).
 
-- `image_token_mask` is keyed `"inputs"` and returns `input_ids == image_token_id(config)`
-  (`image_token_id`, else `image_token_index`); like `input_ids` it is read before anything
-  else in the invoke. Assigning raises.
-- `image_features` is keyed `"projector.output"` and returns the output flattened to
-  `[image_tokens, hidden]`, a view, so in-place edits land; an assignment is reshaped back.
+- `image_token_mask` is keyed `from_root("inputs")`, which on both wrappers is
+  `"../../inputs"` from `model.model.vision_tower`: the root's inputs, the location
+  `model.input_ids` reads, so it is read before anything else in the invoke. It returns
+  `input_ids == image_token_id(config)` (`image_token_id`, else `image_token_index`, off the
+  wrapper's config). Assigning raises.
+- `image_features` is keyed `from_root("projector.output")`, `"../multi_modal_projector.output"`
+  on both: the projector, the tower's sibling under the root. It returns the output
+  flattened to `[image_tokens, hidden]`, a view, so in-place edits land; an assignment is
+  reshaped back to the projector's output.
+
+What the tower reads outside itself (the wrapper's config, its processor, the family's
+`IMAGE_WRAPPERS`, the root's `projector` alias) it reads through `Standard._root`, the
+`StandardizedTransformer` every standard envoy is handed when the model is built.
 
 **Where `image_features` is read.** At the projector's output, on the wrappers where that
 output is what the wrapper scatters into the token embeddings. The family lists those
 wrappers by config `model_type` in `IMAGE_WRAPPERS`, each one checked by the suite
-(`layers[0].input[image_token_mask] == image_features` exactly). The projector is a module
+(`layers[0].input[image_token_mask] == image_features` exactly); `image_features`'
+`unavailable=` predicate reads the list through `model.family`. The projector is a module
 boundary: no instrumentation, no read-order trap. A wrapper that rearranges the projector's
 output before the scatter (LLaVA-NeXT's unpadding and newline tokens; an encoder-free
 embedder's padding) reads `image_features` at the scatter instead: the family names the
@@ -223,11 +242,16 @@ same forward). Until a family does that for a wrapper, the wrapper is not in
 `IMAGE_WRAPPERS` and `image_features` is `Unavailable` there with that reason, even where
 the names bind.
 
-**Availability.** Both values are unavailable, and left out of `model.support()`, where no
-image can reach the model: a tree with no `projector` (a text-only checkpoint or class) or
-a load with no processor (`task="text-generation"`, which on Gemma 3 builds the wrapper
-with a tokenizer only). `model.vision.support()` reports the tower's values over
-`vision.layers` the way `model.support()` reports the text blocks'.
+**Availability.** `Vision.no_images()` is the one place that decides whether an image can
+reach the model: not where the family names no `projector`, nor on a load with no processor
+(`task="text-generation"`, which on Gemma 3 builds the wrapper with a tokenizer only).
+There both image values are `Unavailable` with that reason, `model.vision.support()` is
+empty (the tower never runs), and `model.support()` has no `vision` rows; a text-only
+checkpoint has no `model.vision` at all. Otherwise `model.vision.support()` reports the
+tower's values and its block values over `vision.layers` the way `model.support()` reports
+the text blocks', and `model.support()` carries the same rows under the `vision` host
+(`"vision.image_features"`, `"vision.self_attn.attention_probabilities"`): the root lists
+every `Standard` child it has an alias for, as it lists the `Standard` children of a block.
 
 ## Loading
 
@@ -270,16 +294,18 @@ float32, and traces a fixed random image through the processor's chat template:
   vision config's; the root's sizes are the text config's;
 - on every tower block, `input + attention_output + mlp_output == layer_output`, and under
   eager `attention_probabilities` rows sum to one;
+- `vision.support()` lists the tower's four values and the block values, all available, and
+  `model.support()` carries them as `vision.*` rows; the root has no image values;
 - `image_token_mask == (input_ids == image_token_id)`, and its count is
   `image_features.shape[0]`;
-- `layers[0].input[image_token_mask] == image_features` exactly;
+- `layers[0].input[vision.image_token_mask] == vision.image_features` exactly;
 - writes are causal: zeroing `image_features` lands at the image positions only and moves
   the logits, an assignment lands, a tower block's `layer_output` write and a
   `patch_embeddings` edit move `image_features`;
 - `patch_embeddings` is the convolution's output flattened, `tower_output` the last block's
   stream after `vision.norm` where there is one;
 - a text-only trace reads the text values with the mask all false; a text-only checkpoint
-  of the family (and Gemma 3's `text-generation` load) lists no image values.
+  of the family (and Gemma 3's `text-generation` load) has no `vision` host in `support()`.
 
 Every `FamilySuite` test also runs on the wrappers loaded under `image-text-to-text`
 (`TestLlavaWrapper`, `TestIdefics3Wrapper`, `TestGemma3ImageTextToText`,
@@ -311,7 +337,7 @@ The pinned checkpoints, all loadable offline once cached:
 `qwen3_5_moe_text`, `llama` (`model.language_model.*` and Idefics 3's `model.text_model.*`),
 `qwen2`, `mistral`, `ministral3`, `gemma`, `cohere2`, `exaone4`, `qwen3`. Done.
 
-**Phase 1, the per-image towers and the root.** `components/vision.py`, the root values,
+**Phase 1, the per-image towers.** `components/vision.py` with the image values on the tower,
 `VisionSuite`; SigLIP on `gemma3_text`, CLIP on `llama` (Llava 1.5). Done.
 
 **Phase 2, the packed and the remaining towers.**
@@ -323,7 +349,7 @@ The pinned checkpoints, all loadable offline once cached:
 - Qwen's ViT for `qwen3_5_text`, `qwen3_5_moe_text` and the new Qwen-VL families (packed:
   the interior `Unavailable`); MoonViT for `kimi_k2`; Pixtral for `mistral` and
   `ministral3`; Llama 4's ViT for `llama4_text`; Gemma 4's ViT for `gemma4_text`; Gemma 4
-  unified's embedder (no tower, root values only, read at the scatter).
+  unified's embedder (no tower: a blockless `Vision` with the image values only, read at the scatter).
 - SigLIP on the other families that host it (`gemma` for PaliGemma, `qwen2` for
   LLaVA-OneVision and llava-interleave, `cohere2` for Aya Vision), with their wrappers in
   `IMAGE_WRAPPERS` once the suite checks the scatter.

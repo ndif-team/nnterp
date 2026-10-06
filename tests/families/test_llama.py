@@ -30,7 +30,7 @@ class TestIdefics3Wrapper(TestLlama):
 
 
 class TestLlavaVision(VisionSuite):
-    """Llava 1.5's CLIP tower and projector, and the root's image values."""
+    """Llava 1.5's CLIP tower and projector, and the tower's image values."""
 
     REPO = "trl-internal-testing/tiny-LlavaForConditionalGeneration"
     FAMILY = llama

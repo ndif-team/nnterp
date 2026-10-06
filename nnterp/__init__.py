@@ -20,8 +20,9 @@ Each family under `nnterp.families` says how its own names map onto those, and
 (``layer_output``, ``attention_output``, ``mlp_output``,
 ``attention_probabilities``), which each family subclasses. On a multimodal
 checkpoint loaded with ``task="image-text-to-text"`` the vision tower is
-``model.vision`` (its blocks ``model.vision.layers[i]``), the projector
-``model.projector``, and the root adds ``image_token_mask`` and ``image_features``.
+``model.vision`` (its blocks ``model.vision.layers[i]``, its values
+``model.vision.image_token_mask`` and ``model.vision.image_features``) and the
+projector ``model.projector``.
 """
 
 try:

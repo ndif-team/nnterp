@@ -13,7 +13,7 @@ projector ``model.multi_modal_projector``, which is ``projector``. Llava feeds t
 projector ``vision.layers[-2].layer_output`` without its CLS token
 (``vision_feature_layer=-2``, ``vision_feature_select_strategy="default"``), not
 the tower's output, and the projector's output is what it scatters, so
-``image_features`` is the projector's output. CLIP's ``post_layernorm`` norms only
+``vision.image_features`` is the projector's output. CLIP's ``post_layernorm`` norms only
 the pooled CLS token, never the patches, so it is not ``vision.norm``.
 """
 

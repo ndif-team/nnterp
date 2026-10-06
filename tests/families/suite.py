@@ -17,10 +17,9 @@ from nnsight.intervention.envoy import Envoy
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.components import (
     Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
-    first_tensor,
+    Vision, first_tensor,
 )
 from nnterp.components.standard import in_width
-from nnterp.standardized import IMAGE_VALUES, text_only
 
 PROMPT = "Hello world there"
 #: Two prompts for the batching checks: two invokes, or one invoke of both.
@@ -211,8 +210,8 @@ class FamilySuite:
             values.discard("mlp.mlp_output")
         if any(isinstance(getattr(layer, "mlp", None), Moe) for layer in model.layers):
             values |= {f"mlp.{name}" for name in MOE}
-        if text_only(model) is None:  # a multimodal wrapper loaded with its processor
-            values |= set(IMAGE_VALUES)
+        if "vision" in model._aliases and isinstance(model.vision, Vision) and model.vision.no_images() is None:  # a multimodal wrapper loaded with its processor
+            values |= {f"vision.{name}" for name in model.vision.support()}  # what they are: VisionSuite
         return values
 
     # -- names ------------------------------------------------------------------
@@ -271,7 +270,9 @@ class FamilySuite:
         support = model.support()
         expected = self.expected_values(model)
         assert set(support) == expected
-        assert set(model.support(layer=0)) == expected - {"logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", *IMAGE_VALUES}
+        assert set(model.support(layer=0)) == {
+            name for name in expected if not name.startswith("vision.")
+        } - {"logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size"}
 
     def test_support_is_what_this_family_expects(self, model):
         for name, reason in model.support().items():
@@ -612,8 +613,8 @@ class FamilySuite:
         for host in hosts:
             unavailable = root_support if host is model else host.support()
             for name, value in Standard.values.__func__(type(host)).items():
-                if value.layout is None or unavailable.get(name) or name in IMAGE_VALUES:
-                    continue  # the image values need an image: VisionSuite
+                if value.layout is None or unavailable.get(name):
+                    continue
                 saved = None  # bound outside: a name bound inside the block does not survive it
                 with model.trace(PROMPT):
                     tensor = getattr(host, name)

@@ -18,14 +18,20 @@ attention interior is inherited unchanged: ``attention_probabilities`` is a
 ``query``/``key`` axes are the image's patches, unmasked (the tower attends
 both ways). The tower's sizes are on `Vision`, read off its own config; the
 root's sizes stay the text model's.
+
+Where the image meets the text model is the tower's too: ``vision.image_token_mask``
+(which positions of the text batch hold an image token, off the root's inputs)
+and ``vision.image_features`` (the projector's output, flat over those tokens),
+so ``layers[0].input[vision.image_token_mask] == vision.image_features``.
 """
 
 from __future__ import annotations
 
-from typing import Any, Sequence
+from typing import Any, Callable, Sequence
 
 import torch
-from jaxtyping import Float
+from jaxtyping import Bool, Float
+from nnsight.intervention.envoy import Envoy
 from torch import Tensor
 
 from .attention import Attention
@@ -38,6 +44,72 @@ from .standard import Standard, blocks_support, first_tensor, rewrap
 #: with CLIP's CLS token first), ``vision_hidden`` wide. The tower blocks' ``layer_output``,
 #: ``attention_output``, ``mlp_output``, and the tower's ``patch_embeddings`` and ``tower_output``.
 Patches = Float[Tensor, "images patches vision_hidden"]
+#: Which positions of the text batch hold an image token: ``vision.image_token_mask``.
+ImageTokenMask = Bool[Tensor, "batch seq"]
+#: What the text model receives at the image tokens, flat over every image token of the batch in row-major
+#: (scatter) order, the text model's ``hidden`` wide: ``vision.image_features``.
+ImageFeatures = Float[Tensor, "image_tokens hidden"]
+
+
+def image_token_id(config: Any) -> int | None:
+    """The id of the token the processor puts where an image's features go: ``image_token_id`` (``image_token_index`` on older configs)."""
+    for name in ("image_token_id", "image_token_index"):
+        value = getattr(config, name, None)
+        if isinstance(value, int):
+            return value
+    return None
+
+
+def from_root(path: str) -> Callable[[Envoy], str]:
+    """A key for a tower value served outside the tower: ``path`` named from the model's root, aliases included.
+
+    ``from_root("inputs")`` is the root's inputs and ``from_root("projector.output")``
+    the projector's output, the tower's sibling under the root: the key the
+    function returns climbs from the tower to the root (``"../../inputs"``)
+    and descends by the native names the aliases stand for, since a path that
+    goes up takes native names only.
+    """
+
+    def key(vision: Envoy) -> str:
+        root = vision._root
+        up = "../" * (vision.path.count(".") - root.path.count("."))
+        *walk, attribute = path.split(".")
+        native = root.get(".".join(walk)).path.removeprefix(f"{root.path}.") + "." if walk else ""
+        return f"{up}{native}{attribute}"
+
+    key.__name__ = path
+    return key
+
+
+def no_image_tokens(vision: Vision) -> str | None:
+    """Why ``vision.image_token_mask`` is unavailable, or ``None``."""
+    reason = vision.no_images()
+    if reason is None and image_token_id(vision._root.config) is None:
+        reason = "the config names no image_token_id"
+    return reason
+
+
+def no_image_features(vision: Vision) -> str | None:
+    """Why ``vision.image_features`` is unavailable, or ``None``.
+
+    ``image_features`` is the projector's output, which is what the wrapper
+    scatters into the text stream on the wrappers the family lists in
+    ``IMAGE_WRAPPERS`` (each verified by the suite:
+    ``layers[0].input[image_token_mask] == image_features``). A wrapper that
+    rearranges the projector's output before the scatter (LLaVA-NeXT's
+    unpadding and newline tokens) binds the same names but is not listed, so
+    the value says so rather than serving the wrong tensor.
+    """
+    reason = no_image_tokens(vision)
+    if reason is None:
+        model = vision._root
+        wrappers = tuple(getattr(model.family, "IMAGE_WRAPPERS", ()))
+        if model.config.model_type not in wrappers:
+            reason = (
+                f"the {model.config.model_type!r} wrapper is not one whose projector output is known to be what it "
+                f"scatters into the text stream (the {model.family.__name__.rsplit('.', 1)[-1]} family lists {wrappers})"
+            )
+    return reason
 
 
 class VisionLayer(Layer):
@@ -88,7 +160,11 @@ class Vision(Standard):
     ``last_hidden_state``). The host reads the tower its own way: Gemma 3 pools
     ``tower_output``, Llava 1.5 takes ``vision.layers[-2].layer_output`` and
     drops the CLS token, so what reaches the projector is ``projector.input``,
-    not necessarily ``tower_output``.
+    not necessarily ``tower_output``. Where the image meets the text model:
+    ``image_token_mask``, read off the model's inputs, and ``image_features``,
+    the projector's output (`from_root`), so
+    ``layers[0].input[image_token_mask] == image_features``. Both need an image
+    to reach the model (`no_images`).
 
     The sizes (`num_layers`, `hidden_size`, `num_heads`, `head_dim`,
     `intermediate_size`, `patch_size`, `image_size`) are read off the tower's
@@ -139,6 +215,20 @@ class Vision(Standard):
 
     # -- values ----------------------------------------------------------------------
 
+    @EProperty(from_root("inputs"), description="Which positions hold image tokens: input_ids == the config's image_token_id; read-only", unavailable=no_image_tokens)
+    def image_token_mask(self, value: Any) -> ImageTokenMask:
+        """Which positions of the text batch hold an image token, ``[batch, seq]`` bool: ``input_ids == config.image_token_id``.
+
+        Read off the model's inputs, so like ``model.input_ids`` it is read
+        before anything else in the invoke. All false on a text-only trace.
+        Read-only.
+        """
+        return value[1]["input_ids"] == image_token_id(self._root.config)
+
+    @image_token_mask.postprocess
+    def image_token_mask(self, value: Any) -> Any:
+        raise AttributeError("image_token_mask is derived from the ids and cannot be assigned; assign input_ids")
+
     @EProperty("patch_embed.output", description="The patch embedding's output, one row per patch")
     def patch_embeddings(self, value: torch.Tensor) -> Patches:
         """The patch embedding's output, ``[images, patches, vision_hidden]``, patches in raster order.
@@ -174,16 +264,54 @@ class Vision(Standard):
             return output
         return rewrap(self, value)
 
+    @EProperty(from_root("projector.output"), description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
+    def image_features(self, value: torch.Tensor) -> ImageFeatures:
+        """The image features the text model receives, ``[image_tokens, hidden]``, flat over every image token of the batch.
+
+        The projector's output, which the wrapper scatters into the token
+        embeddings at the image tokens in row-major order, so
+        ``layers[0].input[image_token_mask] == image_features``. A view of the
+        projector's output: in-place edits land, and an assigned tensor of the
+        same shape replaces it. Read after the tower's values and before
+        ``layers[0].input``. Never reached on a text-only trace.
+        """
+        return value.reshape(-1, value.shape[-1])
+
+    @image_features.postprocess
+    def image_features(self, value: torch.Tensor) -> torch.Tensor:
+        return value.reshape(self._root.projector.output.shape)
+
     # -- availability ------------------------------------------------------------------
+
+    def no_images(self) -> str | None:
+        """Why no image reaches the model this tower belongs to, or ``None``: the one place that decides.
+
+        A wrapper whose family names no ``projector`` (where the image enters
+        the text model is unknown), or a load without a processor (a
+        ``task="text-generation"`` load of the wrapper).
+        """
+        model = self._root
+        if model is None:
+            return "the tower is not part of a StandardizedTransformer, so the model's inputs and projector are unknown"
+        if "projector" not in model._aliases:
+            return f"the {model.family.__name__.rsplit('.', 1)[-1]} family names no projector on this wrapper"
+        if getattr(model, "processor", None) is None:
+            return "a text-only load: no processor, so no image reaches the model; load with task='image-text-to-text'"
+        return None
 
     def support(self, layer: int | None = None) -> dict[str, Any]:
         """Which tower values this checkpoint has, the way `StandardizedTransformer.support` reports the text model's.
 
-        The tower's own values plus every block value over ``layers``
-        (``"layer_output"``, ``"self_attn.attention_probabilities"``, ...):
-        ``None`` when available on every block, else ``{layer: reason}``. With
-        ``layer``, that block's values alone.
+        The tower's own values (``image_token_mask`` and ``image_features``
+        among them) plus every block value over ``layers`` (``"layer_output"``,
+        ``"self_attn.attention_probabilities"``, ...): ``None`` when available
+        on every block, else ``{layer: reason}``. With ``layer``, that block's
+        values alone. Empty on a load no image reaches (`no_images`): the tower
+        never runs, so the model's `support` has no ``vision`` rows, and a
+        read of an image value raises `Unavailable` saying why.
         """
         if layer is not None:
             return blocks_support(self.layers, layer)
+        if self.no_images():
+            return {}
         return {**super().support(), **blocks_support(self.layers)}

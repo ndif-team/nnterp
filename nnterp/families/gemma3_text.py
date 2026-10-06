@@ -13,7 +13,7 @@ wrapper the SigLIP tower ``model.vision_tower`` is ``vision`` (a `Vision`; its
 ``post_layernorm`` over the patches is ``vision.norm``) and the pooling
 projector ``model.multi_modal_projector``, whose output is what the wrapper
 scatters, is ``projector``. Loaded with ``task="image-text-to-text"`` (the
-processor), the root serves ``image_token_mask`` and ``image_features``. Only
+processor), the tower serves ``vision.image_token_mask`` and ``vision.image_features``. Only
 ``Gemma3ForCausalLM`` softcaps its logits where the config sets
 ``final_logit_softcapping`` (no released checkpoint does); the wrapper never
 does, and `project_on_vocab` follows the class.

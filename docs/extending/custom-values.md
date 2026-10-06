@@ -164,8 +164,8 @@ is, not when its forward is instrumented.
 A `jaxtyping` return annotation is the value's declared shape, and the standard shapes have
 names exported by `nnterp.components`: `Residual`, `Pattern`, `Keys`, ... (each defined
 beside the envoy that serves it; [../usage/layouts.md](../usage/layouts.md) lists all
-thirty-five: thirty from `nnterp.components`, and the root's `Logits`, `NextTokenProbs`,
-`Tokens`, `ImageTokenMask`, `ImageFeatures` from `nnterp.standardized`).
+thirty-five: thirty-two from `nnterp.components`, and the root's `Logits`, `NextTokenProbs`,
+`Tokens` from `nnterp.standardized`).
 Annotate with the name where one fits: `attention_softmax` above is `-> Pattern`, so
 `Attention.attention_softmax.layout is Pattern`, the same object the base's
 `attention_probabilities` carries, and `.dims` is `("batch", "heads", "query", "key")`.

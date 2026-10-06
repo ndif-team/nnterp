@@ -4,9 +4,9 @@
 names the pinned tiny wrapper, the native paths of the tower and projector
 and the family's text-only checkpoint, and inherits end-to-end statements:
 the tower names alias the native modules, the tower's blocks keep the
-contribution identity, the root's ``image_token_mask`` and ``image_features``
+contribution identity, the tower's ``image_token_mask`` and ``image_features``
 mean what they say (``layers[0].input[image_token_mask] == image_features``),
-edits are causal, and a text-only checkpoint lists no image values.
+edits are causal, and a text-only checkpoint or load lists no ``vision`` host.
 
 `WrapperSuite`: the text names on a multimodal wrapper of a text family, for a
 family whose wrapper has no tiny checkpoint to run the whole `FamilySuite` on
@@ -22,8 +22,17 @@ from PIL import Image
 from suite import PROMPT, contributions
 
 from nnterp import StandardizedTransformer, Unavailable
-from nnterp.components import Patches, Pattern, Vision, VisionAttention, VisionLayer, VisionMlp
-from nnterp.standardized import IMAGE_VALUES, ImageFeatures, ImageTokenMask, image_token_id
+from nnterp.components import (
+    ImageFeatures, ImageTokenMask, Patches, Pattern, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id,
+)
+
+#: The tower's own values, in forward order; its block values are those of a text block.
+TOWER_VALUES = ("image_token_mask", "patch_embeddings", "tower_output", "image_features")
+BLOCK_VALUES = {
+    "layer_output", "self_attn.attention_output", "self_attn.attention_probabilities", "self_attn.attention_queries",
+    "self_attn.attention_keys", "self_attn.attention_values", "self_attn.attention_scores",
+    "self_attn.attention_head_outputs", "mlp.mlp_output",
+}
 
 #: A fixed random image; the processor resizes it to the tower's size.
 IMAGE = Image.fromarray((np.random.RandomState(0).rand(64, 64, 3) * 255).astype("uint8"))
@@ -61,8 +70,8 @@ class VisionSuite:
         """One traced run on the image: the values every test compares against."""
         with model.trace(image_prompt(model), images=[IMAGE]):
             ids = model.input_ids.save()
-            mask = model.image_token_mask.save()
-            features = model.image_features.save()
+            mask = model.vision.image_token_mask.save()
+            features = model.vision.image_features.save()
             first = model.layers[0].input.save()
             logits = model.logits.save()
         return {"ids": ids, "mask": mask, "features": features, "first": first, "logits": logits}
@@ -109,32 +118,39 @@ class VisionSuite:
 
     # -- availability ------------------------------------------------------------------
 
-    def test_support_lists_the_image_values(self, model):
+    def test_support_lists_the_tower_values(self, model):
+        vision = model.vision.support()
+        assert set(vision) == {*TOWER_VALUES, *BLOCK_VALUES}
+        assert all(reason is None for reason in vision.values()), vision
+        assert set(model.vision.support(layer=0)) == BLOCK_VALUES
         support = model.support()
-        assert {name: support[name] for name in IMAGE_VALUES} == dict.fromkeys(IMAGE_VALUES)
-        assert all(reason is None for reason in model.vision.support().values()), model.vision.support()
-        assert set(model.vision.support(layer=0)) == set(model.vision.support()) - {"patch_embeddings", "tower_output"}
+        assert {name.removeprefix("vision."): reason for name, reason in support.items() if name.startswith("vision.")} == vision
+        assert not {"image_token_mask", "image_features"} & set(support)
 
-    def test_a_text_only_checkpoint_lists_no_image_values(self):
+    def test_the_image_values_are_the_towers(self, model):
+        assert "image_token_mask" not in type(model).__dict__ and "image_features" not in type(model).__dict__
+        assert list(Vision.values())[:2] == ["image_token_mask", "patch_embeddings"]
+        assert Vision.values().keys() >= set(TOWER_VALUES)
+
+    def test_a_text_only_checkpoint_has_no_vision_host(self):
         text = StandardizedTransformer(self.TEXT_REPO)
         assert text.family is self.FAMILY
-        assert not set(IMAGE_VALUES) & set(text.support())
         assert "vision" not in text._aliases and "projector" not in text._aliases
-        with pytest.raises(Unavailable, match="text-only checkpoint"):
-            text.image_features
+        assert not any(name.startswith("vision.") for name in text.support())
 
-    def test_a_text_generation_load_of_the_wrapper_lists_no_image_values(self):
+    def test_a_text_generation_load_of_the_wrapper_has_no_vision_host(self):
         if not self.TEXT_GENERATION_BUILDS_WRAPPER:
             pytest.skip("text-generation builds the text-only class or refuses the config")
         text = StandardizedTransformer(self.REPO)
         assert "projector" in text._aliases and text.processor is None
-        assert not set(IMAGE_VALUES) & set(text.support())
+        assert isinstance(text.vision, Vision) and text.vision.support() == {}
+        assert not any(name.startswith("vision.") for name in text.support())
         with pytest.raises(Unavailable, match="text-only load"):
-            text.image_token_mask
+            text.vision.image_token_mask
 
     def test_layouts(self, model):
-        assert type(model).image_token_mask.layout is ImageTokenMask
-        assert type(model).image_features.layout is ImageFeatures
+        assert type(model.vision).image_token_mask.layout is ImageTokenMask
+        assert type(model.vision).image_features.layout is ImageFeatures
         layer = model.vision.layers[0]
         assert type(layer).layer_output.layout is Patches
         assert type(layer.self_attn).attention_output.layout is Patches
@@ -142,7 +158,7 @@ class VisionSuite:
         assert type(layer.self_attn).attention_probabilities.layout is Pattern
         assert type(model.vision).patch_embeddings.layout is Patches
 
-    # -- the root values ---------------------------------------------------------------
+    # -- where the image meets the text model ------------------------------------------
 
     def test_image_token_mask_is_the_image_tokens(self, model, clean):
         mask, ids = clean["mask"], clean["ids"]
@@ -157,7 +173,7 @@ class VisionSuite:
 
     def test_zeroing_image_features_lands_and_moves_the_logits(self, model, clean):
         with model.trace(image_prompt(model), images=[IMAGE]):
-            model.image_features[:] = 0
+            model.vision.image_features[:] = 0
             first = model.layers[0].input.save()
             logits = model.logits.save()
         assert (first[clean["mask"]] == 0).all()
@@ -167,24 +183,24 @@ class VisionSuite:
     def test_assigning_image_features_lands(self, model, clean):
         replacement = torch.randn_like(clean["features"])
         with model.trace(image_prompt(model), images=[IMAGE]):
-            model.image_features = replacement
+            model.vision.image_features = replacement
             first = model.layers[0].input.save()
         assert torch.equal(first[clean["mask"]], replacement)
 
     def test_a_tower_write_moves_the_image_features(self, model, clean):
         with model.trace(image_prompt(model), images=[IMAGE]):
             model.vision.layers[0].layer_output = torch.randn_like(model.vision.layers[0].layer_output)
-            features = model.image_features.save()
+            features = model.vision.image_features.save()
         assert not torch.allclose(features, clean["features"])
 
     def test_mask_and_features_are_read_only_where_derived(self, model):
         with pytest.raises(AttributeError, match="assign input_ids"):
             with model.trace(image_prompt(model), images=[IMAGE]):
-                model.image_token_mask = torch.zeros(1, 1, dtype=torch.bool)
+                model.vision.image_token_mask = torch.zeros(1, 1, dtype=torch.bool)
 
     def test_a_text_only_trace(self, model):
         with model.trace(PROMPT):
-            mask = model.image_token_mask.save()
+            mask = model.vision.image_token_mask.save()
             out = model.layers[-1].layer_output.save()
             logits = model.logits.save()
         assert not mask.any()
@@ -229,7 +245,7 @@ class VisionSuite:
         with model.trace(image_prompt(model), images=[IMAGE]):
             vision.patch_embeddings[:, 0] = 0
             conv = vision.patch_embed.output.save()
-            features = model.image_features.save()
+            features = vision.image_features.save()
         assert (conv[:, :, 0, 0] == 0).all()
         assert not torch.allclose(features, clean["features"])
 
@@ -282,10 +298,10 @@ class WrapperSuite:
         assert all(type(layer) is self.FAMILY.Layer for layer in model.layers)
         assert all(type(layer.self_attn) is self.FAMILY.Attention for layer in model.layers)
 
-    def test_support_runs_and_lists_no_image_values_without_a_vision_family(self, model):
+    def test_support_runs_and_lists_no_vision_host_without_a_vision_family(self, model):
         support = model.support()
         assert "layer_output" in support and "self_attn.attention_output" in support
-        assert not set(IMAGE_VALUES) & set(support)
+        assert not any(name.startswith("vision.") for name in support)
 
     def test_text_only_trace_keeps_the_identity(self, model):
         layer = model.layers[0]

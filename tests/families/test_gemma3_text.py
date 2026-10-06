@@ -58,7 +58,7 @@ class TestGemma3ImageTextToText(TestGemma3Wrapper):
 
 
 class TestGemma3Vision(VisionSuite):
-    """Gemma 3's SigLIP tower and pooling projector, and the root's image values.
+    """Gemma 3's SigLIP tower and pooling projector, and the tower's image values.
 
     ``yujiepan/gemma-3-tiny-random``: the trl tiny wrapper's projector outputs
     exact zeros, so no edit upstream of it would show there.
@@ -84,6 +84,6 @@ class TestGemma3Vision(VisionSuite):
         with model.trace(image_prompt(model), images=[IMAGE]):
             out = model.vision.tower_output.save()
             fed = model.projector.input.save()
-            features = model.image_features.save()
+            features = model.vision.image_features.save()
         assert torch.equal(fed, out)
         assert features.shape[0] == model.config.mm_tokens_per_image < out.shape[1]

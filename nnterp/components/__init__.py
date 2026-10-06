@@ -8,7 +8,8 @@ on the softmax-attention module, `Mlp` on the feed-forward, and
 Mamba-1 mixer and `StateSpace` on a Mamba-2 (SSD) mixer, all `RecurrentMixer`s
 (the mechanism every recurrent mixer shares). A multimodal wrapper's vision
 tower is a `Vision`, its blocks `VisionLayer` / `VisionAttention` /
-`VisionMlp`, whose stream values are `Patches`. The families under
+`VisionMlp`, whose stream values are `Patches`; the tower also serves
+where the image meets the text model (`ImageTokenMask`, `ImageFeatures`). The families under
 `nnterp.families` subclass these, so a family whose forward is spelled
 differently overrides only what differs, and key them on its own module types
 in its ``ENVOYS``.
@@ -74,15 +75,15 @@ from .tokens import TokenEProperty
 from .state_space import (
     SSDHeadOutputs, SSDKeys, SSDQueries, SSDValues, StateSpace, chunk_per_token, needs_per_token_chunks,
 )
-from .vision import Patches, Vision, VisionAttention, VisionLayer, VisionMlp
+from .vision import ImageFeatures, ImageTokenMask, Patches, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id
 
 __all__ = [
-    "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "Keys", "Layer", "LinearAttention", "Patches",
+    "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "ImageFeatures", "ImageTokenMask", "Keys", "Layer", "LinearAttention", "Patches",
     "LOGITS", "LinearQK", "LinearV", "Mlp", "Moe", "PER_SLOT", "Pattern", "Queries", "RecurrentMixer", "Residual", "RouterLogits", "ScanDecays", "ScanQK", "ScanState",
     "ScanStates", "ScanSteps", "ScanValues", "SelectiveScan", "State", "States", "StreamMixing", "StreamWeights", "Streams", "TokenEProperty",
     "Values", "Vision", "VisionAttention", "VisionLayer", "VisionMlp", "blocks_support",
     "NOT_ON_INTERFACE", "SSDHeadOutputs", "SSDKeys", "SSDQueries", "SSDValues", "Standard", "StateSpace", "Unavailable",
-    "chunk_per_token", "first_tensor", "interface_reason", "mixture_reason", "needs_eager",
+    "chunk_per_token", "first_tensor", "image_token_id", "interface_reason", "mixture_reason", "needs_eager",
     "needs_grouped_experts", "needs_kernel_source", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert",
     "per_call", "pinned", "rewrap", "route_delta_rule", "route_kernels", "seq_first", "unavailable",
 ]

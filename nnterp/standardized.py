@@ -8,7 +8,7 @@ import functools
 from typing import Any, Callable, Sequence
 
 import torch
-from jaxtyping import Bool, Float, Int
+from jaxtyping import Float, Int
 from nnsight.intervention.envoy import Envoy
 from nnsight.modeling.transformers import TransformersModel
 from torch import Tensor
@@ -23,66 +23,6 @@ from .components.vision import Vision
 Logits = Float[Tensor, "batch seq vocab"]
 NextTokenProbs = Float[Tensor, "batch vocab"]
 Tokens = Int[Tensor, "batch seq"]
-#: Which positions of the text batch hold an image token: ``image_token_mask``.
-ImageTokenMask = Bool[Tensor, "batch seq"]
-#: What the text model receives at the image tokens, flat over every image token of the batch in row-major
-#: (scatter) order, the text model's ``hidden`` wide: ``image_features``.
-ImageFeatures = Float[Tensor, "image_tokens hidden"]
-
-#: The root values a checkpoint has only when images reach the model.
-IMAGE_VALUES = ("image_token_mask", "image_features")
-
-
-def image_token_id(config: Any) -> int | None:
-    """The id of the token the processor puts where an image's features go: ``image_token_id`` (``image_token_index`` on older configs)."""
-    for name in ("image_token_id", "image_token_index"):
-        value = getattr(config, name, None)
-        if isinstance(value, int):
-            return value
-    return None
-
-
-def text_only(model: Any) -> str | None:
-    """Why no image reaches this model, or ``None``: a text-only class, or a load without a processor.
-
-    A value this returns a reason for is left out of `StandardizedTransformer.support` altogether.
-    """
-    if "projector" not in model._aliases:
-        return "a text-only checkpoint or class: the tree has no image projector"
-    if getattr(model, "processor", None) is None:
-        return "a text-only load: no processor, so no image reaches the model; load with task='image-text-to-text'"
-    return None
-
-
-def no_image_tokens(model: Any) -> str | None:
-    """Why ``image_token_mask`` is unavailable, or ``None``."""
-    reason = text_only(model)
-    if reason is None and image_token_id(model.config) is None:
-        reason = "the config names no image_token_id"
-    return reason
-
-
-def no_image_features(model: Any) -> str | None:
-    """Why ``image_features`` is unavailable, or ``None``.
-
-    ``image_features`` is the projector's output, which is what the wrapper
-    scatters into the text stream on the wrappers the family lists in
-    ``IMAGE_WRAPPERS`` (each verified by the suite:
-    ``layers[0].input[image_token_mask] == image_features``). A wrapper that
-    rearranges the projector's output before the scatter (LLaVA-NeXT's
-    unpadding and newline tokens) binds the same names but is not listed, so
-    the value says so rather than serving the wrong tensor.
-    """
-    reason = no_image_tokens(model)
-    if reason is None and model.config.model_type not in getattr(model.family, "IMAGE_WRAPPERS", ()):
-        reason = (
-            f"the {model.config.model_type!r} wrapper is not one whose projector output is known to be what it "
-            f"scatters into the text stream (the {model.family.__name__.rsplit('.', 1)[-1]} family lists "
-            f"{tuple(getattr(model.family, 'IMAGE_WRAPPERS', ()))})"
-        )
-    return reason
-
-
 class StandardizedProperty:
     """A read-only value of the model that a family may define instead.
 
@@ -173,10 +113,9 @@ class StandardizedTransformer(TransformersModel):
 
     On an image-text-to-text checkpoint loaded with ``task="image-text-to-text"``
     the text names keep their meaning (the language model's), the vision tower
-    is ``vision`` (a `Vision`, with its own blocks and sizes) and the module
-    whose output is scattered into the text stream is ``projector``; the root
-    adds ``image_token_mask`` and ``image_features``, where
-    ``layers[0].input[image_token_mask] == image_features``.
+    is ``vision`` (a `Vision`, with its own blocks, sizes and values, among them
+    ``vision.image_token_mask`` and ``vision.image_features``) and the module
+    whose output is scattered into the text stream is ``projector``.
 
     Attributes:
         family: The toolkit module the checkpoint resolved to.
@@ -223,6 +162,8 @@ class StandardizedTransformer(TransformersModel):
             },
             **kwargs,
         )
+        for envoy in self.modules(include_fn=lambda envoy: isinstance(envoy, Standard)):
+            envoy._root = self
         for key, value in (tokenizer_kwargs or {}).items():
             setattr(self.tokenizer, key, value)
 
@@ -389,18 +330,18 @@ class StandardizedTransformer(TransformersModel):
         standard values (a `Standard` envoy) is walked under its standard
         name, so a value installed through ``envoys=`` or a registered family
         appears here as it does in the envoy's own `Standard.support`, and a
-        module no block has (OPT's ``mlp``) has no entry. The image values
-        (``image_token_mask``, ``image_features``) are listed only where images
-        reach the model: a multimodal checkpoint loaded with its processor. A
-        vision tower's values are ``model.vision.support()``.
+        module no block has (OPT's ``mlp``) has no entry. A standard child of
+        the root (the vision tower, `Vision`) is listed the same way, its own
+        `support` rows under its standard name (``"vision.image_features"``,
+        ``"vision.self_attn.attention_probabilities"``); a tower no image
+        reaches lists none.
         """
         if layer is not None:
             return blocks_support(self.layers, layer)
-        hidden = IMAGE_VALUES if text_only(self) else ()
-        support: dict[str, Any] = {
-            name: value.reason(self) for name, value in values(type(self)).items() if name not in hidden
-        }
+        support: dict[str, Any] = {name: value.reason(self) for name, value in values(type(self)).items()}
         support.update(blocks_support(self.layers))
+        for host, child in standard_children(self).items():
+            support.update((f"{host}.{name}", reason) for name, reason in child.support().items())
         return support
 
     #: The block's children that carry standard values, by standard name (see `standard_children`).
@@ -436,38 +377,6 @@ class StandardizedTransformer(TransformersModel):
     @input_size.postprocess
     def input_size(self, value: Any) -> Any:
         raise AttributeError("input_size is the ids' shape and cannot be assigned; assign input_ids")
-
-    # -- the image values (inside a trace, on a multimodal load) --------------------
-
-    @EProperty(key="inputs", description="Which positions hold image tokens: input_ids == the config's image_token_id; read-only", unavailable=no_image_tokens)
-    def image_token_mask(self, value: Any) -> ImageTokenMask:
-        """Which positions hold an image token, ``[batch, seq]`` bool: ``input_ids == config.image_token_id``.
-
-        Read off the call's inputs, so like `input_ids` it is read before
-        anything else in the invoke. All false on a text-only trace. Read-only.
-        """
-        return value[1]["input_ids"] == image_token_id(self.config)
-
-    @image_token_mask.postprocess
-    def image_token_mask(self, value: Any) -> Any:
-        raise AttributeError("image_token_mask is derived from the ids and cannot be assigned; assign input_ids")
-
-    @EProperty("projector.output", description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
-    def image_features(self, value: torch.Tensor) -> ImageFeatures:
-        """The image features the text model receives, ``[image_tokens, hidden]``, flat over every image token of the batch.
-
-        The projector's output, which the wrapper scatters into the token
-        embeddings at the image tokens in row-major order, so
-        ``layers[0].input[image_token_mask] == image_features``. A view of the
-        projector's output: in-place edits land, and an assigned tensor of the
-        same shape replaces it. Read after `image_token_mask` and before
-        ``layers[0].input``. Never reached on a text-only trace.
-        """
-        return value.reshape(-1, value.shape[-1])
-
-    @image_features.postprocess
-    def image_features(self, value: torch.Tensor) -> torch.Tensor:
-        return value.reshape(self.projector.output.shape)
 
     # -- tokenizers ---------------------------------------------------------------
 

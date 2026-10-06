@@ -51,7 +51,7 @@ Reads within one trace follow the forward: the pattern is produced inside block 
 | `unavailable`, `route_kernels`, `route_delta_rule` | A value a family lacks; the recurrent kernel switch, and its DeltaNet spelling. |
 | `chunk_per_token` | A Mamba-2 model's chunk scan with a chunk size of 1, so `StateSpace.states` reads the state after every token. |
 | `Unavailable`, `UnsupportedFamily` | The two exceptions nnterp raises itself. |
-| `Vision` | A vision tower's root envoy (`model.vision`): its blocks at `layers` (`VisionLayer`, with `VisionAttention`, `VisionMlp` from `nnterp.components`), its sizes, `patch_embeddings`, `tower_output`, `support()`. See [../usage/vision.md](../usage/vision.md). |
+| `Vision` | A vision tower's root envoy (`model.vision`): its blocks at `layers` (`VisionLayer`, with `VisionAttention`, `VisionMlp` from `nnterp.components`), its sizes, `image_token_mask`, `patch_embeddings`, `tower_output`, `image_features`, `support()`. See [../usage/vision.md](../usage/vision.md). |
 
 `nnterp.families`, `nnterp.components`, `nnterp.prompt_utils` and `nnterp.nnsight_utils` are imported as modules.
 
@@ -85,8 +85,6 @@ Every row is an `EProperty` on the root, listed in `repr(model)` with its descri
 | `model.input_ids` | `Tokens` | yes: the model runs on the ids you set | The token ids the model was called with. |
 | `model.attention_mask` | `Tokens` | yes | The attention mask the model was called with; zeros are padding. |
 | `model.input_size` | none (a `torch.Size`) | no (`AttributeError`: assign `input_ids`) | `[batch, seq]` of the current call. |
-| `model.image_token_mask` | `ImageTokenMask` | no (`AttributeError`: assign `input_ids`) | `input_ids == config.image_token_id`, read off the inputs. Listed by `support()` only on a multimodal load with a processor. |
-| `model.image_features` | `ImageFeatures` | yes; in-place edits land | The projector's output flat over every image token, `[image_tokens, hidden]`: `layers[0].input[image_token_mask] == image_features`. On the wrappers in the family's `IMAGE_WRAPPERS`. |
 
 `input_ids`, `attention_mask` and `input_size` are served at the model's input, the first location of a run: read them before any block's value in the same trace.
 
@@ -99,7 +97,7 @@ Every row is an `EProperty` on the root, listed in `repr(model)` with its descri
 | `project_on_vocab` | `project_on_vocab(hidden: Tensor) -> Tensor` | inside (on a live value) or outside (on a saved one) | The logit lens: `lm_head(norm(hidden))`, then what the model does to the head's output to make its logits: the text config's `final_logit_softcapping` if set (Gemma-2), else nothing; a family's `def project_on_vocab(model, hidden)` is bound in its place (Cohere's `* logit_scale`, Granite's `/ logits_scaling`). On the last block's `layer_output` it equals `logits`. |
 | `get_topk_closest_tokens` | `get_topk_closest_tokens(hidden: Tensor, k: int = 5) -> list[dict[str, float]]` | outside, on a saved `[..., hidden]` tensor | `project_on_vocab` then softmax; one `{token: probability}` per position, row-major over the leading axes. Takes a residual-stream tensor, not logits. |
 | `probs_to_dict` | `probs_to_dict(probs: Tensor, k: int = 5) -> dict[str, float]` | outside | The `k` most likely tokens of one `[vocab]` distribution. |
-| `support` | `support(layer: int \| None = None) -> dict[str, Any]` | outside; nothing runs | Without `layer`: every root value and every block value, `None` when available on every block, else `{layer: reason}`. With `layer`: that block's values by dotted name (`"self_attn.attention_probabilities"`), `None` or the reason, including `"no <module> module on this block"`. The keys come from the tree: every `Standard` child of any block, under its standard name, so a value added through `envoys=` is listed as `self_attn.<name>`, a module some blocks lack (a hybrid's `self_attn`) is reported missing on those, and a module no block has (OPT's `mlp`) has no key. |
+| `support` | `support(layer: int \| None = None) -> dict[str, Any]` | outside; nothing runs | Without `layer`: every root value and every block value, `None` when available on every block, else `{layer: reason}`. With `layer`: that block's values by dotted name (`"self_attn.attention_probabilities"`), `None` or the reason, including `"no <module> module on this block"`. The keys come from the tree: every `Standard` child of any block, under its standard name, so a value added through `envoys=` is listed as `self_attn.<name>`, a module some blocks lack (a hybrid's `self_attn`) is reported missing on those, and a module no block has (OPT's `mlp`) has no key. A `Standard` child of the root (the vision tower) adds its own `support()` rows under its standard name (`"vision.image_features"`); a tower no image reaches adds none. |
 
 ### Sizes, outside a trace
 
@@ -130,7 +128,7 @@ Each is a `StandardizedProperty`: it reads the config by the plain rule unless t
 | `model.embed_tokens`, `model.norm`, `model.lm_head` | The embedding, the final norm, the unembedding, as envoys. |
 | `model.layers[i].self_attn`, `.mlp`, `.linear_attn` | The family's `Attention`, `Mlp`, `LinearAttention`; `linear_attn` on a hybrid's DeltaNet blocks only, `mlp` absent on OPT. |
 | `model.layers[i].input_layernorm`, `.post_attention_layernorm` | Aliases of the block's norms where the family has them; their meaning varies by family (see [families.md](families.md)). |
-| `model.vision`, `model.projector` | On a multimodal wrapper whose family names them: the vision tower (a `Vision`; `vision.layers[i]`, `vision.patch_embed`, `vision.norm`; sizes `num_layers`, `hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size`) and the module whose output is scattered into the text stream. |
+| `model.vision`, `model.projector` | On a multimodal wrapper whose family names them: the vision tower (a `Vision`; `vision.layers[i]`, `vision.patch_embed`, `vision.norm`; sizes `num_layers`, `hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size`; values in [`Vision`](#vision)) and the module whose output is scattered into the text stream. |
 | `model.add_prefix_false_tokenizer` | The checkpoint's tokenizer loaded with `add_prefix_space=False`, so `"word"` and `" word"` differ; loaded on first use. |
 | `model.tokenizer`, `model.config` | nnsight's, unchanged. |
 
@@ -307,14 +305,32 @@ A Mamba-2 (SSD) mixer (`layers[i].linear_attn` on Mamba-2, Nemotron-H, Bamba and
 
 `heads` is the module's `num_heads`, `groups` its `n_groups`, `head_dim` its `head_dim`, `state_dim` (the state's `key_dim`) its `ssm_state_size`; the state's `value_dim` is `head_dim`.
 
+## `Vision`
+
+`model.vision`, a multimodal wrapper's vision tower, on a family that names it (Gemma 3's SigLIP, Llava 1.5's CLIP); its blocks are `VisionLayer`, `VisionAttention`, `VisionMlp` (the text components with the stream values annotated `Patches`). The two image values are the tower's although neither is read inside it: the keys are `from_root(path)`, a path named from the model's root (aliases included) that climbs from the tower and descends by native names.
+
+| Value | Layout | Read at | Assignable | Unavailable when |
+|---|---|---|---|---|
+| `image_token_mask` | `ImageTokenMask` | the model's inputs (`from_root("inputs")`), so first in the invoke: `input_ids == config.image_token_id` | no (`AttributeError`: assign `input_ids`) | `no_images()`, or the config names no `image_token_id` |
+| `patch_embeddings` | `Patches` | `patch_embed.output`, the grid flattened (a view) | yes | never |
+| `tower_output` | `Patches` | the tower's `last_hidden_state` | yes | never |
+| `image_features` | `ImageFeatures` | the projector's output (`from_root("projector.output")`) flat over the batch's image tokens: `layers[0].input[image_token_mask] == image_features` | yes; in-place edits land | as `image_token_mask`, or the wrapper's `model_type` is not in the family's `IMAGE_WRAPPERS` |
+
+| Member | Signature | What |
+|---|---|---|
+| `no_images` | `no_images() -> str \| None` | Why no image reaches the model, or `None`: the family names no `projector`, or the load has no processor (a `task="text-generation"` load of a wrapper). The one place that decides. |
+| `support` | `support(layer: int \| None = None) -> dict[str, Any]` | The tower's values plus its block values over `vision.layers`, as `StandardizedTransformer.support` reports the text blocks'; with `layer`, that block's. Empty when `no_images()` gives a reason. `model.support()` carries the same rows prefixed `vision.`. |
+| sizes | `num_layers`, `hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size` | Read off the tower's own config. |
+
 ## `Standard`
 
-The base of the four hosts.
+The base of the hosts.
 
 | Member | Signature | What |
 |---|---|---|
 | `values` | `classmethod values() -> dict[str, EProperty]` | This class's standard values by name, base classes first. |
 | `support` | `support() -> dict[str, str \| None]` | Each value here: `None` when available on this envoy, else the reason. |
+| `_root` | `_root: StandardizedTransformer \| None` | The model the envoy belongs to, set when the model is built; what a value reads the model's config, processor or family through (`Vision`'s image values). |
 | `sourced` | `sourced: bool = False` (class attribute) | `True` on a subclass instruments the envoy's forward when it is built and again when real weights replace meta ones, for a value in that forward read after the call has started (Llama 4's `Layer`, whose `Mlp.mlp_output` follows `attention_output`). A path declares where a value is; this flag is what makes such a read serve rather than raise `OutOfOrderError`. |
 
 ## `nnterp.families`
@@ -345,11 +361,14 @@ Every descriptor exposes `.layout` (the layout alias the defining function's ret
 
 ### Layouts
 
-The twenty-seven `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the twenty-four envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
+The thirty-five `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the thirty-two envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
 
 | Name | Axes | Defined in | Carried by |
 |---|---|---|---|
 | `Residual` | `batch seq hidden` | `components/layer.py` | `layer_output`, `attention_output`, `mlp_output`, `token_embeddings` |
+| `Streams` | `batch seq streams hidden` | `components/layer.py` | `layer_output` on a hyper-connection family (DeepSeek-V4) |
+| `StreamWeights` | `batch seq streams` | `components/layer.py` | a hyper-connection family's `attention_post`, `mlp_post` |
+| `StreamMixing` | `batch seq streams streams` | `components/layer.py` | a hyper-connection family's `attention_comb`, `mlp_comb` |
 | `Logits` | `batch seq vocab` | `standardized.py` | `logits` |
 | `NextTokenProbs` | `batch vocab` | `standardized.py` | `next_token_probs` |
 | `Tokens` | `batch seq` (`Int`) | `standardized.py` | `input_ids`, `attention_mask` |
@@ -376,6 +395,9 @@ The twenty-seven `jaxtyping` types every standard value is annotated with, each 
 | `ExpertWeights` | `batch seq top_k` | `components/moe.py` | `expert_weights` |
 | `ExpertIndices` | `batch seq top_k` (`Int`) | `components/moe.py` | `expert_indices` |
 | `ExpertOutputs` | `batch seq top_k hidden` | `components/moe.py` | `expert_outputs` |
+| `Patches` | `images patches vision_hidden` | `components/vision.py` | a tower block's `layer_output`, `attention_output`, `mlp_output`; `vision.patch_embeddings`, `vision.tower_output` |
+| `ImageTokenMask` | `batch seq` (`Bool`) | `components/vision.py` | `vision.image_token_mask` |
+| `ImageFeatures` | `image_tokens hidden` | `components/vision.py` | `vision.image_features` |
 
 The axis names are the same on every layout (`batch` axis 0 everywhere, `seq` the token axis, `heads` the query heads, `kv_heads` the key/value heads, `head_dim` the width of values and head outputs, `qk_head_dim` that of queries and keys, `query`/`key` a pattern's two token axes, `key_dim`/`value_dim` a DeltaNet state's two sides, `channels`/`state_dim` a Mamba-1 state's, `groups` the `B`/`C` groups, `experts` a router's classes, `top_k` the routing slots); the comments above each alias state them, and [../usage/layouts.md](../usage/layouts.md) is the page.
 

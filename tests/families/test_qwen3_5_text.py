@@ -2,6 +2,7 @@
 
 import pytest
 import torch
+from qwen_vision_suite import PACKED_UNAVAILABLE, QwenVisionSuite
 from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed
 
 from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
@@ -206,10 +207,19 @@ class TestQwen3_5(FamilySuite):
 
 
 class TestQwen3_5Wrapper(TestQwen3_5):
-    """The same checkpoint loaded as the wrapper with its processor (Qwen ViT not named yet): the text stack at ``model.language_model``."""
+    """The same checkpoint loaded as the wrapper with its processor: the text stack at ``model.language_model``, the Qwen ViT at ``model.visual``."""
 
     NATIVE = {k: v.replace("model.", "model.language_model.", 1) if v.startswith("model.") else v for k, v in TestQwen3_5.NATIVE.items()}
     LOAD_KWARGS = {"task": "image-text-to-text"}
+    EXPECTED_UNAVAILABLE = {**TestQwen3_5.EXPECTED_UNAVAILABLE, **PACKED_UNAVAILABLE}
 
     def test_values_follow_the_step_under_generate(self, model):
         pytest.skip("nnsight's generate passes the image-text-to-text pipeline's generate_kwargs to model.generate as a model kwarg")
+
+
+class TestQwen3_5Vision(QwenVisionSuite):
+    """The wrapper's Qwen ViT: Qwen3-VL's tower with no deepstack; ``task="text-generation"`` builds the text-only class from the same checkpoint."""
+
+    REPO = TestQwen3_5.REPO
+    FAMILY = qwen3_5_text
+    TEXT_REPO = TestQwen3_5.REPO

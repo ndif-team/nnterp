@@ -307,7 +307,7 @@ A Mamba-2 (SSD) mixer (`layers[i].linear_attn` on Mamba-2, Nemotron-H, Bamba and
 
 ## `Vision`
 
-`model.vision`, a multimodal wrapper's vision tower, on a family that names it (Gemma 3's SigLIP, Llava 1.5's CLIP); its blocks are `VisionLayer`, `VisionAttention`, `VisionMlp` (the text components with the stream values annotated `Patches`). The two image values are the tower's although neither is read inside it: their keys are anchored at the model's root (`"/inputs"`, `"/projector.output"`), walked from `vision.root` by standard names.
+`model.vision`, a multimodal wrapper's vision tower, on a family that names it (Gemma 3's SigLIP, Llava 1.5's CLIP, the Qwen ViT); its blocks are `VisionLayer`, `VisionAttention`, `VisionMlp` (the text components with the stream values annotated `Patches`). The Qwen ViT is packed: its root is a `QwenVision` (a `PackedVision`) and its blocks `PackedVisionLayer`, `PackedVisionAttention`, `PackedVisionMlp`, whose stream values are `[1, patches, vision_hidden]` and whose attention interior is unavailable (`PACKED`); its `image_features` is the tower's `pooler_output`, and its sizes add `spatial_merge_size` and `window_size`. The two image values are the tower's although neither is read inside it: their keys are anchored at the model's root (`"/inputs"`, `"/projector.output"`), walked from `vision.root` by standard names.
 
 | Value | Layout | Read at | Assignable | Unavailable when |
 |---|---|---|---|---|
@@ -339,7 +339,7 @@ The base of the hosts.
 |---|---|---|
 | `lookup` | `lookup(model_type: str) -> ModuleType` | The family for `model_type`: a registered one, else `nnterp.families.<model_type>`, imported on first use. Raises `UnsupportedFamily` when there is neither. |
 | `register` | `register(family: ModuleType, *model_types: str) -> ModuleType` | Add a family (any module or object with `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under `model_types`, or, with none given, the type its `__name__` ends in (`TypeError` for a nameless `SimpleNamespace`); consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
-| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (94), alphabetical. |
+| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (98), alphabetical. |
 | `all_families` | `all_families() -> list[ModuleType]` | Every shipped family, imported. For tooling and tests. |
 | `REGISTRY` | `dict[str, ModuleType]` | `model_type -> family` for what `register` added. |
 | `UnsupportedFamily` | `ValueError` subclass | No module of that name and nothing registered. |

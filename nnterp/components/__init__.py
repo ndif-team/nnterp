@@ -78,6 +78,7 @@ from .state_space import (
     SSDHeadOutputs, SSDKeys, SSDQueries, SSDValues, StateSpace, chunk_per_token, needs_per_token_chunks,
 )
 from .vision import ImageFeatures, ImageTokenMask, Patches, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id
+from .vision import PACKED, PackedVision, PackedVisionAttention, PackedVisionLayer, PackedVisionMlp, QwenVision
 
 __all__ = [
     "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "ImageFeatures", "ImageTokenMask", "Keys", "Layer", "LinearAttention", "Patches",
@@ -89,3 +90,4 @@ __all__ = [
     "needs_grouped_experts", "needs_kernel_source", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert",
     "per_call", "pinned", "rewrap", "route_delta_rule", "route_kernels", "seq_first", "unavailable",
 ]
+__all__ += ["PACKED", "PackedVision", "PackedVisionAttention", "PackedVisionLayer", "PackedVisionMlp", "QwenVision"]

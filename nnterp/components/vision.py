@@ -293,3 +293,177 @@ class Vision(Standard):
         if self.no_images():
             return {}
         return {**super().support(), **blocks_support(self.layers)}
+
+
+# -- packed towers ------------------------------------------------------------------------
+# A packed tower (the Qwen ViT) runs on ``[patches, vision_hidden]``: every image's patches
+# concatenated, one attention call per image (or window) over its own run of rows. Its
+# stream values are served with a leading images axis of 1, as `Patches`; the attention
+# interior is unavailable, since no one tensor is the block's pattern.
+
+#: Why the attention interior is unavailable on a packed tower.
+PACKED = (
+    "a packed tower: the attention makes one interface call per image (attention_interface_2; one per window "
+    "on Qwen2.5-VL's windowed blocks), so the block's pattern is not one tensor; attention_output and the block "
+    "values are whole"
+)
+
+
+def unpack(value: torch.Tensor) -> torch.Tensor:
+    """A packed tower's ``[patches, vision_hidden]`` as `Patches`, ``[1, patches, vision_hidden]``: a view."""
+    return value.unsqueeze(0) if value.dim() == 2 else value
+
+
+def pack(value: torch.Tensor) -> torch.Tensor:
+    """`Patches` ``[1, patches, vision_hidden]`` back to the packed tower's ``[patches, vision_hidden]``."""
+    return value.squeeze(0) if value.dim() == 3 else value
+
+
+class PackedVisionLayer(VisionLayer):
+    """A packed tower's block: ``layer_output`` is ``[1, patches, vision_hidden]``, every image's patches in one row."""
+
+    @EProperty(key="output", description="The tower's stream leaving the block, every image's patches in one row")
+    def layer_output(self, value: Any) -> Patches:
+        """The tower's stream leaving this block, ``[1, patches, vision_hidden]``: a view; assign or edit in place."""
+        return unpack(first_tensor(value))
+
+    @layer_output.postprocess
+    def layer_output(self, value: torch.Tensor) -> Any:
+        return rewrap(self, pack(value))
+
+
+class PackedVisionAttention(VisionAttention):
+    """A packed tower block's attention: ``attention_output`` is whole; the interior is unavailable (`PACKED`).
+
+    The module calls the attention interface once per image, inside a list
+    comprehension, whatever ``attn_implementation`` (flash takes one call with
+    ``cu_seqlens`` instead), so a value read at a call is one image's and
+    loading eager does not help: `off_interface` says so, ahead of `needs_eager`.
+    """
+
+    def off_interface(self) -> str | None:
+        return PACKED
+
+    @EProperty(key="output", description="What the attention adds to the tower's stream")
+    def attention_output(self, value: Any) -> Patches:
+        """The attention sublayer's contribution to the tower's stream, ``[1, patches, vision_hidden]``."""
+        return unpack(first_tensor(value))
+
+    @attention_output.postprocess
+    def attention_output(self, value: torch.Tensor) -> Any:
+        return rewrap(self, pack(value))
+
+
+class PackedVisionMlp(VisionMlp):
+    """A packed tower block's MLP: ``mlp_output`` is ``[1, patches, vision_hidden]``."""
+
+    @EProperty(key="output", description="What the MLP adds to the tower's stream")
+    def mlp_output(self, value: Any) -> Patches:
+        """The MLP sublayer's contribution to the tower's stream, ``[1, patches, vision_hidden]``."""
+        return unpack(first_tensor(value))
+
+    @mlp_output.postprocess
+    def mlp_output(self, value: torch.Tensor) -> Any:
+        return rewrap(self, pack(value))
+
+
+class PackedVision(Vision):
+    """A packed tower's root: ``patch_embeddings`` and ``tower_output`` are ``[1, patches, vision_hidden]``."""
+
+    @EProperty("patch_embed.output", description="The patch embedding's output, one row per patch")
+    def patch_embeddings(self, value: torch.Tensor) -> Patches:
+        """The patch embedding's output, ``[1, patches, vision_hidden]``, every image's patches in one row: a view."""
+        return unpack(value)
+
+    @patch_embeddings.postprocess
+    def patch_embeddings(self, value: torch.Tensor) -> torch.Tensor:
+        return pack(value)
+
+    @EProperty(key="output", description="What the tower returns over the patches: its last_hidden_state")
+    def tower_output(self, value: Any) -> Patches:
+        """The last block's stream as the tower returns it (``last_hidden_state``), ``[1, patches, vision_hidden]``."""
+        return unpack(value.last_hidden_state if hasattr(value, "last_hidden_state") else first_tensor(value))
+
+    @tower_output.postprocess
+    def tower_output(self, value: torch.Tensor) -> Any:
+        output = self.output
+        if hasattr(output, "last_hidden_state"):
+            output.last_hidden_state = pack(value)
+            return output
+        return rewrap(self, pack(value))
+
+
+class QwenVision(PackedVision):
+    """The Qwen ViT (Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3.5): packed, its merger inside, at ``model.visual``.
+
+    The processor cuts each image into ``patch_size`` squares (two frames
+    deep), and lays them out in ``spatial_merge_size`` x ``spatial_merge_size``
+    blocks, each block's patches consecutive, images one after another; the
+    merger folds each block into one image token. So ``patches`` runs over
+    every image of the invoke, ``image_grid_thw`` (``[t, h, w]`` per image, in
+    patches) splits it, and an image's patches are in merge-block order, not
+    raster order. Qwen2.5-VL's tower further permutes them into attention
+    windows at entry: its blocks' values, ``tower_output`` and the merger's
+    output are in window order, and the tower restores the merge-block order
+    after the merger.
+
+    ``image_features`` is the tower's ``pooler_output``, the merged output in
+    the order the wrapper scatters it (on Qwen2.5-VL, after the restore the
+    merger's output has not had), so it is read at the tower's output rather
+    than at the projector's.
+
+    Sizes, off the vision config: ``hidden_size`` is the tower's width
+    (``embed_dim`` on Qwen2-VL, whose config's ``hidden_size`` is the merger's
+    output width), ``num_heads``, ``intermediate_size`` (Qwen2-VL's is
+    ``embed_dim * mlp_ratio``), ``patch_size``, ``spatial_merge_size`` and
+    ``window_size`` (Qwen2.5-VL's, in pixels; ``None`` on the others). There
+    is no fixed ``image_size``: the tower takes any resolution.
+    """
+
+    @property
+    def hidden_size(self) -> int:
+        config = self._module.config
+        return getattr(config, "embed_dim", None) or config.hidden_size
+
+    @property
+    def num_heads(self) -> int:
+        return self._module.config.num_heads
+
+    @property
+    def intermediate_size(self) -> int:
+        config = self._module.config
+        size = getattr(config, "intermediate_size", None)
+        return size if size else int(self.hidden_size * config.mlp_ratio)
+
+    @property
+    def image_size(self) -> None:
+        """``None``: the tower takes any resolution (``image_grid_thw`` says what each image was cut into)."""
+        return None
+
+    @property
+    def spatial_merge_size(self) -> int:
+        """Side of the square block of patches the merger folds into one image token."""
+        return self._module.config.spatial_merge_size
+
+    @property
+    def window_size(self) -> int | None:
+        """Side of an attention window in pixels (Qwen2.5-VL), or ``None`` on a tower without windows."""
+        return getattr(self._module.config, "window_size", None)
+
+    @EProperty("output", description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
+    def image_features(self, value: Any) -> ImageFeatures:
+        """The image features the text model receives, ``[image_tokens, hidden]``: the tower's ``pooler_output``.
+
+        The merger's output in scatter order, so
+        ``layers[0].input[image_token_mask] == image_features``; the same tensor
+        as ``projector.output`` except on Qwen2.5-VL, whose merger output is in
+        window order. In-place edits land, and an assigned tensor of the same
+        shape replaces it. Never reached on a text-only trace.
+        """
+        return value.pooler_output
+
+    @image_features.postprocess
+    def image_features(self, value: torch.Tensor) -> Any:
+        output = self.output
+        output.pooler_output = value
+        return output

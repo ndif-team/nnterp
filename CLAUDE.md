@@ -27,7 +27,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 ### "Load a model and use the standard names"
 - [docs/usage/loading.md](docs/usage/loading.md) — `StandardizedTransformer(repo_id, ...)`; pass `attn_implementation="eager"` for anything inside attention
 - [docs/usage/vocabulary.md](docs/usage/vocabulary.md) — `embed_tokens`, `layers[i].self_attn`, `layers[i].mlp`, `norm`, `lm_head`; native names keep working
-- [docs/reference/families.md](docs/reference/families.md) — the 94 families, their native names and quirks
+- [docs/reference/families.md](docs/reference/families.md) — the 98 families, their native names and quirks
 
 ### "Read or edit the residual stream / a sublayer's contribution"
 - [docs/usage/residual-stream.md](docs/usage/residual-stream.md) — `layer_output`, `attention_output`, `mlp_output`; `input + attention_output + mlp_output == layer_output`
@@ -37,7 +37,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/patterns/attention-patterns.md](docs/patterns/attention-patterns.md) — head metrics and pattern edits
 
 ### "Mixture of experts: the router, the experts, expert ablation and rerouting"
-- [docs/usage/mixture-of-experts.md](docs/usage/mixture-of-experts.md) — `layers[i].mlp` is a `Moe` on the 38 MoE families: `router_logits` (writable, before the scoring), `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs` (needs `experts_implementation="grouped_mm"`, the default), `routed_output`, `shared_expert_output`; `num_experts`, `top_k`, `SCORING`
+- [docs/usage/mixture-of-experts.md](docs/usage/mixture-of-experts.md) — `layers[i].mlp` is a `Moe` on the 39 MoE families: `router_logits` (writable, before the scoring), `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs` (needs `experts_implementation="grouped_mm"`, the default), `routed_output`, `shared_expert_output`; `num_experts`, `top_k`, `SCORING`
 - [docs/patterns/expert-ablation.md](docs/patterns/expert-ablation.md) — every expert's effect on a prediction
 
 ### "Logits, embeddings, next-token probabilities, the input, the sizes"
@@ -45,6 +45,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 
 ### "Vision-language models: images, the vision tower, the projector"
 - [docs/usage/vision.md](docs/usage/vision.md) — load with `task="image-text-to-text"`, `model.trace(prompt, images=[image])`; `model.vision.layers[i]` (tower blocks, `Patches`), `model.projector`, the tower's `vision.image_token_mask` and `vision.image_features` (`layers[0].input[vision.image_token_mask] == vision.image_features`); SigLIP (Gemma 3), CLIP (Llava 1.5), the ViTs of Llama 4 (CLS last) and Gemma 4 (padded patches), and Gemma 4 unified's encoder-free embedder (a `vision` with no blocks)
+- [docs/usage/vision.md](docs/usage/vision.md) — load with `task="image-text-to-text"`, `model.trace(prompt, images=[image])`; `model.vision.layers[i]` (tower blocks, `Patches`), `model.projector`, the tower's `vision.image_token_mask` and `vision.image_features` (`layers[0].input[vision.image_token_mask] == vision.image_features`); SigLIP (Gemma 3), CLIP (Llava 1.5) and the packed Qwen ViT (Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3.5: `[1, patches, vision_hidden]`, no attention interior; Qwen3-VL's `layers[k].deepstack_output`)
 - [docs/developing/vision-design.md](docs/developing/vision-design.md) — the design, what does not fit, the phases
 
 ### "Does this checkpoint have that value?"

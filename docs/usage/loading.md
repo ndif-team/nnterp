@@ -56,7 +56,7 @@ as `text_config`; the text-generation task builds that model, so its `model_type
 one looked up.
 
 A `model_type` with no family raises `UnsupportedFamily` before anything loads, naming every
-known model type, the list `nnterp.families.known()` returns (94 shipped families,
+known model type, the list `nnterp.families.known()` returns (98 shipped families,
 alphabetical):
 
 ```

@@ -244,7 +244,7 @@ class Mlp(Moe):
 
 
 class Vision(Vision):
-    """Gemma-4's ViT: ``tower_output`` is the encoder's output over the padded patches; the tower's own return is pooled.
+    """Gemma-4's ViT: its ``last_hidden_state`` is pooled, so ``tower_output`` is read at the encoder's output, padded rows included.
 
     Images are variable-resolution (the processor sizes each to at most
     ``max_soft_tokens * pooling_kernel_size**2`` patches), so ``image_size``
@@ -253,7 +253,7 @@ class Vision(Vision):
 
     image_size = property(variable_resolution)
 
-    @EProperty("encoder.output", description="The last block's stream over the padded patches: the encoder's output")
+    @EProperty("encoder.output", description=Vision.tower_output.description)
     def tower_output(self, value) -> Patches:
         """The encoder's output, ``[images, max_patches, vision_hidden]``: the last block's stream, padded rows included.
 

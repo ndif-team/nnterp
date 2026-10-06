@@ -15,9 +15,11 @@ with the stream values re-annotated as `Patches`: ``layer_output``,
 ``vision.layers[i].input + attention_output + mlp_output == layer_output``. The
 attention interior is inherited unchanged: ``attention_probabilities`` is a
 `Pattern` whose ``batch`` axis is the tower's (one row per image) and whose
-``query``/``key`` axes are the image's patches, unmasked (the tower attends
-both ways). The tower's sizes are on `Vision`, read off its own config; the
-root's sizes stay the text model's.
+``query``/``key`` axes are the image's patches. There is no causal mask (a
+patch attends to every patch of its image); a tower that masks does so for
+its own layout (Pixtral's block-diagonal mask between packed images, Gemma
+4's padded keys). The tower's sizes are on `Vision`, read off its own config;
+the root's sizes stay the text model's.
 
 Where the image meets the text model is the tower's too: ``vision.image_token_mask``
 (which positions of the text batch hold an image token, off the root's inputs)
@@ -198,11 +200,13 @@ class Vision(Standard):
 
     Values: ``patch_embeddings``, the patch embedding's output one row per patch
     (before any position embedding, CLS token or pre-norm the tower adds), and
-    ``tower_output``, what the tower returns over the patches (its
-    ``last_hidden_state``). The host reads the tower its own way: Gemma 3 pools
-    ``tower_output``, Llava 1.5 takes ``vision.layers[-2].layer_output`` and
-    drops the CLS token, so what reaches the projector is ``projector.input``,
-    not necessarily ``tower_output``. Where the image meets the text model:
+    ``tower_output``, the last block's stream after the tower's final norm
+    where it has one, before any pooling, CLS dropping or adapter (the tower's
+    ``last_hidden_state``, unless the tower returns something after those).
+    The host reads the tower its own way: Gemma 3 pools ``tower_output``,
+    Llava 1.5 takes ``vision.layers[-2].layer_output`` and drops the CLS
+    token, so what reaches the projector is ``projector.input``, not
+    necessarily ``tower_output``. Where the image meets the text model:
     ``image_token_mask``, read off the model's inputs, and ``image_features``,
     read at the scatter (`ImageScatter`, keyed from the root), so
     ``layers[0].input[image_token_mask] == image_features``. Both need an image
@@ -275,10 +279,11 @@ class Vision(Standard):
     def patch_embeddings(self, value: torch.Tensor) -> Patches:
         """The patch embedding's output, ``[images, patches, vision_hidden]``, patches in raster order.
 
-        A convolution returns ``[images, vision_hidden, rows, columns]``; this
-        is a view of it with the grid flattened, so in-place edits land.
+        On a convolution, which returns ``[images, vision_hidden, rows,
+        columns]``, a view of it with the grid flattened, so in-place edits
+        land; on a linear patch embedding (Llama 4, Gemma 4), its output.
         Assign a tensor of the same shape to replace it. Position embeddings,
-        CLIP's CLS token and its pre-norm come after.
+        a CLS token and a pre-norm come after.
         """
         return value.flatten(2).transpose(1, 2) if value.dim() == 4 else value
 
@@ -287,14 +292,15 @@ class Vision(Standard):
         current = self.patch_embed.output
         return value.transpose(1, 2).reshape(current.shape) if current.dim() == 4 else value
 
-    @EProperty(key="output", description="What the tower returns over the patches: its last_hidden_state")
+    @EProperty(key="output", description="The last block's stream after the tower's final norm, before any pooling or adapter")
     def tower_output(self, value: Any) -> Patches:
-        """The tower's output over the patches, ``[images, patches, vision_hidden]``: its ``last_hidden_state``.
+        """The last block's stream after the final norm where the tower has one (`norm`), ``[images, patches, vision_hidden]``.
 
-        The last block's stream after the final norm, where the tower has one
-        (`norm`). Assigning replaces it in the tower's output; whether that
-        reaches the text model depends on what the host reads (see the class
-        docstring).
+        Before any pooling, CLS dropping or adapter: the tower's
+        ``last_hidden_state``, which a tower that returns something after
+        those reads where the stream is instead. Assigning replaces it;
+        whether that reaches the text model depends on what the host reads
+        (see the class docstring).
         """
         return value.last_hidden_state if hasattr(value, "last_hidden_state") else first_tensor(value)
 

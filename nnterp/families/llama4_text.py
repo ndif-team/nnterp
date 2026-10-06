@@ -194,14 +194,14 @@ class Moe(Moe, Mlp):
 
 
 class Vision(Vision):
-    """Llama 4's ViT: ``tower_output`` is the stream after ``layernorm_post``, before the CLS is dropped and the adapter runs.
+    """Llama 4's ViT: its ``last_hidden_state`` is the adapter's output, so ``tower_output`` is read at ``layernorm_post``.
 
     The tower's own return is the pixel-shuffle adapter's output
     (``vision.vision_adapter``), a quarter as many rows as patches and
     ``projector_output_dim`` wide; that is ``projector.input``, flattened.
     """
 
-    @EProperty("norm.output", description="The tower's stream after its final norm, CLS last")
+    @EProperty("norm.output", description=Vision.tower_output.description)
     def tower_output(self, value) -> Patches:
         """The last block's stream after ``layernorm_post``, ``[tiles, patches + 1, vision_hidden]``, the CLS token last.
 

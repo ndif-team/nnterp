@@ -80,9 +80,10 @@ def _no_blocks(vision: Vision, name: str) -> Unavailable:
 class Vision(Vision):
     """The encoder-free image embedder: a `Vision` with no blocks.
 
-    ``patch_embeddings`` is ``patch_dense``'s output and ``tower_output`` the
-    embedder's states before the projection (``projector.input``), both over
-    the padded patches, ``[images, max_soft_tokens, mm_embed_dim]``.
+    ``patch_embeddings`` is ``patch_dense``'s output and, with no blocks to
+    end a stream, ``tower_output`` is the embedder's states before the
+    projection (``projector.input``), both over the padded patches,
+    ``[images, max_soft_tokens, mm_embed_dim]``.
     ``image_features`` is read at the wrapper's scatter, after the padded rows
     are stripped. ``num_layers`` is 0; ``hidden_size`` is ``mm_embed_dim`` and
     ``patch_size`` the merged patch the embedder sees (``model_patch_size``).

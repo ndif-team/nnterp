@@ -1,9 +1,9 @@
 ---
 title: Vision-language models
 one_liner: "Load an image-text-to-text checkpoint with `task=\"image-text-to-text\"`, pass an image, and read the tower (`model.vision`, `vision.layers[i]`), the `projector`, and the tower's `vision.image_token_mask` and `vision.image_features`, where `layers[0].input[vision.image_token_mask] == vision.image_features`."
-tags: [usage, vision, multimodal, image-text-to-text, vision tower, projector, image_features, image_token_mask, Patches, siglip, clip, llava, gemma3]
+tags: [usage, vision, multimodal, image-text-to-text, vision tower, projector, image_features, image_token_mask, Patches, siglip, clip, llava, gemma3, qwen-vl, packed tower, deepstack, m-rope]
 related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/root-values.md, docs/usage/availability.md, docs/usage/layouts.md, docs/developing/vision-design.md, docs/reference/families.md]
-sources: [nnterp/components/vision.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, tests/families/vision_suite.py, tests/families/test_gemma3_text.py, tests/families/test_llama.py]
+sources: [nnterp/components/vision.py, nnterp/families/gemma3_text.py, nnterp/families/llama.py, nnterp/families/qwen2_vl_text.py, nnterp/families/qwen2_5_vl_text.py, nnterp/families/qwen3_vl_text.py, nnterp/families/qwen3_vl_moe_text.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_5_moe_text.py, tests/families/vision_suite.py, tests/families/qwen_vision_suite.py, tests/families/test_gemma3_text.py, tests/families/test_llama.py, tests/families/test_qwen3_vl_text.py]
 ---
 
 # Vision-language models
@@ -55,15 +55,15 @@ token first), `features` `(576, 16)`. The same body runs on Gemma 3
 
 ## The names
 
-| standard name | what it is | Gemma 3 (SigLIP) | Llava 1.5 (CLIP) |
-| --- | --- | --- | --- |
-| `model.vision` | the tower's root, a `Vision` | `model.model.vision_tower` | `model.model.vision_tower` |
-| `model.vision.patch_embed` | the patch embedding | `vision_tower.embeddings.patch_embedding` | same |
-| `model.vision.layers[i]` | the tower's blocks, `VisionLayer` | `vision_tower.encoder.layers[i]` | same |
-| `vision.layers[i].self_attn`, `.mlp` | `VisionAttention`, `VisionMlp` | native | native |
-| `vision.layers[i].input_layernorm`, `.post_attention_layernorm` | the pre-norms | `layer_norm1`, `layer_norm2` | same |
-| `model.vision.norm` | the final norm over the patches | `post_layernorm` | none: CLIP's `post_layernorm` norms only the pooled CLS token |
-| `model.projector` | the module whose output is scattered into the text stream | `model.multi_modal_projector` (pools 4096 patches to 256 tokens) | `model.multi_modal_projector` |
+| standard name | what it is | Gemma 3 (SigLIP) | Llava 1.5 (CLIP) | Qwen-VL, Qwen3.5 (Qwen ViT) |
+| --- | --- | --- | --- | --- |
+| `model.vision` | the tower's root, a `Vision` | `model.model.vision_tower` | `model.model.vision_tower` | `model.model.visual` (a `QwenVision`) |
+| `model.vision.patch_embed` | the patch embedding | `vision_tower.embeddings.patch_embedding` | same | `visual.patch_embed` |
+| `model.vision.layers[i]` | the tower's blocks, `VisionLayer` | `vision_tower.encoder.layers[i]` | same | `visual.blocks[i]` (`PackedVisionLayer`) |
+| `vision.layers[i].self_attn`, `.mlp` | `VisionAttention`, `VisionMlp` | native | native | `attn`, `mlp` (`PackedVisionAttention`, `PackedVisionMlp`) |
+| `vision.layers[i].input_layernorm`, `.post_attention_layernorm` | the pre-norms | `layer_norm1`, `layer_norm2` | same | `norm1`, `norm2` |
+| `model.vision.norm` | the final norm over the patches | `post_layernorm` | none: CLIP's `post_layernorm` norms only the pooled CLS token | none: the merger norms its own input |
+| `model.projector` | the module whose output is scattered into the text stream | `model.multi_modal_projector` (pools 4096 patches to 256 tokens) | `model.multi_modal_projector` | `visual.merger`, inside the tower (folds each 2x2 block of patches into one token) |
 
 `embed_tokens`, `layers`, `norm` and `lm_head` stay the language model's
 (`model.language_model.*` on the wrapper), and native names keep working.
@@ -115,6 +115,76 @@ Read order is the forward's: `vision.image_token_mask` first (it comes off the i
 like `input_ids`), then the tower's values, a block's attention interior before its
 `layer_output`, then `vision.image_features`, then the text model's.
 
+## A packed tower: the Qwen ViT
+
+Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3-VL-MoE, Qwen3.5 and Qwen3.5-MoE share one tower at
+`model.visual`, and it is *packed*: it runs on `[patches, vision_hidden]`, every image of
+the invoke concatenated, and its attention calls the interface once per image (once per
+window on Qwen2.5-VL's windowed blocks). So:
+
+- Its `Patches` values (`patch_embeddings`, `tower_output`, `layer_output`,
+  `attention_output`, `mlp_output`) are `[1, patches, vision_hidden]`: the packed tensor with
+  a leading images axis of 1, a view, so in-place edits land; assign the same shape.
+  `vision.layers[i].output` stays the native `[patches, vision_hidden]`.
+- The processor's `image_grid_thw` (`[t, h, w]` per image, in patches) splits the row: image
+  `j` has `t * h * w` patches. An image's patches are in merge-block order (each 2x2 block
+  the merger folds is consecutive), not raster order. On Qwen2.5-VL the tower permutes them
+  into attention windows at entry, so its block values and `tower_output` are in window
+  order, served as they are.
+- The attention interior (`attention_queries` ... `attention_head_outputs`,
+  `attention_probabilities`) is `Unavailable` on every tower block, eager or not: "a packed
+  tower: the attention makes one interface call per image ..., so the block's pattern is
+  not one tensor". `attention_output` and the block values are whole.
+- `vision.image_features` is the tower's `pooler_output`: the merger's output in the order
+  the wrapper scatters it. On Qwen2.5-VL that is not `projector.output`, which is still in
+  window order once an image spans more than one 112-pixel window.
+- The sizes are the vision config's: `hidden_size` is the tower's width (`embed_dim` on
+  Qwen2-VL), `num_heads`, `intermediate_size`, `patch_size`, `spatial_merge_size`, and
+  `window_size` (Qwen2.5-VL; `None` elsewhere). `image_size` is `None`: any resolution goes.
+
+```python
+import torch
+from PIL import Image
+from nnterp import StandardizedTransformer
+
+model = StandardizedTransformer("Qwen/Qwen3-VL-4B-Instruct", task="image-text-to-text", dispatch=True, dtype=torch.bfloat16)
+red, blue = Image.new("RGB", (448, 448), "red"), Image.new("RGB", (320, 256), "blue")
+content = [{"type": "image"}, {"type": "image"}, {"type": "text", "text": "Describe both images."}]
+prompt = model.processor.apply_chat_template([{"role": "user", "content": content}], add_generation_prompt=True, tokenize=False)
+
+with torch.no_grad(), model.trace(prompt, images=[red, blue]):
+    mask = model.vision.image_token_mask.save()        # 276 image tokens, both images' (read first: off the inputs)
+    patches = model.vision.patch_embeddings.save()     # [1, 1104, 1024]: both images' patches in one row
+    features = model.vision.image_features.save()      # [276, 2560]
+    first = model.layers[0].input.save()
+
+torch.equal(first[mask], features)                     # True
+```
+
+**Qwen3-VL's DeepStack.** On `qwen3_vl_text` and `qwen3_vl_moe_text` the tower also taps
+three of its blocks, and the text model adds each tap's merged features at the image
+positions after text blocks 0, 1 and 2, outside the blocks. `layers[k].deepstack_output`
+(`[image_tokens, hidden]`, assignable) is what is added after block `k`:
+`layers[k+1].input[mask] == layers[k].layer_output[mask] + layers[k].deepstack_output`;
+on the other blocks it is `Unavailable` and `layers[k+1].input == layers[k].layer_output`.
+So `image_features` is not the only way the image reaches the text model there: on
+`Qwen/Qwen3-VL-4B-Instruct`, asked the color of a red square on white, zeroing
+`image_features` alone still answers "Red"; zeroing `deepstack_output` on blocks 0-2 too
+answers "White".
+
+```python
+with torch.no_grad(), model.trace(prompt, images=[red, blue]):
+    model.vision.image_features[:] = 0
+    for k in range(3):
+        model.layers[k].deepstack_output[:] = 0         # read in forward order: after block k
+    ablated = model.logits.save()
+```
+
+The text blocks of these families use multimodal rotary embeddings (M-RoPE: temporal,
+height and width position streams), which the model folds into one `cos`/`sin` before the
+blocks; the attention applies it before the interface, so `attention_queries` and
+`attention_keys` are the rotated queries and keys, as on any rotary family.
+
 ## Availability
 
 `model.vision.support()` lists the tower's values (`image_token_mask`, `patch_embeddings`,
@@ -129,17 +199,17 @@ processor) has a tower that never runs, so `model.vision.support()` is empty,
 ("a text-only load").
 
 `vision.image_features` is served only on the wrappers a family lists in `IMAGE_WRAPPERS`
-(`gemma3` for `gemma3_text`, `llava` for `llama`), where the projector's output is what is
-scattered. A wrapper that binds the same names but rearranges the projector's output
+(`gemma3` for `gemma3_text`, `llava` for `llama`, each Qwen wrapper for its text family),
+where the value read is what is scattered. A wrapper that binds the same names but rearranges the projector's output
 first (LLaVA-NeXT's unpadding and newline tokens) is not listed, and the value says so.
 
 ## What is not covered yet
 
-- Towers other than SigLIP (Gemma 3) and CLIP (Llava 1.5). The text names bind on the
-  wrappers of Qwen3.5, Qwen3.5-MoE, Mistral 3, PaliGemma, LLaVA-OneVision, llava-interleave,
-  Idefics 3, Aya Vision, EXAONE 4.5 and LightOnOCR, but their towers and projectors are
-  native-only, and there is no `model.vision` there.
-- Qwen2-VL, Qwen2.5-VL, Qwen3-VL and Mllama: their text models are types nnterp has no
-  family for yet.
+- Towers other than SigLIP (Gemma 3), CLIP (Llava 1.5) and the Qwen ViT (Qwen2-VL,
+  Qwen2.5-VL, Qwen3-VL, Qwen3-VL-MoE, Qwen3.5, Qwen3.5-MoE). The text names bind on the
+  wrappers of Mistral 3, PaliGemma, LLaVA-OneVision, llava-interleave, Idefics 3, Aya
+  Vision, EXAONE 4.5 and LightOnOCR, but their towers and projectors are native-only, and
+  there is no `model.vision` there.
+- Mllama: its text model is a type nnterp has no family for yet.
 - Video and audio values; batching several image-carrying invokes in one trace.
 - The design and the phases: [docs/developing/vision-design.md](../developing/vision-design.md).

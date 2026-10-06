@@ -45,7 +45,7 @@ The rules:
 | `vision.norm` | the tower's final norm over the patches, where it has one | `post_layernorm` | none (CLIP's `post_layernorm` norms the pooled CLS only) | none (the merger norms) | `layernorm_post` | none | `final_layernorm` | none |
 | `projector` | the module whose output is scattered into the text stream | `model.multi_modal_projector` | `model.multi_modal_projector` | `model.visual.merger` | `multi_modal_projector` | `model.multi_modal_projector` | `model.mm_projector` | `model.embed_vision` |
 
-Gemma 3 and Llava are implemented; the other columns are what the later phases bind. The
+Gemma 3, Llava and the Qwen column are implemented; the other columns are what the later phases bind. The
 text names (`embed_tokens`, `layers`, `norm`, `lm_head`) keep their meaning; on a wrapper
 they alias `model.language_model.*` (Llava's family included) or `model.text_model.*`
 (Idefics 3, SmolVLM). Native names keep working everywhere.
@@ -107,8 +107,8 @@ tower whose config spells one its own way overrides the property on a `Vision` s
 | Llama 4 ViT | one row per image tile | patches, then CLS last |
 | Gemma 4 ViT | one row per image | patches padded to the batch's longest; the padding is masked and stripped by the pooler |
 | Pixtral (Mistral 3, LightOnOCR, Pixtral-12B's Llava wrapper) | 1 | every image's patches concatenated (block-diagonal mask) |
-| Qwen2-VL, Qwen3-VL, Qwen3.5 ViT; MoonViT (Kimi K2.5) | 1 | every image's patches concatenated (`cu_seqlens`); natively `[patches, hidden]`, served with a leading 1 |
-| Qwen2.5-VL ViT (also EXAONE 4.5) | 1 | as Qwen2-VL, but in *window order*: the tower permutes the patches into attention windows at entry and restores raster order after the merger |
+| Qwen2-VL, Qwen3-VL, Qwen3.5 ViT; MoonViT (Kimi K2.5) | 1 | every image's patches concatenated (`cu_seqlens`); natively `[patches, hidden]`, served with a leading 1; on the Qwen ViT each image's patches are in the processor's merge-block order (each `spatial_merge_size` x `spatial_merge_size` block consecutive), not raster order |
+| Qwen2.5-VL ViT (also EXAONE 4.5) | 1 | as Qwen2-VL, but in *window order*: the tower permutes the merge blocks into attention windows at entry and restores the merge-block order after the merger |
 
 A video enters as frames on the per-image towers and as temporal patches on the packed
 ones. A user splits a packed row per image with the processor's `image_grid_thw` (Qwen,
@@ -122,9 +122,19 @@ Kimi) or `image_sizes` (Pixtral).
   trace with two images served the first image's 256x256 pattern while the block held 536
   patches. The interior values are `Unavailable` on those towers, with the op named in the
   reason; `attention_output` and the block values are whole and available.
+  `PackedVisionAttention.off_interface` returns that reason whatever `attn_implementation`
+  is (sdpa runs the same per-image loop, flash one varlen call), ahead of `needs_eager`, so
+  the reason never tells the user to load eager.
 - **Qwen2.5-VL's window order.** The block values are served in the tower's own (window)
-  order and documented as such; a raster view needs the window index, which the tower
-  computes inside its forward, so nnterp does not reorder.
+  order and documented as such; the order back needs the window index, which the tower
+  computes inside its forward, so nnterp does not reorder. The tower restores the order
+  *after* the merger (`merger(hidden)[reverse_indices]`, an indexing op, not a module), so
+  `projector.output` is in window order too and is not what the wrapper scatters once an
+  image spans more than one window (`window_size` 112 pixels: a 256x320 image does).
+  `image_features` on the Qwen ViT is therefore read at the tower's own output,
+  `vision.output.pooler_output`, which is the merger's output in scatter order on all four
+  towers (the same tensor as `projector.output` on Qwen2-VL, Qwen3-VL and Qwen3.5), and
+  `IMAGE_WRAPPERS` lists each Qwen wrapper on that reading.
 - **Qwen3-VL's DeepStack.** Three tower blocks (`deepstack_visual_indexes`) each feed a
   `deepstack_merger_list[k]` whose output the text model adds at the image positions after
   text block `k`, outside the block. So on `qwen3_vl_text`,
@@ -133,7 +143,14 @@ Kimi) or `image_sizes` (Pixtral).
   hidden]`, read at the text model's `_deepstack_process` call (third argument), with
   `layers[k+1].input[mask] == layers[k].layer_output[mask] + deepstack_output`; unavailable
   on the other blocks. The tower side needs no new name: the taps are
-  `vision.layers[i].layer_output` and the mergers keep their native path.
+  `vision.layers[i].layer_output` and the mergers keep their native path. The call runs
+  from one line of the text model's loop, so every block's location is the same op and
+  block `k`'s is its `k`-th occurrence: the value is a `DeepstackEProperty`, which pins the
+  read or write to that occurrence (`pinned(k)`), and the text model's envoy sets
+  `sourced = True` so the op exists before the blocks run. The value is also what an
+  ablation of the image has to reach: on `Qwen/Qwen3-VL-4B-Instruct`, zeroing
+  `image_features` alone leaves the answer to "what color is the square?" at "Red"; zeroing
+  `deepstack_output` on blocks 0-2 as well makes it "White".
 - **Mllama (Llama 3.2 Vision).** Its text model (`mllama_text_model`) interleaves
   cross-attention blocks that attend to `cross_attention_states` (the projector's output) and
   are skipped entirely on a text-only input; nothing is scattered. It needs its own family
@@ -161,7 +178,10 @@ nnterp/
   components/
     vision.py        Patches, ImageTokenMask, ImageFeatures; Vision (the tower root: sizes, image_token_mask,
                      patch_embeddings, tower_output, image_features, no_images, support);
-                     VisionLayer, VisionAttention, VisionMlp (Layer/Attention/Mlp with Patches stream values)
+                     VisionLayer, VisionAttention, VisionMlp (Layer/Attention/Mlp with Patches stream values);
+                     PackedVision, PackedVisionLayer, PackedVisionAttention, PackedVisionMlp (a packed tower:
+                     the leading 1, the interior unavailable with PACKED); QwenVision (the Qwen ViT's sizes,
+                     image_features at the tower's pooler_output)
     standard.py      blocks_support: the support walk over a block list, shared by model.support()
                      and model.vision.support()
     eproperty.py     root-anchored keys ("/projector.output"), walked from envoy.root
@@ -169,6 +189,10 @@ nnterp/
   families/
     gemma3_text.py   SigLIP's paths in RENAME, its module types in ENVOYS, IMAGE_WRAPPERS = ("gemma3",)
     llama.py         CLIP's paths in RENAME, its module types in ENVOYS, IMAGE_WRAPPERS = ("llava",)
+    qwen2_vl_text.py, qwen2_5_vl_text.py, qwen3_vl_text.py, qwen3_vl_moe_text.py, qwen3_5_text.py,
+    qwen3_5_moe_text.py
+                     the Qwen ViT's paths in RENAME, its module types keyed to the packed classes in ENVOYS,
+                     the family's wrapper in IMAGE_WRAPPERS; qwen3_vl_text.py: deepstack_output
 ```
 
 A tower whose blocks are plain pre-norm attention + MLP on the shared attention interface
@@ -238,7 +262,10 @@ wrapper's `inputs_embeds.masked_scatter` operation and keys a `Standard` envoy w
 `sourced = True` on the wrapper model's type (the scatter runs after the tower, inside the
 same forward). Until a family does that for a wrapper, the wrapper is not in
 `IMAGE_WRAPPERS` and `image_features` is `Unavailable` there with that reason, even where
-the names bind.
+the names bind. A tower whose projector is inside it and whose output is the scattered
+tensor reads `image_features` there: the Qwen ViT returns the merger's output as
+`pooler_output`, after Qwen2.5-VL's window restore, so `QwenVision.image_features` is keyed
+`"output"` (the tower's own) and serves `pooler_output`.
 
 **Availability.** `Vision.no_images()` is the one place that decides whether an image can
 reach the model: not where the family names no `projector`, nor on a load with no processor
@@ -313,6 +340,16 @@ Every `FamilySuite` test also runs on the wrappers loaded under `image-text-to-t
 no tiny checkpoint of its own, built from the family's tiny text config with random
 weights (Mistral 3 around Mistral, Aya Vision, EXAONE 4.5, LightOnOCR), and on PaliGemma.
 
+`QwenVisionSuite` (`tests/families/qwen_vision_suite.py`) is `VisionSuite` on the packed
+Qwen ViT, subclassed in the six families that host it: the sizes off the Qwen vision
+config, the stream values `[1, patches, vision_hidden]` equal to the native packed tensors,
+the interior `Unavailable` with `PACKED` under eager and sdpa, `image_features` equal to the
+tower's `pooler_output`, the merger's output in scatter order except on Qwen2.5-VL, and two
+images in one invoke (the patches of both in one row, both images' tokens in the mask, the
+scatter exact). The text families' `FamilySuite` subclasses mix in `MRopeSuite` (the queries
+and keys at the interface are `q_proj`/`k_proj` rotated by the `cos`/`sin` the model folds
+from three position streams) and, on Qwen3-VL, `DeepstackSuite`.
+
 The pinned checkpoints, all loadable offline once cached:
 
 | family | checkpoint | note |
@@ -320,11 +357,14 @@ The pinned checkpoints, all loadable offline once cached:
 | `gemma3_text` | `yujiepan/gemma-3-tiny-random` | `trl-internal-testing/tiny-Gemma3ForConditionalGeneration` (the wrapper test's) has a projector that outputs exact zeros, so no edit upstream of it shows |
 | `llama` | `trl-internal-testing/tiny-LlavaForConditionalGeneration` | real check: `llava-hf/llava-1.5-7b-hf` |
 | `qwen2` | `llava-hf/llava-interleave-qwen-0.5b-hf` (Llava with SigLIP) | |
-| `qwen3_5_text`, `qwen3_5_moe_text` | `yujiepan/qwen3.5-tiny-random`, `yujiepan/qwen3.5-moe-tiny-random` | real check: `Qwen/Qwen3.5-0.8B` |
+| `qwen3_5_text`, `qwen3_5_moe_text` | `yujiepan/qwen3.5-tiny-random`, `yujiepan/qwen3.5-moe-tiny-random` | real check: `Qwen/Qwen3.5-0.8B` (text side) |
 | `ministral3` | `yujiepan/mistral-3-tiny-random` | |
 | `gemma` | `trl-internal-testing/tiny-PaliGemmaForConditionalGeneration` | |
 | `gemma4_text` | `trl-internal-testing/tiny-Gemma4ForConditionalGeneration`; `yujiepan/gemma-4-e-tiny-random` (with audio) | phase 2 |
-| `qwen2_vl_text`, `qwen2_5_vl_text`, `qwen3_vl_text` | `yujiepan/qwen2-vl-tiny-random`, `trl-internal-testing/tiny-Qwen2_5_VLForConditionalGeneration`, `yujiepan/qwen3-vl-tiny-random` | phase 2 |
+| `qwen2_vl_text` | `yujiepan/qwen2-vl-tiny-random` | real check: `Qwen/Qwen2-VL-2B-Instruct` |
+| `qwen2_5_vl_text` | `trl-internal-testing/tiny-Qwen2_5_VLForConditionalGeneration` | the window order shows only on an image wider than one window: the suite's second image is 256x320 |
+| `qwen3_vl_text` | `yujiepan/qwen3-vl-tiny-random` | real check: `Qwen/Qwen3-VL-4B-Instruct`; two text blocks for three taps, so the blocks past the taps are checked on a four-block model built from its config |
+| `qwen3_vl_moe_text` | `yujiepan/qwen3-vl-moe-tiny-random` | |
 | `llama4_text` | `yujiepan/llama-4-tiny-random`, config-patched as its text test does | phase 2 |
 | `kimi_k2` | `hf-tiny-v2/tiny-random-Kimi_K25ForConditionalGeneration`, config-patched plus `image_token_id: 163602` | its processor uses 14-pixel patches merged 2x2 where its tower config says 8 and 1x1, so the image path needs a matching tiny before it can be tested |
 
@@ -340,12 +380,12 @@ The pinned checkpoints, all loadable offline once cached:
 
 **Phase 2, the packed and the remaining towers.**
 
-- New text families, re-exporting their base's components on the VL classes (M-RoPE), as
-  `kimi_k2` re-exports DeepSeek-V3's: `qwen2_vl_text`, `qwen2_5_vl_text`, `qwen3_vl_text`
-  (with `deepstack_output`), `qwen3_vl_moe_text`. Today these wrappers resolve to a
-  `model_type` with no family and raise `UnsupportedFamily`.
+- New text families on the VL classes (M-RoPE; the base `Attention` holds, since the
+  rotation is applied before the interface): `qwen2_vl_text`, `qwen2_5_vl_text`,
+  `qwen3_vl_text` (with `deepstack_output`), `qwen3_vl_moe_text` (with `Moe`). Done.
 - Qwen's ViT for `qwen3_5_text`, `qwen3_5_moe_text` and the new Qwen-VL families (packed:
-  the interior `Unavailable`); MoonViT for `kimi_k2`; Pixtral for `mistral` and
+  the interior `Unavailable`; `image_features` at the tower's `pooler_output`). Done.
+- MoonViT for `kimi_k2`; Pixtral for `mistral` and
   `ministral3`; Llama 4's ViT for `llama4_text`; Gemma 4's ViT for `gemma4_text`; Gemma 4
   unified's embedder (no tower: a blockless `Vision` with the image values only, read at the scatter).
 - SigLIP on the other families that host it (`gemma` for PaliGemma, `qwen2` for

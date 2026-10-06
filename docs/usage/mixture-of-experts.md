@@ -15,7 +15,7 @@ stream. The six values below are how the mixture made it: the router's logits, t
 experts and weights it chose for each token, each chosen expert's weighted output, the
 routed sum, and the shared expert beside it. Expert ablation, rerouting, expert usage and
 routing entropy are reads and writes of these. They live on `model.layers[i].mlp` when it
-is a `Moe` (an `Mlp` subclass), on all 38 MoE families, with one layout each.
+is a `Moe` (an `Mlp` subclass), on all 39 MoE families, with one layout each.
 
 Nearly every mixture in transformers computes the same thing:
 

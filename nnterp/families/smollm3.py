@@ -9,8 +9,6 @@ from transformers.models.smollm3.modeling_smollm3 import SmolLM3Attention, SmolL
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("smollm3",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

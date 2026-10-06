@@ -14,8 +14,6 @@ from transformers.models.dots1.modeling_dots1 import Dots1Attention, Dots1Decode
 
 from ..components import Attention, Layer, Mlp, Moe
 
-MODEL_TYPES = ("dots1",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

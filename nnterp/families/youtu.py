@@ -15,8 +15,6 @@ from transformers.models.youtu.modeling_youtu import YoutuAttention, YoutuDecode
 from ..components import Attention, Layer, Mlp
 from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
-MODEL_TYPES = ("youtu",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

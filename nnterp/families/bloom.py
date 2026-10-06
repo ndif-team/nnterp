@@ -19,8 +19,6 @@ from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pa
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("bloom",)
-
 RENAME = {
     "transformer.word_embeddings": "embed_tokens",
     "transformer.h": "layers",

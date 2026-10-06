@@ -27,8 +27,6 @@ from ..components import Attention, EProperty, Layer, Mlp, Moe, Residual, Router
 if TYPE_CHECKING:
     from nnsight.intervention.envoy import Envoy
 
-MODEL_TYPES = ("afmoe",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

@@ -45,8 +45,6 @@ from ..components import Attention, ChannelGates, EProperty, Layer, LinearAttent
 from ..components.recurrent import kernel
 from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
-MODEL_TYPES = ("kimi_linear",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

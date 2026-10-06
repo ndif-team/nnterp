@@ -32,8 +32,6 @@ from ..components import (
     Attention, ExpertIndices, ExpertWeights, Layer, Moe, Residual, RouterLogits, TokenEProperty, unavailable,
 )
 
-MODEL_TYPES = ("jetmoe",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

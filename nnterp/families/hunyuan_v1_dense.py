@@ -16,8 +16,6 @@ from transformers.models.hunyuan_v1_dense.modeling_hunyuan_v1_dense import (
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("hunyuan_v1_dense",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

@@ -24,8 +24,6 @@ from ..components import Attention, EProperty, Layer, Mlp, Residual
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("gemma3_text",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

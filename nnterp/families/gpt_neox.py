@@ -10,8 +10,6 @@ from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXAttention, GPT
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("gpt_neox",)
-
 RENAME = {
     "gpt_neox.embed_in": "embed_tokens",
     "gpt_neox.layers": "layers",

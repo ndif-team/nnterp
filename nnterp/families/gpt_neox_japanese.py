@@ -31,8 +31,6 @@ from ..components import (
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("gpt_neox_japanese",)
-
 RENAME = {
     "gpt_neox_japanese.embed_in": "embed_tokens",
     "gpt_neox_japanese.layers": "layers",

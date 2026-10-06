@@ -11,8 +11,6 @@ from transformers.models.olmo2.modeling_olmo2 import Olmo2Attention, Olmo2Decode
 
 from ..components import Attention, EProperty, Layer, Mlp, Residual
 
-MODEL_TYPES = ("olmo2",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

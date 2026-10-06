@@ -54,8 +54,6 @@ from ..components import Attention, EProperty, Layer, Mlp, Residual, StateSpace
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("falcon_h1",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

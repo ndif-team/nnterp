@@ -16,8 +16,6 @@ from transformers.models.vaultgemma.modeling_vaultgemma import VaultGemmaAttenti
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("vaultgemma",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

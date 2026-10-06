@@ -16,8 +16,6 @@ from transformers.models.hunyuan_v1_moe.modeling_hunyuan_v1_moe import (
 
 from ..components import Attention, Layer, Moe, RouterLogits, TokenEProperty
 
-MODEL_TYPES = ("hunyuan_v1_moe",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

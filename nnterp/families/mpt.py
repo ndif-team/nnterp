@@ -19,8 +19,6 @@ from ..components import (
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("mpt",)
-
 RENAME = {
     "transformer.wte": "embed_tokens",
     "transformer.blocks": "layers",

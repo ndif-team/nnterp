@@ -20,8 +20,6 @@ from transformers.models.minimax_m2.modeling_minimax_m2 import (
 
 from ..components import Attention, Layer, Moe
 
-MODEL_TYPES = ("minimax_m2",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

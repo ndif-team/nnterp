@@ -20,8 +20,6 @@ from ..components import Attention, Layer, Mlp
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
 
-MODEL_TYPES = ("gpt2",)
-
 RENAME = {
     "transformer.wte": "embed_tokens",
     "transformer.h": "layers",

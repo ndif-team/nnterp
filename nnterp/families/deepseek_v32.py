@@ -29,8 +29,6 @@ from transformers.models.deepseek_v32.modeling_deepseek_v32 import DeepseekV32At
 from ..components import Attention, Layer, Mlp, Moe
 from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
-MODEL_TYPES = ("deepseek_v32",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

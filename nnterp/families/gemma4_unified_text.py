@@ -21,8 +21,6 @@ from ..components import EProperty, Layer, Mlp, Residual
 from . import gemma4_text
 from .gemma4_text import RENAME, head_dim, num_kv_heads  # noqa: F401  the same tree; the sizes read the same config keys
 
-MODEL_TYPES = ("gemma4_unified_text",)
-
 
 class Layer(Layer):
     """Gemma-4 unified's decoder block; returns a bare tensor (the sum times ``layer_scalar``), so the base holds."""

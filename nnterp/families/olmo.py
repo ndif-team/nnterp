@@ -9,8 +9,6 @@ from transformers.models.olmo.modeling_olmo import OlmoAttention, OlmoDecoderLay
 
 from ..components import Attention, Layer, Mlp
 
-MODEL_TYPES = ("olmo",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

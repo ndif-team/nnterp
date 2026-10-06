@@ -25,8 +25,6 @@ from transformers.models.doge.modeling_doge import DogeAttention, DogeCDMoE, Dog
 
 from ..components import Attention, Layer, Mlp, Moe
 
-MODEL_TYPES = ("doge",)
-
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",

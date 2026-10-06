@@ -102,7 +102,8 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "layernorm": ("LayerNorm", "Norms subtract the mean before scaling; a shift along the all-ones direction never reaches the next sublayer or the logits."),
     "squared-relu": ("Squared ReLU", "The MLP's activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere."),
     "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; split its output by that layout before reading a head."),
-    "dense-first-blocks": ("Dense first blocks", "The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
+    "one-sublayer-blocks": ("One sublayer per block", "Each block is one norm and one sublayer, so it adds one contribution to the stream, and support() reports the hosts it does not hold missing on it."),
+    "dense-first-blocks": ("Dense first blocks","The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
 }
 
 ROOT_NAMES = ("embed_tokens", "layers", "norm", "lm_head")
@@ -122,6 +123,8 @@ CONFIG_KEYS = (
     "linear_num_heads", "linear_head_dim", "linear_conv_kernel_dim",
     "first_k_dense_replace", "moe_intermediate_size", "num_experts", "n_routed_experts", "num_experts_per_token",
     "num_experts_per_tok", "num_shared_experts", "n_shared_experts", "routed_scaling_factor",
+    "mamba_num_heads", "mamba_head_dim", "n_groups", "ssm_state_size", "chunk_size", "mlp_hidden_act",
+    "moe_shared_expert_intermediate_size", "moe_latent_size",
 )
 
 STRUCTURAL = re.compile(r"^no \w+ (module|value) on this block")
@@ -138,15 +141,18 @@ def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
         match = VALUE_LINE.match(str(value))
         assert match, str(value)
         key, select = getattr(value, "key", None), getattr(value, "select", None)
+        # `unavailable(reason)`: a value the family declares it does not have; its key falls back to its
+        # own name and names no location, so it is read nowhere.
+        nowhere = isinstance(getattr(value, "unavailable", None), str)
         rows.append({
             "name": name,
             "expr": f"{expr}.{name}",
             "layout": match["layout"],
             "dims": match["dims"],
             "description": match["desc"],
-            "key": key if isinstance(key, str) else ("computed" if key is not None else None),
+            "key": None if nowhere else key if isinstance(key, str) else ("computed" if key is not None else None),
             "select": select,
-            "where": humanize_key(key, select),
+            "where": "nowhere: the family does not serve it" if nowhere else humanize_key(key, select),
         })
     return rows
 
@@ -155,7 +161,13 @@ def humanize_key(key: Any, select: int | None) -> str:
     """Where a value is read, in words: the key is a path from the host envoy."""
     if not isinstance(key, str):
         return "computed from several served values" if key is not None else "derived"
-    element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
+    if callable(select):
+        # a select resolved per call (a Mamba-2 value): the argument the kernel that fires takes it as,
+        # or the element of its output that call returns it in
+        named = re.fullmatch(r"argument\((\w+)\)", select.__name__)
+        element = f", argument `{named[1]}`" if named else ", the element that call returns it in"
+    else:
+        element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
     if key.startswith("<"):
         # a location the value finds per call: a recurrent mixer's kernel, whichever fires on this call
         name = key[1:-1]

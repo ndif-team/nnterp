@@ -179,7 +179,7 @@ button.chip.active, button.chip.active:hover { background: var(--mark); color: v
 pre { background: var(--paper-dk); border: 1.5px solid var(--line); padding: 14px 16px; overflow: auto; font-size: 12px; line-height: 1.45; margin: 0.6rem 0 1rem; }
 pre code { font-size: inherit; }
 .prose pre { margin: 1rem 0; }
-.repr { font-size: 12px; }
+.repr { font-size: 12px; max-height: 32rem; overflow: auto; }
 pre .k, pre .kn, pre .kc, pre .ow { color: var(--mark-deep); font-weight: 500; }
 pre .s, pre .s1, pre .s2, pre .sa, pre .sb, pre .sd, pre .se, pre .si, pre .sx { color: var(--stream-deep); }
 pre .c1, pre .cm, pre .ch, pre .rd { opacity: 0.62; }

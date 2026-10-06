@@ -175,6 +175,11 @@
         text(gplus, SX, jY + 8, '+', 'plus-sign', 'middle');
       }
     });
+    // SVG has no z-index: the last child is on top. The contribution edges' wide hit paths were
+    // drawn after the boxes and covered the chips along a box's lower edge, so the boxes and
+    // their chips go last.
+    Array.prototype.slice.call(svg.querySelectorAll('g[data-node^="sub."], g[data-node^="interior."], g[data-node^="moe."]'))
+      .forEach(function (g) { svg.appendChild(g); });
   }
 
   // -- the side card ----------------------------------------------------------------

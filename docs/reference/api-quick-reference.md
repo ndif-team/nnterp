@@ -231,7 +231,7 @@ A hybrid's gated DeltaNet mixer (`layers[i].linear_attn`), a `RecurrentMixer` th
 | `attention_queries` | `LinearQK` | `KERNEL` argument 0 | yes | `needs_torch_kernels` |
 | `attention_keys` | `LinearQK` | `KERNEL` argument 1 | yes | `needs_torch_kernels` |
 | `attention_values` | `LinearV` | `KERNEL` argument 2 | yes | `needs_torch_kernels` |
-| `decays` | `Gates` | `KERNEL` keyword `g`; float32, non-positive | yes | `needs_torch_kernels` |
+| `decays` | `Gates` (`ChannelGates` on Kimi-Linear) | `KERNEL` keyword `g`; float32, non-positive | yes | `needs_torch_kernels` |
 | `betas` | `Gates` | `KERNEL` keyword `beta`; in `(0, 1)` | yes | `needs_torch_kernels` |
 | `state_input` | `State`, or `None` on a fresh prompt | `KERNEL` keyword `initial_state`, read as a clone of the cache's buffer | yes | `needs_torch_kernels` |
 | `attention_head_outputs` | `LinearV` | `KERNEL` return 0, before the gated norm and `out_proj` | yes | `needs_torch_kernels` |
@@ -319,7 +319,7 @@ The base of the four hosts.
 |---|---|---|
 | `lookup` | `lookup(model_type: str) -> ModuleType` | The family for `model_type`: a registered one, else `nnterp.families.<model_type>`, imported on first use. Raises `UnsupportedFamily` when there is neither. |
 | `register` | `register(family: ModuleType) -> ModuleType` | Add a family (any module or object with `MODEL_TYPES`, `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under its model types; consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
-| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (92), alphabetical. |
+| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (94), alphabetical. |
 | `all_families` | `all_families() -> list[ModuleType]` | Every shipped family, imported. For tooling and tests. |
 | `REGISTRY` | `dict[str, ModuleType]` | `model_type -> family` for what `register` added. |
 | `UnsupportedFamily` | `ValueError` subclass | No module of that name and nothing registered. |
@@ -359,6 +359,7 @@ The twenty-seven `jaxtyping` types every standard value is annotated with, each 
 | `SSDValues` / `SSDHeadOutputs` | `batch seq heads head_dim` | `components/state_space.py` | a Mamba-2 `linear_attn.attention_values` (`x`) / `attention_head_outputs` (`y`) |
 | `LinearV` | `batch seq heads value_dim` | `components/linear_attention.py` | `linear_attn.attention_values`, `linear_attn.attention_head_outputs` |
 | `Gates` | `batch seq heads` | `components/linear_attention.py` | `decays`, `betas` |
+| `ChannelGates` | `batch seq heads key_dim` | `components/linear_attention.py` | `decays` on Kimi-Linear |
 | `State` | `batch heads key_dim value_dim` | `components/recurrent.py` | `state_input`, `state_output`, `state` |
 | `States` | `batch seq heads key_dim value_dim` | `components/recurrent.py` | `states` |
 | `ScanQK` | `batch seq groups state_dim` | `components/selective_scan.py` | a Mamba-1 `attention_queries`, `attention_keys` |

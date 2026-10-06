@@ -15,7 +15,7 @@ stream. The six values below are how the mixture made it: the router's logits, t
 experts and weights it chose for each token, each chosen expert's weighted output, the
 routed sum, and the shared expert beside it. Expert ablation, rerouting, expert usage and
 routing entropy are reads and writes of these. They live on `model.layers[i].mlp` when it
-is a `Moe` (an `Mlp` subclass), on all 36 MoE families, with one layout each.
+is a `Moe` (an `Mlp` subclass), on all 38 MoE families, with one layout each.
 
 Nearly every mixture in transformers computes the same thing:
 
@@ -72,7 +72,7 @@ experts module, like `mlp.intermediate_size`. `Moe.SCORING` says what the logits
 | --- | --- | --- |
 | `"softmax"` | softmax over every expert, then top-k (renormalized or not, per family) | Mixtral, Qwen2/3-MoE, Qwen3-Next, Qwen3.5-MoE, OLMoE, FlexOlmo, DeepSeek-V2, Hunyuan, ERNIE, Jamba, DBRX, Gemma-4, ZAYA |
 | `"topk_softmax"` | top-k of the logits, then a softmax over those | GPT-OSS, GraniteMoE (-Shared, -Hybrid, -SWA), JetMoE |
-| `"sigmoid"` | a sigmoid per expert (plus a selection bias on most) | DeepSeek-V3/V3.2, GLM-4-MoE(-Lite), GLM-5, dots.llm1, Solar Open, MiMo-V2-Flash, Nemotron-H, MiniMax-M2, Laguna, AFMoE, Llama 4 |
+| `"sigmoid"` | a sigmoid per expert (plus a selection bias on most) | DeepSeek-V3/V3.2, Kimi K2, Kimi-Linear, GLM-4-MoE(-Lite), GLM-5, dots.llm1, Solar Open, MiMo-V2-Flash, Nemotron-H, MiniMax-M2, Laguna, AFMoE, Llama 4 |
 | `"sparsemixer"` | Phi-3.5-MoE's masked softmax per slot | Phi-3.5-MoE |
 | `"hash"` / the config's `scoring_func` | DeepSeek-V4, per block: the token id picks the experts on a `hash_moe` block; elsewhere `scoring_func` (`"sqrtsoftplus"`) per expert | DeepSeek-V4 |
 

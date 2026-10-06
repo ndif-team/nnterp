@@ -18,10 +18,12 @@ from .recurrent import RecurrentMixer, State, kernel, needs_torch_kernels
 LinearQK = Float[Tensor, "batch seq heads key_dim"]
 LinearV = Float[Tensor, "batch seq heads value_dim"]
 Gates = Float[Tensor, "batch seq heads"]
+#: A gate per token, head and key channel: Kimi Delta Attention decays each key channel of the state on its own.
+ChannelGates = Float[Tensor, "batch seq heads key_dim"]
 
 
 class LinearAttention(RecurrentMixer):
-    """A gated DeltaNet mixer (Qwen3-Next, Qwen3.5/3.6, OLMo-Hybrid): linear attention with a recurrent state.
+    """A gated DeltaNet mixer (Qwen3-Next, Qwen3.5/3.6, OLMo-Hybrid; Kimi-Linear's KDA subclasses it): linear attention with a recurrent state.
 
     It projects queries, keys and values like attention, but mixes them
     through a per-head recurrent state instead of a softmax over keys: for

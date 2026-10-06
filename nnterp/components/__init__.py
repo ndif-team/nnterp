@@ -53,7 +53,7 @@ from .eproperty import (
     DerivedEProperty, EProperty, Unavailable, unavailable,
 )
 from .layer import Layer, Residual, StreamMixing, Streams, StreamWeights
-from .linear_attention import Gates, LinearAttention, LinearQK, LinearV
+from .linear_attention import ChannelGates, Gates, LinearAttention, LinearQK, LinearV
 from .mlp import Mlp
 from .moe import (
     DISPATCH, LOGITS, PER_SLOT, ExpertIndices, ExpertOutputs, ExpertWeights, Moe, RouterLogits, mixture_reason,
@@ -74,7 +74,7 @@ from .state_space import (
 )
 
 __all__ = [
-    "Attention", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "Keys", "Layer", "LinearAttention",
+    "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "Keys", "Layer", "LinearAttention",
     "LOGITS", "LinearQK", "LinearV", "Mlp", "Moe", "PER_SLOT", "Pattern", "Queries", "RecurrentMixer", "Residual", "RouterLogits", "ScanDecays", "ScanQK", "ScanState",
     "ScanStates", "ScanSteps", "ScanValues", "SelectiveScan", "State", "States", "StreamMixing", "StreamWeights", "Streams", "TokenEProperty",
     "Values",

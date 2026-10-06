@@ -575,7 +575,10 @@ class FamilySuite:
                          head_dim=model.head_dim, qk_head_dim=model.qk_head_dim)
         module = getattr(host, "_module", None)
         if isinstance(host, LinearAttention):
-            sizes.update(heads=module.num_v_heads, key_dim=module.head_k_dim, value_dim=module.head_v_dim)
+            if hasattr(module, "num_v_heads"):  # a gated DeltaNet
+                sizes.update(heads=module.num_v_heads, key_dim=module.head_k_dim, value_dim=module.head_v_dim)
+            else:  # Kimi Delta Attention: one head size for keys and values
+                sizes.update(heads=module.num_heads, key_dim=module.head_dim, value_dim=module.head_dim)
         if isinstance(host, SelectiveScan):
             sizes.update(groups=1, channels=module.intermediate_size, state_dim=module.ssm_state_size)
         if isinstance(host, StateSpace):

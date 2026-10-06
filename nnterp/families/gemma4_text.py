@@ -94,6 +94,7 @@ from ..components import (
     ImageScatter, INTERFACE, Attention, EProperty, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty, Unavailable,
     Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
 )
+from ..components.vision import variable_resolution
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -246,16 +247,11 @@ class Vision(Vision):
     """Gemma-4's ViT: ``tower_output`` is the encoder's output over the padded patches; the tower's own return is pooled.
 
     Images are variable-resolution (the processor sizes each to at most
-    ``max_soft_tokens * pooling_kernel_size**2`` patches), so there is no
-    ``image_size``.
+    ``max_soft_tokens * pooling_kernel_size**2`` patches), so ``image_size``
+    is `Unavailable`.
     """
 
-    @property
-    def image_size(self) -> int:
-        raise Unavailable(
-            f"{self.path}.image_size is not available: the tower takes variable-resolution images, each sized by the "
-            "processor to at most max_soft_tokens * pooling_kernel_size**2 patches"
-        )
+    image_size = property(variable_resolution)
 
     @EProperty("encoder.output", description="The last block's stream over the padded patches: the encoder's output")
     def tower_output(self, value) -> Patches:

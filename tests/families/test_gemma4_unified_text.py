@@ -102,7 +102,7 @@ class TestGemma4UnifiedVision(VisionSuite):
         for name in ("num_heads", "head_dim", "intermediate_size"):
             with pytest.raises(Unavailable, match="encoder-free"):
                 getattr(vision, name)
-        with pytest.raises(Unavailable, match="variable-resolution"):
+        with pytest.raises(Unavailable, match="any resolution"):
             vision.image_size
         text = model.config.get_text_config()
         assert model.num_layers == len(model.layers) == text.num_hidden_layers and model.hidden_size == text.hidden_size

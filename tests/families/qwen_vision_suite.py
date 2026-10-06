@@ -70,7 +70,8 @@ class QwenVisionSuite(VisionSuite):
         assert (vision.hidden_size, vision.num_heads, vision.patch_size, vision.spatial_merge_size) == (
             width, config.num_heads, config.patch_size, config.spatial_merge_size)
         assert vision.window_size == getattr(config, "window_size", None)
-        assert vision.image_size is None
+        with pytest.raises(Unavailable, match="any resolution"):
+            vision.image_size
         assert vision.head_dim * vision.num_heads == vision.hidden_size
         attn = vision.layers[0].self_attn
         assert (attn.num_heads, attn.head_dim) == (vision.num_heads, vision.head_dim)

@@ -464,7 +464,7 @@ class TestGemma4Vision(VisionSuite):
 
     def test_no_final_norm_and_no_image_size(self, model):
         assert "norm" not in model.vision._aliases
-        with pytest.raises(Unavailable, match="variable-resolution"):
+        with pytest.raises(Unavailable, match="any resolution"):
             model.vision.image_size
 
     def test_contributions_are_the_post_norms(self, model):

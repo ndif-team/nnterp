@@ -36,7 +36,7 @@ from jaxtyping import Bool, Float
 from torch import Tensor
 
 from .attention import Attention
-from .eproperty import EProperty
+from .eproperty import EProperty, Unavailable
 from .layer import Layer
 from .mlp import Mlp
 from .standard import Standard, blocks_support, first_tensor, rewrap
@@ -59,6 +59,15 @@ def image_token_id(config: Any) -> int | None:
         if isinstance(value, int):
             return value
     return None
+
+
+def variable_resolution(vision: Vision) -> int:
+    """``image_size`` on a tower with no fixed resolution: `Unavailable`, saying where each image's size is."""
+    raise Unavailable(
+        f"{vision.path}.image_size is not available: the tower takes images of any resolution, each cut into its own "
+        "patch grid by the processor; read the grid off the processor's output (image_grid_thw, image_sizes, "
+        "image_position_ids)"
+    )
 
 
 def no_image_tokens(vision: Vision) -> str | None:
@@ -243,7 +252,7 @@ class Vision(Standard):
 
     @property
     def image_size(self) -> int:
-        """Side of the square image the tower is configured for, in pixels."""
+        """Side of the square image the tower is configured for, in pixels; `Unavailable` on a tower with no fixed resolution (`variable_resolution`)."""
         return self._module.config.image_size
 
     # -- values ----------------------------------------------------------------------
@@ -468,8 +477,8 @@ class QwenVision(PackedVision):
     (``embed_dim`` on Qwen2-VL, whose config's ``hidden_size`` is the merger's
     output width), ``num_heads``, ``intermediate_size`` (Qwen2-VL's is
     ``embed_dim * mlp_ratio``), ``patch_size``, ``spatial_merge_size`` and
-    ``window_size`` (Qwen2.5-VL's, in pixels; ``None`` on the others). There
-    is no fixed ``image_size``: the tower takes any resolution.
+    ``window_size`` (Qwen2.5-VL's, in pixels; ``None`` on the others).
+    ``image_size`` is `Unavailable`: the tower takes any resolution.
     """
 
     @property
@@ -487,10 +496,7 @@ class QwenVision(PackedVision):
         size = getattr(config, "intermediate_size", None)
         return size if size else int(self.hidden_size * config.mlp_ratio)
 
-    @property
-    def image_size(self) -> None:
-        """``None``: the tower takes any resolution (``image_grid_thw`` says what each image was cut into)."""
-        return None
+    image_size = property(variable_resolution)
 
     @property
     def spatial_merge_size(self) -> int:
@@ -516,8 +522,12 @@ class PixtralVision(Vision):
     per image: ``(height // patch_size) * (width // patch_size)`` patches each,
     in order. The attention interior is whole: one interface call over the
     packed row, so ``attention_probabilities`` is ``[1, heads, all patches,
-    all patches]``, zero between images.
+    all patches]``, zero between images. ``image_size`` is `Unavailable`: the
+    config's is the largest side the processor resizes to, not one size every
+    image has.
     """
+
+    image_size = property(variable_resolution)
 
     @EProperty("ln_pre.input", description="Every image's patch embeddings packed in one row, entering the pre-norm")
     def patch_embeddings(self, value: torch.Tensor) -> Patches:

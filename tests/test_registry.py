@@ -16,7 +16,7 @@ GPT2 = "hf-internal-testing/tiny-random-gpt2"
 def test_every_family_module_is_named_after_its_model_type():
     for name in families.known():
         family = getattr(families, name)   # lazy: imported here
-        assert family.MODEL_TYPES == (name,), name
+        assert family.__name__ == f"nnterp.families.{name}"
         assert families.lookup(name) is family
     assert len(families.known()) == len(families.all_families()) >= 31
 
@@ -43,9 +43,9 @@ def test_unknown_family_refused():
 
 
 def test_register_adds_a_family_and_can_override():
-    custom = types.SimpleNamespace(MODEL_TYPES=("gpt2",), RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS)
+    custom = types.SimpleNamespace(RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS)
     try:
-        families.register(custom)
+        families.register(custom, "gpt2")
         assert families.lookup("gpt2") is custom
         assert StandardizedTransformer(GPT2).family is custom
     finally:
@@ -95,9 +95,9 @@ def test_default_load_keeps_the_checkpoints_attention():
 
 def test_register_needs_only_names_and_envoys_for_support():
     """`support()` walks the tree, so a family without `Attention`/`Mlp` classes still reports every block value."""
-    custom = types.SimpleNamespace(MODEL_TYPES=("gpt2",), RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS)
+    custom = types.SimpleNamespace(RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS)
     try:
-        families.register(custom)
+        families.register(custom, "gpt2")
         support = StandardizedTransformer(GPT2).support()
     finally:
         del families.REGISTRY["gpt2"]
@@ -121,9 +121,9 @@ def test_custom_value_through_envoys_is_in_support():
 
 def test_family_defines_a_size_instead_of_the_root():
     """A function named like a `StandardizedProperty` in the family module wins over the root's implementation."""
-    custom = types.SimpleNamespace(MODEL_TYPES=("gpt2",), RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS, hidden_size=lambda model: 999)
+    custom = types.SimpleNamespace(RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS, hidden_size=lambda model: 999)
     try:
-        families.register(custom)
+        families.register(custom, "gpt2")
         model = StandardizedTransformer(GPT2)
     finally:
         del families.REGISTRY["gpt2"]
@@ -137,11 +137,11 @@ def test_family_defines_project_on_vocab_instead_of_the_softcap():
     from nnterp.standardized import StandardizedCapability
 
     custom = types.SimpleNamespace(
-        MODEL_TYPES=("gpt2",), RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS,
+        RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS,
         project_on_vocab=lambda model, hidden: model.lm_head(model.norm(hidden)) * 2,
     )
     try:
-        families.register(custom)
+        families.register(custom, "gpt2")
         model = StandardizedTransformer(GPT2, dispatch=True)
     finally:
         del families.REGISTRY["gpt2"]
@@ -162,3 +162,31 @@ def test_sizes_are_read_only():
     with pytest.raises(AttributeError, match="def hidden_size"):
         model.hidden_size = 5
 
+
+def test_register_takes_the_type_from_a_modules_name():
+    """`register(module)` covers the type the module's name ends in, as a shipped module's file name does."""
+    custom = types.ModuleType("my_pkg.families.gpt2")
+    custom.RENAME, custom.ENVOYS = gpt2.RENAME, gpt2.ENVOYS
+    try:
+        assert families.register(custom) is custom
+        assert families.lookup("gpt2") is custom
+        assert StandardizedTransformer(GPT2).family is custom
+    finally:
+        del families.REGISTRY["gpt2"]
+
+
+def test_register_takes_several_types():
+    custom = types.SimpleNamespace(RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS)
+    try:
+        families.register(custom, "my_type", "my_other_type")
+        assert families.lookup("my_type") is families.lookup("my_other_type") is custom
+    finally:
+        del families.REGISTRY["my_type"], families.REGISTRY["my_other_type"]
+
+
+def test_register_without_a_name_or_types_raises():
+    custom = types.SimpleNamespace(RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS)
+    snapshot = dict(families.REGISTRY)
+    with pytest.raises(TypeError, match=r"register\(family, 'my_model_type'\)"):
+        families.register(custom)
+    assert families.REGISTRY == snapshot

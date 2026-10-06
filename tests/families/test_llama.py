@@ -1,9 +1,11 @@
 """Llama, end to end: the family the vocabulary is taken from."""
 
+import pytest
 import torch
 from suite import FamilySuite, LLAMA_ROWS, rows
-from vision_suite import IMAGE, VisionSuite, image_prompt
+from vision_suite import IMAGE, VisionSuite, align_processor, clip_rows, image_prompt
 
+from nnterp import StandardizedTransformer, Unavailable
 from nnterp.families import llama
 
 
@@ -57,3 +59,54 @@ class TestLlavaVision(VisionSuite):
             fed = model.projector.input.save()
         assert model.config.vision_feature_layer == -2
         assert torch.equal(fed, stream[:, 1:])
+
+
+def tiny_v2_processor(model):
+    """The hf-tiny-v2 Llava-class processors: ``crop_size`` has edge keys where center-cropping needs ``height`` and
+    ``width``, and ``patch_size`` and ``vision_feature_select_strategy`` are unset, so the image token count fails."""
+    from transformers.image_utils import SizeDict
+
+    side = model.processor.image_processor.crop_size.shortest_edge
+    align_processor(
+        model, patch_size=model.config.vision_config.patch_size, num_additional_image_tokens=1,  # CLIP's CLS token
+        vision_feature_select_strategy=getattr(model.config, "vision_feature_select_strategy", "default"),  # VipLlava drops CLS
+        image_processor={"crop_size": SizeDict(height=side, width=side)},
+    )
+
+
+class TestLlavaNextVision(VisionSuite):
+    """LLaVA-NeXT around Llama: CLIP over the image's crops, and a projector output the wrapper unpads and adds newline tokens to."""
+
+    REPO = "hf-tiny-v2/tiny-random-LlavaNextForConditionalGeneration"
+    FAMILY = llama
+    TEXT_REPO = TestLlama.REPO
+    VISION_NATIVE = clip_rows()
+
+    @staticmethod
+    def fix_processor(model):
+        """As `tiny_v2_processor`, and the processor's crop grid is the 336-pixel default where the model's is ``[[8, 8]]``."""
+        tiny_v2_processor(model)
+        model.processor.image_processor.image_grid_pinpoints = model.config.image_grid_pinpoints
+
+    def test_image_features_are_not_the_projector_output(self, model):
+        """What is scattered is the unpadded projector output with a newline token per row, so the projector read would be wrong."""
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            projected = model.projector.output.save()
+            features = model.vision.image_features.save()
+        assert projected.shape[0] > 1  # the base image and its crops
+        assert features.shape[0] != projected.shape[0] * projected.shape[1]
+        newline = model.get("model").image_newline.detach()
+        assert (features == newline).all(-1).any()
+
+
+def test_image_features_need_an_image_scatter():
+    """Without an `ImageScatter` on the wrapper's model, where the features enter the text stream is unknown: the value says so."""
+    from nnsight.intervention.envoy import Envoy
+    from transformers.models.llava.modeling_llava import LlavaModel
+
+    model = StandardizedTransformer(TestLlavaVision.REPO, task="image-text-to-text", envoys={LlavaModel: Envoy})
+    reason = model.vision.support()["image_features"]
+    assert "keys no ImageScatter on the 'llava' wrapper" in reason
+    assert model.vision.support()["image_token_mask"] is None
+    with pytest.raises(Unavailable, match="ImageScatter"):
+        model.vision.image_features

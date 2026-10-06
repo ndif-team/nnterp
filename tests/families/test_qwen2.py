@@ -1,5 +1,7 @@
 """Qwen2, end to end."""
 
+import pytest
+import torch
 from suite import FamilySuite, LLAMA_ROWS, rows
 from vision_suite import IMAGE, VisionSuite, align_processor, image_prompt, siglip_rows
 
@@ -20,8 +22,10 @@ class TestLlavaInterleaveWrapper(TestQwen2):
     LOAD_KWARGS = {"task": "image-text-to-text"}
 
 
+@pytest.mark.skipif(not torch.cuda.is_available(), reason="real weights: a trace per tower block of a 0.5B model is minutes on one CPU thread")
 class TestLlavaInterleaveVision(VisionSuite):
-    """llava-interleave: Llava around Qwen2 with a SigLIP tower, real weights."""
+    """llava-interleave: Llava around Qwen2 with a SigLIP tower, real weights, so it runs where CUDA is (LLaVA-OneVision's
+    tiny covers the same SigLIP keys and ``LlavaModel``'s scatter is covered on ``llama``)."""
 
     REPO = "llava-hf/llava-interleave-qwen-0.5b-hf"
     FAMILY = qwen2

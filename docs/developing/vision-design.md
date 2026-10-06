@@ -393,7 +393,7 @@ The pinned checkpoints, all loadable offline once cached:
 | `llama` | `trl-internal-testing/tiny-LlavaForConditionalGeneration` | real check: `llava-hf/llava-1.5-7b-hf` |
 | `llama` | `hf-tiny-v2/tiny-random-VipLlavaForConditionalGeneration`, `hf-tiny-v2/tiny-random-LlavaNextForConditionalGeneration`, `hf-tiny-v2/tiny-random-DeepseekVLForConditionalGeneration` | processors set to the model (`fix_processor`) |
 | `llama` | `trl-internal-testing/tiny-Idefics3ForConditionalGeneration`, `trl-internal-testing/tiny-SmolVLMForConditionalGeneration` | SmolVLM's processor needs `num2words` |
-| `qwen2` | `llava-hf/llava-interleave-qwen-0.5b-hf` (Llava with SigLIP); `hf-tiny-v2/tiny-random-LlavaOnevisionForConditionalGeneration` | |
+| `qwen2` | `llava-hf/llava-interleave-qwen-0.5b-hf` (Llava with SigLIP); `hf-tiny-v2/tiny-random-LlavaOnevisionForConditionalGeneration` | llava-interleave's `VisionSuite` runs only where CUDA is: real weights, a trace per tower block |
 | `cohere2` | `hf-tiny-v2/tiny-random-AyaVisionForConditionalGeneration`, `hf-tiny-v2/tiny-random-Cohere2VisionForConditionalGeneration` | |
 | `mistral` | `trl-internal-testing/tiny-LlavaNextForConditionalGeneration` (LLaVA-NeXT); `hf-tiny-v2/tiny-random-Mistral3ForConditionalGeneration`; Pixtral-12B's Llava wrapper built small from `mistral-community/pixtral-12b`'s config with its processor | no tiny Pixtral-12B or BakLLaVA checkpoint exists |
 | `qwen3_5_text`, `qwen3_5_moe_text` | `yujiepan/qwen3.5-tiny-random`, `yujiepan/qwen3.5-moe-tiny-random` | real check: `Qwen/Qwen3.5-0.8B` |

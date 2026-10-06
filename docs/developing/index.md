@@ -28,6 +28,7 @@ read.
 - [architecture](architecture.md) — the map, which layer owns what, lazy family import.
 - [eproperty-internals](eproperty-internals.md) — `EProperty` and its path grammar (`../`, `source`, `input`/`inputs`/`output`), `_resolve`'s walk, drilling per run, `select`, the `Standard` instrumentation rule, `DerivedEProperty`.
 - [recurrent-mixer-internals](recurrent-mixer-internals.md) — `RecurrentMixer` and its DeltaNet subclass: the kernel op the forward's own test picks, the once-per-call record (`KERNEL`, `per_call`), per-token state through occurrence arithmetic, `route_kernels`.
+- [vision-design](vision-design.md) — the vision side of image-text-to-text checkpoints: the tower names, the root image values, where the code lives, what does not fit, the phases.
 - [testing](testing.md) — `HF_HUB_OFFLINE=1 pytest`, what `FamilySuite` asserts method by method, the root tests.
 - [transformers-compat](transformers-compat.md) — the versions nnterp is developed against, which operation names a release can move, the upgrade procedure.
 - [gotchas](gotchas.md) — contributor traps, each as constraint and reason.

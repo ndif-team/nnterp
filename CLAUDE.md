@@ -43,6 +43,10 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 ### "Logits, embeddings, next-token probabilities, the input, the sizes"
 - [docs/usage/root-values.md](docs/usage/root-values.md) — `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`, `num_layers`, `head_dim`, ... (each root size a `StandardizedProperty`: the config's value, by the plain rule or the family's spelling); a block's own sizes on `layers[i].self_attn` (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) and `layers[i].mlp` (`intermediate_size`), which differ from the root's on Gemma-4 and MiMo-V2-Flash
 
+### "Vision-language models: images, the vision tower, the projector"
+- [docs/usage/vision.md](docs/usage/vision.md) — load with `task="image-text-to-text"`, `model.trace(prompt, images=[image])`; `model.vision.layers[i]` (tower blocks, `Patches`), `model.projector`, root `image_token_mask` and `image_features` (`layers[0].input[image_token_mask] == image_features`); SigLIP (Gemma 3) and CLIP (Llava 1.5) today
+- [docs/developing/vision-design.md](docs/developing/vision-design.md) — the design, what does not fit, the phases
+
 ### "Does this checkpoint have that value?"
 - [docs/usage/availability.md](docs/usage/availability.md) — `model.support()` before the trace; `nnterp.Unavailable` at the read; the reasons you will see
 
@@ -87,7 +91,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 
 ### "Change nnterp itself"
 - [docs/developing/index.md](docs/developing/index.md) — architecture, descriptor internals, the recurrent mixer (`RecurrentMixer`, DeltaNet) and its occurrence arithmetic, tests, transformers compatibility, gotchas, contributing
-- **Run `HF_HUB_OFFLINE=1 pytest` (about 6100 tests, ~7 min on CPU) before and after.**
+- **Run `HF_HUB_OFFLINE=1 pytest` (about 6800 tests, ~7 min on CPU) before and after.**
 
 ### "Every symbol / every term"
 - [docs/reference/api-quick-reference.md](docs/reference/api-quick-reference.md), [docs/reference/glossary.md](docs/reference/glossary.md)

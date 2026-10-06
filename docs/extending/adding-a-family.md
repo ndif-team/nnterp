@@ -224,6 +224,20 @@ same class); a mixture is keyed to its own (`DeepseekV2MLP: Mlp, DeepseekV2Moe: 
 matches by type or by native path suffix, never by alias, and nnsight tries type keys
 before path keys.
 
+### A multimodal wrapper
+
+A family whose checkpoints also load as an image-text-to-text wrapper adds the wrapper's
+spellings of the text stack to `RENAME` (`"model.language_model.layers": "layers"`, ...),
+keyed so a text-only checkpoint never resolves them. To name the wrapper's vision tower,
+add its root and projector keys from the model root (`"model.vision_tower": "vision"`,
+`"model.multi_modal_projector": "projector"`), its inner names keyed relative to the tower
+(`"encoder.layers": "layers"`, never a bare name a text block has), key `Vision`,
+`VisionLayer`, `VisionAttention`, `VisionMlp` from `nnterp.components` on the tower's module
+types in `ENVOYS`, and list the wrapper's `model_type` in `IMAGE_WRAPPERS` once the suite
+checks that its projector's output is what it scatters. Test it with a `VisionSuite`
+subclass. `gemma3_text.py` and `llama.py` are the two worked examples;
+[../developing/vision-design.md](../developing/vision-design.md) has the rules.
+
 ### Sizes
 
 The root's sizes (`num_layers`, `hidden_size`, `vocab_size`, `num_heads`, `num_kv_heads`,

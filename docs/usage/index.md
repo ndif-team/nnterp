@@ -36,6 +36,7 @@ model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_imp
 - [mixture-of-experts](mixture-of-experts.md) — a mixture's `router_logits`, `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs`, `routed_output`, `shared_expert_output` on `layers[i].mlp` (a `Moe`); ablation, rerouting, `experts_implementation=`.
 - [layouts](layouts.md) — one axis layout per value on every family, a named `jaxtyping` type from `nnterp.components` (`Residual`, `Pattern`, ...; `value.dims`, `value.layout`).
 - [availability](availability.md) — `model.support()`, `nnterp.Unavailable`, and the reasons a checkpoint lacks a value.
+- [vision](vision.md) — a vision-language checkpoint under `task="image-text-to-text"`: `model.vision`, `vision.layers[i]`, `projector`, and the root's `image_token_mask` and `image_features`.
 
 ## Doing things with them
 

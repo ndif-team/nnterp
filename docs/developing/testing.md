@@ -246,6 +246,15 @@ the per-token state on `SCAN_BLOCK`, and meta-build a real checkpoint's config
 (`REAL`). On a model with no softmax attention (Mamba), `attn_block(model)`
 skips the pattern and interior tests and `expected_values` drops the
 `self_attn.*` names.
+A multimodal wrapper runs `FamilySuite` loaded with `LOAD_KWARGS = {"task":
+"image-text-to-text"}` (a subclass of the family's text class with the wrapper's
+`NATIVE` rows; `expected_values` adds `image_token_mask` and `image_features`
+where the load has a processor), and its vision side runs `VisionSuite`
+(`tests/families/vision_suite.py`: the tower names and identity, the scatter
+`layers[0].input[image_token_mask] == image_features`, causal edits, no image values
+on a text-only checkpoint). `WrapperSuite`, in the same file, checks the text names
+on a wrapper built from a family's tiny text config where no tiny wrapper exists
+([vision-design.md](vision-design.md)).
 
 ## The root tests
 

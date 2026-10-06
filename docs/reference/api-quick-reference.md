@@ -51,6 +51,7 @@ Reads within one trace follow the forward: the pattern is produced inside block 
 | `unavailable`, `route_kernels`, `route_delta_rule` | A value a family lacks; the recurrent kernel switch, and its DeltaNet spelling. |
 | `chunk_per_token` | A Mamba-2 model's chunk scan with a chunk size of 1, so `StateSpace.states` reads the state after every token. |
 | `Unavailable`, `UnsupportedFamily` | The two exceptions nnterp raises itself. |
+| `Vision` | A vision tower's root envoy (`model.vision`): its blocks at `layers` (`VisionLayer`, with `VisionAttention`, `VisionMlp` from `nnterp.components`), its sizes, `patch_embeddings`, `tower_output`, `support()`. See [../usage/vision.md](../usage/vision.md). |
 
 `nnterp.families`, `nnterp.components`, `nnterp.prompt_utils` and `nnterp.nnsight_utils` are imported as modules.
 
@@ -68,7 +69,7 @@ StandardizedTransformer(repo_id, *args, rename=None, envoys=None, tokenizer_kwar
 | `rename` | `dict[str, str \| list[str]] \| None` | Extra nnsight aliases, merged over the family's `RENAME`; a key given here wins. |
 | `envoys` | `dict \| None` | Extra `envoys=` entries, merged over the family's `ENVOYS` (and nnsight's tensor-parallel envoys on a sharded load); a key given here wins. Keys are module types or native paths, never aliases. |
 | `tokenizer_kwargs` | `dict \| None` | Attributes set on the loaded tokenizer: `{"padding_side": "left"}`, a `pad_token`. |
-| `**kwargs` | | Passed to `TransformersModel`: `dispatch=True`, `attn_implementation="eager"`, `dtype=`, `device=` (one device; `device_map="cpu"` does not keep a model off the GPU), `device_map=`, `revision=`, `trust_remote_code=`. `task` defaults to `"text-generation"`. |
+| `**kwargs` | | Passed to `TransformersModel`: `dispatch=True`, `attn_implementation="eager"`, `dtype=`, `device=` (one device; `device_map="cpu"` does not keep a model off the GPU), `device_map=`, `revision=`, `trust_remote_code=`. `task` defaults to `"text-generation"`; `task="image-text-to-text"` loads a multimodal checkpoint as its wrapper, with its processor. |
 
 The constructor reads the checkpoint's config first (`AutoConfig`; a multimodal config's `text_config`), looks up `config.model_type` in `nnterp.families`, and raises `UnsupportedFamily` before any weights load when no family covers it. `attn_implementation` is not forced: the checkpoint's own default (`sdpa` on most) stays, and the interior attention values then report unavailable in `support()`.
 
@@ -84,6 +85,8 @@ Every row is an `EProperty` on the root, listed in `repr(model)` with its descri
 | `model.input_ids` | `Tokens` | yes: the model runs on the ids you set | The token ids the model was called with. |
 | `model.attention_mask` | `Tokens` | yes | The attention mask the model was called with; zeros are padding. |
 | `model.input_size` | none (a `torch.Size`) | no (`AttributeError`: assign `input_ids`) | `[batch, seq]` of the current call. |
+| `model.image_token_mask` | `ImageTokenMask` | no (`AttributeError`: assign `input_ids`) | `input_ids == config.image_token_id`, read off the inputs. Listed by `support()` only on a multimodal load with a processor. |
+| `model.image_features` | `ImageFeatures` | yes; in-place edits land | The projector's output flat over every image token, `[image_tokens, hidden]`: `layers[0].input[image_token_mask] == image_features`. On the wrappers in the family's `IMAGE_WRAPPERS`. |
 
 `input_ids`, `attention_mask` and `input_size` are served at the model's input, the first location of a run: read them before any block's value in the same trace.
 
@@ -127,6 +130,7 @@ Each is a `StandardizedProperty`: it reads the config by the plain rule unless t
 | `model.embed_tokens`, `model.norm`, `model.lm_head` | The embedding, the final norm, the unembedding, as envoys. |
 | `model.layers[i].self_attn`, `.mlp`, `.linear_attn` | The family's `Attention`, `Mlp`, `LinearAttention`; `linear_attn` on a hybrid's DeltaNet blocks only, `mlp` absent on OPT. |
 | `model.layers[i].input_layernorm`, `.post_attention_layernorm` | Aliases of the block's norms where the family has them; their meaning varies by family (see [families.md](families.md)). |
+| `model.vision`, `model.projector` | On a multimodal wrapper whose family names them: the vision tower (a `Vision`; `vision.layers[i]`, `vision.patch_embed`, `vision.norm`; sizes `num_layers`, `hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size`) and the module whose output is scattered into the text stream. |
 | `model.add_prefix_false_tokenizer` | The checkpoint's tokenizer loaded with `add_prefix_space=False`, so `"word"` and `" word"` differ; loaded on first use. |
 | `model.tokenizer`, `model.config` | nnsight's, unchanged. |
 

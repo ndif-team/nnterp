@@ -23,7 +23,9 @@ def pinned(entry):
     """The checkpoint the family's own suite runs on: its ``REPO``, which is ``PINNED`` or, where the
     suite rewrites the tiny checkpoint's config, a local copy of it."""
     module = importlib.import_module(f"test_{entry.MODEL_TYPE}")
-    repo = next(cls.REPO for cls in vars(module).values() if isinstance(cls, type) and "REPO" in vars(cls))
+    # the module's own suites: another family's suite it imports (falcon_mamba imports TestMamba) is not its pin
+    repo = next(cls.REPO for cls in vars(module).values()
+                if isinstance(cls, type) and cls.__module__ == module.__name__ and "REPO" in vars(cls))
     assert repo == entry.PINNED or os.path.isdir(repo), (repo, entry.PINNED)
     return repo
 

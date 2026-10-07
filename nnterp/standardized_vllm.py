@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from types import ModuleType
 from typing import Any
 
 import torch
@@ -46,29 +47,41 @@ class StandardizedVLLM(Standardized, VLLM):
 
     Args:
         repo_id: A HuggingFace repo id.
+        family: The family to use instead of the one looked up: a module or
+            any object with ``RENAME`` and ``ENVOYS`` written against vLLM's
+            module classes (and any size function or ``project_on_vocab`` it
+            defines). It applies to this model only; the config is not read
+            for it, and no model type is named or checked.
         rename: Extra aliases, merged over the family's; a key given here wins.
         envoys: Extra ``envoys=`` entries, merged over the family's ``ENVOYS``
             and nnsight's envoys for vLLM's parallel layers; a key given here wins.
         **kwargs: Passed through to ``VLLM`` (``dispatch``, ``mode``, ``taps``,
             and vLLM's engine arguments).
 
+    Attributes:
+        family: The vLLM family the checkpoint resolved to, or the ``family`` passed.
+
     Raises:
-        UnsupportedFamily: when vLLM's implementation of the checkpoint's
-            ``model_type`` has no family under `nnterp.families.vllm`.
+        UnsupportedFamily: when no family is passed and vLLM's implementation
+            of the checkpoint's ``model_type`` has no family under
+            `nnterp.families.vllm`.
     """
 
     def __init__(
         self,
         repo_id: str,
         *args: Any,
+        family: ModuleType | None = None,
         rename: dict[str, str | list[str]] | None = None,
         envoys: dict | None = None,
         **kwargs: Any,
     ) -> None:
         from nnsight.modeling.vllm.envoys import parallel_envoys
 
-        config = self._read_config(repo_id, kwargs)
-        self.family = families.lookup(getattr(config, "text_config", config).model_type, engine="vllm")
+        if family is None:
+            config = self._read_config(repo_id, kwargs)
+            family = families.lookup(getattr(config, "text_config", config).model_type, engine="vllm")
+        self.family = family
         super().__init__(
             repo_id,
             *args,

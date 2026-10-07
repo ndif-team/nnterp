@@ -68,6 +68,33 @@ def test_an_engine_has_its_own_families():
         del families.REGISTRY["vllm.stablelm"]
 
 
+def test_vllm_family_passed_skips_the_lookup(monkeypatch):
+    """`StandardizedVLLM(family=)` hands the engine that family's names and envoys without reading the config.
+
+    Checked at the seam into nnsight's ``VLLM`` so it runs without vLLM; the
+    vLLM suite loads real engines.
+    """
+    from nnsight.modeling.vllm import VLLM, envoys as vllm_envoys
+
+    from nnterp import StandardizedVLLM
+
+    built = {}
+    monkeypatch.setattr(vllm_envoys, "parallel_envoys", lambda: {"parallel": "envoy"})
+    monkeypatch.setattr(VLLM, "__init__", lambda self, repo_id, *args, **kwargs: built.update(kwargs, repo_id=repo_id))
+    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, kwargs: pytest.fail("config read")))
+
+    custom = types.SimpleNamespace(RENAME={"model.layers": "layers"}, ENVOYS={"parallel": "mine", int: "layer"})
+    model = StandardizedVLLM("some/repo", family=custom, rename={"lm_head": "unembed"}, envoys={str: "extra"}, dispatch=True)
+    assert model.family is custom and built["repo_id"] == "some/repo" and built["dispatch"] is True
+    assert built["rename"] == {"model.layers": "layers", "lm_head": "unembed"}
+    assert built["envoys"] == {"parallel": "mine", int: "layer", str: "extra"}  # the family's win over nnsight's, the load's over both
+    assert "family" not in built and families.REGISTRY == {}
+
+    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, kwargs: types.SimpleNamespace(model_type="stablelm")))
+    with pytest.raises(UnsupportedFamily, match="'stablelm' on vllm"):
+        StandardizedVLLM("some/repo")
+
+
 def test_preloaded_module_uses_its_own_config():
     module = AutoModelForCausalLM.from_pretrained(GPT2)
     model = StandardizedTransformer(module)

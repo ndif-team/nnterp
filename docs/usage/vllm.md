@@ -292,6 +292,24 @@ blocks return a pair whose first element is already the whole stream. Then add
 checkpoint both engines load, with an attention head at least 32 wide; the suite compares
 every value with `StandardizedTransformer`'s.
 `nnterp.families.register(module, engine="vllm")` (or `register(family, "my_type", engine="vllm")`) adds one from outside the package.
+`StandardizedVLLM(repo_id, family=my_family)` uses one for a single load instead: the
+lookup is skipped (the config is not read for it, nothing is registered), `model.family` is
+`my_family`, and `rename=` / `envoys=` still layer on top. `my_family` is a module or a
+`types.SimpleNamespace` with `RENAME` and `ENVOYS` keyed on vLLM's classes, so a shipped
+family extends as on transformers
+([registering](../extending/registering.md#passing-a-family-at-load)):
+
+```python
+import types
+from nnterp import StandardizedVLLM
+from nnterp.families.vllm import llama
+
+family = types.SimpleNamespace(**vars(llama))
+family.RENAME = {**llama.RENAME, "mlp": ["mlp", "ffn"]}
+model = StandardizedVLLM("HuggingFaceTB/SmolLM2-135M-Instruct", family=family, dispatch=True,
+                         gpu_memory_utilization=0.2, max_model_len=1024)
+assert model.family is family and model.layers[0].ffn is model.layers[0].mlp
+```
 
 ## Gotchas
 

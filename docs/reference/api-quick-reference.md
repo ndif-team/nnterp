@@ -44,7 +44,7 @@ Reads within one trace follow the forward: the pattern is produced inside block 
 | Name | What it is |
 |---|---|
 | `StandardizedTransformer` | The model class: a `TransformersModel` renamed to the standard vocabulary and wrapped in the family's envoys. |
-| `StandardizedVLLM` | The same over nnsight's `VLLM` engine, with the family from `nnterp.families.vllm`; see [usage/vllm](../usage/vllm.md). |
+| `StandardizedVLLM` | The same over nnsight's `VLLM` engine, with the family from `nnterp.families.vllm` (or `family=`); see [usage/vllm](../usage/vllm.md). |
 | `Standardized` | What the two share: sizes, `support()`, `steer`, `skip_layers`, `get_topk_closest_tokens`. |
 | `Layer`, `Attention`, `Mlp`, `LinearAttention`, `StateSpace` | The base envoys a family subclasses; the hosts of the standard values. |
 | `RecurrentMixer` | The base of `LinearAttention` and `StateSpace`: how a recurrent mixer's values are reached at its kernel call, the per-token state and the kernel routing. |

@@ -25,8 +25,8 @@ CHECKPOINTS = [
 #: are this family too, but their blocks hold no ``linear_attn``, and the build refuses a checkpoint on which a
 #: listed sublayer matches no block (only an ``mlp``/``moe`` pair may be half absent); they wait on that.
 
-#: Granite lineage (205, set by granite); below granite_swa (199), clear of Cohere's 188.
-PALETTE = {"hue": 194}
+#: Granite lineage (205, set by granite); below granite_swa (199), between Cohere 2 (188) and Bamba (196).
+PALETTE = {"hue": 192}
 VLLM = False
 QUIRKS = ["scaled-residual-adds", "hybrid", "mamba2", "nope-blocks", "mixture-of-experts", "embedding-multiplier",
           "scaled-logits"]

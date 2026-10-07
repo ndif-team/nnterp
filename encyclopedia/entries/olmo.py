@@ -23,7 +23,7 @@ CHECKPOINTS = [
 #: OLMo lineage (olmo2 58, olmoe 70, olmo_hybrid 64); 55 sits between jetmoe's 52 and olmo2's 58.
 PALETTE = {"hue": 55}
 VLLM = False
-QUIRKS = ["layernorm"]
+QUIRKS = ["layernorm", "weightless-norms"]
 
 #: Shapes, identities and read places are from the pinned tiny checkpoint (float32, CPU); the clip_qkv
 #: trap also from the tiny loaded with clip_qkv=0.05. Real numbers are from allenai/OLMo-1B-0724-hf in

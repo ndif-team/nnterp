@@ -26,7 +26,7 @@ CHECKPOINTS = [
 
 PALETTE = {"hue": 350}
 VLLM = True
-QUIRKS = ["residual-inside-module", "tuple-blocks", "own-attention-arithmetic", "fused-qkv", "layernorm"]
+QUIRKS = ["residual-inside-module", "tuple-blocks", "own-attention-arithmetic", "alibi", "fused-qkv", "layernorm"]
 
 #: What the visualization draws: a sequential block with two bias-free LayerNorm pre-norms; the block adds the
 #: attention, the MLP module adds the residual itself.

@@ -23,7 +23,7 @@ CHECKPOINTS = [
 
 PALETTE = {"hue": 325}
 VLLM = True
-QUIRKS = ["parallel-blocks", "tuple-blocks", "own-attention-arithmetic", "fused-qkv", "layernorm"]
+QUIRKS = ["parallel-blocks", "tuple-blocks", "own-attention-arithmetic", "fused-qkv", "layernorm", "alibi"]
 
 INTERIOR = [
     "attention_queries", "attention_keys", "attention_values",

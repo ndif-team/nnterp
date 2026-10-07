@@ -251,7 +251,7 @@ pre .rn { font-weight: 500; }
 .prose h2 { font-family: var(--disp); font-weight: 900; font-size: clamp(26px, 2.4vw, 38px); line-height: 0.95; letter-spacing: -0.012em; margin: 2rem 0 0.6rem; }
 .prose h2:first-child { margin-top: 0.4rem; }
 .prose p, .prose li { font-size: clamp(15px, 1vw, 17px); }
-.prose code { background: var(--paper-dk); padding: 1px 4px; }
+.prose code { background: var(--paper-dk); padding: 1px 4px; overflow-wrap: anywhere; }
 .prose pre code { background: none; padding: 0; }
 .prose strong { font-weight: 700; }
 .prose a { text-decoration: underline; text-decoration-color: var(--mark-deep); }

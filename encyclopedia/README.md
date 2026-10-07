@@ -203,6 +203,11 @@ The entry states facts about a family, and each one has a source. Before writing
      - `variants`: `{layer_type: detail}` keyed on the values of `config.layer_types`, shown instead
        of `detail` as the slider moves, for blocks that differ only in a setting; the same length
        limit applies.
+     - `parallel_with_next`: optional, `True` on a sublayer of a `"sequential"` block that reads the
+       same stream point as the sublayer after it, the two joining the stream at one add (Falcon-H1's
+       Mamba-2 mixer and attention, then the MLP). The pair is drawn side by side with one `⊕`, the
+       stream has no point between them, and the default identity sums the pair in parentheses;
+       each keeps its own hover texts. A shared pre-norm is listed on both, as in a parallel block;
      - `block`: optional, the native class name of the blocks this sublayer is drawn on
        (`"OlmoHybridAttentionDecoderLayer"`); a sublayer without it is drawn on every class. Give it
        when one host is drawn differently on two block classes: OLMo-Hybrid's `mlp` is pre-normed on

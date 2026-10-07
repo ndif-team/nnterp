@@ -36,8 +36,7 @@ NORM_NOTE = ("One module, input_layernorm, drawn on both mixers' rows: the Mamba
 
 #: The block in forward order: the Mamba-2 mixer and the attention both read input_layernorm's output and join the
 #: stream at one add, then the MLP reads the stream after that add. `parallel_with_next` marks the mixer as the
-#: first branch of that pair; the generator does not read it yet (see the report), so the page draws the three in
-#: sequence.
+#: first branch of that pair, so the page draws the two mixers side by side, joining at one add.
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

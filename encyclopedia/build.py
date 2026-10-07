@@ -637,6 +637,8 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         }
         if key != host:
             sub["key"] = key
+        if spec.get("parallel_with_next"):
+            sub["parallel_with_next"] = True
         matched = [(c, n) for c, is_moe, n in info["host_classes"][host] if kind not in ("mlp", "moe") or is_moe == (kind == "moe")]
         classes, count = [c for c, _ in matched], max(n for _, n in matched)
         extra = f"{count} standard value{'s' if count != 1 else ''}; `.input` is what the sublayer reads."
@@ -712,9 +714,17 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         subs = [sublayers[k] for k in shape]
         mids = []
         # Between two sequential sublayers the stream has a value of its own; a parallel block has no such point.
+        # A sublayer marked parallel_with_next and the one after it read one stream point and join at one
+        # add: there is no stream point between them (None keeps the list aligned with the sublayers).
+        paired = [bool(sub.get("parallel_with_next")) and k + 1 < len(subs) for k, sub in enumerate(subs)]
         for k in range(len(subs) - 1 if block_spec.get("topology", "sequential") == "sequential" else 0):
             nxt = subs[k + 1]
+            if paired[k]:
+                mids.append(None)
+                continue
             after = subs[k]["label"].lower()
+            if k and paired[k - 1]:
+                after = f"{subs[k - 1]['label'].lower()} and {after}"
             mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
             if nxt["pre_norm"]:
                 nodes[mid] = node(stream, f"{base}.{nxt['pre_norm']}.input",
@@ -723,7 +733,11 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                 nodes[mid] = node(stream, f"{base}.{nxt['host']}.input",
                                   f"The stream after the {after} add, as the next sublayer receives it. No standard value of its own.")
             mids.append(mid)
-        terms = " + ".join(f"{sub['host']}.{sub['contribution']}" for sub in subs)
+        terms = [f"{sub['host']}.{sub['contribution']}" for sub in subs]
+        for k in reversed(range(len(subs))):
+            if paired[k]:
+                terms[k:k + 2] = [f"({terms[k]} + {terms[k + 1]})"]
+        terms = " + ".join(terms)
         identity = block_spec.get("identity", f"{base.removeprefix('model.')}.input + {terms} == layer_output")
         plus = "plus" if single else f"plus.{s}"
         checked = "on this family" if stream == "residual stream" else "on every vision encoder block"

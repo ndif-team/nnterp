@@ -91,14 +91,19 @@
     while (svg.firstChild) svg.removeChild(svg.firstChild);
     marker(arr, getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#3A2516');
     var subs = shape.subs.map(function (k) { return all[k]; }), n = subs.length;
+    // a sublayer marked parallel_with_next and the next one branch from one stream point and join at one add
+    var first = subs.map(function (sub, k) { return !parallel && !!sub.parallel_with_next && k + 1 < n; });
+    var second = subs.map(function (_, k) { return k > 0 && first[k - 1]; });
     // a box taller than the base moves the rows after it down by its extra height
     var ext = subs.map(function (sub) { return (heightOf(sub) - BASE) / 2; });
     var rowY = [], joinY = [], y = TOP + ext[0];
     subs.forEach(function (_, k) {
       rowY.push(y);
-      y += (parallel ? 130 : ROW) + ext[k] + (k + 1 < n ? ext[k + 1] : 0);
+      y += (parallel || first[k] ? 130 : ROW) + ext[k] + (k + 1 < n ? ext[k + 1] : 0);
     });
-    subs.forEach(function (_, k) { joinY.push(parallel ? rowY[n - 1] + 110 + ext[n - 1] : rowY[k] + 140 + ext[k]); });
+    subs.forEach(function (_, k) {
+      joinY.push(parallel ? rowY[n - 1] + 110 + ext[n - 1] : first[k] ? rowY[k + 1] + 110 + ext[k + 1] : rowY[k] + 140 + ext[k]);
+    });
     var H = joinY[n - 1] + 60;
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     var mids = shape.mids || subs.slice(1).map(function (_, k) { return 'stream.mid.' + k; });
@@ -106,7 +111,7 @@
     // -- the stream -----------------------------------------------------------------
     var topY = 24, botY = H - 26;
     var segments = [[topY, rowY[0], 'stream.input']];
-    if (!parallel) for (var k = 0; k < n - 1; k++) segments.push([joinY[k], rowY[k + 1], mids[k]]);
+    if (!parallel) for (var k = 0; k < n - 1; k++) if (!first[k]) segments.push([joinY[k], rowY[k + 1], mids[k]]);
     segments.push([joinY[n - 1], botY, 'stream.output']);
     // the stream between a branch and its join carries the input of that sublayer's add: same name as the segment above
     var full = el('g', { 'class': 'role-stream streamline' });
@@ -121,10 +126,10 @@
 
     // -- sublayers ------------------------------------------------------------------
     subs.forEach(function (sub, k) {
-      var y = rowY[k], exitY = parallel ? rowY[0] : y, jY = joinY[k], key = keyOf(sub), role = s.roles[key] || 'mlp';
+      var y = rowY[k], exitY = parallel ? rowY[0] : second[k] ? rowY[k - 1] : y, jY = joinY[k], key = keyOf(sub), role = s.roles[key] || 'mlp';
       var h = heightOf(sub);
       // branch out of the stream
-      el('path', { 'class': 'edge', d: parallel
+      el('path', { 'class': 'edge', d: parallel || second[k]
         ? 'M' + SX + ',' + exitY + ' H' + 190 + ' V' + y + ' H' + (sub.pre_norm ? PRE.x : SUB.x)
         : 'M' + SX + ',' + exitY + ' H' + (sub.pre_norm ? PRE.x : SUB.x), 'marker-end': arrow });
       el('circle', { cx: SX, cy: exitY, r: 5, fill: 'var(--stream-deep)' });
@@ -178,14 +183,14 @@
       // the contribution: back into the stream
       // In a parallel block every contribution meets the stream at the one add, each on its own
       // return path, the first sublayer's outermost, so no two edges or labels share a line.
-      var lane = parallel ? (n - 1 - k) : 0, retX = RET - lane * 24, inY = jY - lane * 26;
+      var lane = parallel ? (n - 1 - k) : first[k] ? 1 : 0, retX = RET - lane * 24, inY = jY - lane * 26;
       var gc2 = group('contrib.' + key, role);
       var d = 'M' + outX + ',' + y + ' H' + retX + ' V' + inY + ' H' + (SX + 16);
       el('path', { 'class': 'edge-contrib', d: d, 'marker-end': arrow }, gc2);
       el('path', { 'class': 'hit', d: d, 'stroke-width': 18, fill: 'none', stroke: 'transparent' }, gc2);
       text(gc2, retX - 8, inY - 10, sub.contribution, 'label-role', 'end');
       // the add
-      if (!parallel || k === n - 1) {
+      if (parallel ? k === n - 1 : !first[k]) {
         var gplus = group(shape.plus, 'stream');
         el('circle', { cx: SX, cy: jY, r: 14, 'class': 'plus' }, gplus);
         text(gplus, SX, jY + 8, '+', 'plus-sign', 'middle');

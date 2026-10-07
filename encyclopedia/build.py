@@ -294,6 +294,15 @@ def summarize_reason(reason: Any, num_layers: int) -> str | None:
     return f"{where}: " + " / ".join(reasons)
 
 
+def has_module(envoy: Any, name: str) -> bool:
+    """Whether ``envoy`` has a child module under ``name``, native or standard."""
+    try:
+        envoy.get(name)
+    except AttributeError:
+        return False
+    return True
+
+
 def children_of(layer: Any) -> tuple[str, ...]:
     """A block's children as a BLOCK may name them: the native modules' names and the block's aliases."""
     return tuple(sorted({name for name, _ in layer._module.named_children()} | set(layer._aliases)))
@@ -385,8 +394,10 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
     moe = next((child for found in children.values() for child in found if runs_mixture(child)), None)
     mixer = next((child for found in children.values() for child in found if isinstance(child, RecurrentMixer)), None)
 
+    # the root's standard modules this checkpoint has (OPT-350m has no final norm)
+    root_names = [name for name in ROOT_NAMES if has_module(eager, name)]
     paths = []
-    for name in ROOT_NAMES:
+    for name in root_names:
         paths.append((f"model.{name}", eager.get(name).path))
     paths.append(("model.layers[i]", eager.get("layers.0").path))
     for name, child in block._named_children():
@@ -429,6 +440,7 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "config": config_rows,
         "rename": list(family.RENAME.items()),
         "paths": paths,
+        "root_names": root_names,
         "values": values,
         "support": support,
         "repr": root_printout(eager, tower=bool(wrapper)),
@@ -856,8 +868,12 @@ def strip_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
         "strip.head": node("unembedding", "model.lm_head.output", "The raw projection onto the vocabulary."),
         "strip.logits": value_node(root["logits"], "logits"),
     }
+    if "norm" not in info["root_names"]:
+        # no final norm on this checkpoint (OPT-350m): the strip has no norm node
+        del nodes["strip.norm"]
     for key, note in strip.items():
-        nodes[f"strip.{key}"]["extra"] = note
+        if f"strip.{key}" in nodes:
+            nodes[f"strip.{key}"]["extra"] = note
     if info.get("vision"):
         embed = nodes["strip.embed"]
         embed["extra"] = f"{embed['extra']} {IMAGE_SENTENCE}" if embed["extra"] else IMAGE_SENTENCE

@@ -45,7 +45,8 @@ rearrange them.
    Nothing else: no layer count, no vLLM or eager stamps.
    The selector is the page's list of checkpoints; the suite's pinned tiny checkpoints are not on the
    page.
-2. **The block** (`01`). The model-level strip (`embed_tokens → layers → norm → lm_head → logits`),
+2. **The block** (`01`). The model-level strip (`embed_tokens → layers → norm → lm_head → logits`;
+   a checkpoint with no final norm, OPT-350m, has no `norm` node and its `STRIP["norm"]` is not shown),
    a slider over the blocks with one tick per block coloured by `config.layer_types` (by the block's
    shape on a family whose blocks come in several; clicking a tick, or Enter or Space on it, selects
    that block as the slider does), and the block diagram: the residual stream as a

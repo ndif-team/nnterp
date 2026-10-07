@@ -13,8 +13,8 @@ REFERENCE = "ibm-research/moe-7b-1b-active-shared-experts"
 PINNED = "hf-tiny-v2/tiny-random-GraniteMoeSharedForCausalLM"
 CHECKPOINTS = ["ibm-research/moe-7b-1b-active-shared-experts"]
 
-#: Granite lineage (205, set by granite); beside granitemoe (215).
-PALETTE = {"hue": 219}
+#: Set by hues.py (lineage: Granite).
+PALETTE = {"hue": 217}
 VLLM = False
 QUIRKS = ["scaled-residual-adds", "mixture-of-experts", "embedding-multiplier", "scaled-logits"]
 

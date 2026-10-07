@@ -21,7 +21,8 @@ CHECKPOINTS = [
     "tiiuae/falcon-rw-1b", "tiiuae/falcon-rw-7b",
 ]
 
-PALETTE = {"hue": 325}
+#: Set by hues.py (lineage: Falcon).
+PALETTE = {"hue": 17}
 VLLM = True
 QUIRKS = ["parallel-blocks", "tuple-blocks", "own-attention-arithmetic", "fused-qkv", "layernorm", "alibi"]
 

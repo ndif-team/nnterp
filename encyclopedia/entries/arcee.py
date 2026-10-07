@@ -16,9 +16,8 @@ CHECKPOINTS = [
     "arcee-ai/AFM-4.5B-Preview", "arcee-ai/AFM-4.5B-Base-Pre-Anneal",
 ]
 
-#: Kin of afmoe (315), which has no free hue within 15 degrees; 13 sits between youtu's 9 and mamba's 17,
-#: one of the largest free gaps.
-PALETTE = {"hue": 13}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 235}
 VLLM = False
 QUIRKS = ["squared-relu"]
 

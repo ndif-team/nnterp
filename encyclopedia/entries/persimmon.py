@@ -25,8 +25,8 @@ def load(checkpoint, **kwargs):
     return StandardizedTransformer(checkpoint, tokenizer=AutoTokenizer.from_pretrained(PINNED), **kwargs)
 
 
-#: No kin among the entries; set in the largest free gap of the hue table.
-PALETTE = {"hue": 171}
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 73}
 VLLM = False
 QUIRKS = ["fused-qkv", "qkv-bias", "qk-norm", "partial-rotary", "squared-relu", "layernorm"]
 

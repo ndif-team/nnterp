@@ -19,6 +19,8 @@ CHECKPOINTS = [
     "PygmalionAI/pygmalion-6b",
 ]
 
+#: Set by hues.py (lineage: GPT-J).
+PALETTE = {"hue": 54}
 VLLM = True
 QUIRKS = ["parallel-blocks", "tuple-blocks", "own-attention-arithmetic", "partial-rotary", "interleaved-rotary",
           "layernorm"]

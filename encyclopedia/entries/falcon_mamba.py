@@ -16,8 +16,8 @@ CHECKPOINTS = [
     "tiiuae/Falcon3-Mamba-7B-Base", "tiiuae/Falcon3-Mamba-7B-Instruct",
 ]
 
-#: Mamba lineage, beside mamba (17) and mamba2 (8).
-PALETTE = {"hue": 26}
+#: Set by hues.py (lineage: Mamba).
+PALETTE = {"hue": 5}
 VLLM = False
 QUIRKS = ["mamba1", "fp32-residual"]
 

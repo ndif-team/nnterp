@@ -17,6 +17,8 @@ CHECKPOINTS = [
     "nvidia/Nemotron-4-Mini-Hindi-4B-Base", "nvidia/Nemotron-4-Mini-Hindi-4B-Instruct",
 ]
 
+#: Set by hues.py (lineage: Nemotron).
+PALETTE = {"hue": 223}
 VLLM = False
 QUIRKS = ["layernorm", "gain-norm", "partial-rotary", "squared-relu"]
 

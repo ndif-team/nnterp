@@ -26,8 +26,8 @@ CHECKPOINTS = [
     "ibm-granite/granite-4.0-micro-base", "ibm-granite/granite-4.0-micro",
 ]
 
-#: Granite lineage (205, set by granite); below granite_swa (199), between Cohere 2 (188) and Bamba (196).
-PALETTE = {"hue": 192}
+#: Set by hues.py (lineage: Granite).
+PALETTE = {"hue": 201}
 VLLM = False
 QUIRKS = ["scaled-residual-adds", "hybrid", "mamba2", "nope-blocks", "mixture-of-experts", "embedding-multiplier",
           "scaled-logits"]

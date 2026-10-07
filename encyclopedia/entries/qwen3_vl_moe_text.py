@@ -99,8 +99,8 @@ and `.output` before `vision.tower_output`; then `vision.image_features`; then, 
     },
 }
 
-#: The Qwen lineage sits at 285 (qwen2), 297 (qwen3), 273 (qwen3_5_text) and 303 (qwen3_vl_text); this family takes 311.
-PALETTE = {"hue": 311}
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 304}
 VLLM = False
 QUIRKS = ["qk-norm", "multimodal-rotary", "mixture-of-experts"]
 

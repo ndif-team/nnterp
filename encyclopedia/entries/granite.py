@@ -26,7 +26,7 @@ CHECKPOINTS = [
     "ibm-granite/granite-4.2-3b", "ibm-granite/granite-4.2-8b", "ibm-granite/granite-4.2-30b",
 ]
 
-#: `granite` hashes to 156, beside Gemma's 145 and 157; the Granite lineage sits at 205.
+#: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 205}
 VLLM = False
 QUIRKS = ["scaled-residual-adds", "embedding-multiplier", "scaled-logits"]

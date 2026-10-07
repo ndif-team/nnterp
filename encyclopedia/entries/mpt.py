@@ -24,7 +24,8 @@ CHECKPOINTS = [
     "ethzanalytics/mpt-7b-storywriter-sharded",
 ]
 
-PALETTE = {"hue": 350}
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 86}
 VLLM = True
 QUIRKS = ["residual-inside-module", "tuple-blocks", "own-attention-arithmetic", "alibi", "fused-qkv", "layernorm"]
 

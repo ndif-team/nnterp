@@ -21,8 +21,8 @@ CHECKPOINTS = [
     "state-spaces/mamba2-1.3b", "state-spaces/mamba2-2.7b",
 ]
 
-#: Mamba lineage, beside mamba (17).
-PALETTE = {"hue": 8}
+#: Set by hues.py (lineage: Mamba).
+PALETTE = {"hue": 2}
 VLLM = False
 QUIRKS = ["mamba2", "one-sublayer-blocks", "fp32-residual"]
 

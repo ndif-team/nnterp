@@ -17,7 +17,8 @@ CHECKPOINTS = [
     "ByteDance-Seed/Seed-OSS-36B-Instruct",
 ]
 
-PALETTE = {"hue": 258}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 256}
 VLLM = False
 QUIRKS = ["qkv-bias"]
 

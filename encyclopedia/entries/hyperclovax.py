@@ -14,9 +14,8 @@ REFERENCE = "naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"
 PINNED = "hf-tiny-v2/tiny-random-HyperCLOVAXForCausalLM"
 CHECKPOINTS = ["naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"]
 
-#: No kin among the entries; the hash (186) sits among Cohere and ERNIE (176 to 188), so it takes the gap
-#: between CodeGen (234) and BLOOM (242).
-PALETTE = {"hue": 238}
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 273}
 VLLM = False
 QUIRKS = ["sandwich-norms", "scaled-residual-adds", "embedding-multiplier", "scaled-logits"]
 

@@ -16,8 +16,8 @@ CHECKPOINTS = [
     "facebook/opt-6.7b", "facebook/opt-13b", "facebook/opt-30b", "facebook/opt-66b",
 ]
 
-#: OPT and XGLM share the block (fairseq's decoder layer); OPT sets the lineage's hue.
-PALETTE = {"hue": 336}
+#: Set by hues.py (lineage: OPT).
+PALETTE = {"hue": 78}
 VLLM = False
 QUIRKS = ["no-mlp", "position-embeddings", "layernorm", "qkv-bias"]
 

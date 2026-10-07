@@ -16,9 +16,8 @@ CHECKPOINTS = [
     "mistralai/Mixtral-8x22B-v0.1", "mistralai/Mixtral-8x22B-Instruct-v0.1",
 ]
 
-#: Llama lineage: llama hashes to 148, and mistral's entry sits at 152 (its own hash is 1); Gemma holds 133-157
-#: and llama4_text 162, so this family takes 167.
-PALETTE = {"hue": 167}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 263}
 VLLM = True
 QUIRKS = ["mixture-of-experts"]
 

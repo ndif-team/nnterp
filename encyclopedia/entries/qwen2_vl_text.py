@@ -67,8 +67,8 @@ prompt = model.processor.apply_chat_template(content)
     },
 }
 
-#: The Qwen lineage sits at 285 (qwen2), 297 (qwen3) and 273 (qwen3_5_text); this family takes 279.
-PALETTE = {"hue": 279}
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 288}
 VLLM = False
 QUIRKS = ["qkv-bias", "multimodal-rotary"]
 

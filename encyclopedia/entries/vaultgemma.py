@@ -13,7 +13,8 @@ REFERENCE = "google/vaultgemma-1b"
 PINNED = "hf-tiny-v2/tiny-random-VaultGemmaForCausalLM"
 CHECKPOINTS = ["google/vaultgemma-1b"]
 
-PALETTE = {"hue": 151}
+#: Set by hues.py (lineage: Gemma).
+PALETTE = {"hue": 168}
 VLLM = False
 QUIRKS = ["scaled-embeddings", "gain-norm"]
 

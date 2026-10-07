@@ -165,6 +165,8 @@ connector reading `vision.tower_output`, and `vision.image_features` read at `in
     },
 }
 
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 241}
 VLLM = True
 QUIRKS: list[str] = []
 

@@ -18,8 +18,8 @@ CHECKPOINTS = [
     "bigcode/starcoder2-15b-instruct-v0.1",
 ]
 
-#: Beside gpt_bigcode's 39, StarCoder's family.
-PALETTE = {"hue": 43}
+#: Set by hues.py (lineage: GPT-2).
+PALETTE = {"hue": 41}
 VLLM = False
 QUIRKS = ["layernorm", "qkv-bias", "sliding-window"]
 

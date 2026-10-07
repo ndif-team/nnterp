@@ -95,7 +95,7 @@ template writes the three for an `{"type": "image"}` entry.
     },
 }
 
-#: The Qwen lineage sits at 285 (qwen2), 297 (qwen3) and 273 (qwen3_5_text); this family takes 291.
+#: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 291}
 VLLM = False
 QUIRKS = ["qkv-bias", "multimodal-rotary"]

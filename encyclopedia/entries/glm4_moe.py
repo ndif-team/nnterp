@@ -17,8 +17,8 @@ CHECKPOINTS = [
     "zai-org/GLM-4.6", "zai-org/GLM-4.7",
 ]
 
-#: GLM lineage: glm sets 84; glm4_moe sits 5 degrees from it on the other side from glm4 (79).
-PALETTE = {"hue": 89}
+#: Set by hues.py (lineage: GLM).
+PALETTE = {"hue": 122}
 VLLM = False
 QUIRKS = ["mixture-of-experts", "dense-first-blocks", "qkv-bias", "qk-norm", "partial-rotary"]
 

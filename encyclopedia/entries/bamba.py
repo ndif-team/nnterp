@@ -18,9 +18,8 @@ CHECKPOINTS = [
     "ibm-ai-platform/Bamba-9B-1.8T", "ibm-ai-platform/Bamba-9B-2T",
 ]
 
-#: No lineage row: IBM's hybrid sits below Granite (205), whose granitemoehybrid is Bamba's block with
-#: Granite's multipliers.
-PALETTE = {"hue": 196}
+#: Set by hues.py (lineage: Granite).
+PALETTE = {"hue": 198}
 VLLM = False
 QUIRKS = ["hybrid", "mamba2", "tuple-blocks", "partial-rotary"]
 

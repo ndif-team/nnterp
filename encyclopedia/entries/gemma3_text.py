@@ -76,7 +76,8 @@ with torch.no_grad(), model.trace(prompt, images=[image]):
     },
 }
 
-PALETTE = {"hue": 157}
+#: Set by hues.py (lineage: Gemma).
+PALETTE = {"hue": 159}
 VLLM = True
 QUIRKS = ["sandwich-norms", "qk-norm", "sliding-window", "scaled-embeddings", "gain-norm"]
 

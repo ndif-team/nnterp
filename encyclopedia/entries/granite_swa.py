@@ -14,8 +14,8 @@ REFERENCE = "ibm-granite/granite-swash-2b"
 PINNED = "hf-tiny-v2/tiny-random-GraniteSWAForCausalLM"
 CHECKPOINTS = ["ibm-granite/granite-swash-2b"]
 
-#: Granite lineage (205, set by granite); Granite SWA sits beside it.
-PALETTE = {"hue": 199}
+#: Set by hues.py (lineage: Granite).
+PALETTE = {"hue": 208}
 VLLM = False
 QUIRKS = ["scaled-residual-adds", "sliding-window", "sink-scaled-heads", "embedding-multiplier", "scaled-logits"]
 

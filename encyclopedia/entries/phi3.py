@@ -20,8 +20,8 @@ CHECKPOINTS = [
     "microsoft/phi-4", "microsoft/Phi-4-reasoning", "microsoft/Phi-4-reasoning-plus",
 ]
 
-#: The Phi lineage: phi 106, phi3 113, phimoe 120.
-PALETTE = {"hue": 113}
+#: Set by hues.py (lineage: Phi).
+PALETTE = {"hue": 140}
 VLLM = True
 QUIRKS = ["fused-qkv", "sliding-window", "partial-rotary"]
 

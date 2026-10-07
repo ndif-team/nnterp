@@ -165,7 +165,8 @@ the same load.
     },
 }
 
-PALETTE = {"hue": 133}
+#: Set by hues.py (lineage: Gemma).
+PALETTE = {"hue": 162}
 VLLM = False
 QUIRKS = [
     "sandwich-norms", "scaled-residual-adds", "qk-norm", "sliding-window", "proportional-rotary", "borrowed-kv",

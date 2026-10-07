@@ -19,8 +19,8 @@ CHECKPOINTS = [
     "baidu/ERNIE-4.5-300B-A47B-Base-PT", "baidu/ERNIE-4.5-300B-A47B-PT",
 ]
 
-#: ERNIE lineage: ernie4_5 sets 180; 185 sits beside it, short of cohere2's 188.
-PALETTE = {"hue": 185}
+#: Set by hues.py (lineage: ERNIE).
+PALETTE = {"hue": 189}
 VLLM = False
 QUIRKS = ["interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 

@@ -22,9 +22,8 @@ CHECKPOINTS = [
     "tiiuae/Falcon-H1-Tiny-90M-Base", "tiiuae/Falcon-H1-Tiny-90M-Instruct",
 ]
 
-#: Falcon kin with no Falcon row yet; no free hue sits 15 degrees from every row, so this one is between Qwen's 311
-#: and Kimi's 330.
-PALETTE = {"hue": 320}
+#: Set by hues.py (lineage: Falcon).
+PALETTE = {"hue": 14}
 VLLM = False
 QUIRKS = ["parallel-mixers", "mamba2", "scaled-residual-adds", "embedding-multiplier", "scaled-logits", "tuple-blocks"]
 

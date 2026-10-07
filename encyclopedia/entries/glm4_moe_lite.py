@@ -14,8 +14,8 @@ PINNED = "hf-tiny-v2/tiny-random-Glm4MoeLiteForCausalLM"
 #: The one public checkpoint whose config is glm4_moe_lite (GLM-4.7 itself is glm4_moe).
 CHECKPOINTS = ["zai-org/GLM-4.7-Flash"]
 
-#: GLM lineage: glm sets 84 (glm4 79, glm4_moe 89); the latent-attention line sits at 94 (glm_moe_dsa 74).
-PALETTE = {"hue": 94}
+#: Set by hues.py (lineage: GLM).
+PALETTE = {"hue": 125}
 VLLM = False
 QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 

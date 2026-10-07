@@ -17,8 +17,8 @@ CHECKPOINTS = [
     "zai-org/GLM-5.2", "zai-org/GLM-5.2-FP8", "zai-org/GLM-5.3", "zai-org/GLM-5.3-BF16",
 ]
 
-#: GLM lineage: glm sets 84 (glm4 79, glm4_moe 89, glm4_moe_lite 94).
-PALETTE = {"hue": 74}
+#: Set by hues.py (lineage: GLM).
+PALETTE = {"hue": 128}
 VLLM = False
 QUIRKS = ["latent-attention", "sparse-attention", "tuple-blocks", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 

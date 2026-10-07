@@ -119,7 +119,8 @@ Command A Vision's projector has no norm: the shuffled vector goes straight into
     },
 }
 
-PALETTE = {"hue": 188}
+#: Set by hues.py (lineage: Cohere).
+PALETTE = {"hue": 177}
 VLLM = True
 QUIRKS = ["parallel-blocks", "layernorm", "sliding-window", "nope-blocks", "interleaved-rotary", "scaled-logits"]
 

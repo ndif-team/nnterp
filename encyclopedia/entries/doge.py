@@ -49,8 +49,8 @@ def load(checkpoint, **kwargs):
     return StandardizedTransformer(checkpoint, **kwargs)
 
 
-#: No kin among the entries; the free gap between dbrx and mpt (350) and deepseek_v2 (357).
-PALETTE = {"hue": 353}
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 21}
 VLLM = False
 QUIRKS = ["scaled-residual-adds", "qk-norm"]
 

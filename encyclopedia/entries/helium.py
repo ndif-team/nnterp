@@ -15,9 +15,8 @@ PINNED = "hf-tiny-v2/tiny-random-HeliumForCausalLM"
 #: per-domain variants) is model_type llama and loads as the llama family.
 CHECKPOINTS = ["kyutai/helium-1-preview-2b"]
 
-#: Llama-shaped, but the Llama lineage's hues (139 to 167) are full; 124 sits between phimoe's 120 and
-#: gemma4_unified_text's 127, one of the largest free gaps.
-PALETTE = {"hue": 124}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 250}
 VLLM = False
 QUIRKS = ["interleaved-rotary"]
 

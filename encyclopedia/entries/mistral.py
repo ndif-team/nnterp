@@ -161,8 +161,8 @@ pinned tiny checkpoint a 64 × 64 image is three rows of 576 patches, the projec
     },
 }
 
-#: The Llama lineage sits at the hash of `llama` (148); Gemma's 133, 145 and 157 are near, so this family takes 152.
-PALETTE = {"hue": 152}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 259}
 VLLM = True
 QUIRKS: list[str] = ["sliding-window"]
 

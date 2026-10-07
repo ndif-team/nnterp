@@ -20,9 +20,8 @@ CHECKPOINTS = [
     "arcee-ai/Trinity-Large-Thinking",
 ]
 
-#: No kin among the entries; the hash of afmoe (320) sits on falcon_h1's and jamba's. 315 is the middle of the
-#: free gap between qwen3_vl_moe_text (311) and falcon_h1 / jamba (320).
-PALETTE = {"hue": 315}
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 230}
 VLLM = False
 QUIRKS = [
     "sandwich-norms", "embedding-multiplier", "qk-norm", "sliding-window", "nope-blocks",

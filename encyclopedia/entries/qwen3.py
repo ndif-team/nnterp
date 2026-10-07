@@ -25,8 +25,8 @@ CHECKPOINTS = [
     "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B",
 ]
 
-#: The Qwen lineage sits at 285 (qwen2); qwen3 takes a hue 12 degrees from it.
-PALETTE = {"hue": 297}
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 295}
 VLLM = True
 QUIRKS = ["qk-norm"]
 

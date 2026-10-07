@@ -20,7 +20,8 @@ CHECKPOINTS = [
     "bigscience/bloomz", "bigscience/bloomz-mt",
 ]
 
-PALETTE = {"hue": 242}
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 46}
 VLLM = True
 QUIRKS = ["residual-inside-module", "tuple-blocks", "own-attention-arithmetic", "alibi", "fused-qkv", "qkv-bias", "layernorm"]
 

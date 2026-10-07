@@ -13,9 +13,8 @@ REFERENCE = "baidu/ERNIE-4.5-0.3B-Base-PT"
 PINNED = "hf-tiny-v2/tiny-random-Ernie4_5ForCausalLM"
 CHECKPOINTS = ["baidu/ERNIE-4.5-0.3B-Base-PT", "baidu/ERNIE-4.5-0.3B-PT"]
 
-#: ERNIE lineage: ernie4_5_moe takes 185. ernie4_5's hash (11) sits between mamba2 (8) and mamba (17); 180 is in
-#: the widest free gap, between cohere (176) and cohere2 (188).
-PALETTE = {"hue": 180}
+#: Set by hues.py (lineage: ERNIE).
+PALETTE = {"hue": 186}
 VLLM = False
 QUIRKS = ["interleaved-rotary"]
 

@@ -15,8 +15,8 @@ PINNED = "hf-tiny-v2/tiny-random-HunYuanMoEV1ForCausalLM"
 #: Hunyuan-A13B-Pretrain's config says ``model_type`` ``hunyuan`` and needs its own remote code: listed, greyed.
 CHECKPOINTS = ["tencent/Hunyuan-A13B-Instruct", "tencent/Hunyuan-A13B-Pretrain"]
 
-#: Hunyuan lineage: hunyuan_v1_dense is 29; the hash of hunyuan_v1_moe (316) sits among the Qwen MoE hues.
-PALETTE = {"hue": 33}
+#: Set by hues.py (lineage: HunYuan).
+PALETTE = {"hue": 29}
 VLLM = False
 QUIRKS = ["qk-norm", "mixture-of-experts"]
 

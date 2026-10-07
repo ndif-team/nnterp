@@ -95,8 +95,8 @@ text model receives.
     },
 }
 
-#: A hue for the Qwen lineage; its other families (qwen2_moe, qwen3, ...) can sit within about 15 degrees of it.
-PALETTE = {"hue": 285}
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 282}
 VLLM = True
 QUIRKS = ["qkv-bias"]
 

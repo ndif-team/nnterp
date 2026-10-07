@@ -38,8 +38,8 @@ def load(checkpoint, **kwargs):
     return StandardizedTransformer(checkpoint, **kwargs)
 
 
-#: Granite lineage (205, set by granite); GraniteMoE sits beside it.
-PALETTE = {"hue": 215}
+#: Set by hues.py (lineage: Granite).
+PALETTE = {"hue": 211}
 VLLM = False
 QUIRKS = ["scaled-residual-adds", "mixture-of-experts", "embedding-multiplier", "scaled-logits"]
 

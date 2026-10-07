@@ -13,8 +13,8 @@ REFERENCE = "microsoft/phi-2"
 PINNED = "hf-internal-testing/tiny-random-PhiForCausalLM"
 CHECKPOINTS = ["microsoft/phi-1", "microsoft/phi-1_5", "microsoft/phi-2"]
 
-#: The Phi lineage (phi, phi3, phimoe) sits in the free band between GPT-NeoX's hashed 99 and Gemma-4 unified's 127.
-PALETTE = {"hue": 106}
+#: Set by hues.py (lineage: Phi).
+PALETTE = {"hue": 137}
 VLLM = True
 QUIRKS = ["parallel-blocks", "partial-rotary", "qkv-bias", "layernorm"]
 

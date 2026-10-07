@@ -135,7 +135,8 @@ yourself, `f"{model.processor.image_token} What is this?"`. Audio enters through
     },
 }
 
-PALETTE = {"hue": 127}
+#: Set by hues.py (lineage: Gemma).
+PALETTE = {"hue": 165}
 VLLM = False
 QUIRKS = [
     "sandwich-norms", "scaled-residual-adds", "qk-norm", "sliding-window", "proportional-rotary", "scaled-embeddings",

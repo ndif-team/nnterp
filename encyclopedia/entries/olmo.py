@@ -20,8 +20,8 @@ CHECKPOINTS = [
     "allenai/OLMo-7B-0724-SFT-hf", "allenai/OLMo-7B-0724-Instruct-hf",
 ]
 
-#: OLMo lineage (olmo2 58, olmoe 70, olmo_hybrid 64); 55 sits between jetmoe's 52 and olmo2's 58.
-PALETTE = {"hue": 55}
+#: Set by hues.py (lineage: OLMo).
+PALETTE = {"hue": 95}
 VLLM = False
 QUIRKS = ["layernorm", "weightless-norms"]
 

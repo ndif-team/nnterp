@@ -66,8 +66,8 @@ processor resizes an image's longest side to at most 1540 pixels (`longest_edge`
     },
 }
 
-#: The Llama lineage sits at the hash of `llama` (148); Gemma's 133, 145, 157 and mistral's 152 are near, so 163.
-PALETTE = {"hue": 163}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 269}
 VLLM = False
 QUIRKS: list[str] = []
 

@@ -18,9 +18,8 @@ CHECKPOINTS = [
     "Qwen/Qwen3-Coder-Next", "Qwen/Qwen3-Coder-Next-Base",
 ]
 
-#: The Qwen lineage sits at 285 (qwen2), 297 (qwen3), 273 (qwen3_5_text) and 255 (qwen3_5_moe_text); this family
-#: takes 267.
-PALETTE = {"hue": 267}
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 307}
 VLLM = False
 QUIRKS = ["hybrid", "gated-query", "mixture-of-experts", "qk-norm", "partial-rotary", "gain-norm"]
 

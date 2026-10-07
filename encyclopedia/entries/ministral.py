@@ -14,8 +14,8 @@ REFERENCE = "mistralai/Ministral-8B-Instruct-2410"
 PINNED = "hf-tiny-v2/tiny-random-MinistralForCausalLM"
 CHECKPOINTS = ["mistralai/Ministral-8B-Instruct-2410"]
 
-#: The Llama lineage sits at the hash of `llama` (148); Gemma's 133 and 145 are near, so 139.
-PALETTE = {"hue": 139}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 266}
 VLLM = False
 QUIRKS = ["sliding-window"]
 

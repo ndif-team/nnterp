@@ -21,8 +21,8 @@ CHECKPOINTS = [
     "allenai/Olmo-3.1-32B-Instruct", "allenai/Olmo-3.1-32B-Think",
 ]
 
-#: OLMo lineage: 61 sits between olmo2's 58 and olmo_hybrid's 64.
-PALETTE = {"hue": 61}
+#: Set by hues.py (lineage: OLMo).
+PALETTE = {"hue": 101}
 VLLM = True
 QUIRKS = ["post-norms", "qk-norm", "sliding-window"]
 

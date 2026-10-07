@@ -22,9 +22,8 @@ CHECKPOINTS = [
     "ai21labs/AI21-Jamba2-3B", "ai21labs/AI21-Jamba2-Mini",
 ]
 
-#: No lineage row of its own; Mamba's band (17) is taken by mamba and its kin, so the hybrid takes a free
-#: band between Qwen (311) and Kimi (330).
-PALETTE = {"hue": 320}
+#: Set by hues.py (lineage: Mamba).
+PALETTE = {"hue": 8}
 VLLM = False
 QUIRKS = ["hybrid", "mamba1", "nope-blocks", "mixture-of-experts", "unnormalized-routing"]
 

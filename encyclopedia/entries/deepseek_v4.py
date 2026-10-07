@@ -21,9 +21,8 @@ CHECKPOINTS = [
     "deepseek-ai/DeepSeek-V4-Pro-DSpark",
 ]
 
-#: DeepSeek lineage: deepseek_v2 357, deepseek_v3 2, mimo_v2_flash 5, youtu 9, deepseek_v32 359; no slot sits 3°
-#: from both neighbours, so this one sits between youtu (9) and arcee (13).
-PALETTE = {"hue": 11}
+#: Set by hues.py (lineage: DeepSeek).
+PALETTE = {"hue": 331}
 VLLM = False
 QUIRKS = ["hyper-connections", "attention-sink", "sliding-window", "sparse-attention", "interleaved-rotary", "mixture-of-experts"]
 

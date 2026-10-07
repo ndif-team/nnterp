@@ -15,8 +15,8 @@ CHECKPOINTS = [
     "facebook/xglm-564M", "facebook/xglm-1.7B", "facebook/xglm-2.9B", "facebook/xglm-4.5B", "facebook/xglm-7.5B",
 ]
 
-#: OPT's kin (opt is 336).
-PALETTE = {"hue": 346}
+#: Set by hues.py (lineage: OPT).
+PALETTE = {"hue": 81}
 VLLM = False
 QUIRKS = ["no-mlp", "scaled-embeddings", "position-embeddings", "own-attention-arithmetic", "layernorm", "qkv-bias"]
 

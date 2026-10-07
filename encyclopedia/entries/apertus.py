@@ -20,8 +20,8 @@ CHECKPOINTS = [
     "swiss-ai/Apertus-v1.1-4B", "swiss-ai/Apertus-v1.1-4B-Instruct",
 ]
 
-#: No kin among the entries; 42 sits between gpt_bigcode's 39 and exaone4's 46, one of the largest free gaps.
-PALETTE = {"hue": 42}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 238}
 VLLM = False
 QUIRKS = ["qk-norm"]
 

@@ -16,8 +16,8 @@ CHECKPOINTS = [
     "HuggingFaceTB/SmolLM3-3B",
 ]
 
-#: Llama kin: within 15 degrees of llama's 148.
-PALETTE = {"hue": 142}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 247}
 VLLM = False
 QUIRKS = ["nope-blocks"]
 

@@ -13,8 +13,8 @@ REFERENCE = "ibm-granite/granite-swash-3b-a600m"
 PINNED = "hf-tiny-v2/tiny-random-GraniteMoeSWAForCausalLM"
 CHECKPOINTS = ["ibm-granite/granite-swash-3b-a600m"]
 
-#: Granite lineage (205, set by granite); between granite_swa (199) and granitemoe (215).
-PALETTE = {"hue": 210}
+#: Set by hues.py (lineage: Granite).
+PALETTE = {"hue": 214}
 VLLM = False
 QUIRKS = ["scaled-residual-adds", "sliding-window", "sink-scaled-heads", "mixture-of-experts", "embedding-multiplier", "scaled-logits"]
 

@@ -15,9 +15,8 @@ PINNED = "hf-tiny-v2/tiny-random-MiMoV2FlashForCausalLM"
 #: MiMo-V2.5 and V2.6 have model_type mimo_v2, another architecture, and are not listed.
 CHECKPOINTS = ["XiaomiMiMo/MiMo-V2-Flash", "XiaomiMiMo/MiMo-V2-Flash-Base"]
 
-#: No kin among the entries; the hash of mimo_v2_flash (319) sits on afmoe's 315 and falcon_h1/jamba's 320.
-#: 5 is the middle of a free gap, between deepseek_v3 (2), whose router this mixture shares, and mamba2 (8).
-PALETTE = {"hue": 5}
+#: Set by hues.py (lineage: MiniMax / MiMo).
+PALETTE = {"hue": 349}
 VLLM = False
 QUIRKS = ["attention-sink", "sliding-window", "partial-rotary", "mixture-of-experts", "dense-first-blocks"]
 

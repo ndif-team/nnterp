@@ -18,8 +18,8 @@ CHECKPOINTS = [
     "bigcode/octocoder", "HuggingFaceH4/starchat-alpha", "WizardLMTeam/WizardCoder-15B-V1.0",
 ]
 
-#: GPT-2's kin: GPT-2 hashes to 36.
-PALETTE = {"hue": 39}
+#: Set by hues.py (lineage: GPT-2).
+PALETTE = {"hue": 38}
 VLLM = False
 QUIRKS = ["position-embeddings", "layernorm", "fused-qkv"]
 

@@ -159,8 +159,8 @@ encoding with `model.processor` and cast `pixel_values` to the model's dtype bef
     },
 }
 
-#: Llama lineage: `llama` hashes to 148; Llama 4 takes the side above it.
-PALETTE = {"hue": 162}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 244}
 VLLM = False
 QUIRKS = ["qk-norm", "nope-blocks", "chunked-attention", "mixture-of-experts", "interleaved-moe"]
 

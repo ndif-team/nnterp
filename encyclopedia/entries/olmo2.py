@@ -41,6 +41,8 @@ def load(checkpoint, **kwargs):
     return StandardizedTransformer(checkpoint, **kwargs)
 
 
+#: Set by hues.py (lineage: OLMo).
+PALETTE = {"hue": 98}
 VLLM = False
 QUIRKS = ["post-norms", "qk-norm"]
 

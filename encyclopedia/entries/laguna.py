@@ -19,9 +19,8 @@ CHECKPOINTS = [
     "poolside/Laguna-M.1", "poolside/Laguna-M.1-base",
 ]
 
-#: No kin among the entries; the hash of laguna (293) sits in the Qwen lineage (291, 297).
-#: 49 is the middle of a free gap, between exaone4 (46) and jetmoe (52).
-PALETTE = {"hue": 49}
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 194}
 VLLM = False
 QUIRKS = ["qk-norm", "sliding-window", "partial-rotary", "mixture-of-experts", "dense-first-blocks"]
 

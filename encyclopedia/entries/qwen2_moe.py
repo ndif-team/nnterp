@@ -17,10 +17,8 @@ CHECKPOINTS = [
     "Qwen/Qwen2-57B-A14B", "Qwen/Qwen2-57B-A14B-Instruct",
 ]
 
-#: The Qwen lineage: qwen2 285, qwen3 297, qwen3_5_text 273, qwen2_vl_text 279, qwen2_5_vl_text 291,
-#: qwen3_vl_text 303, qwen3_vl_moe_text 311, qwen3_moe 307. This family's own hash is 243; it takes 288,
-#: between Qwen2 and Qwen2.5-VL.
-PALETTE = {"hue": 288}
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 285}
 VLLM = True
 QUIRKS = ["qkv-bias", "mixture-of-experts", "unnormalized-routing"]
 

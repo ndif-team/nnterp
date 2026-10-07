@@ -14,8 +14,8 @@ REFERENCE = "microsoft/bitnet-b1.58-2B-4T"
 PINNED = "hf-tiny-v2/tiny-random-BitNetForCausalLM"
 CHECKPOINTS = ["microsoft/bitnet-b1.58-2B-4T", "microsoft/bitnet-b1.58-2B-4T-bf16"]
 
-#: No kin among the entries; 339 sits between opt's 336 and kimi_linear's 342, in one of the largest free gaps (6 degrees).
-PALETTE = {"hue": 339}
+#: Set by hues.py (lineage: Llama and its kin).
+PALETTE = {"hue": 253}
 VLLM = False
 QUIRKS = ["squared-relu"]
 

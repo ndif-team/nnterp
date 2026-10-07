@@ -22,7 +22,8 @@ CHECKPOINTS = [
     "unsloth/c4ai-command-r-plus-08-2024",
 ]
 
-PALETTE = {"hue": 176}
+#: Set by hues.py (lineage: Cohere).
+PALETTE = {"hue": 174}
 VLLM = True
 QUIRKS = ["parallel-blocks", "layernorm", "interleaved-rotary", "qk-norm", "scaled-logits"]
 

@@ -14,9 +14,8 @@ REFERENCE = "MiniMaxAI/MiniMax-M2"
 PINNED = "hf-tiny-v2/tiny-random-MiniMaxM2ForCausalLM"
 CHECKPOINTS = ["MiniMaxAI/MiniMax-M2", "MiniMaxAI/MiniMax-M2.1", "MiniMaxAI/MiniMax-M2.5", "MiniMaxAI/MiniMax-M2.7"]
 
-#: No kin among the entries; the hash of minimax_m2 (354) sits among dbrx and mpt (350) and deepseek_v2 (357).
-#: 21 is the middle of the widest free gap, between mamba (17) and falcon_mamba (26).
-PALETTE = {"hue": 21}
+#: Set by hues.py (lineage: MiniMax / MiMo).
+PALETTE = {"hue": 346}
 VLLM = False
 QUIRKS = ["qk-norm", "mixture-of-experts"]
 

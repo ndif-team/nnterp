@@ -26,6 +26,8 @@ CHECKPOINTS = [
     "EleutherAI/gpt-neox-20b",
 ]
 
+#: Set by hues.py (lineage: GPT-NeoX).
+PALETTE = {"hue": 63}
 VLLM = True
 QUIRKS = ["parallel-blocks", "fused-qkv", "partial-rotary"]
 

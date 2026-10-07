@@ -14,8 +14,8 @@ REFERENCE = "abeja/gpt-neox-japanese-2.7b"
 PINNED = "hf-internal-testing/tiny-random-GPTNeoXJapaneseForCausalLM"
 CHECKPOINTS = ["abeja/gpt-neox-japanese-2.7b"]
 
-#: GPT-NeoX's kin: GPT-NeoX hashes to 99 (GLM sits at 74 to 94, Phi at 106).
-PALETTE = {"hue": 102}
+#: Set by hues.py (lineage: GPT-NeoX).
+PALETTE = {"hue": 66}
 VLLM = False
 QUIRKS = ["tuple-blocks", "own-attention-arithmetic", "fused-qkv", "layernorm"]
 

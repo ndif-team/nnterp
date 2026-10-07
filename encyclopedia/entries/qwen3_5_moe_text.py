@@ -67,8 +67,8 @@ block's `layer_output`, then `model.projector.input` and `.output`, then `vision
     },
 }
 
-#: The Qwen lineage sits at 285 (qwen2), 297 (qwen3) and 273 (qwen3_5_text); this family takes 255.
-PALETTE = {"hue": 255}
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 313}
 VLLM = False
 QUIRKS = ["hybrid", "gated-query", "mixture-of-experts", "qk-norm", "partial-rotary", "gain-norm", "multimodal-rotary"]
 

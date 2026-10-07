@@ -23,6 +23,8 @@ CHECKPOINTS = [
     "stanford-crfm/eowyn-gpt2-medium-x777",
 ]
 
+#: Set by hues.py (lineage: GPT-2).
+PALETTE = {"hue": 35}
 VLLM = True
 QUIRKS = ["position-embeddings", "layernorm", "fused-qkv"]
 

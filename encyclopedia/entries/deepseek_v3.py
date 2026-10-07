@@ -18,8 +18,8 @@ CHECKPOINTS = [
     "moonshotai/Moonlight-16B-A3B", "moonshotai/Moonlight-16B-A3B-Instruct",
 ]
 
-#: DeepSeek lineage: deepseek_v2 sets 357.
-PALETTE = {"hue": 2}
+#: Set by hues.py (lineage: DeepSeek).
+PALETTE = {"hue": 325}
 VLLM = True
 QUIRKS = ["latent-attention", "mixture-of-experts", "dense-first-blocks"]
 

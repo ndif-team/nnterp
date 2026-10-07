@@ -20,8 +20,8 @@ CHECKPOINTS = [
     "roneneldan/TinyStories-Instruct-33M",
 ]
 
-#: GPT-J's kin (EleutherAI's line): GPT-J hashes to 222, CodeGen sits at 234.
-PALETTE = {"hue": 228}
+#: Set by hues.py (lineage: GPT-J).
+PALETTE = {"hue": 50}
 VLLM = False
 QUIRKS = ["tuple-blocks", "own-attention-arithmetic", "sliding-window", "position-embeddings", "layernorm"]
 

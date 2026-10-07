@@ -18,8 +18,8 @@ CHECKPOINTS = [
     "allenai/Olmo-Hybrid-Think-SFT-7B",
 ]
 
-#: OLMo lineage: olmo2 at 58 and olmoe at 70; the hybrid takes 64, between them.
-PALETTE = {"hue": 64}
+#: Set by hues.py (lineage: OLMo).
+PALETTE = {"hue": 110}
 VLLM = False
 QUIRKS = ["hybrid", "post-norms", "qk-norm", "nope-blocks"]
 

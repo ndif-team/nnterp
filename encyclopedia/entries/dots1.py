@@ -15,9 +15,8 @@ REFERENCE = "rednote-hilab/dots.llm1.base"
 PINNED = "hf-tiny-v2/tiny-random-Dots1ForCausalLM"
 CHECKPOINTS = ["rednote-hilab/dots.llm1.base", "rednote-hilab/dots.llm1.inst"]
 
-#: No kin among the entries; the hash of dots1 (249) sits on nemotron_h's 250. 246 is the middle of the free
-#: gap between bloom (242) and nemotron_h (250).
-PALETTE = {"hue": 246}
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 317}
 VLLM = False
 QUIRKS = ["qk-norm", "mixture-of-experts", "dense-first-blocks"]
 

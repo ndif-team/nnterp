@@ -19,8 +19,8 @@ CHECKPOINTS = [
     "stabilityai/stablelm-zephyr-3b",
 ]
 
-#: Near gpt_neox's 99 (Pythia's partial rotary and parallel block), between phi's 106 and phi3's 113.
-PALETTE = {"hue": 110}
+#: Set by hues.py (lineage: GPT-NeoX).
+PALETTE = {"hue": 69}
 VLLM = False
 QUIRKS = ["layernorm", "partial-rotary", "qkv-bias", "parallel-blocks", "qk-norm"]
 

@@ -20,9 +20,8 @@ CHECKPOINTS = [
     "deepseek-ai/DeepSeek-Coder-V2-Instruct-0724",
 ]
 
-#: DeepSeek lineage: set here; deepseek_v3 sits at 2. Every hue from 99 to 127 is within 15° of
-#: gpt_neox (99) or gemma4_unified_text (127), so the lineage sits between kimi_linear (342) and mamba (17).
-PALETTE = {"hue": 357}
+#: Set by hues.py (lineage: DeepSeek).
+PALETTE = {"hue": 322}
 VLLM = True
 QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 

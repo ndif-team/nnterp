@@ -18,8 +18,8 @@ CHECKPOINTS = [
     "allenai/Flex-code-2x7B-1T", "allenai/Flex-creative-2x7B-1T", "allenai/Flex-reddit-2x7B-1T",
 ]
 
-#: OLMo lineage: 67 sits between olmo_hybrid's 64 and olmoe's 70.
-PALETTE = {"hue": 67}
+#: Set by hues.py (lineage: OLMo).
+PALETTE = {"hue": 107}
 VLLM = False
 QUIRKS = ["post-norms", "qk-norm", "mixture-of-experts"]
 

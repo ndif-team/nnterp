@@ -14,8 +14,8 @@ PINNED = "hf-tiny-v2/tiny-random-YoutuForCausalLM"
 #: Every public id whose config is youtu (Youtu-LLM-2B-GGUF has no config.json).
 CHECKPOINTS = ["tencent/Youtu-LLM-2B-Base", "tencent/Youtu-LLM-2B"]
 
-#: DeepSeek lineage: deepseek_v2 357, deepseek_v3 2; Youtu's latent attention sits beside them.
-PALETTE = {"hue": 9}
+#: Set by hues.py (lineage: DeepSeek).
+PALETTE = {"hue": 334}
 VLLM = False
 QUIRKS = ["latent-attention", "interleaved-rotary"]
 

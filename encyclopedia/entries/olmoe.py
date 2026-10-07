@@ -18,8 +18,8 @@ CHECKPOINTS = [
     "allenai/OLMoE-1B-7B-0125-Instruct",
 ]
 
-#: OLMo lineage: olmo2 hashes to 58; OLMoE's own hash (48) sits beside EXAONE's 46.
-PALETTE = {"hue": 70}
+#: Set by hues.py (lineage: OLMo).
+PALETTE = {"hue": 104}
 VLLM = True
 QUIRKS = ["qk-norm", "mixture-of-experts", "unnormalized-routing"]
 

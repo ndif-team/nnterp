@@ -61,8 +61,8 @@ on 0.8B, 24 of width 1024 on 2B and 4B, 27 of width 1152 on 9B and 27B.
     },
 }
 
-#: The Qwen lineage sits at 285 (qwen2) and 297 (qwen3); this family takes 273.
-PALETTE = {"hue": 273}
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 310}
 VLLM = False
 QUIRKS = ["hybrid", "gated-query", "qk-norm", "partial-rotary", "gain-norm", "multimodal-rotary"]
 

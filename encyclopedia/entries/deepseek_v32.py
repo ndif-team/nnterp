@@ -17,9 +17,8 @@ CHECKPOINTS = [
     "deepseek-ai/DeepSeek-V3.2-Exp", "deepseek-ai/DeepSeek-V3.2-Exp-Base",
 ]
 
-#: DeepSeek lineage: deepseek_v2 357, deepseek_v3 2, mimo_v2_flash 5, youtu 9; no slot sits 3° from both
-#: neighbours, so this one sits between V2 and V3.
-PALETTE = {"hue": 359}
+#: Set by hues.py (lineage: DeepSeek).
+PALETTE = {"hue": 328}
 VLLM = False
 QUIRKS = ["latent-attention", "sparse-attention", "mixture-of-experts", "dense-first-blocks"]
 

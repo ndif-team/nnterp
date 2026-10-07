@@ -18,8 +18,8 @@ CHECKPOINTS = [
     "microsoft/Phi-mini-MoE-instruct", "microsoft/Phi-tiny-MoE-instruct",
 ]
 
-#: The Phi lineage: phi 106, phi3 113, phimoe 120.
-PALETTE = {"hue": 120}
+#: Set by hues.py (lineage: Phi).
+PALETTE = {"hue": 144}
 VLLM = False
 QUIRKS = ["mixture-of-experts", "qkv-bias", "layernorm", "sliding-window"]
 

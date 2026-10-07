@@ -19,8 +19,8 @@ CHECKPOINTS = [
     "Zyphra/ZAYA1-base", "Zyphra/ZAYA1-reasoning-base", "Zyphra/ZAYA1-8B-legacy", "Zyphra/ZAYA1-74B-preview-legacy",
 ]
 
-#: No kin among the entries; the free gap between kimi_k2 (330) and opt (336).
-PALETTE = {"hue": 333}
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 354}
 VLLM = False
 QUIRKS = [
     "tuple-blocks", "scaled-residual-adds", "fp32-residual", "embedding-multiplier", "partial-rotary",

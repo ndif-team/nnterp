@@ -287,32 +287,41 @@ The entry states facts about a family, and each one has a source. Before writing
    `deepstack` (`layers[k].deepstack_output`), `unpadded-features` (`projector.output` is not
    `image_features`), `pooled-projector` (fewer image tokens than patches), `encoder-free` (no vision encoder
    blocks). The index keeps them off its first filter row.
-8. **`PALETTE`**: `{"hue": degrees}` is the base hue the five colours are generated from. Related
-   families sit together: the first entry of a lineage sets a hue and adds it to the table below, and
-   its kin take one within about 15° of it (not equal) and add themselves to the row. A family with no kin leaves `PALETTE` out and
-   gets a hash of its `model_type` (also listed below once an entry exists, so later kin can find it).
-   Entry agents working at the same time do not edit this table themselves: each reports the hue it
-   chose, and the table is updated in the next sweep. `"paper"` tints the page and is rarely needed. `"colors"` (five hex fills in role order: attention,
-   MLP, norms, stream, mark) and `"deeps"` bypass generation; a palette that fails the contrast or
-   distinctness checks fails the build.
+8. **`PALETTE`**: `{"hue": degrees}` is the base hue the five colours are generated from. The table
+   below is the layout: every entry's hue, computed by `hues.py` from one ordered list of lineages
+   (each a band, its members a step apart, about 3°) and the families with no kin (each in a gap
+   between two bands, a step and a half from both). Run `hues.py` to re-space after adding a family:
+   put the family in `hues.LAYOUT`, in its lineage's band or in a gap, and run
+   `python encyclopedia/hues.py --write`, which rewrites every entry's `PALETTE` hue and this table.
+   Do not pick a hue by hand. `"paper"` tints the page and is rarely needed. `"colors"` (five hex
+   fills in role order: attention, MLP, norms, stream, mark) and `"deeps"` bypass generation; a
+   palette that fails the contrast or distinctness checks fails the build.
 
-   | lineage | hue | set by |
-   |---|---|---|
-   | Gemma | 145 | gemma2 (gemma3_text 157, gemma4_text 133) |
-   | Qwen | 285 | qwen2 (qwen3 297, qwen3_5_text 273; qwen2_moe hashes to 243, so set it near 285) |
-   | Llama and its relatives (Mistral, SmolLM, ...) | hash of `llama` | llama |
-   | OLMo (olmo3, olmo_hybrid, flex_olmo, olmoe) | hash of `olmo2` (58) | olmo2 (olmoe 70) |
-   | GPT-2 | hash of `gpt2` | gpt2 |
-   | GPT-NeoX / Pythia | hash of `gpt_neox` | gpt_neox |
-   | EXAONE | hash of `exaone4` (46) | exaone4 |
-   | GPT-J and CodeGen | hash of `gptj` (222) | gptj (codegen 234) |
-   | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (granitemoe 215; `granite` hashes to 156, beside Gemma) |
-   | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron (nemotron_h 250) |
-   | Kimi (kimi_k2, kimi_linear) | 330 | kimi_k2 (kimi_linear 342) |
-   | Mamba (mamba2, falcon_mamba, jamba's Mamba blocks) | hash of `mamba` (17) | mamba |
+<!-- hues.py: table -->
+| lineage | hues |
+|---|---|
+| DeepSeek (and the Kimi and Youtu lines on its latent attention) | `deepseek_v2` 322, `deepseek_v3` 325, `deepseek_v32` 328, `deepseek_v4` 331, `youtu` 334, `kimi_k2` 337, `kimi_linear` 340 |
+| MiniMax / MiMo | `minimax_m2` 346, `mimo_v2_flash` 349 |
+| Mamba (and Jamba's Mamba blocks) | `mamba` 359, `mamba2` 2, `falcon_mamba` 5, `jamba` 8 |
+| Falcon | `falcon_h1` 14, `falcon` 17 |
+| HunYuan | `hunyuan_v1_dense` 26, `hunyuan_v1_moe` 29 |
+| GPT-2 | `gpt2` 35, `gpt_bigcode` 38, `starcoder2` 41 |
+| GPT-J | `gpt_neo` 50, `gptj` 54, `codegen` 57 |
+| GPT-NeoX | `gpt_neox` 63, `gpt_neox_japanese` 66, `stablelm` 69 |
+| OPT | `opt` 78, `xglm` 81 |
+| OLMo | `olmo` 95, `olmo2` 98, `olmo3` 101, `olmoe` 104, `flex_olmo` 107, `olmo_hybrid` 110 |
+| GLM | `glm` 116, `glm4` 119, `glm4_moe` 122, `glm4_moe_lite` 125, `glm_moe_dsa` 128 |
+| Phi | `phi` 137, `phi3` 140, `phimoe` 144 |
+| Gemma | `gemma` 153, `gemma2` 156, `gemma3_text` 159, `gemma4_text` 162, `gemma4_unified_text` 165, `vaultgemma` 168 |
+| Cohere | `cohere` 174, `cohere2` 177 |
+| ERNIE | `ernie4_5` 186, `ernie4_5_moe` 189 |
+| Granite (and IBM's Bamba) | `bamba` 198, `granitemoehybrid` 201, `granite` 205, `granite_swa` 208, `granitemoe` 211, `granitemoe_swa` 214, `granitemoeshared` 217 |
+| Nemotron | `nemotron` 223, `nemotron_h` 226 |
+| Llama and its kin | `arcee` 235, `apertus` 238, `llama` 241, `llama4_text` 244, `smollm3` 247, `helium` 250, `bitnet` 253, `seed_oss` 256, `mistral` 259, `mixtral` 263, `ministral` 266, `ministral3` 269 |
+| Qwen | `qwen2` 282, `qwen2_moe` 285, `qwen2_vl_text` 288, `qwen2_5_vl_text` 291, `qwen3` 295, `qwen3_moe` 298, `qwen3_vl_text` 301, `qwen3_vl_moe_text` 304, `qwen3_next` 307, `qwen3_5_text` 310, `qwen3_5_moe_text` 313 |
+| no kin (in the gaps) | `zaya` 354, `doge` 21, `bloom` 46, `persimmon` 73, `mpt` 86, `dbrx` 90, `jetmoe` 133, `gpt_oss` 148, `exaone4` 182, `laguna` 194, `afmoe` 230, `hyperclovax` 273, `solar_open` 278, `dots1` 317 |
+<!-- hues.py: end -->
 
-   `python -c "import sys; sys.path.insert(0, 'encyclopedia'); import palette; print(palette.hue_of('olmo2'))"`
-   prints a hashed hue.
 9. **`NOTES`**: markdown, the part only a person can write. See below.
 10. **`WRAPPERS`** (optional): the family's vision-language wrappers, keyed by the wrapper's
     `config.model_type` (`"llava"`, `"idefics3"`, ...), each a dict of what a config does not say:

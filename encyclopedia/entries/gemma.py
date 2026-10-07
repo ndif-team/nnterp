@@ -85,7 +85,8 @@ with model.trace(dict(model.tokenizer(text, return_tensors="pt"))):
     },
 }
 
-PALETTE = {"hue": 139}
+#: Set by hues.py (lineage: Gemma).
+PALETTE = {"hue": 153}
 VLLM = True
 QUIRKS = ["scaled-embeddings", "gain-norm"]
 

@@ -16,9 +16,8 @@ CHECKPOINTS = [
     "zai-org/glm-edge-1.5b-chat", "zai-org/glm-edge-4b-chat",
 ]
 
-#: GLM lineage, set here (glm4 79, glm4_moe 89). No hue is 15 degrees from every other entry's;
-#: 84 sits 14 from OLMoE's 70 and 15 from GPT-NeoX's 99.
-PALETTE = {"hue": 84}
+#: Set by hues.py (lineage: GLM).
+PALETTE = {"hue": 116}
 VLLM = False
 QUIRKS = ["qkv-bias", "partial-rotary", "interleaved-rotary"]
 

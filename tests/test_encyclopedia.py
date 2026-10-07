@@ -54,6 +54,14 @@ def panes(page, checkpoint):
     return out
 
 
+def block_of(entry):
+    """The entry's BLOCK for its pinned checkpoint: a BLOCK that varies by checkpoint is resolved on that build's config."""
+    if isinstance(entry.BLOCK, dict):
+        return entry.BLOCK
+    info = build.read_entry(entry, reference=pinned(entry))[0][0]["info"]
+    return build.resolve_block(entry.MODEL_TYPE, entry.BLOCK, info["text_config"])
+
+
 @pytest.mark.parametrize("name", entries.names())
 def test_entry_builds_a_page(name):
     entry = entries.load(name)
@@ -64,10 +72,11 @@ def test_entry_builds_a_page(name):
     assert entry.TITLE in page
     data = checkpoint_data(page)
     schema, nodes = data["schema"], data["nodes"]
+    block = block_of(entry)
     # The schema holds the sublayers this checkpoint's blocks draw: every one the entry lists, but
     # where a host runs a mixture on some checkpoints only (Gemma-4), the one of the pair it has.
     drawn = schema["sublayers"]
-    listed = {(sub["host"], sub["kind"]) for sub in entry.BLOCK["sublayers"]}
+    listed = {(sub["host"], sub["kind"]) for sub in block["sublayers"]}
     assert {(sub["host"], sub["kind"]) for sub in drawn} <= listed
     assert {sub["host"] for sub in drawn} == {host for host, _ in listed}
     for sub in drawn:
@@ -86,12 +95,12 @@ def test_entry_builds_a_page(name):
     for shape in shapes:
         for k in shape["subs"]:
             sub = drawn[k]
-            assert "identity" in entry.BLOCK or f"{sub['host']}.{sub['contribution']}" in shape["identity"]
+            assert "identity" in block or f"{sub['host']}.{sub['contribution']}" in shape["identity"]
     assert '"identity"' in page and "stream.output" in page
     for k in range(1, 6):
         assert f"--c{k}: #" in page and f"--c{k}-deep: #" in page
     assert '<span class="k">with</span>' in page, "the notes' snippets are highlighted at build time"
-    assert f'<span class="n role-{build.HOST_ROLES[entry.BLOCK["sublayers"][0]["host"]]}">' in page
+    assert f'<span class="n role-{build.HOST_ROLES[block["sublayers"][0]["host"]]}">' in page
     assert '<span class="rl">' in page, "the printout's layouts are lexed"
 
 

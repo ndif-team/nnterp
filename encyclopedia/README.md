@@ -240,8 +240,17 @@ The entry states facts about a family, and each one has a source. Before writing
    checkpoint is left off that checkpoint's drawing and ledgers (Granite 4.0's attention-only
    checkpoints have no `linear_attn`). When the reference and the pinned checkpoint have different block kinds (Nemotron 3 Nano is dense where its tiny checkpoint is a mixture), list both layouts (`"mlp"` and `"moe"` for the same host); each build draws the ones its checkpoint has.
 
+   **Layouts that differ by checkpoint.** Where a family's checkpoints build different blocks from
+   one class (Falcon-7B's one norm, Falcon-40B's `ln_attn` and `ln_mlp`, Falcon-RW's sequential block;
+   OPT's post-norm `opt-350m`), `BLOCK` is a list of `(predicate, block)` pairs, each `block` a dict as
+   above and each predicate a function of the checkpoint's text config; a checkpoint draws the first
+   whose predicate holds, so end the list with `(lambda config: True, ...)` for the default. A callable
+   of the config returning the dict does the same. Each checkpoint is drawn, checked and given its
+   identity from its own block; the notes colour the norms of every block listed.
+
    The build checks every host, contribution and interior value against the family and fails on a
-   name the family does not have.
+   name the family does not have, and every `pre_norm` and `post_norm` against the children of the
+   blocks that draw it (native names and aliases).
 6. **`STRIP`**: sentences for the model-level strip, keyed `embed`, `layers`, `norm`, `head`,
    `logits`; each is shown when that node is hovered. Give one wherever the family does something
    there: a scaled embedding, tied weights, a softcap, a logit scale, a position embedding added after

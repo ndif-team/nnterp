@@ -294,6 +294,11 @@ def summarize_reason(reason: Any, num_layers: int) -> str | None:
     return f"{where}: " + " / ".join(reasons)
 
 
+def children_of(layer: Any) -> tuple[str, ...]:
+    """A block's children as a BLOCK may name them: the native modules' names and the block's aliases."""
+    return tuple(sorted({name for name, _ in layer._module.named_children()} | set(layer._aliases)))
+
+
 def runs_mixture(child: Any) -> bool:
     """Whether a block's child runs a mixture of experts: a `Moe` whose family does not say otherwise
     (Gemma-4's MLP is a `Moe` on every checkpoint and runs a mixture only under ``enable_moe_block``)."""
@@ -317,11 +322,12 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
 
     # Each block's standard children, and whether each is a mixture; one block of each
     # combination of child classes stands for the rest, so a hybrid's ledgers list every host.
-    block_hosts, block_classes, shapes = [], [], {}
+    block_hosts, block_classes, block_children, shapes = [], [], [], {}
     for layer in eager.layers:
         found = StandardizedTransformer._standard_children(layer)
         block_hosts.append({alias: runs_mixture(child) for alias, child in found.items()})
         block_classes.append(type(layer._module).__name__)
+        block_children.append(children_of(layer))
         shapes.setdefault(tuple((alias, type(child._module)) for alias, child in found.items()), (layer, found))
     hosts_found: dict[str, list[tuple[int, Any]]] = {}
     for layer, found in shapes.values():
@@ -406,6 +412,10 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "block_hosts": block_hosts,
         # each block's native class, which a sublayer's optional ``block`` key names
         "block_classes": block_classes,
+        # each block's children by native name and alias: the norms a BLOCK names must be among them
+        "block_children": block_children,
+        # the text model's config, which a per-checkpoint BLOCK is chosen by (`resolve_block`)
+        "text_config": text_config,
         "moe": moe_sizes(moe),
         "mixer": mixer_kernels(mixer),
         "block_class": type(block._module).__name__,
@@ -517,6 +527,7 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
             "num_layers": vision.num_layers,
             "host_classes": {alias: [(type(child._module).__name__, False, len(child.values()))] for alias, child in children.items()},
             "block_hosts": [{alias: False for alias in StandardizedTransformer._standard_children(block)} for block in vision.layers],
+            "block_children": [children_of(block) for block in vision.layers],
         },
     }
 
@@ -605,6 +616,22 @@ MOE_PARTS = {
 }
 
 
+def resolve_block(owner: str, spec: Any, config: Any) -> dict[str, Any]:
+    """An entry's ``BLOCK`` for one checkpoint. A dict is the block of every checkpoint; a callable of the
+    checkpoint's text config returns the checkpoint's; a list of ``(predicate, BLOCK)`` pairs gives the first
+    whose predicate holds on the config (Falcon's 7B, 40B and RW layouts, OPT's post-norm opt-350m)."""
+    if isinstance(spec, dict):
+        return spec
+    chosen = spec(config) if callable(spec) else next((block for holds, block in spec if holds(config)), None)
+    assert isinstance(chosen, dict), f"{owner}: no BLOCK matches this checkpoint's config"
+    return chosen
+
+
+def block_variants(spec: Any) -> list[dict[str, Any]]:
+    """Every BLOCK an entry lists: the dict, or each of a list's (a callable's are known only per checkpoint)."""
+    return [spec] if isinstance(spec, dict) else [] if callable(spec) else [block for _, block in spec]
+
+
 def drawn(specs: list[dict[str, Any]], hosts: dict[str, bool], block_class: str | None = None) -> tuple[int, ...]:
     """The sublayers one block draws, as indices into ``specs``: ``hosts`` maps each of the block's
     standard children to whether it is a mixture, and ``block_class`` is the block's native class. A
@@ -627,8 +654,10 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
     ``mlp``) lists both sublayers; a checkpoint draws the one its blocks have, and the other is
     left out of the schema.
 
-    ``owner`` is what an assertion names (the entry's model_type), ``block_spec`` the BLOCK, ``base`` the block's
-    expression (``model.vision.layers[i]`` for a tower's block) and ``stream`` what its stream is called."""
+    ``owner`` is what an assertion names (the entry's model_type), ``block_spec`` the BLOCK (resolved for this
+    checkpoint by `resolve_block`), ``base`` the block's expression (``model.vision.layers[i]`` for a tower's block)
+    and ``stream`` what its stream is called."""
+    block_spec = resolve_block(owner, block_spec, info.get("text_config"))
     by_host = {alias: {row["name"]: row for row in rows} for alias, rows in info["values"].items()}
     sizes = dict(info["sizes"])
     moe = info["moe"] or {}
@@ -648,6 +677,12 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         named = [h for h in block_hosts if h in hosts]
         assert sorted(named) == sorted(specs[k]["host"] for k in shape), \
             f"{owner}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
+        # every norm drawn on a block is one of its children, by native name or alias
+        for k in shape:
+            for where in ("pre_norm", "post_norm"):
+                norm_name = specs[k].get(where)
+                assert not norm_name or "block_children" not in info or norm_name in info["block_children"][i], \
+                    f"{owner}: BLOCK's {keys[k]!r} names {where} {norm_name!r}; block {i}'s children are {list(info['block_children'][i])}"
     shown = sorted({k for shape in shape_of for k in shape})
     # A sublayer no block draws is the other half of an mlp/moe pair, or its host is on no block of this
     # checkpoint (granitemoehybrid's attention-only checkpoints build no Mamba mixer): the checkpoint draws
@@ -873,8 +908,10 @@ def name_roles(entry: ModuleType, info: dict[str, Any]) -> dict[str, str]:
     for host, rows in info["values"].items():  # root and layer first, so a sublayer's value wins
         if host in HOST_ROLES:
             roles.update({row["name"]: HOST_ROLES[host] for row in rows})
-    for sub in entry.BLOCK["sublayers"]:
-        roles.update({sub[key]: "norm" for key in ("pre_norm", "post_norm") if sub.get(key)})
+    # the norms of every BLOCK the entry lists, so the notes colour another checkpoint's norms too
+    for spec in block_variants(entry.BLOCK) or [resolve_block(entry.MODEL_TYPE, entry.BLOCK, info.get("text_config"))]:
+        for sub in spec["sublayers"]:
+            roles.update({sub[key]: "norm" for key in ("pre_norm", "post_norm") if sub.get(key)})
     if info.get("vision"):  # the tower's own values belong to the stream; its blocks' take their hosts' roles, as above
         roles.update({row["name"]: "stream" for row in info["vision"]["values"]["vision"]})
     return roles

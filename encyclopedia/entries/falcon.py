@@ -1,4 +1,4 @@
-"""Falcon: TII's Falcon-7B and Falcon-11B, the parallel one-norm layouts of FalconForCausalLM."""
+"""Falcon: TII's Falcon-7B, 11B, 40B, 180B and Falcon-RW, the three block layouts of FalconForCausalLM."""
 
 MODEL_TYPE = "falcon"
 TITLE = "Falcon"
@@ -12,20 +12,31 @@ SUBTITLE = (
 REFERENCE = "tiiuae/falcon-7b"
 #: The tiny checkpoint the test suite builds the page from.
 PINNED = "Rocketknight1/tiny-random-falcon-7b"
-#: The checkpoints whose block the diagram draws: parallel, one input_layernorm. Falcon-40B/180B (ln_attn and
-#: ln_mlp) and Falcon-RW (a sequential block with two norms) wait for a per-checkpoint BLOCK in the generator.
+#: Three layouts: 7B and 11B (parallel, one input_layernorm), 40B and 180B (parallel, ln_attn and ln_mlp), Falcon-RW
+#: (sequential, input_layernorm and post_attention_layernorm, ALiBi). BLOCK picks one from each config.
 CHECKPOINTS = [
     "tiiuae/falcon-7b", "tiiuae/falcon-7b-instruct",
     "tiiuae/falcon-11B",
+    "tiiuae/falcon-40b", "tiiuae/falcon-40b-instruct", "tiiuae/falcon-180B",
+    "tiiuae/falcon-rw-1b", "tiiuae/falcon-rw-7b",
 ]
 
 PALETTE = {"hue": 325}
 VLLM = True
 QUIRKS = ["parallel-blocks", "tuple-blocks", "own-attention-arithmetic", "fused-qkv", "layernorm"]
 
-#: What the visualization draws: one input_layernorm whose output both sublayers read (drawn once per
-#: branch, one node), no post-norms; the two contributions join the stream in one add.
-BLOCK = {
+INTERIOR = [
+    "attention_queries", "attention_keys", "attention_values",
+    "attention_scores", "attention_probabilities", "attention_head_outputs",
+]
+#: Both parallel layouts add the attention into the MLP's output, then the residual.
+PARALLEL_NOTE = ("The block adds the attention into the MLP's output, then the residual: "
+                 "(mlp_output + attention_output) + input is bit-exact; this order of the sum differs by "
+                 "rounding in bfloat16.")
+
+#: 7B and 11B: one input_layernorm whose output both sublayers read (drawn once per branch, one node), no
+#: post-norms; the two contributions join the stream in one add.
+SEVEN_B = {
     "topology": "parallel",
     "sublayers": [
         {
@@ -36,10 +47,7 @@ BLOCK = {
             "pre_norm_note": "One LayerNorm, drawn on both branches: the attention and the MLP read the same output "
                              "tensor, so an in-place edit of self_attn.input reaches the MLP too.",
             "contribution": "attention_output",
-            "interior": [
-                "attention_queries", "attention_keys", "attention_values",
-                "attention_scores", "attention_probabilities", "attention_head_outputs",
-            ],
+            "interior": INTERIOR,
             "detail": "{num_heads} heads × {head_dim}, {num_kv_heads} kv",
         },
         {
@@ -53,17 +61,75 @@ BLOCK = {
             "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, GELU",
         },
     ],
-    "identity_note": "The block adds the attention into the MLP's output, then the residual: "
-                     "(mlp_output + attention_output) + input is bit-exact; this order of the sum differs by "
-                     "rounding in bfloat16.",
+    "identity_note": PARALLEL_NOTE,
 }
+
+#: 40B and 180B (new_decoder_architecture, two norms in parallel): each sublayer reads its own LayerNorm of the
+#: block input, ln_attn and ln_mlp, and the two contributions join the stream in one add.
+FORTY_B = {
+    "topology": "parallel",
+    "sublayers": [
+        {
+            "host": "self_attn",
+            "kind": "attention",
+            "label": "Attention",
+            "pre_norm": "ln_attn",
+            "pre_norm_note": "A LayerNorm of the block input, the attention's own; it has no standard name.",
+            "contribution": "attention_output",
+            "interior": INTERIOR,
+            "detail": "{num_heads} heads × {head_dim}, {num_kv_heads} kv",
+        },
+        {
+            "host": "mlp",
+            "kind": "mlp",
+            "label": "MLP",
+            "pre_norm": "ln_mlp",
+            "pre_norm_note": "A LayerNorm of the block input, the MLP's own; it has no standard name.",
+            "contribution": "mlp_output",
+            "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, GELU",
+        },
+    ],
+    "identity_note": PARALLEL_NOTE,
+}
+
+#: Falcon-RW: sequential, input_layernorm before the attention and post_attention_layernorm before the MLP.
+RW = {
+    "topology": "sequential",
+    "sublayers": [
+        {
+            "host": "self_attn",
+            "kind": "attention",
+            "label": "Attention",
+            "pre_norm": "input_layernorm",
+            "contribution": "attention_output",
+            "interior": INTERIOR,
+            "detail": "{num_heads} heads × {head_dim}, ALiBi",
+        },
+        {
+            "host": "mlp",
+            "kind": "mlp",
+            "label": "MLP",
+            "pre_norm": "post_attention_layernorm",
+            "contribution": "mlp_output",
+            "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, GELU",
+        },
+    ],
+}
+
+#: What the visualization draws, by the checkpoint's config: Falcon-RW is the one sequential layout; a
+#: new_decoder_architecture config with two norms in parallel is 40B's (11B sets num_ln_in_parallel_attn to 1).
+BLOCK = [
+    (lambda config: not config.parallel_attn, RW),
+    (lambda config: config.new_decoder_architecture and config.num_ln_in_parallel_attn != 1, FORTY_B),
+    (lambda config: True, SEVEN_B),
+]
 
 #: Notes on the model-level strip, by node.
 STRIP = {
-    "embed": "word_embeddings is a plain lookup with no scale and no position embedding (position enters through "
-             "rotary in each attention), so token_embeddings equals layers[0].input.",
+    "embed": "word_embeddings is a plain lookup with no scale and no position embedding (position enters in each "
+             "attention, through rotary, or ALiBi on Falcon-RW), so token_embeddings equals layers[0].input.",
     "norm": "ln_f is a LayerNorm with a bias; project_on_vocab applies it, bias included.",
-    "head": "lm_head has no bias; it is tied to word_embeddings on 7B and has its own matrix on 11B. Nothing "
+    "head": "lm_head has no bias; it is tied to word_embeddings on 7B, 40B and Falcon-RW, and has its own matrix on 11B. Nothing "
             "follows it: logits equals lm_head.output.",
 }
 

@@ -414,11 +414,28 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "docstring": doc,
         "children": list(children),
         "versions": {"nnterp": nnterp.__version__, "transformers": importlib.import_module("transformers").__version__},
-        "vision": vision_info(entry, eager, wrapper, conditions) if wrapper else None,
+        "vision": vision_info(entry, eager, wrapper, conditions, reference) if wrapper else None,
     }
 
 
-def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[str, Any]) -> dict[str, Any]:
+#: The fields of a WRAPPERS record a ``per_checkpoint`` entry may override for one checkpoint.
+PER_CHECKPOINT_FIELDS = ("title", "projector", "projector_input", "quirks", "notes")
+
+
+def wrapper_fields(entry: ModuleType, wrapper: str, checkpoint: str) -> dict[str, Any]:
+    """The WRAPPERS record for ``checkpoint``: the record, with its ``per_checkpoint[checkpoint]`` fields over it (one
+    wrapper class around different vision encoders or projector readings, as Llava is on Pixtral-12B and BakLLaVA)."""
+    record = entry.WRAPPERS[wrapper]
+    overrides = record.get("per_checkpoint", {})
+    for repo, fields in overrides.items():
+        assert repo in entry.CHECKPOINTS or repo == record.get("pinned"), \
+            f"{entry.MODEL_TYPE}: WRAPPERS[{wrapper!r}]['per_checkpoint'] names {repo}, not one of CHECKPOINTS or the pinned"
+        extra = sorted(set(fields) - set(PER_CHECKPOINT_FIELDS))
+        assert not extra, f"{entry.MODEL_TYPE}: per_checkpoint[{repo!r}] overrides {extra}; it may override {PER_CHECKPOINT_FIELDS}"
+    return {**{k: v for k, v in record.items() if k != "per_checkpoint"}, **overrides.get(checkpoint, {})}
+
+
+def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[str, Any], checkpoint: str) -> dict[str, Any]:
     """A vision-language checkpoint's tower: which tower (by ``vision_config.model_type``), its sizes, its values
     with their ``support()`` conditions (the ``vision.`` rows), what the diagram needs to draw its block, the
     projector, and the envoy classes on the tower's modules."""
@@ -455,7 +472,7 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
               for envoy in (vision, *([] if blockless else [layer, *children.values()]))]
     if scatter is not None:
         envoys.append((type(scatter[1]._module).__name__, type(scatter[1]).__name__))
-    fields = entry.WRAPPERS[wrapper]
+    fields = wrapper_fields(entry, wrapper, checkpoint)
     projector_input = fields.get("projector_input")
     assert isinstance(projector_input, str) and projector_input.strip(), \
         f"{entry.MODEL_TYPE}: WRAPPERS[{wrapper!r}] needs projector_input, what model.projector.input is"
@@ -967,7 +984,9 @@ def read_checkpoint(entry: ModuleType, checkpoint: str, cache: dict[Any, dict[st
         if config.model_type in IMAGE_TEXT_TO_TEXT and config.model_type in getattr(entry, "WRAPPERS", {}):
             wrapper = config.model_type
         fields = {k: v for k, v in config.to_dict().items() if k != "_name_or_path"}
-        key = (wrapper, json.dumps(fields, sort_keys=True, default=str))
+        # a checkpoint its wrapper record overrides (per_checkpoint) is introspected on its own
+        own = checkpoint if wrapper and checkpoint in entry.WRAPPERS[wrapper].get("per_checkpoint", {}) else None
+        key = (wrapper, own, json.dumps(fields, sort_keys=True, default=str))
     if key not in cache:
         try:
             cache[key] = introspect(entry, checkpoint, wrapper=wrapper)

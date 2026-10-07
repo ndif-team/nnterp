@@ -25,8 +25,8 @@ CHECKPOINTS = [
 
 #: The vision-language wrappers of this family, keyed by the wrapper's config.model_type. The vision encoder comes
 #: from the checkpoint's vision_config.model_type (encyclopedia/vision/pixtral.py, clip.py); what a config does not
-#: say is here. The `llava` key holds two checkpoints on two vision encoders (Pixtral-12B and BakLLaVA), so its
-#: record states what each reads.
+#: say is here. The `llava` key holds two checkpoints on two vision encoders (Pixtral-12B and BakLLaVA): its
+#: per_checkpoint gives each its own projector reading and notes.
 WRAPPERS = {
     "mistral3": {
         "title": "Mistral 3",
@@ -71,42 +71,72 @@ side to at most 1540 pixels (`longest_edge`).
 """,
     },
     "llava": {
-        "title": "Llava (Pixtral-12B, BakLLaVA)",
+        "title": "Llava",
         "pinned": "mistral-community/pixtral-12b",
         "projector": "a two-layer MLP (linear_1, GELU, linear_2), one image token per patch, over the block "
-                     "vision_feature_layer names: the last on Pixtral-12B, block -2 without the CLS token on BakLLaVA",
-        "projector_input": "`vision.tower_output` (Pixtral-12B); `vision.layers[-2].layer_output[:, 1:]` (BakLLaVA)",
-        "notes": """
-## Two checkpoints, two vision encoders, one wrapper
+                     "vision_feature_layer names",
+        "projector_input": "the block `vision_feature_layer` names, sliced by `vision_feature_select_strategy`",
+        "notes": "",
+        # Two checkpoints of this wrapper class on two vision encoders, each reading another block.
+        "per_checkpoint": {
+            "mistral-community/pixtral-12b": {
+                "title": "Llava (Pixtral-12B)",
+                "projector": "a two-layer MLP (linear_1, GELU, linear_2), one image token per patch, over the last "
+                             "block (vision_feature_layer -1, \"full\")",
+                "projector_input": "`vision.tower_output`",
+                "notes": """
+## The projector reads `vision.tower_output`
 
-`mistral-community/pixtral-12b` and `llava-hf/bakLlava-v1-hf` are both `model_type` `llava`
-around a Mistral text model: Pixtral-12B on the Pixtral vision encoder, BakLLaVA on CLIP. The
-wrapper's projector is the same two-layer MLP (`linear_1`, GELU, `linear_2`), one image token per
-patch, and `vision.image_features` is `model.projector.output` flattened over the images. What
-feeds it is the block `vision_feature_layer` names, sliced by
-`vision_feature_select_strategy`, and the two configs differ:
+`mistral-community/pixtral-12b` is `model_type` `llava` around a Mistral text model, on the
+Pixtral vision encoder. The projector is a two-layer MLP (`linear_1`, GELU, `linear_2`), one image
+token per patch, and `vision.image_features` is `model.projector.output` flattened over the
+images. The config sets `vision_feature_layer` to `-1` and `vision_feature_select_strategy` to
+`"full"`, so `model.projector.input` is `vision.tower_output`, `[1, patches, vision_hidden]`,
+every image's patches packed. `llava-hf/bakLlava-v1-hf` is the same wrapper class on CLIP,
+reading block -2.
 
-- Pixtral-12B: `-1` and `"full"`, so `model.projector.input` is `vision.tower_output`,
-  `[1, patches, vision_hidden]`, every image's patches packed. A patch is 16 pixels and the
-  processor resizes an image's longest side to at most 1024, so an image is up to 64 × 64 image
-  tokens, written row by row with `[IMG_BREAK]` after every row but the last and `[IMG_END]` after
-  the last; only `[IMG]` is in `vision.image_token_mask`.
-- BakLLaVA: `-2` and `"default"`, so `model.projector.input` is
-  `vision.layers[-2].layer_output[:, 1:]`, block -2 without its CLS token: the last block and
-  `vision.tower_output` are computed and discarded. An image is 576 image tokens (24 × 24 patches of
-  14 pixels at 336).
+```python
+with model.trace(prompt, images=[image]):
+    tower = model.vision.tower_output.save()
+    fed = model.projector.input.save()
+
+torch.equal(fed, tower)               # True
+```
+
+## Image tokens
+
+A patch is 16 pixels and the processor resizes an image's longest side to at most 1024, so an
+image is up to 64 × 64 image tokens, written row by row with `[IMG_BREAK]` after every row but
+the last and `[IMG_END]` after the last; only `[IMG]` is in `vision.image_token_mask`.
+""",
+            },
+            "llava-hf/bakLlava-v1-hf": {
+                "title": "Llava (BakLLaVA)",
+                "projector": "a two-layer MLP (linear_1, GELU, linear_2), one image token per patch, over block -2 "
+                             "without the CLS token (vision_feature_layer -2, \"default\")",
+                "projector_input": "`vision.layers[-2].layer_output[:, 1:]`",
+                "notes": """
+## The projector reads block -2 without its CLS token
+
+`llava-hf/bakLlava-v1-hf` is `model_type` `llava` around a Mistral text model, on CLIP. The
+projector is a two-layer MLP (`linear_1`, GELU, `linear_2`), one image token per patch, and
+`vision.image_features` is `model.projector.output` flattened over the images. The config sets
+`vision_feature_layer` to `-2` and `vision_feature_select_strategy` to `"default"`, so
+`model.projector.input` is `vision.layers[-2].layer_output[:, 1:]`, block -2 without its CLS
+token: the last block and `vision.tower_output` are computed and discarded. An image is 576 image
+tokens (24 × 24 patches of 14 pixels at 336). `mistral-community/pixtral-12b` is the same wrapper
+class on Pixtral, reading `vision.tower_output`.
 
 ```python
 with model.trace(prompt, images=[image]):
     stream = model.vision.layers[-2].layer_output.save()
-    tower = model.vision.tower_output.save()
     fed = model.projector.input.save()
 
-torch.equal(fed, tower)               # True on Pixtral-12B
-torch.equal(fed, stream[:, 1:])       # True on BakLLaVA
+torch.equal(fed, stream[:, 1:])       # True
 ```
-
 """,
+            },
+        },
     },
     "llava_next": {
         "title": "LLaVA-NeXT",

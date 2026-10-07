@@ -286,7 +286,12 @@ The entry states facts about a family, and each one has a source. Before writing
     - `notes`: markdown, the wrapper's own facts: what the projector reads, what `tower_output`
       edits reach, image tokens per image, the scatter; checked on the pinned tiny wrapper, real
       numbers from a run or from `docs/patterns/image-pathway.md`;
-    - `tower` (optional): a vision encoder's fields inline (below), for a vision encoder only this family hosts.
+    - `tower` (optional): a vision encoder's fields inline (below), for a vision encoder only this family hosts;
+    - `per_checkpoint` (optional): `{"<repo id>": {...}}`, fields merged over the record for that checkpoint alone,
+      for one wrapper class whose checkpoints differ in what a config does not say (`mistral.py`'s `llava`:
+      Pixtral-12B reads `vision.tower_output`, BakLLaVA block -2). It may override `title`, `projector`,
+      `projector_input`, `quirks` and `notes`; each key is one of the entry's `CHECKPOINTS` or the record's
+      `pinned`, and the record's own fields stay the default for its other checkpoints.
 
 ### Vision encoders
 

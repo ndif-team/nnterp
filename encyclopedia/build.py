@@ -309,10 +309,11 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
 
     # Each block's standard children, and whether each is a mixture; one block of each
     # combination of child classes stands for the rest, so a hybrid's ledgers list every host.
-    block_hosts, shapes = [], {}
+    block_hosts, block_classes, shapes = [], [], {}
     for layer in eager.layers:
         found = StandardizedTransformer._standard_children(layer)
         block_hosts.append({alias: runs_mixture(child) for alias, child in found.items()})
+        block_classes.append(type(layer._module).__name__)
         shapes.setdefault(tuple((alias, type(child._module)) for alias, child in found.items()), (layer, found))
     hosts_found: dict[str, list[tuple[int, Any]]] = {}
     for layer, found in shapes.values():
@@ -395,6 +396,8 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "host_classes": {alias: [(type(child._module).__name__, runs_mixture(child), len(child.values())) for child in found]
                          for alias, found in children.items()},
         "block_hosts": block_hosts,
+        # each block's native class, which a sublayer's optional ``block`` key names
+        "block_classes": block_classes,
         "moe": moe_sizes(moe),
         "mixer": mixer_kernels(mixer),
         "block_class": type(block._module).__name__,
@@ -565,10 +568,12 @@ MOE_PARTS = {
 }
 
 
-def drawn(specs: list[dict[str, Any]], hosts: dict[str, bool]) -> tuple[int, ...]:
+def drawn(specs: list[dict[str, Any]], hosts: dict[str, bool], block_class: str | None = None) -> tuple[int, ...]:
     """The sublayers one block draws, as indices into ``specs``: ``hosts`` maps each of the block's
-    standard children to whether it is a mixture."""
+    standard children to whether it is a mixture, and ``block_class`` is the block's native class. A
+    spec with a ``block`` key is drawn only on blocks of that class; one without, on every class."""
     return tuple(k for k, spec in enumerate(specs) if spec["host"] in hosts
+                 and spec.get("block", block_class) == block_class
                  and (spec["kind"] not in ("mlp", "moe") or hosts[spec["host"]] == (spec["kind"] == "moe")))
 
 
@@ -593,10 +598,15 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
     fmt = {**sizes, **{k: v for k, v in info["config"]}, **{k: moe[k] for k in ("num_experts", "top_k") if k in moe}}
     specs = block_spec["sublayers"]
     hosts = [s["host"] for s in specs]
-    # A host drawn by two sublayers (a dense MLP and a mixture) keys its nodes by kind as well.
-    keys = [s["host"] if hosts.count(s["host"]) == 1 else f"{s['host']}-{s['kind']}" for s in specs]
+    # A host drawn by two sublayers keys its nodes by the block class a sublayer names (a host whose
+    # norms differ by block class), else by kind (a dense MLP and a mixture).
+    keys = [s["host"] if hosts.count(s["host"]) == 1 else f"{s['host']}-{s.get('block', s['kind'])}" for s in specs]
+    block_classes = info.get("block_classes") or [None] * len(info["block_hosts"])
+    for s in specs:
+        assert "block" not in s or s["block"] in block_classes, \
+            f"{owner}: BLOCK's {s['host']!r} names block class {s['block']!r}; the blocks are {sorted(set(block_classes))}"
 
-    shape_of = [drawn(specs, hosts) for hosts in info["block_hosts"]]
+    shape_of = [drawn(specs, hosts, cls) for hosts, cls in zip(info["block_hosts"], block_classes)]
     for i, (shape, block_hosts) in enumerate(zip(shape_of, info["block_hosts"])):
         named = [h for h in block_hosts if h in hosts]
         assert sorted(named) == sorted(specs[k]["host"] for k in shape), \
@@ -666,13 +676,18 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                     "the shared expert", f"{expr}.shared_experts",
                     f"`{moe['shared']}`. Every token runs through it; `shared_expert_output` is what it adds beside `routed_output`.")
         nodes[f"contrib.{key}"] = value_node(contribution, "contribution")
+        # A norm's node is its native name; on a sublayer drawn on one block class it is the sublayer's
+        # own, since the same name can be a pre-norm on one class and a post-norm on another.
+        for where in ("pre_norm", "post_norm"):
+            if spec.get(where) and "block" in spec:
+                sub[f"{where}_node"] = f"norm.{key}.{spec[where]}"
         if spec.get("pre_norm"):
-            nodes[f"norm.{spec['pre_norm']}"] = node(
+            nodes[sub.get("pre_norm_node", f"norm.{spec['pre_norm']}")] = node(
                 "pre-norm", f"{base}.{spec['pre_norm']}",
                 f"A native module under its own name. Its output is what `{host}` reads: `{base}.{host}.input`.",
                 extra=spec.get("pre_norm_note"))
         if spec.get("post_norm"):
-            nodes[f"norm.{spec['post_norm']}"] = node(
+            nodes[sub.get("post_norm_node", f"norm.{spec['post_norm']}")] = node(
                 "post-norm", f"{base}.{spec['post_norm']}",
                 f"A native module under its own name. Its output is the contribution: `{contribution['expr']}`.",
                 extra=spec.get("post_norm_note"))

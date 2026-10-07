@@ -129,7 +129,7 @@
         : 'M' + SX + ',' + exitY + ' H' + (sub.pre_norm ? PRE.x : SUB.x), 'marker-end': arrow });
       el('circle', { cx: SX, cy: exitY, r: 5, fill: 'var(--stream-deep)' });
       if (sub.pre_norm) {
-        var gp = group('norm.' + sub.pre_norm, 'norm');
+        var gp = group(sub.pre_norm_node || 'norm.' + sub.pre_norm, 'norm');
         el('rect', { x: PRE.x, y: y - PRE.h / 2, width: PRE.w, height: PRE.h, 'class': 'box box-norm' }, gp);
         text(gp, PRE.x + PRE.w / 2, y - 4, 'norm', 'label-dim', 'middle');
         text(gp, PRE.x + PRE.w / 2, y + 12, sub.pre_norm, 'label-sm', 'middle');
@@ -169,7 +169,7 @@
       var outX = SUB.x + SUB.w;
       if (sub.post_norm) {
         el('path', { 'class': 'edge', d: 'M' + outX + ',' + y + ' H' + POST.x, 'marker-end': arrow });
-        var gq = group('norm.' + sub.post_norm, 'norm');
+        var gq = group(sub.post_norm_node || 'norm.' + sub.post_norm, 'norm');
         el('rect', { x: POST.x, y: y - POST.h / 2, width: POST.w, height: POST.h, 'class': 'box box-norm' }, gq);
         text(gq, POST.x + POST.w / 2, y - 4, 'norm', 'label-dim', 'middle');
         text(gq, POST.x + POST.w / 2, y + 12, sub.post_norm, 'label-sm', 'middle');

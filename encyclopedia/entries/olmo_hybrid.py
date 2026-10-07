@@ -27,12 +27,10 @@ QUIRKS = ["hybrid", "post-norms", "qk-norm", "nope-blocks"]
 #: pinned tiny checkpoint with the released config's rope_theta null and linear_allow_neg_eigval written in
 #: (tests/families/test_olmo_hybrid.py's copy), routed, float32, CPU; sizes from the checkpoints' configs.
 
-#: BLOCKED on the generator. The two block classes put the same native norm in two roles and the one MLP in
-#: two places: on a DeltaNet block post_attention_layernorm is the MLP's pre-norm, on an attention block the
-#: attention's post-norm, and the MLP is pre-normed on one and post-normed on the other. The schema matches a
-#: sublayer by host only, so `mlp` cannot be listed twice with different norms, and a norm's hover node is
-#: keyed by its native name alone. The `block` key below (the native block class a sublayer is drawn on)
-#: is what the generator would need, with norm nodes keyed per sublayer; the current build rejects it.
+#: The two block classes put the same native norm in two roles and the one MLP in two places: on a DeltaNet
+#: block post_attention_layernorm is the MLP's pre-norm, on an attention block the attention's post-norm,
+#: and the MLP is pre-normed on one and post-normed on the other. Each sublayer's `block` key names the
+#: native block class it is drawn on, so `mlp` is listed once per class with its own norms.
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

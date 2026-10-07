@@ -200,6 +200,13 @@ The entry states facts about a family, and each one has a source. Before writing
      - `variants`: `{layer_type: detail}` keyed on the values of `config.layer_types`, shown instead
        of `detail` as the slider moves, for blocks that differ only in a setting; the same length
        limit applies.
+     - `block`: optional, the native class name of the blocks this sublayer is drawn on
+       (`"OlmoHybridAttentionDecoderLayer"`); a sublayer without it is drawn on every class. Give it
+       when one host is drawn differently on two block classes: OLMo-Hybrid's `mlp` is pre-normed on
+       its DeltaNet blocks and post-normed on its attention blocks, and `post_attention_layernorm` is
+       the MLP's pre-norm on one class and the attention's post-norm on the other, so `mlp` is listed
+       once per class, each with its own `block` and norms. A sublayer with a `block` key has its own
+       norm hover nodes, so the same norm name can sit in two roles.
    - `identity` (and `identity_note`): the contribution identity, when it is not the plain sum
      `layers[i].input + <contributions> == layer_output` (Gemma-4, DeepSeek-V4; Granite's scaled
      contributions still sum exactly). `identity_note` may be given on its own, for a sum that is
@@ -218,7 +225,8 @@ The entry states facts about a family, and each one has a source. Before writing
    `first_k_dense_replace` and their kin all come out the same way. The distinct combinations are
    the block's shapes; the slider's ticks are coloured by shape, and the diagram, the identity and
    the variant label redraw when the slider crosses into another. The build fails when a block has
-   a host the listed sublayers do not draw, when two sublayers match the same host, or when a
+   a host the listed sublayers do not draw, when two sublayers match the same host on one block,
+   when a `block` key names no block class of the checkpoint, or when a
    sublayer matches no block of the checkpoint and is not the other half of such an `"mlp"` /
    `"moe"` pair. When the reference and the pinned checkpoint have different block kinds (Nemotron 3 Nano is dense where its tiny checkpoint is a mixture), list both layouts (`"mlp"` and `"moe"` for the same host); each build draws the ones its checkpoint has.
 

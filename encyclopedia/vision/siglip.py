@@ -33,11 +33,11 @@ BLOCK = {
     ],
 }
 
-ROWS = "One row per image (per tile on Idefics 3 and SmolVLM); patches in raster order."
+ROWS = "One row per image (per crop on LLaVA-OneVision, per tile on Idefics 3 and SmolVLM); patches in raster order."
 MASKING = "No causal mask: a patch attends to every patch of its row."
 POSITIONS = ("Learned absolute position embeddings are added to the patch embeddings; no class token and no norm "
              "before block 0.")
-NORM = "`post_layernorm` norms every patch after the last block: it is `vision.norm`, and `vision.tower_output` is its output."
+NORM = "`post_layernorm`, a LayerNorm over every patch after the last block, is `vision.norm`; `vision.tower_output` is its output."
 QUIRKS: list[str] = []
 
 NOTES = """
@@ -50,6 +50,6 @@ column `c` of the grid is index `r * (image_size // patch_size) + c` on every va
 ## The final norm is `vision.norm`
 
 `post_layernorm` norms every patch after the last block, so
-`vision.tower_output == vision.norm(vision.layers[-1].layer_output)`: a write to the last block's
-`layer_output` reaches `tower_output` through the norm.
+`vision.tower_output == vision.norm(vision.layers[-1].layer_output)`. Whether the projector reads
+`tower_output` or a block's `layer_output` before the norm is the wrapper's choice, in its notes.
 """

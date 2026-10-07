@@ -80,6 +80,10 @@ The linear-attention mixer of Qwen3-Next and Qwen3.5 (`linear_attn`): queries, k
 
 A family whose blocks are of two kinds: Qwen3-Next, Qwen3.5 (text), Qwen3.5-MoE (text), OLMo-Hybrid and Kimi-Linear have `linear_attn` (gated DeltaNet, a `LinearAttention`, a `RecurrentMixer`) on three blocks in four and `self_attn` on the fourth, per `config.layer_types`; never both on one block. `support()` reads per block there. See [families.md](families.md#hybrids).
 
+## Image features, image token mask
+
+The two values of a vision tower that say where the image enters the text model: `vision.image_token_mask` is `input_ids == image_token_id` (`[batch, seq]`, read off the model's inputs, so first in a trace), and `vision.image_features` is the tensor the wrapper scatters into the token embeddings at those positions (`[image_tokens, hidden]`, read at the scatter, assignable). `layers[0].input[vision.image_token_mask] == vision.image_features` on every wrapper. See [../usage/vision.md](../usage/vision.md#where-the-image-meets-the-text-model).
+
 ## Interface (`attention_interface_1`)
 
 transformers' shared attention call, `attention_interface(module, query, key, value, attention_mask, ...)`, which under eager attention is `eager_attention_forward`. The base `Attention` reads the interior values on and inside this call; four families do their own arithmetic and relocate them. See [../usage/attention-interior.md](../usage/attention-interior.md).
@@ -90,7 +94,7 @@ The number of key/value heads, `num_kv_heads`, fewer than `num_heads` under grou
 
 ## Layout, dims
 
-The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-two named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the twenty-nine envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`) and `linear_attn.decays` on Kimi-Linear (`ChannelGates`). See [../usage/layouts.md](../usage/layouts.md).
+The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-five named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the thirty-two envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`) and `linear_attn.decays` on Kimi-Linear (`ChannelGates`). See [../usage/layouts.md](../usage/layouts.md).
 
 ## MLA (multi-head latent attention)
 
@@ -108,6 +112,10 @@ nnsight's count of how many times a run has reached one location; each visit is 
 
 One call or assignment inside a module's forward as nnsight's `.source` names it: `nn_functional_softmax_0`, `attn_weights_1`, `torch_chunk_gated_delta_rule_0`; `<callable>_<n>` for the n-th call, `<name>_<n>` for the n-th binding. An `EProperty`'s key names one after a `source` segment, with another `source` between a call and an op inside it (`source.attention_interface_1.source.nn_functional_softmax_0.output`). See [../extending/finding-source-ops.md](../extending/finding-source-ops.md) and nnsight `docs/usage/source.md`.
 
+## Packed tower
+
+A vision tower that runs every image of the invoke as one sequence of patches (the Qwen ViT, Pixtral): its `Patches` values are `[1, all patches, vision_hidden]`, with the images axis 1, and the processor's per-image grid (`image_grid_thw`, `image_sizes`) says where one image's patches end. See [../usage/vision.md](../usage/vision.md#the-qwen-vit).
+
 ## Parallel block
 
 A block where one norm's output feeds both sublayers and `x + attn(norm(x)) + mlp(norm(x))` is summed at the end: GPT-NeoX (with `use_parallel_residual`), Phi, GPT-J, CodeGen, StableLM-2, Falcon. `mlp.input` is that norm's output, and the contribution identity holds unchanged. See [families.md](families.md#parallel-blocks).
@@ -115,6 +123,10 @@ A block where one norm's output feeds both sublayers and `x + attn(norm(x)) + ml
 ## Pinned read, relaxed read
 
 Inside `for t in tracer.iter[t]:` a read is *pinned* to occurrence `t` of its location; a read outside any `tracer.iter`, or after a step body's first read, is *relaxed* and takes the occurrence in flight. A `RecurrentMixer`'s per-token `state` decides its kernel and drills into the kernel call relaxed (`pinned(None)`), so the callee resolves from the live call, and the value read that follows is pinned to a token. See [../developing/eproperty-internals.md](../developing/eproperty-internals.md) and [../developing/recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md).
+
+## Projector
+
+`model.projector`: the last module before the scatter on a vision-language wrapper (`multi_modal_projector`, Qwen's `merger`, Idefics 3's `connector`), mapping the tower's output into the text model's width. `projector.input` is what the tower hands over; `projector.output` is `image_features` on most wrappers but not all (LLaVA-NeXT adds newline tokens after it), which is why `image_features` is read at the scatter instead. See [../usage/vision.md](../usage/vision.md#where-the-image-meets-the-text-model).
 
 ## Recurrent state
 
@@ -143,6 +155,10 @@ The tensor a block passes to the next, `[batch, seq, hidden]`: `layers[i].input`
 ## Sandwich block
 
 A block that norms a sublayer's output before adding it to the residual stream, `x + post_attention_layernorm(attn(...))` (Gemma-2/3/4, OLMo-2/3). The contribution is the post-norm's output, so those families point `attention_output` / `mlp_output` at the sibling norm. See [families.md](families.md#sandwich-norms) and [../extending/overriding-values.md](../extending/overriding-values.md).
+
+## Scatter
+
+The step in a vision-language wrapper's forward that writes the projected image features into the token embeddings at the image tokens (`masked_scatter`). `vision.image_features` is read there, through an `ImageScatter` envoy keyed on the wrapper's model, or on the root's forward where the family sets `ROOT_SCATTER` (Llama 4). See [../developing/vision-design.md](../developing/vision-design.md#the-image-values).
 
 ## Selective scan, `SelectiveScan`
 
@@ -184,6 +200,10 @@ The attention (or linear attention) and the MLP of a block, each adding one cont
 
 The random-weights checkpoint each family's test pins (`hf-internal-testing/tiny-random-LlamaForCausalLM`, `yujiepan/qwen3.5-tiny-random`), small enough to run on a CPU in seconds; every example in these docs was run against one. Its outputs are meaningless as numbers: show shapes and structure from it, not values. See [families.md](families.md) and [../developing/testing.md](../developing/testing.md).
 
+## Tower, `Vision`
+
+The vision side of an image-text-to-text wrapper under its standard names: `model.vision` (a `Vision` envoy), `vision.layers[i]` (`VisionLayer`, with `VisionAttention` and `VisionMlp`), `vision.patch_embed`, `vision.norm`, the tower's sizes, `patch_embeddings` and `tower_output` (`Patches`, `[images, patches, vision_hidden]`), and the two image values. Named by the text model's family, since the family is one per `model_type` and the wrapper's `text_config.model_type` picks it. See [../usage/vision.md](../usage/vision.md#the-names).
+
 ## Tuple block, `returns_tuple`
 
 A decoder block whose forward returns `(hidden_states, ...)` rather than the tensor alone: GPT-J, GPT-Neo, CodeGen, GPT-NeoX-Japanese, BLOOM, MPT, Falcon set `Layer.returns_tuple = True`. `layer_output` is the tensor either way; `skip_layers` packs the replacement the way the block would have. See [families.md](families.md#tuple-blocks).
@@ -195,6 +215,7 @@ A decoder block whose forward returns `(hidden_states, ...)` rather than the ten
 - "Available" is per envoy: on a hybrid the same value is available on some blocks and `"no self_attn module on this block"` on others.
 - `hasattr(envoy, value)` raises `Unavailable` rather than returning `False`; `support()` is the question to ask.
 - "Occurrence" counts over the whole run, "step" counts `tracer.iter` iterations; `states`, `state_after` and `set_state_after` translate between the two by counting from the current call's first token.
+- A "wrapper" is the image-text-to-text class around a text model (`LlavaForConditionalGeneration` around a Llama); its family is the text model's, and `model.vision` exists only when it is loaded with `task="image-text-to-text"`.
 
 ## Related
 

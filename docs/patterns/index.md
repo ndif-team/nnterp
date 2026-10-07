@@ -3,7 +3,7 @@ title: Patterns Index
 one_liner: Interpretability recipes written once against nnterp's standard values, so each runs unchanged on every family.
 tags: [pattern, interpretability, index]
 related: [docs/usage/index.md, docs/reference/families.md]
-sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/components/attention.py]
+sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/components/attention.py, nnterp/components/vision.py]
 ---
 
 # Patterns Index
@@ -40,6 +40,10 @@ model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_imp
 
 - [cross-family-sweep](cross-family-sweep.md) — one experiment over several checkpoints, guarded by `support()`, hybrids handled.
 - [probing](probing.md) — `get_token_activations` to build a dataset, a closed-form linear probe per layer.
+
+## Vision-language models
+
+- [image-pathway](image-pathway.md) — ablate the image at `vision.image_features` or inside the tower, patch one image's features into another's run, each head's attention onto the image, and one-sided edits at the image positions of a text block.
 
 ## Hybrids
 

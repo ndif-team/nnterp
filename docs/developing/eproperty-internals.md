@@ -126,13 +126,14 @@ name in the repr and `support()`.
 ### The path grammar
 
 A key is dotted segments ending in `output`, `input` or `inputs`, walked
-from the host envoy:
+from the host envoy, or from the model's root after a leading `/`:
 
 | segment | meaning | example |
 |---|---|---|
 | `output` (last) | the current node's output | `"output"`: `Layer.layer_output` (`layer.py:58`), a view over the same location as `.output` |
 | `input` (last) | the first argument of the current node's call (fact 6) | `"source.dropout_add_0.input"`: BLOOM's contribution (`families/bloom.py:73-78`) |
 | `inputs` (last) | the `(args, kwargs)` pair, one element of it with `select` | `"inputs"` on the root: `input_ids` (`standardized.py:352-360`); `"source.attention_interface_1.inputs"` with `select=1`: `attention_queries` (`attention.py:140`) |
+| `/` (leading) | the model's root (`envoy.root`), walked down from there like a path below the host, aliases included | `"/inputs"`: `Vision.image_token_mask` (`components/vision.py`); `"/model.source.inputs_embeds_masked_scatter_0.inputs"`, from a key function: `Vision.image_features` |
 | `../` (leading, repeatable) | the parent module, by native name | `"../post_attention_layernorm.output"`: Gemma-2's `attention_output` (`families/gemma2.py:30-36`) |
 | a name | a child module of the current node, aliases included; under a `source`, an operation | `"embed_tokens.output"`: `token_embeddings` (`standardized.py:186-194`) |
 | `source` | the current module's or operation's forward, instrumented for this run | `"source.attention_interface_1.source.nn_functional_dropout_0.output"`: `attention_probabilities` (`attention.py:196-202`); `"../source.hidden_states_view_0.output"`: Llama 4's `mlp_output` (`families/llama4_text.py:106-112`) |
@@ -140,17 +141,20 @@ from the host envoy:
 
 ### `_resolve`: the walk
 
-`_resolve(obj, key)` (`:162-191`) turns a path into the served location, and
+`_resolve(obj, key)` (`:189-222`) turns a path into the served location, and
 runs before every read and write, because of fact 5: an operation under a
 call is per run, so nothing about the walk can be cached on the descriptor.
-It strips every leading `../` (counting them), splits the rest on `.`, and,
+A leading `/` swaps the host for `obj.root` (nnsight's `Envoy.root`, the
+top of the parent links) and is dropped; the rest is then a relative path
+from the root, and a `../` right after it is refused, since nothing is above
+the root. It strips every leading `../` (counting them), splits the rest on `.`, and,
 below the host, hands every segment but the last to one
 `obj.get(".".join(walk))` (fact 6): every segment is an attribute, whether
 a child module (so an alias works), `source` (the drill of fact 5) or, on
 the `Source` a drill returns, an operation. An
 `AttributeError` anywhere is re-raised as `SourceNotAvailable` naming the
-value, the path and nnsight's list of what is there (`:186-190`), because of
-fact 2. The key it is given is `path(obj)` (`:154-156`: the string, or the
+value, the path and nnsight's list of what is there (`:216-220`), because of
+fact 2. The key it is given is `path(obj)` (`:176-178`: the string, or the
 function applied to the host). Verified on tiny GPT-2: a wrong op
 reads `model.transformer.h.0.attn.broken reads 'source.no_such_op_0.output',
 which this run does not have: 'model.transformer.h.0.attn.source' has no
@@ -163,8 +167,7 @@ eproperty's is.
 
 ### Above the host: arithmetic on names
 
-An envoy carries its path but not its parent, so a path that starts with
-`../` is not walked through envoys at all: `_resolve` drops as many trailing
+A path that starts with `../` is not walked through envoys: `_resolve` drops as many trailing
 segments from the host's own path as there are `../`, appends the rest of
 the key, and returns that string as the location. The parent's name is
 native, so a `../` step is by native name, and the segment after it is
@@ -175,8 +178,9 @@ drilled: a `source` segment above the host names an operation of the
 parent's own forward, which is served by its string because the family
 instrumented that forward at build (`sourced = True`, below); a second
 `source` on such a path, a call inside the parent's forward, would need the
-parent drilled, which only an envoy can do, and `_resolve` refuses it with
-a `ValueError` saying so. Verified on tiny GPT-2: `EProperty("../ln_2.output")`
+parent drilled at read time, and `_resolve` refuses it with a `ValueError`
+saying so. A value that reads something far from its host by standard name
+anchors its key at the root (`/`) instead, which is walked through envoys. Verified on tiny GPT-2: `EProperty("../ln_2.output")`
 on the attention equals `layers[0].ln_2.output`, and zeroing it in place
 moves the logits.
 
@@ -205,7 +209,8 @@ read pinned past 0 (`tests/families/test_qwen3_5_text.py:173-176`).
 
 `_pick(attribute, value)` (`:199-207`) takes one element of the served
 value and `_put(attribute, current, element)` (`:209-223`) puts one back;
-`attribute` is the path's last segment, handed in by the caller:
+`attribute` is the path's last segment past any `/` (`EProperty.attribute(key)`),
+handed in by the caller:
 
 - `input` is `first_input(args, kwargs)` on read and
   `replace_first_input(args, kwargs, element)` on write, nnsight's own rule
@@ -283,7 +288,7 @@ block.
   `RuntimeError: the availability check of model.transformer.h.0.attn.probe failed: 'GPT2Config' object has no attribute 'no_such_flag'`.
 - `layout` and `dims` (`:127-150`) read the return annotation of the stub with
   `typing.get_type_hints(func, include_extras=True)`. The annotation is one
-  of the thirty-two layout aliases, each defined in the file of the envoy that
+  of the thirty-five layout aliases, each defined in the file of the envoy that
   serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `layer.py`,
   `Pattern` and `Keys` in `attention.py`, `State` in `recurrent.py`,
   `Logits` in `standardized.py`):

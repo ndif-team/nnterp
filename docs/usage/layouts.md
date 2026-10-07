@@ -1,6 +1,6 @@
 ---
 title: Layouts
-one_liner: "Every standard value has one axis layout on every family (two exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear), one of thirty-two named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
+one_liner: "Every standard value has one axis layout on every family (two exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear), one of thirty-five named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
 tags: [usage, layouts, shapes, jaxtyping, dims, heads, kv_heads, Residual, Pattern, Streams, experts, top_k]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/reference/families.md, docs/usage/availability.md, docs/extending/custom-values.md]
 sources: [nnterp/components/eproperty.py, nnterp/components/moe.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/components/__init__.py]
@@ -11,8 +11,8 @@ sources: [nnterp/components/eproperty.py, nnterp/components/moe.py, nnterp/compo
 ## What this is for
 
 A value's shape is part of what it means. Each standard value is annotated with one of
-thirty-two named layouts, each defined in the file of the envoy that serves it (`Residual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
-re-exports the twenty-nine envoy-level names, and the root's three come from `nnterp.standardized`.
+thirty-five named layouts, each defined in the file of the envoy that serves it (`Residual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Patches`, `ImageTokenMask`, `ImageFeatures` in `nnterp/components/vision.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
+re-exports the thirty-two envoy-level names, and the root's three come from `nnterp.standardized`.
 They are `jaxtyping` types such as `Residual = Float[Tensor, "batch seq hidden"]` and
 `Pattern = Float[Tensor, "batch heads query key"]`. `value.layout` returns that alias itself
 and `value.dims` names its axes. Layouts differ between values, not between families:
@@ -60,7 +60,7 @@ from the base.
 
 ## The layouts
 
-The thirty-two names, their axes, and the values that carry each:
+The thirty-five names, their axes, and the values that carry each:
 
 | layout | axes | values |
 | --- | --- | --- |
@@ -95,6 +95,9 @@ The thirty-two names, their axes, and the values that carry each:
 | `ExpertWeights` | `batch seq top_k` | a mixture's `expert_weights` |
 | `ExpertIndices` | `batch seq top_k` (`Int`) | a mixture's `expert_indices` |
 | `ExpertOutputs` | `batch seq top_k hidden` | a mixture's `expert_outputs` |
+| `Patches` | `images patches vision_hidden` | a vision tower's `vision.layers[i].layer_output`, `attention_output`, `mlp_output`, and `vision.patch_embeddings`, `vision.tower_output` ([vision.md](vision.md)); the tower's attention interior keeps `Pattern`, `Queries`, ..., its `batch` being the images |
+| `ImageTokenMask` | `batch seq` (`Bool`) | `vision.image_token_mask` |
+| `ImageFeatures` | `image_tokens hidden` | `vision.image_features` (flat over the batch's image tokens) |
 
 An axis name means the same thing on every layout: `batch` is axis 0 everywhere, `seq`
 the token axis, `heads` the query heads and `kv_heads` the key/value heads, `head_dim`

@@ -27,7 +27,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 ### "Load a model and use the standard names"
 - [docs/usage/loading.md](docs/usage/loading.md) — `StandardizedTransformer(repo_id, ...)`; pass `attn_implementation="eager"` for anything inside attention
 - [docs/usage/vocabulary.md](docs/usage/vocabulary.md) — `embed_tokens`, `layers[i].self_attn`, `layers[i].mlp`, `norm`, `lm_head`; native names keep working
-- [docs/reference/families.md](docs/reference/families.md) — the 94 families, their native names and quirks
+- [docs/reference/families.md](docs/reference/families.md) — the 98 families, their native names and quirks
 
 ### "Read or edit the residual stream / a sublayer's contribution"
 - [docs/usage/residual-stream.md](docs/usage/residual-stream.md) — `layer_output`, `attention_output`, `mlp_output`; `input + attention_output + mlp_output == layer_output`
@@ -37,11 +37,16 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/patterns/attention-patterns.md](docs/patterns/attention-patterns.md) — head metrics and pattern edits
 
 ### "Mixture of experts: the router, the experts, expert ablation and rerouting"
-- [docs/usage/mixture-of-experts.md](docs/usage/mixture-of-experts.md) — `layers[i].mlp` is a `Moe` on the 38 MoE families: `router_logits` (writable, before the scoring), `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs` (needs `experts_implementation="grouped_mm"`, the default), `routed_output`, `shared_expert_output`; `num_experts`, `top_k`, `SCORING`
+- [docs/usage/mixture-of-experts.md](docs/usage/mixture-of-experts.md) — `layers[i].mlp` is a `Moe` on the 39 MoE families: `router_logits` (writable, before the scoring), `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs` (needs `experts_implementation="grouped_mm"`, the default), `routed_output`, `shared_expert_output`; `num_experts`, `top_k`, `SCORING`
 - [docs/patterns/expert-ablation.md](docs/patterns/expert-ablation.md) — every expert's effect on a prediction
 
 ### "Logits, embeddings, next-token probabilities, the input, the sizes"
 - [docs/usage/root-values.md](docs/usage/root-values.md) — `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`, `num_layers`, `head_dim`, ... (each root size a `StandardizedProperty`: the config's value, by the plain rule or the family's spelling); a block's own sizes on `layers[i].self_attn` (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) and `layers[i].mlp` (`intermediate_size`), which differ from the root's on Gemma-4 and MiMo-V2-Flash
+
+### "Vision-language models: images, the vision tower, the projector"
+- [docs/usage/vision.md](docs/usage/vision.md) — load with `task="image-text-to-text"`, `model.trace(prompt, images=[image])`; `model.vision.layers[i]` (tower blocks, `Patches`), `model.projector`, the tower's `vision.image_token_mask` and `vision.image_features` (`layers[0].input[vision.image_token_mask] == vision.image_features`, read at the scatter); SigLIP, CLIP, Pixtral (packed, `[1, patches, vision_hidden]`), the Qwen ViT (packed; queries, keys, values and head outputs whole, no pattern; Qwen3-VL's `layers[k].deepstack_output`), the ViTs of Llama 4 (CLS last) and Gemma 4 (padded patches), and Gemma 4 unified's encoder-free embedder (a `vision` with no blocks), across 16 families
+- [docs/patterns/image-pathway.md](docs/patterns/image-pathway.md) — ablate the image at `vision.image_features` or inside the tower, patch one image's features into another's run, each head's mass onto the image, one-sided edits at the image positions (`h[mask] = 0`)
+- [docs/developing/vision-design.md](docs/developing/vision-design.md) — the design, what does not fit, what is left
 
 ### "Does this checkpoint have that value?"
 - [docs/usage/availability.md](docs/usage/availability.md) — `model.support()` before the trace; `nnterp.Unavailable` at the read; the reasons you will see
@@ -69,7 +74,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/usage/activations.md](docs/usage/activations.md) — `nnterp.nnsight_utils`: `get_token_activations` and friends
 
 ### "Run a research pattern across families"
-- [docs/patterns/index.md](docs/patterns/index.md) — logit lens, steering, attention patterns, ablation, activation patching, contribution decomposition, cross-family sweep, probing, DeltaNet state
+- [docs/patterns/index.md](docs/patterns/index.md) — logit lens, steering, attention patterns, ablation, activation patching, contribution decomposition, cross-family sweep, probing, the image pathway, DeltaNet state
 
 ### "Run remotely on NDIF"
 - [docs/usage/remote.md](docs/usage/remote.md) — `remote=True`; nnterp installed server-side, never shipped by value
@@ -87,7 +92,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 
 ### "Change nnterp itself"
 - [docs/developing/index.md](docs/developing/index.md) — architecture, descriptor internals, the recurrent mixer (`RecurrentMixer`, DeltaNet) and its occurrence arithmetic, tests, transformers compatibility, gotchas, contributing
-- **Run `HF_HUB_OFFLINE=1 pytest` (about 6100 tests, ~7 min on CPU) before and after.**
+- **Run `HF_HUB_OFFLINE=1 pytest` (about 6800 tests, ~7 min on CPU) before and after.**
 
 ### "Every symbol / every term"
 - [docs/reference/api-quick-reference.md](docs/reference/api-quick-reference.md), [docs/reference/glossary.md](docs/reference/glossary.md)
@@ -127,5 +132,6 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - **Recurrent mixers need `nnterp.route_kernels(model.family, "torch")` before the first trace of the layer** where an optimized kernel is installed: for DeltaNet's per-token `state`/`states`, and on Mamba-1 (Mamba, Falcon-Mamba, Jamba) and Mamba-2 whenever `mamba_ssm` is installed, whose CUDA kernels have no source and do not run on CPU (unrouted, even a `layer_output` read on CPU fails inside the kernel with `Expected u.is_cuda()`). DeltaNet's queries and keys are served before the kernel's l2-norm and scale; Mamba-2's `betas` and `decays` are one argument (`dt`): writing `decays` rewrites `betas`, and a write-back of unchanged values is not exact in bf16. A state write is not all a block remembers: a width-4 convolution carries the last tokens.
 - **A mixture's routing is the sparse pair `[batch, seq, top_k]`**: ablate expert `e` with `moe.expert_weights = moe.expert_weights.masked_fill(moe.expert_indices == e, 0)`; a rerouted index keeps the old slot's weight. Read a mixture's values in forward order (`router_logits`, weights/indices, `expert_outputs`, `routed_output`); where `shared_expert_output` falls differs per family. Mask pad tokens with `model.attention_mask` when counting usage (the router routes them). Under two or more invokes, edit the routing in place, and take the clean baseline from an unedited invoke of the same batch; sweep single experts in float32. ZAYA's skipped slots read as expert 0 with weight 0.
 - **`envoys=` keys match by module type or native path, never by alias**; to displace a family's envoy, key yours on the type. An `EProperty` path that goes up (`"../ln_2.output"`) takes native names only.
+- **Vision-language models: load with `task="image-text-to-text"`** (the default `text-generation` load has no processor, so `model.vision` serves nothing and says so), pass the image as `model.trace(prompt, images=[image])` with the placeholder in the prompt (the processor's chat template puts it there), one image-carrying invoke per trace (several images go in that invoke, as lists). Read `vision.image_token_mask` first (it comes off the inputs), then the tower's values, then `vision.image_features`, then the text model's. Boolean indexing with the mask flattens the batch: `out[mask]` is `[image_tokens, hidden]`, `out[~mask]` the text rows; `h[mask] = 0` in a trace is a one-sided edit that lands. Eager traces on a big tower (Gemma 3's 4096 patches) need `torch.no_grad()`; Llama 4 loads in bfloat16 (its processor returns bf16 pixels). Zeroing `image_features` is not the whole image on Qwen3-VL (`layers[0..2].deepstack_output` re-add it) and not reachable through `tower_output` on Llava (the projector reads block -2).
 - **Import nnterp (or nnsight) before any `transformers.models...` module**; the reverse order segfaults on this stack.
 - **Every snippet in `docs/` ran against a cached checkpoint**; when a page and the code disagree, the suite is the arbiter: `HF_HUB_OFFLINE=1 pytest tests/families/test_<family>.py`.

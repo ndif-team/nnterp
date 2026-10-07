@@ -1,5 +1,7 @@
 """EXAONE 4.0, end to end: post-norms only, sliding-window layers with the rotary and full layers without."""
 
+import pytest
+
 import glob
 import json
 import os
@@ -7,6 +9,7 @@ import tempfile
 
 import torch
 from suite import FamilySuite, PROMPT, rows
+from vision_suite import WrapperSuite, wrapper_of
 
 from nnterp.families import exaone4
 
@@ -67,3 +70,14 @@ class TestExaone4Hybrid(FamilySuite):
             keys_full = model.layers[1].self_attn.attention_keys.save()
         assert torch.equal(keys_full, normed_full)
         assert not torch.equal(keys_sliding, normed_sliding)
+
+
+class TestExaone4_5Wrapper(WrapperSuite):
+    """EXAONE 4.5 around EXAONE 4, built from the tiny text checkpoint's config (no tiny wrapper checkpoint exists): the text stack at
+    ``model.language_model``."""
+
+    FAMILY = exaone4
+
+    @pytest.fixture(scope="class")
+    def model(self):
+        return wrapper_of(TestExaone4.REPO, "Exaone4_5_Config", dict(hidden_size=16, depth=1, num_heads=2, intermediate_size=32, out_hidden_size=None))

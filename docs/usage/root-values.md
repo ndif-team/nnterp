@@ -147,7 +147,7 @@ block", which holds only where the model adds nothing after the embedding module
 ## Sizes
 
 Each size is a `StandardizedProperty` on the root, read-only, readable before any trace and
-without `dispatch`. It reads the text config (a multimodal checkpoint's `text_config`, else the config itself) by the plain rule below unless the model's family module
+without `dispatch`. It reads the text config (a multimodal checkpoint's `text_config`, else the config itself; a vision tower's own sizes, `model.vision.num_layers`, `hidden_size`, `patch_size`, ..., are on the tower, [vision.md](vision.md#the-values)) by the plain rule below unless the model's family module
 defines a function of the same name (`def num_kv_heads(model): ...` in `falcon.py`), in
 which case that function answers. The plain rule is what a Llama-style config needs; a
 family whose config spells a size its own way keeps that spelling beside its names and

@@ -125,9 +125,9 @@ class Moe(Mlp):
     def _routing_modules(self) -> list[Any]:
         modules = self._module._modules
         found = [modules.get(name) for name in ("gate", "router", "experts")]
-        for name in ("router", "experts"):  # handed down by the block where the mixture has no module of its own
-            envoy = self.__dict__.get(name)
-            if envoy is not None:
+        for name in ("router", "experts"):  # the block's, where the mixture has no module of its own (a family property)
+            envoy = getattr(self, name, None)
+            if isinstance(envoy, Envoy) and all(envoy._module is not module for module in found):
                 found.append(envoy._module)
         return [self._module, *(module for module in found if module is not None)]
 

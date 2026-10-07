@@ -15,7 +15,7 @@ stream. The six values below are how the mixture made it: the router's logits, t
 experts and weights it chose for each token, each chosen expert's weighted output, the
 routed sum, and the shared expert beside it. Expert ablation, rerouting, expert usage and
 routing entropy are reads and writes of these. They live on `model.layers[i].mlp` when it
-is a `Moe` (an `Mlp` subclass), on all 38 MoE families, with one layout each.
+is a `Moe` (an `Mlp` subclass), on all 39 MoE families, with one layout each.
 
 Nearly every mixture in transformers computes the same thing:
 
@@ -186,8 +186,8 @@ without it, edit in place under several invokes.
 
 | family | what differs |
 | --- | --- |
-| Gemma-4 (26B-A4B) | No MoE module: `router` and `experts` are the block's children and the block hands them to `layers[i].mlp`, the dense MLP, which hosts the values. The router runs on the block's input with its own norm and returns probabilities; `router_logits` is its projection (`router.proj`). `shared_expert_output` is the dense MLP's output; the identity is `mlp_output == post_feedforward_layernorm(post_feedforward_layernorm_1(shared_expert_output) + post_feedforward_layernorm_2(routed_output))`. On a dense checkpoint every mixture value is unavailable. |
-| GraniteMoE-Hybrid | `mlp` is the shared expert (`shared_mlp`); the block hands it `block_sparse_moe`'s `router` and `experts`. `shared_expert_output` is `mlp.output`; `routed_output + shared_expert_output == mlp_output / residual_multiplier`. GraniteMoE-Shared: `shared_expert_output` is the block's `shared_mlp`, the same identity. |
+| Gemma-4 (26B-A4B) | No MoE module: `router` and `experts` are the block's children; `layers[i].mlp`, the dense MLP, reads them through its parent and hosts the values. The router runs on the block's input with its own norm and returns probabilities; `router_logits` is its projection (`router.proj`). `shared_expert_output` is the dense MLP's output; the identity is `mlp_output == post_feedforward_layernorm(post_feedforward_layernorm_1(shared_expert_output) + post_feedforward_layernorm_2(routed_output))`. On a dense checkpoint every mixture value is unavailable. |
+| GraniteMoE-Hybrid | `mlp` is the shared expert (`shared_mlp`); it reads `block_sparse_moe`'s `router` and `experts` through its parent. `shared_expert_output` is `mlp.output`; `routed_output + shared_expert_output == mlp_output / residual_multiplier`. GraniteMoE-Shared: `shared_expert_output` is the block's `shared_mlp`, the same identity. |
 | Llama 4 | The router scatters the sigmoid of the top-k logits into dense scores over every expert, every expert runs on every token scaled on its *input* by its score, and the routed sum is added into the shared expert's output tensor in place. `router_logits` and `expert_indices` (the router's top-k) are served, `routed_output` is the sum over experts, `shared_expert_output` a copy carried back by a transform; `expert_weights` and `expert_outputs` are unavailable. |
 | JetMoE | No experts module: the router takes the top-k of its logits, softmaxes them and sorts the slots by expert. `expert_indices` / `expert_weights` are its top-k indices and gates in token order; `routed_output` is the routed sum before the mixture's `+ bias`; `expert_outputs` (sorted by expert) is unavailable. Read order: logits, indices, weights. |
 | DBRX | The router (`router.layer`) returns the logits alone; the FFN's `route_tokens_to_experts` takes a softmax top-k and p-normalizes. The experts loop over experts in their own forward, so `expert_outputs` is unavailable. |

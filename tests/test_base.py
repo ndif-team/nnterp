@@ -85,6 +85,14 @@ def gpt2_paths():
         def queries(self, value):
             return value
 
+        @EProperty("/norm.output", description="The final norm's output, by its standard name from the root")
+        def final_norm(self, value) -> Residual:
+            return value
+
+        @EProperty("/inputs", select="input_ids", description="The model's input ids, from the root")
+        def root_ids(self, value):
+            return value
+
     model = StandardizedTransformer("hf-internal-testing/tiny-random-gpt2", dispatch=True, attn_implementation="eager", envoys={GPT2Attention: Paths})
     return model, Paths
 
@@ -112,6 +120,25 @@ def test_eproperty_paths_resolve_and_write(gpt2_paths):
         pattern = attn.softmax.save()
     causal = torch.ones_like(pattern).tril()                 # with no scaling every score is 0: uniform over the causal keys
     assert torch.allclose(pattern, causal / causal.sum(-1, keepdim=True))
+
+
+def test_root_anchored_keys(gpt2_paths):
+    """A key with a leading ``/`` is walked from the model's root, aliases included, whatever the host."""
+    model, Paths = gpt2_paths
+    attn = model.layers[0].self_attn
+    assert attn.root is model and not Paths.final_norm.inside_forward()
+    assert model.support()["self_attn.final_norm"] is None
+    with model.trace("Hello world"):
+        ids = attn.root_ids.save()
+        normed = attn.final_norm.save()
+    with model.trace("Hello world"):
+        input_ids = model.input_ids.save()
+        ln_f = model.transformer.ln_f.output.save()  # the native name of `norm`
+    assert torch.equal(ids, input_ids) and torch.equal(normed, ln_f)
+    with model.trace("Hello world"):
+        attn.final_norm = attn.final_norm * 0  # a write lands where the root's path leads
+        logits = model.logits.save()
+    assert torch.equal(logits, model.lm_head._module(torch.zeros_like(ln_f)))
 
 
 def test_select_can_be_a_function_of_the_host(gpt2_paths):

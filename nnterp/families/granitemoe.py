@@ -5,9 +5,8 @@ the MLP: ``block_sparse_moe`` (``GraniteMoeMoE``, routed experts only) is
 ``mlp``. The block adds ``h * residual_multiplier`` for each sublayer, so
 ``attention_output`` and ``mlp_output`` are the module's output times the
 multiplier, computed copies that divide on assignment and carry an in-place edit
-back through a transform, as on Granite. The mixture keeps no config, so the
-block hands it the multiplier: the family's `Layer` sets ``residual_multiplier``
-on its `Mlp` child when it is built (`hand_residual_multiplier`). ``embedding_multiplier`` scales the
+back through a transform, as on Granite. The mixture keeps no config, so its
+`Mlp` reads the multiplier off its parent block (`residual_multiplier`). ``embedding_multiplier`` scales the
 embedding module's output before the first block and ``logits_scaling`` divides
 the head's output (the family's ``project_on_vocab``, Granite's). Every block has
 the mixture, so the config's ``intermediate_size`` is the experts' width. The
@@ -20,8 +19,7 @@ import torch
 from nnsight.intervention.envoy import Envoy
 from transformers.models.granitemoe.modeling_granitemoe import GraniteMoeAttention, GraniteMoeDecoderLayer, GraniteMoeMoE
 
-from ..components import EProperty, Layer, Moe, RecurrentMixer, Residual, first_tensor, rewrap
-from ..components import Mlp as BaseMlp
+from ..components import EProperty, Layer, Moe, Residual, first_tensor, rewrap
 from .granite import Attention as GraniteAttention
 from .granite import project_on_vocab  # noqa: F401  the logit lens divides by logits_scaling, as Granite's
 
@@ -33,15 +31,9 @@ RENAME = {
 }
 
 
-def hand_residual_multiplier(layer: Envoy) -> None:
-    """Set the block's ``residual_multiplier`` on its `Mlp` and `RecurrentMixer` children, whose modules keep no config.
-
-    Called by a family's `Layer` once its children are built; the child envoys
-    outlive a weight swap (`Envoy._update`), and the multiplier is the config's.
-    """
-    for _, child in layer._named_children():
-        if isinstance(child, (BaseMlp, RecurrentMixer)):  # the base: `Mlp` here is rebound to this family's
-            child.residual_multiplier = layer._module.residual_multiplier
+def residual_multiplier(envoy: Envoy) -> float:
+    """The block's ``residual_multiplier``, off the parent block's module: a mixture's or a mixer's module keeps no config."""
+    return envoy.parent._module.residual_multiplier
 
 
 def scaled_back(edited: torch.Tensor, raw, multiplier: float):
@@ -54,11 +46,7 @@ def scaled_back(edited: torch.Tensor, raw, multiplier: float):
 
 
 class Layer(Layer):
-    """GraniteMoE's decoder block; returns a bare tensor. It hands its mixture the multiplier the mixture's module does not keep."""
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        hand_residual_multiplier(self)
+    """GraniteMoE's decoder block; returns a bare tensor, so the base holds."""
 
 
 class Attention(GraniteAttention):
@@ -66,12 +54,11 @@ class Attention(GraniteAttention):
 
 
 class Mlp(Moe):
-    """GraniteMoE's mixture of experts; the block adds its output times ``residual_multiplier``, which the block hands it."""
+    """GraniteMoE's mixture of experts; the block adds its output times ``residual_multiplier``, read off the block."""
 
     SCORING = "topk_softmax"
 
-    #: Set by the block (`hand_residual_multiplier`): the mixture's module keeps no config.
-    residual_multiplier: float
+    residual_multiplier = property(residual_multiplier)
 
     @EProperty(key="output", description="What the MLP adds to the residual stream: its output times residual_multiplier")
     def mlp_output(self, value) -> Residual:

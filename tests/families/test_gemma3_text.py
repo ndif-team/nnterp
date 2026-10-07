@@ -2,6 +2,7 @@
 
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT, rows
+from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp.families import gemma3_text
 
@@ -48,3 +49,40 @@ class TestGemma3WrapperWithACap(TestGemma3Wrapper):
             torch.testing.assert_close(model.project_on_vocab(out), logits)
         finally:
             model.config.text_config.final_logit_softcapping = None
+
+
+class TestGemma3ImageTextToText(TestGemma3Wrapper):
+    """The wrapper loaded with its processor: the whole suite on the text side, the image values listed."""
+
+    LOAD_KWARGS = {"task": "image-text-to-text"}
+
+
+class TestGemma3Vision(VisionSuite):
+    """Gemma 3's SigLIP tower and pooling projector, and the tower's image values.
+
+    ``yujiepan/gemma-3-tiny-random``: the trl tiny wrapper's projector outputs
+    exact zeros, so no edit upstream of it would show there.
+    """
+
+    REPO = "yujiepan/gemma-3-tiny-random"
+    FAMILY = gemma3_text
+    TEXT_REPO = TestGemma3.REPO
+    VISION_NATIVE = {
+        "vision": "model.vision_tower",
+        "vision.layers": "model.vision_tower.encoder.layers",
+        "vision.patch_embed": "model.vision_tower.embeddings.patch_embedding",
+        "vision.norm": "model.vision_tower.post_layernorm",
+        "vision.layers.0.self_attn": "model.vision_tower.encoder.layers.0.self_attn",
+        "vision.layers.0.mlp": "model.vision_tower.encoder.layers.0.mlp",
+        "vision.layers.0.input_layernorm": "model.vision_tower.encoder.layers.0.layer_norm1",
+        "vision.layers.0.post_attention_layernorm": "model.vision_tower.encoder.layers.0.layer_norm2",
+        "projector": "model.multi_modal_projector",
+    }
+
+    def test_the_projector_pools_the_tower_output(self, model):
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            out = model.vision.tower_output.save()
+            fed = model.projector.input.save()
+            features = model.vision.image_features.save()
+        assert torch.equal(fed, out)
+        assert features.shape[0] == model.config.mm_tokens_per_image < out.shape[1]

@@ -132,6 +132,10 @@ outside the trace to pick blocks.
 | `this checkpoint has no per-layer embeddings (hidden_size_per_layer_input is 0); the block adds attention_output and mlp_output only` | `per_layer_output` (Gemma-4's `Layer` only) | a Gemma-4 checkpoint without per-layer embeddings (26B-A4B, 31B) |
 | `this mixer's kernels do not materialize the state per token` | `state`, `states` on a `RecurrentMixer` with no `STATE_OP` | the mixer has no token-by-token kernel |
 | `read inside transformers' pure-torch torch_chunk_gated_delta_rule, but this process dispatches it to an optimized kernel (fla) with no Python source; uninstall it, or call nnterp.route_kernels(model.family, 'torch'), to read these` | every `linear_attn` value but `attention_output` | `flash-linear-attention` or `causal-conv1d` is installed |
+| `a text-only load: no processor, so no image reaches the model; load with task='image-text-to-text'` | every value of `model.vision` and its blocks | a vision-language wrapper loaded under the default `task="text-generation"` ([vision.md](vision.md#availability)); `model.vision.support()` is then empty and `model.support()` has no `vision.` rows |
+| `<tower>.image_size is not available: the tower takes images of any resolution, each cut into its own patch grid by the processor; read the grid off the processor's output (image_grid_thw, image_sizes, image_position_ids)` | `vision.image_size` (a size, so raised at the read; not a `support()` row) | the Qwen ViT, Pixtral, Gemma 4 and Gemma 4 unified |
+| `the <family> family keys no ImageScatter on the '<model_type>' wrapper, so where its image features enter the text stream is unknown` | `vision.image_features` | the tower's names bind but the family does not say where the wrapper writes the features into the token embeddings |
+| `the config names no image_token_id` | `vision.image_token_mask`, `vision.image_features` | a wrapper whose config has no image token id to read the mask from |
 
 BLOOM and MPT do their attention arithmetic themselves, so their pattern and interior do
 not need an eager load and are `None` under any implementation.
@@ -181,6 +185,12 @@ with model.trace(prompt):
 
 For one block, `model.support(layer=i)["self_attn.attention_probabilities"]` is the flat
 form of the same check.
+
+A vision-language wrapper adds its tower's rows under `vision.` (`"vision.image_features"`,
+`"vision.self_attn.attention_probabilities"`), and `model.vision.support()` lists them
+without the prefix; a text-only checkpoint has no `model.vision` attribute at all, so guard
+on `getattr(model, "vision", None)` first and on `support()` second
+([vision.md](vision.md#availability)).
 
 ## Gotchas
 

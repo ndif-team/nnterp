@@ -22,8 +22,8 @@ The block, in order::
   post_feedforward_layernorm_2(experts(pre_feedforward_layernorm_2(x1)))``, and
   ``post_feedforward_layernorm`` norms that sum, so ``mlp_output`` is the dense
   MLP and the experts together, what the block adds. The mixture has no module
-  of its own, so ``mlp`` (a `Moe`) hosts its values: the block hands its
-  ``router`` and ``experts`` envoys down to it when it is built. The router
+  of its own, so ``mlp`` (a `Moe`) hosts its values, reading the block's
+  ``router`` and ``experts`` through its parent. The router
   runs on the block's *input* (``residual``), with its own norm, and returns
   probabilities; ``router_logits`` are its projection's output
   (``router.proj``). ``shared_expert_output`` is the dense MLP's output, before
@@ -61,17 +61,40 @@ The block, in order::
 
 ``final_logit_softcapping`` is in the text config; the root's ``project_on_vocab``
 reads it there.
+
+On the wrapper the vision tower ``model.vision_tower`` is ``vision`` (a `Vision`)
+and ``model.embed_vision``, the last module before the scatter, is
+``projector``. The tower is a ViT over each image's patches: the patch embedder's
+linear over the processor's flattened patches (``patch_embedder.input_proj``) is
+``vision.patch_embed``, so ``vision.patch_embeddings`` is before the 2D position
+embedding ``patch_embedder`` adds, and the blocks (``encoder.layers``) are
+``vision.layers``. Each block is the text block's
+sandwich, so its contributions are the post-norms' outputs too
+(`VisionAttention`, `VisionMlp`). The processor pads every image's patches to
+``max_soft_tokens * pooling_kernel_size**2`` rows with zero pixels at position
+``(-1, -1)``; the padded rows run through every block (masked as keys only), so
+they are present in ``vision.layers[i].layer_output``. There is no final norm:
+the tower's ``pooler`` zeroes the padded rows, average-pools the patches
+``pooling_kernel_size`` by ``pooling_kernel_size`` and strips the padding, so
+``vision.tower_output`` is the encoder's output (the last block's stream,
+padded) and ``projector.input`` is the pooled soft tokens, flat over the
+images. The audio tower (``model.audio_tower``, a Conformer) and its embedder
+``model.embed_audio`` keep their native names.
 """
 
 from typing import TYPE_CHECKING
 
 from nnsight.intervention.envoy import Envoy
-from transformers.models.gemma4.modeling_gemma4 import Gemma4TextAttention, Gemma4TextDecoderLayer, Gemma4TextMLP
+from transformers.models.gemma4.modeling_gemma4 import (
+    Gemma4Model, Gemma4TextAttention, Gemma4TextDecoderLayer, Gemma4TextMLP, Gemma4VisionAttention,
+    Gemma4VisionEncoderLayer, Gemma4VisionMLP, Gemma4VisionModel,
+)
 
 from ..components import (
-    INTERFACE, Attention, EProperty, Keys, Layer, Moe, Residual, RouterLogits, TokenEProperty, Unavailable, Values,
-    interface_reason, mixture_reason,
+    INTERFACE, Attention, EProperty, ImageScatter, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty,
+    Unavailable, Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
 )
+from ..components.vision import no_tower_run, variable_resolution
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -84,6 +107,12 @@ RENAME = {
     "model.language_model.embed_tokens": "embed_tokens",
     "model.language_model.layers": "layers",
     "model.language_model.norm": "norm",
+    # The wrapper's tower and projector. The tower's inner keys are relative to the tower
+    # (multi-component, or a name no text block has), so they bind on it alone.
+    "model.vision_tower": "vision",
+    "model.embed_vision": "projector",
+    "patch_embedder.input_proj": "patch_embed",
+    "encoder.layers": "layers",
 }
 
 
@@ -98,17 +127,9 @@ class Layer(Layer):
 
     Adds ``per_layer_output``, the third thing the block adds on a checkpoint
     with per-layer embeddings. On a mixture-of-experts checkpoint the block's
-    ``router`` and ``experts`` have no module of their own to host their values,
-    so the block hands their envoys to its `Mlp` when it is built; the envoys
-    outlive a weight swap.
+    ``router`` and ``experts`` have no module of their own to host their values;
+    its `Mlp` hosts them.
     """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.mlp.has_experts = bool(self._module.enable_moe_block)
-        if self.mlp.has_experts:
-            self.mlp.router = self.router
-            self.mlp.experts = self.experts
 
     @EProperty(
         "post_per_layer_input_norm.output",
@@ -173,13 +194,25 @@ class Mlp(Moe):
     """Gemma-4's MLP: what reaches the residual stream is the post-feedforward norm's output (with the experts', on a mixture block).
 
     On a mixture block it hosts the block's mixture of experts, whose
-    ``router`` and ``experts`` the block hands it; the dense MLP itself is the
-    shared expert. Read order: ``shared_expert_output`` (the dense MLP runs
+    ``router`` and ``experts`` it reads off its parent block; the dense MLP
+    itself is the shared expert. Read order: ``shared_expert_output`` (the dense MLP runs
     first), then the routing values, then ``routed_output``.
     """
 
-    #: Set by the block: whether it runs a mixture of experts beside this MLP.
-    has_experts: bool
+    @property
+    def has_experts(self) -> bool:
+        """Whether the block runs a mixture of experts beside this MLP (``enable_moe_block``)."""
+        return bool(self.parent._module.enable_moe_block)
+
+    @property
+    def router(self) -> Envoy:
+        """The block's router."""
+        return self.parent.router
+
+    @property
+    def experts(self) -> Envoy:
+        """The block's experts."""
+        return self.parent.experts
 
     def no_mixture(self) -> str | None:
         if self.has_experts:
@@ -210,8 +243,72 @@ class Mlp(Moe):
         return value
 
 
+class Vision(Vision):
+    """Gemma-4's ViT: its ``last_hidden_state`` is pooled, so ``tower_output`` is read at the encoder's output, padded rows included.
+
+    Images are variable-resolution (the processor sizes each to at most
+    ``max_soft_tokens * pooling_kernel_size**2`` patches), so ``image_size``
+    is `Unavailable`.
+    """
+
+    image_size = property(variable_resolution)
+
+    @EProperty("encoder.output", description=Vision.tower_output.description, unavailable=no_tower_run)
+    def tower_output(self, value) -> Patches:
+        """The encoder's output, ``[images, max_patches, vision_hidden]``: the last block's stream, padded rows included.
+
+        The tower then pools it in ``pooler`` and strips the padding, which is
+        what reaches the projector (``projector.input``). Assign to replace it.
+        """
+        return value.last_hidden_state
+
+    @tower_output.postprocess
+    def tower_output(self, value):
+        output = self.encoder.output
+        output.last_hidden_state = value
+        return output
+
+
+class VisionAttention(VisionAttention):
+    """Gemma-4's ViT attention: what reaches the tower's stream is the post-attention norm's output.
+
+    Its heads are the tower config's ``num_attention_heads`` (the module keeps
+    no count, and its output projection is wrapped in a clippable linear).
+    """
+
+    @property
+    def num_heads(self) -> int:
+        return self._module.config.num_attention_heads
+
+    @EProperty(
+        "../post_attention_layernorm.output",
+        description="What the attention adds to the tower's stream: the post-attention norm's output",
+        unavailable=no_tower_run,
+    )
+    def attention_output(self, value) -> Patches:
+        return value
+
+
+class VisionMlp(VisionMlp):
+    """Gemma-4's ViT MLP: what reaches the tower's stream is the post-feedforward norm's output."""
+
+    @EProperty(
+        "../post_feedforward_layernorm.output",
+        description="What the MLP adds to the tower's stream: the post-feedforward norm's output",
+        unavailable=no_tower_run,
+    )
+    def mlp_output(self, value) -> Patches:
+        return value
+
+
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
-ENVOYS = {Gemma4TextDecoderLayer: Layer, Gemma4TextAttention: Attention, Gemma4TextMLP: Mlp}
+ENVOYS = {
+    Gemma4Model: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
+    Gemma4TextDecoderLayer: Layer, Gemma4TextAttention: Attention, Gemma4TextMLP: Mlp,
+    # The ViT's sandwich blocks on the shared attention interface: the contributions point at the post-norms.
+    Gemma4VisionModel: Vision, Gemma4VisionEncoderLayer: VisionLayer, Gemma4VisionAttention: VisionAttention,
+    Gemma4VisionMLP: VisionMlp,
+}
 
 
 # -- sizes: per-layer on this config ---------------------------------------------

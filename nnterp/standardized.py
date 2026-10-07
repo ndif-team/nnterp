@@ -14,16 +14,15 @@ from nnsight.modeling.transformers import TransformersModel
 from torch import Tensor
 
 from . import families
-from .components import EProperty, Layer, Residual, Standard
-from .components.standard import values
+from .components import EProperty, Layer, Residual
+from .components.standard import blocks_support, standard_children, values
+from .components.vision import Vision
 
 #: The layouts of the root's values: the logits, the next-token distribution at the last position, and one
 #: integer per token (``input_ids``, ``attention_mask``).
 Logits = Float[Tensor, "batch seq vocab"]
 NextTokenProbs = Float[Tensor, "batch vocab"]
 Tokens = Int[Tensor, "batch seq"]
-
-
 class StandardizedProperty:
     """A read-only value of the model that a family may define instead.
 
@@ -95,7 +94,8 @@ class StandardizedTransformer(TransformersModel):
         tokenizer_kwargs: Attributes to set on the loaded tokenizer, such as
             ``padding_side="left"`` or a ``pad_token``.
         **kwargs: Passed through to `TransformersModel`. ``task`` defaults to
-            ``"text-generation"``.
+            ``"text-generation"``; pass ``task="image-text-to-text"`` to load a
+            multimodal checkpoint as its wrapper, with its processor.
 
     Over the values, `skip_layers`, `steer`, `project_on_vocab` and
     `get_topk_closest_tokens` do the common things (see each). Inside a
@@ -111,10 +111,18 @@ class StandardizedTransformer(TransformersModel):
     instead; `project_on_vocab` is a `StandardizedCapability`, a method the family
     can define the same way.
 
+    On an image-text-to-text checkpoint loaded with ``task="image-text-to-text"``
+    the text names keep their meaning (the language model's), the vision tower
+    is ``vision`` (a `Vision`, with its own blocks, sizes and values, among them
+    ``vision.image_token_mask`` and ``vision.image_features``) and the last
+    module before the scatter into the text stream is ``projector``.
+
     Attributes:
         family: The toolkit module the checkpoint resolved to.
         layers: The decoder blocks, each a `Layer` (the family's subclass).
         embed_tokens, norm, lm_head: The embedding, the final norm, the unembedding.
+        vision: The vision tower, a `Vision`, on a multimodal wrapper whose family names it.
+        projector: The last module before the wrapper scatters the image features into the text stream.
 
     Raises:
         UnsupportedFamily: when no family covers the checkpoint's ``model_type``.
@@ -125,6 +133,8 @@ class StandardizedTransformer(TransformersModel):
     embed_tokens: Envoy
     norm: Envoy
     lm_head: Envoy
+    vision: Vision
+    projector: Envoy
 
     def __init__(
         self,
@@ -154,6 +164,16 @@ class StandardizedTransformer(TransformersModel):
         )
         for key, value in (tokenizer_kwargs or {}).items():
             setattr(self.tokenizer, key, value)
+        self._source_root_scatter()
+
+    def _update(self, module: Any) -> None:
+        super()._update(module)  # real weights replacing meta ones reinstall the plain forward
+        self._source_root_scatter()
+
+    def _source_root_scatter(self) -> None:
+        """Instrument the root's forward ahead of any run where it scatters the image features (the family's ``ROOT_SCATTER``)."""
+        if getattr(self.family, "ROOT_SCATTER", None) and "projector" in self._aliases:
+            self.source
 
     @staticmethod
     def _base_envoys(repo_id: Any, kwargs: dict) -> dict:
@@ -316,54 +336,24 @@ class StandardizedTransformer(TransformersModel):
 
         The tree decides what is listed: every child of a block that carries
         standard values (a `Standard` envoy) is walked under its standard
-        name, so a value added through ``envoys=`` or a registered family
+        name, so a value installed through ``envoys=`` or a registered family
         appears here as it does in the envoy's own `Standard.support`, and a
-        module no block has (OPT's ``mlp``) has no entry.
+        module no block has (OPT's ``mlp``) has no entry. A standard child of
+        the root (the vision tower, `Vision`) is listed the same way, its own
+        `support` rows under its standard name (``"vision.image_features"``,
+        ``"vision.self_attn.attention_probabilities"``); a tower no image
+        reaches lists none.
         """
-        hosts = self._hosts()
         if layer is not None:
-            return self._layer_support(self.layers[layer], hosts)
+            return blocks_support(self.layers, layer)
         support: dict[str, Any] = {name: value.reason(self) for name, value in values(type(self)).items()}
-        per_layer = [self._layer_support(block, hosts) for block in self.layers]
-        for name in per_layer[0]:
-            missing = {i: reasons[name] for i, reasons in enumerate(per_layer) if reasons[name]}
-            support[name] = missing or None
+        support.update(blocks_support(self.layers))
+        for host, child in standard_children(self).items():
+            support.update((f"{host}.{name}", reason) for name, reason in child.support().items())
         return support
 
-    @staticmethod
-    def _standard_children(block: Envoy) -> dict[str, Standard]:
-        """The block's children that carry standard values, by standard name (the alias where one is bound)."""
-        bound = {alias: block.__dict__[alias] for alias in block._aliases}  # what each alias is bound to, however deep
-        names = {id(child): alias for alias, child in bound.items()}
-        found = {names.get(id(child), name): child for name, child in block._named_children() if isinstance(child, Standard)}
-        found.update((alias, child) for alias, child in bound.items() if isinstance(child, Standard) and alias not in found)
-        return found
-
-    def _hosts(self) -> dict[str, list[str]]:
-        """Standard-value hosts across every block: module name -> value names, in first-seen order.
-
-        The union over the blocks, so a hybrid lists both ``self_attn`` and
-        ``linear_attn`` and a block lacking one reports it as missing; a
-        module no block has (OPT's ``mlp``) is not listed.
-        """
-        hosts: dict[str, dict[str, None]] = {}
-        for block in self.layers:
-            for module, child in self._standard_children(block).items():
-                hosts.setdefault(module, {}).update(dict.fromkeys(child.values()))
-        return {module: list(names) for module, names in hosts.items()}
-
-    def _layer_support(self, block: Any, hosts: dict[str, list[str]]) -> dict[str, str | None]:
-        support: dict[str, str | None] = dict(block.support())
-        present = self._standard_children(block)
-        for module, names in hosts.items():
-            envoy = present.get(module)
-            reasons = envoy.support() if envoy is not None else {}
-            for name in names:
-                if envoy is None:
-                    support[f"{module}.{name}"] = f"no {module} module on this block"
-                else:
-                    support[f"{module}.{name}"] = reasons.get(name, f"no {name} value on this block's {module}")
-        return support
+    #: The block's children that carry standard values, by standard name (see `standard_children`).
+    _standard_children = staticmethod(standard_children)
 
     # -- the input (inside a trace) ----------------------------------------------
 

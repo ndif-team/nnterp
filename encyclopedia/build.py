@@ -141,6 +141,8 @@ VISION_QUIRKS = ("cls-token", "packed-tower", "variable-resolution", "padded-pat
 IMAGE_TASK = "image-text-to-text"
 IMAGE_TEXT_TO_TEXT = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES
 TOWER_SIZE_NAMES = ("num_layers", "hidden_size", "num_heads", "head_dim", "intermediate_size", "patch_size", "image_size")
+#: Sizes only some vision encoders' envoys define (the Qwen ViT's `QwenVision`), shown after the others where the class has them.
+TOWER_OWN_SIZE_NAMES = ("spatial_merge_size", "window_size")
 #: What the strip's embed node adds on a vision-language checkpoint.
 IMAGE_SENTENCE = ("On this checkpoint the projected image features replace the image tokens' embeddings before block 0: "
                   "layers[0].input[vision.image_token_mask] == vision.image_features.")
@@ -433,6 +435,7 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
             sizes.append((name, getattr(vision, name)))
         except Unavailable:  # a tower that takes any resolution
             sizes.append((name, "varies"))
+    sizes += [(name, getattr(vision, name)) for name in TOWER_OWN_SIZE_NAMES if isinstance(getattr(type(vision), name, None), property)]
     vision_config = config.to_dict()
     scatter = scatter_host(model)
     envoys = [(type(envoy._module).__name__, type(envoy).__name__) for envoy in (vision, layer, *children.values())]

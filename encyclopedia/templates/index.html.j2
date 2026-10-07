@@ -60,7 +60,7 @@
         <h3 class="card-name">{% for line in p.title.split(" / ") %}<span class="line">{{ line }}</span>{% endfor %}</h3>
         <p class="body-md">{{ p.subtitle }}</p>
         <div class="dashed"></div>
-        <div class="specs"><div class="spec"><span>model_type</span><span>{{ p.model_type }}</span></div><div class="spec"><span>blocks</span><span>{{ p.blocks }}</span></div>{% if p.towers %}<div class="spec"><span>vision</span><span>{{ eye }}{{ p.towers|join(' · ') }}</span></div>{% endif %}<div class="spec"><span>vLLM</span><span>{{ 'yes' if p.vllm else 'no' }}</span></div></div>
+        <div class="specs"><div class="spec"><span>model_type</span><span>{{ p.model_type }}</span></div>{% if p.towers %}<div class="spec"><span>vision</span><span>{{ eye }}{{ p.towers|join(' · ') }}</span></div>{% endif %}<div class="spec"><span>vLLM</span><span>{{ 'yes' if p.vllm else 'no' }}</span></div></div>
         <div class="chips">{% for q in p.quirks %}<span class="chip chip-sm">{{ q.label }}</span>{% endfor %}</div>
       </div>
     </a>

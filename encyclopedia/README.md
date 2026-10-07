@@ -126,7 +126,7 @@ rearrange them.
    family's `RENAME` lines for the vision encoder are not singled out.
 
 The index lists every family in `nnterp.families.known()`: a card with the family's circles, title,
-subtitle and quirks for each entry (the quirks that hold on any of its checkpoints; blocks as a range when its checkpoints differ; an eye and the
+subtitle and quirks for each entry (the quirks that hold on any of its checkpoints; an eye and the
 vision encoders found, `CLIP · SigLIP`, and the `Vision-language` chip when any checkpoint has a vision encoder), a
 stub for each family not written yet, a search box (title, `model_type`, org, architecture, Hub ids,
 quirks, vision encoders, wrappers) and three filter rows, each a fold closed at first whose label opens it and
@@ -552,6 +552,9 @@ and the same role takes the same colour everywhere on its page:
 
 Every colour has a fill tier, which takes ink text, and a deep tier for lines and coloured text on
 the paper; the page sets `--c1` … `--c5`, `--c1-deep` … `--c5-deep` and `--paper` on `<html>`, and
-the stylesheet names the roles from them. The hero's circles are the five fills. Code is highlighted
+the stylesheet names the roles from them. The hero's circles are the five fills, and so is the
+browser tab's icon: the same five discs on a 32×32 SVG (`palette.favicon`), inlined in each page as a
+data URI, so a family's tab shows its own colours and the index's the site palette;
+`static/favicon.svg` is the site palette's, linked first as the fallback. Code is highlighted
 at build time (Pygments for the snippets, a line lexer for the printout), with no JavaScript. The
 warning mark is amber on every family: it is a status, not a role.

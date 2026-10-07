@@ -352,7 +352,7 @@ def test_the_index_lists_every_vision_encoder_an_entry_resolves():
     assert titles and shown == titles
     index = build.environment().get_template("index.html.j2").render(**build.index_model(
         [{**card, "title": "x", "subtitle": "", "palette": build.site_palette(), "checkpoints": [], "quirks": [],
-          "vllm": False, "architecture": "", "family_module": "", "wrappers": [], "blocks": "1",
+          "vllm": False, "architecture": "", "family_module": "", "wrappers": [],
           "tower_slugs": [build.tower_slug(t) for t in card["towers"]]} for card in cards]))
     for title in titles:
         assert f'data-filter="{build.tower_slug(title)}">{title}</button>' in index, title
@@ -385,7 +385,7 @@ def test_every_entrys_org_is_in_the_cache():
 def test_the_index_has_org_filters_and_cards_carry_their_org():
     org = {"id": "meta-llama", "name": "Meta Llama", "avatar": "orgs/meta-llama.png"}
     card = {"model_type": "llama", "title": "Llama", "subtitle": "", "org": org, "palette": build.site_palette(), "checkpoints": [],
-            "quirks": [], "vllm": False, "architecture": "", "family_module": "", "towers": [], "wrappers": [], "blocks": "1",
+            "quirks": [], "vllm": False, "architecture": "", "family_module": "", "towers": [], "wrappers": [],
             "tower_slugs": []}
     index = build.environment().get_template("index.html.j2").render(**build.index_model([card]))
     assert index.index("<span>Org</span>") < index.index("<span>Quirks</span>")
@@ -395,6 +395,29 @@ def test_the_index_has_org_filters_and_cards_carry_their_org():
     assert index.count("Meta Llama</button>") == 1 and 'alt="Meta Llama" title="Meta Llama"' in index
     # each filter row is a fold, closed at first
     assert index.count('<details class="filter-group"') == 2 and "<details class=\"filter-group\" open" not in index
+    # a card's spec rows: model_type and vLLM (vision when the family has an encoder), no block count
+    assert "<span>model_type</span>" in index and "<span>vLLM</span>" in index and "<span>blocks</span>" not in index
+
+
+def test_every_page_has_its_palette_as_the_tab_icon():
+    """The tab's icon is the petals in the page's five fills, an SVG data URI with nothing in it that breaks the
+    attribute; static/favicon.svg is the site palette's."""
+    from urllib.parse import unquote
+
+    site = build.site_palette()
+    uri = site["icon"]
+    assert uri.startswith("data:image/svg+xml,") and not set("#'\" <>") & set(uri)
+    svg = unquote(uri.removeprefix("data:image/svg+xml,"))
+    assert svg == palette.favicon(site["fills"]) and "viewBox='0 0 32 32'" in svg
+    assert [f"fill='{fill}'" in svg for fill in site["fills"]] == [True] * 5 and svg.count("<circle") == 5
+    assert (Path(build.__file__).parent / "static" / "favicon.svg").read_text().strip() == svg
+    family = build.palette(entries.load("llama"))
+    assert family["icon"] != uri and all(f"fill='{fill}'" in unquote(family["icon"]) for fill in family["fills"])
+    card = {"model_type": "llama", "title": "Llama", "subtitle": "", "org": None, "palette": family, "checkpoints": [],
+            "quirks": [], "vllm": False, "architecture": "", "family_module": "", "towers": [], "wrappers": [], "tower_slugs": []}
+    index = build.environment().get_template("index.html.j2").render(**build.index_model([card]))
+    assert f'<link rel="icon" type="image/svg+xml" sizes="any" href="{uri}">' in index
+    assert '<link rel="icon" type="image/svg+xml" href="static/favicon.svg">' in index
 
 
 def test_parameter_counts_and_dates_read_like_the_hub():

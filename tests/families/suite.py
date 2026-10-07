@@ -311,10 +311,11 @@ class FamilySuite:
         assert std.shape[-1] == model.hidden_size
 
     def test_layer_input_is_the_block_input(self, model):
-        with model.trace(PROMPT):
-            raw = model.layers[1].input.save()
-            std = model.layers[1].layer_input.save()
-        assert torch.equal(std, raw) and std.shape[-1] == model.hidden_size
+        for i in sorted({0, min(1, len(model.layers) - 1)}):
+            with model.trace(PROMPT):
+                raw = model.layers[i].input.save()
+                std = model.layers[i].layer_input.save()
+            assert torch.equal(std, raw) and std.shape[-1] == model.hidden_size, i
         with model.trace(PROMPT):
             clean = model.logits.save()
         with model.trace(PROMPT):

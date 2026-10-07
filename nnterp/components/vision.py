@@ -10,9 +10,9 @@ on the tower's module types in its ``ENVOYS``.
 
 The tower's blocks are pre-norm attention + MLP blocks on transformers' shared
 attention interface (SigLIP, CLIP), so they are `Layer`, `Attention` and `Mlp`
-with the stream values re-annotated as `Patches`: ``layer_output``,
+with the stream values re-annotated as `Patches`: ``layer_input``, ``layer_output``,
 ``attention_output`` and ``mlp_output`` mean what they mean on a text block,
-``vision.layers[i].input + attention_output + mlp_output == layer_output``. The
+``vision.layers[i].layer_input + attention_output + mlp_output == layer_output``. The
 attention interior is inherited unchanged: ``attention_probabilities`` is a
 `Pattern` whose ``batch`` axis is the tower's (one row per image) and whose
 ``query``/``key`` axes are the image's patches. There is no causal mask (a
@@ -174,7 +174,20 @@ class ImageScatter(Standard):
 
 
 class VisionLayer(Layer):
-    """A vision tower's block: ``layer_output`` is the tower's stream, `Patches`."""
+    """A vision tower's block: ``layer_input`` and ``layer_output`` are the tower's stream, `Patches`."""
+
+    @EProperty(key="input", description="The tower's stream entering the block", unavailable=no_tower_run)
+    def layer_input(self, value: torch.Tensor) -> Patches:
+        """The tower's stream entering this block, ``[images, patches, vision_hidden]``, before any of its norms.
+
+        The block's first argument, with a packed tower's leading 1 (as
+        ``layer_output``); a view: assign or edit in place.
+        """
+        return as_patches(value)
+
+    @layer_input.postprocess
+    def layer_input(self, value: torch.Tensor) -> torch.Tensor:
+        return as_native(self.input, value)
 
     @EProperty(key="output", description="The tower's stream leaving the block", unavailable=no_tower_run)
     def layer_output(self, value: Any) -> Patches:

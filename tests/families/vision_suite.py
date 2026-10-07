@@ -244,7 +244,7 @@ class VisionSuite:
         reads = [(text.vision, name) for name in TOWER_VALUES]
         if text.vision.num_layers:
             layer = text.vision.layers[0]
-            reads += [(layer, "layer_output"), (layer.mlp, "mlp_output")]
+            reads += [(layer, "layer_input"), (layer, "layer_output"), (layer.mlp, "mlp_output")]
             reads += [(layer.self_attn, name.removeprefix("self_attn.")) for name in BLOCK_VALUES if name.startswith("self_attn.")]
         for host, name in reads:
             with pytest.raises(Unavailable, match="text-only load.*task='image-text-to-text'"):
@@ -258,7 +258,7 @@ class VisionSuite:
         assert type(model.vision).image_token_mask.layout is ImageTokenMask
         assert type(model.vision).image_features.layout is ImageFeatures
         layer = model.vision.layers[0]
-        assert type(layer).layer_output.layout is Patches
+        assert type(layer).layer_input.layout is Patches and type(layer).layer_output.layout is Patches
         assert type(layer.self_attn).attention_output.layout is Patches
         assert type(layer.mlp).mlp_output.layout is Patches
         assert type(layer.self_attn).attention_probabilities.layout is Pattern
@@ -319,14 +319,22 @@ class VisionSuite:
     # -- the tower ------------------------------------------------------------------------
 
     def test_tower_contribution_identity(self, model):
-        for layer in model.vision.layers:
+        """``layer_input + attention_output + mlp_output == layer_output`` on every tower block, ``layer_input`` its native input as
+        `Patches`; and the text side's ``layer_input`` is its block's input on the same trace."""
+        for i, layer in enumerate(model.vision.layers):
             with model.trace(image_prompt(model), images=[IMAGE]):
-                stream = layer.input.save()
+                native = layer.input.save()
+                stream = layer.layer_input.save()
                 attn = layer.self_attn.attention_output.save()
                 mlp = layer.mlp.mlp_output.save()
                 out = layer.layer_output.save()
-            assert isinstance(out, Patches) and out.shape[-1] == model.vision.hidden_size
+                text_native = model.layers[0].input.save() if i == 0 else None
+                text = model.layers[0].layer_input.save() if i == 0 else None
+            assert isinstance(stream, Patches) and isinstance(out, Patches) and out.shape[-1] == model.vision.hidden_size
+            assert stream.shape == out.shape and torch.equal(stream, as_rows(native))
             torch.testing.assert_close(stream + attn + mlp, out)
+            if i == 0:
+                assert torch.equal(text, text_native) and text.shape[-1] == model.hidden_size
 
     def test_tower_pattern_sums_to_one_over_keys(self, model):
         if "self_attn.attention_probabilities" in self.EXPECTED_VISION_UNAVAILABLE:
@@ -365,6 +373,21 @@ class VisionSuite:
             features = vision.image_features.save()
         assert (as_rows(native)[:, 0] == 0).all()
         assert not torch.allclose(features, clean["features"])
+
+    def test_tower_layer_input_writes_land(self, model, clean):
+        """Assigning a block's ``layer_input`` (`Patches`, a packed tower's leading 1 included) or editing it in place reaches the tower."""
+        if not model.vision.num_layers:
+            pytest.skip("this tower has no blocks")
+        layer = model.vision.layers[0]
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            layer.layer_input = layer.layer_input.clone()
+            same = model.vision.image_features.save()
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            layer.layer_input[:, 0] = 0
+            native = layer.input.save()
+            features = model.vision.image_features.save()
+        assert torch.equal(same, clean["features"])
+        assert (as_rows(native)[:, 0] == 0).all() and not torch.allclose(features, clean["features"])
 
     def test_two_images_in_one_invoke(self, model, clean):
         """Two images of different shapes: the mask holds both images' tokens and the scatter identity holds; a packed

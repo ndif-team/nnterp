@@ -354,10 +354,10 @@
   slider.addEventListener('input', update);
 
   // -- the checkpoint -----------------------------------------------------------------
-  var button = document.getElementById('ckpt-button'), list = document.getElementById('ckpt-list');
-  var options = Array.prototype.slice.call(list.querySelectorAll('[role="option"]'));
+  // Two selectors, the hero's and the sticky bar's, over one selected checkpoint: picking in either selects it,
+  // and select() shows it in both. Each is a button and a listbox of the same options.
+  var selectors = Array.prototype.slice.call(document.querySelectorAll('[data-selector]')).map(Selector);
   function usable(o) { return o.getAttribute('aria-disabled') !== 'true'; }
-  function optionOf(id) { return options.filter(function (o) { return o.getAttribute('data-ckpt') === id; })[0]; }
 
   function select(id) {
     if (!store.checkpoints[id]) return;
@@ -375,16 +375,21 @@
     buildTicks();
     update();
     drawTower();
-    // the selector, its Hub link and the colophon say which
-    var option = optionOf(id);
-    options.forEach(function (o) { o.setAttribute('aria-selected', o === option ? 'true' : 'false'); });
-    document.getElementById('ckpt-name').textContent = option ? option.getAttribute('data-name') : id;
-    document.getElementById('ckpt-eye').hidden = !(option && option.hasAttribute('data-vision'));
+    // the selectors, the Hub link and the colophon say which
+    selectors.forEach(function (s) { s.show(id); });
     var hub = document.getElementById('ckpt-hub');
     hub.href = data.url;
     hub.title = id + ' on the Hugging Face Hub';
     hub.setAttribute('aria-label', hub.title);
     document.getElementById('colophon-reference').textContent = id;
+  }
+
+  // Selecting from a selector: the page and the URL hash follow.
+  function choose(id) {
+    if (id === selected) return;
+    select(id);
+    if (history.replaceState) history.replaceState(null, '', '#ckpt=' + id);
+    else location.hash = 'ckpt=' + id;
   }
 
   // The vision encoder's block, in the pane now shown, once its fold is open (a closed fold has no layout to fit
@@ -410,62 +415,90 @@
     return store.checkpoints[id] ? id : null;
   }
 
-  // The list: a button opens it; arrows move, Enter or Space picks, Escape closes, a click picks.
-  var active = null;
-  function setActive(o) {
-    if (active) active.classList.remove('is-active');
-    active = o;
-    if (!o) { list.removeAttribute('aria-activedescendant'); return; }
-    o.classList.add('is-active');
-    list.setAttribute('aria-activedescendant', o.id);
-    if (o.scrollIntoView) o.scrollIntoView({ block: 'nearest' });
+  // One selector. The list: a button opens it; arrows move, Home and End jump, Enter or Space picks, Escape
+  // closes, a click picks.
+  function Selector(root) {
+    var button = root.querySelector('.ckpt-button'), list = root.querySelector('.ckpt-list');
+    var options = Array.prototype.slice.call(list.querySelectorAll('[role="option"]'));
+    var name = root.querySelector('.ckpt-name'), eye = root.querySelector('.ckpt-eye-current');
+    var active = null;
+    function optionOf(id) { return options.filter(function (o) { return o.getAttribute('data-ckpt') === id; })[0]; }
+    function setActive(o) {
+      if (active) active.classList.remove('is-active');
+      active = o;
+      if (!o) { list.removeAttribute('aria-activedescendant'); return; }
+      o.classList.add('is-active');
+      list.setAttribute('aria-activedescendant', o.id);
+      if (o.scrollIntoView) o.scrollIntoView({ block: 'nearest' });
+    }
+    function open() {
+      list.hidden = false;
+      button.setAttribute('aria-expanded', 'true');
+      setActive(optionOf(selected) || options.filter(usable)[0]);
+      list.focus();
+    }
+    function close(refocus) {
+      if (list.hidden) return;
+      list.hidden = true;
+      button.setAttribute('aria-expanded', 'false');
+      setActive(null);
+      if (refocus) button.focus();
+    }
+    function pick(o) {
+      if (!o || !usable(o)) return;
+      close(true);
+      choose(o.getAttribute('data-ckpt'));
+    }
+    button.addEventListener('click', function () { if (list.hidden) open(); else close(true); });
+    button.addEventListener('keydown', function (ev) {
+      if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); open(); }
+    });
+    list.addEventListener('keydown', function (ev) {
+      var choices = options.filter(usable), at = choices.indexOf(active);
+      if (ev.key === 'ArrowDown') { ev.preventDefault(); setActive(choices[Math.min(at + 1, choices.length - 1)]); }
+      else if (ev.key === 'ArrowUp') { ev.preventDefault(); setActive(choices[Math.max(at - 1, 0)]); }
+      else if (ev.key === 'Home') { ev.preventDefault(); setActive(choices[0]); }
+      else if (ev.key === 'End') { ev.preventDefault(); setActive(choices[choices.length - 1]); }
+      else if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(active); }
+      else if (ev.key === 'Escape') { ev.preventDefault(); close(true); }
+      else if (ev.key === 'Tab') close(false);
+    });
+    list.addEventListener('click', function (ev) {
+      var o = ev.target.closest && ev.target.closest('[role="option"]');
+      if (o) pick(o);
+    });
+    list.addEventListener('mousemove', function (ev) {
+      var o = ev.target.closest && ev.target.closest('[role="option"]');
+      if (o && usable(o) && o !== active) setActive(o);
+    });
+    document.addEventListener('click', function (ev) {
+      if (!root.contains(ev.target)) close(false);
+    });
+    return {
+      root: root, close: close,
+      // show the selected checkpoint: its name on the button, its eye, and aria-selected in the list
+      show: function (id) {
+        var option = optionOf(id);
+        options.forEach(function (o) { o.setAttribute('aria-selected', o === option ? 'true' : 'false'); });
+        name.textContent = option ? option.getAttribute('data-name') : id;
+        eye.hidden = !(option && option.hasAttribute('data-vision'));
+      }
+    };
   }
-  function open() {
-    list.hidden = false;
-    button.setAttribute('aria-expanded', 'true');
-    setActive(optionOf(selected) || options.filter(usable)[0]);
-    list.focus();
+
+  // The sticky bar: shown once the hero has scrolled off the top, hidden (and out of the tab order) while any of
+  // it is in view; a list left open in it closes when it hides.
+  var bar = document.getElementById('stickybar'), hero = document.querySelector('.hero');
+  if (bar && hero && window.IntersectionObserver) {
+    var barSelector = selectors.filter(function (s) { return bar.contains(s.root); })[0];
+    new IntersectionObserver(function (seen) {
+      var past = !seen[0].isIntersecting && seen[0].boundingClientRect.bottom <= 0;
+      bar.classList.toggle('is-shown', past);
+      bar.setAttribute('aria-hidden', past ? 'false' : 'true');
+      if (!past && barSelector) barSelector.close(false);
+    }).observe(hero);
   }
-  function close(refocus) {
-    list.hidden = true;
-    button.setAttribute('aria-expanded', 'false');
-    setActive(null);
-    if (refocus) button.focus();
-  }
-  function pick(o) {
-    if (!o || !usable(o)) return;
-    var id = o.getAttribute('data-ckpt');
-    close(true);
-    if (id === selected) return;
-    select(id);
-    if (history.replaceState) history.replaceState(null, '', '#ckpt=' + id);
-    else location.hash = 'ckpt=' + id;
-  }
-  button.addEventListener('click', function () { if (list.hidden) open(); else close(true); });
-  button.addEventListener('keydown', function (ev) {
-    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') { ev.preventDefault(); open(); }
-  });
-  list.addEventListener('keydown', function (ev) {
-    var choices = options.filter(usable), at = choices.indexOf(active);
-    if (ev.key === 'ArrowDown') { ev.preventDefault(); setActive(choices[Math.min(at + 1, choices.length - 1)]); }
-    else if (ev.key === 'ArrowUp') { ev.preventDefault(); setActive(choices[Math.max(at - 1, 0)]); }
-    else if (ev.key === 'Home') { ev.preventDefault(); setActive(choices[0]); }
-    else if (ev.key === 'End') { ev.preventDefault(); setActive(choices[choices.length - 1]); }
-    else if (ev.key === 'Enter' || ev.key === ' ') { ev.preventDefault(); pick(active); }
-    else if (ev.key === 'Escape') { ev.preventDefault(); close(true); }
-    else if (ev.key === 'Tab') close(false);
-  });
-  list.addEventListener('click', function (ev) {
-    var o = ev.target.closest && ev.target.closest('[role="option"]');
-    if (o) pick(o);
-  });
-  list.addEventListener('mousemove', function (ev) {
-    var o = ev.target.closest && ev.target.closest('[role="option"]');
-    if (o && usable(o) && o !== active) setActive(o);
-  });
-  document.addEventListener('click', function (ev) {
-    if (!list.hidden && !ev.target.closest('#ckpt')) close(false);
-  });
+
   window.addEventListener('hashchange', function () {
     var id = fromHash();
     if (id && id !== selected) select(id);

@@ -92,7 +92,7 @@
   // One shape of block from schema `s` into `target`: its sublayers in order, between the stream's two ends.
   // `between` (the text block's, on the blocks that have them) are the values the text model adds after
   // `layer_output`, outside the block: an add each on the stream below the block, its value coming in from the side.
-  var BET = 84;
+  var BET = 96;
   function draw(target, s, shape, prefix, between) {
     between = between || [];
     ctx = { svg: target, schema: s, prefix: prefix || '' };
@@ -148,11 +148,11 @@
       text(full, SX + 16, botY - 2, 'layers[i+1].input', 'label-role');
     } else text(full, SX + 16, botY - 2, 'layer_output', 'label-role');
     between.forEach(function (b, j) {
-      var y = betY[j], bh = 44;
+      var y = betY[j], bh = 64, top = y - bh / 2;
       var gv = group('between.value.' + b.value, 'mark');
-      el('rect', { x: SUB.x, y: y - bh / 2, width: SUB.w, height: bh, 'class': 'box box-sub' }, gv);
-      text(gv, SUB.x + 14, y - 3, b.label, 'label');
-      text(gv, SUB.x + 14, y + 13, 'at ' + b.mask, 'label-sm');
+      el('rect', { x: SUB.x, y: top, width: SUB.w, height: bh, 'class': 'box box-sub' }, gv);
+      text(gv, SUB.x + 14, top + 30, b.label, 'label');
+      text(gv, SUB.x + 14, top + 46, 'at ' + b.mask, 'label-sm');
       var d = 'M' + SUB.x + ',' + y + ' H' + (SX + 16);
       el('path', { 'class': 'edge-contrib', d: d, 'marker-end': arrow }, gv);
       el('path', { 'class': 'hit', d: d, 'stroke-width': 18, fill: 'none', stroke: 'transparent' }, gv);

@@ -161,10 +161,10 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
         assert host in shown["values"], host
     for value in ("image_token_mask", "patch_embeddings", "tower_output", "image_features"):
         assert f">{value}</span>" in shown["values"], value
-    assert "Vision Config" in shown["config"] and "<details" in shown["config"]
+    assert "Vision Config" in shown["config"] and '<details class="card card-tower card-fold">' in shown["config"]
     for size in build.TOWER_SIZE_NAMES:
         assert f"model.vision.{size}</span>" in shown["config"], size
-    assert '<h2 class="disp-section">The <em>vision encoder</em></h2>' in shown["tower"]
+    assert '<h2 class="fold-heading">The <em>vision encoder</em></h2>' in shown["tower"]
     assert vision["architecture"].endswith("ForConditionalGeneration") and text["architecture"] == "LlamaForCausalLM"
     assert f'href="https://huggingface.co/{entry.PINNED}"' in page and 'id="ckpt-hub"' in page
     assert f'href="https://huggingface.co/{tiny}"' not in page, "only the selected checkpoint is linked, by the script"

@@ -298,10 +298,13 @@ pre .rn { font-weight: 500; }
 .ckpt-hub { display: inline-flex; color: var(--ink); opacity: 0.8; }
 .ckpt-hub:hover, .ckpt-hub:focus-visible { color: var(--ink); opacity: 1; }
 .ckpt-hub:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
-.hf { height: 20px; width: auto; display: block; }
+.hf { height: 28px; width: auto; display: block; }
 /* a fold that holds a vision part: its summary carries a styled title and a micro tag */
 .fold-titled > summary { justify-content: flex-start; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
 .fold-titled > summary h2, .fold-titled > summary h3 { margin: 0; }
+/* a fold's title: the display face a little larger than the body, "The" in ink and the rest in the accent */
+.fold-heading { font-family: var(--disp); font-weight: 900; font-size: clamp(18px, 1.25vw, 21px); line-height: 1.1; letter-spacing: 0; }
+.fold-heading em { font-style: normal; color: var(--mark-deep); }
 .fold-titled > summary .fold-tag { flex: 0 1 auto; opacity: 0.75; }
 .fold-titled > summary::before { align-self: center; }
 .fold-titled[open] > summary { margin-bottom: 1.2rem; }
@@ -317,6 +320,14 @@ pre .rn { font-weight: 500; }
 .tower-facts code { background: var(--paper-dk); padding: 1px 4px; font-size: 0.88em; }
 .ledger-part { margin: 2.6rem 0 0.6rem; opacity: 0.8; }
 .card-tower { margin-top: clamp(16px, 1.8vw, 28px); }
+/* a card whose body folds: closed, only its band shows, labelled; open, the band is bare and the body titled */
+.card-fold { display: block; }
+.card-fold > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px; cursor: pointer; height: auto; min-height: clamp(26px, 2.2vw, 32px); }
+.card-fold > summary::-webkit-details-marker { display: none; }
+.card-fold > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
+.card-fold-mark::before { content: '+'; font-family: var(--disp); font-weight: 900; font-size: 20px; line-height: 1; }
+.card-fold[open] > summary .card-fold-label { visibility: hidden; }
+.card-fold[open] .card-fold-mark::before { content: '×'; }
 .card-tower .topstrip { background: var(--stream); }
 
 /* the vision part of the notes */

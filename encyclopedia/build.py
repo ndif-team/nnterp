@@ -970,7 +970,7 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
                             "architecture": info["architecture"], "url": f"https://huggingface.co/{info['reference']}"}
     shown = list(family_quirks)
     model: dict[str, Any] = {**info, "block": block, "roles": roles, "ledgers": ledgers(info),
-                             "eager_only": [row["name"] for row in info["support"] if row["condition"] and row["condition"]["kind"] == "eager"],
+                             "conditional": any(row["condition"] for row in info["support"]),
                              "repr_html": highlight_repr(info["repr"], roles), "logits_label": logits_label(family_quirks)}
     v = info.get("vision")
     if v:

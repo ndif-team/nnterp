@@ -63,8 +63,8 @@ rearrange them.
    `projector.input`/`.output`, `vision.image_features`, `vision.image_token_mask`); four facts of the
    vision encoder (what a row is, positions, masking, the final norm); and the vision encoder's block, drawn by the same
    code as the text block from the vision encoder's `BLOCK`, with its own card and its identity. It is a fold,
-   closed at first, whose summary is a section title, *The vision encoder*, tagged `· CLIP ·
-   CLIPVisionModel`; absent on a text checkpoint.
+   closed at first, whose summary is a small title, *The vision encoder* (the display face a little
+   larger than the body), tagged `· CLIP · CLIPVisionModel`; absent on a text checkpoint.
 3. **The API** (`02`). In this order:
    - *Values, by host*: one ledger per host (`model`, `model.layers[i]`, `model.layers[i].self_attn`,
      ...) with every standard value's name, layout and dims, description and where it is read. A value
@@ -76,7 +76,8 @@ rearrange them.
      same way.
    - *Config*: the root sizes and, under a rule, the config keys they come
      from (`architectures` is the checkpoint's own, a wrapper's on a vision-language checkpoint; the
-     rest are the text config's). On a vision-language checkpoint a second card, *Vision Config*, in a fold closed at first: `model.vision.num_layers`, `hidden_size`, `num_heads`,
+     rest are the text config's). On a vision-language checkpoint a second card, *Vision Config*, whose body folds (closed at
+     first, only its band shows, labelled; open, the body is titled as the Config card is): `model.vision.num_layers`, `hidden_size`, `num_heads`,
      `head_dim`, `intermediate_size`, `patch_size`, `image_size` (`varies` where nnterp raises
      `Unavailable`).
 
@@ -389,6 +390,10 @@ generator as its own change, so every family with that shape gains it.
 
 Done means: the page builds from both the reference and the pinned checkpoint, the tests pass, the
 page has been looked at in a browser at both widths, and every sentence in the entry has a source.
+
+The page's sentences are the same on every checkpoint: the only checkpoint-specific text a
+template composes is the repo id (the printout's caption); counts, sizes and classes appear as
+data (the strip's `× N`, the Config cards, the ledgers), never inside a sentence.
 
 ## Design
 

@@ -10,10 +10,10 @@
 
 {% macro block_head(c) %}
 {% if c.block.shapes %}
-<p class="lead">One of {{ c.num_layers }} blocks, of {{ c.block.shapes|length }} shapes. Hover any part for the nnterp name that reads it; click to pin.
+<p class="lead">One block of the stack. Hover any part for the nnterp name that reads it; click to pin.
 The slider picks a block, its tick's colour gives the shape, and the diagram redraws for it.</p>
 {% else %}
-<p class="lead">One of {{ c.num_layers }} identical blocks. Hover any part for the nnterp name that reads it; click to pin.
+<p class="lead">One block of the stack. Hover any part for the nnterp name that reads it; click to pin.
 {% if c.layer_types and c.layer_types|unique|list|length > 1 %}The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.{% endif %}</p>
 {% endif %}
 <div class="strip">
@@ -33,8 +33,8 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
 {% if c.tower %}
 {% set t = c.tower %}
 <details class="fold fold-titled tower-scope">
-  <summary><h2 class="disp-section">The <em>vision encoder</em></h2><span class="micro fold-tag">· {{ t.title }} · {{ t.module_class }}</span></summary>
-  <p class="lead">The image's path into the text model on {{ t.wrapper }}, then one of the vision encoder's {{ t.num_layers }} blocks. Hover any part for the nnterp name that reads it; click to pin.</p>
+  <summary><h2 class="fold-heading">The <em>vision encoder</em></h2><span class="micro fold-tag">· {{ t.title }} · {{ t.module_class }}</span></summary>
+  <p class="lead">The image's path into the text model, then one block of the vision encoder. Hover any part for the nnterp name that reads it; click to pin.</p>
   <div class="strip tower-strip">
     <div class="strip-node" data-node="v:path.image"><span class="mono role-stream">image</span><small>pixel_values</small></div>
     <span class="strip-arrow">→</span>
@@ -76,7 +76,7 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
 {% endmacro %}
 
 {% macro values(c) %}
-{% if c.eager_only %}<p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition. Here, {{ c.eager_only|length }} values need <span class="mono">attn_implementation="eager"</span>.</p>{% endif %}
+{% if c.conditional %}<p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition.</p>{% endif %}
 {% for ledger in c.ledgers %}
 {% if ledger.tower %}<p class="micro ledger-part">the vision encoder · {{ ledger.tower }}</p>{% endif %}
 <div class="ledger values">
@@ -94,7 +94,7 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
 {% endmacro %}
 
 {% macro printout(c) %}
-<p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">{{ c.reference }}</span>: the native modules and, among them, the standard names and every standard value with its layout.{% if c.returns_tuple %} The block returns a tuple; <span class="mono">layer_output</span> is its first element.{% endif %}{% if c.tower %} The vision encoder's blocks follow the text model's.{% endif %}</p>
+<p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">{{ c.reference }}</span>: the native modules, standard names and every standard value with its layout.</p>
 <pre class="repr"><code>{{ c.repr_html }}</code></pre>
 {% endmacro %}
 
@@ -103,7 +103,6 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
   <div class="topstrip"></div>
   <div class="card-body">
     <h3 class="card-name">Config</h3>
-    <p class="body-md">The config of <span class="mono">{{ c.reference }}</span>: the root sizes, each a <span class="mono">StandardizedProperty</span> read off it, and below the rule the config keys they come from.</p>
     <div class="specs specs-cols">
       {% for name, value in c.sizes %}<div class="spec"><span>model.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
     </div>
@@ -114,18 +113,14 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
   </div>
 </div>
 {% if c.tower %}
-<details class="fold fold-titled vision-fold">
-<summary><h3 class="ttl-row">Vision <em>Config</em></h3><span class="micro fold-tag">· {{ c.tower.title }} · {{ c.tower.module_class }}</span></summary>
-<div class="card card-tower">
-  <div class="topstrip"></div>
+<details class="card card-tower card-fold">
+  <summary class="topstrip"><span class="micro card-fold-label">Vision Config</span><span class="card-fold-mark" aria-hidden="true"></span></summary>
   <div class="card-body">
     <h3 class="card-name">Vision Config</h3>
-    <p class="body-md">The {{ c.tower.title }} vision encoder's sizes, on <span class="mono">model.vision</span>, read off <span class="mono">config.vision_config</span>; the root's stay the text model's.</p>
     <div class="specs specs-cols">
       {% for name, value in c.tower.sizes %}<div class="spec"><span>model.vision.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
     </div>
   </div>
-</div>
 </details>
 {% endif %}
 {% endmacro %}

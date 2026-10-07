@@ -21,9 +21,19 @@ PALETTE = {"hue": 336}
 VLLM = False
 QUIRKS = ["no-mlp", "position-embeddings", "layernorm", "qkv-bias"]
 
-#: What the visualization draws: the attention and its pre-norm, then the MLP path, which has no module:
-#: final_layer_norm, fc1, activation_fn and fc2 sit on the block, so the sublayer is hosted on the native fc2.
-BLOCK = {
+ATTENTION_INTERIOR = [
+    "attention_queries", "attention_keys", "attention_values",
+    "attention_scores", "attention_probabilities", "attention_head_outputs",
+]
+MLP_PATH_NOTE = ("No mlp module: final_layer_norm, fc1, activation_fn and fc2 sit on the block, and fc2.output is "
+                 "what the path adds. The path runs on the stream flattened to [batch * seq, hidden]: fc2.output "
+                 "is [batch * seq, hidden], row b * seq + t for prompt b, position t; unflatten(0, (batch, seq)) "
+                 "is a view, so an in-place edit through it lands.")
+
+#: What the visualization draws on every pre-norm checkpoint: the attention and its pre-norm, then the MLP path,
+#: which has no module: final_layer_norm, fc1, activation_fn and fc2 sit on the block, so the sublayer is hosted
+#: on the native fc2.
+PRE_NORM = {
     "topology": "sequential",
     "sublayers": [
         {
@@ -32,14 +42,9 @@ BLOCK = {
             "label": "Attention",
             "pre_norm": "input_layernorm",
             "contribution": "attention_output",
-            "interior": [
-                "attention_queries", "attention_keys", "attention_values",
-                "attention_scores", "attention_probabilities", "attention_head_outputs",
-            ],
+            "interior": ATTENTION_INTERIOR,
             "detail": "{num_heads} heads × {head_dim}, biased q/k/v",
-            "pre_norm_note": "Native name self_attn_layer_norm, a LayerNorm with a bias. On opt-350m "
-                             "(do_layer_norm_before false) it follows the attention's add instead, and the "
-                             "attention reads the raw stream.",
+            "pre_norm_note": "Native name self_attn_layer_norm, a LayerNorm with a bias.",
         },
         {
             "host": "fc2",
@@ -51,17 +56,53 @@ BLOCK = {
                              "the same native name and is model.norm.",
             "contribution": "fc2.output",
             "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, {activation_function}",
-            "host_note": ("No mlp module: final_layer_norm, fc1, activation_fn and fc2 sit on the block, and fc2.output is "
-                          "what the path adds. The path runs on the stream flattened to [batch * seq, hidden]: fc2.output "
-                          "is [batch * seq, hidden], row b * seq + t for prompt b, position t; unflatten(0, (batch, seq)) "
-                          "is a view, so an in-place edit through it lands."),
+            "host_note": MLP_PATH_NOTE,
         },
     ],
     "identity": "layers[i].input + self_attn.attention_output + fc2.output.view_as(layer_output) == layer_output",
     "identity_note": "fc2.output is the MLP path's term: the block has no mlp module, and it flattens the stream to "
-                     "[batch * seq, hidden] before final_layer_norm and fc1. Exact on every pre-norm checkpoint; on "
-                     "opt-350m a post-norm follows each add, and no sum of these terms is layer_output.",
+                     "[batch * seq, hidden] before final_layer_norm and fc1. Exact on every pre-norm checkpoint.",
 }
+
+#: opt-350m (do_layer_norm_before false): each LayerNorm follows its add, on the stream. The attention reads the
+#: raw stream, the MLP path reads self_attn_layer_norm's output, and layer_output is final_layer_norm's output.
+POST_NORM = {
+    "topology": "sequential",
+    "sublayers": [
+        {
+            "host": "self_attn",
+            "kind": "attention",
+            "label": "Attention",
+            "contribution": "attention_output",
+            "interior": ATTENTION_INTERIOR,
+            "detail": "{num_heads} heads × {head_dim}, biased q/k/v",
+            "stream_norm": "self_attn_layer_norm",
+            "stream_norm_note": "A LayerNorm with a bias, after the attention's add: the attention reads the raw "
+                                "stream, and the MLP path reads this norm's output, flattened to [batch * seq, hidden].",
+        },
+        {
+            "host": "fc2",
+            "kind": "mlp",
+            "label": "MLP",
+            "contribution": "fc2.output",
+            "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, {activation_function}",
+            "host_note": MLP_PATH_NOTE,
+            "stream_norm": "final_layer_norm",
+            "stream_norm_note": "The block's own LayerNorm, with a bias, after the MLP path's add and the view back to "
+                                "[batch, seq, hidden]. The decoder has no final norm on this checkpoint.",
+        },
+    ],
+    "identity": "final_layer_norm((self_attn_layer_norm(layers[i].input + self_attn.attention_output).flatten(0, 1) "
+                "+ fc2.output).view_as(layer_output)) == layer_output",
+    "identity_note": "Each LayerNorm follows its add, so no sum of the terms is layer_output: the block's "
+                     "final_layer_norm output is. Exact on the pinned checkpoint with do_layer_norm_before false.",
+}
+
+#: What the visualization draws, by the checkpoint's config: opt-350m is the one post-norm size.
+BLOCK = [
+    (lambda config: not config.do_layer_norm_before, POST_NORM),
+    (lambda config: True, PRE_NORM),
+]
 
 #: Notes on the model-level strip, by node.
 STRIP = {

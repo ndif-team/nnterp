@@ -34,6 +34,8 @@
   // each for the router, the routed experts and the shared expert, with their values as chips.
   var W = 1040, SX = 150, TOP = 80, ROW = 220, RET = 990, BASE = 104, PANEL = 48, PGAP = 8;
   var PRE = { x: 220, w: 190, h: 48 }, SUB = { x: 440, w: 300 }, POST = { x: 770, w: 190, h: 48 };
+  // a norm on the stream after an add (a post-LN block) sits on the line below the add, SN taller
+  var SNORM = { w: 170, h: 44, gap: 22 }, SN = 60;
   var PARTS = [['router', 'router'], ['experts', 'routed experts'], ['shared', 'shared expert']];
   function keyOf(sub) { return sub.key || sub.host; }
   function partsOf(sub) {
@@ -97,22 +99,26 @@
     // a box taller than the base moves the rows after it down by its extra height
     var ext = subs.map(function (sub) { return (heightOf(sub) - BASE) / 2; });
     var rowY = [], joinY = [], y = TOP + ext[0];
+    var sn = subs.map(function (sub) { return sub.stream_norm ? SN : 0; });
     subs.forEach(function (_, k) {
       rowY.push(y);
-      y += (parallel || first[k] ? 130 : ROW) + ext[k] + (k + 1 < n ? ext[k + 1] : 0);
+      y += (parallel || first[k] ? 130 : ROW) + ext[k] + (k + 1 < n ? ext[k + 1] : 0) + sn[k];
     });
     subs.forEach(function (_, k) {
       joinY.push(parallel ? rowY[n - 1] + 110 + ext[n - 1] : first[k] ? rowY[k + 1] + 110 + ext[k + 1] : rowY[k] + 140 + ext[k]);
     });
-    var H = joinY[n - 1] + 60;
+    var H = joinY[n - 1] + 60 + sn[n - 1];
+    // where the stream resumes below an add: under its stream norm, where it has one
+    function below(k) { return sn[k] ? joinY[k] + SNORM.gap + SNORM.h : joinY[k]; }
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     var mids = shape.mids || subs.slice(1).map(function (_, k) { return 'stream.mid.' + k; });
 
     // -- the stream -----------------------------------------------------------------
     var topY = 24, botY = H - 26;
     var segments = [[topY, rowY[0], 'stream.input']];
-    if (!parallel) for (var k = 0; k < n - 1; k++) if (!first[k]) segments.push([joinY[k], rowY[k + 1], mids[k]]);
-    segments.push([joinY[n - 1], botY, 'stream.output']);
+    subs.forEach(function (sub, k) { if (sn[k]) segments.push([joinY[k], joinY[k] + SNORM.gap, sub.stream_norm_in]); });
+    if (!parallel) for (var k = 0; k < n - 1; k++) if (!first[k]) segments.push([below(k), rowY[k + 1], mids[k]]);
+    segments.push([below(n - 1), botY, 'stream.output']);
     // the stream between a branch and its join carries the input of that sublayer's add: same name as the segment above
     var full = el('g', { 'class': 'role-stream streamline' });
     el('line', { x1: SX, y1: topY, x2: SX, y2: botY, 'class': 'stream', 'marker-end': arrow }, full);
@@ -194,6 +200,13 @@
         var gplus = group(shape.plus, 'stream');
         el('circle', { cx: SX, cy: jY, r: 14, 'class': 'plus' }, gplus);
         text(gplus, SX, jY + 8, '+', 'plus-sign', 'middle');
+      }
+      // a norm on the stream after the add, over the line
+      if (sub.stream_norm) {
+        var gn = group('norm.' + sub.stream_norm, 'norm'), ny = jY + SNORM.gap;
+        el('rect', { x: SX - SNORM.w / 2, y: ny, width: SNORM.w, height: SNORM.h, 'class': 'box box-norm' }, gn);
+        text(gn, SX, ny + 18, 'norm', 'label-dim', 'middle');
+        text(gn, SX, ny + 34, sub.stream_norm, 'label-sm', 'middle');
       }
     });
     // SVG has no z-index: the last child is on top. The contribution edges' wide hit paths were

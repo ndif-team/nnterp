@@ -706,7 +706,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             f"{owner}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
         # every norm drawn on a block is one of its children, by native name or alias
         for k in shape:
-            for where in ("pre_norm", "post_norm"):
+            for where in ("pre_norm", "post_norm", "stream_norm"):
                 norm_name = specs[k].get(where)
                 assert not norm_name or "block_children" not in info or norm_name in info["block_children"][i], \
                     f"{owner}: BLOCK's {keys[k]!r} names {where} {norm_name!r}; block {i} has no such module"
@@ -824,6 +824,20 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                 "post-norm", f"{base}.{spec['post_norm']}",
                 f"A native module under its own name. Its output is the contribution: `{contribution['expr']}`.",
                 extra=spec.get("post_norm_note"))
+        if spec.get("stream_norm"):
+            # a norm on the stream after this sublayer's add (a post-LN block, OPT-350m): it normalizes the sum
+            norm_name, last = spec["stream_norm"], k == len(specs) - 1
+            assert block_spec.get("topology", "sequential") == "sequential" and not spec.get("parallel_with_next"), \
+                f"{owner}: a stream_norm follows one sublayer's add in a sequential block"
+            sub["stream_norm"], sub["stream_norm_in"] = norm_name, f"stream.into.{key}"
+            nodes[f"norm.{norm_name}"] = node(
+                "norm on the stream", f"{base}.{norm_name}",
+                f"A native module under its own name, on the stream after the {spec['label'].lower()} add: it normalizes "
+                f"the sum, and its output is " + ("`layer_output`." if last else "what the next sublayer reads."),
+                extra=spec.get("stream_norm_note"))
+            nodes[f"stream.into.{key}"] = node(
+                stream, f"{base}.{norm_name}.input",
+                f"The stream after the {spec['label'].lower()} add, as `{norm_name}` receives it. No standard value of its own.")
         sublayers.append(sub)
 
     shapes = list(dict.fromkeys(shape_of))
@@ -855,7 +869,11 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             if k and paired[k - 1]:
                 after = f"{subs[k - 1]['label'].lower()} and {after}"
             mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
-            if nxt["pre_norm"]:
+            if subs[k].get("stream_norm"):
+                nodes[mid] = node(stream, f"{base}.{subs[k]['stream_norm']}.output",
+                                  f"The stream after the {after} add and `{subs[k]['stream_norm']}`, as the next sublayer "
+                                  "receives it. No standard value of its own.")
+            elif nxt["pre_norm"]:
                 nodes[mid] = node(stream, f"{base}.{nxt['pre_norm']}.input",
                                   f"The stream after the {after} add, as the next pre-norm receives it. No standard value of its own.")
             else:
@@ -975,7 +993,7 @@ def name_roles(entry: ModuleType, info: dict[str, Any]) -> dict[str, str]:
     # the norms of every BLOCK the entry lists, so the notes colour another checkpoint's norms too
     for spec in block_variants(entry.BLOCK) or [resolve_block(entry.MODEL_TYPE, entry.BLOCK, info.get("text_config"))]:
         for sub in spec["sublayers"]:
-            roles.update({sub[key]: "norm" for key in ("pre_norm", "post_norm") if sub.get(key)})
+            roles.update({sub[key]: "norm" for key in ("pre_norm", "post_norm", "stream_norm") if sub.get(key)})
             if is_native(sub):  # a sublayer on a native path (OPT's fc2) takes its kind's role
                 roles[sub["host"]] = host_role(sub)
     if info.get("vision"):  # the tower's own values belong to the stream; its blocks' take their hosts' roles, as above

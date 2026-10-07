@@ -211,6 +211,11 @@ The entry states facts about a family, and each one has a source. Before writing
      - `variants`: `{layer_type: detail}` keyed on the values of `config.layer_types`, shown instead
        of `detail` as the slider moves, for blocks that differ only in a setting; the same length
        limit applies.
+     - `stream_norm` (and `stream_norm_note`): optional, the native name of a norm on the stream after
+       this sublayer's add, in a post-LN block (OPT-350m: `self_attn_layer_norm` after the attention's
+       add, `final_layer_norm` after the MLP path's, whose output is `layer_output`). It is drawn on the
+       stream line under the `⊕`; the next sublayer reads its output. Such a block's identity is not a
+       sum, so give `identity`;
      - `parallel_with_next`: optional, `True` on a sublayer of a `"sequential"` block that reads the
        same stream point as the sublayer after it, the two joining the stream at one add (Falcon-H1's
        Mamba-2 mixer and attention, then the MLP). The pair is drawn side by side with one `⊕`, the

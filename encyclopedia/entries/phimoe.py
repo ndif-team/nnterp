@@ -5,7 +5,8 @@ TITLE = "Phi-3.5-MoE"
 SUBTITLE = (
     "Llama's tree with LayerNorms and biased projections, and a mixture of 16 experts on every block whose "
     "router, sparsemixer, picks two experts one after the other and weights each by a softmax over the "
-    "logits near that slot's maximum, so a weight is often exactly 1 and a token's two weights sum to up to 2."
+    "logits near that slot's maximum: a weight is exactly 1 unless another logit is within 2% of it, and a "
+    "token's two weights sum to up to 2."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -149,7 +150,7 @@ changed = (ablated != clean).any(-1)                       # [batch, seq]
 assert torch.equal(changed, (idx == e).any(-1))            # only the tokens that chose e
 ```
 
-A token's weights are often 1 each, so removing one of its experts removes a full-weight term.
+A slot whose weight is 1 contributes its expert's whole output, so removing it removes a full-weight term.
 `expert_outputs` (each slot's weighted output) is served under the default
 `experts_implementation`, and its sum over the two slots is `routed_output`.
 

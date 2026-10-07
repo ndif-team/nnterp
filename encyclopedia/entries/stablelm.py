@@ -24,10 +24,15 @@ PALETTE = {"hue": 110}
 VLLM = False
 QUIRKS = ["layernorm", "partial-rotary", "qkv-bias", "parallel-blocks", "qk-norm"]
 
-#: What the visualization draws: the sequential block of StableLM-2-1.6B and StableLM-3B, the reference's.
-#: StableLM-2-12B (and the pinned checkpoint) is parallel with one input_layernorm and no post_attention_layernorm;
-#: the schema has one topology per entry, so those checkpoints are drawn sequential too (see the notes).
-BLOCK = {
+ATTENTION_INTERIOR = [
+    "attention_queries", "attention_keys", "attention_values",
+    "attention_scores", "attention_probabilities", "attention_head_outputs",
+]
+MLP_DETAIL = "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}"
+
+#: StableLM-2-1.6B and StableLM-3B (use_parallel_residual false): input_layernorm before the attention,
+#: post_attention_layernorm before the MLP, each sublayer adding to the stream in turn.
+SEQUENTIAL = {
     "topology": "sequential",
     "sublayers": [
         {
@@ -35,13 +40,9 @@ BLOCK = {
             "kind": "attention",
             "label": "Attention",
             "pre_norm": "input_layernorm",
-            "pre_norm_note": "A LayerNorm with a bias. Under use_parallel_residual (StableLM-2-12B) its output is "
-                             "also the MLP's input.",
+            "pre_norm_note": "A LayerNorm with a bias.",
             "contribution": "attention_output",
-            "interior": [
-                "attention_queries", "attention_keys", "attention_values",
-                "attention_scores", "attention_probabilities", "attention_head_outputs",
-            ],
+            "interior": ATTENTION_INTERIOR,
             "detail": "{num_heads} heads, {num_kv_heads} kv; rotary on ¼",
         },
         {
@@ -49,14 +50,48 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "post_attention_layernorm",
-            "pre_norm_note": "The MLP's input norm on StableLM-2-1.6B and StableLM-3B, after the attention's add. "
-                             "StableLM-2-12B sets use_parallel_residual and has no such module: its MLP reads "
-                             "input_layernorm's output, beside the attention.",
+            "pre_norm_note": "A LayerNorm with a bias, of the stream after the attention's add.",
             "contribution": "mlp_output",
-            "detail": "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}",
+            "detail": MLP_DETAIL,
         },
     ],
 }
+
+#: StableLM-2-12B and the pinned checkpoint (use_parallel_residual true): one input_layernorm whose output both
+#: sublayers read (drawn once per branch, one node), per-head q/k LayerNorms inside the attention, one add.
+PARALLEL_NORM_NOTE = ("One LayerNorm with a bias, drawn on both branches: the attention and the MLP read the same "
+                      "output tensor. This block has no post_attention_layernorm.")
+PARALLEL = {
+    "topology": "parallel",
+    "sublayers": [
+        {
+            "host": "self_attn",
+            "kind": "attention",
+            "label": "Attention",
+            "pre_norm": "input_layernorm",
+            "pre_norm_note": PARALLEL_NORM_NOTE,
+            "contribution": "attention_output",
+            "interior": ATTENTION_INTERIOR,
+            "detail": "{num_heads} heads, {num_kv_heads} kv; q/k norms",
+        },
+        {
+            "host": "mlp",
+            "kind": "mlp",
+            "label": "MLP",
+            "pre_norm": "input_layernorm",
+            "pre_norm_note": PARALLEL_NORM_NOTE,
+            "contribution": "mlp_output",
+            "detail": MLP_DETAIL,
+        },
+    ],
+}
+
+#: What the visualization draws, by the checkpoint's config: parallel where use_parallel_residual is set
+#: (StableLM-2-12B, the pinned checkpoint), sequential otherwise (the configs that leave it out take false).
+BLOCK = [
+    (lambda config: getattr(config, "use_parallel_residual", False), PARALLEL),
+    (lambda config: True, SEQUENTIAL),
+]
 
 #: Notes on the model-level strip, by node.
 STRIP = {
@@ -83,10 +118,9 @@ out = x + self_attn(n) + mlp(n)
 The configs differ: only `stablelm-2-12b` sets `use_parallel_residual: true`, and the others leave
 it out and take the default, `false`. On the parallel block `post_attention_layernorm` does not
 exist, both sublayers read the one `input_layernorm` output, and an edit to `attention_output`
-leaves that block's `mlp.input` bit-identical. The diagram draws the sequential block of the page's
-default checkpoint on every checkpoint, the parallel 12B included; read
-`model.config.use_parallel_residual` before reusing a recipe across sizes. The pinned checkpoint
-has 12B's shape.
+leaves that block's `mlp.input` bit-identical. The diagram draws each checkpoint's own block: the
+parallel one on 12B, the sequential one on 1.6B and 3B. Read `model.config.use_parallel_residual`
+before reusing a recipe across sizes. The pinned checkpoint has 12B's shape.
 
 ## The contributions are the modules' outputs
 

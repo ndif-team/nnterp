@@ -38,7 +38,7 @@
         </div>
         {% endfor %}
       </div>
-      <a class="ckpt-hub" id="ckpt-hub" href="{{ current.url }}" title="{{ current.id }} on the Hugging Face Hub" aria-label="{{ current.id }} on the Hugging Face Hub">{{ hf }}</a>
+      <a class="ckpt-hub" id="ckpt-hub" href="{{ current.url }}" title="{{ current.id }} on the Hugging Face Hub" aria-label="{{ current.id }} on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
     </div>
   </aside>
 </section>
@@ -78,26 +78,18 @@
   <h3 class="ttl-row">Printout</h3>
   {{ pane("printout") }}
 
-  <details class="fold fold-section">
-    <summary><span class="micro">config</span></summary>
-    {{ pane("config") }}
-  </details>
+  {{ pane("config") }}
 </section>
 
 <section class="frame section" id="notes">
   <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
-  <details class="fold fold-section">
-  <summary><span class="micro">the notes and the quirks</span></summary>
   <div class="grid-notes">
-    <div>
-      <div class="prose">{{ notes }}</div>
-      {{ pane("vision_notes") }}
-    </div>
+    <div class="prose">{{ notes }}</div>
     <aside class="quirk-list">
       {{ pane("quirk_list") }}
     </aside>
   </div>
-  </details>
+  {{ pane("vision_notes") }}
 </section>
 
 <section class="frame section" id="source">

@@ -33,7 +33,8 @@ rearrange them.
    the entry's `CHECKPOINTS`, text checkpoints first, then the vision-language ones, each marked with
    an eye, then any the build could not read, greyed out and not selectable, their hover saying
    "not available in the encyclopedia: <reason>". The list is a keyboard listbox (arrows, Home, End,
-   Enter, Escape). Under it, a small Hugging Face mark links to the shown checkpoint's Hub page. The
+   Enter, Escape). Under it, the Hugging Face logo (`static/hf-logo.svg`, the official file with a
+   `viewBox` added so it scales) links to the shown checkpoint's Hub page. The
    eyebrow's class is the shown checkpoint's (`LlavaForConditionalGeneration` on a Llava checkpoint).
    The page opens on `REFERENCE`; the choice is the URL hash, `#ckpt=<repo id>`, so
    a link opens the page on a checkpoint. Switching does not reload: every part that depends on the
@@ -62,8 +63,8 @@ rearrange them.
    `projector.input`/`.output`, `vision.image_features`, `vision.image_token_mask`); four facts of the
    vision encoder (what a row is, positions, masking, the final norm); and the vision encoder's block, drawn by the same
    code as the text block from the vision encoder's `BLOCK`, with its own card and its identity. It is a fold,
-   closed at first, whose summary names it (`The vision encoder · CLIP · CLIPVisionModel`); absent on
-   a text checkpoint.
+   closed at first, whose summary is a section title, *The vision encoder*, tagged `· CLIP ·
+   CLIPVisionModel`; absent on a text checkpoint.
 3. **The API** (`02`). In this order:
    - *Values, by host*: one ledger per host (`model`, `model.layers[i]`, `model.layers[i].self_attn`,
      ...) with every standard value's name, layout and dims, description and where it is read. A value
@@ -73,19 +74,20 @@ rearrange them.
      ...): the standard names on the root, the blocks collapsed to one (`(0-25): 26 x ...`), and the
      root's values. On a wrapper the vision encoder follows under `vision`, its native `encoder` left out the
      same way.
-   - *Config*, a fold closed at first: the root sizes and, under a rule, the config keys they come
+   - *Config*: the root sizes and, under a rule, the config keys they come
      from (`architectures` is the checkpoint's own, a wrapper's on a vision-language checkpoint; the
-     rest are the text config's). On a vision-language checkpoint a second card, *Vision encoder config*: `model.vision.num_layers`, `hidden_size`, `num_heads`,
+     rest are the text config's). On a vision-language checkpoint a second card, *Vision Config*, in a fold closed at first: `model.vision.num_layers`, `hidden_size`, `num_heads`,
      `head_dim`, `intermediate_size`, `patch_size`, `image_size` (`varies` where nnterp raises
      `Unavailable`).
 
    On a vision-language checkpoint the ledgers go on with the vision encoder's hosts (`model.vision`,
    `model.vision.layers[i]`, `.self_attn`, `.mlp`), with the same `⚠` convention: the vision encoder's
    attention interior needs eager. Everything in this section is the selected checkpoint's.
-4. **The Notes** (`03`). A fold, closed at first, holding the entry's notes on the left, the quirks with their one-line explanations on
-   the right. On a vision-language checkpoint a *Vision* part follows the family's notes: the vision encoder
-   module's `NOTES` under "The <title> vision encoder", then the wrapper's `notes` under its title; the quirk
-   list adds the vision slugs.
+4. **The Notes** (`03`). The entry's notes on the left, the quirks with their one-line explanations on
+   the right. On a vision-language checkpoint *Vision notes* follow, a fold closed at first (tagged `· CLIP ·
+   Llava 1.5`): the vision encoder module's `NOTES` under "The <title> vision encoder", then the
+   wrapper's `notes` under its title, beside the vision quirks; the family's quirk list stays the
+   family's.
 5. **From the family module** (`04`). The family module's docstring, links to the module, its test
    file and the families table, and which envoy class wraps which module; on a vision-language
    checkpoint also the vision encoder's (`CLIPVisionModel → Vision`, ..., `LlavaModel → ImageScatter`). The

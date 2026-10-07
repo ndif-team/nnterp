@@ -298,11 +298,14 @@ pre .rn { font-weight: 500; }
 .ckpt-hub { display: inline-flex; color: var(--ink); opacity: 0.8; }
 .ckpt-hub:hover, .ckpt-hub:focus-visible { color: var(--ink); opacity: 1; }
 .ckpt-hub:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
-.hf { width: 18px; height: 18px; display: block; }
-/* a fold that holds a section's body or one of its parts */
-.fold-section { margin-top: 1.2rem; }
-.fold-section[open] > summary { margin-bottom: 1.2rem; }
-.tower-scope[open] > summary { margin-bottom: 1rem; }
+.hf { height: 20px; width: auto; display: block; }
+/* a fold that holds a vision part: its summary carries a styled title and a micro tag */
+.fold-titled > summary { justify-content: flex-start; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
+.fold-titled > summary h2, .fold-titled > summary h3 { margin: 0; }
+.fold-titled > summary .fold-tag { flex: 0 1 auto; opacity: 0.75; }
+.fold-titled > summary::before { align-self: center; }
+.fold-titled[open] > summary { margin-bottom: 1.2rem; }
+.vision-fold { margin-top: clamp(16px, 1.8vw, 28px); }
 
 /* the tower, under the text block */
 .tower-scope { margin-top: clamp(28px, 3vw, 48px); }
@@ -317,9 +320,9 @@ pre .rn { font-weight: 500; }
 .card-tower .topstrip { background: var(--stream); }
 
 /* the vision part of the notes */
-.vision-notes { margin-top: 2.6rem; padding-top: 1.4rem; border-top: 1.5px solid var(--line); }
-.vision-mark { display: flex; align-items: center; gap: 8px; color: var(--mark-deep); }
-.vision-notes > h2 { margin-top: 1.6rem; }
+.vision-notes { margin-top: 2.6rem; }
+.vision-notes .prose > h2 { margin-top: 1.6rem; }
+.vision-notes .prose > h2:first-child { margin-top: 0.4rem; }
 .prose h3 { font-family: var(--disp); font-weight: 700; font-size: clamp(21px, 1.8vw, 28px); line-height: 1.05; margin: 1.6rem 0 0.5rem; }
 
 /* the index: the tower filters under the quirks */

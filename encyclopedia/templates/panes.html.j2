@@ -32,8 +32,8 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
 {% macro tower(c) %}
 {% if c.tower %}
 {% set t = c.tower %}
-<details class="fold tower-scope">
-  <summary><span class="micro">The vision encoder · {{ t.title }} · {{ t.module_class }}</span></summary>
+<details class="fold fold-titled tower-scope">
+  <summary><h2 class="disp-section">The <em>vision encoder</em></h2><span class="micro fold-tag">· {{ t.title }} · {{ t.module_class }}</span></summary>
   <p class="lead">The image's path into the text model on {{ t.wrapper }}, then one of the vision encoder's {{ t.num_layers }} blocks. Hover any part for the nnterp name that reads it; click to pin.</p>
   <div class="strip tower-strip">
     <div class="strip-node" data-node="v:path.image"><span class="mono role-stream">image</span><small>pixel_values</small></div>
@@ -114,35 +114,48 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
   </div>
 </div>
 {% if c.tower %}
+<details class="fold fold-titled vision-fold">
+<summary><h3 class="ttl-row">Vision <em>Config</em></h3><span class="micro fold-tag">· {{ c.tower.title }} · {{ c.tower.module_class }}</span></summary>
 <div class="card card-tower">
   <div class="topstrip"></div>
   <div class="card-body">
-    <h3 class="card-name">Vision encoder config</h3>
+    <h3 class="card-name">Vision Config</h3>
     <p class="body-md">The {{ c.tower.title }} vision encoder's sizes, on <span class="mono">model.vision</span>, read off <span class="mono">config.vision_config</span>; the root's stay the text model's.</p>
     <div class="specs specs-cols">
       {% for name, value in c.tower.sizes %}<div class="spec"><span>model.vision.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
     </div>
   </div>
 </div>
+</details>
 {% endif %}
 {% endmacro %}
 
 {% macro vision_notes(c) %}
 {% if c.tower %}
-<div class="prose vision-notes">
-  <p class="micro vision-mark">{{ eye }} vision · {{ c.tower.wrapper }}</p>
-  <h2>The {{ c.tower.title }} vision encoder</h2>
-  {{ c.tower.notes }}
-  <h2>{{ c.tower.wrapper }}</h2>
-  {{ c.tower.wrapper_notes }}
+<details class="fold fold-titled vision-fold vision-notes">
+<summary><h3 class="ttl-row">Vision <em>notes</em></h3><span class="micro fold-tag">· {{ c.tower.title }} · {{ c.tower.wrapper }}</span></summary>
+<div class="grid-notes">
+  <div class="prose">
+    <h2>The {{ c.tower.title }} vision encoder</h2>
+    {{ c.tower.notes }}
+    <h2>{{ c.tower.wrapper }}</h2>
+    {{ c.tower.wrapper_notes }}
+  </div>
+  {% if c.vision_quirks %}
+  <aside class="quirk-list">
+    <p class="micro">vision quirks</p>
+    {% for q in c.vision_quirks %}<div class="quirk"><span class="chip">{{ q.label }}</span><p class="body-md">{{ q.blurb }}</p></div>{% endfor %}
+  </aside>
+  {% endif %}
 </div>
+</details>
 {% endif %}
 {% endmacro %}
 
 {% macro quirk_list(c) %}
-{% if c.quirks %}
+{% if c.family_quirks %}
 <p class="micro">quirks</p>
-{% for q in c.quirks %}<div class="quirk"><span class="chip">{{ q.label }}</span><p class="body-md">{{ q.blurb }}</p></div>{% endfor %}
+{% for q in c.family_quirks %}<div class="quirk"><span class="chip">{{ q.label }}</span><p class="body-md">{{ q.blurb }}</p></div>{% endfor %}
 {% endif %}
 {% endmacro %}
 

@@ -881,13 +881,6 @@ def quirks(entry: ModuleType) -> list[dict[str, str]]:
 #: A small eye, marking a vision-language checkpoint in the selector, the checkpoints ledger and the index.
 EYE = Markup('<svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false">'
              '<path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg>')
-#: The Hugging Face mark, monochrome in the ink: the selector's link to the shown checkpoint's Hub page.
-HF = Markup('<svg class="hf" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
-            '<circle cx="12" cy="10.5" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/>'
-            '<circle cx="9.2" cy="8.9" r="1.15" fill="currentColor"/><circle cx="14.8" cy="8.9" r="1.15" fill="currentColor"/>'
-            '<path d="M8.6 12.4c.9 1.5 2 2.2 3.4 2.2s2.5-.7 3.4-2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
-            '<path d="M2.8 17.6c1.1-1 2.6-.9 3.4.3l1.1 1.7M21.2 17.6c-1.1-1-2.6-.9-3.4.3l-1.1 1.7" fill="none" stroke="currentColor" '
-            'stroke-width="1.6" stroke-linecap="round"/></svg>')
 #: The parts of a family page built once per checkpoint, each a template macro in panes.html.j2; the page holds
 #: one copy per distinct rendering and shows the selected checkpoint's.
 PANES = ("chips", "block_head", "tower", "values", "printout", "config", "vision_notes", "quirk_list", "envoys")
@@ -1007,6 +1000,8 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
             "wrapper_notes": Markup(str(md(wrapper.get("notes", ""), roles=roles)).replace("<h2", "<h3").replace("</h2>", "</h3>")),
         }
     model["quirks"] = shown
+    model["family_quirks"] = family_quirks
+    model["vision_quirks"] = shown[len(family_quirks):]
     model["data"] = data
     return model
 
@@ -1067,7 +1062,6 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
         "docstring": md(info["docstring"], rst=True, roles=roles),
         "panes": panes,
         "eye": EYE,
-        "hf": HF,
         "identity_html": Markup(models[default]["data"]["identity_html"]),
         "checkpoints_json": embed_json({"default": default, "checkpoints": {cid: m["data"] for cid, m in models.items()}}),
         "blocks": sorted({m["num_layers"] for m in available}),

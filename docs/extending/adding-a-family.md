@@ -3,7 +3,7 @@ title: Adding a Family
 one_liner: Write one module named after `config.model_type` with `RENAME`, three envoy subclasses and `ENVOYS`, a `def <size>(model)` for any root size the config spells its own way, plus one test file subclassing `FamilySuite`.
 tags: [extending, families, rename, envoys, tests]
 related: [docs/extending/overriding-values.md, docs/extending/custom-values.md, docs/extending/finding-source-ops.md, docs/extending/registering.md]
-sources: [nnterp/families/__init__.py, nnterp/families/llama.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/cohere.py, nnterp/components/__init__.py, nnterp/components/layer.py, nnterp/standardized.py, tests/families/suite.py, tests/families/test_llama.py, tests/families/test_gpt2.py]
+sources: [nnterp/families/__init__.py, nnterp/families/default.py, nnterp/families/llama.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/cohere.py, nnterp/components/__init__.py, nnterp/components/layer.py, nnterp/standardized.py, tests/families/suite.py, tests/families/test_llama.py, tests/families/test_gpt2.py]
 ---
 
 # Adding a Family
@@ -18,6 +18,34 @@ loaded, so adding a family is writing one module and one test file, and nothing
 in `nnterp/` core changes. A family that lives outside the package goes through
 `register()` instead ([registering.md](registering.md)); this page's template is the
 same either way.
+
+## Starting from the default
+
+Until the module exists, a checkpoint of that type loads with the best-effort default
+family ([loading.md](../usage/loading.md#an-architecture-with-no-family)), and what it
+reports is the to-do list for the family:
+
+```python
+from nnterp import StandardizedTransformer
+
+# nanochat has no family module: this warns "nnterp has no family for model_type 'nanochat'; ..."
+model = StandardizedTransformer("hf-tiny-v2/tiny-random-NanoChatForCausalLM", attn_implementation="eager")
+print(model.layers[0])                                               # the native names and the aliases the default bound
+{name: reason for name, reason in model.support().items() if reason}
+# {'self_attn.attention_output': 'the default family cannot tell what this sublayer adds to the stream; ...',
+#  'mlp.mlp_output': ...}
+```
+
+The default always lists the two contributions, and `model.project_on_vocab` raises
+`Unavailable` ("the default family cannot tell what follows lm_head"): a family module
+says what the block adds (an `attention_output` keyed on a post-norm's output on Gemma-2,
+[overriding-values.md](overriding-values.md)) and what follows the head (a
+`def project_on_vocab(model, hidden)` for a softcap or a scale). Anything further in the
+dict names another spot: "no self_attn module found under the names the default family
+knows" is a `RENAME` entry, and "the attention does its own arithmetic rather than
+transformers' shared attention interface" is an interior mapped onto the family's own
+arithmetic. The family replaces the default entirely once its module exists: `lookup`
+finds it first.
 
 ## Canonical pattern
 
@@ -217,8 +245,10 @@ the top of the family module and nowhere else in nnterp: `import nnterp` loads n
 transformers modeling code because families are imported on first use. Several
 module types may share one envoy class (Llama's `LlamaMLP` and a shared expert of the
 same class); a mixture is keyed to its own (`DeepseekV2MLP: Mlp, DeepseekV2Moe: Moe`). `envoys=`
-matches by type or by native path suffix, never by alias, and nnsight tries type keys
-before path keys.
+matches by type or by path suffix (the native path, or an alias path where the alias's
+`rename` key ends it: `"self_attn"` reaches GPT-2's `attn`), and nnsight tries type keys
+before path keys. A shipped family keys on types; the default family keys on the standard
+names, since it knows no types.
 
 ### A multimodal wrapper
 
@@ -473,9 +503,9 @@ into the package and the `register()` line removed.
   trace; a family-specific test that reads two in one trace must read them in forward
   order (Falcon without alibi: `attention_values` before `attention_queries`; with alibi
   queries, keys, values).
-- **`known()` and `all_families()` list the shipped modules only.** A registered family is
-  reached through `lookup` and the model's `family` attribute, and appears in the
-  `UnsupportedFamily` message's list.
+- **`known()` and `all_families()` list the shipped modules only**, and not `default`, which
+  covers no model type. A registered family is reached through `lookup` and the model's
+  `family` attribute.
 
 ## Related
 

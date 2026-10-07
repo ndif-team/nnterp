@@ -14,6 +14,7 @@ from nnsight.modeling.transformers import TransformersModel
 from torch import Tensor
 
 from . import families
+from .families import default
 from .components import EProperty, Layer, Residual
 from .components.standard import blocks_support, standard_children, values
 from .components.vision import Vision
@@ -91,7 +92,10 @@ class StandardizedTransformer(TransformersModel):
             any object with ``RENAME`` and ``ENVOYS`` (and, like a shipped
             family, any size function or ``project_on_vocab`` it defines). It
             applies to this model only; the config is not read for it, and
-            no model type is named or checked.
+            no model type is named or checked. ``nnterp.families.default``
+            itself runs its load-time check; a copy of it (a
+            ``SimpleNamespace`` spread from its ``vars``) does not, so call
+            ``default.check(model)`` after the load.
         rename: Extra aliases, merged over the family's; a key given here wins.
         envoys: Extra ``envoys=`` entries, merged over the family's ``ENVOYS``
             (and nnsight's tensor-parallel envoys when the load shards); a key
@@ -130,7 +134,8 @@ class StandardizedTransformer(TransformersModel):
         projector: The last module before the wrapper scatters the image features into the text stream.
 
     Raises:
-        UnsupportedFamily: when no family is passed and none covers the checkpoint's ``model_type``.
+        UnsupportedFamily: when no family is passed and none covers the checkpoint's ``model_type``
+            and the best-effort default family cannot standardize it either.
     """
 
     family: ModuleType
@@ -170,6 +175,9 @@ class StandardizedTransformer(TransformersModel):
             },
             **kwargs,
         )
+        # The default family is a guess, confirmed on the built tree (a copy of it calls the check itself).
+        if self.family is default:
+            default.check(self)
         for key, value in (tokenizer_kwargs or {}).items():
             setattr(self.tokenizer, key, value)
         self._source_root_scatter()

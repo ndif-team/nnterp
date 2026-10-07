@@ -208,8 +208,8 @@ modeling module; import them after `import nnterp`.
 
 - **`import nnterp` before `from transformers.models... import`**; the reverse order
   segfaults at import on this stack.
-- **Key on the module type, not the alias.** `envoys=` matches type or native path; a
-  path key loses to the family's type key.
+- **Key on the module type, not the alias.** `envoys=` matches type, then path (native,
+  or an alias where its `rename` key ends the path); a path key loses to the family's type key.
 - **`unavailable=` is yours to state.** A value on an interface op without
   `unavailable=interface_reason` raises `SourceNotAvailable` at read time under `sdpa`
   instead of reporting in `support()` and raising `Unavailable` before the model runs.

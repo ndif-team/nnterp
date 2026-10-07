@@ -258,14 +258,38 @@ load; `fix_processor` where a tiny checkpoint's processor disagrees with its mod
 on a wrapper built from a family's tiny text config where no tiny wrapper exists
 ([vision-design.md](vision-design.md)).
 
+## The default family (`tests/families/test_default.py`)
+
+The default family has no checkpoint of its own; it is tested against the
+families that do. `load_default(repo)` registers `default` under the
+checkpoint's `model_type` for one load. `forced(name)` builds a `FamilySuite`
+subclass from a shipped family's suite settings with the default forced on,
+so the suite runs on GPT-2, Llama, GPT-NeoX, Phi and OPT, with the
+contributions listed unavailable (and OPT's missing `mlp`); `DefaultSuite`
+replaces the tests that read a contribution or the logit lens with ones that
+assert the refusal. `test_default_reads_what_the_family_reads` loads every
+shipped family's checkpoint both ways (but the Mamba-kernel families, whose
+mixers need `route_kernels`; mixtures with `experts_implementation=
+"batched_mm"`, so the scan runs) and asserts that every value the default
+serves is bit-identical to the dedicated family's, and that the logits are;
+`REFUSED` lists the families it refuses at load (DBRX's data-dependent
+shapes, DeepSeek-V4's parallel streams) and `NO_OP` the pattern reads that
+fail loudly on a family whose eager attention forward has no softmax. The rest
+pin NanoChat (a `model_type` with no family: the warning, the stream and
+logits against the raw model, the one reason for the contributions and the
+lens, `steer` and `skip_layers`), Gemma-2's contributions reported
+unavailable rather than wrong, and the refusals (RWKV's names,
+GPT-NeoX-Japanese's container, Gemma-3n's parallel streams, Inkling's scan
+under `grouped_mm`).
+
 ## The root tests
 
 `tests/test_registry.py` (21 tests): every module under `nnterp/families/` is
 named after its type, and there are at least 31
 (`:15-20`); `import nnterp` pulls in no `transformers.models.*.modeling_*`
 module and `lookup("gpt2")` imports only that family, checked in a
-subprocess (`:23-36`); an unknown `model_type` raises `UnsupportedFamily`
-(`:39-41`); `register` adds and overrides, and `lookup` returns it (`:44-51`);
+subprocess (`:23-36`); an unknown `model_type` falls back to the default
+family with a warning (`:39-44`); `register` adds and overrides, and `lookup` returns it (`:44-51`);
 a preloaded `nn.Module` uses its own config (`:54-58`); a user `rename`
 merges over the family's (`:61-64`); a user `envoys` type key replaces the
 family's (`:67-77`); the remote key is `TransformersModel` (`:80-85`); a

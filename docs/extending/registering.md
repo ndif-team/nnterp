@@ -126,7 +126,11 @@ only, the same as a module. It needs `RENAME` and `ENVOYS`. No model type is nam
 none is checked against the checkpoint, so a family can be applied to a checkpoint whose
 `model_type` it was not written for (a fork with the same module classes under a new
 type, say). Functions named after a root size or `project_on_vocab` win over the
-root's rule exactly as on a shipped family.
+root's rule exactly as on a shipped family. The load-time check of the best-effort default
+runs only when the family *is* `nnterp.families.default`: a copy of it
+(`types.SimpleNamespace(**vars(default))`) skips it, so call `default.check(model)` after
+the load, or register the default itself under the model type
+(`families.register(default, "<model_type>")`), which keeps the check and drops the warning.
 
 Extending a shipped family is the common case. `vars(module)` copies everything the
 module defines, its size functions included, so only what changes is written:
@@ -167,17 +171,20 @@ defaults, then the family's `ENVOYS`, then `envoys=`; the aliases are the family
 
 1. `REGISTRY[model_type]`, if `register` put one there.
 2. `nnterp.families.<model_type>`, imported on first use.
-3. `UnsupportedFamily`, listing what exists:
+3. `nnterp.families.default`, the best-effort family, with a warning; it checks its guess at
+   load and raises `UnsupportedFamily` when it cannot standardize the checkpoint
+   ([loading.md](../usage/loading.md#an-architecture-with-no-family)).
 
 ```
-UnsupportedFamily: no standardization for model_type 'zamba'; known: ['afmoe', 'apertus', ..., 'zaya'].
-Add nnterp/families/zamba.py with RENAME and ENVOYS, or pass a family to nnterp.families.register(family, 'zamba').
+UserWarning: nnterp has no family for model_type 'zamba'; the default family standardizes it as a
+best-effort guess. Check model.support() for what it found, and add nnterp/families/zamba.py (or
+nnterp.families.register(family, 'zamba')) for a standardization you can rely on.
 ```
 
-The list is `sorted(set(known()) | set(REGISTRY))`, so a registered type appears there.
+Registering a family for the type, or shipping its module, takes it off the default.
 
 - `families.known()` is the shipped modules' names, from the package directory, without
-  importing them. It does not list registered families.
+  importing them. It does not list registered families, nor `default`.
 - `families.all_families()` imports and returns every shipped module; for tooling and
   tests, not for a load. It does not include registered families.
 - `families.<model_type>` (`families.gpt2`, `families.qwen3_5_text`) is the shipped module,
@@ -202,8 +209,8 @@ assert model.layers[0].ffn is model.layers[0].mlp
 assert model.family is gpt2
 ```
 
-`envoys=` matches by module type or native path, never by alias, and type keys are tried
-before path keys, so displacing a family's type-keyed envoy takes a type key of your own
+`envoys=` matches by module type or path, and type keys are tried before path keys, so
+displacing a family's type-keyed envoy takes a type key of your own
 ([custom-values.md](custom-values.md)).
 
 ## Gotchas
@@ -214,8 +221,8 @@ before path keys, so displacing a family's type-keyed envoy takes a type key of 
   in the process yours; a test that registers cleans up with `del families.REGISTRY[...]`
   in a `finally`.
 - **`Layer`, `Attention`, `Mlp` on the namespace are optional.** `support()` walks the
-  tree and reads none of them; the `UnsupportedFamily` message names the two attributes
-  the load path reads, and they are enough. The suite (`FamilySuite`) does read the classes.
+  tree and reads none of them; `RENAME` and `ENVOYS` are what the load path
+  reads, and they are enough. The suite (`FamilySuite`) does read the classes.
 - **`known()` and `all_families()` are the shipped modules only.**
 - **Carry a shipped family's size functions into a variant.** `RENAME` and `ENVOYS` are
   dicts to spread; `num_kv_heads`, `head_dim`, `qk_head_dim` and `intermediate_size` are

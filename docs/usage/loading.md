@@ -3,7 +3,7 @@ title: Loading a model
 one_liner: "`StandardizedTransformer(repo_id, ...)` picks the family from the config's `model_type`, renames the tree to the standard vocabulary, and takes every `TransformersModel` argument."
 tags: [usage, loading, families, rename, envoys, tokenizer]
 related: [docs/usage/vocabulary.md, docs/usage/availability.md, docs/usage/root-values.md, docs/usage/residual-stream.md]
-sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/components/standard.py]
+sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/families/default.py, nnterp/components/standard.py]
 ---
 
 # Loading a model
@@ -63,23 +63,69 @@ as `text_config`, and that `model_type` is the one looked up under either task: 
 is the text model's (`gemma3_text` for a Gemma 3 wrapper, `llama` for Llava 1.5), and it
 carries the wrapper's spellings and the vision tower's names beside the text model's.
 
-A `model_type` with no family raises `UnsupportedFamily` before anything loads, naming every
-known model type, the list `nnterp.families.known()` returns (98 shipped families,
-alphabetical):
-
-```
-UnsupportedFamily: no standardization for model_type 'bert'; known: ['afmoe', 'apertus', 'arcee',
-'bamba', ..., 'xglm', 'youtu', 'zaya']. Add nnterp/families/bert.py with RENAME and ENVOYS, or
-pass a family to nnterp.families.register(family, 'bert').
-```
-
 `model.family` is the module the checkpoint resolved to; `nnterp.families.known()` lists
-the shipped ones without loading anything.
+the shipped ones (98) without loading anything.
+
+## An architecture with no family
+
+A `model_type` with no family module and nothing registered loads with
+`nnterp.families.default`, a best-effort family, and a warning:
+
+```
+UserWarning: nnterp has no family for model_type 'nanochat'; the default family standardizes it as a
+best-effort guess. Check model.support() for what it found, and add nnterp/families/nanochat.py (or
+nnterp.families.register(family, 'nanochat')) for a standardization you can rely on.
+```
+
+The default serves what a name guess makes safe. It knows the spellings the shipped families
+use (`transformer.h`, `gpt_neox.layers`, `model.decoder.final_layer_norm`, `attn`,
+`self_attention`, `feed_forward`, ...) and maps them onto Llama's names, and it checks its
+guess at load: the root needs `embed_tokens`, `layers`, `norm` and `lm_head`, block 0 must take
+and the blocks return a `[batch, seq, hidden]` stream, and the logits must start `[batch, seq]`,
+on a shape-only scan (fake tensors; nothing loads). When the names fail it raises
+`UnsupportedFamily`, with a `rename=` read off the module tree when it can find one:
+
+```
+UnsupportedFamily: the default family cannot standardize GPTNeoXJapaneseForCausalLM: found no embed_tokens,
+layers, norm under any name it knows. Name the native modules with rename={'<native path>': '<standard
+name>'} at load; going by the module tree, perhaps rename={'gpt_neox_japanese.embed_in': 'embed_tokens',
+'gpt_neox_japanese.layers': 'layers', 'gpt_neox_japanese.final_layer_norm': 'norm'}, or add a family
+module named after the model_type (docs/extending/adding-a-family.md).
+```
+
+(GPT-NeoX-Japanese has a family; this is the default forced onto it.) Passing that `rename=`
+completes the default's names, and the load goes through. A scan that cannot run on fake
+tensors is refused too, naming the error: grouped expert matmuls (`experts_implementation=
+"batched_mm"` at load lets the scan run), data-dependent shapes, CUDA-only kernels.
+
+What loads serves:
+
+- `layer_output` (the block's output, or a tuple's first element, as the scan finds), the
+  root values (`logits`, `token_embeddings`, `input_ids`, `attention_mask`, `input_size`,
+  `next_token_probs`) and the sizes; `skip_layers` and `steer`, which work on the stream.
+- The attention interior (`attention_queries/keys/values/scores/probabilities/head_outputs`),
+  read on transformers' shared attention interface as on any family, wherever the module
+  calls it, and with `attn_implementation="eager"`. A module that makes no
+  `attention_interface` call (GPT-J, Falcon) reports them unavailable; a model whose eager
+  attention forward is its own, with no `nn.functional.softmax` (GPT-OSS's sink, Granite's
+  sliding window), raises `SourceNotAvailable` naming the missing op when the scores are read.
+
+It does not serve `attention_output` and `mlp_output` ("the default family cannot tell what
+this sublayer adds to the stream"), nor `project_on_vocab` and `get_topk_closest_tokens` ("the
+default family cannot tell what follows lm_head"): a post-norm (Gemma-2), a residual taken
+inside the sublayer (BLOOM), a scale (Granite) or a softcap past the head is code a name does
+not show. A block's `self_attn.*` or `mlp.*` is unavailable when it has no module under a name
+the default knows. The contributions, the logit lens, the mixture values and the recurrent
+mixers (`linear_attn`) need a family module ([adding-a-family](../extending/adding-a-family.md)).
 
 `family=` skips all of this for one load: `StandardizedTransformer(repo_id,
 family=my_family)` uses `my_family` (a module, or a `types.SimpleNamespace` with `RENAME`
 and `ENVOYS`) without reading the config or touching the registry, and `model.family` is
-`my_family`. On a vision-language wrapper the passed family carries the wrapper's and the
+`my_family`. The load runs the default's check only when the family *is*
+`nnterp.families.default`: a copy of it (`types.SimpleNamespace(**vars(default))`) skips
+the check, so call `default.check(model)` after the load yourself, or register the default
+itself under the model type (`families.register(default, "<model_type>")`) and load without
+`family=`. On a vision-language wrapper the passed family carries the wrapper's and the
 vision tower's names, as the text family it stands in for does
 ([registering](../extending/registering.md#passing-a-family-at-load)).
 
@@ -152,7 +198,7 @@ The key forms are nnsight's (nnsight docs/usage/rename-modules.md): a dotted key
 where it resolves from, the root; a single-component key binds on every envoy that has a
 child of that name; a key that resolves nowhere is skipped.
 
-`envoys=` maps a module *type* or a *native* dotted path to an `Envoy` subclass. nnsight
+`envoys=` maps a module *type* or a dotted path to an `Envoy` subclass. nnsight
 tries the type keys first, over the module's MRO, then the path keys, so:
 
 ```python
@@ -170,8 +216,10 @@ type(model.layers[0].mlp) is MyMlp                 # True
 A path key reaches only a module no type key in the merged map matches. The family keys
 its block, attention and MLP by type, so `envoys={"transformer.h.0.mlp": MyMlp}` leaves
 the family's `Mlp` in place there, while `envoys={"ln_f": MyNorm}` wraps the final norm,
-which no family keys. Paths are the native ones (`transformer.h.0.mlp`); an alias
-(`layers.0.mlp`) matches nothing, because aliases are bound after the envoys are chosen.
+which no family keys. A path key matches the native path (`transformer.h.0.mlp`) or any
+alias spelling of it, composed through the ancestors' aliases: `"self_attn"` reaches GPT-2's
+`attn`, `"layers.0.mlp"` its `transformer.h.0.mlp`, and `"layers.*"` (a `*` is any one
+component) every block.
 When the load shards across GPUs (`distributed_config=`), nnsight's tensor-parallel envoys
 are the base of the merge, so a family's or your own map never drops them.
 
@@ -241,8 +289,8 @@ The root's own values (`logits`, `token_embeddings`, `next_token_probs`, `input_
   still work.
 - **Your `envoys=` key must be the type to displace a family envoy.** Type keys are tried
   before path keys, and the family keys its modules by type.
-- **`envoys=` paths are native, never aliases.** `"layers.0.mlp"` matches nothing on GPT-2;
-  `"transformer.h.0.mlp"` is the path, and even that is shadowed by the family's type key.
+- **`envoys=` paths match the alias spellings too.** `"self_attn"` reaches GPT-2's `attn` and
+  `"layers.0.mlp"` its `transformer.h.0.mlp`, and either is shadowed by the family's type key.
 - **A `rename=` alias that would shadow an existing name raises at construction** (an
   `Envoy` attribute, a sibling module, a name on the wrapped model). That is nnsight's rule;
   see nnsight docs/usage/rename-modules.md.

@@ -342,12 +342,14 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
 
     # Each block's standard children, and whether each is a mixture; one block of each
     # combination of child classes stands for the rest, so a hybrid's ledgers list every host.
-    block_hosts, block_classes, block_children, shapes = [], [], [], {}
+    block_hosts, block_classes, block_children, block_scoring, shapes = [], [], [], [], {}
     for layer in eager.layers:
         found = StandardizedTransformer._standard_children(layer)
         block_hosts.append({alias: runs_mixture(child) for alias, child in found.items()})
         block_classes.append(type(layer._module).__name__)
         block_children.append(children_of(layer))
+        # the mixture's scoring on this block, read off the instance: DeepSeek-V4's differs by block (hash, then sqrtsoftplus)
+        block_scoring.append(next((child.SCORING for child in found.values() if runs_mixture(child)), None))
         shapes.setdefault(tuple((alias, type(child._module)) for alias, child in found.items()), (layer, found))
     hosts_found: dict[str, list[tuple[int, Any]]] = {}
     for layer, found in shapes.values():
@@ -439,6 +441,7 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "block_classes": block_classes,
         # each block's children by native name and alias: the norms a BLOCK names must be among them
         "block_children": block_children,
+        "block_scoring": block_scoring,
         # the text model's config, which a per-checkpoint BLOCK is chosen by (`resolve_block`)
         "text_config": text_config,
         "moe": moe_sizes(moe),
@@ -602,7 +605,7 @@ def moe_sizes(moe: Any) -> dict[str, Any] | None:
         elif key == "output":
             shared, shared_at = moe._module, ""
     sizes = {
-        "num_experts": moe.num_experts, "top_k": moe.top_k, "scoring": type(moe).SCORING,
+        "num_experts": moe.num_experts, "top_k": moe.top_k, "scoring": moe.SCORING,
         "router": type(router).__name__ if router is not None else None,
         "experts": type(experts).__name__ if experts is not None else None,
         "shared": type(shared).__name__ if shared is not None else None,
@@ -659,6 +662,18 @@ def resolve_block(owner: str, spec: Any, config: Any) -> dict[str, Any]:
 def block_variants(spec: Any) -> list[dict[str, Any]]:
     """Every BLOCK an entry lists: the dict, or each of a list's (a callable's are known only per checkpoint)."""
     return [spec] if isinstance(spec, dict) else [] if callable(spec) else [block for _, block in spec]
+
+
+def blocks_range(blocks: list[int]) -> str:
+    """Block indices as runs: ``0-2, 5``."""
+    runs, start = [], None
+    for k, b in enumerate(blocks):
+        if start is None:
+            start = b
+        if k + 1 == len(blocks) or blocks[k + 1] != b + 1:
+            runs.append(str(start) if start == b else f"{start}-{b}")
+            start = None
+    return ", ".join(runs)
 
 
 def is_native(spec: dict[str, Any]) -> bool:
@@ -803,12 +818,19 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             parts = {chip["part"] for chip in sub["interior"]}
             assert "shared" not in parts or moe.get("shared"), f"{owner}: the mixture has no shared expert to draw"
             sub["moe"] = {"num_experts": moe["num_experts"], "top_k": moe["top_k"], "scoring": moe["scoring"]}
+            # a scoring that differs by block (DeepSeek-V4's hash blocks) goes per block; the panel shows the slider's
+            scorings = list(dict.fromkeys(sc for sc in info.get("block_scoring") or [] if sc is not None))
+            if len(scorings) > 1:
+                sub["moe"]["scoring_of"] = info["block_scoring"]
+            scoring = (f"`{moe['scoring']}`" if len(scorings) < 2 else
+                       "per block (" + ", ".join(f"`{sc}` on blocks {blocks_range([i for i, b in enumerate(info['block_scoring']) if b == sc])}"
+                                               for sc in scorings) + ")")
             expr = f"{base}.{host}"
             if "router" in parts:
                 nodes[f"moe.{key}.router"] = node(
                     "the router", f"{expr}.router",
                     f"`{moe['router']}`. One logit per expert ({moe['num_experts']}) for each token; the scoring is "
-                    f"`{moe['scoring']}`, and {moe['top_k']} are picked: `expert_indices`, each weighted by its `expert_weights`.")
+                    f"{scoring}, and {moe['top_k']} are picked: `expert_indices`, each weighted by its `expert_weights`.")
             if "experts" in parts:
                 nodes[f"moe.{key}.experts"] = node(
                     "the routed experts", f"{expr}.experts",

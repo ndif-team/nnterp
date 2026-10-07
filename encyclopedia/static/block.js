@@ -167,7 +167,9 @@
           text(gpart, px + 8, py + 14, part[1], 'label-dim');
           var size = part[0] === 'router' ? sub.moe.scoring
             : part[0] === 'experts' ? sub.moe.top_k + ' of ' + sub.moe.num_experts + ' per token' : 'every token';
-          text(gpart, px + pw - 8, py + 14, size, 'label-dim', 'end');
+          var sizeText = text(gpart, px + pw - 8, py + 14, size, 'label-dim', 'end');
+          // a scoring that differs by block is set from the slider's block (update)
+          if (part[0] === 'router' && sub.moe.scoring_of) sizeText.setAttribute('data-scoring-for', key);
           sub.interior.filter(function (v) { return v.part === part[0]; }).forEach(function (v, c) {
             chip('interior.' + key + '.' + v.name, role, px + 8 + c * 88, py + 22, 80, v.short);
           });
@@ -327,6 +329,10 @@
     var t = types ? types[i] : null;
     variant.textContent = (t ? t.replace(/_/g, ' ') : '') + (shapeOf ? (t ? ' · ' : '') + shapes[s].label : '');
     Array.prototype.forEach.call(ticks.children, function (c, j) { c.classList.toggle('cur', j === i); });
+    shapes[s].subs.forEach(function (k) {
+      var sub = schema.sublayers[k], sc = mainSvg.querySelector('[data-scoring-for="' + keyOf(sub) + '"]');
+      if (sc && sub.moe.scoring_of[i]) sc.textContent = sub.moe.scoring_of[i];
+    });
     shapes[s].subs.forEach(function (k) {
       var sub = schema.sublayers[k], d = mainSvg.querySelector('[data-variant-for="' + keyOf(sub) + '"]');
       if (!d) return;

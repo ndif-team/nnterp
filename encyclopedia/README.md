@@ -163,6 +163,10 @@ The entry states facts about a family, and each one has a source. Before writing
    the page reads, for a checkpoint a repo id alone does not build on the meta device (a tokenizer
    that is not cached, a config `AutoConfig` maps only through remote code). It receives the
    reference, the pinned checkpoint and `attn_implementation`; say in its docstring why it exists.
+   **`GREYED`** (optional): `{"<repo id>": "<reason>"}`, checkpoints of `CHECKPOINTS` the page lists greyed
+   out with that reason, without reading or building them: a checkpoint whose config builds but whose
+   weights do not load (Doge's repositories in their remote code's layout). A checkpoint whose config
+   cannot be read needs no entry here; the build greys it by itself.
 4. **`VLLM`**: whether the family has a module under `nnterp/families/vllm/` on the `0.8-refactor-vllm`
    branch (`git show origin/0.8-refactor-vllm:nnterp/families/vllm/<model_type>.py`); this branch has no
    `StandardizedVLLM`, so the flag cannot be run here.

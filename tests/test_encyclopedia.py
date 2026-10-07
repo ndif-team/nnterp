@@ -213,6 +213,14 @@ def test_an_unreadable_checkpoint_is_listed_and_skipped():
     assert checkpoint_data(page)["schema"]["sublayers"]
 
 
+def test_a_greyed_checkpoint_is_listed_without_a_build(monkeypatch):
+    """A checkpoint in an entry's GREYED is listed greyed out with the entry's reason, and nothing is read for it."""
+    entry = entries.load("doge")
+    greyed = next(iter(entry.GREYED))
+    monkeypatch.setattr(build, "introspect", lambda *a, **k: pytest.fail("a GREYED checkpoint was built"))
+    assert build.read_checkpoint(entry, greyed, {}) == {"id": greyed, "unavailable": entry.GREYED[greyed]}
+
+
 def test_every_vision_host_in_nnterp_is_a_wrapper():
     """Every wrapper the family's tests run the vision suite on is some WRAPPERS entry's pinned checkpoint, so a new
     host in nnterp shows up here."""

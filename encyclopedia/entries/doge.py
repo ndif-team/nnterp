@@ -22,32 +22,19 @@ CHECKPOINTS = [
 ]
 
 #: Checkpoints whose safetensors (read from their headers on 2026-10-07) do not fit transformers 5.17's
-#: DogeForCausalLM: they hold the layout of the repositories' own remote code.
-OWN_LAYOUT = {
-    "SmallDoge/Doge-20M-Instruct", "SmallDoge/Doge-60M", "SmallDoge/Doge-60M-Instruct",
-    "SmallDoge/Doge-160M", "SmallDoge/Doge-160M-Instruct", "SmallDoge/Doge-320M", "SmallDoge/Doge-320M-Instruct",
-    "SmallDoge/Doge-20M-MoE", "SmallDoge/Doge-120M-MoE",
+#: DogeForCausalLM: they hold the layout of the repositories' own remote code. Their configs build a model, but
+#: each block's ``A`` and ``dt_proj`` are twice ``num_key_value_heads`` wide where transformers builds
+#: ``num_key_value_heads``, and the attention has no ``q_norm`` or ``k_norm``, so ``from_pretrained`` raises on the
+#: size mismatch. The page lists them greyed out with the reason.
+GREYED = {
+    checkpoint: "transformers 5.17 does not load its weights: A and dt_proj are twice num_key_value_heads wide, "
+                "and the attention has no q_norm or k_norm"
+    for checkpoint in (
+        "SmallDoge/Doge-20M-Instruct", "SmallDoge/Doge-60M", "SmallDoge/Doge-60M-Instruct",
+        "SmallDoge/Doge-160M", "SmallDoge/Doge-160M-Instruct", "SmallDoge/Doge-320M", "SmallDoge/Doge-320M-Instruct",
+        "SmallDoge/Doge-20M-MoE", "SmallDoge/Doge-120M-MoE",
+    )
 }
-
-
-class WeightsDoNotLoad(Exception):
-    """A checkpoint the page lists greyed out: its config builds, its weights do not load."""
-
-
-def load(checkpoint, **kwargs):
-    """The page's model, built on the meta device; a checkpoint in ``OWN_LAYOUT`` is refused, so the page lists
-    it greyed out with the reason. Its config builds a model, but its weights do not load into it: each block's
-    ``A`` and ``dt_proj`` are twice ``num_key_value_heads`` wide where transformers builds ``num_key_value_heads``,
-    and the attention has no ``q_norm`` or ``k_norm``, so ``from_pretrained`` raises on the size mismatch."""
-    from nnterp import StandardizedTransformer
-
-    if checkpoint in OWN_LAYOUT:
-        raise WeightsDoNotLoad(
-            "transformers 5.17 does not load its weights: A and dt_proj are twice num_key_value_heads wide, "
-            "and the attention has no q_norm or k_norm"
-        )
-    return StandardizedTransformer(checkpoint, **kwargs)
-
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 21}

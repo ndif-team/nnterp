@@ -1211,7 +1211,14 @@ def read_checkpoint(entry: ModuleType, checkpoint: str, cache: dict[Any, dict[st
     ``AutoConfig``). Checkpoints whose configs differ only in their name share one introspection.
 
     A checkpoint whose config reads but whose meta build fails (a tokenizer that does not load) is listed the
-    same way, unless it is ``required`` (the page's default); the build's own checks (assertions) always fail it."""
+    same way, unless it is ``required`` (the page's default); the build's own checks (assertions) always fail it.
+
+    A checkpoint in the entry's ``GREYED`` (``{repo id: reason}``) is listed greyed out with that reason, and nothing
+    is read or built for it."""
+    greyed = getattr(entry, "GREYED", {})
+    if checkpoint in greyed:
+        assert not required, f"{entry.MODEL_TYPE}: the default checkpoint {checkpoint} is in GREYED"
+        return {"id": checkpoint, "unavailable": greyed[checkpoint]}
     key, wrapper = checkpoint, None
     if not hasattr(entry, "load"):
         try:
@@ -1391,6 +1398,8 @@ def read_entry(entry: ModuleType, reference: str | None = None, checkpoints: lis
     """The entry's checkpoints, each read (`read_checkpoint`), and the default one: ``reference`` or the entry's
     ``REFERENCE``. Given a ``reference`` and no ``checkpoints``, that one alone (the test suite's pinned build)."""
     default = reference or entry.REFERENCE
+    stray = set(getattr(entry, "GREYED", {})) - set(entry.CHECKPOINTS)
+    assert not stray, f"{entry.MODEL_TYPE}: GREYED names {sorted(stray)}, not in CHECKPOINTS"
     ids = list(checkpoints or ([reference] if reference else entry.CHECKPOINTS))
     if default not in ids:
         ids.insert(0, default)

@@ -206,9 +206,10 @@ type(model.layers[0].mlp) is MyMlp                 # True
 A path key reaches only a module no type key in the merged map matches. The family keys
 its block, attention and MLP by type, so `envoys={"transformer.h.0.mlp": MyMlp}` leaves
 the family's `Mlp` in place there, while `envoys={"ln_f": MyNorm}` wraps the final norm,
-which no family keys. A path key matches the native path (`transformer.h.0.mlp`) or an
-alias path where the alias's own `rename` key ends it: `"self_attn"` reaches GPT-2's `attn`,
-but `"layers.0.mlp"` matches nothing, since `layers` names the container, not the block.
+which no family keys. A path key matches the native path (`transformer.h.0.mlp`) or any
+alias spelling of it, composed through the ancestors' aliases: `"self_attn"` reaches GPT-2's
+`attn`, `"layers.0.mlp"` its `transformer.h.0.mlp`, and `"layers.*"` (a `*` is any one
+component) every block.
 When the load shards across GPUs (`distributed_config=`), nnsight's tensor-parallel envoys
 are the base of the merge, so a family's or your own map never drops them.
 
@@ -278,9 +279,8 @@ The root's own values (`logits`, `token_embeddings`, `next_token_probs`, `input_
   still work.
 - **Your `envoys=` key must be the type to displace a family envoy.** Type keys are tried
   before path keys, and the family keys its modules by type.
-- **`envoys=` paths match an alias only where its `rename` key ends the path.** `"self_attn"`
-  reaches GPT-2's `attn`; `"layers.0.mlp"` matches nothing (`"transformer.h.0.mlp"` does), and
-  either is shadowed by the family's type key.
+- **`envoys=` paths match the alias spellings too.** `"self_attn"` reaches GPT-2's `attn` and
+  `"layers.0.mlp"` its `transformer.h.0.mlp`, and either is shadowed by the family's type key.
 - **A `rename=` alias that would shadow an existing name raises at construction** (an
   `Envoy` attribute, a sibling module, a name on the wrapped model). That is nnsight's rule;
   see nnsight docs/usage/rename-modules.md.

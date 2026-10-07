@@ -12,9 +12,8 @@ and norms. A key that does not resolve on a checkpoint is skipped, so one dict
 serves every architecture. ``ENVOYS`` is keyed on the *standard* names:
 nnsight matches a string key against a module's alias paths as well as its
 native one, so ``"self_attn"`` reaches GPT-2's ``attn`` once ``RENAME`` has
-aliased it. The blocks have no alias path of their own (``layers`` is the
-container), so the container's envoy, `Layers`, wraps each of its children in
-`Layer`.
+aliased it, and ``"layers.*"`` reaches every block (GPT-2's ``transformer.h.0``
+is also ``layers.0`` under ``RENAME``).
 
 What the default cannot know it reports rather than guesses: `check` runs at
 load, confirms the root has what it needs (``embed_tokens``, ``layers``,
@@ -329,20 +328,6 @@ class Layer(Layer):
         return {**super().support(), **missing_modules(self, {"self_attn": Attention, "mlp": Mlp})}
 
 
-class Layers(Envoy):
-    """The block container: wraps each block in `Layer`.
-
-    A block has no alias path for a string key to match (``layers`` names the
-    container, ``layers.0`` one index), so the container picks its children's
-    class. A key that matches a block on its own (a type key, a native path)
-    still wins.
-    """
-
-    def _resolve_envoy_class(self, module: torch.nn.Module, path: str) -> type[Envoy]:
-        envoy_class = super()._resolve_envoy_class(module, path)
-        return Layer if envoy_class is Envoy else envoy_class
-
-
 class Attention(Attention):
     """An attention module as the default finds it.
 
@@ -398,8 +383,8 @@ class Mlp(Mlp):
         return rewrap(self, value)
 
 
-#: Keyed on the standard names (nnsight matches a string key on alias paths too).
-ENVOYS = {"layers": Layers, "self_attn": Attention, "mlp": Mlp}
+#: Keyed on the standard names (nnsight matches a string key on alias paths too; ``*`` is any one component).
+ENVOYS = {"layers.*": Layer, "self_attn": Attention, "mlp": Mlp}
 
 
 # -- the load-time check -------------------------------------------------------------

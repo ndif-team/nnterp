@@ -248,8 +248,8 @@ purpose: `import nnterp` must import no transformers modeling module
 - `default` is a family like the others that `lookup` returns, with a warning, when
   neither of the above has the `model_type`. Its
   `RENAME` is the union of the shipped spellings, its `ENVOYS` are string keys
-  on the standard names (nnsight matches them on alias paths), with a `Layers`
-  container envoy wrapping the blocks, and it defines `check(model)`, which
+  on the standard names (nnsight matches them on alias paths; `"layers.*"`
+  reaches the blocks), and it defines `check(model)`, which
   `StandardizedTransformer.__init__` calls on the built tree when the family
   is `default`: the required root modules, a shape-only `scan`, and the
   per-sublayer reasons (read off the forwards' source) that `support()`

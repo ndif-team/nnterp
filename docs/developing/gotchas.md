@@ -126,14 +126,14 @@ NDIF travels by reference (`standardized.py:440-451`); do not
 
 **`envoys=` matches type before path.** `_resolve_envoy_class` walks the
 module's MRO against type keys, then path-suffix keys against the native path
-and the alias paths a `rename` key ending that path gives it (nnsight
+and every alias spelling of that path (nnsight
 `Envoy._resolve_envoy_class`). On GPT-2 `envoys={"self_attn": Marker}` and
 `envoys={"attn": Marker}` both do nothing, because the family's
 `GPT2Attention` type key is tried first. Key on the type to displace
-(`tests/test_registry.py:67-77`). A block has no alias path (`rename` aliases
-the container, `transformer.h -> layers`), so no string key reaches the
-blocks; the default family's `Layers` container envoy picks its children's
-class instead.
+(`tests/test_registry.py:67-77`). Alias paths compose through ancestors, so
+under `transformer.h -> layers` GPT-2's `transformer.h.0` is also `layers.0`,
+and `"layers.*"` (a `*` is any one component) reaches every block; the default
+family keys its `Layer` that way.
 
 **A bare `unavailable("...")` needs `__set_name__`.** The marker is never
 called on a stub, so nnsight's `eproperty.__call__` never set `name`/`key`;

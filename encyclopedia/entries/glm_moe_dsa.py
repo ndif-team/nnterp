@@ -65,6 +65,11 @@ BLOCK = {
             "detail": "{num_experts} experts × {moe_intermediate_size}, top {top_k}",
         },
     ],
+    # GLM-5.2 and GLM-5.3 mark each block's indexer; on GLM-5 and GLM-5.1 every block is full, so no row is drawn
+    "tick_facets": [
+        {"key": "indexer_types", "label": "indexer",
+         "values": {"full": "own indexer", "shared": "reuses the previous block's selection"}},
+    ],
 }
 
 STRIP = {

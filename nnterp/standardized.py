@@ -474,16 +474,21 @@ class StandardizedTransformer(TransformersModel):
     def _read_config(repo_id: Any, kwargs: dict) -> Any:
         """The checkpoint's config, before any model is built.
 
-        A ready module carries its own; a repo id is read with ``AutoConfig``,
-        so a config transformers cannot parse fails here with its own error.
-        The Hub caches the file, and the meta build reads it again.
+        A ready module carries its own, and a ``config=`` load argument is the
+        one the model is built from; otherwise the repo id (or the path that
+        ``config=`` names) is read with ``AutoConfig``, so a config transformers
+        cannot parse fails here with its own error. The Hub caches the file,
+        and the meta build reads it again.
         """
         if isinstance(repo_id, torch.nn.Module):
             return repo_id.config
-        from transformers import AutoConfig
+        from transformers import AutoConfig, PretrainedConfig
 
+        config = kwargs.get("config")
+        if isinstance(config, PretrainedConfig):
+            return config
         return AutoConfig.from_pretrained(
-            repo_id,
+            config if isinstance(config, str) else repo_id,
             revision=kwargs.get("revision"),
             trust_remote_code=bool(kwargs.get("trust_remote_code", False)),
         )

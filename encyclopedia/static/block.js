@@ -284,17 +284,25 @@
   });
 
   // -- the layer slider -------------------------------------------------------------
-  // A tick takes its block's shape's colour on a family with several shapes, else its layer type's.
+  // A tick takes its block's shape's colour on a family with several shapes, else its layer type's; where the
+  // layer types also differ within a shape (sliding and full blocks of both a dense and a mixture shape), each
+  // (shape, layer type) pair takes its own colour, so both differences show.
   var slider = document.getElementById('layer'), label = document.getElementById('layer-label'), variant = document.getElementById('layer-variant');
   var ticks = document.getElementById('ticks'), identity = document.querySelector('#identity code');
   var shapes, shapeOf, types, drawnShape = null;
   function buildTicks() {
-    var kinds = [];
+    var kinds = [], pairs = [];
     if (types) types.forEach(function (t) { if (kinds.indexOf(t) === -1) kinds.push(t); });
+    if (shapeOf && types) shapeOf.forEach(function (s, i) {
+      var pair = s + '|' + types[i];
+      if (pairs.indexOf(pair) === -1) pairs.push(pair);
+    });
+    var byPair = shapeOf && types && pairs.length > shapes.length;
     while (ticks.firstChild) ticks.removeChild(ticks.firstChild);
     for (var i = 0; i < schema.num_layers; i++) {
       var tick = document.createElement('i');
-      if (shapeOf) tick.className = 't' + Math.min(shapeOf[i], 4);
+      if (byPair) tick.className = 't' + Math.min(pairs.indexOf(shapeOf[i] + '|' + types[i]), 4);
+      else if (shapeOf) tick.className = 't' + Math.min(shapeOf[i], 4);
       else if (types) tick.className = 't' + kinds.indexOf(types[i]);
       tick.title = 'block ' + i + (types ? ' · ' + types[i] : '') + (shapeOf ? ' · ' + shapes[shapeOf[i]].label : '');
       tick.setAttribute('role', 'button');

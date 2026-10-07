@@ -49,7 +49,8 @@ rearrange them.
    a checkpoint with no final norm, OPT-350m, has no `norm` node and its `STRIP["norm"]` is not shown),
    a slider over the blocks with one tick per block coloured by `config.layer_types` (GPT-Neo's
    `config.attention_layers` where there is none; by the block's
-   shape on a family whose blocks come in several; clicking a tick, or Enter or Space on it, selects
+   shape on a family whose blocks come in several; by the pair of shape and layer type where the
+   types also differ within a shape, as on MiMo-V2-Flash, Laguna and Gemma 4; clicking a tick, or Enter or Space on it, selects
    that block as the slider does), and the block diagram: the residual stream as a
    vertical line, each sublayer as a row (pre-norm, the module with its interior values as chips,
    post-norm) whose contribution returns to an `⊕` on the stream. A mixture of experts draws a panel

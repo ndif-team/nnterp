@@ -147,20 +147,29 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
     # A family whose every checkpoint is the wrapper (Qwen3.5) pins the same checkpoint for both: no text-only one to compare.
     text_side = tiny != text_pin
     assert (text["tower"] is None or not text_side) and vision["tower"] is not None
+    nodes = vision["nodes"]
+    shown = panes(page, tiny)
+    for part, expr in [("patch_embed", "model.vision.patch_embeddings"), ("features", "model.vision.image_features"),
+                       ("scatter", "model.vision.image_token_mask"), ("projector", "model.projector")]:
+        assert nodes[f"v:path.{part}"]["expr"] == expr, part
+    assert "Vision Config" in shown["config"] and '<details class="card card-tower card-fold">' in shown["config"]
+    if entry.WRAPPERS[wrapper].get("tower", {}).get("BLOCK", True) is None:
+        # a vision encoder with no blocks (an encoder-free embedder): the image's path and model.vision's ledger only
+        assert vision["tower"]["schema"] is None and vision["tower"]["identity_html"] is None
+        assert not any(key.startswith(("v:contrib.", "v:sub.", "v:interior.")) for key in nodes) and "v:path.layers" not in nodes
+        assert nodes["v:path.tower_output"]["expr"] == "model.vision.tower_output"
+        assert 'class="tower-svg"' not in shown["tower"] and "model.<wbr>vision.<wbr>layers" not in shown["values"]
+        assert "model.<wbr>vision</span>" in shown["values"]
+        return
     tower = vision["tower"]["schema"]
     assert [sub["host"] for sub in tower["sublayers"]] == ["self_attn", "mlp"]
     assert tower["identity"] == "vision.layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output"
-    nodes = vision["nodes"]
     assert nodes["v:contrib.self_attn"]["expr"] == "model.vision.layers[i].self_attn.attention_output"
     assert nodes["v:contrib.mlp"]["expr"] == "model.vision.layers[i].mlp.mlp_output"
     for sub in tower["sublayers"]:
         for value in sub["interior"]:
             assert f"v:interior.{sub['host']}.{value['name']}" in nodes
-    for part, expr in [("patch_embed", "model.vision.patch_embeddings"), ("features", "model.vision.image_features"),
-                       ("scatter", "model.vision.image_token_mask"), ("projector", "model.projector")]:
-        assert nodes[f"v:path.{part}"]["expr"] == expr, part
     assert "layers[0].input[vision.image_token_mask] == vision.image_features" in nodes["strip.embed"]["extra"]
-    shown = panes(page, tiny)
     assert 'class="tower-svg"' in shown["tower"] and ('class="tower-svg"' not in panes(page, text_pin)["tower"] or not text_side)
     for host in ("model.<wbr>vision", "model.<wbr>vision.<wbr>layers[i].<wbr>self_attn", "model.<wbr>vision.<wbr>layers[i].<wbr>mlp"):
         assert host in shown["values"], host
@@ -203,7 +212,8 @@ def test_every_vision_host_in_nnterp_is_a_wrapper():
         suites = {cls.REPO for cls in vars(module).values()
                   if isinstance(cls, type) and issubclass(cls, VisionSuite) and getattr(cls, "REPO", None)}
         pinned_wrappers = {wrapper["pinned"] for wrapper in entry.WRAPPERS.values()}
-        suites = {entry.PINNED if os.path.isdir(repo) else repo for repo in suites}  # a suite's local copy of PINNED
+        # a suite's local copy of PINNED, unless that local dir is itself a record's pinned (a wrapper the suite writes)
+        suites = {entry.PINNED if os.path.isdir(repo) and repo not in pinned_wrappers else repo for repo in suites}
         assert suites and suites <= pinned_wrappers, (name, sorted(suites - pinned_wrappers))
 
 

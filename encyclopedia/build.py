@@ -129,7 +129,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "cls-token": ("CLS token", "The vision encoder's stream carries a class token beside the patches (CLIP's first, Llama 4's last), so the patch axis is one longer than the patch grid."),
     "packed-tower": ("Packed vision encoder", "Every image's patches run in one row, [1, all patches, vision_hidden]; the processor's grid sizes split it."),
     "variable-resolution": ("Variable resolution", "The vision encoder takes images of any resolution, so vision.image_size raises Unavailable; each image's grid is in the processor's output."),
-    "padded-patches": ("Padded patches", "Each image's patches are padded to a fixed row count; the padded rows are masked as keys but run through every block, so they are rows of layer_output."),
+    "padded-patches": ("Padded patches", "Each image's patches are padded to a fixed row count; the padded rows run through the vision encoder, masked as keys where it attends, so they are rows of its values."),
     "tiled-images": ("Tiled images", "The processor cuts an image into crops or tiles, each a row of the vision encoder's batch."),
     "deepstack": ("DeepStack", "Vision encoder blocks feed the text model again after its first blocks: layers[k].deepstack_output is added at the image positions, outside the block."),
     "unpadded-features": ("Unpadded features", "The wrapper unpads the projector's output and adds a newline token per row, so projector.output is not image_features."),
@@ -428,9 +428,13 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
     module_class = type(vision._module).__name__
     assert module_class in tower["module_classes"], \
         f"{entry.MODEL_TYPE}: {wrapper}'s tower is a {module_class}; {tower['slug']} lists {tower['module_classes']}"
-    layer = vision.layers[0]
-    children = StandardizedTransformer._standard_children(layer)
-    hosts = [("vision", "model.vision", vision, "vision."), ("layer", "model.vision.layers[i]", layer, "vision.")]
+    # a vision encoder with no blocks (an encoder-free embedder) has only model.vision's own values
+    blockless = vision.num_layers == 0
+    layer = None if blockless else vision.layers[0]
+    children = {} if blockless else StandardizedTransformer._standard_children(layer)
+    hosts = [("vision", "model.vision", vision, "vision.")]
+    if not blockless:
+        hosts.append(("layer", "model.vision.layers[i]", layer, "vision."))
     hosts += [(alias, f"model.vision.layers[i].{alias}", child, f"vision.{alias}.") for alias, child in children.items()]
     values: dict[str, list[dict[str, Any]]] = {}
     for alias, expr, host, prefix in hosts:
@@ -442,12 +446,13 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
     for name in TOWER_SIZE_NAMES:
         try:
             sizes.append((name, getattr(vision, name)))
-        except Unavailable:  # a tower that takes any resolution
-            sizes.append((name, "varies"))
+        except Unavailable:  # a tower that takes any resolution; an embedder with no blocks has no heads or MLP
+            sizes.append((name, "varies" if name == "image_size" else "none"))
     sizes += [(name, getattr(vision, name)) for name in TOWER_OWN_SIZE_NAMES if isinstance(getattr(type(vision), name, None), property)]
     vision_config = config.to_dict()
     scatter = scatter_host(model)
-    envoys = [(type(envoy._module).__name__, type(envoy).__name__) for envoy in (vision, layer, *children.values())]
+    envoys = [(type(envoy._module).__name__, type(envoy).__name__)
+              for envoy in (vision, *([] if blockless else [layer, *children.values()]))]
     if scatter is not None:
         envoys.append((type(scatter[1]._module).__name__, type(scatter[1]).__name__))
     fields = entry.WRAPPERS[wrapper]
@@ -460,7 +465,8 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
         "wrapper_fields": fields,
         "tower": tower,
         "module_class": module_class,
-        "layer_class": type(layer._module).__name__,
+        "layer_class": None if blockless else type(layer._module).__name__,
+        "num_layers": vision.num_layers,
         "path": vision.path,
         "sizes": sizes,
         "values": values,
@@ -471,8 +477,8 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
         "projector": {"class": type(model.projector._module).__name__, "path": model.projector.path,
                       "input": projector_input, "caption": projector_caption(projector_input)},
         "envoys": envoys,
-        # what block_schema reads, for the tower's block
-        "block": {
+        # what block_schema reads, for the tower's block; None where it has no blocks
+        "block": None if blockless else {
             "values": {"layer": values["layer"], **{alias: values[alias] for alias in children}},
             "sizes": [(name, value) for name, value in sizes],
             # the encoder's own sizes win over a config key of the same name (Qwen2-VL's vision_config.hidden_size is
@@ -739,13 +745,9 @@ def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
     blocks, its final norm where it has one, the projector, the features and where they enter."""
     tower, wrapper = v["tower"], v["wrapper_fields"]
     root = {row["name"]: row for row in v["values"]["vision"]}
-    layer = {row["name"]: row for row in v["values"]["layer"]}
-    blocks = value_node(layer["layer_output"], "the vision encoder's blocks")
-    blocks["extra"] = f"{v['block']['num_layers']} blocks of {v['layer_class']}; the one drawn below is any of them."
     nodes = {
         "path.image": node("the image", "pixel_values", f"What the processor hands the vision encoder. {tower['rows']}"),
         "path.patch_embed": {**value_node(root["patch_embeddings"], "patch embedding"), "extra": tower["positions"]},
-        "path.layers": blocks,
         "path.projector": node(
             "projector", "model.projector",
             f"`{v['projector']['class']}` at `{v['projector']['path']}`: {wrapper['projector']}.",
@@ -755,6 +757,13 @@ def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
                          "extra": "`model.layers[0].input[model.vision.image_token_mask] == model.vision.image_features`: "
                                   "the features replace the image tokens' embeddings before block 0."},
     }
+    if not v["num_layers"]:
+        # no blocks: the patch embedding runs straight on to the projector, and tower_output rides that edge
+        nodes["path.tower_output"] = {**value_node(root["tower_output"], "the vision encoder's output"), "extra": tower["norm"]}
+        return nodes
+    layer = {row["name"]: row for row in v["values"]["layer"]}
+    nodes["path.layers"] = value_node(layer["layer_output"], "the vision encoder's blocks")
+    nodes["path.layers"]["extra"] = f"{v['num_layers']} blocks of {v['layer_class']}; the one drawn below is any of them."
     if v["has_norm"]:
         nodes["path.norm"] = {**value_node(root["tower_output"], "final norm"), "extra": f"`model.vision.norm`. {tower['norm']}"}
         if not v["norm_read"]:
@@ -1010,16 +1019,20 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
     v = info.get("vision")
     if v:
         tower, wrapper = v["tower"], v["wrapper_fields"]
-        schema = block_schema(f"{entry.MODEL_TYPE} ({tower['slug']} tower)", tower["block"], v["block"],
-                              base="model.vision.layers[i]", stream="vision encoder's stream")
-        tower_nodes = schema.pop("nodes")
-        attention = next((key for key in tower_nodes if key.startswith("sub.") and "self_attn" in key), None)
-        if attention:
-            tower_nodes[attention]["extra"] += " " + tower["masking"]
+        assert (tower["block"] is None) == (v["block"] is None), \
+            f"{entry.MODEL_TYPE}: {tower['slug']}'s BLOCK is {'None' if tower['block'] is None else 'set'}, and the vision encoder has {v['num_layers']} blocks"
+        schema, tower_nodes = None, {}
+        if v["block"] is not None:
+            schema = block_schema(f"{entry.MODEL_TYPE} ({tower['slug']} tower)", tower["block"], v["block"],
+                                  base="model.vision.layers[i]", stream="vision encoder's stream")
+            tower_nodes = schema.pop("nodes")
+            attention = next((key for key in tower_nodes if key.startswith("sub.") and "self_attn" in key), None)
+            if attention:
+                tower_nodes[attention]["extra"] += " " + tower["masking"]
+            schema["roles"] = {s.get("key", s["host"]): HOST_ROLES.get(s["host"], "mlp") for s in schema["sublayers"]}
         tower_nodes.update(tower_path_nodes(v))
         nodes.update({"v:" + key: value for key, value in tower_nodes.items()})
-        schema["roles"] = {s.get("key", s["host"]): HOST_ROLES.get(s["host"], "mlp") for s in schema["sublayers"]}
-        data["tower"] = {"schema": schema, "identity_html": str(highlight_python(schema["identity"], roles))}
+        data["tower"] = {"schema": schema, "identity_html": str(highlight_python(schema["identity"], roles)) if schema else None}
         seen = {q["slug"] for q in shown}
         for slug in ["vision", *tower["quirks"], *wrapper.get("quirks", [])]:
             if slug not in seen:
@@ -1028,7 +1041,7 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
         model["tower"] = {
             "title": tower["title"], "wrapper": wrapper["title"], "schema": schema, "identity_html": data["tower"]["identity_html"],
             "rows": tower["rows"], "positions": tower["positions"], "masking": tower["masking"], "norm": tower["norm"],
-            "has_norm": v["has_norm"], "norm_read": v["norm_read"], "num_layers": v["block"]["num_layers"], "layer_class": v["layer_class"],
+            "has_norm": v["has_norm"], "norm_read": v["norm_read"], "num_layers": v["num_layers"], "layer_class": v["layer_class"],
             "module_class": v["module_class"], "projector": v["projector"], "sizes": v["sizes"], "envoys": v["envoys"],
             # The parts' headings are h2; the notes' own headings sit under them.
             "notes": Markup(str(md(tower["notes"], roles=roles)).replace("<h2", "<h3").replace("</h2>", "</h3>")),

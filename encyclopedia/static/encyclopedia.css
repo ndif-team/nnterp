@@ -193,6 +193,11 @@ pre .rn { font-weight: 500; }
 .strip-node:hover .mono, .strip-node.active .mono { color: var(--ink); }
 .strip-layers { border-width: 2.5px; }
 .strip-arrow { font-family: var(--mono); opacity: 0.6; }
+/* an edge that is a value (a blockless vision encoder's tower_output): hoverable like a node */
+.strip-edge { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 6px; cursor: help; opacity: 0.85; }
+.strip-edge small { font-size: 11px; }
+.strip-edge:hover, .strip-edge.active { background: var(--mark); opacity: 1; }
+.tower-card-only { max-width: 520px; }
 /* a node the path does not go through (a final norm the projector skips) hangs under the node it follows, dimmed */
 .strip-fork { position: relative; }
 .strip-branch { position: absolute; top: calc(100% + 6px); left: 14px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }

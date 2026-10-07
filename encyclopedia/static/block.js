@@ -356,7 +356,7 @@
   // the detail lines in).
   function drawTower() {
     var pane = towerPane(), fold = pane && pane.querySelector('details');
-    if (!pane || !data.tower || (fold && !fold.open)) return;
+    if (!pane || !data.tower || !data.tower.schema || (fold && !fold.open)) return;  // a blockless encoder draws no block
     var ts = data.tower.schema, tsvg = pane.querySelector('.tower-svg');
     draw(tsvg, ts, shapesOf(ts)[0], TOWER);
     ts.sublayers.forEach(function (sub) {

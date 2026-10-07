@@ -34,11 +34,15 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
 {% set t = c.tower %}
 <details class="fold fold-titled tower-scope">
   <summary><h2 class="fold-heading">The <em>vision encoder</em></h2><span class="micro fold-tag">· {{ t.title }} · {{ t.module_class }}</span></summary>
-  <p class="lead">The image's path into the text model, then one block of the vision encoder. Hover any part for the nnterp name that reads it; click to pin.</p>
+  <p class="lead">The image's path into the text model{% if t.num_layers %}, then one block of the vision encoder{% endif %}. Hover any part for the nnterp name that reads it; click to pin.</p>
   <div class="strip tower-strip">
     <div class="strip-node" data-node="v:path.image"><span class="mono role-stream">image</span><small>pixel_values</small></div>
     <span class="strip-arrow">→</span>
     <div class="strip-node" data-node="v:path.patch_embed"><span class="mono role-stream">patch_embed</span><small>patch_embeddings</small></div>
+    {% if not t.num_layers %}
+    {# no blocks: the patch embedding runs on to the projector, and tower_output is that edge #}
+    <span class="strip-arrow strip-edge" data-node="v:path.tower_output"><small class="mono">tower_output</small><span aria-hidden="true">→</span></span>
+    {% else %}
     <span class="strip-arrow">→</span>
     {% if t.has_norm and not t.norm_read %}
     {# the projector reads a block before the final norm: the norm hangs off the path, dimmed #}
@@ -54,6 +58,7 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
     {% endif %}
     {% endif %}
     <span class="strip-arrow">→</span>
+    {% endif %}
     <div class="strip-node strip-projector" data-node="v:path.projector"><span class="mono role-stream">projector</span><small>{{ t.projector.caption }}</small></div>
     <span class="strip-arrow">→</span>
     <div class="strip-node" data-node="v:path.features"><span class="mono role-stream">image_features</span><small>at the scatter</small></div>
@@ -66,6 +71,7 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
     <div><dt class="micro">masking</dt><dd class="body-md">{{ t.masking|inline }}</dd></div>
     <div><dt class="micro">final norm</dt><dd class="body-md">{{ t.norm|inline }}</dd></div>
   </dl>
+  {% if t.num_layers %}
   <div class="viz">
     <div class="viz-panel">
       <svg class="tower-svg" role="img" aria-label="The vision encoder's block, as nnterp names it"></svg>
@@ -79,6 +85,15 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
     </aside>
   </div>
   <p class="identity"><span class="micro">identity</span> <code>{{ t.identity_html|safe }}</code></p>
+  {% else %}
+  <aside class="card node-card tower-card-only">
+    <div class="topstrip"></div>
+    <div class="card-body">
+      <p class="micro eyebrow">hover a part</p>
+      <p class="body-md">Each node of the image's path names what nnterp calls it.</p>
+    </div>
+  </aside>
+  {% endif %}
 </details>
 {% endif %}
 {% endmacro %}

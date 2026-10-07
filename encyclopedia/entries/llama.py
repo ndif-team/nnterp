@@ -20,7 +20,144 @@ CHECKPOINTS = [
     "meta-llama/Llama-3.2-1B", "meta-llama/Llama-3.2-1B-Instruct",
     "meta-llama/Llama-3.2-3B", "meta-llama/Llama-3.2-3B-Instruct",
     "meta-llama/Llama-3.3-70B-Instruct",
+    # Vision-language wrappers around a Llama text model, each a key of WRAPPERS by its config's model_type.
+    "llava-hf/llava-1.5-7b-hf", "llava-hf/llava-1.5-13b-hf",
+    "llava-hf/vip-llava-7b-hf",
+    "llava-hf/llava-v1.6-vicuna-7b-hf",
+    "deepseek-community/deepseek-vl-1.3b-chat",
+    "HuggingFaceM4/Idefics3-8B-Llama3",
+    "HuggingFaceTB/SmolVLM-Instruct",  # model_type idefics3
+    "HuggingFaceTB/SmolVLM2-2.2B-Instruct",  # model_type smolvlm
 ]
+
+#: The vision-language wrappers of this family, keyed by the wrapper's config.model_type. The tower comes
+#: from the checkpoint's vision_config.model_type (encyclopedia/vision/); what a config does not say is here.
+WRAPPERS = {
+    "llava": {
+        "title": "Llava 1.5",
+        "pinned": "trl-internal-testing/tiny-LlavaForConditionalGeneration",
+        "projector": "a two-layer MLP (linear_1, GELU, linear_2) over block -2's patches, the CLS token dropped",
+        "notes": """
+## The projector reads block -2, without the CLS token
+
+`vision_feature_layer` is `-2` and `vision_feature_select_strategy` is `"default"`: the projector
+receives `vision.layers[-2].layer_output[:, 1:]`, so the last block and `vision.tower_output` are
+computed and discarded. On `llava-hf/llava-1.5-7b-hf`, asked the colour of a red square, zeroing
+`vision.tower_output` leaves `Red` at 0.990, and zeroing `vision.layers[-2].layer_output` drops it to
+0.001.
+
+```python
+with model.trace(prompt, images=[image]):
+    stream = model.vision.layers[-2].layer_output.save()
+    fed = model.projector.input.save()
+
+torch.equal(fed, stream[:, 1:])   # True
+```
+
+## One token per patch
+
+The projector maps each patch to one token, so an image is 576 image tokens on 7B and 13B (24 × 24
+patches of 14 pixels at 336), and `vision.image_features` is `model.projector.output` flattened over
+the images: `[576, hidden_size]` per image.
+""",
+    },
+    "vipllava": {
+        "title": "VipLlava",
+        "pinned": "hf-tiny-v2/tiny-random-VipLlavaForConditionalGeneration",
+        "projector": "a LayerNorm and a two-layer MLP over five blocks' patches concatenated, the CLS token dropped from each",
+        "notes": """
+## The projector reads five blocks
+
+`vision_feature_layers` is `[-2, -5, -8, -11, 6]` on `vip-llava-7b-hf`, indices into the tower's
+hidden states, where `0` is the stream entering block 0 and `k > 0` is block `k - 1`'s
+`layer_output`. So the projector reads `vision.layers[i].layer_output` of blocks 22, 19, 16, 13 and 5,
+each without its CLS token, concatenated on the last axis: `projector.input` is
+`[images, 576, 5120]`, and `projector_layernorm` norms it before the MLP. The last block and
+`vision.tower_output` are computed and discarded. `vision.image_features` is
+`model.projector.output` flattened over the images.
+
+```python
+streams = []
+with model.trace(prompt, images=[image]):
+    for k in (5, 13, 16, 19, 22):
+        streams.append(model.vision.layers[k].layer_output.save())
+    fed = model.projector.input.save()
+
+order = [4, 3, 2, 1, 0]   # the config's order: blocks 22, 19, 16, 13, 5
+torch.equal(fed, torch.cat([streams[j][:, 1:] for j in order], -1))   # True
+```
+""",
+    },
+    "llava_next": {
+        "title": "LLaVA-NeXT",
+        "pinned": "hf-tiny-v2/tiny-random-LlavaNextForConditionalGeneration",
+        "projector": "a two-layer MLP over each crop's block -2 patches, the CLS token dropped; the wrapper unpads its output and adds newline tokens",
+        "quirks": ["tiled-images", "unpadded-features"],
+        "notes": """
+## Crops as rows, and features that are not the projector's output
+
+The processor cuts an image into a base image and crops at a resolution from
+`image_grid_pinpoints`, each a row of the tower's batch, and the projector reads block -2 without
+the CLS token as on Llava 1.5 (`vision_feature_layer` is `-2` on `llava-v1.6-vicuna-7b-hf`). The
+wrapper then unpads the projector's output to the image's aspect ratio and appends
+`image_newline` after each row of patches, so `vision.image_features` has another row count than
+`model.projector.output`. On the pinned tiny checkpoint the projector returns 8 rows (the base image
+and one crop, 4 patches each) and `vision.image_features` 10, 2 of them `image_newline`. Edit `vision.image_features` for what
+the text model receives.
+""",
+    },
+    "deepseek_vl": {
+        "title": "DeepSeek-VL",
+        "pinned": "hf-tiny-v2/tiny-random-DeepseekVLForConditionalGeneration",
+        "projector": "aligner, a two-layer MLP (linear1, GELU, linear2) over vision.tower_output",
+        "notes": """
+## The aligner reads `tower_output`
+
+`model.aligner` is the `projector`: `linear1`, GELU, `linear2`, applied to `vision.tower_output`, the
+patches after `post_layernorm`. So `model.projector.input == model.vision.tower_output`, a write to the
+last block reaches the text model through the norm, and `vision.image_features` is
+`model.projector.output` flattened. An image is 576 image tokens on 1.3B (24 × 24 patches of 16 pixels
+at 384), the processor's `num_image_tokens`.
+""",
+    },
+    "idefics3": {
+        "title": "Idefics 3",
+        "pinned": "trl-internal-testing/tiny-Idefics3ForConditionalGeneration",
+        "projector": "connector: a pixel shuffle folding each scale_factor × scale_factor block of patches into one token, then modality_projection, a linear",
+        "quirks": ["tiled-images", "pooled-projector"],
+        "notes": """
+## Tiles as rows, pixel-shuffled into tokens
+
+The processor splits an image into tiles of `image_size` pixels and appends the whole image resized
+to one tile, each a row of the tower's batch. `model.connector` (the `projector`) reads
+`vision.tower_output`, folds each `scale_factor` × `scale_factor` block of neighbouring patches into one
+token, their widths concatenated, and projects it with `modality_projection`, a linear without bias.
+On `Idefics3-8B-Llama3` (`scale_factor` 2) a 364-pixel tile's 26 × 26 = 676 patches become 169 tokens;
+`HuggingFaceTB/SmolVLM-Instruct` is an `idefics3` checkpoint with `scale_factor` 3, so its 384-pixel
+tile's 729 patches become 81.
+
+## The features go in through `inputs_merger`
+
+`vision.image_features` is read at `inputs_merger`'s `image_hidden_states` argument, which is
+`model.projector.output` flattened, tiles in order:
+`layers[0].input[vision.image_token_mask] == vision.image_features` holds as on every wrapper.
+""",
+    },
+    "smolvlm": {
+        "title": "SmolVLM",
+        "pinned": "trl-internal-testing/tiny-SmolVLMForConditionalGeneration",
+        "projector": "connector: a pixel shuffle folding each scale_factor × scale_factor block of patches into one token, then modality_projection, a linear",
+        "quirks": ["tiled-images", "pooled-projector"],
+        "notes": """
+## Idefics 3's layout, with a 3 × 3 shuffle
+
+SmolVLM keeps Idefics 3's tower, connector and merge: tiles as rows of the tower's batch, the
+connector reading `vision.tower_output`, and `vision.image_features` read at `inputs_merger`'s
+`image_hidden_states`, `model.projector.output` flattened. On `SmolVLM2-2.2B-Instruct` the
+`scale_factor` is 3, so a 384-pixel tile's 27 × 27 = 729 patches become 81 tokens.
+""",
+    },
+}
 
 VLLM = True
 QUIRKS: list[str] = []

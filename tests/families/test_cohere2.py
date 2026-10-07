@@ -24,6 +24,7 @@ class TestCohere2(FamilySuite):
         full, sliding = kinds.index("full_attention"), kinds.index("sliding_attention")
         projected = {}
         for i in (full, sliding):
+            model.layers[i].self_attn.source  # nnsight instruments a forward on the first `.source` access; a child's output read before that in the same trace leaves the call uninstrumented
             with model.trace(PROMPT):
                 attn = model.layers[i].self_attn
                 q_proj = attn.q_proj.output.save()

@@ -14,6 +14,7 @@ class TestOlmoe(FamilySuite):
     def test_queries_and_keys_are_read_after_their_norms(self, model):
         """``q_norm``/``k_norm`` run on the projections before the head split and the rotary embedding."""
         attn = model.layers[0].self_attn
+        attn.source  # nnsight instruments a forward on the first `.source` access; a child's output read before that in the same trace leaves the call uninstrumented
         with model.trace(PROMPT):
             q_normed = attn.q_norm.output.save()
             k_normed = attn.k_norm.output.save()

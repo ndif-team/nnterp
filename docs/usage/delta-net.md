@@ -327,6 +327,11 @@ this block`.
 
 ## Gotchas
 
+- **A mixer's submodule and its kernel values do not mix in one trace.** Reading a
+  submodule's value (`linear_attn.in_proj_qkv.output`) and then a kernel value (`attention_queries`) raises
+  `OutOfOrderError` naming an op at the top of the mixer's forward (`apply_mask_to_padding_states_0`): the kernel
+  values look up that op to see which kernel runs, and the submodule read has already
+  passed it. The other order is out of forward order too. Read them in separate traces.
 - **In-place edits on the queries, keys and values need `torch.no_grad()`**; assignment
   always works.
 - **`state` takes assignment, not in-place edits.** `mix.state[:] = 0` raises

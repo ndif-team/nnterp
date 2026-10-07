@@ -288,6 +288,11 @@ them.
 
 ## Gotchas
 
+- **A mixer's submodule and its kernel values do not mix in one trace.** Reading a
+  submodule's value (`linear_attn.in_proj.output`) and then a kernel value (`betas`) raises
+  `OutOfOrderError` naming an op at the top of the mixer's forward (`use_precomputed_states_0`): the kernel
+  values look up that op to see which kernel runs, and the submodule read has already
+  passed it. The other order is out of forward order too. Read them in separate traces.
 - **Route before the layer is traced**, with the family module before loading
   (`nnterp.families.mamba2`) or `model.family` after; see
   [recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md).

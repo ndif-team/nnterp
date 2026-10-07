@@ -225,6 +225,11 @@ with model.generate(prompt, images=[image], max_new_tokens=3, do_sample=False) a
   `vision.image_features` is never reached), except on PaliGemma, whose processor demands an
   image; pass `dict(model.tokenizer(text, return_tensors="pt"))` there.
 - One invoke per trace while it carries an image; several images go in one invoke, as lists.
+  `trace(prompt, images=[...])` refuses a second image-carrying invoke. Chat-message
+  inputs with the image embedded do batch across invokes (the pipeline collates
+  `pixel_values`), but the scatter runs once over the batch: `vision.image_features` is
+  then the whole batch's features, flat and the same tensor in every invoke, and a write
+  in one invoke reaches every row's image (the mask is sliced per invoke).
 - Llama 4's image processor returns bfloat16 pixels, which a float32 tower refuses (as in
   plain transformers): load Llama 4 in bfloat16, or cast `pixel_values` in an encoding.
 

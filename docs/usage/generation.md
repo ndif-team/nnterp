@@ -119,7 +119,10 @@ and treat that warning as a read-order error.
   `do_sample=True`.
 - **`next_token_probs` is the last position of the current call.** On a decode
   step that is the one token; on the prompt call it is each row's last token,
-  which is each prompt's own last token only under left padding.
+  which is each prompt's own last token only under left padding. nnsight builds
+  `position_ids` from the attention mask, so a left-padded row computes what the
+  prompt alone does: on GPT-2 (float32) a padded row's `layer_output` at block 5 matches
+  the unpadded prompt's to 1.3e-5.
 - **The keys and values grow with the cache; the queries do not.** A head-wise
   edit of `attention_keys` on a decode step touches the whole context.
 - **On a DeltaNet hybrid, a decode step runs the recurrent kernel**, and

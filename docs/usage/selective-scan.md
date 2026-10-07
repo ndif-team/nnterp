@@ -187,6 +187,11 @@ before `t`".
 
 ## Gotchas
 
+- **A mixer's submodule and its kernel values do not mix in one trace.** Reading a
+  submodule's value (`linear_attn.x_proj.output`) and then a kernel value (`betas`) raises
+  `OutOfOrderError` naming an op at the top of the mixer's forward (`use_precomputed_states_0`): the kernel
+  values look up that op to see which kernel runs, and the submodule read has already
+  passed it. The other order is out of forward order too. Read them in separate traces.
 - **Route before the first trace that reads the mixer.** With `mamba_ssm` installed
   nothing runs on CPU and nothing inside the kernels is readable until
   `route_kernels(family, "torch")`; on a GPU a plain trace before routing is harmless.

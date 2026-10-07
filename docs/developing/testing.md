@@ -308,8 +308,10 @@ session collector agrees; `compute_next_token_probs` rows sum to one.
 
 - Names bound inside a `with model.trace(...)` block do not survive it;
   the suite pre-binds containers (`read = {}`, `saved = None`) outside the
-  block (`suite.py:198`, `:472`). A plain list built inside the block needs
-  `.save()` too.
+  block (`suite.py:198`, `:472`). A list first bound inside the block is
+  gone after it even when its elements are saved (`xs = [v.save() for ...]` and
+  `ys = []; ys.append(v.save())` both raise `NameError` after the block); bind it
+  before the block, or save the list itself (`nnsight.save([...])`).
 - Reads in one trace follow the forward: the suite reads one interior value
   per trace (`:327`, `:340`) because families bind them at different points.
 - The class-scoped `model` fixture is shared by every test in the class;
@@ -324,6 +326,15 @@ session collector agrees; `compute_next_token_probs` rows sum to one.
   (`from suite import FamilySuite`); do not name another test helper that.
 - Run from the repository root: `git rev-parse --show-toplevel` is
   the nnterp checkout, and pytest's `testpaths` is relative to it.
+- The fixtures load with `dispatch=True` and no `device=`, so with a GPU visible every
+  tiny model lands on `cuda:0`; on a shared card a parallel run fails by the hundreds
+  (CUDA out of memory, cuBLAS errors). Run with `CUDA_VISIBLE_DEVICES=""` to keep the
+  suite on CPU.
+- The tiny checkpoints cannot show scale-dependent behaviour: on
+  `hf-tiny-v2/tiny-random-Olmo2ForCausalLM` the sublayer outputs have an RMS near 1e-6,
+  far below `sqrt(rms_norm_eps)` (3e-3), so the RMSNorms act linearly and scaling a
+  module's output moves the stream as scaling its contribution does. A test about norm
+  scale invariance needs real weights or scaled activations.
 
 ## Related
 

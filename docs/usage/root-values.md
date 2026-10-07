@@ -155,7 +155,7 @@ values, and anything the family does not define falls to the plain rule.
 
 A root size is the config's value, equal to every block's on the families where the
 blocks agree. Some sizes belong to one attention or MLP module, and on a family whose
-blocks differ (Gemma-4, MiMo-V2-Flash) the root reports the config's top-level value
+blocks differ (Gemma-4, MiMo-V2-Flash, Laguna) the root reports the config's top-level value
 while each block's own is on `layers[i].self_attn` (`num_heads`, `num_kv_heads`,
 `head_dim`, `qk_head_dim`) and `layers[i].mlp` (`intermediate_size`, one routed expert's
 on a mixture of experts). Those are read off the module itself, outside or inside a
@@ -220,11 +220,12 @@ same way: [adding-a-family](../extending/adding-a-family.md#sizes).
 
 ## Gotchas
 
-- **On Gemma-4 and MiMo-V2-Flash the root's sizes are the config's top-level ones.** A
-  Gemma-4 full-attention block's `head_dim` and key/value heads differ, a MiMo-V2-Flash
-  sliding block has twice the key/value heads, and Gemma-4 E2B's KV-sharing blocks have a
-  double-width MLP: read `layers[i].self_attn.head_dim`, `.num_kv_heads` and
-  `layers[i].mlp.intermediate_size`.
+- **On Gemma-4, MiMo-V2-Flash and Laguna the root's sizes are the config's top-level ones.** A
+  Gemma-4 full-attention block's `head_dim` differs (and its key/value heads on 26B-A4B,
+  31B and the unified 12B; the query heads never), a MiMo-V2-Flash sliding block has twice
+  the key/value heads, a Laguna block has its own query heads, and Gemma-4 E2B's
+  KV-sharing blocks have a double-width MLP: read `layers[i].self_attn.head_dim`,
+  `.num_heads`, `.num_kv_heads` and `layers[i].mlp.intermediate_size`.
 - **`logits` is not `lm_head.output` on Gemma-2, Gemma-4, Cohere or Granite.** Use `logits` for the
   model's prediction and `lm_head.output` only when you want the raw projection.
 - **`next_token_probs` and `input_size` are read-only.** Assign `logits` or `input_ids`.

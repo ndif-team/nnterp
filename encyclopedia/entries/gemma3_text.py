@@ -14,10 +14,66 @@ PINNED = "hf-internal-testing/tiny-random-Gemma3ForCausalLM"
 CHECKPOINTS = [
     "google/gemma-3-270m", "google/gemma-3-270m-it",
     "google/gemma-3-1b-pt", "google/gemma-3-1b-it",
+    # Vision-language wrappers around a Gemma 3 text model: model_type gemma3, a key of WRAPPERS.
     "google/gemma-3-4b-pt", "google/gemma-3-4b-it",
     "google/gemma-3-12b-pt", "google/gemma-3-12b-it",
     "google/gemma-3-27b-pt", "google/gemma-3-27b-it",
 ]
+
+#: The vision-language wrapper of this family, keyed by the wrapper's config.model_type. The vision encoder comes
+#: from the checkpoint's vision_config.model_type (encyclopedia/vision/); what a config does not say is here.
+WRAPPERS = {
+    "gemma3": {
+        "title": "Gemma 3",
+        "pinned": "yujiepan/gemma-3-tiny-random",
+        "projector": "multi_modal_projector: a 4 × 4 average pool over vision.tower_output's 64 × 64 patches, "
+                     "an RMSNorm (mm_soft_emb_norm) and a matrix product (mm_input_projection_weight)",
+        "quirks": ["pooled-projector"],
+        "notes": """
+## The projector pools `tower_output`
+
+`model.multi_modal_projector` (the `projector`) receives `vision.tower_output`, the patches after
+`post_layernorm`, so `model.projector.input == model.vision.tower_output` and a write to the last
+block or to `tower_output` reaches the text model. It lays the 4096 patches out as their 64 × 64
+grid, averages each 4 × 4 block (`avg_pool`), norms the 256 averages with `mm_soft_emb_norm`
+(gain `1 + weight`) and multiplies them by `mm_input_projection_weight`, `[vision_hidden, hidden]`.
+`vision.image_features` is `model.projector.output` flattened over the images, `[256, hidden_size]`
+per image. On the pinned tiny checkpoint:
+
+```python
+with model.trace(prompt, images=[image]):
+    mask = model.vision.image_token_mask.save()
+    out = model.vision.tower_output.save()
+    fed = model.projector.input.save()
+    features = model.vision.image_features.save()
+    first = model.layers[0].input.save()
+
+torch.equal(fed, out)                    # True: the projector reads tower_output
+features.shape[0], out.shape[1]          # 256, 4096
+torch.equal(first[mask], features)       # True: the scatter
+```
+
+## Every image is 896 × 896 pixels, 256 image tokens
+
+`vision.image_size` is 896 on every size, and the processor resizes each image to it:
+`pixel_values` is `[images, 3, 896, 896]`, 64 × 64 patches of 14 pixels, and the projector turns
+them into 256 image tokens (`mm_tokens_per_image`). Every image gives the same count, so the
+features of one image can be assigned into another's run.
+
+## Eager attention keeps a 4096 × 4096 pattern per head
+
+The vision encoder attends over all 4096 patches, so under `attn_implementation="eager"` every block's
+pattern is 16 × 4096 × 4096. A trace keeps them all for autograd unless it runs under
+`torch.no_grad()`: on `google/gemma-3-4b-pt` an eager trace without it runs out of a 48 GB card, and
+with it peaks at 11 GB.
+
+```python
+with torch.no_grad(), model.trace(prompt, images=[image]):
+    pattern = model.vision.layers[0].self_attn.attention_probabilities.save()
+```
+""",
+    },
+}
 
 PALETTE = {"hue": 157}
 VLLM = True

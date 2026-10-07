@@ -12,12 +12,157 @@ REFERENCE = "google/gemma-4-E2B"
 #: The tiny checkpoint the test suite builds the page from: the suite tiles its per-layer table to the
 #: full vocabulary in a local copy (``_ple_checkpoint``), and the page is built from that copy.
 PINNED = "hf-tiny-v2/tiny-random-Gemma4ForCausalLM"
+#: Every checkpoint is a vision-language wrapper (model_type gemma4, a key of WRAPPERS).
 CHECKPOINTS = [
     "google/gemma-4-E2B", "google/gemma-4-E2B-it",
     "google/gemma-4-E4B", "google/gemma-4-E4B-it",
     "google/gemma-4-26B-A4B", "google/gemma-4-26B-A4B-it",
     "google/gemma-4-31B", "google/gemma-4-31B-it",
 ]
+
+#: The vision-language wrapper of this family, keyed by the wrapper's config.model_type. Its vision encoder is hosted
+#: by this family alone, so it is inline (``tower``) rather than a module under encyclopedia/vision/.
+WRAPPERS = {
+    "gemma4": {
+        "title": "Gemma 4",
+        "pinned": "yujiepan/gemma-4-e-tiny-random",
+        "projector": "embed_vision: an RMS norm without gain (embedding_pre_projection_norm) and a linear "
+                     "(embedding_projection) over the soft tokens the vision encoder's pooler returns",
+        "tower": {
+            "TITLE": "Gemma 4 ViT",
+            "VISION_CONFIG_TYPES": ["gemma4_vision"],
+            "MODULE_CLASSES": ["Gemma4VisionModel"],
+            "BLOCK": {
+                "topology": "sequential",
+                "sublayers": [
+                    {
+                        "host": "self_attn",
+                        "kind": "attention",
+                        "label": "Attention",
+                        "pre_norm": "input_layernorm",
+                        "post_norm": "post_attention_layernorm",
+                        "post_norm_note": "This norm follows the attention, as on the text block: its output is attention_output.",
+                        "contribution": "attention_output",
+                        "interior": [
+                            "attention_queries", "attention_keys", "attention_values",
+                            "attention_scores", "attention_probabilities", "attention_head_outputs",
+                        ],
+                        "detail": "{num_heads} heads × {head_dim}, 2D rotary",
+                    },
+                    {
+                        "host": "mlp",
+                        "kind": "mlp",
+                        "label": "MLP",
+                        "pre_norm": "pre_feedforward_layernorm",
+                        "post_norm": "post_feedforward_layernorm",
+                        "contribution": "mlp_output",
+                        "detail": "GeGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_activation}",
+                    },
+                ],
+            },
+            "ROWS": ("One row per image: its patches, then padding up to "
+                     "`max_soft_tokens * pooling_kernel_size**2` rows (2520 by default); the processor's "
+                     "`image_position_ids` is `(-1, -1)` on the padded rows."),
+            "MASKING": "No causal mask: a row attends to every patch of its image; the padded rows are masked as keys.",
+            "POSITIONS": ("`patch_embeddings` is `patch_embedder.input_proj`'s output; `patch_embedder` then adds a learned "
+                          "x and a learned y embedding per patch (zero on the padded rows), and every attention rotates "
+                          "queries and keys by the patch's 2D position."),
+            "NORM": ("None: `vision.tower_output` is the encoder's output, padded rows included, and the vision "
+                     "encoder's `pooler` follows it, outside the blocks."),
+            "QUIRKS": ["variable-resolution", "padded-patches"],
+            "NOTES": """
+## The block is a sandwich
+
+```
+h   = x + post_attention_layernorm(self_attn(input_layernorm(x)))
+out = h + post_feedforward_layernorm(mlp(pre_feedforward_layernorm(h)))
+```
+
+Four RMSNorms per block, no per-layer branch and no scalar.
+`attention_output` and `mlp_output` are the post-norms' outputs, so
+`vision.layers[i].input + attention_output + mlp_output == layer_output` holds exactly in float32,
+and an ablation or a steering vector on a sublayer goes on `attention_output` or `mlp_output`.
+
+## Queries, keys and values are normed, and the scores are not scaled
+
+The attention norms each head's queries and keys (`q_norm`, `k_norm`) and its values (`v_norm`,
+without gain), rotates queries and keys by the patch's x and y position, and computes the scores
+with `scaling` 1.0. `model.vision.head_dim` is the config's `head_dim`: 64 on E2B and E4B, with 12
+heads over a 768-wide stream.
+
+## The padded rows run through every block
+
+The processor resizes an image within a budget of `max_soft_tokens * pooling_kernel_size**2`
+patches of 16 pixels and pads the row to that length: a square image is 48 × 48 = 2304 patches
+and 216 padded rows of 2520. The padded rows are masked as keys, so no patch reads them, but they
+are rows of every block's `layer_output` and of `tower_output`, with values. Select the image's
+patches with the processor's positions:
+
+```python
+encoding = model.processor(text=prompt, images=[image], return_tensors="pt")
+padded = (encoding["image_position_ids"] == -1).all(-1)   # [images, 2520]
+
+with model.trace(dict(encoding)):
+    stream = model.vision.layers[0].layer_output.save()
+
+stream[~padded]                         # the 2304 patches
+```
+
+## The pooler makes the soft tokens
+
+After the last block the vision encoder's `pooler` zeroes the padded rows, averages each 3 × 3
+block of patches by position (`pooling_kernel_size`), multiplies by √`vision_hidden` and drops
+the padding: 2304 patches become 256 soft tokens, `[soft_tokens, vision_hidden]` flat over the
+images. That is `model.projector.input`. A write to `tower_output` at the padded rows changes
+nothing downstream; at the patches it reaches the text model. On 26B-A4B and 31B
+(`standardize`) the pooled tokens are then shifted by `std_bias` and scaled by `std_scale`, inside
+the vision encoder.
+""",
+        },
+        "notes": """
+## `embed_vision` projects the pooled soft tokens
+
+`model.embed_vision` (the `projector`) receives the pooler's soft tokens, not `tower_output`:
+`model.projector.input` is `[soft_tokens, vision_hidden]`, flat over the images. It norms them
+without a gain (`embedding_pre_projection_norm`) and projects them to the text model's width
+(`embedding_projection`); `vision.image_features` is `model.projector.output`, and
+`layers[0].input[vision.image_token_mask] == vision.image_features` holds exactly. On the pinned
+tiny checkpoint:
+
+```python
+with model.trace(prompt, images=[image]):
+    mask = model.vision.image_token_mask.save()
+    out = model.vision.tower_output.save()
+    fed = model.projector.input.save()
+    features = model.vision.image_features.save()
+    first = model.layers[0].input.save()
+
+out.shape[1], fed.shape[0]               # 2520 rows, 256 soft tokens
+torch.equal(first[mask], features)       # True: the scatter
+```
+
+## 256 image tokens for a square image
+
+On `google/gemma-4-E2B` a 224 × 224 image is 2304 patches and 216 padded rows: under eager every
+vision encoder block's pattern is `(1, 12, 2520, 2520)`, and the text model receives 256 image tokens,
+`vision.image_features` `(256, 1536)`. The trace ran under `torch.no_grad()` in bfloat16 and peaked
+at 11 GB. An image of another shape gets another grid in the same 2520 rows (a 96 × 48 image is 2277
+patches and 253 image tokens), so the count of image tokens depends on the image: assign one
+image's features into another's run only when the two give the same count.
+
+## The base checkpoints have no chat template
+
+`google/gemma-4-E2B` ships no chat template: put the processor's image token in the prompt
+yourself, `f"{model.processor.image_token} What is this?"`.
+
+## The audio side keeps its native names
+
+E2B and E4B also carry an audio encoder. `model.model.audio_tower` and `model.model.embed_audio`
+keep their native names, and an audio prompt, `model.trace(prompt, audio=[waveform])`, runs under
+the same load.
+""",
+    },
+}
 
 PALETTE = {"hue": 133}
 VLLM = False

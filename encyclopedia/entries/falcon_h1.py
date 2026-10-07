@@ -26,7 +26,7 @@ CHECKPOINTS = [
 #: and Kimi's 330.
 PALETTE = {"hue": 320}
 VLLM = False
-QUIRKS = ["mamba2", "scaled-residual-adds", "embedding-multiplier", "scaled-logits", "tuple-blocks"]
+QUIRKS = ["parallel-mixers", "mamba2", "scaled-residual-adds", "embedding-multiplier", "scaled-logits", "tuple-blocks"]
 
 #: Every real-value number below was run on Falcon-H1-0.5B-Base, routed to the torch kernels, in float32 with
 #: attn_implementation="eager", on an RTX A6000, unless it says bfloat16.

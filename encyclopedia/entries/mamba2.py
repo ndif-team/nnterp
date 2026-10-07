@@ -24,7 +24,7 @@ CHECKPOINTS = [
 #: Mamba lineage, beside mamba (17).
 PALETTE = {"hue": 8}
 VLLM = False
-QUIRKS = ["mamba2", "fp32-residual"]
+QUIRKS = ["mamba2", "one-sublayer-blocks", "fp32-residual"]
 
 #: Every real-value number below was run on mamba2-130m-hf, routed to the torch kernels, in float32 on an RTX A6000
 #: unless it says bfloat16.

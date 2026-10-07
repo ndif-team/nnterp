@@ -103,10 +103,11 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "nope-blocks": ("Blocks without rotary", "Some blocks, or all, apply no rotary embedding (NoPE): there attention_queries and attention_keys carry no position, and only the causal mask orders the tokens."),
     "interleaved-rotary": ("Interleaved rotary", "Rotary turns adjacent pairs of dimensions (2i, 2i + 1) rather than i with i + rot/2 (rotate_half), so query and key dimensions are ordered differently from a rotate_half family's."),
     "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
+    "parallel-mixers": ("Parallel mixers", "Attention and a recurrent mixer read the same normed input side by side and their outputs are summed before the MLP."),
     "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),
     "mamba2": ("State space (Mamba-2)", "The mixer is an SSD state-space block with a per-chunk state."),
     "fp32-residual": ("Float32 residual", "The blocks add in float32 (residual_in_fp32), so layer_output is float32 whatever the load dtype."),
-    "no-mlp": ("No MLP module", "fc1/fc2 sit on the block, so layers[i].mlp does not exist."),
+    "no-mlp": ("No MLP module", "No mlp module: the block has no MLP sublayer, or spells it as fc1/fc2 on the block, so layers[i].mlp does not exist."),
     "softcapped-logits": ("Softcapped logits", "logits is tanh-capped after lm_head; project_on_vocab applies the cap."),
     "scaled-logits": ("Scaled logits", "The head's output is multiplied or divided by a config scale."),
     "chunked-attention": ("Chunked attention", "Some blocks attend within fixed-length chunks of the sequence rather than over a sliding window; config.layer_types says which."),
@@ -122,7 +123,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; split its output by that layout before reading a head."),
     "dense-first-blocks": ("Dense first blocks", "The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
     "unnormalized-routing": ("Unnormalized routing", "The expert weights are the router's softmax entries for the chosen experts, not renormalized over them: a token's expert_weights sum to less than one."),
-    "one-sublayer-blocks": ("One sublayer per block", "Each block is one norm and one sublayer, so it adds one contribution to the stream, and support() reports the hosts it does not hold missing on it."),
+    "one-sublayer-blocks": ("One sublayer per block", "Each block is one norm and one sublayer, so it adds one contribution to the stream."),
     # The vision side (docs/usage/vision.md). `vision` marks a family some of whose checkpoints carry a tower; a
     # vision-language checkpoint's page adds its tower's and its wrapper's slugs from the rest.
     "vision": ("Vision-language", "Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model."),

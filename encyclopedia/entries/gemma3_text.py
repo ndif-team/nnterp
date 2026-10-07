@@ -28,6 +28,7 @@ WRAPPERS = {
         "pinned": "yujiepan/gemma-3-tiny-random",
         "projector": "multi_modal_projector: a 4 × 4 average pool over vision.tower_output's 64 × 64 patches, "
                      "an RMSNorm (mm_soft_emb_norm) and a matrix product (mm_input_projection_weight)",
+        "projector_input": "`vision.tower_output`",
         "quirks": ["pooled-projector"],
         "notes": """
 ## The projector pools `tower_output`

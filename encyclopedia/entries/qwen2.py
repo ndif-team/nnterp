@@ -39,6 +39,7 @@ WRAPPERS = {
         # The family suite's TestLlavaInterleaveVision runs on this real checkpoint (where CUDA is); the meta build is cheap.
         "pinned": "llava-hf/llava-interleave-qwen-0.5b-hf",
         "projector": "a two-layer MLP (linear_1, GELU, linear_2) over the last block's patches, before post_layernorm",
+        "projector_input": "the last block's `layer_output`, before `vision.norm`",
         "notes": """
 ## The projector reads the last block, before the final norm
 
@@ -70,6 +71,7 @@ text model's 1024, GELU, `linear_2`. The processor resizes every image to 384 ×
         "title": "LLaVA-OneVision",
         "pinned": "hf-tiny-v2/tiny-random-LlavaOnevisionForConditionalGeneration",
         "projector": "a two-layer MLP (linear_1, GELU, linear_2) over each crop's last-block patches; the wrapper unpads its output and adds newline tokens",
+        "projector_input": "each crop's last-block `layer_output`, before `vision.norm`",
         "quirks": ["tiled-images", "unpadded-features"],
         "notes": """
 ## Crops as rows, and features that are not the projector's output

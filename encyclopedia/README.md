@@ -60,7 +60,10 @@ rearrange them.
    image's path (`image → patch_embed → layers × N → norm`, where the vision encoder has one, `→ projector →
    image_features → layers[0].input`), each node's hover naming the nnterp value
    (`vision.patch_embeddings`, `vision.layers[i].layer_output`, `vision.tower_output`,
-   `projector.input`/`.output`, `vision.image_features`, `vision.image_token_mask`); four facts of the
+   `projector.input`/`.output`, `vision.image_features`, `vision.image_token_mask`). The `projector` node's
+   caption is the wrapper's `projector_input`; where the vision encoder has `vision.norm` and the projector
+   reads something else (a block before it), the norm hangs off the path under `layers`, dimmed, its hover
+   saying the projector does not read it. Then four facts of the
    vision encoder (what a row is, positions, masking, the final norm); and the vision encoder's block, drawn by the same
    code as the text block from the vision encoder's `BLOCK`, with its own card and its identity. It is a fold,
    closed at first, whose summary is a small title, *The vision encoder* (the display face a little
@@ -274,6 +277,11 @@ The entry states facts about a family, and each one has a source. Before writing
       the tests build the vision encoder from it, and every `VisionSuite` `REPO` in the family's test file
       must be some wrapper's `pinned`;
     - `projector`: one line, what feeds the projector and what it does;
+    - `projector_input`: a short phrase naming what `model.projector.input` is, shown as the `projector` node's
+      caption and in its hover (`"vision.layers[-2].layer_output[:, 1:]"`, `"the last block's layer_output,
+      before vision.norm"`, `"vision.tower_output"`, `"the merger's input: the last block's output"`), checked
+      on the pinned tiny wrapper like the notes. Exactly `` `vision.tower_output` `` puts the vision encoder's
+      norm on the image's path; anything else, on a vision encoder with `vision.norm`, draws the norm off it;
     - `quirks` (optional): the wrapper's slugs (`tiled-images`, `unpadded-features`, ...);
     - `notes`: markdown, the wrapper's own facts: what the projector reads, what `tower_output`
       edits reach, image tokens per image, the scatter; checked on the pinned tiny wrapper, real

@@ -37,6 +37,7 @@ WRAPPERS = {
         "title": "Llava 1.5",
         "pinned": "trl-internal-testing/tiny-LlavaForConditionalGeneration",
         "projector": "a two-layer MLP (linear_1, GELU, linear_2) over block -2's patches, the CLS token dropped",
+        "projector_input": "`vision.layers[-2].layer_output[:, 1:]`",
         "notes": """
 ## The projector reads block -2, without the CLS token
 
@@ -65,6 +66,7 @@ the images: `[576, hidden_size]` per image.
         "title": "VipLlava",
         "pinned": "hf-tiny-v2/tiny-random-VipLlavaForConditionalGeneration",
         "projector": "a LayerNorm and a two-layer MLP over five blocks' patches concatenated, the CLS token dropped from each",
+        "projector_input": "five blocks' `layer_output[:, 1:]`, concatenated",
         "notes": """
 ## The projector reads five blocks
 
@@ -92,6 +94,7 @@ torch.equal(fed, torch.cat([streams[j][:, 1:] for j in order], -1))   # True
         "title": "LLaVA-NeXT",
         "pinned": "hf-tiny-v2/tiny-random-LlavaNextForConditionalGeneration",
         "projector": "a two-layer MLP over each crop's block -2 patches, the CLS token dropped; the wrapper unpads its output and adds newline tokens",
+        "projector_input": "each crop's `vision.layers[-2].layer_output[:, 1:]`",
         "quirks": ["tiled-images", "unpadded-features"],
         "notes": """
 ## Crops as rows, and features that are not the projector's output
@@ -110,6 +113,7 @@ the text model receives.
         "title": "DeepSeek-VL",
         "pinned": "hf-tiny-v2/tiny-random-DeepseekVLForConditionalGeneration",
         "projector": "aligner, a two-layer MLP (linear1, GELU, linear2) over vision.tower_output",
+        "projector_input": "`vision.tower_output`",
         "notes": """
 ## The aligner reads `tower_output`
 
@@ -124,6 +128,7 @@ at 384), the processor's `num_image_tokens`.
         "title": "Idefics 3",
         "pinned": "trl-internal-testing/tiny-Idefics3ForConditionalGeneration",
         "projector": "connector: a pixel shuffle folding each scale_factor × scale_factor block of patches into one token, then modality_projection, a linear",
+        "projector_input": "`vision.tower_output`",
         "quirks": ["tiled-images", "pooled-projector"],
         "notes": """
 ## Tiles as rows, pixel-shuffled into tokens
@@ -147,6 +152,7 @@ tile's 729 patches become 81.
         "title": "SmolVLM",
         "pinned": "trl-internal-testing/tiny-SmolVLMForConditionalGeneration",
         "projector": "connector: a pixel shuffle folding each scale_factor × scale_factor block of patches into one token, then modality_projection, a linear",
+        "projector_input": "`vision.tower_output`",
         "quirks": ["tiled-images", "pooled-projector"],
         "notes": """
 ## Idefics 3's layout, with a 3 × 3 shuffle

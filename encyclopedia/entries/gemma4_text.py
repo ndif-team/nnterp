@@ -28,6 +28,7 @@ WRAPPERS = {
         "pinned": "yujiepan/gemma-4-e-tiny-random",
         "projector": "embed_vision: an RMS norm without gain (embedding_pre_projection_norm) and a linear "
                      "(embedding_projection) over the soft tokens the vision encoder's pooler returns",
+        "projector_input": "the pooler's soft tokens, after `vision.tower_output`",
         "tower": {
             "TITLE": "Gemma 4 ViT",
             "VISION_CONFIG_TYPES": ["gemma4_vision"],

@@ -441,17 +441,26 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
     envoys = [(type(envoy._module).__name__, type(envoy).__name__) for envoy in (vision, layer, *children.values())]
     if scatter is not None:
         envoys.append((type(scatter[1]._module).__name__, type(scatter[1]).__name__))
+    fields = entry.WRAPPERS[wrapper]
+    projector_input = fields.get("projector_input")
+    assert isinstance(projector_input, str) and projector_input.strip(), \
+        f"{entry.MODEL_TYPE}: WRAPPERS[{wrapper!r}] needs projector_input, what model.projector.input is"
+    has_norm = "norm" in vision._aliases or isinstance(getattr(type(vision), "norm", None), property)
     return {
         "wrapper": wrapper,
-        "wrapper_fields": entry.WRAPPERS[wrapper],
+        "wrapper_fields": fields,
         "tower": tower,
         "module_class": module_class,
         "layer_class": type(layer._module).__name__,
         "path": vision.path,
         "sizes": sizes,
         "values": values,
-        "has_norm": "norm" in vision._aliases or isinstance(getattr(type(vision), "norm", None), property),
-        "projector": {"class": type(model.projector._module).__name__, "path": model.projector.path},
+        "has_norm": has_norm,
+        # the projector reads the final norm's output only where its input is tower_output itself; otherwise the
+        # path draws the norm off to the side
+        "norm_read": has_norm and projector_input.strip("` ") == "vision.tower_output",
+        "projector": {"class": type(model.projector._module).__name__, "path": model.projector.path,
+                      "input": projector_input, "caption": projector_input.replace("`", "")},
         "envoys": envoys,
         # what block_schema reads, for the tower's block
         "block": {
@@ -721,7 +730,7 @@ def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
         "path.projector": node(
             "projector", "model.projector",
             f"`{v['projector']['class']}` at `{v['projector']['path']}`: {wrapper['projector']}.",
-            extra="`model.projector.input` is what it receives, `model.projector.output` what it returns."),
+            extra=f"`model.projector.input` is {v['projector']['input']}; `model.projector.output` is what it returns."),
         "path.features": value_node(root["image_features"], "image features"),
         "path.scatter": {**value_node(root["image_token_mask"], "into the text model"),
                          "extra": "`model.layers[0].input[model.vision.image_token_mask] == model.vision.image_features`: "
@@ -729,6 +738,10 @@ def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
     }
     if v["has_norm"]:
         nodes["path.norm"] = {**value_node(root["tower_output"], "final norm"), "extra": f"`model.vision.norm`. {tower['norm']}"}
+        if not v["norm_read"]:
+            nodes["path.norm"]["eyebrow"] = "final norm, off the path"
+            nodes["path.norm"]["extra"] += (f" The projector does not read it: `model.projector.input` is {v['projector']['input']}, "
+                                            "so a write to `vision.tower_output` does not reach the text model.")
     else:
         nodes["path.layers"]["extra"] += f" `model.vision.tower_output` is the last block's `layer_output`: {tower['norm']}"
     return nodes
@@ -996,7 +1009,7 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
         model["tower"] = {
             "title": tower["title"], "wrapper": wrapper["title"], "schema": schema, "identity_html": data["tower"]["identity_html"],
             "rows": tower["rows"], "positions": tower["positions"], "masking": tower["masking"], "norm": tower["norm"],
-            "has_norm": v["has_norm"], "num_layers": v["block"]["num_layers"], "layer_class": v["layer_class"],
+            "has_norm": v["has_norm"], "norm_read": v["norm_read"], "num_layers": v["block"]["num_layers"], "layer_class": v["layer_class"],
             "module_class": v["module_class"], "projector": v["projector"], "sizes": v["sizes"], "envoys": v["envoys"],
             # The parts' headings are h2; the notes' own headings sit under them.
             "notes": Markup(str(md(tower["notes"], roles=roles)).replace("<h2", "<h3").replace("</h2>", "</h3>")),

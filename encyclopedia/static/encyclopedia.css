@@ -193,6 +193,13 @@ pre .rn { font-weight: 500; }
 .strip-node:hover .mono, .strip-node.active .mono { color: var(--ink); }
 .strip-layers { border-width: 2.5px; }
 .strip-arrow { font-family: var(--mono); opacity: 0.6; }
+/* a node the path does not go through (a final norm the projector skips) hangs under the node it follows, dimmed */
+.strip-fork { position: relative; }
+.strip-branch { position: absolute; top: calc(100% + 6px); left: 14px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.strip:has(.strip-fork) { row-gap: 4.2rem; margin-bottom: 4.6rem; }
+.strip-off { opacity: 0.5; border-style: dashed; min-width: 0; }
+.strip-off:hover, .strip-off.active { opacity: 1; }
+.strip-projector small { max-width: 26ch; overflow-wrap: anywhere; }
 .viz { display: grid; grid-template-columns: 1fr 320px; gap: clamp(16px, 2vw, 32px); align-items: start; }
 .viz-panel { border: 1.5px solid var(--line); background: var(--paper); box-shadow: 8px 8px 0 var(--ink); padding: 14px 16px 18px; }
 .slider-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }

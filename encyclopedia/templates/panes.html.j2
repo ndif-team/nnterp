@@ -40,13 +40,21 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
     <span class="strip-arrow">→</span>
     <div class="strip-node" data-node="v:path.patch_embed"><span class="mono role-stream">patch_embed</span><small>patch_embeddings</small></div>
     <span class="strip-arrow">→</span>
+    {% if t.has_norm and not t.norm_read %}
+    {# the projector reads a block before the final norm: the norm hangs off the path, dimmed #}
+    <div class="strip-fork">
+      <div class="strip-node strip-layers" data-node="v:path.layers"><span class="mono role-stream">layers</span><small>× {{ t.num_layers }}</small></div>
+      <div class="strip-branch"><span class="strip-arrow" aria-hidden="true">↳</span><div class="strip-node strip-off" data-node="v:path.norm"><span class="mono role-norm">norm</span><small>tower_output · not read</small></div></div>
+    </div>
+    {% else %}
     <div class="strip-node strip-layers" data-node="v:path.layers"><span class="mono role-stream">layers</span><small>× {{ t.num_layers }}{% if not t.has_norm %} · tower_output{% endif %}</small></div>
     {% if t.has_norm %}
     <span class="strip-arrow">→</span>
     <div class="strip-node" data-node="v:path.norm"><span class="mono role-norm">norm</span><small>tower_output</small></div>
     {% endif %}
+    {% endif %}
     <span class="strip-arrow">→</span>
-    <div class="strip-node" data-node="v:path.projector"><span class="mono role-stream">projector</span><small>input → output</small></div>
+    <div class="strip-node strip-projector" data-node="v:path.projector"><span class="mono role-stream">projector</span><small>input: {{ t.projector.caption }}</small></div>
     <span class="strip-arrow">→</span>
     <div class="strip-node" data-node="v:path.features"><span class="mono role-stream">image_features</span><small>at the scatter</small></div>
     <span class="strip-arrow">→</span>

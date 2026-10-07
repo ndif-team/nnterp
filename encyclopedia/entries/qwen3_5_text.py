@@ -29,6 +29,7 @@ WRAPPERS = {
         "pinned": "yujiepan/qwen3.5-tiny-random",
         "projector": "merger, inside the vision encoder: a LayerNorm on each patch, then an MLP (linear_fc1, GELU, "
                      "linear_fc2) over each 2 × 2 block of patches concatenated, one image token per block",
+        "projector_input": "the merger's input: the last block's output",
         "notes": """
 ## The merger folds four patches into one image token
 

@@ -174,6 +174,8 @@ CONFIG_KEYS = (
     "state_size", "expand", "conv_kernel", "residual_in_fp32",
     "num_kv_shared_layers",
     "mamba_num_heads", "mamba_head_dim", "n_groups", "ssm_state_size", "chunk_size", "mlp_hidden_act",
+    "mamba_n_heads", "mamba_d_head", "mamba_d_state", "mamba_expand", "mamba_chunk_size",
+    "attn_layer_period", "attn_layer_offset", "expert_layer_period", "expert_layer_offset",
     "moe_shared_expert_intermediate_size", "moe_latent_size",
     # scalars an entry's notes rely on
     "attention_bias", "use_sliding_window", "max_window_layers", "decoder_sparse_step", "shared_expert_intermediate_size",

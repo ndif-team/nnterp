@@ -13,4 +13,7 @@ What a family has to say is which convention its block follows, because the
 return type does not tell: `FusedLayer` for a block that takes and returns
 ``(hidden_states, residual)`` whose sum is the stream, `Layer` for one that
 takes and returns the stream, and its own `layer_output` where neither holds.
+A family vLLM runs through its transformers backend (transformers' own
+modules inside the engine: OLMo, OLMo 2, SmolLM3, StarCoder2, GPT-BigCode)
+builds on `nnterp.components.vllm.transformers_backend` instead.
 """

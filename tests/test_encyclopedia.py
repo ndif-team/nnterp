@@ -216,3 +216,33 @@ def test_vision_encoder_modules_are_complete():
         for kind in module.VISION_CONFIG_TYPES:
             assert kind not in seen, (kind, seen.get(kind), module.__name__)
             seen[kind] = module.__name__
+
+
+def test_every_wrapper_names_its_projector_input():
+    """Every WRAPPERS record says what model.projector.input is: the image's path shows it on the projector node."""
+    for name in entries.names():
+        for wrapper, fields in getattr(entries.load(name), "WRAPPERS", {}).items():
+            value = fields.get("projector_input")
+            assert isinstance(value, str) and value.strip(), (name, wrapper)
+
+
+def test_the_index_lists_every_vision_encoder_an_entry_resolves():
+    """Each vision encoder some wrapper resolves to (a module, or one inline) has a filter on the index."""
+    import vision
+    from transformers import AutoConfig
+
+    titles = set()
+    for name in entries.names():
+        entry = entries.load(name)
+        for wrapper, fields in getattr(entry, "WRAPPERS", {}).items():
+            vision_type = AutoConfig.from_pretrained(fields["pinned"]).vision_config.model_type
+            titles.add(vision.resolve(entry, wrapper, vision_type)["title"])
+    cards = [{"model_type": "x", "towers": sorted(titles)}]
+    shown = {tower["label"] for tower in build.index_model(cards)["towers"]}
+    assert titles and shown == titles
+    index = build.environment().get_template("index.html.j2").render(**build.index_model(
+        [{**card, "title": "x", "subtitle": "", "palette": build.site_palette(), "checkpoints": [], "quirks": [],
+          "vllm": False, "architecture": "", "family_module": "", "wrappers": [], "blocks": "1",
+          "tower_slugs": [build.tower_slug(t) for t in card["towers"]]} for card in cards]))
+    for title in titles:
+        assert f'data-filter="{build.tower_slug(title)}">{title}</button>' in index, title

@@ -19,7 +19,8 @@ The module's name is its ``model_type`` (``gemma3_text.py`` covers
 ``nnterp.families.<model_type>`` on first use, so ``import nnterp`` loads no
 transformers modeling module. To add a family, write the module beside these;
 to add one from elsewhere, or to override a shipped one, pass it to `register`
-with the model types it covers.
+with the model types it covers; to use one for a single load, pass it as
+``StandardizedTransformer(..., family=)``.
 """
 
 from __future__ import annotations

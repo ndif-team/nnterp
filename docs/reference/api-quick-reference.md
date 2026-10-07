@@ -60,18 +60,19 @@ Reads within one trace follow the forward: the pattern is produced inside block 
 ### Constructor
 
 ```python
-StandardizedTransformer(repo_id, *args, rename=None, envoys=None, tokenizer_kwargs=None, **kwargs)
+StandardizedTransformer(repo_id, *args, family=None, rename=None, envoys=None, tokenizer_kwargs=None, **kwargs)
 ```
 
 | Argument | Type | Meaning |
 |---|---|---|
 | `repo_id` | `str` or `torch.nn.Module` | A Hub repo id, or an already-loaded module (its own `config` is read). |
+| `family` | module or object \| `None` | The family for this load instead of the one looked up: anything with `RENAME` and `ENVOYS`, plus any size function or `project_on_vocab` it defines. No model type is named or checked; nothing is registered. See [registering](../extending/registering.md#passing-a-family-at-load). |
 | `rename` | `dict[str, str \| list[str]] \| None` | Extra nnsight aliases, merged over the family's `RENAME`; a key given here wins. |
 | `envoys` | `dict \| None` | Extra `envoys=` entries, merged over the family's `ENVOYS` (and nnsight's tensor-parallel envoys on a sharded load); a key given here wins. Keys are module types or native paths, never aliases. |
 | `tokenizer_kwargs` | `dict \| None` | Attributes set on the loaded tokenizer: `{"padding_side": "left"}`, a `pad_token`. |
 | `**kwargs` | | Passed to `TransformersModel`: `dispatch=True`, `attn_implementation="eager"`, `dtype=`, `device=` (one device; `device_map="cpu"` does not keep a model off the GPU), `device_map=`, `revision=`, `trust_remote_code=`. `task` defaults to `"text-generation"`; `task="image-text-to-text"` loads a multimodal checkpoint as its wrapper, with its processor. |
 
-The constructor reads the checkpoint's config first (`AutoConfig`; a multimodal config's `text_config`), looks up `config.model_type` in `nnterp.families`, and raises `UnsupportedFamily` before any weights load when no family covers it. `attn_implementation` is not forced: the checkpoint's own default (`sdpa` on most) stays, and the interior attention values then report unavailable in `support()`.
+Without `family=`, the constructor reads the checkpoint's config first (`AutoConfig`; a multimodal config's `text_config`), looks up `config.model_type` in `nnterp.families`, and raises `UnsupportedFamily` before any weights load when no family covers it. `attn_implementation` is not forced: the checkpoint's own default (`sdpa` on most) stays, and the interior attention values then report unavailable in `support()`.
 
 ### Root values, inside a trace
 

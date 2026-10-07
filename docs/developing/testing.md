@@ -260,7 +260,7 @@ on a wrapper built from a family's tiny text config where no tiny wrapper exists
 
 ## The root tests
 
-`tests/test_registry.py` (17 tests): every module under `nnterp/families/` is
+`tests/test_registry.py` (21 tests): every module under `nnterp/families/` is
 named after its type, and there are at least 31
 (`:15-20`); `import nnterp` pulls in no `transformers.models.*.modeling_*`
 module and `lookup("gpt2")` imports only that family, checked in a
@@ -278,10 +278,16 @@ it (`:106-118`); a family registered with `hidden_size=lambda model: 999`
 answers `model.hidden_size` with 999 while `num_heads` keeps the root's rule,
 and a plain load reads `config.hidden_size` (`:121-131`); assigning a size
 (`model.hidden_size = 5`) raises `AttributeError` naming `def hidden_size`
-(`:160-163`); `register(module)` with no types covers the type the module's
-`__name__` ends in (`:166-175`); `register(ns, "my_type", "my_other_type")`
-covers both (`:178-184`); `register(ns)` on a `SimpleNamespace` with no types
-raises `TypeError` and registers nothing (`:187-192`).
+(`:229-232`); `register(module)` with no types covers the type the module's
+`__name__` ends in (`:235-244`); `register(ns, "my_type", "my_other_type")`
+covers both (`:247-253`); `register(ns)` on a `SimpleNamespace` with no types
+raises `TypeError` and registers nothing (`:256-261`). `family=` takes a module
+imported from the user's path, aliases and size functions included
+(`:160-175`), and a `SimpleNamespace` with only `RENAME` and `ENVOYS` that
+loads and traces (`:178-189`); a namespace spread from `vars(llama)` with an
+extra alias and envoy class composes with `rename=` (`:192-213`); size and
+`project_on_vocab` functions on a passed family win (`:216-226`); none of them
+touches `REGISTRY`.
 
 `tests/test_base.py` (2 tests): the base `Layer` on a plain
 `TransformersModel` over GPT-J unwraps and rewraps a tuple block output

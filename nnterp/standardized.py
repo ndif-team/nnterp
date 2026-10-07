@@ -87,6 +87,11 @@ class StandardizedTransformer(TransformersModel):
     Args:
         repo_id: A HuggingFace repo id, or an already-loaded ``torch.nn.Module``
             (its own ``config`` is read then).
+        family: The family to use instead of the one looked up: a module or
+            any object with ``RENAME`` and ``ENVOYS`` (and, like a shipped
+            family, any size function or ``project_on_vocab`` it defines). It
+            applies to this model only; the config is not read for it, and
+            no model type is named or checked.
         rename: Extra aliases, merged over the family's; a key given here wins.
         envoys: Extra ``envoys=`` entries, merged over the family's ``ENVOYS``
             (and nnsight's tensor-parallel envoys when the load shards); a key
@@ -118,14 +123,14 @@ class StandardizedTransformer(TransformersModel):
     module before the scatter into the text stream is ``projector``.
 
     Attributes:
-        family: The toolkit module the checkpoint resolved to.
+        family: The toolkit module the checkpoint resolved to, or the ``family`` passed.
         layers: The decoder blocks, each a `Layer` (the family's subclass).
         embed_tokens, norm, lm_head: The embedding, the final norm, the unembedding.
         vision: The vision tower, a `Vision`, on a multimodal wrapper whose family names it.
         projector: The last module before the wrapper scatters the image features into the text stream.
 
     Raises:
-        UnsupportedFamily: when no family covers the checkpoint's ``model_type``.
+        UnsupportedFamily: when no family is passed and none covers the checkpoint's ``model_type``.
     """
 
     family: ModuleType
@@ -140,6 +145,7 @@ class StandardizedTransformer(TransformersModel):
         self,
         repo_id: Any,
         *args: Any,
+        family: ModuleType | None = None,
         rename: dict[str, str | list[str]] | None = None,
         envoys: dict | None = None,
         tokenizer_kwargs: dict | None = None,
@@ -147,10 +153,12 @@ class StandardizedTransformer(TransformersModel):
     ) -> None:
         kwargs.setdefault("task", "text-generation")
         self._add_prefix_false_tokenizer = None
-        config = self._read_config(repo_id, kwargs)
-        # A multimodal checkpoint's config nests the language model's; the
-        # text-generation task builds that model, so its family is the one.
-        self.family = families.lookup(getattr(config, "text_config", config).model_type)
+        if family is None:
+            config = self._read_config(repo_id, kwargs)
+            # A multimodal checkpoint's config nests the language model's; the
+            # text-generation task builds that model, so its family is the one.
+            family = families.lookup(getattr(config, "text_config", config).model_type)
+        self.family = family
         super().__init__(
             repo_id,
             *args,

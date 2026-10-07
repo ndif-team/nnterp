@@ -42,6 +42,10 @@ BLOCK = {
                 "attention_scores", "attention_probabilities", "attention_head_outputs",
             ],
             "detail": "{num_heads} heads × {head_dim}, unscaled",
+            "variants": {
+                "global": "{num_heads} heads × {head_dim}, unscaled",
+                "local": "{num_heads} heads × {head_dim}, window {window_size}",
+            },
         },
         {
             "host": "mlp",

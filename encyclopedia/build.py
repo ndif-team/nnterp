@@ -189,6 +189,7 @@ CONFIG_KEYS = (
     "enable_moe_block", "hidden_size_per_layer_input", "attention_k_eq_v", "use_bidirectional_attention",
     "interleave_moe_layer_step", "intermediate_size_mlp", "no_rope_layer_interval", "attention_chunk_size",
     "attn_temperature_tuning", "attn_scale", "floor_scale",
+    "window_size",
 )
 
 #: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.
@@ -416,7 +417,10 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
     # the checkpoint's own architectures (a wrapper's, on a vision-language checkpoint); the rest is the text model's
     config["architectures"] = eager.config.architectures or config.get("architectures")
     config_rows = [(key, config[key]) for key in CONFIG_KEYS if key in config and config[key] is not None]
-    layer_types = config.get("layer_types")
+    # each block's type, for the slider: config.layer_types, or GPT-Neo's attention_layers ("global" / "local")
+    layer_types, layer_types_key = config.get("layer_types"), "layer_types"
+    if layer_types is None and isinstance(config.get("attention_layers"), list) and len(config["attention_layers"]) == num_layers:
+        layer_types, layer_types_key = config["attention_layers"], "attention_layers"
 
     doc = inspect.getdoc(family) or ""
     return {
@@ -441,6 +445,7 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "default_impl": default_impl,
         "num_layers": num_layers,
         "layer_types": layer_types,
+        "layer_types_key": layer_types_key,
         # a size the family has nothing to read for (no attention heads on a pure state-space model) is left out
         "sizes": [(name, getattr(eager, name)) for name in SIZE_NAMES if getattr(eager, name, None) is not None],
         "config": config_rows,

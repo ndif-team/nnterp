@@ -14,7 +14,7 @@
 The slider picks a block, its tick's colour gives the shape, and the diagram redraws for it.</p>
 {% else %}
 <p class="lead">One block of the stack. Hover any part for the nnterp name that reads it; click to pin.
-{% if c.layer_types and c.layer_types|unique|list|length > 1 %}The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.{% endif %}</p>
+{% if c.layer_types and c.layer_types|unique|list|length > 1 %}The slider picks a block; this family's blocks differ by <span class="mono">{{ c.layer_types_key }}</span>.{% endif %}</p>
 {% endif %}
 <div class="strip">
   <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>

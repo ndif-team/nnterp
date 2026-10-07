@@ -57,15 +57,15 @@ def test_register_adds_a_family_and_can_override():
 def test_an_engine_has_its_own_families():
     """vLLM's families are a package under the transformers ones, looked up by the same model type."""
     assert "vllm" not in families.known() and {"llama", "gpt2"} <= set(families.known("vllm"))
-    with pytest.raises(UnsupportedFamily, match="'stablelm' on vllm.*nnterp/families/vllm/stablelm.py"):
-        families.lookup("stablelm", engine="vllm")
+    with pytest.raises(UnsupportedFamily, match="'xglm' on vllm.*nnterp/families/vllm/xglm.py"):
+        families.lookup("xglm", engine="vllm")
     custom = types.SimpleNamespace(RENAME={}, ENVOYS={})
     try:
-        families.register(custom, "stablelm", engine="vllm")
-        assert families.lookup("stablelm", engine="vllm") is custom
-        assert families.lookup("stablelm") is not custom
+        families.register(custom, "xglm", engine="vllm")
+        assert families.lookup("xglm", engine="vllm") is custom
+        assert families.lookup("xglm") is not custom
     finally:
-        del families.REGISTRY["vllm.stablelm"]
+        del families.REGISTRY["vllm.xglm"]
 
 
 def test_vllm_family_passed_skips_the_lookup(monkeypatch):
@@ -90,8 +90,8 @@ def test_vllm_family_passed_skips_the_lookup(monkeypatch):
     assert built["envoys"] == {"parallel": "mine", int: "layer", str: "extra"}  # the family's win over nnsight's, the load's over both
     assert "family" not in built and families.REGISTRY == {}
 
-    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, kwargs: types.SimpleNamespace(model_type="stablelm")))
-    with pytest.raises(UnsupportedFamily, match="'stablelm' on vllm"):
+    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, kwargs: types.SimpleNamespace(model_type="xglm")))
+    with pytest.raises(UnsupportedFamily, match="'xglm' on vllm"):
         StandardizedVLLM("some/repo")
 
 

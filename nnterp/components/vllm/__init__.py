@@ -25,6 +25,11 @@ served in nnterp's layouts with the heads split out. What the layer computes
 between them (the scores, the pattern) is inside its kernel, not Python on
 this engine, so those two are recomputed from the queries and keys:
 read-only, and there on the prefill only, where a step holds every key.
+
+A family vLLM runs through its transformers backend (transformers' own
+modules inside the engine) builds on `nnterp.components.vllm.transformers_backend`
+instead, where the batch axis is already there and the engine's attention
+layer is mounted as the attention module's ``attn`` child.
 """
 
 from .attention import DECODE_STEP, Attention, on_decode_step
@@ -32,8 +37,9 @@ from .flat import Flat, batched, unbatched
 from .layer import FusedLayer, Layer, argument, with_argument
 from .mlp import Mlp
 from .project import project
+from .transformers_backend import on_transformers_backend
 
 __all__ = [
-    "Attention", "DECODE_STEP", "Flat", "FusedLayer", "Layer", "Mlp", "argument", "batched", "on_decode_step", "project", "unbatched",
-    "with_argument",
+    "Attention", "DECODE_STEP", "Flat", "FusedLayer", "Layer", "Mlp", "argument", "batched", "on_decode_step", "on_transformers_backend",
+    "project", "unbatched", "with_argument",
 ]

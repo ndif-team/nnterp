@@ -10,7 +10,7 @@ from nnsight.modeling.vllm import VLLM
 
 from . import families
 from .components import EProperty, Residual, unavailable
-from .components.vllm import Flat, argument, project
+from .components.vllm import Flat, argument, on_transformers_backend, project
 from .standardized import Logits, NextTokenProbs, Standardized, StandardizedCapability, Tokens
 
 
@@ -124,7 +124,7 @@ class StandardizedVLLM(Standardized, VLLM):
             "assign model.logits instead"
         )
 
-    @Flat("embed_tokens.output", description="The token embeddings entering the first block, [1, tokens, hidden]")
+    @Flat("embed_tokens.output", batch=on_transformers_backend, description="The token embeddings entering the first block, [1, tokens, hidden]")
     def token_embeddings(self, value: torch.Tensor) -> Residual:
         """The embedding module's output, ``[1, tokens, hidden]``; what a family scales or adds positions to comes after."""
         return value

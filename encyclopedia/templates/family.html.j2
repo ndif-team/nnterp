@@ -10,7 +10,7 @@
 {% block body %}
 <section class="hero frame">
   <div class="hero-text">
-    <p class="micro-lg eyebrow">family <span class="mono">{{ model_type }}</span> · <span class="mono" id="hero-architecture">{{ architecture }}</span></p>
+    <p class="micro-lg eyebrow">family <span class="mono">{{ model_type }}</span></p>
     <h1 class="disp-title">{% for line in title.split(" / ") %}<span class="line">{{ line }}</span>{% endfor %}</h1>
     <p class="subtitle">{{ subtitle }}</p>
     {{ pane("chips") }}

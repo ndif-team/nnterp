@@ -209,6 +209,9 @@ pre .rn { font-weight: 500; }
 .ticks i { flex: 1; display: block; background: var(--tint); }
 .ticks i.t0 { background: var(--c1); } .ticks i.t1 { background: var(--c2); } .ticks i.t2 { background: var(--c3); } .ticks i.t3 { background: var(--c4); } .ticks i.t4 { background: var(--c5); }
 .ticks i.cur { outline: 2px solid var(--ink); outline-offset: 1px; }
+.ticks i[data-block] { cursor: pointer; }
+.ticks i[data-block]:hover { filter: brightness(0.85); outline: 1px solid var(--line); outline-offset: 1px; }
+.ticks i[data-block]:focus-visible { outline: 2px dashed var(--ink); outline-offset: 1px; }
 #block-svg, .tower-svg { width: 100%; height: auto; display: block; font-family: var(--sans); }
 /* every part of the diagram sits in a group with a role class: boxes take the role's fill
    and its deep as the stroke, edges and the stream the deep; hovered, a box turns deep and

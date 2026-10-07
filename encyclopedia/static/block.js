@@ -277,9 +277,25 @@
       if (shapeOf) tick.className = 't' + Math.min(shapeOf[i], 4);
       else if (types) tick.className = 't' + kinds.indexOf(types[i]);
       tick.title = 'block ' + i + (types ? ' · ' + types[i] : '') + (shapeOf ? ' · ' + shapes[shapeOf[i]].label : '');
+      tick.setAttribute('role', 'button');
+      tick.setAttribute('tabindex', '0');
+      tick.setAttribute('aria-label', tick.title);
+      tick.setAttribute('data-block', i);
       ticks.appendChild(tick);
     }
   }
+  // A tick selects its block, as moving the slider to it does.
+  function pickBlock(tick) {
+    if (!tick || !tick.hasAttribute('data-block')) return;
+    slider.value = tick.getAttribute('data-block');
+    update();
+  }
+  ticks.addEventListener('click', function (e) { pickBlock(e.target.closest('[data-block]')); });
+  ticks.addEventListener('keydown', function (e) {
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    pickBlock(e.target.closest('[data-block]'));
+  });
   function update() {
     var i = parseInt(slider.value, 10);
     var s = shapeOf ? shapeOf[i] : 0;
@@ -324,7 +340,7 @@
     buildTicks();
     update();
     drawTower();
-    // the selector, its Hub link, the hero's class and the colophon say which
+    // the selector, its Hub link and the colophon say which
     var option = optionOf(id);
     options.forEach(function (o) { o.setAttribute('aria-selected', o === option ? 'true' : 'false'); });
     document.getElementById('ckpt-name').textContent = option ? option.getAttribute('data-name') : id;
@@ -333,7 +349,6 @@
     hub.href = data.url;
     hub.title = id + ' on the Hugging Face Hub';
     hub.setAttribute('aria-label', hub.title);
-    document.getElementById('hero-architecture').textContent = data.architecture;
     document.getElementById('colophon-reference').textContent = id;
   }
 

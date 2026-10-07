@@ -397,7 +397,7 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "paths": paths,
         "values": values,
         "support": support,
-        "repr": root_printout(eager),
+        "repr": root_printout(eager, tower=bool(wrapper)),
         "docstring": doc,
         "children": list(children),
         "versions": {"nnterp": nnterp.__version__, "transformers": importlib.import_module("transformers").__version__},
@@ -516,7 +516,7 @@ def drawn(specs: list[dict[str, Any]], hosts: dict[str, bool]) -> tuple[int, ...
                  and (spec["kind"] not in ("mlp", "moe") or hosts[spec["host"]] == (spec["kind"] == "moe")))
 
 
-def block_schema(name: str, spec: dict[str, Any], info: dict[str, Any], base: str = "model.layers[i]",
+def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], base: str = "model.layers[i]",
                  stream: str = "residual stream") -> dict[str, Any]:
     """The entry's BLOCK, checked against the family and enriched with every node's hover card.
 
@@ -529,13 +529,13 @@ def block_schema(name: str, spec: dict[str, Any], info: dict[str, Any], base: st
     ``mlp``) lists both sublayers; a checkpoint draws the one its blocks have, and the other is
     left out of the schema.
 
-    ``name`` is what an assertion names (the entry's model_type), ``spec`` the BLOCK, ``base`` the block's
+    ``owner`` is what an assertion names (the entry's model_type), ``block_spec`` the BLOCK, ``base`` the block's
     expression (``model.vision.layers[i]`` for a tower's block) and ``stream`` what its stream is called."""
     by_host = {alias: {row["name"]: row for row in rows} for alias, rows in info["values"].items()}
     sizes = dict(info["sizes"])
     moe = info["moe"] or {}
     fmt = {**sizes, **{k: v for k, v in info["config"]}, **{k: moe[k] for k in ("num_experts", "top_k") if k in moe}}
-    specs = spec["sublayers"]
+    specs = block_spec["sublayers"]
     hosts = [s["host"] for s in specs]
     # A host drawn by two sublayers (a dense MLP and a mixture) keys its nodes by kind as well.
     keys = [s["host"] if hosts.count(s["host"]) == 1 else f"{s['host']}-{s['kind']}" for s in specs]
@@ -544,11 +544,11 @@ def block_schema(name: str, spec: dict[str, Any], info: dict[str, Any], base: st
     for i, (shape, block_hosts) in enumerate(zip(shape_of, info["block_hosts"])):
         named = [h for h in block_hosts if h in hosts]
         assert sorted(named) == sorted(specs[k]["host"] for k in shape), \
-            f"{name}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
+            f"{owner}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
     shown = sorted({k for shape in shape_of for k in shape})
     for k in range(len(specs)):
         assert k in shown or any(hosts[j] == hosts[k] for j in shown), \
-            f"{name}: no block has BLOCK's {keys[k]!r} sublayer"
+            f"{owner}: no block has BLOCK's {keys[k]!r} sublayer"
     # Only the sublayers this checkpoint's blocks draw: the shapes index into what is left.
     position = {k: n for n, k in enumerate(shown)}
     shape_of = [tuple(position[k] for k in shape) for shape in shape_of]
@@ -557,8 +557,8 @@ def block_schema(name: str, spec: dict[str, Any], info: dict[str, Any], base: st
     sublayers = []
     for k, spec in enumerate(specs):
         host, key, kind = spec["host"], keys[k], spec["kind"]
-        assert host in by_host, f"{name}: BLOCK names host {host!r}; the block has {list(by_host)}"
-        assert kind in KINDS, f"{name}: kind {kind!r}; known: {KINDS}"
+        assert host in by_host, f"{owner}: BLOCK names host {host!r}; the block has {list(by_host)}"
+        assert kind in KINDS, f"{owner}: kind {kind!r}; known: {KINDS}"
         contribution = by_host[host][spec["contribution"]]
         sub = {
             "host": host, "kind": kind, "label": spec["label"],
@@ -583,16 +583,16 @@ def block_schema(name: str, spec: dict[str, Any], info: dict[str, Any], base: st
             spec["label"], f"{base}.{host}",
             f"{' / '.join(classes)} under its standard name. " + spec.get("detail", "").format(**fmt), extra=extra)
         for name in spec.get("interior", []):
-            assert name in by_host[host], f"{name}: {host} has no value {name!r}"
+            assert name in by_host[host], f"{owner}: {host} has no value {name!r}"
             chip = {"name": name, "short": INTERIOR_SHORT.get(name, name)}
             if kind == "moe":
-                assert name in MOE_PARTS, f"{name}: {name!r} is not a mixture's value; a moe sublayer draws {list(MOE_PARTS)}"
+                assert name in MOE_PARTS, f"{owner}: {name!r} is not a mixture's value; a moe sublayer draws {list(MOE_PARTS)}"
                 chip["part"] = MOE_PARTS[name]
             sub["interior"].append(chip)
             nodes[f"interior.{key}.{name}"] = value_node(by_host[host][name], "inside the sublayer")
         if kind == "moe":
             parts = {chip["part"] for chip in sub["interior"]}
-            assert "shared" not in parts or moe.get("shared"), f"{name}: the mixture has no shared expert to draw"
+            assert "shared" not in parts or moe.get("shared"), f"{owner}: the mixture has no shared expert to draw"
             sub["moe"] = {"num_experts": moe["num_experts"], "top_k": moe["top_k"], "scoring": moe["scoring"]}
             expr = f"{base}.{host}"
             if "router" in parts:
@@ -624,7 +624,7 @@ def block_schema(name: str, spec: dict[str, Any], info: dict[str, Any], base: st
 
     shapes = list(dict.fromkeys(shape_of))
     single = len(shapes) == 1
-    assert single or "identity" not in spec, f"{name}: a BLOCK with several shapes takes no identity"
+    assert single or "identity" not in block_spec, f"{owner}: a BLOCK with several shapes takes no identity"
 
     layer_output = by_host["layer"]["layer_output"]
     entering = by_host["layer"].get("layer_output", {})
@@ -639,7 +639,7 @@ def block_schema(name: str, spec: dict[str, Any], info: dict[str, Any], base: st
         subs = [sublayers[k] for k in shape]
         mids = []
         # Between two sequential sublayers the stream has a value of its own; a parallel block has no such point.
-        for k in range(len(subs) - 1 if spec.get("topology", "sequential") == "sequential" else 0):
+        for k in range(len(subs) - 1 if block_spec.get("topology", "sequential") == "sequential" else 0):
             nxt = subs[k + 1]
             after = subs[k]["label"].lower()
             mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
@@ -651,15 +651,15 @@ def block_schema(name: str, spec: dict[str, Any], info: dict[str, Any], base: st
                                   f"The stream after the {after} add, as the next sublayer receives it. No standard value of its own.")
             mids.append(mid)
         terms = " + ".join(f"{sub['host']}.{sub['contribution']}" for sub in subs)
-        identity = spec.get("identity", f"{base.removeprefix('model.')}.input + {terms} == layer_output")
+        identity = block_spec.get("identity", f"{base.removeprefix('model.')}.input + {terms} == layer_output")
         plus = "plus" if single else f"plus.{s}"
         checked = "on this family" if stream == "residual stream" else "on every tower block"
-        nodes[plus] = node("the add", identity, spec.get("identity_note", f"The contribution identity nnterp's suite checks {checked}."))
+        nodes[plus] = node("the add", identity, block_spec.get("identity_note", f"The contribution identity nnterp's suite checks {checked}."))
         drawn_shapes.append({"subs": list(shape), "mids": mids, "plus": plus, "identity": identity,
                              "label": " + ".join(sub["label"] for sub in subs)})
 
     schema = {
-        "topology": spec.get("topology", "sequential"),
+        "topology": block_spec.get("topology", "sequential"),
         "sublayers": sublayers,
         "identity": drawn_shapes[0]["identity"],  # block 0's; a hybrid's page swaps it as the slider moves
         "num_layers": info["num_layers"],
@@ -759,7 +759,7 @@ def highlight_python(code: str, roles: dict[str, str]) -> Markup:
     return Markup(out)
 
 
-def root_printout(model: Any) -> str:
+def root_printout(model: Any, tower: bool = False) -> str:
     """``print(model)`` without the native containers: a root child that holds a module mounted on
     the root under its standard name (``model``, holding ``model.layers``) is left out, so the
     standard names and whatever else sits on the root are what shows."""
@@ -774,9 +774,9 @@ def root_printout(model: Any) -> str:
         else:
             out.append(lines[i])
         i += 1
-    if "vision" not in model._aliases:
+    if not tower or "vision" not in model._aliases:
         return "\n".join(out)
-    # The tower likewise: a native container whose every child is mounted on the tower under a standard name
+    # On a wrapper the page describes (``tower``), the tower likewise: a native container whose every child is mounted on the tower under a standard name
     # (CLIP's and SigLIP's `encoder`, holding only `layers`) is left out; one with other children stays.
     vision = model.vision
     mounted = set(vision._aliases.values())
@@ -901,14 +901,17 @@ def unavailable_reason(error: BaseException) -> str:
     return f"{type(error).__name__}: {text.splitlines()[0] if text else 'no message'}"[:240]
 
 
-def read_checkpoint(entry: ModuleType, checkpoint: str, cache: dict[Any, dict[str, Any]]) -> dict[str, Any]:
+def read_checkpoint(entry: ModuleType, checkpoint: str, cache: dict[Any, dict[str, Any]], required: bool = False) -> dict[str, Any]:
     """One checkpoint as the page holds it: ``info`` from `introspect`, or ``unavailable`` saying why its config
     cannot be read (gated, missing, offline), so the page lists it greyed out and the build goes on.
 
     The task comes from the config: a ``model_type`` transformers maps to image-text-to-text, and the entry
     describes in ``WRAPPERS``, loads as that wrapper with its tower; any other loads for text generation, as a
     page always has. An entry with a ``load`` builds its checkpoints itself (its configs need more than
-    ``AutoConfig``). Checkpoints whose configs differ only in their name share one introspection."""
+    ``AutoConfig``). Checkpoints whose configs differ only in their name share one introspection.
+
+    A checkpoint whose config reads but whose meta build fails (a tokenizer that does not load) is listed the
+    same way, unless it is ``required`` (the page's default); the build's own checks (assertions) always fail it."""
     key, wrapper = checkpoint, None
     if not hasattr(entry, "load"):
         try:
@@ -920,7 +923,14 @@ def read_checkpoint(entry: ModuleType, checkpoint: str, cache: dict[Any, dict[st
         fields = {k: v for k, v in config.to_dict().items() if k != "_name_or_path"}
         key = (wrapper, json.dumps(fields, sort_keys=True, default=str))
     if key not in cache:
-        cache[key] = introspect(entry, checkpoint, wrapper=wrapper)
+        try:
+            cache[key] = introspect(entry, checkpoint, wrapper=wrapper)
+        except AssertionError:
+            raise
+        except Exception as error:  # noqa: BLE001 - see the docstring
+            if required:
+                raise
+            return {"id": checkpoint, "unavailable": "its meta build fails: " + unavailable_reason(error)}
     return {"id": checkpoint, "info": {**cache[key], "reference": checkpoint}}
 
 
@@ -1078,7 +1088,7 @@ def read_entry(entry: ModuleType, reference: str | None = None, checkpoints: lis
     if default not in ids:
         ids.insert(0, default)
     cache: dict[Any, dict[str, Any]] = {}
-    return [read_checkpoint(entry, checkpoint, cache) for checkpoint in ids], default
+    return [read_checkpoint(entry, checkpoint, cache, required=checkpoint == default) for checkpoint in ids], default
 
 
 def build_page(entry: ModuleType, reference: str | None = None, checkpoints: list[str] | None = None) -> str:

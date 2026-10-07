@@ -19,8 +19,9 @@ CHECKPOINTS = [
     "tencent/Hunyuan-MT-7B", "tencent/Hunyuan-MT-Chimera-7B",
 ]
 
-#: Hunyuan lineage (hunyuan_v1_dense, hunyuan_v1_moe); the hash (228) sits between GPT-J's 222 and CodeGen's 234.
-PALETTE = {"hue": 31}
+#: Hunyuan lineage (hunyuan_v1_dense 29, hunyuan_v1_moe 33), in the gap between Falcon-Mamba (26) and GPT-2 (36);
+#: the hash (228) sits between GPT-J's 222 and CodeGen's 234.
+PALETTE = {"hue": 29}
 VLLM = False
 QUIRKS = ["qk-norm"]
 

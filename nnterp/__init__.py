@@ -36,11 +36,16 @@ from .components import (
     StateSpace, Unavailable, chunk_per_token, route_delta_rule, route_kernels, unavailable,
 )
 from .families import UnsupportedFamily
+from .interventions import (
+    TargetPrompt, TargetPromptBatch, it_repeat_prompt, logit_lens, patch_object_attn_lens, patchscope_generate,
+    patchscope_lens, repeat_prompt,
+)
 from .standardized import StandardizedTransformer
 
 __all__ = [
     "Attention", "DerivedEProperty", "EProperty", "Layer", "LinearAttention", "Mlp", "Moe", "RecurrentMixer", "SelectiveScan",
-    "Standard", "StandardizedTransformer", "StateSpace", "Unavailable", "UnsupportedFamily", "chunk_per_token",
-    "route_delta_rule", "route_kernels",
+    "Standard", "StandardizedTransformer", "StateSpace", "TargetPrompt", "TargetPromptBatch", "Unavailable",
+    "UnsupportedFamily", "chunk_per_token", "it_repeat_prompt", "logit_lens", "patch_object_attn_lens",
+    "patchscope_generate", "patchscope_lens", "repeat_prompt", "route_delta_rule", "route_kernels",
     "unavailable",
 ]

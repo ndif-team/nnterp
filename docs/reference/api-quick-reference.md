@@ -51,8 +51,9 @@ Reads within one trace follow the forward: the pattern is produced inside block 
 | `unavailable`, `route_kernels`, `route_delta_rule` | A value a family lacks; the recurrent kernel switch, and its DeltaNet spelling. |
 | `chunk_per_token` | A Mamba-2 model's chunk scan with a chunk size of 1, so `StateSpace.states` reads the state after every token. |
 | `Unavailable`, `UnsupportedFamily` | The two exceptions nnterp raises itself. |
+| `logit_lens`, `patchscope_lens`, `patchscope_generate`, `patch_object_attn_lens`, `TargetPrompt`, `TargetPromptBatch`, `repeat_prompt`, `it_repeat_prompt` | The lenses of `nnterp.interventions`, re-exported. |
 
-`nnterp.families`, `nnterp.components`, `nnterp.prompt_utils` and `nnterp.nnsight_utils` are imported as modules.
+`nnterp.families`, `nnterp.components`, `nnterp.interventions`, `nnterp.prompt_utils` and `nnterp.nnsight_utils` are imported as modules.
 
 ## `StandardizedTransformer`
 
@@ -92,6 +93,7 @@ Every row is an `EProperty` on the root, listed in `repr(model)` with its descri
 | Method | Signature | Where | What |
 |---|---|---|---|
 | `skip_layers` | `skip_layers(start: int, end: int, skip_with: Tensor \| None = None) -> None` | inside a trace, before block `start` runs | Blocks `start..end` inclusive do not run; block `start`'s input (or `skip_with`) becomes each one's `layer_output`, packed as the family's block returns it (`Layer.skip_with`). Negative indices count from the end. |
+| `skip_layer` | `skip_layer(layer: int, skip_with: Tensor \| None = None) -> None` | inside a trace, before block `layer` runs | `skip_layers(layer, layer, skip_with)`. |
 | `steer` | `steer(layers: int \| list[int], vector: Tensor, factor: float = 1.0, token_positions: int \| list[int] \| slice \| None = None, batch_index: int \| None = None) -> None` | inside a trace, `layers` ascending | Adds `factor * vector` in place to `layer_output` of each block, at the given positions and row (default all). |
 | `project_on_vocab` | `project_on_vocab(hidden: Tensor) -> Tensor` | inside (on a live value) or outside (on a saved one) | The logit lens: `lm_head(norm(hidden))`, then what the model does to the head's output to make its logits: the text config's `final_logit_softcapping` if set (Gemma-2), else nothing; a family's `def project_on_vocab(model, hidden)` is bound in its place (Cohere's `* logit_scale`, Granite's `/ logits_scaling`). On the last block's `layer_output` it equals `logits`. |
 | `get_topk_closest_tokens` | `get_topk_closest_tokens(hidden: Tensor, k: int = 5) -> list[dict[str, float]]` | outside, on a saved `[..., hidden]` tensor | `project_on_vocab` then softmax; one `{token: probability}` per position, row-major over the leading axes. Takes a residual-stream tensor, not logits. |
@@ -408,6 +410,21 @@ The axis names are the same on every layout (`batch` axis 0 everywhere, `seq` th
 | `rewrap` | `rewrap(envoy, value: Tensor) -> Any` | `value` back in the module's current output tuple, if any. |
 | `rows`, `splice` | `rows(value, rank) -> Any`, `splice(whole, value, rank) -> Any` | A tensor flat over tokens as this invoke's `[batch, seq, ...]` view; this invoke's rows written back into the whole flat tensor. What `TokenEProperty` reads and writes through. Defined in `nnterp.components.tokens`. |
 | `module_int`, `in_width` | `module_int(module, *names) -> int \| None`, `in_width(module, *names) -> int \| None` | The first of `names` the module holds as an integer; the input width of the first of `names` it has as a projection (`nn.Linear` or `Conv1D`). What the per-module sizes read with. Defined in `nnterp.components.standard`. |
+
+## `nnterp.interventions`
+
+Lenses that open their own traces and return tensors on the CPU ([interventions](../usage/interventions.md)). `LayerProbs = Float[Tensor, "batch layers vocab"]`.
+
+| Name | Signature | What |
+|---|---|---|
+| `logit_lens` | `logit_lens(nn_model, prompts: list[str] \| str, remote: bool = False, return_inv_logits: bool = False) -> LayerProbs \| tuple[LayerProbs, LayerProbs]` | `project_on_vocab(layers[i].layer_output)` at the last token, softmaxed, for every block; on a `Streams` family the streams are collapsed as the model's readout does. With `return_inv_logits`, also `project_on_vocab(-hidden)`. Needs left padding (`ValueError`). |
+| `TargetPrompt` | `@dataclass TargetPrompt(prompt: str, index_to_patch: int)` | A patchscope's target prompt and the position written into. |
+| `repeat_prompt` | `repeat_prompt(words=None, rel=" ", sep="\n", placeholder="?", index_to_patch=-1) -> TargetPrompt` | The patchscopes paper's next-token target. |
+| `it_repeat_prompt` | `it_repeat_prompt(tokenizer, words=None, rel=" ", sep="\n", placeholder="?", complete_prompt=True, add_user_instr=True, use_system_prompt=True) -> TargetPrompt` | `repeat_prompt` in the tokenizer's chat template, patched at the last token. |
+| `TargetPromptBatch` | `@dataclass TargetPromptBatch(prompts: list[str], index_to_patch: Tensor)`; `from_target_prompts`, `from_target_prompt(prompt, batch_size)`, `from_prompts(prompts, index_to_patch)`, `auto(target, batch_size)` | One target per row. |
+| `patchscope_lens` | `patchscope_lens(nn_model, source_prompts=None, target_patch_prompts=None, layers=None, latents=None, remote=False) -> LayerProbs` | One trace per block: block `l`'s `layer_output` at each target's `index_to_patch` replaced by source `i`'s last-token stream (or `latents[l, i]`); the target's `next_token_probs`. `[num_sources, len(layers), vocab]`. |
+| `patchscope_generate` | `patchscope_generate(nn_model, prompts, target_patch_prompt: TargetPrompt, max_length=50, layers=None, remote=False, max_batch_size=32) -> dict[int, Tensor]` | The same patch on the prompt's forward of `generate`, one invoke per block; `{layer: ids}`. |
+| `patch_object_attn_lens` | `patch_object_attn_lens(nn_model, source_prompts, target_prompts, attn_idx_patch: int, num_patches=5) -> LayerProbs` | `self_attn.input` at `attn_idx_patch` replaced by the source's last-token one in blocks `l..l+num_patches-1`, for every `l`. Raises `Unavailable` when a block has no `self_attn`. |
 
 ## `nnterp.prompt_utils`
 

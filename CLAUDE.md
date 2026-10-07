@@ -46,8 +46,9 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 ### "Does this checkpoint have that value?"
 - [docs/usage/availability.md](docs/usage/availability.md) — `model.support()` before the trace; `nnterp.Unavailable` at the read; the reasons you will see
 
-### "Skip layers, steer, logit lens, top-k tokens"
-- [docs/usage/methods.md](docs/usage/methods.md) — `skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`
+### "Skip layers, steer, logit lens, patchscopes, top-k tokens"
+- [docs/usage/methods.md](docs/usage/methods.md) — `skip_layer`, `skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`
+- [docs/usage/interventions.md](docs/usage/interventions.md) — `logit_lens`, `patchscope_lens`, `patchscope_generate`, `patch_object_attn_lens`: one call, a tensor back
 - [docs/patterns/logit-lens.md](docs/patterns/logit-lens.md), [docs/patterns/steering.md](docs/patterns/steering.md)
 
 ### "Qwen3-Next / Qwen3.5 / OLMo-Hybrid / Kimi-Linear: linear attention, the recurrent state"

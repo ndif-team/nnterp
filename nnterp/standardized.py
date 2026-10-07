@@ -97,7 +97,7 @@ class StandardizedTransformer(TransformersModel):
         **kwargs: Passed through to `TransformersModel`. ``task`` defaults to
             ``"text-generation"``.
 
-    Over the values, `skip_layers`, `steer`, `project_on_vocab` and
+    Over the values, `skip_layer`, `skip_layers`, `steer`, `project_on_vocab` and
     `get_topk_closest_tokens` do the common things (see each). Inside a
     trace `input_ids`, `input_size` and `attention_mask` are what the model
     was called with.
@@ -212,6 +212,10 @@ class StandardizedTransformer(TransformersModel):
         )
 
     # -- methods over the values (inside a trace unless said otherwise) ----------
+
+    def skip_layer(self, layer: int, skip_with: torch.Tensor | None = None) -> None:
+        """Skip block ``layer``: `skip_layers` over that one block."""
+        self.skip_layers(layer, layer, skip_with)
 
     def skip_layers(self, start: int, end: int, skip_with: torch.Tensor | None = None) -> None:
         """Skip blocks ``start`` through ``end`` inclusive.

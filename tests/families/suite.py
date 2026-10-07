@@ -20,6 +20,8 @@ from nnterp.components import (
     first_tensor,
 )
 from nnterp.components.standard import in_width
+from nnterp.interventions import logit_lens, patch_object_attn_lens, patchscope_generate, patchscope_lens, repeat_prompt
+from nnterp.nnsight_utils import get_token_activations
 
 PROMPT = "Hello world there"
 #: Two prompts for the batching checks: two invokes, or one invoke of both.
@@ -560,6 +562,66 @@ class FamilySuite:
         assert len(top) == 1 and len(top[0]) == 3
         assert all(isinstance(token, str) and 0 < p <= 1 for token, p in top[0].items())
         assert 0 < sum(top[0].values()) <= 1 + 1e-4
+
+    def test_skip_layer_is_skip_layers_over_one_block(self, model):
+        """On the last block, which no other block borrows keys and values from (Gemma-4's KV sharing)."""
+        last = model.num_layers - 1
+        with model.trace(PROMPT):
+            model.skip_layer(-1)
+            one = model.logits.save()
+        with model.trace(PROMPT):
+            model.skip_layers(last, last)
+            many = model.logits.save()
+        with model.trace(PROMPT):
+            clean = model.logits.save()
+        assert torch.equal(one, many) and not torch.equal(one, clean)
+
+    # -- interventions ---------------------------------------------------------------
+
+    def test_logit_lens_ends_at_the_models_prediction(self, model):
+        """One row per block, each `project_on_vocab` at the last token; the last block's is `next_token_probs`."""
+        probs, inv = logit_lens(model, PROMPTS, return_inv_logits=True)
+        with model.trace(PROMPTS):
+            middle = model.layers[1].layer_output[:, -1:].save()
+            expected = model.next_token_probs.save()
+        assert probs.shape == inv.shape == (len(PROMPTS), model.num_layers, model.vocab_size)
+        assert probs.device.type == "cpu"
+        torch.testing.assert_close(probs[:, -1], expected.cpu())
+        torch.testing.assert_close(probs[:, 1], model.project_on_vocab(middle)[:, 0].softmax(-1).cpu())
+        torch.testing.assert_close(inv[:, 1], model.project_on_vocab(-middle)[:, 0].softmax(-1).cpu())
+
+    def test_patchscope_lens_at_the_last_block_is_the_sources_prediction(self, model):
+        """The last block's stream at the patched (last) position decides the next token, so the target predicts what the source does."""
+        last = model.num_layers - 1
+        probs = patchscope_lens(model, PROMPTS, layers=[0, last])
+        with model.trace(PROMPTS):
+            expected = model.next_token_probs.save()
+        assert probs.shape == (len(PROMPTS), 2, model.vocab_size)
+        torch.testing.assert_close(probs[:, 1], expected.cpu())
+        latents = get_token_activations(model, PROMPTS, layers=[0, last])
+        torch.testing.assert_close(patchscope_lens(model, latents=latents, layers=[0, last]), probs)
+
+    def test_patchscope_generate(self, model):
+        target = repeat_prompt()
+        ids = model.tokenizer(target.prompt, return_tensors="pt").input_ids
+        last = model.num_layers - 1
+        generations = patchscope_generate(model, PROMPTS, target, max_length=2, layers=[0, last])
+        assert set(generations) == {0, last}
+        for out in generations.values():
+            assert out.device.type == "cpu" and out.shape == (len(PROMPTS), ids.shape[1] + 2)
+            assert torch.equal(out[:, : ids.shape[1]], ids.expand(len(PROMPTS), -1))
+
+    def test_patch_object_attn_lens(self, model):
+        """Patching a prompt's own attention inputs into itself changes nothing; without softmax attention on every block it is unavailable."""
+        if any(getattr(layer, "self_attn", None) is None for layer in model.layers):
+            with pytest.raises(Unavailable, match="no self_attn module"):
+                patch_object_attn_lens(model, PROMPT, PROMPT, attn_idx_patch=-1)
+            return
+        probs = patch_object_attn_lens(model, PROMPT, PROMPT, attn_idx_patch=-1, num_patches=2)
+        with model.trace(PROMPT):
+            expected = model.next_token_probs.save()
+        assert probs.shape == (1, model.num_layers, model.vocab_size)
+        torch.testing.assert_close(probs, expected.cpu()[:, None].expand_as(probs))
 
     # -- layouts -------------------------------------------------------------------
 

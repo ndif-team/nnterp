@@ -186,9 +186,7 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
   blocks would be plain `Envoy`s with no `layer_output`), detection of
   `reorder_and_upcast_attn` and of a sublayer that takes a `residual`
   argument (§2a "Load-time validation", §4 items 9-11).
-- **Interventions and display conveniences**: nnterp 1.x's `logit_lens`,
-  `patchscope_lens`, `patchscope_generate`, `patch_object_attn_lens`,
-  `TargetPrompt(Batch)`, `repeat_prompt`, `plot_topk_tokens`, `prompts_to_df`
+- **Display conveniences**: nnterp 1.x's `plot_topk_tokens`, `prompts_to_df`
   (§2b).
 - **VLMs**: `detect_automodel`, `text_only`, `StandardizedVLM`, `load_model`;
   nnterp hardcodes `task="text-generation"` and would need the same container

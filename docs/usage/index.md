@@ -39,7 +39,8 @@ model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_imp
 
 ## Doing things with them
 
-- [methods](methods.md) — `skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`, `probs_to_dict`.
+- [methods](methods.md) — `skip_layer`, `skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`, `probs_to_dict`.
+- [interventions](interventions.md) — `logit_lens`, `patchscope_lens`, `patchscope_generate`, `patch_object_attn_lens`: whole lenses in one call.
 - [generation](generation.md) — the values under `model.generate`: per forward call, `[batch, 1, ...]` on a decode step, `tracer.iter` picks the step.
 - [prompt-utils](prompt-utils.md) — `nnterp.prompt_utils`: target-token probability mass over many prompts.
 - [activations](activations.md) — `nnterp.nnsight_utils`: one position's activation at chosen blocks over many prompts.

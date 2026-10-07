@@ -1,10 +1,12 @@
 """Falcon-H1, end to end: a Mamba-2 mixer and attention side by side in every block, µP multipliers around them."""
 
+import pytest
 import torch
 from ssd import StateSpaceChecks
 from suite import LLAMA_ROWS, FamilySuite, PROMPT
 
 from nnterp.families import falcon_h1
+from nnterp.interventions import patchscope_generate, repeat_prompt
 
 
 class TestFalconH1(StateSpaceChecks, FamilySuite):
@@ -56,6 +58,21 @@ class TestFalconH1(StateSpaceChecks, FamilySuite):
             out = layer.layer_output.save()
         eps = torch.finfo(out.dtype).eps
         torch.testing.assert_close(x.float() + attn.float() + mlp.float(), out.float(), rtol=8 * eps, atol=8 * eps)
+
+
+    def test_patchscope_generate(self, model):
+        """This checkpoint generates one row at a time: transformers' own ``generate`` fails on a batch of two
+        (the cached keys come out one position short of the mask), with or without nnsight, so the patchscope
+        runs on one source and one block, and two rows fail the same way."""
+        if type(self) is not TestFalconH1:
+            return super().test_patchscope_generate(model)
+        target = repeat_prompt()
+        ids = model.tokenizer(target.prompt, return_tensors="pt").input_ids
+        last = model.num_layers - 1
+        out = patchscope_generate(model, PROMPT, target, max_length=2, layers=[last])[last]
+        assert out.shape == (1, ids.shape[1] + 2) and torch.equal(out[:, : ids.shape[1]], ids)
+        with pytest.raises(RuntimeError, match="must match the size"):
+            patchscope_generate(model, [PROMPT, PROMPT], target, max_length=2, layers=[last])
 
 
 class TestFalconH1GateInKernel(TestFalconH1):

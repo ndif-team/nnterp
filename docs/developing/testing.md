@@ -141,6 +141,16 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_skip_layers_with_a_given_stream` | `skip_with=zeros` makes block 0's output and block 1's input zero |
 | `test_steer` | the last position moves by `2 * vector`, the others are untouched, the logits move |
 | `test_project_on_vocab_is_the_logit_lens` | on the last block's output it equals `logits`; `get_topk_closest_tokens(k=3)` returns one dict of three token → probability entries summing to at most one |
+| `test_skip_layer_is_skip_layers_over_one_block` | `skip_layer(-1)` gives the logits of `skip_layers(last, last)`, which differ from the clean run's |
+
+**Interventions** (`nnterp.interventions`)
+
+| method | asserts |
+|---|---|
+| `test_logit_lens_ends_at_the_models_prediction` | `[2, num_layers, vocab]` on the CPU over two prompts; the last block's row is `next_token_probs`, block 1's is `project_on_vocab` of its last-token stream, and the inverse lens is `project_on_vocab(-hidden)` |
+| `test_patchscope_lens_at_the_last_block_is_the_sources_prediction` | patched at the last block, the target predicts each source's `next_token_probs`; passing `latents` from `get_token_activations` gives the same result |
+| `test_patchscope_generate` | one entry per block, each `[2, target_len + 2]` on the CPU, starting with the target's ids |
+| `test_patch_object_attn_lens` | a prompt's own attention inputs patched into itself leave `next_token_probs` unchanged at every block; with a block lacking `self_attn` it raises `Unavailable` |
 
 **Layouts** (`:445-485`)
 
@@ -292,6 +302,12 @@ is `[num_layers, num_prompts, hidden]` on the CPU and equals
 `layer_output[:, -1]`; it reads inside a caller's tracer; a positive index
 needs right padding; batched and one-at-a-time collection agree; the
 session collector agrees; `compute_next_token_probs` rows sum to one.
+
+`tests/test_interventions.py` (5 tests, the tiny Llama): `repeat_prompt`'s text
+and positions; `it_repeat_prompt` in the chat template, with and without the
+instruction turns; `TargetPromptBatch`'s constructors, indexing and `auto`;
+`logit_lens` refuses right padding; `patchscope_lens` refuses both or neither of
+`source_prompts` and `latents`, and a target count that does not match.
 
 ## Gotchas
 

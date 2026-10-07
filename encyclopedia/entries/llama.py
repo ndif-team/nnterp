@@ -30,7 +30,7 @@ CHECKPOINTS = [
     "HuggingFaceTB/SmolVLM2-2.2B-Instruct",  # model_type smolvlm
 ]
 
-#: The vision-language wrappers of this family, keyed by the wrapper's config.model_type. The tower comes
+#: The vision-language wrappers of this family, keyed by the wrapper's config.model_type. The vision encoder comes
 #: from the checkpoint's vision_config.model_type (encyclopedia/vision/); what a config does not say is here.
 WRAPPERS = {
     "llava": {
@@ -68,7 +68,7 @@ the images: `[576, hidden_size]` per image.
         "notes": """
 ## The projector reads five blocks
 
-`vision_feature_layers` is `[-2, -5, -8, -11, 6]` on `vip-llava-7b-hf`, indices into the tower's
+`vision_feature_layers` is `[-2, -5, -8, -11, 6]` on `vip-llava-7b-hf`, indices into the vision encoder's
 hidden states, where `0` is the stream entering block 0 and `k > 0` is block `k - 1`'s
 `layer_output`. So the projector reads `vision.layers[i].layer_output` of blocks 22, 19, 16, 13 and 5,
 each without its CLS token, concatenated on the last axis: `projector.input` is
@@ -97,7 +97,7 @@ torch.equal(fed, torch.cat([streams[j][:, 1:] for j in order], -1))   # True
 ## Crops as rows, and features that are not the projector's output
 
 The processor cuts an image into a base image and crops at a resolution from
-`image_grid_pinpoints`, each a row of the tower's batch, and the projector reads block -2 without
+`image_grid_pinpoints`, each a row of the vision encoder's batch, and the projector reads block -2 without
 the CLS token as on Llava 1.5 (`vision_feature_layer` is `-2` on `llava-v1.6-vicuna-7b-hf`). The
 wrapper then unpads the projector's output to the image's aspect ratio and appends
 `image_newline` after each row of patches, so `vision.image_features` has another row count than
@@ -129,7 +129,7 @@ at 384), the processor's `num_image_tokens`.
 ## Tiles as rows, pixel-shuffled into tokens
 
 The processor splits an image into tiles of `image_size` pixels and appends the whole image resized
-to one tile, each a row of the tower's batch. `model.connector` (the `projector`) reads
+to one tile, each a row of the vision encoder's batch. `model.connector` (the `projector`) reads
 `vision.tower_output`, folds each `scale_factor` × `scale_factor` block of neighbouring patches into one
 token, their widths concatenated, and projects it with `modality_projection`, a linear without bias.
 On `Idefics3-8B-Llama3` (`scale_factor` 2) a 364-pixel tile's 26 × 26 = 676 patches become 169 tokens;
@@ -151,7 +151,7 @@ tile's 729 patches become 81.
         "notes": """
 ## Idefics 3's layout, with a 3 × 3 shuffle
 
-SmolVLM keeps Idefics 3's tower, connector and merge: tiles as rows of the tower's batch, the
+SmolVLM keeps Idefics 3's vision encoder, connector and merge: tiles as rows of the vision encoder's batch, the
 connector reading `vision.tower_output`, and `vision.image_features` read at `inputs_merger`'s
 `image_hidden_states`, `model.projector.output` flattened. On `SmolVLM2-2.2B-Instruct` the
 `scale_factor` is 3, so a 384-pixel tile's 27 × 27 = 729 patches become 81 tokens.

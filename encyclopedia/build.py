@@ -122,16 +122,16 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "one-sublayer-blocks": ("One sublayer per block", "Each block is one norm and one sublayer, so it adds one contribution to the stream, and support() reports the hosts it does not hold missing on it."),
     # The vision side (docs/usage/vision.md). `vision` marks a family some of whose checkpoints carry a tower; a
     # vision-language checkpoint's page adds its tower's and its wrapper's slugs from the rest.
-    "vision": ("Vision-language", "Some checkpoints carry a vision tower: model.vision, its blocks, the projector, and the image values where the image enters the text model."),
-    "cls-token": ("CLS token", "The tower's stream carries a class token beside the patches (CLIP's first, Llama 4's last), so the patch axis is one longer than the patch grid."),
-    "packed-tower": ("Packed tower", "Every image's patches run in one row, [1, all patches, vision_hidden]; the processor's grid sizes split it."),
-    "variable-resolution": ("Variable resolution", "The tower takes images of any resolution, so vision.image_size raises Unavailable; each image's grid is in the processor's output."),
+    "vision": ("Vision-language", "Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model."),
+    "cls-token": ("CLS token", "The vision encoder's stream carries a class token beside the patches (CLIP's first, Llama 4's last), so the patch axis is one longer than the patch grid."),
+    "packed-tower": ("Packed vision encoder", "Every image's patches run in one row, [1, all patches, vision_hidden]; the processor's grid sizes split it."),
+    "variable-resolution": ("Variable resolution", "The vision encoder takes images of any resolution, so vision.image_size raises Unavailable; each image's grid is in the processor's output."),
     "padded-patches": ("Padded patches", "Each image's patches are padded to a fixed row count; the padded rows are masked as keys but run through every block, so they are rows of layer_output."),
-    "tiled-images": ("Tiled images", "The processor cuts an image into crops or tiles, each a row of the tower's batch."),
-    "deepstack": ("DeepStack", "Tower blocks feed the text model again after its first blocks: layers[k].deepstack_output is added at the image positions, outside the block."),
+    "tiled-images": ("Tiled images", "The processor cuts an image into crops or tiles, each a row of the vision encoder's batch."),
+    "deepstack": ("DeepStack", "Vision encoder blocks feed the text model again after its first blocks: layers[k].deepstack_output is added at the image positions, outside the block."),
     "unpadded-features": ("Unpadded features", "The wrapper unpads the projector's output and adds a newline token per row, so projector.output is not image_features."),
     "pooled-projector": ("Pooled projector", "The projector pools or pixel-shuffles neighbouring patches into one token, so an image has fewer tokens than patches."),
-    "encoder-free": ("Encoder-free", "No tower blocks: raw patches go through one embedder into the text stream, so vision.num_layers is 0."),
+    "encoder-free": ("Encoder-free", "No vision encoder blocks: raw patches go through one embedder into the text stream, so vision.num_layers is 0."),
 }
 
 #: The vision quirk slugs: a page shows them on a vision-language checkpoint, the index keeps them off its first filter row.
@@ -370,6 +370,8 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
 
     text_config = eager.config.get_text_config()
     config = text_config.to_dict()
+    # the checkpoint's own architectures (a wrapper's, on a vision-language checkpoint); the rest is the text model's
+    config["architectures"] = eager.config.architectures or config.get("architectures")
     config_rows = [(key, config[key]) for key in CONFIG_KEYS if key in config and config[key] is not None]
     layer_types = config.get("layer_types")
 
@@ -653,7 +655,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         terms = " + ".join(f"{sub['host']}.{sub['contribution']}" for sub in subs)
         identity = block_spec.get("identity", f"{base.removeprefix('model.')}.input + {terms} == layer_output")
         plus = "plus" if single else f"plus.{s}"
-        checked = "on this family" if stream == "residual stream" else "on every tower block"
+        checked = "on this family" if stream == "residual stream" else "on every vision encoder block"
         nodes[plus] = node("the add", identity, block_spec.get("identity_note", f"The contribution identity nnterp's suite checks {checked}."))
         drawn_shapes.append({"subs": list(shape), "mids": mids, "plus": plus, "identity": identity,
                              "label": " + ".join(sub["label"] for sub in subs)})
@@ -707,10 +709,10 @@ def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
     tower, wrapper = v["tower"], v["wrapper_fields"]
     root = {row["name"]: row for row in v["values"]["vision"]}
     layer = {row["name"]: row for row in v["values"]["layer"]}
-    blocks = value_node(layer["layer_output"], "the tower's blocks")
+    blocks = value_node(layer["layer_output"], "the vision encoder's blocks")
     blocks["extra"] = f"{v['block']['num_layers']} blocks of {v['layer_class']}; the one drawn below is any of them."
     nodes = {
-        "path.image": node("the image", "pixel_values", f"What the processor hands the tower. {tower['rows']}"),
+        "path.image": node("the image", "pixel_values", f"What the processor hands the vision encoder. {tower['rows']}"),
         "path.patch_embed": {**value_node(root["patch_embeddings"], "patch embedding"), "extra": tower["positions"]},
         "path.layers": blocks,
         "path.projector": node(
@@ -879,9 +881,16 @@ def quirks(entry: ModuleType) -> list[dict[str, str]]:
 #: A small eye, marking a vision-language checkpoint in the selector, the checkpoints ledger and the index.
 EYE = Markup('<svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false">'
              '<path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg>')
+#: The Hugging Face mark, monochrome in the ink: the selector's link to the shown checkpoint's Hub page.
+HF = Markup('<svg class="hf" viewBox="0 0 24 24" aria-hidden="true" focusable="false">'
+            '<circle cx="12" cy="10.5" r="8" fill="none" stroke="currentColor" stroke-width="1.6"/>'
+            '<circle cx="9.2" cy="8.9" r="1.15" fill="currentColor"/><circle cx="14.8" cy="8.9" r="1.15" fill="currentColor"/>'
+            '<path d="M8.6 12.4c.9 1.5 2 2.2 3.4 2.2s2.5-.7 3.4-2.2" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>'
+            '<path d="M2.8 17.6c1.1-1 2.6-.9 3.4.3l1.1 1.7M21.2 17.6c-1.1-1-2.6-.9-3.4.3l-1.1 1.7" fill="none" stroke="currentColor" '
+            'stroke-width="1.6" stroke-linecap="round"/></svg>')
 #: The parts of a family page built once per checkpoint, each a template macro in panes.html.j2; the page holds
 #: one copy per distinct rendering and shows the selected checkpoint's.
-PANES = ("chips", "block_head", "tower", "values", "printout", "sizes", "vision_notes", "quirk_list", "envoys")
+PANES = ("chips", "block_head", "tower", "values", "printout", "config", "vision_notes", "quirk_list", "envoys")
 
 
 def unavailable_reason(error: BaseException) -> str:
@@ -964,7 +973,8 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
     for shape in block.get("shapes", []):
         shape["identity_html"] = str(highlight_python(shape["identity"], roles))
     block["roles"] = {s.get("key", s["host"]): HOST_ROLES.get(s["host"], "mlp") for s in block["sublayers"]}
-    data: dict[str, Any] = {"schema": block, "nodes": nodes, "identity_html": str(highlight_python(block["identity"], roles)), "tower": None}
+    data: dict[str, Any] = {"schema": block, "nodes": nodes, "identity_html": str(highlight_python(block["identity"], roles)), "tower": None,
+                            "architecture": info["architecture"], "url": f"https://huggingface.co/{info['reference']}"}
     shown = list(family_quirks)
     model: dict[str, Any] = {**info, "block": block, "roles": roles, "ledgers": ledgers(info),
                              "eager_only": [row["name"] for row in info["support"] if row["condition"] and row["condition"]["kind"] == "eager"],
@@ -973,7 +983,7 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
     if v:
         tower, wrapper = v["tower"], v["wrapper_fields"]
         schema = block_schema(f"{entry.MODEL_TYPE} ({tower['slug']} tower)", tower["block"], v["block"],
-                              base="model.vision.layers[i]", stream="tower's stream")
+                              base="model.vision.layers[i]", stream="vision encoder's stream")
         tower_nodes = schema.pop("nodes")
         attention = next((key for key in tower_nodes if key.startswith("sub.") and "self_attn" in key), None)
         if attention:
@@ -1038,7 +1048,6 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
         })
     groups = [(label, [o for o in options if o["group"] == key])
               for key, label in (("text", "text"), ("vision", "vision-language"), ("unavailable", "not available"))]
-    pinned = [entry.PINNED] + [w["pinned"] for w in wrappers.values() if w["pinned"] != entry.PINNED]
     roles = models[default]["roles"]
     available = [models[o["id"]] for o in options if o["id"] in models]
     towers_found = list(dict.fromkeys(m["tower"]["title"] for m in available if m.get("tower")))
@@ -1052,13 +1061,13 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
         "options": options,
         "option_groups": [(label, items) for label, items in groups if items],
         "checkpoints": [{"id": o["id"], "url": o["url"]} for o in options],
-        "pinned": pinned,
         "vllm": getattr(entry, "VLLM", False),
         "quirks": family_quirks + ([quirk("vision", entry.MODEL_TYPE)] if towers_found else []),
         "notes": md(entry.NOTES, roles=roles),
         "docstring": md(info["docstring"], rst=True, roles=roles),
         "panes": panes,
         "eye": EYE,
+        "hf": HF,
         "identity_html": Markup(models[default]["data"]["identity_html"]),
         "checkpoints_json": embed_json({"default": default, "checkpoints": {cid: m["data"] for cid, m in models.items()}}),
         "blocks": sorted({m["num_layers"] for m in available}),

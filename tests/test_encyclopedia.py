@@ -134,9 +134,9 @@ def wrapped():
 
 
 @pytest.mark.parametrize("name, wrapper", wrapped())
-def test_a_wrapper_builds_its_tower(name, wrapper):
-    """The wrapper's pinned tiny checkpoint, selected on its family's page, brings the tower: the tower module is
-    found, its block is drawn with the tower's names, the vision ledgers carry the tower's values, and its sizes show."""
+def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
+    """The wrapper's pinned tiny checkpoint, selected on its family's page, brings the vision encoder: its module is
+    found, its block is drawn with the encoder's names, the vision ledgers carry its values, and its config shows."""
     entry = entries.load(name)
     tiny = entry.WRAPPERS[wrapper]["pinned"]
     page = build.build_page(entry, reference=entry.PINNED, checkpoints=[entry.PINNED, tiny])
@@ -161,23 +161,26 @@ def test_a_wrapper_builds_its_tower(name, wrapper):
         assert host in shown["values"], host
     for value in ("image_token_mask", "patch_embeddings", "tower_output", "image_features"):
         assert f">{value}</span>" in shown["values"], value
-    assert "Tower sizes" in shown["sizes"]
+    assert "Vision encoder config" in shown["config"]
     for size in build.TOWER_SIZE_NAMES:
-        assert f"model.vision.{size}</span>" in shown["sizes"], size
+        assert f"model.vision.{size}</span>" in shown["config"], size
+    assert "The vision encoder · " in shown["tower"]
+    assert vision["architecture"].endswith("ForConditionalGeneration") and text["architecture"] == "LlamaForCausalLM"
+    assert f'href="https://huggingface.co/{entry.PINNED}"' in page and 'id="ckpt-hub"' in page
+    assert f'href="https://huggingface.co/{tiny}"' not in page, "only the selected checkpoint is linked, by the script"
     assert "Vision-language" in shown["chips"] and "<h2>" in shown["vision_notes"]
     assert f'data-ckpt="{tiny}"' in page and 'data-vision="1"' in page
 
 
 def test_an_unreadable_checkpoint_is_listed_and_skipped():
-    """A checkpoint whose config cannot be read is not dropped: the selector greys it out with the reason, the
-    checkpoints ledger says why, it has no data, and the page builds from the others."""
+    """A checkpoint whose config cannot be read is not dropped: the selector greys it out with the reason, it has
+    no data, and the page builds from the others."""
     entry = entries.load("llama")
     missing = "nnterp-encyclopedia/no-such-checkpoint"
     page = build.build_page(entry, reference=entry.PINNED, checkpoints=[entry.PINNED, missing])
     assert missing not in embedded(page, "checkpoints-json")["checkpoints"]
     option = re.search(rf'<div class="ckpt-option"[^>]*data-ckpt="{missing}"[^>]*>', page, re.S)[0]
     assert 'aria-disabled="true"' in option and 'title="not available in the encyclopedia: ' in option
-    assert "not available in the encyclopedia: " in re.search(rf'data-ckpt-row="{missing}".*?</div>', page, re.S)[0]
     assert checkpoint_data(page)["schema"]["sublayers"]
 
 
@@ -197,8 +200,8 @@ def test_every_vision_host_in_nnterp_is_a_wrapper():
         assert suites and suites <= pinned_wrappers, (name, sorted(suites - pinned_wrappers))
 
 
-def test_vision_towers_are_complete():
-    """Every tower module has every field, and no two cover the same vision_config.model_type."""
+def test_vision_encoder_modules_are_complete():
+    """Every vision encoder module has every field, and no two cover the same vision_config.model_type."""
     import vision
 
     seen = {}

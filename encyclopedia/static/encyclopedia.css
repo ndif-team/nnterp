@@ -295,18 +295,18 @@ pre .rn { font-weight: 500; }
 .ckpt-option.is-active .ckpt-eye { color: var(--ink); }
 .ckpt-option[aria-selected="true"] { border-left-color: var(--ink); font-weight: 600; }
 .ckpt-option[aria-disabled="true"] { opacity: 0.42; cursor: not-allowed; }
-
-/* the checkpoints ledger: the shown row, and rows the encyclopedia cannot read */
-.ledger-row.is-selected { background: var(--tint); }
-.ledger-row.is-unavailable > a { opacity: 0.5; }
-.ckpt-reason { display: block; margin-top: 2px; font-size: 12.5px; }
-.chip[hidden] { display: none; }
+.ckpt-hub { display: inline-flex; color: var(--ink); opacity: 0.8; }
+.ckpt-hub:hover, .ckpt-hub:focus-visible { color: var(--ink); opacity: 1; }
+.ckpt-hub:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.hf { width: 18px; height: 18px; display: block; }
+/* a fold that holds a section's body or one of its parts */
+.fold-section { margin-top: 1.2rem; }
+.fold-section[open] > summary { margin-bottom: 1.2rem; }
+.tower-scope[open] > summary { margin-bottom: 1rem; }
 
 /* the tower, under the text block */
-.tower-scope { margin-top: clamp(36px, 4vw, 64px); padding-top: 1.2rem; border-top: 1.5px dashed var(--line); }
-.tower-scope .ttl-row { margin-top: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 14px; }
+.tower-scope { margin-top: clamp(28px, 3vw, 48px); }
 .ttl-row em { font-style: normal; color: var(--mark-deep); }
-.tower-scope .ttl-row .mono { font-family: var(--mono); font-weight: 400; font-size: 13px; }
 .tower-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 32px; margin: 0 0 1.4rem; }
 .tower-facts > div { border-top: 1px solid var(--hair); padding-top: 6px; }
 .tower-facts dt { opacity: 0.75; }

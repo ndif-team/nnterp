@@ -10,7 +10,7 @@
 {% block body %}
 <section class="hero frame">
   <div class="hero-text">
-    <p class="micro-lg eyebrow">family <span class="mono">{{ model_type }}</span> · <span class="mono">{{ architecture }}</span></p>
+    <p class="micro-lg eyebrow">family <span class="mono">{{ model_type }}</span> · <span class="mono" id="hero-architecture">{{ architecture }}</span></p>
     <h1 class="disp-title">{% for line in title.split(" / ") %}<span class="line">{{ line }}</span>{% endfor %}</h1>
     <p class="subtitle">{{ subtitle }}</p>
     {{ pane("chips") }}
@@ -31,30 +31,16 @@
           {% for o in items %}
           <div class="ckpt-option" role="option" id="ckpt-option-{{ o.id|replace('/', '--')|replace('.', '_') }}" data-ckpt="{{ o.id }}" data-name="{{ o.name }}"
                aria-selected="{{ 'true' if o.id == default else 'false' }}"{% if o.vision %} data-vision="1"{% endif %}
-               {% if o.reason %} aria-disabled="true" title="not available in the encyclopedia: {{ o.reason }}"{% else %} title="{{ o.id }}{% if o.vision %} · {{ o.wrapper }}, {{ o.tower }} tower{% endif %}"{% endif %}>
+               {% if o.reason %} aria-disabled="true" title="not available in the encyclopedia: {{ o.reason }}"{% else %} title="{{ o.id }}{% if o.vision %} · {{ o.wrapper }}, {{ o.tower }} vision encoder{% endif %}"{% endif %}>
             <span class="mono">{{ o.name }}</span>{% if o.vision %}<span class="ckpt-eye" aria-label="vision-language">{{ eye }}</span>{% endif %}
           </div>
           {% endfor %}
         </div>
         {% endfor %}
       </div>
+      <a class="ckpt-hub" id="ckpt-hub" href="{{ current.url }}" title="{{ current.id }} on the Hugging Face Hub" aria-label="{{ current.id }} on the Hugging Face Hub">{{ hf }}</a>
     </div>
   </aside>
-</section>
-
-<section class="frame ledger-block">
-  <details class="fold">
-    <summary><span class="micro">checkpoints</span></summary>
-    <div class="ledger">
-      <div class="ledger-head"><span>checkpoint</span><span>on the Hub</span><span class="hide-sm">role</span></div>
-      {% for o in options %}
-      <div class="ledger-row{% if o.reason %} is-unavailable{% endif %}" data-ckpt-row="{{ o.id }}"><a class="mono-md" href="{{ o.url }}">{{ o.name }}{% if o.vision %} <span class="ckpt-eye" title="vision-language: {{ o.wrapper }}, {{ o.tower }} tower">{{ eye }}</span>{% endif %}</a><span><a class="mono" href="{{ o.url }}">{{ o.id }}</a>{% if o.reason %}<span class="body-md dim ckpt-reason">not available in the encyclopedia: {{ o.reason }}</span>{% endif %}</span><span class="hide-sm">{% if o.id == default %}<span class="chip chip-sm chip-ink">default</span> {% endif %}<span class="chip chip-sm ckpt-shown"{% if o.id != default %} hidden{% endif %}>shown</span></span></div>
-      {% endfor %}
-      {% for p in pinned %}
-      <div class="ledger-row"><a class="mono-md" href="https://huggingface.co/{{ p }}">{{ p.split('/')[-1] }}</a><a class="mono" href="https://huggingface.co/{{ p }}">{{ p }}</a><span class="hide-sm"><span class="chip chip-sm">the test suite's</span></span></div>
-      {% endfor %}
-    </div>
-  </details>
 </section>
 
 <section class="frame section" id="block">
@@ -92,11 +78,16 @@
   <h3 class="ttl-row">Printout</h3>
   {{ pane("printout") }}
 
-  {{ pane("sizes") }}
+  <details class="fold fold-section">
+    <summary><span class="micro">config</span></summary>
+    {{ pane("config") }}
+  </details>
 </section>
 
 <section class="frame section" id="notes">
-  <div class="topbar"><h2 class="disp-section"><em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <details class="fold fold-section">
+  <summary><span class="micro">the notes and the quirks</span></summary>
   <div class="grid-notes">
     <div>
       <div class="prose">{{ notes }}</div>
@@ -106,6 +97,7 @@
       {{ pane("quirk_list") }}
     </aside>
   </div>
+  </details>
 </section>
 
 <section class="frame section" id="source">

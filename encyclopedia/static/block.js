@@ -7,7 +7,7 @@
 // The page holds every checkpoint's data (#checkpoints-json) and every checkpoint's panes (.pane, one
 // copy per distinct rendering, data-ckpts naming the checkpoints it is for). The selector in the hero
 // picks one: the panes swap, the block and its slider redraw, and on a vision-language checkpoint the
-// tower's block is drawn with the same code, its node ids prefixed "v:". The choice is the URL hash,
+// vision encoder's block is drawn with the same code, its node ids prefixed "v:". The choice is the URL hash,
 // #ckpt=<repo id>, read on load.
 (function () {
   var store = JSON.parse(document.getElementById('checkpoints-json').textContent);
@@ -323,29 +323,35 @@
     if (parseInt(slider.value, 10) > schema.num_layers - 1) slider.value = 0;
     buildTicks();
     update();
-    // the tower's block, in the tower pane now shown
-    var pane = towerPane();
-    if (pane && data.tower) {
-      var ts = data.tower.schema, tsvg = pane.querySelector('.tower-svg');
-      draw(tsvg, ts, shapesOf(ts)[0], TOWER);
-      ts.sublayers.forEach(function (sub) {
-        var d = tsvg.querySelector('[data-variant-for="' + keyOf(sub) + '"]');
-        if (d) fit(d, sub.detail);
-      });
-    }
-    // the selector, the checkpoints ledger and the colophon say which
+    drawTower();
+    // the selector, its Hub link, the hero's class and the colophon say which
     var option = optionOf(id);
     options.forEach(function (o) { o.setAttribute('aria-selected', o === option ? 'true' : 'false'); });
     document.getElementById('ckpt-name').textContent = option ? option.getAttribute('data-name') : id;
     document.getElementById('ckpt-eye').hidden = !(option && option.hasAttribute('data-vision'));
-    document.querySelectorAll('[data-ckpt-row]').forEach(function (row) {
-      var on = row.getAttribute('data-ckpt-row') === id;
-      row.classList.toggle('is-selected', on);
-      var chip = row.querySelector('.ckpt-shown');
-      if (chip) chip.hidden = !on;
-    });
+    var hub = document.getElementById('ckpt-hub');
+    hub.href = data.url;
+    hub.title = id + ' on the Hugging Face Hub';
+    hub.setAttribute('aria-label', hub.title);
+    document.getElementById('hero-architecture').textContent = data.architecture;
     document.getElementById('colophon-reference').textContent = id;
   }
+
+  // The vision encoder's block, in the pane now shown, once its fold is open (a closed fold has no layout to fit
+  // the detail lines in).
+  function drawTower() {
+    var pane = towerPane(), fold = pane && pane.querySelector('details');
+    if (!pane || !data.tower || (fold && !fold.open)) return;
+    var ts = data.tower.schema, tsvg = pane.querySelector('.tower-svg');
+    draw(tsvg, ts, shapesOf(ts)[0], TOWER);
+    ts.sublayers.forEach(function (sub) {
+      var d = tsvg.querySelector('[data-variant-for="' + keyOf(sub) + '"]');
+      if (d) fit(d, sub.detail);
+    });
+  }
+  document.addEventListener('toggle', function (ev) {
+    if (ev.target.open && ev.target.closest && ev.target.closest('.pane[data-pane="tower"]')) drawTower();
+  }, true);
 
   function fromHash() {
     var m = /^#ckpt=(.+)$/.exec(location.hash);

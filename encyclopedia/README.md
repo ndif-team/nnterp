@@ -33,16 +33,16 @@ rearrange them.
    the entry's `CHECKPOINTS`, text checkpoints first, then the vision-language ones, each marked with
    an eye, then any the build could not read, greyed out and not selectable, their hover saying
    "not available in the encyclopedia: <reason>". The list is a keyboard listbox (arrows, Home, End,
-   Enter, Escape). The page opens on `REFERENCE`; the choice is the URL hash, `#ckpt=<repo id>`, so
+   Enter, Escape). Under it, a small Hugging Face mark links to the shown checkpoint's Hub page. The
+   eyebrow's class is the shown checkpoint's (`LlavaForConditionalGeneration` on a Llava checkpoint).
+   The page opens on `REFERENCE`; the choice is the URL hash, `#ckpt=<repo id>`, so
    a link opens the page on a checkpoint. Switching does not reload: every part that depends on the
    checkpoint is in the page and the script swaps it. On a vision-language checkpoint the chips add
-   `Vision-language` and the tower's and the wrapper's slugs; the subtitle stays the family's.
+   `Vision-language` and the vision encoder's and the wrapper's slugs; the subtitle stays the family's.
    Nothing else: no layer count, no vLLM or eager stamps.
-2. **Checkpoints.** A collapsed fold. One row per checkpoint, the name and the Hub id both linking to
-   the Hub, the vision-language ones with an eye; the reference is tagged "default", the selected
-   row "shown", and a row the build could not read says why. The last rows are the suite's pinned
-   tiny checkpoints, the text one and each wrapper's, tagged "the test suite's".
-3. **The block** (`01`). The model-level strip (`embed_tokens → layers → norm → lm_head → logits`),
+   The selector is the page's list of checkpoints; the suite's pinned tiny checkpoints are not on the
+   page.
+2. **The block** (`01`). The model-level strip (`embed_tokens → layers → norm → lm_head → logits`),
    a slider over the blocks with one tick per block coloured by `config.layer_types` (by the block's
    shape on a family whose blocks come in several), and the block diagram: the residual stream as a
    vertical line, each sublayer as a row (pre-norm, the module with its interior values as chips,
@@ -55,46 +55,48 @@ rearrange them.
    range, its ticks and the diagram's sizes are the selected checkpoint's.
 
    On a vision-language checkpoint the strip's `embed` note adds that the projected image features
-   replace the image tokens' embeddings before block 0, and a sub-section **The tower** follows: the
-   image's path (`image → patch_embed → layers × N → norm`, where the tower has one, `→ projector →
+   replace the image tokens' embeddings before block 0, and a sub-section **The vision encoder** follows: the
+   image's path (`image → patch_embed → layers × N → norm`, where the vision encoder has one, `→ projector →
    image_features → layers[0].input`), each node's hover naming the nnterp value
    (`vision.patch_embeddings`, `vision.layers[i].layer_output`, `vision.tower_output`,
    `projector.input`/`.output`, `vision.image_features`, `vision.image_token_mask`); four facts of the
-   tower (what a row is, positions, masking, the final norm); and the tower's block, drawn by the same
-   code as the text block from the tower's `BLOCK`, with its own card and its identity. Hidden on a
-   text checkpoint.
-4. **The API** (`02`). In this order:
+   vision encoder (what a row is, positions, masking, the final norm); and the vision encoder's block, drawn by the same
+   code as the text block from the vision encoder's `BLOCK`, with its own card and its identity. It is a fold,
+   closed at first, whose summary names it (`The vision encoder · CLIP · CLIPVisionModel`); absent on
+   a text checkpoint.
+3. **The API** (`02`). In this order:
    - *Values, by host*: one ledger per host (`model`, `model.layers[i]`, `model.layers[i].self_attn`,
      ...) with every standard value's name, layout and dims, description and where it is read. A value
      the checkpoint has only under some load carries an amber `⚠` before its name; hovering it shows
      the condition in a popup.
    - *Printout*: `print(model)`, highlighted, without the native container (`model`, `transformer`,
      ...): the standard names on the root, the blocks collapsed to one (`(0-25): 26 x ...`), and the
-     root's values. On a wrapper the tower follows under `vision`, its native `encoder` left out the
+     root's values. On a wrapper the vision encoder follows under `vision`, its native `encoder` left out the
      same way.
-   - *Sizes*: the root sizes and, under a rule, the config keys they come from. On a vision-language
-     checkpoint a second card, *Tower sizes*: `model.vision.num_layers`, `hidden_size`, `num_heads`,
+   - *Config*, a fold closed at first: the root sizes and, under a rule, the config keys they come
+     from (`architectures` is the checkpoint's own, a wrapper's on a vision-language checkpoint; the
+     rest are the text config's). On a vision-language checkpoint a second card, *Vision encoder config*: `model.vision.num_layers`, `hidden_size`, `num_heads`,
      `head_dim`, `intermediate_size`, `patch_size`, `image_size` (`varies` where nnterp raises
      `Unavailable`).
 
-   On a vision-language checkpoint the ledgers go on with the tower's hosts (`model.vision`,
-   `model.vision.layers[i]`, `.self_attn`, `.mlp`), with the same `⚠` convention: the tower's
+   On a vision-language checkpoint the ledgers go on with the vision encoder's hosts (`model.vision`,
+   `model.vision.layers[i]`, `.self_attn`, `.mlp`), with the same `⚠` convention: the vision encoder's
    attention interior needs eager. Everything in this section is the selected checkpoint's.
-5. **Notes** (`03`). The entry's notes on the left, the quirks with their one-line explanations on
-   the right. On a vision-language checkpoint a *Vision* part follows the family's notes: the tower
-   module's `NOTES` under "The <tower> tower", then the wrapper's `notes` under its title; the quirk
+4. **The Notes** (`03`). A fold, closed at first, holding the entry's notes on the left, the quirks with their one-line explanations on
+   the right. On a vision-language checkpoint a *Vision* part follows the family's notes: the vision encoder
+   module's `NOTES` under "The <title> vision encoder", then the wrapper's `notes` under its title; the quirk
    list adds the vision slugs.
-6. **From the family module** (`04`). The family module's docstring, links to the module, its test
+5. **From the family module** (`04`). The family module's docstring, links to the module, its test
    file and the families table, and which envoy class wraps which module; on a vision-language
-   checkpoint also the tower's (`CLIPVisionModel → Vision`, ..., `LlavaModel → ImageScatter`). The
-   family's `RENAME` lines for the tower are not singled out.
+   checkpoint also the vision encoder's (`CLIPVisionModel → Vision`, ..., `LlavaModel → ImageScatter`). The
+   family's `RENAME` lines for the vision encoder are not singled out.
 
 The index lists every family in `nnterp.families.known()`: a card with the family's circles, title,
 subtitle and quirks for each entry (blocks as a range when its checkpoints differ; an eye and the
-towers found, `CLIP · SigLIP`, and the `Vision-language` chip when any checkpoint has a tower), a
+vision encoders found, `CLIP · SigLIP`, and the `Vision-language` chip when any checkpoint has a vision encoder), a
 stub for each family not written yet, a search box (title, `model_type`, architecture, Hub ids,
-quirks, towers, wrappers) and quirk filters: the text quirks and `Vision-language` on the first row,
-the towers on a second.
+quirks, vision encoders, wrappers) and quirk filters: the text quirks and `Vision-language` on the first row,
+the vision encoders on a second.
 
 ## Where each part comes from
 
@@ -105,18 +107,18 @@ the towers on a second.
   hue), and all syntax highlighting.
 - **Per checkpoint**, from a meta build of each: the sizes and config card, the slider's
   `num_layers` and `layer_types` (and the block's shapes), the `support()` rows and their `⚠`, the
-  printout, the colophon's reference, and on a vision-language wrapper which tower, its sizes, its
+  printout, the colophon's reference, and on a vision-language wrapper which vision encoder, its sizes, its
   `vision.*` rows and the wrapper's printout. **Shared**, the family's: the block schema, the
   vocabulary, the quirks, the notes and the family module section.
 - **Derived from the config**: a checkpoint loads with `task="image-text-to-text"` when its
   `config.model_type` is a key of transformers' `MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES` (the
   mapping is keyed by `model_type`) and of the entry's `WRAPPERS`; any other loads for text
-  generation, as before. The family must resolve to the entry's `MODEL_TYPE`. The tower is found by
+  generation, as before. The family must resolve to the entry's `MODEL_TYPE`. The vision encoder is found by
   `config.vision_config.model_type`, and the build asserts `type(model.vision._module).__name__` is
-  one of the tower's `MODULE_CLASSES`.
+  one of the vision encoder's `MODULE_CLASSES`.
 - **From the entry**, `entries/<model_type>.py`: the title and subtitle, the checkpoints, the block
   schema the diagram draws, the strip's notes, the quirk tags, the hue, the notes, and `WRAPPERS`.
-- **From a tower module**, `vision/<tower>.py`: what holds on every host of a tower.
+- **From a vision encoder module**, `vision/<tower>.py`: what holds on every host of a vision encoder.
 
 ## Writing an entry
 
@@ -226,13 +228,13 @@ The entry states facts about a family, and each one has a source. Before writing
    with nothing that departs from the plain block has `QUIRKS = []`.
 
    The vision slugs are not an entry's: a page adds them on a vision-language checkpoint, from the
-   tower module's `QUIRKS` and the wrapper's `quirks`, after `vision` (`Vision-language`: some
-   checkpoints carry a tower; the index's filter). The others, each one line in `build.QUIRKS` taken
+   vision encoder module's `QUIRKS` and the wrapper's `quirks`, after `vision` (`Vision-language`: some
+   checkpoints carry a vision encoder; the index's filter). The others, each one line in `build.QUIRKS` taken
    from `docs/usage/vision.md`: `cls-token` (a class token beside the patches), `packed-tower` (every
    image's patches in one row), `variable-resolution` (`image_size` raises `Unavailable`),
    `padded-patches` (padded rows run through every block), `tiled-images` (crops or tiles as rows),
    `deepstack` (`layers[k].deepstack_output`), `unpadded-features` (`projector.output` is not
-   `image_features`), `pooled-projector` (fewer image tokens than patches), `encoder-free` (no tower
+   `image_features`), `pooled-projector` (fewer image tokens than patches), `encoder-free` (no vision encoder
    blocks). The index keeps them off its first filter row.
 8. **`PALETTE`**: `{"hue": degrees}` is the base hue the five colours are generated from. Related
    families sit together: the first entry of a lineage sets a hue and adds it to the table below, and
@@ -266,32 +268,32 @@ The entry states facts about a family, and each one has a source. Before writing
     `config.model_type` (`"llava"`, `"idefics3"`, ...), each a dict of what a config does not say:
     - `title`: the wrapper's public name (`"Llava 1.5"`);
     - `pinned`: the tiny wrapper checkpoint the family's `VisionSuite` subclass runs on (its `REPO`);
-      the tests build the tower from it, and every `VisionSuite` `REPO` in the family's test file
+      the tests build the vision encoder from it, and every `VisionSuite` `REPO` in the family's test file
       must be some wrapper's `pinned`;
     - `projector`: one line, what feeds the projector and what it does;
     - `quirks` (optional): the wrapper's slugs (`tiled-images`, `unpadded-features`, ...);
     - `notes`: markdown, the wrapper's own facts: what the projector reads, what `tower_output`
       edits reach, image tokens per image, the scatter; checked on the pinned tiny wrapper, real
       numbers from a run or from `docs/patterns/image-pathway.md`;
-    - `tower` (optional): a tower's fields inline (below), for a tower only this family hosts.
+    - `tower` (optional): a vision encoder's fields inline (below), for a vision encoder only this family hosts.
 
-### Towers
+### Vision encoders
 
-A tower's facts that hold on every host live in `vision/<tower>.py` (`clip.py`, `siglip.py`), shared by
+A vision encoder's facts that hold on every host live in `vision/<tower>.py` (`clip.py`, `siglip.py`), shared by
 every family that hosts it; nothing wrapper- or checkpoint-specific goes there. A module declares:
 
 - `TITLE` (`"CLIP"`); `VISION_CONFIG_TYPES`, the `vision_config.model_type` values it covers (SigLIP's
   covers `siglip_vision_model` and the `idefics3`, `idefics3_vision`, `smolvlm_vision` Idefics 3 and
   SmolVLM report); `MODULE_CLASSES`, the class names `model.vision` may have;
-- `BLOCK`, the tower block in an entry's `BLOCK` format (`self_attn` and `mlp`, pre-norms
-  `input_layernorm`, `post_attention_layernorm`), its `detail` formatted with the tower's sizes and
+- `BLOCK`, the vision encoder block in an entry's `BLOCK` format (`self_attn` and `mlp`, pre-norms
+  `input_layernorm`, `post_attention_layernorm`), its `detail` formatted with the vision encoder's sizes and
   its `vision_config` keys;
 - `ROWS` (what a row of `Patches` and its patch axis are), `MASKING`, `POSITIONS`, `NORM` (whether the
-  final norm is `vision.norm`; the page draws a norm node where the built tower has one): a sentence
+  final norm is `vision.norm`; the page draws a norm node where the built vision encoder has one): a sentence
   or two each, code names in backticks;
 - `QUIRKS`, slugs from `build.QUIRKS`; `NOTES`, markdown, true on every host.
 
-A tower hosted by two or more families gets a module; a tower one family hosts stays inline, as
+A vision encoder hosted by two or more families gets a module; a vision encoder one family hosts stays inline, as
 `WRAPPERS[<wrapper>]["tower"]`, a dict with the same field names (`VISION_CONFIG_TYPES` may be left
 out). `vision.resolve` turns either form into one dict, so the build reads both the same way.
 
@@ -352,7 +354,7 @@ PYTHONPATH=. HF_HUB_OFFLINE=1 pytest tests/test_encyclopedia.py
 ```
 
 The test builds every entry's page from its pinned checkpoint and checks the schema against the
-family, builds each wrapper's tower from its pinned tiny wrapper, and checks that a checkpoint whose
+family, builds each wrapper's vision encoder from its pinned tiny wrapper, and checks that a checkpoint whose
 config cannot be read is listed and skipped. Then look at the page: a headless Chromium renders it to
 an image
 (`chrome --headless=new --no-sandbox --hide-scrollbars --window-size=1360,9000 --screenshot=page.png file://.../site/<model_type>.html`;
@@ -367,8 +369,8 @@ Add `#ckpt=<repo id>` to the URL to render it on another checkpoint, and render 
 - the values that carry a `⚠` are the ones that need a non-default load, and no value is missing
   from the ledgers;
 - the notes' code blocks are highlighted and nothing overflows the page at either width;
-- on a vision-language checkpoint, the tower's block reads in forward order, the image's path has a
-  norm node only where the tower has `vision.norm`, and the tower's ledgers, sizes and Vision notes
+- on a vision-language checkpoint, the vision encoder's block reads in forward order, the image's path has a
+  norm node only where the vision encoder has `vision.norm`, and the vision encoder's ledgers, sizes and Vision notes
   are there.
 
 ### Scope of one entry

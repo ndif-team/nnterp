@@ -1,7 +1,7 @@
-"""SigLIP's vision tower, and the SigLIP-shaped ViT of Idefics 3 and SmolVLM: patches only, a final norm over them."""
+"""SigLIP's vision encoder, and the SigLIP-shaped ViT of Idefics 3 and SmolVLM: patches only, a final norm over them."""
 
 TITLE = "SigLIP"
-#: Idefics 3 and SmolVLM report their own types for the same tower shape.
+#: Idefics 3 and SmolVLM report their own types for the same vision encoder shape.
 VISION_CONFIG_TYPES = ["siglip_vision_model", "idefics3", "idefics3_vision", "smolvlm_vision"]
 MODULE_CLASSES = ["SiglipVisionModel", "Idefics3VisionTransformer", "SmolVLMVisionTransformer"]
 
@@ -45,7 +45,7 @@ NOTES = """
 
 No class token: `vision.patch_embeddings`, every block's `layer_output` and `vision.tower_output` have
 the same length, `(image_size // patch_size) ** 2` patches per image or tile, in raster order. Row `r`,
-column `c` of the grid is index `r * (image_size // patch_size) + c` on every value of the tower.
+column `c` of the grid is index `r * (image_size // patch_size) + c` on every value of the vision encoder.
 
 ## The final norm is `vision.norm`
 

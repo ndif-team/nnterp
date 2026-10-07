@@ -1,4 +1,4 @@
-"""CLIP's vision tower: a class token before the patches, a norm before block 0, none over the patches after the last."""
+"""CLIP's vision encoder: a class token before the patches, a norm before block 0, none over the patches after the last."""
 
 TITLE = "CLIP"
 VISION_CONFIG_TYPES = ["clip_vision_model"]

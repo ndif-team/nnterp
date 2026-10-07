@@ -346,7 +346,7 @@ names bind but `image_features` is `Unavailable` and says so.
 | family | wrapper (`model_type`) | tower |
 | --- | --- | --- |
 | `gemma3_text` | Gemma 3 (`gemma3`) | SigLIP |
-| `gemma` | PaliGemma (`paligemma`) | SigLIP |
+| `gemma` | PaliGemma (`paligemma`; PaliGemma 2's `text_config` is `gemma2`, which binds no tower, so a PaliGemma 2 load has no `model.vision`) | SigLIP |
 | `qwen2` | llava-interleave (`llava`), LLaVA-OneVision (`llava_onevision`) | SigLIP |
 | `cohere2` | Aya Vision 8B (`aya_vision`), Cohere2-Vision (`cohere2_vision`) | SigLIP |
 | `llama` | Llava 1.5 (`llava`), VipLlava (`vipllava`), LLaVA-NeXT (`llava_next`) | CLIP |

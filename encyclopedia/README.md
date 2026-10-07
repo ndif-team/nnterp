@@ -268,7 +268,7 @@ The entry states facts about a family, and each one has a source. Before writing
 
    **Layouts that differ by checkpoint.** Where a family's checkpoints build different blocks from
    one class (Falcon-7B's one norm, Falcon-40B's `ln_attn` and `ln_mlp`, Falcon-RW's sequential block;
-   OPT's post-norm `opt-350m`), `BLOCK` is a list of `(predicate, block)` pairs, each `block` a dict as
+   OPT's post-norm `opt-350m`; StableLM-2-12B's parallel block under `use_parallel_residual`), `BLOCK` is a list of `(predicate, block)` pairs, each `block` a dict as
    above and each predicate a function of the checkpoint's text config; a checkpoint draws the first
    whose predicate holds, so end the list with `(lambda config: True, ...)` for the default. A callable
    of the config returning the dict does the same. Each checkpoint is drawn, checked and given its
@@ -285,7 +285,9 @@ The entry states facts about a family, and each one has a source. Before writing
 7. **`QUIRKS`**: slugs from `build.QUIRKS`, in the order a reader should meet them. If the family has
    a property none covers, add a slug there with a label and one sentence, worded so it holds for
    every family that will carry it (check the list first: another entry may have added it). A family
-   with nothing that departs from the plain block has `QUIRKS = []`.
+   with nothing that departs from the plain block has `QUIRKS = []`. The quirks are the family's and
+   show on every checkpoint: where only some checkpoints have the property (StableLM-2-12B's parallel
+   block and q/k norms), keep the slug and say which in the notes.
 
    The vision slugs are not an entry's: a page adds them on a vision-language checkpoint, from the
    vision encoder module's `QUIRKS` and the wrapper's `quirks`, after `vision` (`Vision-language`: some

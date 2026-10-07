@@ -199,13 +199,13 @@ to_image = pattern[0, :, -1, mask[0]].sum(-1)   # [heads]: each head's mass from
 Under `generate` the tower runs on the prompt call only. `vision.image_token_mask` is
 `[batch, prompt_len]` on step 0 and `[batch, 1]`, all false, on every decode step (the new
 token is text); `vision.image_features` and the tower's values have one occurrence, step 0's,
-so read them under `tracer.iter[0]` (the mask first), and an edit before any step lands on
+so read them on step 0 (`for step in tracer.iter[0]:`, the mask first), and an edit before any step lands on
 the prompt call:
 
 ```python
 masks = []
 with model.generate(prompt, images=[image], max_new_tokens=3, do_sample=False) as tracer:
-    with tracer.iter[0]:
+    for step in tracer.iter[0]:
         mask = model.vision.image_token_mask.save()                 # (1, 592), 576 true
         features = model.vision.image_features.save()               # (576, 4096)
     for step in tracer.iter[1:3]:

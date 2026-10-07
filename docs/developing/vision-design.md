@@ -342,7 +342,9 @@ What a trace takes on a wrapper:
   processor demands an image (pass the tokenizer's encoding there).
 
 An invoke carrying `pixel_values` cannot share a trace with another invoke (nnsight refuses
-it); several images or prompts go in one invoke, as lists. Two text-only invokes work.
+it); several images or prompts go in one invoke, as lists. Two text-only invokes work. Chat-message
+inputs with the image embedded batch through the pipeline, but the scatter runs once over the batch,
+so `image_features` is the whole batch's rows in every invoke (slicing it per invoke is open).
 
 ## The suite
 

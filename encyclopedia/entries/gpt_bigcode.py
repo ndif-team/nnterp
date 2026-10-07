@@ -19,7 +19,7 @@ CHECKPOINTS = [
 ]
 
 #: GPT-2's kin: GPT-2 hashes to 36.
-PALETTE = {"hue": 41}
+PALETTE = {"hue": 39}
 VLLM = False
 QUIRKS = ["position-embeddings", "layernorm", "fused-qkv"]
 

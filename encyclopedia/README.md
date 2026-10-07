@@ -27,15 +27,14 @@ build. A single entry's build writes its page and not the index. Open `encyclope
 Every family page has the same sections in the same order. An entry fills them; it does not
 rearrange them.
 
-1. **Hero.** `family <model_type> · <Architecture class>`, the title, a one-sentence subtitle, the
+1. **Hero.** `family <model_type>`, the title, a one-sentence subtitle, the
    quirk chips (each links to the notes), five overlapping circles in the family's five colours, and
    under them the **checkpoint selector**: a button naming the shown checkpoint that opens a list of
    the entry's `CHECKPOINTS`, text checkpoints first, then the vision-language ones, each marked with
    an eye, then any the build could not read, greyed out and not selectable, their hover saying
    "not available in the encyclopedia: <reason>". The list is a keyboard listbox (arrows, Home, End,
    Enter, Escape). Under it, the Hugging Face logo (`static/hf-logo.svg`, the official file with a
-   `viewBox` added so it scales) links to the shown checkpoint's Hub page. The
-   eyebrow's class is the shown checkpoint's (`LlavaForConditionalGeneration` on a Llava checkpoint).
+   `viewBox` added so it scales) links to the shown checkpoint's Hub page.
    The page opens on `REFERENCE`; the choice is the URL hash, `#ckpt=<repo id>`, so
    a link opens the page on a checkpoint. Switching does not reload: every part that depends on the
    checkpoint is in the page and the script swaps it. On a vision-language checkpoint the chips add
@@ -45,7 +44,8 @@ rearrange them.
    page.
 2. **The block** (`01`). The model-level strip (`embed_tokens → layers → norm → lm_head → logits`),
    a slider over the blocks with one tick per block coloured by `config.layer_types` (by the block's
-   shape on a family whose blocks come in several), and the block diagram: the residual stream as a
+   shape on a family whose blocks come in several; clicking a tick, or Enter or Space on it, selects
+   that block as the slider does), and the block diagram: the residual stream as a
    vertical line, each sublayer as a row (pre-norm, the module with its interior values as chips,
    post-norm) whose contribution returns to an `⊕` on the stream. A mixture of experts draws a panel
    each for the router, the routed experts and the shared expert inside its box. On a family with
@@ -247,7 +247,8 @@ The entry states facts about a family, and each one has a source. Before writing
    families sit together: the first entry of a lineage sets a hue and adds it to the table below, and
    its kin take one within about 15° of it (not equal) and add themselves to the row. A family with no kin leaves `PALETTE` out and
    gets a hash of its `model_type` (also listed below once an entry exists, so later kin can find it).
-   `"paper"` tints the page and is rarely needed. `"colors"` (five hex fills in role order: attention,
+   Entry agents working at the same time do not edit this table themselves: each reports the hue it
+   chose, and the table is updated in the next sweep. `"paper"` tints the page and is rarely needed. `"colors"` (five hex fills in role order: attention,
    MLP, norms, stream, mark) and `"deeps"` bypass generation; a palette that fails the contrast or
    distinctness checks fails the build.
 
@@ -262,8 +263,6 @@ The entry states facts about a family, and each one has a source. Before writing
    | EXAONE | hash of `exaone4` (46) | exaone4 |
    | GPT-J and CodeGen | hash of `gptj` (222) | gptj (codegen 234) |
    | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (granitemoe 215; `granite` hashes to 156, beside Gemma) |
-   | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron |
-   | Granite (granitemoe, granitemoeshared, granitemoehybrid, granite_swa, granitemoe_swa) | 205 | granite (`granite` hashes to 156, beside Gemma) |
    | Nemotron (`nemotron_h` is the hybrid line) | 262, the hash of `nemotron` | nemotron (nemotron_h 250) |
    | Kimi (kimi_k2, kimi_linear) | 330 | kimi_k2 (kimi_linear 342) |
    | Mamba (mamba2, falcon_mamba, jamba's Mamba blocks) | hash of `mamba` (17) | mamba |

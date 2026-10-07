@@ -213,6 +213,15 @@ assert model.family is gpt2
 displacing a family's type-keyed envoy takes a type key of your own
 ([custom-values.md](custom-values.md)).
 
+## Another engine's families
+
+`register(family, *model_types, engine="vllm")` registers a family for `StandardizedVLLM`, and
+`lookup(model_type, engine="vllm")` finds it; the shipped ones are the modules under
+`nnterp/families/vllm/`. The two engines' registries do not overlap: a family registered
+without `engine` is a transformers family. `StandardizedVLLM(repo_id, family=my_family)`
+skips that lookup for one load, as `family=` does on `StandardizedTransformer`. See
+[usage/vllm](../usage/vllm.md).
+
 ## Gotchas
 
 - **Register before loading.** `lookup` runs in `StandardizedTransformer.__init__`; a

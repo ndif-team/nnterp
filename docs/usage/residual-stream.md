@@ -30,6 +30,10 @@ holds on a sequential block and a parallel block alike:
 layers[i].input + attention_output + mlp_output == layers[i].layer_output
 ```
 
+`layers[i].layer_input` is the same tensor as `layers[i].input` under a standard name: the
+stream entering the block. On the vLLM engine, where a block is not called with the stream,
+it is the only spelling that works ([vllm](vllm.md)).
+
 Raw nnsight `.output` on the same modules does not have that meaning everywhere: a block
 may return a tuple, an attention module returns `(attn_output, attn_weights)`, a sandwich
 block adds a norm's output rather than the module's, and some modules add the residual

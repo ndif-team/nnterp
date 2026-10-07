@@ -91,8 +91,9 @@ without blocks too: `model.model.embed_audio`, native, and no `audio_tower`.
 
 | value | host | layout | meaning |
 | --- | --- | --- | --- |
+| `layer_input` | `vision.layers[i]` | `Patches` | the tower's stream entering the block, before its norms (a packed tower's with the leading 1) |
 | `layer_output` | `vision.layers[i]` | `Patches` | the tower's stream leaving the block |
-| `attention_output`, `mlp_output` | `vision.layers[i].self_attn`, `.mlp` | `Patches` | what each sublayer adds: `input + attention_output + mlp_output == layer_output` |
+| `attention_output`, `mlp_output` | `vision.layers[i].self_attn`, `.mlp` | `Patches` | what each sublayer adds: `layer_input + attention_output + mlp_output == layer_output` |
 | `attention_probabilities`, `attention_queries`, ... | `vision.layers[i].self_attn` | `Pattern`, `Queries`, ... | as on a text block, the `batch` axis being the tower's rows; no causal mask (Pixtral masks between packed images, Gemma 4 masks its padded keys); needs eager (the Qwen ViT's: [below](#the-qwen-vit)) |
 | `patch_embeddings` | `vision` | `Patches` | the patch embedding's output, one row per patch, before any position embedding, CLS token or pre-norm |
 | `tower_output` | `vision` | `Patches` | the last block's stream after `vision.norm` where there is one, before any pooling, CLS dropping or adapter (on the Qwen ViT, which has no final norm, the last block's `layer_output`, served at the tower's output, after the merger) |
@@ -252,7 +253,7 @@ Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3-VL-MoE, Qwen3.5 and Qwen3.5-MoE share one 
 concatenated, and its attention calls the interface once per image (once per window on
 Qwen2.5-VL's windowed blocks). So:
 
-- Its `Patches` values (`patch_embeddings`, `tower_output`, `layer_output`,
+- Its `Patches` values (`patch_embeddings`, `tower_output`, `layer_input`, `layer_output`,
   `attention_output`, `mlp_output`) are `[1, patches, vision_hidden]`: the packed tensor with
   a leading images axis of 1, a view, so in-place edits land; assign the same shape.
   `vision.layers[i].output` stays the native `[patches, vision_hidden]`.

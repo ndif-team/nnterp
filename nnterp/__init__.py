@@ -23,6 +23,9 @@ checkpoint loaded with ``task="image-text-to-text"`` the vision tower is
 ``model.vision`` (its blocks ``model.vision.layers[i]``, its values
 ``model.vision.image_token_mask`` and ``model.vision.image_features``) and the
 projector ``model.projector``.
+
+`StandardizedVLLM` is the same over nnsight's ``VLLM`` engine, with vLLM's own
+implementation of each family under `nnterp.families.vllm`.
 """
 
 try:
@@ -40,11 +43,13 @@ from .components import (
     StateSpace, Unavailable, Vision, chunk_per_token, route_delta_rule, route_kernels, unavailable,
 )
 from .families import UnsupportedFamily
-from .standardized import StandardizedTransformer
+from .standardized import Standardized, StandardizedTransformer
+from .standardized_vllm import StandardizedVLLM
 
 __all__ = [
     "Attention", "DerivedEProperty", "EProperty", "Layer", "LinearAttention", "Mlp", "Moe", "RecurrentMixer", "SelectiveScan",
-    "Standard", "StandardizedTransformer", "StateSpace", "Unavailable", "UnsupportedFamily", "Vision", "chunk_per_token",
+    "Standard", "Standardized", "StandardizedTransformer", "StandardizedVLLM", "StateSpace", "Unavailable", "UnsupportedFamily", "Vision",
+    "chunk_per_token",
     "route_delta_rule", "route_kernels",
     "unavailable",
 ]

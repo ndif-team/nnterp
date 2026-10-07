@@ -37,7 +37,8 @@ class EProperty(eproperty):
 
     Args:
         key: Where the value lives, relative to the host envoy: dotted segments
-            ending in ``output``, ``input`` or ``inputs``. ``"output"`` is the
+            ending in ``output``, ``input`` or ``inputs``, or in another value
+            the module at that point serves (an engine's ``logits``). ``"output"`` is the
             host's own output. A leading ``"/"`` anchors the path at the
             model's root instead (``envoy.root``), walked down from there as a
             relative path is, aliases included: ``"/inputs"`` is the model's
@@ -183,7 +184,7 @@ class EProperty(eproperty):
 
     @staticmethod
     def attribute(key: str) -> str:
-        """The served attribute a path ends in: ``output``, ``input`` or ``inputs``."""
+        """The served attribute a path ends in: ``output``, ``input``, ``inputs``, or another an engine serves (``logits``)."""
         return key.rsplit("/", 1)[-1].rsplit(".", 1)[-1]
 
     def _resolve(self, obj: Envoy, key: str) -> str:
@@ -197,7 +198,8 @@ class EProperty(eproperty):
         while key.startswith("../"):
             up, key = up + 1, key[3:]
         *walk, attribute = key.split(".")
-        attribute = "input" if attribute in ("input", "inputs") else "output"
+        if attribute == "inputs":  # the same location as ``input``, served whole
+            attribute = "input"
         if up:
             # Above the host the path is arithmetic on names: the parent's
             # forward, when the path goes into it, is instrumented already

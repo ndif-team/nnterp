@@ -128,6 +128,9 @@ itself under the model type (`families.register(default, "<model_type>")`) and l
 `family=`. On a vision-language wrapper the passed family carries the wrapper's and the
 vision tower's names, as the text family it stands in for does
 ([registering](../extending/registering.md#passing-a-family-at-load)).
+`StandardizedVLLM(repo_id, family=my_family)` takes one the same way, a family written
+against vLLM's module classes in place of `lookup(model_type, engine="vllm")`
+([vllm](vllm.md#adding-a-vllm-family)).
 
 ## Passing an already-loaded module
 

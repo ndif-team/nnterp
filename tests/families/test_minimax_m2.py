@@ -26,10 +26,12 @@ def _grouped_checkpoint(repo="hf-tiny-v2/tiny-random-MiniMaxM2ForCausalLM"):
     """A randomly initialised checkpoint in the released models' shape, with the tiny checkpoint's tokenizer.
 
     The tiny checkpoint has as many kv heads as heads, ``head_dim == hidden_size //
-    num_heads`` and a full rotary; MiniMax-M2.5 has 8 kv heads for 48, ``head_dim``
-    128 on a 3072 residual and a half-width rotary (``rotary_dim`` 64). This copy
-    has 2 kv heads for 4, ``head_dim`` 16 on a 32 residual and
-    ``partial_rotary_factor`` 0.5.
+    num_heads`` and a full rotary; MiniMax-M2.5 has 8 kv heads for 48 and ``head_dim``
+    128 on a 3072 residual, and its Hub config sets ``rotary_dim`` 64 (a half-width
+    rotary), which transformers 5.17's native ``MiniMaxM2Config`` does not carry into
+    ``rope_parameters``, so a native load rotates the whole head. This copy has 2 kv
+    heads for 4, ``head_dim`` 16 on a 32 residual and ``partial_rotary_factor`` 0.5,
+    to exercise a partial rotary.
     """
     from transformers import AutoConfig, AutoModelForCausalLM
 

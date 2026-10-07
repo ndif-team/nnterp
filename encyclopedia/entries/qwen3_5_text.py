@@ -64,7 +64,7 @@ on 0.8B, 24 of width 1024 on 2B and 4B, 27 of width 1152 on 9B and 27B.
 #: The Qwen lineage sits at 285 (qwen2) and 297 (qwen3); this family takes 273.
 PALETTE = {"hue": 273}
 VLLM = False
-QUIRKS = ["hybrid", "gated-query", "qk-norm", "partial-rotary", "gain-norm"]
+QUIRKS = ["hybrid", "gated-query", "qk-norm", "partial-rotary", "gain-norm", "multimodal-rotary"]
 
 #: Real-value numbers below come from runs on Qwen3.5-0.8B (float32) and Qwen3.5-9B (bfloat16), with
 #: transformers' pure-torch DeltaNet kernels (flash-linear-attention and causal-conv1d not installed).

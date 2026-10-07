@@ -70,7 +70,7 @@ block's `layer_output`, then `model.projector.input` and `.output`, then `vision
 #: The Qwen lineage sits at 285 (qwen2), 297 (qwen3) and 273 (qwen3_5_text); this family takes 255.
 PALETTE = {"hue": 255}
 VLLM = False
-QUIRKS = ["hybrid", "gated-query", "mixture-of-experts", "qk-norm", "partial-rotary", "gain-norm"]
+QUIRKS = ["hybrid", "gated-query", "mixture-of-experts", "qk-norm", "partial-rotary", "gain-norm", "multimodal-rotary"]
 
 #: No checkpoint of this family is under 3B parameters, so no real-weight run backs the notes: shapes, identities and
 #: read orders are from the pinned tiny checkpoint (as the text model and as the wrapper), sizes from the configs.

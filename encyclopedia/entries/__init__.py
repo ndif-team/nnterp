@@ -5,9 +5,9 @@ An entry declares::
     MODEL_TYPE   the family's model_type (the module's name)
     TITLE        the page title
     SUBTITLE     one sentence under it
-    REFERENCE    the public checkpoint whose config the page is built from (sizes, support())
+    REFERENCE    the public checkpoint the page opens on
     PINNED       the tiny checkpoint the tests build the page from
-    CHECKPOINTS  public checkpoints of this family, linked from the page
+    CHECKPOINTS  public checkpoints of this family, the choices of the page's selector, each built from its config
     PALETTE      {"hue": degrees} picks the base hue the five colours are generated from, or
                  {"colors": [five hex fills], "deeps": [five hex, optional]} gives them outright;
                  "paper" tints the page; any may be left out (the hue then hashes the model_type)
@@ -18,6 +18,8 @@ An entry declares::
                  repo id alone does not build on the meta device
     STRIP        notes on the model-level strip, keyed embed / layers / norm / head / logits
     NOTES        markdown: the open-form notes for interpretability
+    WRAPPERS     optional: the family's vision-language wrappers by config.model_type, each {title, pinned,
+                 projector, quirks?, notes, tower?}; the tower's own facts are in encyclopedia/vision/
 
 ``load_all`` imports every module here but this one.
 """

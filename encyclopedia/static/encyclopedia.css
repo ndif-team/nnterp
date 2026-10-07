@@ -318,6 +318,23 @@ pre .rn { font-weight: 500; }
 .ckpt-hub:hover, .ckpt-hub:focus-visible { color: var(--ink); opacity: 1; }
 .ckpt-hub:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
 .hf { height: 28px; width: auto; display: block; }
+/* the selected checkpoint's size and age, from the Hub, under the selector */
+.ckpt-facts { display: flex; flex-direction: column; align-items: flex-end; gap: 2px; margin: 0; text-align: right; }
+.ckpt-facts b { font-weight: 500; }
+
+/* the sticky bar: past the hero, the family's name and the checkpoint selector stay at the top */
+.stickybar { position: fixed; top: 0; left: 0; right: 0; z-index: 45; background: var(--paper); border-bottom: 1.5px solid var(--line);
+  transform: translateY(-100%); visibility: hidden; transition: transform 0.18s ease, visibility 0s linear 0.18s; }
+.stickybar.is-shown { transform: none; visibility: visible; transition: transform 0.18s ease, visibility 0s; }
+.stickybar-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding-top: 7px; padding-bottom: 7px; }
+.stickybar-title { flex: 1 1 auto; min-width: 0; font-family: var(--disp); font-weight: 900; font-size: clamp(20px, 1.8vw, 26px); line-height: 1.1; letter-spacing: -0.005em;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.stickybar .ckpt { flex: none; flex-direction: row; align-items: center; gap: 10px; }
+.stickybar .ckpt-button { min-width: 0; width: clamp(170px, 24vw, 300px); padding-top: 6px; padding-bottom: 6px; }
+.stickybar .ckpt-list { right: 0; left: auto; max-height: min(70vh, 480px); }
+/* the parts that stick to the top sit under the bar */
+body:has(.stickybar) .node-card, body:has(.stickybar) .quirk-list { top: 72px; }
+body:has(.stickybar) .section { scroll-margin-top: 56px; }
 /* a fold that holds a vision part: its summary carries a styled title and a micro tag */
 .fold-titled > summary { justify-content: flex-start; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
 .fold-titled > summary h2, .fold-titled > summary h3 { margin: 0; }
@@ -347,7 +364,6 @@ pre .rn { font-weight: 500; }
 .card-fold-mark::before { content: '+'; font-family: var(--disp); font-weight: 900; font-size: 20px; line-height: 1; }
 .card-fold[open] > summary .card-fold-label { visibility: hidden; }
 .card-fold[open] .card-fold-mark::before { content: '×'; }
-.card-tower .topstrip { background: var(--stream); }
 
 /* the vision part of the notes */
 .vision-notes { margin-top: 2.6rem; }
@@ -355,9 +371,27 @@ pre .rn { font-weight: 500; }
 .vision-notes .prose > h2:first-child { margin-top: 0.4rem; }
 .prose h3 { font-family: var(--disp); font-weight: 700; font-size: clamp(21px, 1.8vw, 28px); line-height: 1.05; margin: 1.6rem 0 0.5rem; }
 
-/* the index: the tower filters under the quirks */
-.filters-towers { margin-top: -0.8rem; }
-.filters-towers .micro { align-self: center; margin-right: 6px; opacity: 0.75; }
+/* the index: the filters in labelled groups, org, quirks, vision encoders */
+/* each row a fold, closed at first: the label opens it, with the page's + / ×, and counts the filters on in it */
+.filter-group { border-top: 1px solid var(--hair); }
+.filter-group:last-child { border-bottom: 1px solid var(--hair); margin-bottom: 1.4rem; }
+.filter-label { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer; }
+.filter-label::-webkit-details-marker { display: none; }
+.filter-label::before { content: '+'; font-family: var(--disp); font-weight: 900; font-size: 18px; line-height: 1; width: 12px; color: var(--mark-deep); }
+.filter-group[open] > .filter-label::before { content: '×'; }
+.filter-label:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.filter-label .eye { margin-right: 2px; }
+.filter-count { background: var(--mark); color: var(--ink); padding: 3px 7px; font-family: var(--mono); letter-spacing: 0.04em; }
+.filter-count:empty { display: none; }
+.filter-group .filters { margin: 0 0 12px; }
+/* a card's org: its logo, the name in the image's alt and title */
+.org-logo { display: inline-flex; border: 1.5px solid var(--line); background: var(--paper); flex: none; }
+.org-logo img { width: 22px; height: 22px; display: block; object-fit: cover; }
+/* an org: its Hub avatar and its display name, as a filter and on a card */
+.chip-org { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 3px; text-transform: none; letter-spacing: 0.02em; }
+.chip-org img { width: 18px; height: 18px; display: block; object-fit: cover; background: var(--paper); flex: none; }
+.chip-org.no-avatar { padding-left: 9px; }
+.card-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 8px; }
 .spec .eye { margin-right: 4px; }
 
 @media (max-width: 900px) {
@@ -374,4 +408,9 @@ pre .rn { font-weight: 500; }
   .ckpt { align-items: flex-start; }
   .ckpt-list { left: 0; right: auto; }
   .tower-facts { grid-template-columns: 1fr; }
+  .ckpt-facts { align-items: flex-start; text-align: left; }
+}
+@media (max-width: 560px) {
+  .stickybar .ckpt-label { display: none; }
+  .stickybar .ckpt-button { width: min(200px, 52vw); }
 }

@@ -7,7 +7,35 @@
 {# One copy of each distinct rendering of a per-checkpoint part; the page's script shows the selected checkpoint's. #}
 {% macro pane(name) %}{% for p in panes[name] %}<div class="pane" data-pane="{{ name }}" data-ckpts="{{ p.ckpts|join(' ') }}"{% if not p.shown %} hidden{% endif %}>{{ p.html }}</div>{% endfor %}{% endmacro %}
 
+{# The checkpoint selector: a button and its listbox. The page has two, the hero's and the sticky bar's, over one
+   selected checkpoint (block.js); `prefix` keeps their ids apart, and the caller adds what sits under the button. #}
+{% macro selector(prefix, current) %}
+<div class="ckpt" id="{{ prefix }}ckpt" data-selector>
+  <span class="micro ckpt-label" id="{{ prefix }}ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="{{ prefix }}ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="{{ prefix }}ckpt-list" aria-labelledby="{{ prefix }}ckpt-label {{ prefix }}ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="{{ prefix }}ckpt-name">{{ current.name }}</span><span class="ckpt-eye ckpt-eye-current" id="{{ prefix }}ckpt-eye"{% if not current.vision %} hidden{% endif %}>{{ eye }}</span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="{{ prefix }}ckpt-list" role="listbox" tabindex="-1" aria-labelledby="{{ prefix }}ckpt-label" hidden>
+    {% for label, items in option_groups %}
+    <div class="ckpt-group" role="group" aria-labelledby="{{ prefix }}ckpt-group-{{ loop.index }}">
+      <p class="micro ckpt-group-label" id="{{ prefix }}ckpt-group-{{ loop.index }}">{{ label }}</p>
+      {% for o in items %}
+      <div class="ckpt-option" role="option" id="{{ prefix }}ckpt-option-{{ o.id|replace('/', '--')|replace('.', '_') }}" data-ckpt="{{ o.id }}" data-name="{{ o.name }}"
+           aria-selected="{{ 'true' if o.id == default else 'false' }}"{% if o.vision %} data-vision="1"{% endif %}
+           {% if o.reason %} aria-disabled="true" title="not available in the encyclopedia: {{ o.reason }}"{% else %} title="{{ o.id }}{% if o.vision %} · {{ o.wrapper }}, {{ o.tower }} vision encoder{% endif %}"{% endif %}>
+        <span class="mono">{{ o.name }}</span>{% if o.vision %}<span class="ckpt-eye" aria-label="vision-language">{{ eye }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {{ caller() if caller }}
+</div>
+{% endmacro %}
+
 {% block body %}
+{% set current = options|selectattr('id', 'equalto', default)|first %}
 <section class="hero frame">
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">{{ model_type }}</span></p>
@@ -17,31 +45,20 @@
   </div>
   <aside class="hero-side">
     <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
-    {% set current = options|selectattr('id', 'equalto', default)|first %}
-    <div class="ckpt" id="ckpt">
-      <span class="micro ckpt-label" id="ckpt-label">checkpoint</span>
-      <button type="button" class="ckpt-button" id="ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="ckpt-list" aria-labelledby="ckpt-label ckpt-button">
-        <span class="ckpt-current"><span class="mono-md" id="ckpt-name">{{ current.name }}</span><span class="ckpt-eye" id="ckpt-eye"{% if not current.vision %} hidden{% endif %}>{{ eye }}</span></span>
-        <span class="ckpt-caret" aria-hidden="true">▾</span>
-      </button>
-      <div class="ckpt-list" id="ckpt-list" role="listbox" tabindex="-1" aria-labelledby="ckpt-label" hidden>
-        {% for label, items in option_groups %}
-        <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-{{ loop.index }}">
-          <p class="micro ckpt-group-label" id="ckpt-group-{{ loop.index }}">{{ label }}</p>
-          {% for o in items %}
-          <div class="ckpt-option" role="option" id="ckpt-option-{{ o.id|replace('/', '--')|replace('.', '_') }}" data-ckpt="{{ o.id }}" data-name="{{ o.name }}"
-               aria-selected="{{ 'true' if o.id == default else 'false' }}"{% if o.vision %} data-vision="1"{% endif %}
-               {% if o.reason %} aria-disabled="true" title="not available in the encyclopedia: {{ o.reason }}"{% else %} title="{{ o.id }}{% if o.vision %} · {{ o.wrapper }}, {{ o.tower }} vision encoder{% endif %}"{% endif %}>
-            <span class="mono">{{ o.name }}</span>{% if o.vision %}<span class="ckpt-eye" aria-label="vision-language">{{ eye }}</span>{% endif %}
-          </div>
-          {% endfor %}
-        </div>
-        {% endfor %}
-      </div>
+    {% call selector("", current) %}
+      {{ pane("hub") }}
       <a class="ckpt-hub" id="ckpt-hub" href="{{ current.url }}" title="{{ current.id }} on the Hugging Face Hub" aria-label="{{ current.id }} on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
-    </div>
+    {% endcall %}
   </aside>
 </section>
+
+{# Past the hero, a bar at the top keeps the family's name and the checkpoint selector in reach. #}
+<div class="stickybar" id="stickybar" aria-hidden="true">
+  <div class="frame stickybar-row">
+    <span class="stickybar-title">{{ title|replace(" / ", " · ") }}</span>
+    {% call selector("bar-", current) %}{% endcall %}
+  </div>
+</div>
 
 <section class="frame section" id="block">
   <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>

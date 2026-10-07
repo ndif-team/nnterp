@@ -10,6 +10,8 @@ SUBTITLE = (
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 #: Every CohereLabs repository is gated; this is an ungated copy of c4ai-command-r7b-12-2024 (its card names that base).
 REFERENCE = "mlx-community/c4ai-command-r7b-12-2024-bf16"
+#: The Hub org the index files the family under: the copy is mlx-community's; the model is CohereLabs'.
+ORG = "CohereLabs"
 #: The tiny checkpoint the test suite builds the page from.
 PINNED = "trl-internal-testing/tiny-Cohere2ForCausalLM"
 CHECKPOINTS = [

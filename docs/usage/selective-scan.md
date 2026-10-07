@@ -87,8 +87,14 @@ to its own pure-torch function, process-wide:
   transformers' pure-torch mamba_selective_scan, but this process dispatches
   it to an optimized kernel (mamba_ssm) with no Python source; uninstall it, or
   call nnterp.route_kernels(model.family, 'torch'), to read these`.
-- Route before the layer's forward is traced; `route_kernels(family,
-  "default")` restores the module's own bindings. `family` is the family
+- Route before the first trace that reads a value inside the mixer: the first
+  such read fixes the kernel the instrumented forward calls, and a plain trace
+  before it (a `layer_output` read on a GPU) does not. On CPU route before any
+  trace, since the unrouted kernels fail there (`Expected u.is_cuda()`).
+  `route_kernels(family, "default")` restores the module's own bindings.
+- `model.train()` takes another path, the fused `mamba_inner_fn`, which
+  `route_kernels` does not reroute: a training-mode trace fails without
+  `causal-conv1d` (`causal_conv1d_cuda is not available`), routed or not. `family` is the family
   module (`nnterp.families.mamba`, `falcon_mamba`, `jamba`) or `model.family`.
 
 ## The values
@@ -181,9 +187,9 @@ before `t`".
 
 ## Gotchas
 
-- **Route before the first trace.** With `mamba_ssm` installed nothing runs on
-  CPU and nothing inside the kernels is readable until `route_kernels(family,
-  "torch")`.
+- **Route before the first trace that reads the mixer.** With `mamba_ssm` installed
+  nothing runs on CPU and nothing inside the kernels is readable until
+  `route_kernels(family, "torch")`; on a GPU a plain trace before routing is harmless.
 - **Read order differs between the kernels.** In the scan, `y`
   (`attention_head_outputs`) is computed before the returned state
   (`state_output`); in the decode step the state is updated first and `y`

@@ -192,11 +192,13 @@ torch.equal(leaving[0], entering[1])             # step 1 starts from what step 
 ```
 
 The kernels have to be transformers' pure-torch ones. With
-`flash-linear-attention` or `causal-conv1d` installed, the forward dispatches
-to a compiled kernel with no Python source, and every value reports `read
+`flash-linear-attention` installed, the delta-rule kernels dispatch to a
+compiled kernel with no Python source, and every kernel value reports `read
 inside transformers' pure-torch torch_chunk_gated_delta_rule, but this process
 dispatches it to an optimized kernel (fla) with no Python source; uninstall it,
 or call nnterp.route_kernels(model.family, 'torch'), to read these`.
+`causal-conv1d` alone replaces only the short convolution before the kernel;
+the kernel values stay readable, since only the delta-rule kernels are checked.
 
 ## The state after every token
 

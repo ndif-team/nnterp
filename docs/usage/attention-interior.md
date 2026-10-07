@@ -376,7 +376,7 @@ values (and the pattern's key axis) are as long as the cache:
   values before the queries and keys. An out-of-order read raises `OutOfOrderError`, and
   inside a `tracer.iter` body the error can name a later location than the one
   you misplaced.
-- **GPT-2 and MPT queries, keys and values: assign, do not edit in place.**
+- **GPT-2 and GPT-BigCode queries, MPT queries, keys and values: assign, do not edit in place** (or edit under `torch.no_grad()`). GPT-2's and GPT-BigCode's keys and values take an in-place edit.
 - **`hasattr(attn, "attention_probabilities")` raises `Unavailable`** when the
   value is unavailable; use `attn.support()` or `model.support(layer=i)`.
 - **A sink model's pattern rows sum to less than one**, and its

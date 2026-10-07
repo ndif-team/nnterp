@@ -6,6 +6,9 @@ added in the block, attention through the shared eager forward.
 The attention norms its per-head outputs (``attn_sub_norm``) after the
 interface and before ``o_proj``, so ``attention_head_outputs`` is before that
 norm; the MLP norms its gated product (``ffn_sub_norm``) before ``down_proj``.
+The released checkpoints (``quant_method: bitnet``) load their projections as
+transformers' ``AutoBitLinear``; a meta build and the pinned tiny show plain
+``nn.Linear``.
 """
 
 from transformers.models.bitnet.modeling_bitnet import BitNetAttention, BitNetDecoderLayer, BitNetMLP

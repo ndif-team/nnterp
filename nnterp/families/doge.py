@@ -19,6 +19,10 @@ forward with q/k norms and a *dynamic mask*: ``dt_proj`` of the values, through
 ``keep_window_size`` keys, used to drop all but the top keys), so
 ``attention_scores`` carry it. The MLP is a gated ``DogeMLP``, or the cross-domain
 mixture ``DogeCDMoE`` under ``is_moe``, which returns ``(hidden_states, router_logits)``.
+
+Doge-20M, -40M and -260M load and run on transformers 5.17. The ``is_moe``
+checkpoints that load (Doge-40M-MoE) fail in the forward: the block passes
+``DogeCDMoE``'s tuple to dropout (``TypeError``).
 """
 
 from transformers.models.doge.modeling_doge import DogeAttention, DogeCDMoE, DogeDecoderLayer, DogeMLP

@@ -406,7 +406,7 @@ Every class attribute of `FamilySuite`:
 | `FAMILY` | The family module the checkpoint must resolve to (`model.family is FAMILY`). |
 | `NATIVE` | Standard path to native path; each pair must be the same envoy, and every `layers.0.*` name must exist on every block. |
 | `EXPECTED_UNAVAILABLE` | `support()` key to a substring of the reason, for values this checkpoint lacks; every other value must report `None`. Default `{}`. |
-| `REFUSES_IN_PLACE_QKV` | torch refuses in-place edits on q/k/v that are views out of a `split`/`chunk` (GPT-2); the suite expects a `RuntimeError` and skips the in-place query edit. |
+| `REFUSES_IN_PLACE_QKV` | torch refuses in-place edits on queries that are views out of a `split`/`chunk` (GPT-2, GPT-BigCode, MPT); the suite expects a `RuntimeError` on the in-place query edit and skips it. |
 | `ATTENTION_SINK` | The pattern's rows sum to less than one (GPT-OSS). |
 | `KV_HEADS_EXPANDED` | Keys and values are read already expanded to `num_heads` (latent attention; Falcon's 40B layout). |
 | `MLP_WIDTH_KEY` | A config key naming the first block's MLP width when it is not `intermediate_size` (an all-MoE family's experts). |

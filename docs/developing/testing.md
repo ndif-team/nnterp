@@ -65,7 +65,7 @@ once per class: `model` (`suite.py:88-92`), a `StandardizedTransformer` with
 | `FAMILY` | the family module the checkpoint must resolve to |
 | `NATIVE` | standard path → native path, usually built by `rows(container, layers, embed, norm, attn=, mlp=, ln1=, ln2=)` (`:58-73`); `LLAMA_ROWS` (`:76`) is the Llama layout |
 | `EXPECTED_UNAVAILABLE` | `support()` key → a substring of the reason, for values this checkpoint lacks; a module no block has (OPT's `mlp`) is absent from `support()` rather than unavailable, so it is not listed here |
-| `REFUSES_IN_PLACE_QKV` | q/k/v come out of a multi-view op (`split`, `chunk`), so torch refuses an in-place edit (GPT-2, MPT) |
+| `REFUSES_IN_PLACE_QKV` | the queries come out of a multi-view op (`split`, `chunk`), so torch refuses an in-place edit of them (GPT-2, GPT-BigCode, MPT) |
 | `ATTENTION_SINK` | the pattern's rows sum to less than one (GPT-OSS) |
 | `KV_HEADS_EXPANDED` | keys and values are read already expanded to `num_heads` (DeepSeek, Falcon 40B) |
 | `MLP_WIDTH_KEY` | a config key naming the MLP width when it is not `intermediate_size` |

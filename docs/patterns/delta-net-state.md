@@ -1,6 +1,6 @@
 ---
 title: DeltaNet State
-one_liner: "On a Qwen3-Next / Qwen3.5 hybrid, read `state_output` and `state_input`, patch the recurrent state between prompts (`state_input` on a decode step, or `set_state_after(t, value)` inside a prompt after `route_kernels`), and track the state's norm token by token with `states`."
+one_liner: "On a Qwen3-Next / Qwen3.5 / Qwen3.5-MoE hybrid, read `state_output` and `state_input`, patch the recurrent state between prompts (`state_input` on a decode step, or `set_state_after(t, value)` inside a prompt after `route_kernels`), and track the state's norm token by token with `states`."
 tags: [patterns, hybrids, deltanet, state, generation]
 related: [docs/usage/availability.md, docs/usage/generation.md, docs/patterns/activation-patching.md, docs/patterns/ablation.md, docs/patterns/cross-family-sweep.md]
 sources: [nnterp/components/linear_attention.py, nnterp/components/eproperty.py, nnterp/families/qwen3_5_text.py, tests/families/test_qwen3_5_text.py]
@@ -17,11 +17,11 @@ remembers about the prompt is in that matrix, so the experiments that ask "what 
 carried forward" are experiments on the state: read it, swap it between prompts,
 watch how it grows.
 
-`model.layers[i].linear_attn` on Qwen3-Next and Qwen3.5 (text) is a
+`model.layers[i].linear_attn` on Qwen3-Next, Qwen3.5 (text) and Qwen3.5-MoE is a
 `LinearAttention` with the state as standard values, read at the delta-rule kernel
 call: `state_input` and `state_output` on any call, and the state *after every
 token* (`state`, `states`, `state_after`, `set_state_after`) once the family's
-prompts are routed through transformers' token-by-token kernel. The two hybrid
+prompts are routed through transformers' token-by-token kernel. The three hybrid
 families share the values, so this page is one recipe.
 
 ## Canonical pattern

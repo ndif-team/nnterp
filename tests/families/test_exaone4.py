@@ -63,6 +63,8 @@ class TestExaone4Hybrid(FamilySuite):
 
     def test_the_full_layer_has_no_rotary(self, model):
         """The keys reach the interface straight from the k norm on the full layer, rotated on the sliding one."""
+        for layer in model.layers:
+            layer.self_attn.source  # nnsight instruments a forward on the first `.source` access; a child's output read before that in the same trace leaves the call uninstrumented
         with model.trace(PROMPT):
             normed_sliding = model.layers[0].self_attn.k_norm.output.save()
             keys_sliding = model.layers[0].self_attn.attention_keys.save()

@@ -38,6 +38,7 @@ def assert_written_pattern_moves_the_logits_on_every_block(model):
     with model.trace(PROMPT):
         clean = model.logits.save()
     for layer in model.layers:
+        layer.self_attn.source  # nnsight instruments a forward on the first `.source` access; a child's output read before that in the same trace leaves the call uninstrumented
         with model.trace(PROMPT):
             indices = layer.self_attn.indexer.output.save()
             probs = layer.self_attn.attention_probabilities.save()
@@ -65,6 +66,7 @@ class TestDeepseekV32(FamilySuite):
         assert model.head_dim == model.config.v_head_dim
 
     def test_a_prompt_shorter_than_topk_selects_every_causal_key(self, model):
+        model.layers[0].self_attn.source  # nnsight instruments a forward on the first `.source` access; a child's output read before that in the same trace leaves the call uninstrumented
         with model.trace(PROMPT):
             indices = model.layers[0].self_attn.indexer.output.save()
             probs = model.layers[0].self_attn.attention_probabilities.save()
@@ -87,6 +89,7 @@ class TestDeepseekV32Sparse(FamilySuite):
 
     def test_pattern_is_zero_outside_the_selection(self, model):
         for layer in model.layers:
+            layer.self_attn.source  # nnsight instruments a forward on the first `.source` access; a child's output read before that in the same trace leaves the call uninstrumented
             with model.trace(PROMPT):
                 indices = layer.self_attn.indexer.output.save()
                 scores = layer.self_attn.attention_scores.save()

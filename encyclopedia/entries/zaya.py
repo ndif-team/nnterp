@@ -19,8 +19,8 @@ CHECKPOINTS = [
     "Zyphra/ZAYA1-base", "Zyphra/ZAYA1-reasoning-base", "Zyphra/ZAYA1-8B-legacy", "Zyphra/ZAYA1-74B-preview-legacy",
 ]
 
-#: No kin among the entries; the free gap between qwen3_5_moe_text (255) and nemotron's hash (262).
-PALETTE = {"hue": 258}
+#: No kin among the entries; the free gap between kimi_k2 (330) and opt (336).
+PALETTE = {"hue": 333}
 VLLM = False
 QUIRKS = [
     "tuple-blocks", "scaled-residual-adds", "fp32-residual", "embedding-multiplier", "partial-rotary",

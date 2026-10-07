@@ -15,8 +15,8 @@ PINNED = "onnx-internal-testing/tiny-random-SolarOpenForCausalLM"
 #: Upstage's one release with this config; the quantized copies on the Hub are other publishers'.
 CHECKPOINTS = ["upstage/Solar-Open-100B"]
 
-#: No kin among the entries; the free gap between gpt_bigcode (39) and exaone4's hash (46).
-PALETTE = {"hue": 42}
+#: No kin among the entries; the free gap between persimmon (171) and cohere (176).
+PALETTE = {"hue": 173}
 VLLM = False
 QUIRKS = ["mixture-of-experts"]
 

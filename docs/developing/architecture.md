@@ -239,12 +239,12 @@ purpose: `import nnterp` must import no transformers modeling module
 - `known()` (`families/__init__.py`) lists the package's modules with
   `pkgutil.iter_modules`, but `default`; that list is the set of shipped
   families, and a module's name *is* its `model_type` (`test_registry.py:15-20`).
-- `lookup(model_type)` (`:44-62`) returns `REGISTRY[model_type]` when
+- `lookup(model_type)` (`:48-70`) returns `REGISTRY[model_type]` when
   something was `register`ed, else `importlib.import_module(f"nnterp.families.{model_type}")`.
   A `ModuleNotFoundError` whose `.name` is that exact module means "no such
   family": `lookup` warns and returns `nnterp.families.default`; any other
   `ModuleNotFoundError` is a family module that itself failed to import, and
-  is re-raised as the real error (`:55-57`).
+  is re-raised as the real error (`:61-63`).
 - `default` is a family like the others that `lookup` returns, with a warning, when
   neither of the above has the `model_type`. Its
   `RENAME` is the union of the shipped spellings, its `ENVOYS` are string keys
@@ -253,15 +253,16 @@ purpose: `import nnterp` must import no transformers modeling module
   `StandardizedTransformer.__init__` calls on the built tree when the family
   is `default`: the required root modules, a shape-only `scan`, and the
   per-sublayer reasons (read off the forwards' source) that `support()`
-- `register(family, *model_types)` (`:65-89`) writes each of `model_types`,
+  reports. It raises `UnsupportedFamily` when the guess cannot stand.
+- `register(family, *model_types)` (`:73-97`) writes each of `model_types`,
   or with none the last component of `family.__name__`, into `REGISTRY`
-  (`:32`), which `lookup` consults first, so a module from outside the
+  (`:36`), which `lookup` consults first, so a module from outside the
   package, or an override of a shipped one, needs no edit here
   (`test_registry.py:44-51`, `:166-192`).
-- `__getattr__` (`:97-104`) makes `nnterp.families.qwen3_5_text` import on
-  first attribute access, and `__dir__` (`:107-108`) lists the shipped names so
+- `__getattr__` (`:105-112`) makes `nnterp.families.qwen3_5_text` import on
+  first attribute access, and `__dir__` (`:115-116`) lists the shipped names so
   tab completion works before anything is imported. `all_families()`
-  (`:92-94`) imports everything, for tooling and tests only.
+  (`:100-102`) imports everything, for tooling and tests only.
 
 A family module imports its transformers modeling module at the top
 (`families/gpt2.py:14`), so the modeling module loads exactly when the first

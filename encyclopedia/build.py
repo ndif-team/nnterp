@@ -460,7 +460,7 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
         # path draws the norm off to the side
         "norm_read": has_norm and "`vision.tower_output`" in projector_input,
         "projector": {"class": type(model.projector._module).__name__, "path": model.projector.path,
-                      "input": projector_input, "caption": projector_input.replace("`", "")},
+                      "input": projector_input, "caption": projector_caption(projector_input)},
         "envoys": envoys,
         # what block_schema reads, for the tower's block
         "block": {
@@ -476,6 +476,13 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
             "block_hosts": [{alias: False for alias in StandardizedTransformer._standard_children(block)} for block in vision.layers],
         },
     }
+
+
+def projector_caption(projector_input: str) -> str:
+    """The strip's line under the projector: ``input:`` and what it reads, unless the phrase names the input itself
+    ("the merger's input: ..."), which would read "input: the merger's input"."""
+    text = projector_input.replace("`", "")
+    return text if re.search(r"\binput\b", text) else f"input: {text}"
 
 
 def moe_sizes(moe: Any) -> dict[str, Any] | None:

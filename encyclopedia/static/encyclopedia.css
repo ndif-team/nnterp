@@ -372,10 +372,21 @@ body:has(.stickybar) .section { scroll-margin-top: 56px; }
 .prose h3 { font-family: var(--disp); font-weight: 700; font-size: clamp(21px, 1.8vw, 28px); line-height: 1.05; margin: 1.6rem 0 0.5rem; }
 
 /* the index: the filters in labelled groups, org, quirks, vision encoders */
-.filter-group { display: grid; grid-template-columns: 11.5rem minmax(0, 1fr); gap: 0 12px; align-items: baseline; padding: 10px 0; border-top: 1px solid var(--hair); }
+/* each row a fold, closed at first: the label opens it, with the page's + / ×, and counts the filters on in it */
+.filter-group { border-top: 1px solid var(--hair); }
 .filter-group:last-child { border-bottom: 1px solid var(--hair); margin-bottom: 1.4rem; }
-.filter-label { margin: 0; opacity: 0.8; padding-top: 0.6rem; }
-.filter-group .filters { margin: 0; }
+.filter-label { list-style: none; display: flex; align-items: center; gap: 10px; padding: 10px 0; cursor: pointer; }
+.filter-label::-webkit-details-marker { display: none; }
+.filter-label::before { content: '+'; font-family: var(--disp); font-weight: 900; font-size: 18px; line-height: 1; width: 12px; color: var(--mark-deep); }
+.filter-group[open] > .filter-label::before { content: '×'; }
+.filter-label:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.filter-label .eye { margin-right: 2px; }
+.filter-count { background: var(--mark); color: var(--ink); padding: 3px 7px; font-family: var(--mono); letter-spacing: 0.04em; }
+.filter-count:empty { display: none; }
+.filter-group .filters { margin: 0 0 12px; }
+/* a card's org: its logo, the name in the image's alt and title */
+.org-logo { display: inline-flex; border: 1.5px solid var(--line); background: var(--paper); flex: none; }
+.org-logo img { width: 22px; height: 22px; display: block; object-fit: cover; }
 /* an org: its Hub avatar and its display name, as a filter and on a card */
 .chip-org { display: inline-flex; align-items: center; gap: 6px; padding: 3px 9px 3px 3px; text-transform: none; letter-spacing: 0.02em; }
 .chip-org img { width: 18px; height: 18px; display: block; object-fit: cover; background: var(--paper); flex: none; }
@@ -398,8 +409,6 @@ body:has(.stickybar) .section { scroll-margin-top: 56px; }
   .ckpt-list { left: 0; right: auto; }
   .tower-facts { grid-template-columns: 1fr; }
   .ckpt-facts { align-items: flex-start; text-align: left; }
-  .filter-group { grid-template-columns: 1fr; }
-  .filter-label { padding-top: 0; margin-bottom: 6px; }
 }
 @media (max-width: 560px) {
   .stickybar .ckpt-label { display: none; }

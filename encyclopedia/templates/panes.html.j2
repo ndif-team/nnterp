@@ -10,7 +10,7 @@
 
 {% macro hub(c) %}
 {% if c.hub.params or c.hub.since %}
-<p class="ckpt-facts mono">{% if c.hub.params %}<span><b>{{ c.hub.params }}</b> parameters{% if c.hub.from_config %} <span class="dim">· from the config</span>{% endif %}</span>{% endif %}{% if c.hub.since %}<span>on the Hub since <b>{{ c.hub.since }}</b></span>{% endif %}</p>
+<p class="ckpt-facts mono">{% if c.hub.params %}<span><b>{{ c.hub.params }}</b> parameters{% if c.hub.from_config %} <span class="dim">· from the config</span>{% endif %}</span>{% endif %}{% if c.hub.since %}<span>released <b>{{ c.hub.since }}</b></span>{% endif %}</p>
 {% endif %}
 {% endmacro %}
 

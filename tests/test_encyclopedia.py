@@ -315,9 +315,13 @@ def test_the_index_has_org_filters_and_cards_carry_their_org():
             "quirks": [], "vllm": False, "architecture": "", "family_module": "", "towers": [], "wrappers": [], "blocks": "1",
             "tower_slugs": []}
     index = build.environment().get_template("index.html.j2").render(**build.index_model([card]))
-    assert index.index(">Org</p>") < index.index(">Quirks</p>")
+    assert index.index("<span>Org</span>") < index.index("<span>Quirks</span>")
     assert 'data-org-filter="meta-llama"' in index and 'data-org="meta-llama"' in index
-    assert index.count('src="static/orgs/meta-llama.png"') == 2 and index.count("Meta Llama</") == 2
+    assert index.count('src="static/orgs/meta-llama.png"') == 2
+    # the filter chip names the org; the card shows the logo alone, its name in the image's alt and title
+    assert index.count("Meta Llama</button>") == 1 and 'alt="Meta Llama" title="Meta Llama"' in index
+    # each filter row is a fold, closed at first
+    assert index.count('<details class="filter-group"') == 2 and "<details class=\"filter-group\" open" not in index
 
 
 def test_parameter_counts_and_dates_read_like_the_hub():
@@ -338,7 +342,7 @@ def test_params_and_date_render_when_cached_and_are_blank_when_not(monkeypatch):
         return panes(build.build_page(entry, reference=repo), repo)["hub"].split("</div>")[0]  # the pane, not what follows
 
     shown = hub_pane({repo: {"params": 8_030_261_248, "created": "2024-07-14"}})
-    assert "<b>8.03B</b> parameters" in shown and "on the Hub since <b>Jul 2024</b>" in shown and "from the config" not in shown
+    assert "<b>8.03B</b> parameters" in shown and "released <b>Jul 2024</b>" in shown and "from the config" not in shown
     info = build.read_entry(entry, reference=repo)[0][0]["info"]
     shown = hub_pane({repo: {"params": None, "created": "2024-07-14"}})
     assert f"<b>{hub.format_params(info['meta_params'])}</b> parameters" in shown and "from the config" in shown

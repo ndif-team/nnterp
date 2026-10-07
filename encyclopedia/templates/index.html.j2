@@ -17,29 +17,32 @@
 <section class="frame section">
   <div class="topbar"><h2 class="disp-section">Find a <em>family</em></h2><span class="micro">search by family, checkpoint, quirk or value</span></div>
   <input class="search" id="search" type="search" placeholder="gemma, Llama-3.1-8B, sandwich, attention_probabilities …" autocomplete="off">
+  {# an org: a filter chip with its logo and name, or on a card its logo alone, named by the image's alt and title #}
   {% macro org_chip(o, tag) %}<{{ tag }} class="chip chip-ink chip-org{% if not o.avatar %} no-avatar{% endif %}"{% if tag == "button" %} type="button" data-org-filter="{{ o.id }}" aria-pressed="false"{% endif %} title="{{ o.id }} on the Hub">{% if o.avatar %}<img src="static/{{ o.avatar }}" alt="" width="18" height="18" loading="lazy">{% endif %}{{ o.name }}</{{ tag }}>{% endmacro %}
+  {% macro org_logo(o) %}{% if o.avatar %}<span class="org-logo"><img src="static/{{ o.avatar }}" alt="{{ o.name }}" title="{{ o.name }}" width="22" height="22" loading="lazy"></span>{% else %}{{ org_chip(o, "span") }}{% endif %}{% endmacro %}
+  {% macro filter_label(text) %}<summary class="micro filter-label"><span>{{ text }}</span><span class="filter-count" aria-live="polite"></span></summary>{% endmacro %}
   <div id="filters">
     {% if orgs %}
-    <div class="filter-group">
-      <p class="micro filter-label">Org</p>
+    <details class="filter-group">
+      {{ filter_label("Org") }}
       <div class="chips filters filters-orgs">
         {% for o in orgs %}{{ org_chip(o, "button") }}{% endfor %}
       </div>
-    </div>
+    </details>
     {% endif %}
-    <div class="filter-group">
-      <p class="micro filter-label">Quirks</p>
+    <details class="filter-group">
+      {{ filter_label("Quirks") }}
       <div class="chips filters">
         {% for q in quirks %}<button type="button" class="chip chip-ink" aria-pressed="false" data-filter="{{ q.slug }}">{{ q.label }}</button>{% endfor %}
       </div>
-    </div>
+    </details>
     {% if towers %}
-    <div class="filter-group filters-towers">
-      <p class="micro filter-label">{{ eye }} Vision encoders</p>
+    <details class="filter-group filters-towers">
+      {{ filter_label(eye ~ " Vision encoders") }}
       <div class="chips filters">
         {% for t in towers %}<button type="button" class="chip chip-ink" aria-pressed="false" data-filter="{{ t.slug }}">{{ t.label }}</button>{% endfor %}
       </div>
-    </div>
+    </details>
     {% endif %}
   </div>
 
@@ -52,7 +55,7 @@
       <div class="card-body">
         <div class="card-head">
           <div class="petals petals-sm" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
-          {% if p.org %}{{ org_chip(p.org, "span") }}{% endif %}
+          {% if p.org %}{{ org_logo(p.org) }}{% endif %}
         </div>
         <h3 class="card-name">{% for line in p.title.split(" / ") %}<span class="line">{{ line }}</span>{% endfor %}</h3>
         <p class="body-md">{{ p.subtitle }}</p>

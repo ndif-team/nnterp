@@ -43,8 +43,7 @@ rearrange them.
    "not available in the encyclopedia: <reason>". The list is a keyboard listbox (arrows, Home, End,
    Enter, Escape). Under it, the shown checkpoint's parameter count (`8.03B parameters`, the Hub's
    safetensors total; where the Hub has none, the meta model's count, marked `· from the config`) and
-   `on the Hub since Jul 2024` (the repository's creation month, which is what the Hub records, not a
-   release date), each blank for a repository the cache does not hold or the Hub does not let the build
+   `released Jul 2024` (the repository's creation month on the Hub), each blank for a repository the cache does not hold or the Hub does not let the build
    read; then the Hugging Face logo (`static/hf-logo.svg`, the official file with a
    `viewBox` added so it scales), linking to the shown checkpoint's Hub page. Once the hero has scrolled
    off, a slim bar at the top holds the family's title and a second selector over the same choice:
@@ -119,10 +118,11 @@ The index lists every family in `nnterp.families.known()`: a card with the famil
 subtitle and quirks for each entry (blocks as a range when its checkpoints differ; an eye and the
 vision encoders found, `CLIP · SigLIP`, and the `Vision-language` chip when any checkpoint has a vision encoder), a
 stub for each family not written yet, a search box (title, `model_type`, org, architecture, Hub ids,
-quirks, vision encoders, wrappers) and three labelled rows of filters: **Org** (each org's Hub avatar and
+quirks, vision encoders, wrappers) and three filter rows, each a fold closed at first whose label opens it and
+counts the filters on in it: **Org** (each org's Hub avatar and
 name; a card shows when it is any org chosen), **Quirks** (the text quirks and `Vision-language`) and
 **Vision encoders** (the encoders found); a card shows when it has every quirk and encoder chosen. A
-card carries its org's chip too. The org is the author of the entry's `REFERENCE`, or the entry's `ORG`.
+card carries its org's logo, the name on hover. The org is the author of the entry's `REFERENCE`, or the entry's `ORG`.
 
 ## Where each part comes from
 

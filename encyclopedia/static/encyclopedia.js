@@ -40,8 +40,16 @@
         set[key] = !set[key];
         btn.classList.toggle('active', !!set[key]);
         btn.setAttribute('aria-pressed', set[key] ? 'true' : 'false');
+        counts();
         apply();
       });
+    });
+  }
+  // a closed row still says how many of its filters are on, beside its label
+  function counts() {
+    document.querySelectorAll('#filters .filter-group').forEach(function (group) {
+      var n = group.querySelectorAll('[aria-pressed="true"]').length;
+      group.querySelector('.filter-count').textContent = n ? n + ' on' : '';
     });
   }
   toggles('#filters [data-filter]', 'data-filter', active);

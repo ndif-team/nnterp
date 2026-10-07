@@ -75,6 +75,7 @@
     var parts = (tower ? id.slice(TOWER.length) : id).split('.');
     if (['sub', 'contrib', 'interior', 'moe'].indexOf(parts[0]) !== -1) return (s && s.roles[parts[1]]) || 'mlp';
     if (parts[0] === 'norm' || id === 'strip.norm' || id === TOWER + 'path.norm') return 'norm';
+    if (parts[0] === 'between' && parts[1] === 'value') return 'mark';
     return 'stream';
   }
   function marker(id, color) {
@@ -89,7 +90,11 @@
   }
 
   // One shape of block from schema `s` into `target`: its sublayers in order, between the stream's two ends.
-  function draw(target, s, shape, prefix) {
+  // `between` (the text block's, on the blocks that have them) are the values the text model adds after
+  // `layer_output`, outside the block: an add each on the stream below the block, its value coming in from the side.
+  var BET = 96;
+  function draw(target, s, shape, prefix, between) {
+    between = between || [];
     ctx = { svg: target, schema: s, prefix: prefix || '' };
     var svg = target, all = s.sublayers, parallel = s.topology === 'parallel', P = ctx.prefix;
     var arr = 'arr' + (P ? '-tower' : ''), arrow = 'url(#' + arr + ')';
@@ -110,7 +115,7 @@
     subs.forEach(function (_, k) {
       joinY.push(parallel ? rowY[n - 1] + 110 + ext[n - 1] : first[k] ? rowY[k + 1] + 110 + ext[k + 1] : rowY[k] + 140 + ext[k]);
     });
-    var H = joinY[n - 1] + 60 + sn[n - 1];
+    var H = joinY[n - 1] + 60 + sn[n - 1] + between.length * BET;
     // where the stream resumes below an add: under its stream norm, where it has one
     function below(k) { return sn[k] ? joinY[k] + SNORM.gap + SNORM.h : joinY[k]; }
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
@@ -121,17 +126,41 @@
     var segments = [[topY, rowY[0], 'stream.input']];
     subs.forEach(function (sub, k) { if (sn[k]) segments.push([joinY[k], joinY[k] + SNORM.gap, sub.stream_norm_in]); });
     if (!parallel) for (var k = 0; k < n - 1; k++) if (!first[k]) segments.push([below(k), rowY[k + 1], mids[k]]);
-    segments.push([below(n - 1), botY, 'stream.output']);
+    // below the block, an add per between value: layer_output runs into the first, the next block's input leaves the last
+    var betY = between.map(function (_, j) { return below(n - 1) + 76 + j * BET; });
+    if (between.length) {
+      segments.push([below(n - 1), betY[0] - 14, 'stream.output']);
+      between.forEach(function (b, j) {
+        segments.push([betY[j] + 14, j + 1 < between.length ? betY[j + 1] - 14 : botY, j + 1 < between.length ? null : 'between.next.' + b.value]);
+      });
+    } else segments.push([below(n - 1), botY, 'stream.output']);
     // the stream between a branch and its join carries the input of that sublayer's add: same name as the segment above
     var full = el('g', { 'class': 'role-stream streamline' });
     el('line', { x1: SX, y1: topY, x2: SX, y2: botY, 'class': 'stream', 'marker-end': arrow }, full);
     segments.forEach(function (seg) {
-      var g = group(seg[2], 'stream');
+      var g = seg[2] ? group(seg[2], 'stream') : el('g', { 'class': 'role-stream' });
       el('line', { x1: SX, y1: seg[0], x2: SX, y2: seg[1], 'class': 'stream' }, g);
       el('rect', { x: SX - 18, y: seg[0], width: 36, height: Math.max(seg[1] - seg[0], 1), 'class': 'hit' }, g);
     });
     text(full, SX + 16, topY + 6, (P ? 'vision.' : '') + 'layers[i].input', 'label-role');
-    text(full, SX + 16, botY - 2, 'layer_output', 'label-role');
+    if (between.length) {
+      text(full, SX + 16, betY[0] - 22, 'layer_output', 'label-role');
+      text(full, SX + 16, botY - 2, 'layers[i+1].input', 'label-role');
+    } else text(full, SX + 16, botY - 2, 'layer_output', 'label-role');
+    between.forEach(function (b, j) {
+      var y = betY[j], bh = 64, top = y - bh / 2;
+      var gv = group('between.value.' + b.value, 'mark');
+      el('rect', { x: SUB.x, y: top, width: SUB.w, height: bh, 'class': 'box box-sub' }, gv);
+      text(gv, SUB.x + 14, top + 30, b.label, 'label');
+      text(gv, SUB.x + 14, top + 46, 'at ' + b.mask, 'label-sm');
+      var d = 'M' + SUB.x + ',' + y + ' H' + (SX + 16);
+      el('path', { 'class': 'edge-contrib', d: d, 'marker-end': arrow }, gv);
+      el('path', { 'class': 'hit', d: d, 'stroke-width': 18, fill: 'none', stroke: 'transparent' }, gv);
+      text(gv, SUB.x - 10, y - 10, b.value, 'label-role', 'end');
+      var gplus = group('between.plus.' + b.value, 'stream');
+      el('circle', { cx: SX, cy: y, r: 14, 'class': 'plus' }, gplus);
+      text(gplus, SX, y + 8, '+', 'plus-sign', 'middle');
+    });
 
     // -- sublayers ------------------------------------------------------------------
     subs.forEach(function (sub, k) {
@@ -238,7 +267,9 @@
     if (!node) return;
     var card = cardFor(id);
     // the slider picks a text block; the tower's block is any of them
-    var expr = id.indexOf(TOWER) === 0 ? node.expr : node.expr.replace(/\[i\]/g, '[' + layer() + ']');
+    var expr = id.indexOf(TOWER) === 0 ? node.expr : node.expr.replace(/\[i\+1\]/g, function () {
+      return '[' + (layer() === 'i' ? 'i+1' : parseInt(layer(), 10) + 1) + ']';
+    }).replace(/\[i\]/g, '[' + layer() + ']');
     var html = '<p class="micro eyebrow">' + esc(node.eyebrow) + '</p>' +
       '<p class="expr">' + esc(expr) + '</p>';
     if (node.layout) html += '<p class="body-md"><span class="chip chip-layout">' + esc(node.layout) + '</span> <span class="mono dim">[' + esc(node.dims) + ']</span></p>';
@@ -307,13 +338,20 @@
       if (byPair) tick.className = 't' + Math.min(pairs.indexOf(shapeOf[i] + '|' + types[i]), 4);
       else if (shapeOf) tick.className = 't' + Math.min(shapeOf[i], 4);
       else if (types) tick.className = 't' + kinds.indexOf(types[i]);
-      tick.title = 'block ' + i + (types ? ' · ' + types[i] : '') + (shapeOf ? ' · ' + shapes[shapeOf[i]].label : '');
+      var adds = betweenOf(i);
+      if (adds.length) tick.classList.add('between');
+      tick.title = 'block ' + i + (types ? ' · ' + types[i] : '') + (shapeOf ? ' · ' + shapes[shapeOf[i]].label : '') +
+        adds.map(function (b) { return ' · then ' + b.label; }).join('');
       tick.setAttribute('role', 'button');
       tick.setAttribute('tabindex', '0');
       tick.setAttribute('aria-label', tick.title);
       tick.setAttribute('data-block', i);
       ticks.appendChild(tick);
     }
+  }
+  // The values the text model adds after block i, outside it (none on most families).
+  function betweenOf(i) {
+    return (schema.between || []).filter(function (b) { return b.blocks.indexOf(i) !== -1; });
   }
   // A tick selects its block, as moving the slider to it does.
   function pickBlock(tick) {
@@ -329,11 +367,13 @@
   });
   function update() {
     var i = parseInt(slider.value, 10);
-    var s = shapeOf ? shapeOf[i] : 0;
-    if (s !== drawnShape) {
-      draw(mainSvg, schema, shapes[s]);
-      drawnShape = s;
-      identity.innerHTML = shapeOf ? shapes[s].identity_html : data.identity_html;
+    var s = shapeOf ? shapeOf[i] : 0, adds = betweenOf(i);
+    var drawing = s + '|' + adds.map(function (b) { return b.value; }).join(' ');
+    if (drawing !== drawnShape) {
+      draw(mainSvg, schema, shapes[s], '', adds);
+      drawnShape = drawing;
+      identity.innerHTML = (shapeOf ? shapes[s].identity_html : data.identity_html) +
+        adds.map(function (b) { return '<br>' + b.identity_html; }).join('');
       if (pinned && pinned.indexOf(TOWER) !== 0) hot(pinned, true);
     }
     label.textContent = 'i = ' + i;

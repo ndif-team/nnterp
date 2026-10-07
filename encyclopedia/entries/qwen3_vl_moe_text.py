@@ -104,9 +104,8 @@ PALETTE = {"hue": 304}
 VLLM = False
 QUIRKS = ["qk-norm", "multimodal-rotary", "mixture-of-experts"]
 
-#: What the visualization draws. The DeepStack add after blocks 0-2 is the text model's, outside the block, and the
-#: block schema has no node for a value added between blocks: it is in the strip's `layers` note, the identity note
-#: and the notes. Every block of every checkpoint, and of the pinned tiny, is a mixture.
+#: What the visualization draws. The DeepStack add after blocks 0-2 is the text model's, outside the block: `between`
+#: draws it after `layer_output` on those blocks. Every block of every checkpoint, and of the pinned tiny, is a mixture.
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -139,6 +138,16 @@ BLOCK = {
                      "model then adds layers[k].deepstack_output at the image positions after blocks 0, 1 and 2, "
                      "outside the block: layers[k+1].input[mask] == layers[k].layer_output[mask] + "
                      "layers[k].deepstack_output there, layers[k+1].input == layers[k].layer_output elsewhere.",
+    "between": [
+        {
+            "value": "deepstack_output",
+            "mask": "vision.image_token_mask",
+            "blocks": [0, 1, 2],
+            "label": "DeepStack",
+            "note": "Its rows are `vision.deepstack_merger_list[k].output`, the k-th DeepStack merger's image tokens. "
+                    "A text prompt makes no DeepStack call, and `deepstack_output` is not reached.",
+        },
+    ],
 }
 
 #: Notes on the model-level strip, by node.

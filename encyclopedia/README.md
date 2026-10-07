@@ -68,7 +68,10 @@ rearrange them.
    several block shapes the diagram and the identity under it redraw for the slider's block. Boxes
    are outlines in their role's colour, clear inside. Hovering any part fills it lightly and shows, in
    the card beside the diagram, the nnterp expression that reads it, its layout and where it is read;
-   clicking pins it. Under the diagram, the contribution identity as highlighted code. The slider's
+   clicking pins it. Under the diagram, the contribution identity as highlighted code. On a family
+   whose text model adds a value between blocks (`BLOCK["between"]`, Qwen3-VL's DeepStack) the
+   blocks it follows have a dot over their tick, and on them the diagram draws that add under
+   `layer_output` and the identity gains its line. The slider's
    range, its ticks and the diagram's sizes are the selected checkpoint's.
 
    On a vision-language checkpoint the strip's `embed` note adds that the projected image features
@@ -264,6 +267,18 @@ The entry states facts about a family, and each one has a source. Before writing
      contributions still sum exactly). `identity_note` may be given on its own, for a sum that is
      exact but worth a word. A family with several block shapes takes no `identity`: each
      shape's is the plain sum of what it draws.
+   - `between` (optional): a value the text model adds to the stream after some blocks, outside them,
+     at the positions a mask marks (Qwen3-VL's DeepStack), as a dict or a list of them:
+     `{"value": "deepstack_output", "mask": "vision.image_token_mask", "blocks": [0, 1, 2], "label":
+     "DeepStack", "note": "..."}`. `value` is a standard value of `model.layers[i]`, `mask` a value of
+     `model.vision`, `blocks` the block indices it is added after, `label` the box's title and `note`
+     a sentence shown on its hover. On those blocks the diagram draws an `⊕` under `layer_output`, the
+     value coming in from a box at the side, the stream leaving it as `layers[i+1].input`, and the
+     identity under the diagram gains a line,
+     `layers[i+1].input[<mask>] == layer_output[<mask>] + <value>`; the slider's ticks for those blocks
+     carry a dot. On other blocks nothing changes. A checkpoint without a vision encoder draws none
+     (the add needs an image), and blocks past a checkpoint's last are dropped (a tiny checkpoint
+     with two blocks draws it on 0 and 1). The ledger lists the value as any other.
 
    **Blocks that differ.** `sublayers` lists every sublayer any block has, once, in forward order,
    and each block draws the ones that match its own children: a sublayer is drawn where its `host`

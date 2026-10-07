@@ -381,3 +381,24 @@ def test_params_and_date_render_when_cached_and_are_blank_when_not(monkeypatch):
     shown = hub_pane({repo: {"params": None, "created": "2024-07-14"}})
     assert f"<b>{hub.format_params(info['meta_params'])}</b> parameters" in shown and "from the config" in shown
     assert hub_pane({}).strip() == "" and hub_pane({repo: {"params": None, "created": None}}).strip() == ""
+
+
+def test_a_value_added_between_blocks_is_drawn_on_its_blocks_only():
+    """Qwen3-VL's DeepStack: the text model adds layers[k].deepstack_output at the image positions after blocks 0, 1
+    and 2, outside the block. The page draws that add on those blocks of a 28-block checkpoint and on no other."""
+    entry = entries.load("qwen3_vl_text")
+    page = build.build_page(entry, reference=entry.REFERENCE, checkpoints=[entry.REFERENCE])
+    data = checkpoint_data(page)
+    (between,) = data["schema"]["between"]
+    assert data["schema"]["num_layers"] > 3
+    assert between["value"] == "deepstack_output" and between["blocks"] == [0, 1, 2]
+    assert between["identity"] == ("layers[i+1].input[vision.image_token_mask] == "
+                                   "layer_output[vision.image_token_mask] + deepstack_output")
+    nodes = data["nodes"]
+    assert nodes["between.value.deepstack_output"]["expr"] == "model.layers[i].deepstack_output"
+    assert nodes["between.value.deepstack_output"]["dims"] == "image_tokens hidden"
+    assert nodes["between.plus.deepstack_output"]["expr"] == between["identity"]
+    assert nodes["between.next.deepstack_output"]["expr"] == "model.layers[i+1].input"
+    # a family without `between` has no such key or node
+    plain = checkpoint_data(build.build_page(entries.load("llama"), reference=entries.load("llama").PINNED))
+    assert "between" not in plain["schema"] and not any(key.startswith("between.") for key in plain["nodes"])

@@ -60,9 +60,9 @@ trace runs, so nothing has to be synchronized.
 
 `add_special_tokens=False` keeps the BOS token out of the target (`tokenizer.encode(" Paris")[0]`
 is the BOS id on Llama and Gemma, and every probability then reads 0.000). The assertion
-catches a word that is more than one token: Mistral's sentencepiece tokenizer gives
-`['▁', '▁Paris']` and Granite's `['ĠPar', 'is']`. Then try the word without the leading
-space (`"Paris"` is `['▁Paris']` on Mistral), or pick a target word that is one token.
+catches a word that is more than one token: Mixtral-8x7B's sentencepiece tokenizer (and the
+tiny Mistral and Mixtral checkpoints') gives `['▁', '▁Paris']` and Granite 3.x's `['ĠPar', 'is']`. Then try the word without the leading
+space (`"Paris"` is `['▁Paris']` there), or pick a target word that is one token.
 
 ## The ordering rule
 

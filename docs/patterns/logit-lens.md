@@ -128,9 +128,9 @@ with model.trace(prompt):
 
 `add_special_tokens=False` keeps the BOS token out of the target (`tokenizer.encode(" Paris")[0]`
 is the BOS id on Llama and Gemma, and the curve is then flat at zero). The assertion
-catches a word that is more than one token: Mistral's sentencepiece tokenizer gives
-`['▁', '▁Paris']` and Granite's `['ĠPar', 'is']`. Then try the word without the leading
-space (`"Paris"` is `['▁Paris']` on Mistral), or pick a target word that is one token.
+catches a word that is more than one token: Mixtral-8x7B's sentencepiece tokenizer (and the
+tiny Mistral and Mixtral checkpoints') gives `['▁', '▁Paris']` and Granite 3.x's `['ĠPar', 'is']`. Then try the word without the leading
+space (`"Paris"` is `['▁Paris']` there), or pick a target word that is one token.
 
 Argmax hides a close race; the probability curve shows a peak that may come before
 the final layer.

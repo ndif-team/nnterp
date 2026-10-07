@@ -12,7 +12,8 @@ The block, in order::
 
     x1 = x  + post_attention_layernorm(self_attn(input_layernorm(x)))
     x2 = x1 + post_feedforward_layernorm(mlp(pre_feedforward_layernorm(x1)) [+ experts])
-    x3 = x2 + post_per_layer_input_norm(per_layer_projection(gelu(per_layer_input_gate(x2)) * per_layer_input))
+    p  = gelu(per_layer_input_gate(x2)) * per_layer_input
+    x3 = x2 + post_per_layer_input_norm(per_layer_projection(p))
     out = x3 * layer_scalar          # in place, on x3
 
 * **The contributions** are the post-norms' outputs, as on Gemma-2/3. On a
@@ -24,7 +25,8 @@ The block, in order::
   MLP and the experts together, what the block adds. The mixture has no module
   of its own, so ``mlp`` (a `Moe`) hosts its values, reading the block's
   ``router`` and ``experts`` through its parent. The router
-  runs on the block's *input* (``residual``), with its own norm, and returns
+  runs on ``x1``, the stream after the attention's add (the block's ``residual``
+  at that point, not its input), with its own norm, and returns
   probabilities; ``router_logits`` are its projection's output
   (``router.proj``). ``shared_expert_output`` is the dense MLP's output, before
   its post-norm: ``mlp_output == post_feedforward_layernorm(
@@ -75,10 +77,12 @@ sandwich, so its contributions are the post-norms' outputs too
 ``(-1, -1)``; the padded rows run through every block (masked as keys only), so
 they are present in ``vision.layers[i].layer_output``. There is no final norm:
 the tower's ``pooler`` zeroes the padded rows, average-pools the patches
-``pooling_kernel_size`` by ``pooling_kernel_size`` and strips the padding, so
-``vision.tower_output`` is the encoder's output (the last block's stream,
-padded) and ``projector.input`` is the pooled soft tokens, flat over the
-images. The audio tower (``model.audio_tower``, a Conformer) and its embedder
+``pooling_kernel_size`` by ``pooling_kernel_size`` and multiplies by
+``sqrt(vision hidden_size)`` (in float32); the tower then strips the padding and,
+where the vision config sets ``standardize`` (26B-A4B, 31B), subtracts ``std_bias``
+and multiplies by ``std_scale``. So ``vision.tower_output`` is the encoder's output
+(the last block's stream, padded) and ``projector.input`` is the pooled, scaled
+(and standardized) soft tokens, flat over the images. The audio tower (``model.audio_tower``, a Conformer) and its embedder
 ``model.embed_audio`` keep their native names.
 """
 

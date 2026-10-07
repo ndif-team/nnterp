@@ -82,7 +82,7 @@ tensor by the time the second runs.
 ## Ablate inside the tower
 
 A tower block's contribution is zeroed like a text block's. Which block reaches the text
-model depends on what the wrapper feeds the projector: Llava takes block -2's stream
+model depends on what the wrapper feeds the projector: Llava 1.5 takes block -2's stream
 (`vision_feature_layer=-2`), so the last block and `tower_output` are computed and
 discarded, while Gemma 3 pools `tower_output` itself.
 

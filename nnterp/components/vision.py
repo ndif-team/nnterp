@@ -464,6 +464,11 @@ class QwenVision(Vision):
     output are in window order, and the tower restores the merge-block order
     after the merger.
 
+    The tower has no final norm, so ``tower_output`` is the last block's
+    stream, the merger's input. It is served at the tower's output, after the
+    merger has run, so ``projector.input`` and ``projector.output`` are read
+    before ``tower_output``.
+
     Sizes, off the vision config: ``hidden_size`` is the tower's width
     (``embed_dim`` on Qwen2-VL, whose config's ``hidden_size`` is the merger's
     output width), ``num_heads``, ``intermediate_size`` (Qwen2-VL's is

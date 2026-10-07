@@ -340,7 +340,7 @@ families do not, and the six values stay available through all of them:
   `v_proj`; their values are `v_norm(k_proj(x))`, the keys' projection before
   `k_norm` and the rotary embedding. `attention_values` is that tensor.
 - **Per-layer sizes.** Sliding blocks have `head_dim` 256, full blocks 512, and
-  on every released size but E4B the two kinds have different
+  on 26B-A4B, 31B and 12B (not on E2B or E4B) the two kinds have different
   `num_key_value_heads`. `model.head_dim` and `model.num_kv_heads` are the
   config's top-level values, the sliding blocks'; read a full block's widths off
   its tensors (`attention_keys.shape`) or `model.config.get_text_config().per_layer_config[i]`.

@@ -45,7 +45,7 @@ for b, moe in enumerate(blocks):
 `support()` picks the blocks with the routing pair: dense blocks beside mixture blocks
 (DeepSeek-V3, GLM-4-MoE, Llama 4, Jamba) have none, and Llama 4's `expert_weights` is
 unavailable. `add_special_tokens=False` keeps the BOS token out of the target. This
-checkpoint's sentencepiece tokenizer (Mistral's) splits `" Paris"` into `['▁', '▁Paris']`,
+checkpoint's sentencepiece tokenizer (Mixtral-8x7B's) splits `" Paris"` into `['▁', '▁Paris']`,
 so the recipe falls back to the word without its space; a tokenizer with no single token
 for the word fails the assertion (`tokenizer(" Paris").input_ids[-1]` would silently be
 `'is'` on Granite, which splits it into `['ĠPar', 'is']`), and then another word is the

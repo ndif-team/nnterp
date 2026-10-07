@@ -13,7 +13,11 @@ does, so the family takes Cohere's ``project_on_vocab``.
 Aya Vision and Cohere2-Vision put a SigLIP tower at ``model.vision_tower``, which is
 ``vision`` (its ``post_layernorm`` over the patches is ``vision.norm``), and a
 pixel-shuffling projector ``model.multi_modal_projector``, which is ``projector``;
-``vision.image_features`` is read at the scatter (`ImageScatter`).
+``vision.image_features`` is read at the scatter (`ImageScatter`). Aya Vision's
+projector reads the last block's ``layer_output`` before ``vision.norm``
+(``vision_feature_layer`` -1, strategy ``"full"``) and norms after its pixel shuffle;
+Cohere2-Vision's reads ``vision.tower_output`` and has no norm. Aya Vision 32B's text
+config is ``cohere``, so it loads through that family, which binds no tower.
 """
 
 from transformers.models.aya_vision.modeling_aya_vision import AyaVisionModel

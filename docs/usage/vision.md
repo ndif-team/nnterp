@@ -84,7 +84,8 @@ native names they alias:
 native names keep working. A family that hosts the tower at two paths keys both, as it keys
 both spellings of the text stack. Gemma 4's audio tower and its embedder keep their native
 names (`model.model.audio_tower`, `model.model.embed_audio`), and an audio prompt
-(`model.trace(prompt, audio=[waveform])`) runs as before.
+(`model.trace(prompt, audio=[waveform])`) runs as before. Gemma 4 unified (12B) embeds audio
+without blocks too: `model.model.embed_audio`, native, and no `audio_tower`.
 
 ## The values
 
@@ -94,7 +95,7 @@ names (`model.model.audio_tower`, `model.model.embed_audio`), and an audio promp
 | `attention_output`, `mlp_output` | `vision.layers[i].self_attn`, `.mlp` | `Patches` | what each sublayer adds: `input + attention_output + mlp_output == layer_output` |
 | `attention_probabilities`, `attention_queries`, ... | `vision.layers[i].self_attn` | `Pattern`, `Queries`, ... | as on a text block, the `batch` axis being the tower's rows; no causal mask (Pixtral masks between packed images, Gemma 4 masks its padded keys); needs eager (the Qwen ViT's: [below](#the-qwen-vit)) |
 | `patch_embeddings` | `vision` | `Patches` | the patch embedding's output, one row per patch, before any position embedding, CLS token or pre-norm |
-| `tower_output` | `vision` | `Patches` | the last block's stream after `vision.norm` where there is one, before any pooling, CLS dropping or adapter |
+| `tower_output` | `vision` | `Patches` | the last block's stream after `vision.norm` where there is one, before any pooling, CLS dropping or adapter (on the Qwen ViT, which has no final norm, the last block's `layer_output`, served at the tower's output, after the merger) |
 | `image_token_mask` | `vision` | `ImageTokenMask` `[batch seq]` bool | `input_ids == config.image_token_id`, read off the model's inputs; read-only |
 | `image_features` | `vision` | `ImageFeatures` `[image_tokens hidden]` | what the wrapper scatters into the token embeddings, flat over every image token in row-major order; assignable, in-place edits land |
 
@@ -140,14 +141,21 @@ that output before scattering it, it is not:
 Both values are the tower's although neither is read inside it: the mask comes off the
 model's inputs and the features off the wrapper's forward.
 
-What feeds the projector differs per host: Gemma 3 pools `tower_output`; Llava takes
-`vision.layers[-2].layer_output` without its CLS token (`vision_feature_layer=-2`), so a
-write to `tower_output` or the last block does not reach Llava's text model; VipLlava
+What feeds the projector differs per host: Gemma 3 pools `tower_output`; Llava 1.5 and
+BakLLaVA take `vision.layers[-2].layer_output` without its CLS token
+(`vision_feature_layer=-2`, strategy "default"), so a write to `tower_output` or the last
+block does not reach their text model; llava-interleave, LLaVA-OneVision and Aya Vision set
+`vision_feature_layer=-1` with strategy "full", so the projector reads the last block's
+`layer_output` *before* SigLIP's `post_layernorm` (`vision.norm`) and a `tower_output` write
+does not reach the text model either; Pixtral-12B reads -1 "full" too, and with no final
+norm on Pixtral that is `tower_output`; Cohere2-Vision reads `tower_output`; VipLlava
 concatenates several blocks' streams. `model.projector.input` is what the projector
 actually receives. On Llama 4 the tower runs a pixel-shuffle adapter after `tower_output`
 (`vision.vision_adapter`, a quarter as many rows) whose output, flattened over the tiles, is
 `projector.input`; on Gemma 4 the tower's `pooler` average-pools 3x3 patches of
-`tower_output` into each soft token and strips the padding, which is `projector.input`; the
+`tower_output` into each soft token and multiplies by `sqrt(vision hidden_size)`, and the
+tower strips the padding and, where the vision config sets `standardize` (26B-A4B, 31B),
+subtracts `std_bias` and multiplies by `std_scale`; that is `projector.input`; the
 encoder-free embedder has no blocks to end a stream, so its `tower_output` is the states
 before the projection, `projector.input` itself.
 
@@ -227,7 +235,10 @@ card, and with it peaked at 11 GB.
 
 Read order is the forward's: `vision.image_token_mask` first (it comes off the inputs,
 like `input_ids`), then the tower's values, a block's attention interior before its
-`layer_output`, then `vision.image_features`, then the text model's.
+`layer_output`, then `vision.image_features`, then the text model's. On the Qwen ViT the
+merger (`projector`) runs inside the tower and `tower_output` is served at the tower's
+output, after it: read `projector.input` and `projector.output` before `tower_output`, or
+the trace raises `OutOfOrderError`.
 
 ## The Qwen ViT
 
@@ -240,6 +251,9 @@ Qwen2.5-VL's windowed blocks). So:
   `attention_output`, `mlp_output`) are `[1, patches, vision_hidden]`: the packed tensor with
   a leading images axis of 1, a view, so in-place edits land; assign the same shape.
   `vision.layers[i].output` stays the native `[patches, vision_hidden]`.
+- The tower has no final norm, so `tower_output` equals the last block's `layer_output` and
+  the merger's input. It is served at the tower's output, which comes after the merger has
+  run: read `projector.input` / `projector.output` before `tower_output` in one trace.
 - The processor's `image_grid_thw` (`[t, h, w]` per image, in patches) splits the row: image
   `j` has `t * h * w` patches. An image's patches are in merge-block order (each 2x2 block
   the merger folds is consecutive), not raster order. On Qwen2.5-VL the tower permutes them
@@ -329,7 +343,7 @@ names bind but `image_features` is `Unavailable` and says so.
 | `gemma3_text` | Gemma 3 (`gemma3`) | SigLIP |
 | `gemma` | PaliGemma (`paligemma`) | SigLIP |
 | `qwen2` | llava-interleave (`llava`), LLaVA-OneVision (`llava_onevision`) | SigLIP |
-| `cohere2` | Aya Vision (`aya_vision`), Cohere2-Vision (`cohere2_vision`) | SigLIP |
+| `cohere2` | Aya Vision 8B (`aya_vision`), Cohere2-Vision (`cohere2_vision`) | SigLIP |
 | `llama` | Llava 1.5 (`llava`), VipLlava (`vipllava`), LLaVA-NeXT (`llava_next`) | CLIP |
 | `llama` | DeepSeek-VL (`deepseek_vl`) | SigLIP |
 | `llama` | Idefics 3 (`idefics3`), SmolVLM (`smolvlm`) | their SigLIP-shaped ViT, one row per tile |

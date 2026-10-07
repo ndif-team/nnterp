@@ -11,7 +11,9 @@ image's patches packed in one row, no final norm) on the ``mistral3`` wrapper
 (``llava-v1.6-mistral``) and BakLLaVA (``llava``). The towers' inner names differ, so
 both sets are keyed. ``vision.image_features`` is read at the scatter
 (`ImageScatter`), so on LLaVA-NeXT it is the unpadded projector output with its
-newline tokens, as the text model receives it.
+newline tokens, as the text model receives it. Pixtral-12B reads
+``vision_feature_layer`` -1 with strategy ``"full"``, so its ``projector.input`` is
+``vision.tower_output``; BakLLaVA reads block -2 without the CLS token, as Llava 1.5.
 """
 
 from transformers.models.clip.modeling_clip import CLIPAttention, CLIPEncoderLayer, CLIPMLP, CLIPVisionModel

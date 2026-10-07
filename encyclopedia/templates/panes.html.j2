@@ -25,7 +25,11 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
 <div class="strip">
   <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
   <span class="strip-arrow">→</span>
-  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× {{ c.num_layers }}</small></div>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× {{ c.num_layers }}{% if c.block.streams %} · {{ c.block.streams.count }} streams{% endif %}</small></div>
+  {% if c.readout %}
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.readout"><span class="mono role-stream">{{ c.readout.expr.rsplit(".", 1)[-1] }}</span><small>streams → one</small></div>
+  {% endif %}
   {% if "norm" in c.root_names %}
   <span class="strip-arrow">→</span>
   <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final norm</small></div>

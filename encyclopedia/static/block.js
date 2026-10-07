@@ -36,6 +36,8 @@
   var PRE = { x: 220, w: 190, h: 48 }, SUB = { x: 440, w: 300 }, POST = { x: 770, w: 190, h: 48 };
   // a norm on the stream after an add (a post-LN block) sits on the line below the add, SN taller
   var SNORM = { w: 170, h: 44, gap: 22 }, SN = 60;
+  // the gap between two of a hyper-connection block's parallel streams
+  var STREAM = 12;
   var PARTS = [['router', 'router'], ['experts', 'routed experts'], ['shared', 'shared expert']];
   function keyOf(sub) { return sub.key || sub.host; }
   // in the forward's order: router, routed experts, shared expert, unless the sublayer gives its own (part_order)
@@ -73,7 +75,7 @@
   function roleOf(id) {
     var tower = id.indexOf(TOWER) === 0, s = tower ? (data.tower && data.tower.schema) : schema;
     var parts = (tower ? id.slice(TOWER.length) : id).split('.');
-    if (['sub', 'contrib', 'interior', 'moe'].indexOf(parts[0]) !== -1) return (s && s.roles[parts[1]]) || 'mlp';
+    if (['sub', 'contrib', 'interior', 'moe', 'post'].indexOf(parts[0]) !== -1) return (s && s.roles[parts[1]]) || 'mlp';
     if (parts[0] === 'norm' || id === 'strip.norm' || id === TOWER + 'path.norm') return 'norm';
     if (parts[0] === 'between' && parts[1] === 'value') return 'mark';
     return 'stream';
@@ -120,6 +122,16 @@
     function below(k) { return sn[k] ? joinY[k] + SNORM.gap + SNORM.h : joinY[k]; }
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     var mids = shape.mids || subs.slice(1).map(function (_, k) { return 'stream.mid.' + k; });
+    // A hyper-connection block (s.streams) carries several streams: thin parallel lines, the first one stronger,
+    // centred on SX and STREAM apart; HB is half the bundle's width, HW half the width of the boxes across it.
+    var st = s.streams, offsets = st ? Array.apply(null, Array(st.count)).map(function (_, j) { return (j - (st.count - 1) / 2) * STREAM; }) : [0];
+    var HB = st ? offsets[offsets.length - 1] : 0, HW = HB + 14;
+    function streamLines(parent, y1, y2, marked) {
+      offsets.forEach(function (o, j) {
+        el('line', { x1: SX + o, y1: y1, x2: SX + o, y2: y2, 'class': st ? (j ? 'stream stream-thin' : 'stream stream-hl') : 'stream',
+          'marker-end': marked ? arrow : null }, parent);
+      });
+    }
 
     // -- the stream -----------------------------------------------------------------
     var topY = 24, botY = H - 26;
@@ -136,17 +148,17 @@
     } else segments.push([below(n - 1), botY, 'stream.output']);
     // the stream between a branch and its join carries the input of that sublayer's add: same name as the segment above
     var full = el('g', { 'class': 'role-stream streamline' });
-    el('line', { x1: SX, y1: topY, x2: SX, y2: botY, 'class': 'stream', 'marker-end': arrow }, full);
+    streamLines(full, topY, botY, true);
     segments.forEach(function (seg) {
       var g = seg[2] ? group(seg[2], 'stream') : el('g', { 'class': 'role-stream' });
-      el('line', { x1: SX, y1: seg[0], x2: SX, y2: seg[1], 'class': 'stream' }, g);
-      el('rect', { x: SX - 18, y: seg[0], width: 36, height: Math.max(seg[1] - seg[0], 1), 'class': 'hit' }, g);
+      streamLines(g, seg[0], seg[1], false);
+      el('rect', { x: SX - 18 - HB, y: seg[0], width: 36 + 2 * HB, height: Math.max(seg[1] - seg[0], 1), 'class': 'hit' }, g);
     });
-    text(full, SX + 16, topY + 6, (P ? 'vision.' : '') + 'layers[i].input', 'label-role');
+    text(full, SX + 16 + HB, topY + 6, (P ? 'vision.' : '') + 'layers[i].input', 'label-role');
     if (between.length) {
-      text(full, SX + 16, betY[0] - 22, 'layer_output', 'label-role');
-      text(full, SX + 16, botY - 2, 'layers[i+1].input', 'label-role');
-    } else text(full, SX + 16, botY - 2, 'layer_output', 'label-role');
+      text(full, SX + 16 + HB, betY[0] - 22, 'layer_output', 'label-role');
+      text(full, SX + 16 + HB, botY - 2, 'layers[i+1].input', 'label-role');
+    } else text(full, SX + 16 + HB, botY - 2, 'layer_output', 'label-role');
     between.forEach(function (b, j) {
       var y = betY[j], bh = 64, top = y - bh / 2;
       var gv = group('between.value.' + b.value, 'mark');
@@ -166,11 +178,22 @@
     subs.forEach(function (sub, k) {
       var y = rowY[k], exitY = parallel ? rowY[0] : second[k] ? rowY[k - 1] : y, jY = joinY[k], key = keyOf(sub), role = s.roles[key] || 'mlp';
       var h = heightOf(sub);
-      // branch out of the stream
-      el('path', { 'class': 'edge', d: parallel || second[k]
-        ? 'M' + SX + ',' + exitY + ' H' + 190 + ' V' + y + ' H' + (sub.pre_norm ? PRE.x : SUB.x)
-        : 'M' + SX + ',' + exitY + ' H' + (sub.pre_norm ? PRE.x : SUB.x), 'marker-end': arrow });
-      el('circle', { cx: SX, cy: exitY, r: 5, fill: 'var(--stream-deep)' });
+      if (st) {
+        // the hyper-connection across the streams: it mixes them (comb) and sends their collapse to the pre-norm
+        var gh = group('hc.' + key, 'stream');
+        el('rect', { x: SX - HW, y: y - 17, width: 2 * HW, height: 34, 'class': 'box box-hc' }, gh);
+        text(gh, SX, y - 3, sub.hc, 'label-sm', 'middle');
+        text(gh, SX, y + 11, 'comb', 'label-dim', 'middle');
+        var gcol = group('collapse.' + key, 'stream'), dcol = 'M' + (SX + HW) + ',' + y + ' H' + (sub.pre_norm ? PRE.x : SUB.x);
+        el('path', { 'class': 'edge', d: dcol, 'marker-end': arrow }, gcol);
+        el('path', { 'class': 'hit', d: dcol, 'stroke-width': 14, fill: 'none', stroke: 'transparent' }, gcol);
+      } else {
+        // branch out of the stream
+        el('path', { 'class': 'edge', d: parallel || second[k]
+          ? 'M' + SX + ',' + exitY + ' H' + 190 + ' V' + y + ' H' + (sub.pre_norm ? PRE.x : SUB.x)
+          : 'M' + SX + ',' + exitY + ' H' + (sub.pre_norm ? PRE.x : SUB.x), 'marker-end': arrow });
+        el('circle', { cx: SX, cy: exitY, r: 5, fill: 'var(--stream-deep)' });
+      }
       if (sub.pre_norm) {
         var gp = group(sub.pre_norm_node || 'norm.' + sub.pre_norm, 'norm');
         el('rect', { x: PRE.x, y: y - PRE.h / 2, width: PRE.w, height: PRE.h, 'class': 'box box-norm' }, gp);
@@ -225,15 +248,22 @@
       // return path, the first sublayer's outermost, so no two edges or labels share a line.
       var lane = parallel ? (n - 1 - k) : first[k] ? 1 : 0, retX = RET - lane * 24, inY = jY - lane * 26;
       var gc2 = group('contrib.' + key, role);
-      var d = 'M' + outX + ',' + y + ' H' + retX + ' V' + inY + ' H' + (SX + 16);
+      var d = 'M' + outX + ',' + y + ' H' + retX + ' V' + inY + ' H' + (st ? SX + HW + 1 : SX + 16);
       el('path', { 'class': 'edge-contrib', d: d, 'marker-end': arrow }, gc2);
       el('path', { 'class': 'hit', d: d, 'stroke-width': 18, fill: 'none', stroke: 'transparent' }, gc2);
       text(gc2, retX - 8, inY - 10, sub.contribution, 'label-role', 'end');
+      // on several streams the contribution enters each, weighted per stream (post), at one add per stream
+      if (st) chip('post.' + key, role, SX + HW + 14, inY - 9, 58, '× post');
       // the add
       if (parallel ? k === n - 1 : !first[k]) {
         var gplus = group(shape.plus, 'stream');
-        el('circle', { cx: SX, cy: jY, r: 14, 'class': 'plus' }, gplus);
-        text(gplus, SX, jY + 8, '+', 'plus-sign', 'middle');
+        if (st) {
+          el('rect', { x: SX - HW, y: jY - 12, width: 2 * HW, height: 24, 'class': 'plus' }, gplus);
+          offsets.forEach(function (o) { text(gplus, SX + o, jY + 5, '+', 'plus-sign plus-sign-sm', 'middle'); });
+        } else {
+          el('circle', { cx: SX, cy: jY, r: 14, 'class': 'plus' }, gplus);
+          text(gplus, SX, jY + 8, '+', 'plus-sign', 'middle');
+        }
       }
       // a norm on the stream after the add, over the line
       if (sub.stream_norm) {

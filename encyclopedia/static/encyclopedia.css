@@ -246,6 +246,8 @@ pre .rn { font-weight: 500; }
 .node-card { position: sticky; top: 16px; }
 .node-card .topstrip { background: var(--role, var(--mark)); }
 .node-card .expr { font-family: var(--mono); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; margin: 0.2rem 0 0.6rem; }
+/* a long expression in a card's sentences breaks inside the card rather than running past its edge */
+.node-card .card-body p, .node-card .card-body code { overflow-wrap: anywhere; }
 .node-card .eyebrow { color: var(--role-deep, var(--mark-deep)); }
 .node-card.pinned .topstrip { background: var(--ink); }
 .node-card .cond { border: 1.5px solid var(--line); padding: 8px 10px; font-size: 12.5px; margin-top: 10px; background: var(--paper-dk); }

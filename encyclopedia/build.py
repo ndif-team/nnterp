@@ -466,7 +466,10 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
         "block": {
             "values": {"layer": values["layer"], **{alias: values[alias] for alias in children}},
             "sizes": [(name, value) for name, value in sizes],
-            "config": [(key, vision_config[key]) for key in CONFIG_KEYS if vision_config.get(key) is not None],
+            # the encoder's own sizes win over a config key of the same name (Qwen2-VL's vision_config.hidden_size is
+            # the merger's output width, not the encoder's)
+            "config": [(key, vision_config[key]) for key in CONFIG_KEYS
+                       if vision_config.get(key) is not None and key not in dict(sizes)],
             "moe": None, "mixer": None, "support": [], "layer_types": None,
             "num_layers": vision.num_layers,
             "host_classes": {alias: [(type(child._module).__name__, False, len(child.values()))] for alias, child in children.items()},

@@ -14,6 +14,7 @@ import warnings
 import pytest
 import torch
 from nnsight import TransformersModel  # nnsight before any transformers submodule
+from nnsight.intervention.envoy import Envoy
 from suite import PROMPT, FamilySuite, recurrent_mixer
 from transformers import AutoConfig
 
@@ -129,6 +130,20 @@ VALUES = (
 )
 
 
+def counterpart(dedicated, model, layer, host):
+    """The dedicated family's name for the module the default calls ``host`` on block ``layer``.
+
+    A hybrid whose transformers code keeps both mixers under ``self_attn``
+    (Kimi-Linear) has its family name the recurrent one ``linear_attn``; the
+    default knows no mixer kinds, so it calls both ``self_attn``.
+    """
+    theirs = dedicated.layers[layer]
+    if not host or theirs.__dict__.get(host) is not None:
+        return host
+    mine = getattr(model.layers[layer], host).path  # the native path: the two loads share no module
+    return next((name for name, child in vars(theirs).items() if isinstance(child, Envoy) and child.path == mine), host)
+
+
 def read(model, layer, host, value):
     saved = {}
     with model.trace(PROMPT):
@@ -151,8 +166,10 @@ def test_default_reads_what_the_family_reads(name):
             key = f"{host}.{value}" if host else value
             if ours.get(key, "absent") is not None:
                 continue
-            assert theirs.get(key) is None, f"layer {i}: the default serves {key}, which {name} reports unavailable: {theirs.get(key)}"
-            expected, actual = read(dedicated, i, host, value), read(model, i, host, value)
+            other = counterpart(dedicated, model, i, host)
+            their_key = f"{other}.{value}" if other else value
+            assert theirs.get(their_key) is None, f"layer {i}: the default serves {key}, which {name} reports unavailable: {theirs.get(their_key)}"
+            expected, actual = read(dedicated, i, other, value), read(model, i, host, value)
             assert torch.equal(actual, expected), f"layer {i}: {key}"
             compared += 1
     with dedicated.trace(PROMPT):

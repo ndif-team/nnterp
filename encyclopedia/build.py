@@ -646,8 +646,13 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         assert sorted(named) == sorted(specs[k]["host"] for k in shape), \
             f"{owner}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
     shown = sorted({k for shape in shape_of for k in shape})
+    # A sublayer no block draws is the other half of an mlp/moe pair, or its host is on no block of this
+    # checkpoint (granitemoehybrid's attention-only checkpoints build no Mamba mixer): the checkpoint draws
+    # the shapes it has. A host that is no standard host is a typo, not an absence.
+    present = {alias for block_hosts in info["block_hosts"] for alias in block_hosts}
     for k in range(len(specs)):
-        assert k in shown or any(hosts[j] == hosts[k] for j in shown), \
+        assert hosts[k] in HOST_ROLES, f"{owner}: BLOCK names host {hosts[k]!r}; the standard hosts are {list(HOST_ROLES)[2:]}"
+        assert k in shown or any(hosts[j] == hosts[k] for j in shown) or hosts[k] not in present, \
             f"{owner}: no block has BLOCK's {keys[k]!r} sublayer"
     # Only the sublayers this checkpoint's blocks draw: the shapes index into what is left.
     position = {k: n for n, k in enumerate(shown)}

@@ -20,10 +20,11 @@ CHECKPOINTS = [
     "ibm-granite/granite-4.0-h-small-base", "ibm-granite/granite-4.0-h-small",
     "ibm-granite/granite-4.0-tiny-base-preview", "ibm-granite/granite-4.0-tiny-preview",
     "ibm-research/granite-4.0-h-3b-ar",
+    # attention on every block: their blocks hold no linear_attn, and the page draws the attention block alone
+    "ibm-granite/granite-4.0-350m-base", "ibm-granite/granite-4.0-350m",
+    "ibm-granite/granite-4.0-1b-base", "ibm-granite/granite-4.0-1b",
+    "ibm-granite/granite-4.0-micro-base", "ibm-granite/granite-4.0-micro",
 ]
-#: The attention-only checkpoints (granite-4.0-350m, -1b, -micro, their -base, granite-guardian-4.0-3b-toxicity-ja)
-#: are this family too, but their blocks hold no ``linear_attn``, and the build refuses a checkpoint on which a
-#: listed sublayer matches no block (only an ``mlp``/``moe`` pair may be half absent); they wait on that.
 
 #: Granite lineage (205, set by granite); below granite_swa (199), between Cohere 2 (188) and Bamba (196).
 PALETTE = {"hue": 192}

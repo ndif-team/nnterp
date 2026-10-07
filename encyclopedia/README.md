@@ -235,8 +235,10 @@ The entry states facts about a family, and each one has a source. Before writing
    the variant label redraw when the slider crosses into another. The build fails when a block has
    a host the listed sublayers do not draw, when two sublayers match the same host on one block,
    when a `block` key names no block class of the checkpoint, or when a
-   sublayer matches no block of the checkpoint and is not the other half of such an `"mlp"` /
-   `"moe"` pair. When the reference and the pinned checkpoint have different block kinds (Nemotron 3 Nano is dense where its tiny checkpoint is a mixture), list both layouts (`"mlp"` and `"moe"` for the same host); each build draws the ones its checkpoint has.
+   sublayer matches no block of the checkpoint while its host is on some block, and it is not the
+   other half of such an `"mlp"` / `"moe"` pair. A sublayer whose host is on no block of a
+   checkpoint is left off that checkpoint's drawing and ledgers (Granite 4.0's attention-only
+   checkpoints have no `linear_attn`). When the reference and the pinned checkpoint have different block kinds (Nemotron 3 Nano is dense where its tiny checkpoint is a mixture), list both layouts (`"mlp"` and `"moe"` for the same host); each build draws the ones its checkpoint has.
 
    The build checks every host, contribution and interior value against the family and fails on a
    name the family does not have.

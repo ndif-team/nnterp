@@ -61,7 +61,9 @@ rearrange them.
    `config.attention_layers` where there is none; by the block's
    shape on a family whose blocks come in several; by the pair of shape and layer type where the
    types also differ within a shape, as on MiMo-V2-Flash, Laguna and Gemma 4; clicking a tick, or Enter or Space on it, selects
-   that block as the slider does), and the block diagram: the residual stream as a
+   that block as the slider does), under it a thinner row of ticks for each of the entry's `tick_facets` whose
+   config list differs between this checkpoint's blocks (GLM-5.2's `indexer_types`), each with a legend and its
+   value appended to the label beside the slider, and the block diagram: the residual stream as a
    vertical line, each sublayer as a row (pre-norm, the module with its interior values as chips,
    post-norm) whose contribution returns to an `⊕` on the stream. A mixture of experts draws a panel
    each for the router, the routed experts and the shared expert inside its box. On a family with
@@ -279,6 +281,16 @@ The entry states facts about a family, and each one has a source. Before writing
      carry a dot. On other blocks nothing changes. A checkpoint without a vision encoder draws none
      (the add needs an image), and blocks past a checkpoint's last are dropped (a tiny checkpoint
      with two blocks draws it on 0 and 1). The ledger lists the value as any other.
+   - `tick_facets` (optional): per-block config lists to show beside the shape, each
+     `{"key": <config key>, "label": <short name>, "values": {<value>: <what it means>}}`
+     (`glm_moe_dsa`: `indexer_types`, `"full"` own indexer, `"shared"` reuses the previous block's
+     selection). The key is read off the text config; where it is a list of strings, one per
+     block, with at least two distinct values, the slider gets a thinner row of ticks under its
+     own, one per facet in the order listed, coloured by value, with a legend naming each value
+     and its text; a tick's hover and the label beside the slider name the block's value. A
+     checkpoint whose config leaves the key unset, or gives every block one value (GLM-5, where
+     transformers fills `indexer_types` with `"full"`), draws no row. A list of another length
+     than the blocks, or a value `values` does not describe, fails the build.
 
    **Blocks that differ.** `sublayers` lists every sublayer any block has, once, in forward order,
    and each block draws the ones that match its own children: a sublayer is drawn where its `host`

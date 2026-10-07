@@ -402,3 +402,25 @@ def test_a_value_added_between_blocks_is_drawn_on_its_blocks_only():
     # a family without `between` has no such key or node
     plain = checkpoint_data(build.build_page(entries.load("llama"), reference=entries.load("llama").PINNED))
     assert "between" not in plain["schema"] and not any(key.startswith("between.") for key in plain["nodes"])
+
+
+def test_a_tick_facet_draws_a_row_where_the_config_list_differs():
+    """BLOCK's tick_facets: a per-block config list draws a row under the slider's ticks on a checkpoint whose blocks
+    differ in it, and none where every block has one value; a value the facet does not describe fails the build."""
+    from test_glm_moe_dsa import _patched_checkpoint
+
+    entry = entries.load("glm_moe_dsa")
+    shared = _patched_checkpoint(indexer_types=["full", "shared"])
+    page = build.build_page(entry, reference=shared, checkpoints=[shared, entry.PINNED])
+    facets = checkpoint_data(page, shared)["schema"]["facets"]
+    assert [(f["key"], f["label"], f["of"]) for f in facets] == [("indexer_types", "indexer", ["full", "shared"])]
+    assert [k["value"] for k in facets[0]["kinds"]] == ["full", "shared"]
+    assert "facets" not in checkpoint_data(page, entry.PINNED)["schema"]  # every block full: no row
+
+    spec = {"tick_facets": [{"key": "indexer_types", "label": "indexer", "values": {"full": "own indexer"}}]}
+    info = {"num_layers": 2, "text_config": type("Config", (), {"indexer_types": ["full", "shared"]})()}
+    with pytest.raises(AssertionError, match="no text for the value 'shared'"):
+        build.tick_facets("glm_moe_dsa", spec, info)
+    info["text_config"].indexer_types = ["full"]
+    with pytest.raises(AssertionError, match="not a list of 2 strings"):
+        build.tick_facets("glm_moe_dsa", spec, info)

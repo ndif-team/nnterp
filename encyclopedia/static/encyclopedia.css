@@ -219,6 +219,14 @@ pre .rn { font-weight: 500; }
 .ticks i[data-block] { cursor: pointer; }
 .ticks i[data-block]:hover { filter: brightness(0.85); outline: 1px solid var(--line); outline-offset: 1px; }
 .ticks i[data-block]:focus-visible { outline: 2px dashed var(--ink); outline-offset: 1px; }
+/* a facet's row (BLOCK.tick_facets): thinner, under the shape row, its values in deep colours, its legend under it */
+.ticks-facet { height: 4px; margin: 2px 0 4px; }
+.ticks-facet i.f0, .facet-legend i.f0 { background: var(--mark-deep); } .ticks-facet i.f1, .facet-legend i.f1 { background: var(--tint); }
+.ticks-facet i.f2, .facet-legend i.f2 { background: var(--c1-deep); } .ticks-facet i.f3, .facet-legend i.f3 { background: var(--c3-deep); } .ticks-facet i.f4, .facet-legend i.f4 { background: var(--c4-deep); }
+.facet-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; margin: 0 0 8px; font-size: 12px; opacity: 0.85; }
+.facet-kind { display: inline-flex; align-items: center; gap: 6px; }
+.facet-kind i { display: inline-block; width: 14px; height: 6px; }
+.facet-kind i.f1 { box-shadow: inset 0 0 0 1px var(--line); }
 #block-svg, .tower-svg { width: 100%; height: auto; display: block; font-family: var(--sans); }
 /* every part of the diagram sits in a group with a role class: boxes take the role's fill
    and its deep as the stroke, edges and the stream the deep; hovered, a box turns deep and

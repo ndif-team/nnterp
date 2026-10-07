@@ -10,6 +10,8 @@ SUBTITLE = (
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ybelkada/mpt-7b-bf16-sharded"
+#: The Hub org the index files the family under: the copy is ybelkada's; the model is MosaicML's.
+ORG = "mosaicml"
 #: The tiny checkpoint the test suite builds the page from.
 PINNED = "hf-internal-testing/tiny-random-MptForCausalLM"
 #: mosaicml's own repositories are gone from the Hub; the copies below carry MPT-7B's and MPT-30B's configs.

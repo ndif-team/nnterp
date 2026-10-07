@@ -9,6 +9,8 @@ SUBTITLE = (
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "AntonV/mamba2-130m-hf"
+#: The Hub org the index files the family under: the conversion is AntonV's; the model is state-spaces'.
+ORG = "state-spaces"
 #: The tiny checkpoint the test suite builds the page from.
 PINNED = "yujiepan/mamba2-tiny-random"
 #: The `-hf` conversions of the original Mamba-2 release, Mamba-Codestral, and the originals: state-spaces/mamba2-*

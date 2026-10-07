@@ -25,6 +25,11 @@ full build goes on past an entry that fails to import or render: it prints `FAIL
 writes the index from the pages that built, and exits non-zero naming the failed entries. Open
 `encyclopedia/site/index.html`.
 
+What the Hub says about an entry beyond its configs (its org's name and avatar, each checkpoint's
+parameter count and creation date) is kept in `hub_cache.json` and `static/orgs/`, both committed, so
+a build offline and the tests show the same page. A build without `HF_HUB_OFFLINE` asks the Hub only
+for what the cache does not hold and writes it back; commit the cache and any new avatar with the entry.
+
 ## The page, top to bottom
 
 Every family page has the same sections in the same order. An entry fills them; it does not
@@ -36,8 +41,14 @@ rearrange them.
    the entry's `CHECKPOINTS`, text checkpoints first, then the vision-language ones, each marked with
    an eye, then any the build could not read, greyed out and not selectable, their hover saying
    "not available in the encyclopedia: <reason>". The list is a keyboard listbox (arrows, Home, End,
-   Enter, Escape). Under it, the Hugging Face logo (`static/hf-logo.svg`, the official file with a
-   `viewBox` added so it scales) links to the shown checkpoint's Hub page.
+   Enter, Escape). Under it, the shown checkpoint's parameter count (`8.03B parameters`, the Hub's
+   safetensors total; where the Hub has none, the meta model's count, marked `· from the config`) and
+   `on the Hub since Jul 2024` (the repository's creation month, which is what the Hub records, not a
+   release date), each blank for a repository the cache does not hold or the Hub does not let the build
+   read; then the Hugging Face logo (`static/hf-logo.svg`, the official file with a
+   `viewBox` added so it scales), linking to the shown checkpoint's Hub page. Once the hero has scrolled
+   off, a slim bar at the top holds the family's title and a second selector over the same choice:
+   picking in either moves both and the hash.
    The page opens on `REFERENCE`; the choice is the URL hash, `#ckpt=<repo id>`, so
    a link opens the page on a checkpoint. Switching does not reload: every part that depends on the
    checkpoint is in the page and the script swaps it. On a vision-language checkpoint the chips add
@@ -107,9 +118,11 @@ rearrange them.
 The index lists every family in `nnterp.families.known()`: a card with the family's circles, title,
 subtitle and quirks for each entry (blocks as a range when its checkpoints differ; an eye and the
 vision encoders found, `CLIP · SigLIP`, and the `Vision-language` chip when any checkpoint has a vision encoder), a
-stub for each family not written yet, a search box (title, `model_type`, architecture, Hub ids,
-quirks, vision encoders, wrappers) and quirk filters: the text quirks and `Vision-language` on the first row,
-the vision encoders on a second.
+stub for each family not written yet, a search box (title, `model_type`, org, architecture, Hub ids,
+quirks, vision encoders, wrappers) and three labelled rows of filters: **Org** (each org's Hub avatar and
+name; a card shows when it is any org chosen), **Quirks** (the text quirks and `Vision-language`) and
+**Vision encoders** (the encoders found); a card shows when it has every quirk and encoder chosen. A
+card carries its org's chip too. The org is the author of the entry's `REFERENCE`, or the entry's `ORG`.
 
 ## Where each part comes from
 
@@ -129,6 +142,8 @@ the vision encoders on a second.
   generation, as before. The family must resolve to the entry's `MODEL_TYPE`. The vision encoder is found by
   `config.vision_config.model_type`, and the build asserts `type(model.vision._module).__name__` is
   one of the vision encoder's `MODULE_CLASSES`.
+- **From the Hub**, by `hub.py`, cached in `hub_cache.json`: the org's display name and avatar, and
+  each checkpoint's parameter count and creation date.
 - **From the entry**, `entries/<model_type>.py`: the title and subtitle, the checkpoints, the block
   schema the diagram draws, the strip's notes, the quirk tags, the hue, the notes, and `WRAPPERS`.
 - **From a vision encoder module**, `vision/<tower>.py`: what holds on every host of a vision encoder.
@@ -168,6 +183,8 @@ The entry states facts about a family, and each one has a source. Before writing
    out with that reason, without reading or building them: a checkpoint whose config builds but whose
    weights do not load (Doge's repositories in their remote code's layout). A checkpoint whose config
    cannot be read needs no entry here; the build greys it by itself.
+   **`ORG`** (optional): the Hub org the index files the family under, where the reference's author is
+   not it (an ungated copy: `cohere.py`'s reference is unsloth's copy of a CohereLabs model).
 4. **`VLLM`**: whether the family has a module under `nnterp/families/vllm/` on the `0.8-refactor-vllm`
    branch (`git show origin/0.8-refactor-vllm:nnterp/families/vllm/<model_type>.py`); this branch has no
    `StandardizedVLLM`, so the flag cannot be run here.

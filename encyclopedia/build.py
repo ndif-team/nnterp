@@ -60,6 +60,7 @@ from transformers import AutoConfig  # noqa: E402
 from transformers.models.auto.modeling_auto import MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES  # noqa: E402
 
 import entries  # noqa: E402
+import hub  # noqa: E402
 import palette as palettes  # noqa: E402
 import vision as towers  # noqa: E402
 
@@ -476,6 +477,8 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "children": list(children),
         "versions": {"nnterp": nnterp.__version__, "transformers": importlib.import_module("transformers").__version__},
         "vision": vision_info(entry, eager, wrapper, conditions, reference) if wrapper else None,
+        # the parameters the meta model holds, which the page shows where the Hub has no safetensors metadata
+        "meta_params": sum(p.numel() for p in eager._module.parameters()),
     }
 
 
@@ -1203,7 +1206,7 @@ EYE = Markup('<svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable=
              '<path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg>')
 #: The parts of a family page built once per checkpoint, each a template macro in panes.html.j2; the page holds
 #: one copy per distinct rendering and shows the selected checkpoint's.
-PANES = ("chips", "block_head", "tower", "values", "printout", "config", "vision_notes", "quirk_list", "envoys")
+PANES = ("chips", "hub", "block_head", "tower", "values", "printout", "config", "vision_notes", "quirk_list", "envoys")
 
 
 def unavailable_reason(error: BaseException) -> str:
@@ -1334,6 +1337,7 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
         }
     model["quirks"] = shown
     model["family_quirks"] = family_quirks
+    model["hub"] = hub.facts(info["reference"], info.get("meta_params"))
     model["vision_quirks"] = shown[len(family_quirks):]
     model["data"] = data
     return model
@@ -1384,6 +1388,7 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
         "model_type": entry.MODEL_TYPE,
         "title": entry.TITLE,
         "subtitle": entry.SUBTITLE,
+        "org": hub.org(entry),
         "palette": palette(entry),
         "default": default,
         "options": options,
@@ -1439,11 +1444,14 @@ def index_model(built: list[dict[str, Any]]) -> dict[str, Any]:
     done = {page["model_type"] for page in built}
     stubs = [name for name in nnterp.families.known() if name not in done]
     found = list(dict.fromkeys(title for page in built for title in page["towers"]))
+    orgs = {page["org"]["id"]: page["org"] for page in built if page.get("org")}
     return {"pages": built, "stubs": stubs, "total": len(nnterp.families.known()), "built": dt.date.today().isoformat(),
             "palette": site_palette(), "eye": EYE,
             # the vision slugs live on the pages; the first filter row keeps the text quirks and the Vision chip
             "quirks": [{"slug": s, "label": l} for s, (l, _) in QUIRKS.items() if s not in VISION_QUIRKS],
-            "towers": [{"slug": tower_slug(title), "label": title} for title in found]}
+            "towers": [{"slug": tower_slug(title), "label": title} for title in found],
+            # the authors of the entries' reference checkpoints, by display name
+            "orgs": sorted(orgs.values(), key=lambda o: o["name"].lower())}
 
 
 def tower_slug(title: str) -> str:
@@ -1452,10 +1460,9 @@ def tower_slug(title: str) -> str:
 
 def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path]:
     env = environment()
+    # online, the Hub fills in what hub_cache.json does not hold yet (orgs, avatars, parameter counts, dates)
+    hub.REFRESH = hub.online()
     out.mkdir(exist_ok=True)
-    if (out / "static").exists():
-        shutil.rmtree(out / "static")
-    shutil.copytree(HERE / "static", out / "static")
     written, cards, failed = [], [], []
     for name in entries.names():
         if only and name not in only:
@@ -1477,11 +1484,16 @@ def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path
         path.write_text(html)
         written.append(path)
         blocks = model["blocks"]
-        cards.append({**{k: model[k] for k in ("model_type", "title", "subtitle", "palette", "checkpoints", "quirks", "vllm",
+        hub.save()
+        cards.append({**{k: model[k] for k in ("model_type", "title", "subtitle", "org", "palette", "checkpoints", "quirks", "vllm",
                                                 "architecture", "family_module", "towers", "wrappers")},
                       "blocks": str(blocks[0]) if len(blocks) == 1 else f"{blocks[0]}–{blocks[-1]}",
                       "tower_slugs": [tower_slug(t) for t in model["towers"]]})
         print(f"wrote {path.relative_to(HERE.parent)}")
+    # static/ is copied after the pages, so the org avatars a build downloads are in it
+    if (out / "static").exists():
+        shutil.rmtree(out / "static")
+    shutil.copytree(HERE / "static", out / "static")
     if not only:
         index = out / "index.html"
         index.write_text(env.get_template("index.html.j2").render(**index_model(cards)))

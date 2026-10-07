@@ -6,6 +6,7 @@ An entry declares::
     TITLE        the page title
     SUBTITLE     one sentence under it
     REFERENCE    the public checkpoint the page opens on
+    ORG          optional: the Hub org the index files the family under (the reference's author by default)
     PINNED       the tiny checkpoint the tests build the page from
     CHECKPOINTS  public checkpoints of this family, the choices of the page's selector, each built from its config
     PALETTE      {"hue": degrees} picks the base hue the five colours are generated from, or

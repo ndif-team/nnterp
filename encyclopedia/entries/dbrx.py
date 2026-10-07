@@ -11,6 +11,8 @@ SUBTITLE = (
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 #: Databricks' own repositories are not on the Hub; the page reads a re-upload's config.
 REFERENCE = "Undi95/dbrx-base"
+#: The Hub org the index files the family under: the copy is Undi95's; the model is Databricks'.
+ORG = "databricks"
 #: The tiny checkpoint the test suite builds the page from.
 PINNED = "yujiepan/dbrx-tiny256-random"
 CHECKPOINTS = [

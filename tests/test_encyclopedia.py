@@ -283,3 +283,63 @@ def test_the_index_lists_every_vision_encoder_an_entry_resolves():
           "tower_slugs": [build.tower_slug(t) for t in card["towers"]]} for card in cards]))
     for title in titles:
         assert f'data-filter="{build.tower_slug(title)}">{title}</button>' in index, title
+
+
+# -- what the Hub says: orgs, parameter counts, dates (hub_cache.json) ----------------------
+
+import hub  # noqa: E402
+
+
+def test_an_entrys_org_resolves_from_the_cache_offline(monkeypatch):
+    """The org is the reference checkpoint's author (or the entry's ORG), named and pictured from the committed cache
+    without asking the Hub; an id the cache does not hold shows as itself, with no avatar."""
+    monkeypatch.setattr(hub, "REFRESH", False)
+    for name, org, display in [("llama", "meta-llama", "Meta Llama"), ("gemma2", "google", "Google"), ("dbrx", "databricks", None)]:
+        found = hub.org(entries.load(name))
+        assert found["id"] == org, name
+        assert display is None or found["name"] == display, (name, found)
+        assert found["avatar"] and (Path(hub.__file__).parent / "static" / found["avatar"]).is_file(), (name, found)
+    monkeypatch.setattr(hub, "_cache", {"orgs": {}, "repos": {}})
+    assert hub.org(entries.load("llama")) == {"id": "meta-llama", "name": "meta-llama", "avatar": None}
+
+
+def test_every_entrys_org_is_in_the_cache():
+    """An offline build names every org: the cache holds each entry's, so an added entry needs one online build."""
+    missing = [name for name in entries.names() if hub.org_id(entries.load(name)) not in hub.cache()["orgs"]]
+    assert not missing, missing
+
+
+def test_the_index_has_org_filters_and_cards_carry_their_org():
+    org = {"id": "meta-llama", "name": "Meta Llama", "avatar": "orgs/meta-llama.png"}
+    card = {"model_type": "llama", "title": "Llama", "subtitle": "", "org": org, "palette": build.site_palette(), "checkpoints": [],
+            "quirks": [], "vllm": False, "architecture": "", "family_module": "", "towers": [], "wrappers": [], "blocks": "1",
+            "tower_slugs": []}
+    index = build.environment().get_template("index.html.j2").render(**build.index_model([card]))
+    assert index.index(">Org</p>") < index.index(">Quirks</p>")
+    assert 'data-org-filter="meta-llama"' in index and 'data-org="meta-llama"' in index
+    assert index.count('src="static/orgs/meta-llama.png"') == 2 and index.count("Meta Llama</") == 2
+
+
+def test_parameter_counts_and_dates_read_like_the_hub():
+    assert [hub.format_params(n) for n in (8_030_261_248, 137_022_720, 405_000_000_000, 70_553_706_496, 1_040_000_000_000)] \
+        == ["8.03B", "137M", "405B", "70.6B", "1.04T"]
+    assert hub.format_month("2024-07-14") == "Jul 2024"
+
+
+def test_params_and_date_render_when_cached_and_are_blank_when_not(monkeypatch):
+    """Under the selector: the Hub's parameter count and creation month when the cache holds the repo; the meta model's
+    count, said to be from the config, when the Hub has no safetensors metadata; nothing when the repo is not cached."""
+    monkeypatch.setattr(hub, "REFRESH", False)
+    entry = entries.load("llama")
+    repo = pinned(entry)
+
+    def hub_pane(repos):
+        monkeypatch.setattr(hub, "_cache", {"orgs": {}, "repos": repos})
+        return panes(build.build_page(entry, reference=repo), repo)["hub"].split("</div>")[0]  # the pane, not what follows
+
+    shown = hub_pane({repo: {"params": 8_030_261_248, "created": "2024-07-14"}})
+    assert "<b>8.03B</b> parameters" in shown and "on the Hub since <b>Jul 2024</b>" in shown and "from the config" not in shown
+    info = build.read_entry(entry, reference=repo)[0][0]["info"]
+    shown = hub_pane({repo: {"params": None, "created": "2024-07-14"}})
+    assert f"<b>{hub.format_params(info['meta_params'])}</b> parameters" in shown and "from the config" in shown
+    assert hub_pane({}).strip() == "" and hub_pane({repo: {"params": None, "created": None}}).strip() == ""

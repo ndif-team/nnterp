@@ -49,7 +49,7 @@ MASKING = ("The attention runs once per image, over that image's patches, so no 
 POSITIONS = ("A 2D rotary embedding (row and column of the patch) turns the queries and keys inside each attention. "
              "Qwen3-VL and Qwen3.5 also add a learned `pos_embed`, resampled to each image's grid, after `patch_embed`.")
 NORM = ("None after the last block: the merger norms each patch as it reads it, so there is no `vision.norm`.")
-QUIRKS = ["packed-tower", "variable-resolution"]
+QUIRKS = ["packed-tower", "variable-resolution", "pooled-projector"]
 
 NOTES = """
 ## Every image in one row
@@ -132,6 +132,7 @@ image into its own grid.
 On Qwen2.5-VL the encoder permutes the patches into windows at entry, so its blocks' values,
 `tower_output` and `projector.output` are in window order, and it restores the merge-block order
 after the merger: `vision.image_features` is in scatter order. On Qwen3-VL and Qwen3.5 `vision.layers[0].input`
-is `patch_embeddings` plus the resampled `pos_embed`; on Qwen2-VL and Qwen2.5-VL positions enter only
-through the rotary embedding.
+is `patch_embeddings` plus the resampled `pos_embed`. On Qwen2-VL `vision.layers[0].input` is
+`patch_embeddings`; on Qwen2.5-VL it is `patch_embeddings` permuted into window order; on both, positions
+enter only through the rotary embedding.
 """

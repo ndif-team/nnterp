@@ -82,7 +82,8 @@ rearrange them.
      rest are the text config's). On a vision-language checkpoint a second card, *Vision Config*, whose body folds (closed at
      first, only its band shows, labelled; open, the body is titled as the Config card is): `model.vision.num_layers`, `hidden_size`, `num_heads`,
      `head_dim`, `intermediate_size`, `patch_size`, `image_size` (`varies` where nnterp raises
-     `Unavailable`).
+     `Unavailable`), then `spatial_merge_size` and `window_size` where the vision encoder's envoy defines
+     them (the Qwen ViT's `QwenVision`).
 
    On a vision-language checkpoint the ledgers go on with the vision encoder's hosts (`model.vision`,
    `model.vision.layers[i]`, `.self_attn`, `.mlp`), with the same `⚠` convention: the vision encoder's
@@ -302,7 +303,10 @@ every family that hosts it; nothing wrapper- or checkpoint-specific goes there. 
 - `ROWS` (what a row of `Patches` and its patch axis are), `MASKING`, `POSITIONS`, `NORM` (whether the
   final norm is `vision.norm`; the page draws a norm node where the built vision encoder has one): a sentence
   or two each, code names in backticks;
-- `QUIRKS`, slugs from `build.QUIRKS`; `NOTES`, markdown, true on every host.
+- `QUIRKS`, slugs from `build.QUIRKS`; `NOTES`, markdown, true on every host. Where one module covers
+  several `vision_config.model_type` values whose encoders differ in a detail (the Qwen ViT's lines: their
+  norms, MLP and windows), `NOTES` may carry a per-variant table, one row per line; it is the one place a
+  Markdown table is allowed, so keep it to four short columns.
 
 A vision encoder hosted by two or more families gets a module; a vision encoder one family hosts stays inline, as
 `WRAPPERS[<wrapper>]["tower"]`, a dict with the same field names (`VISION_CONFIG_TYPES` may be left

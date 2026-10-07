@@ -18,9 +18,9 @@ CHECKPOINTS = [
     "Undi95/dbrx-base", "alpindale/dbrx-instruct",
 ]
 
-#: No kin among the entries; the hash of dbrx (293) sits in the Qwen lineage. 320 is the middle of the
-#: gap between qwen3_vl_moe_text (311) and kimi_k2 (330).
-PALETTE = {"hue": 320}
+#: No kin among the entries; the hash of dbrx (293) sits in the Qwen lineage. 350 is the middle of the
+#: gap between kimi_linear (342) and deepseek_v2 (357).
+PALETTE = {"hue": 350}
 VLLM = False
 QUIRKS = ["fused-qkv", "layernorm", "mixture-of-experts"]
 

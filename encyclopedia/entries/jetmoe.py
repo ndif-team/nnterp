@@ -16,9 +16,9 @@ PINNED = "hf-tiny-v2/tiny-random-JetMoeForCausalLM"
 #: transformers' JetMoeConfig does not read, so it builds with the default 12 blocks, not 24.
 CHECKPOINTS = ["jetmoe/jetmoe-8b", "jetmoe/jetmoe-8b-sft"]
 
-#: No kin among the entries; the hash of jetmoe (0) sits on deepseek_v3's 2. 26 is the middle of the gap
-#: between mamba (17) and gpt2 (36).
-PALETTE = {"hue": 26}
+#: No kin among the entries; the hash of jetmoe (0) sits on deepseek_v3's 2. 52 is the middle of the gap
+#: between exaone4 (46) and olmo2 (58).
+PALETTE = {"hue": 52}
 VLLM = False
 QUIRKS = ["mixture-of-experts"]
 

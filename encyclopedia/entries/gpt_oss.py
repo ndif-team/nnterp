@@ -14,9 +14,9 @@ REFERENCE = "openai/gpt-oss-20b"
 PINNED = "yujiepan/gpt-oss-tiny-random"
 CHECKPOINTS = ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]
 
-#: No kin among the entries; the hash of gpt_oss (18) sits on mamba's 17. 113 is the middle of the
-#: widest free gap, between gpt_neox (99) and gemma4_unified_text (127), 14 degrees from each.
-PALETTE = {"hue": 113}
+#: No kin among the entries; the hash of gpt_oss (18) sits on mamba's 17. 117 is the middle of the
+#: widest free gap, between phi (106) and gemma4_unified_text (127).
+PALETTE = {"hue": 117}
 VLLM = False
 QUIRKS = ["attention-sink", "sliding-window", "mixture-of-experts", "qkv-bias"]
 

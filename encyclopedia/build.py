@@ -458,7 +458,7 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
         "has_norm": has_norm,
         # the projector reads the final norm's output only where its input is tower_output itself; otherwise the
         # path draws the norm off to the side
-        "norm_read": has_norm and projector_input.strip("` ") == "vision.tower_output",
+        "norm_read": has_norm and "`vision.tower_output`" in projector_input,
         "projector": {"class": type(model.projector._module).__name__, "path": model.projector.path,
                       "input": projector_input, "caption": projector_input.replace("`", "")},
         "envoys": envoys,
@@ -801,7 +801,7 @@ def root_printout(model: Any, tower: bool = False) -> str:
     containers = {path.split(".")[0] for path in mounted if "." in path}
     full = {name for name in containers
             if all(f"{name}.{child}" in mounted for child, _ in vision._module.get_submodule(name).named_children())}
-    start = next(k for k, line in enumerate(out) if line.startswith("  (vision): "))
+    start = next(k for k, line in enumerate(out) if line.startswith(("  (vision): ", "  (vision/")))
     lines, out, i = out, out[:start], start
     while i < len(lines):
         name = re.match(r"    \((\w+)\): ", lines[i])

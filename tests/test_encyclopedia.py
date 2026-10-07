@@ -138,11 +138,14 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
     """The wrapper's pinned tiny checkpoint, selected on its family's page, brings the vision encoder: its module is
     found, its block is drawn with the encoder's names, the vision ledgers carry its values, and its config shows."""
     entry = entries.load(name)
+    # Where the suite rewrites the pinned checkpoint into a local copy (Llama 4), the page is built from the copy.
+    text_pin = pinned(entry) if os.path.isdir(pinned(entry)) else entry.PINNED
     tiny = entry.WRAPPERS[wrapper]["pinned"]
-    page = build.build_page(entry, reference=entry.PINNED, checkpoints=[entry.PINNED, tiny])
+    tiny = text_pin if tiny == entry.PINNED else tiny
+    page = build.build_page(entry, reference=text_pin, checkpoints=[text_pin, tiny])
     text, vision = checkpoint_data(page), checkpoint_data(page, tiny)
     # A family whose every checkpoint is the wrapper (Qwen3.5) pins the same checkpoint for both: no text-only one to compare.
-    text_side = tiny != entry.PINNED
+    text_side = tiny != text_pin
     assert (text["tower"] is None or not text_side) and vision["tower"] is not None
     tower = vision["tower"]["schema"]
     assert [sub["host"] for sub in tower["sublayers"]] == ["self_attn", "mlp"]
@@ -158,7 +161,7 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
         assert nodes[f"v:path.{part}"]["expr"] == expr, part
     assert "layers[0].input[vision.image_token_mask] == vision.image_features" in nodes["strip.embed"]["extra"]
     shown = panes(page, tiny)
-    assert 'class="tower-svg"' in shown["tower"] and ('class="tower-svg"' not in panes(page, entry.PINNED)["tower"] or not text_side)
+    assert 'class="tower-svg"' in shown["tower"] and ('class="tower-svg"' not in panes(page, text_pin)["tower"] or not text_side)
     for host in ("model.<wbr>vision", "model.<wbr>vision.<wbr>layers[i].<wbr>self_attn", "model.<wbr>vision.<wbr>layers[i].<wbr>mlp"):
         assert host in shown["values"], host
     for value in ("image_token_mask", "patch_embeddings", "tower_output", "image_features"):
@@ -168,7 +171,7 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
         assert f"model.vision.{size}</span>" in shown["config"], size
     assert '<h2 class="fold-heading">The <em>vision encoder</em></h2>' in shown["tower"]
     assert vision["architecture"].endswith("ForConditionalGeneration") and (text["architecture"].endswith("ForCausalLM") or not text_side)
-    assert f'href="https://huggingface.co/{entry.PINNED}"' in page and 'id="ckpt-hub"' in page
+    assert f'href="https://huggingface.co/{text_pin}"' in page and 'id="ckpt-hub"' in page
     assert f'href="https://huggingface.co/{tiny}"' not in page or not text_side, "only the selected checkpoint is linked, by the script"
     assert "Vision-language" in shown["chips"] and "<h2>" in shown["vision_notes"] and "<details" in shown["vision_notes"]
     assert "Vision-language" not in shown["quirk_list"] and "Vision-language" in shown["vision_notes"]
@@ -200,6 +203,7 @@ def test_every_vision_host_in_nnterp_is_a_wrapper():
         suites = {cls.REPO for cls in vars(module).values()
                   if isinstance(cls, type) and issubclass(cls, VisionSuite) and getattr(cls, "REPO", None)}
         pinned_wrappers = {wrapper["pinned"] for wrapper in entry.WRAPPERS.values()}
+        suites = {entry.PINNED if os.path.isdir(repo) else repo for repo in suites}  # a suite's local copy of PINNED
         assert suites and suites <= pinned_wrappers, (name, sorted(suites - pinned_wrappers))
 
 
@@ -235,7 +239,8 @@ def test_the_index_lists_every_vision_encoder_an_entry_resolves():
     for name in entries.names():
         entry = entries.load(name)
         for wrapper, fields in getattr(entry, "WRAPPERS", {}).items():
-            vision_type = AutoConfig.from_pretrained(fields["pinned"]).vision_config.model_type
+            repo = pinned(entry) if fields["pinned"] == entry.PINNED else fields["pinned"]  # the suite's copy, if any
+            vision_type = AutoConfig.from_pretrained(repo).vision_config.model_type
             titles.add(vision.resolve(entry, wrapper, vision_type)["title"])
     cards = [{"model_type": "x", "towers": sorted(titles)}]
     shown = {tower["label"] for tower in build.index_model(cards)["towers"]}

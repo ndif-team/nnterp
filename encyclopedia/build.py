@@ -444,6 +444,8 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "moe": moe_sizes(moe),
         "mixer": mixer_kernels(mixer),
         "block_class": type(block._module).__name__,
+        # every native block class, in the order the blocks first have them (OLMo-Hybrid has two)
+        "block_class_names": list(dict.fromkeys(block_classes)),
         "returns_tuple": type(block).returns_tuple,
         "reference": reference,
         "default_impl": default_impl,
@@ -928,13 +930,21 @@ INTERIOR_SHORT = {
 }
 
 
+def blocks_sentence(info: dict[str, Any]) -> str:
+    """The strip's ``layers`` hover: the blocks and their native classes, every class a checkpoint's blocks have."""
+    classes = info.get("block_class_names") or [info["block_class"]]
+    if len(classes) == 1:
+        return f"{info['num_layers']} blocks of {classes[0]}; the one drawn below is any of them."
+    return f"{info['num_layers']} blocks of {' and '.join(classes)}; the slider picks the one drawn below."
+
+
 def strip_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     """The model-level strip: embeddings, the blocks, the final norm, the head, the logits."""
     root = {row["name"]: row for row in info["values"]["root"]}
     strip = getattr(entry, "STRIP", {})
     nodes = {
         "strip.embed": value_node(root["token_embeddings"], "embeddings"),
-        "strip.layers": node("the blocks", "model.layers", f"{info['num_layers']} blocks of {info['block_class']}; the one drawn below is any of them."),
+        "strip.layers": node("the blocks", "model.layers", blocks_sentence(info)),
         "strip.norm": node("final norm", "model.norm", "The final norm, under its standard name; `norm.output` is what the head reads."),
         "strip.head": node("unembedding", "model.lm_head.output", "The raw projection onto the vocabulary."),
         "strip.logits": value_node(root["logits"], "logits"),

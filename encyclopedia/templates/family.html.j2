@@ -100,7 +100,7 @@
       <p class="micro">sources</p>
       <p class="body-md"><a href="{{ source_url }}">{{ family_file }}</a><br><a href="{{ test_url }}">tests/families/test_{{ model_type }}.py</a><br><a href="{{ families_url }}">docs/reference/families.md</a></p>
       <p class="micro">envoys</p>
-      <p class="body-md mono">{{ block_class }} → Layer{% for alias, classes in module_classes.items() %}{% for cls in classes %}<br>{{ cls }} → {{ alias }}{% endfor %}{% endfor %}</p>
+      <p class="body-md mono">{% for cls in block_class_names %}{% if not loop.first %}<br>{% endif %}{{ cls }} → Layer{% endfor %}{% for alias, classes in module_classes.items() %}{% for cls in classes %}<br>{{ cls }} → {{ alias }}{% endfor %}{% endfor %}</p>
       {{ pane("envoys") }}
     </aside>
   </div>

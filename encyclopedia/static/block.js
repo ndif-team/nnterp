@@ -320,10 +320,63 @@
   // -- the layer slider -------------------------------------------------------------
   // A tick takes its block's shape's colour on a family with several shapes, else its layer type's; where the
   // layer types also differ within a shape (sliding and full blocks of both a dense and a mixture shape), each
-  // (shape, layer type) pair takes its own colour, so both differences show.
+  // (shape, layer type) pair takes its own colour, so both differences show. Each of the schema's facets (a
+  // per-block config list an entry names in BLOCK.tick_facets) adds a thinner row under it, with its legend.
   var slider = document.getElementById('layer'), label = document.getElementById('layer-label'), variant = document.getElementById('layer-variant');
   var ticks = document.getElementById('ticks'), identity = document.querySelector('#identity code');
-  var shapes, shapeOf, types, drawnShape = null;
+  var shapes, shapeOf, types, facets, drawnShape = null;
+  function tickFor(i, title) {
+    var tick = document.createElement('i');
+    tick.title = title;
+    tick.setAttribute('role', 'button');
+    tick.setAttribute('tabindex', '0');
+    tick.setAttribute('aria-label', title);
+    tick.setAttribute('data-block', i);
+    return tick;
+  }
+  function facetText(f, i) {
+    var v = f.of[i];
+    return f.label + ': ' + v.replace(/_/g, ' ');
+  }
+  function buildFacets() {
+    Array.prototype.forEach.call(document.querySelectorAll('.facet'), function (el) { el.parentNode.removeChild(el); });
+    var after = ticks;
+    facets.forEach(function (f) {
+      var kinds = f.kinds.map(function (k) { return k.value; });
+      var box = document.createElement('div'), row = document.createElement('div'), legend = document.createElement('p');
+      box.className = 'facet';
+      box.setAttribute('data-facet', f.key);
+      row.className = 'ticks ticks-facet';
+      row.setAttribute('aria-hidden', 'true');
+      f.of.forEach(function (v, i) {
+        var tick = tickFor(i, 'block ' + i + ' · ' + facetText(f, i) + ', ' + f.kinds[kinds.indexOf(v)].text);
+        tick.className = 'f' + Math.min(kinds.indexOf(v), 4);
+        row.appendChild(tick);
+      });
+      row.addEventListener('click', onTick);
+      row.addEventListener('keydown', onTickKey);
+      legend.className = 'facet-legend';
+      var name = document.createElement('span');
+      name.className = 'micro';
+      name.textContent = f.label;
+      legend.appendChild(name);
+      f.kinds.forEach(function (k, j) {
+        var item = document.createElement('span'), swatch = document.createElement('i'), value = document.createElement('span');
+        item.className = 'facet-kind';
+        swatch.className = 'f' + Math.min(j, 4);
+        value.className = 'mono';
+        value.textContent = k.value.replace(/_/g, ' ');
+        item.appendChild(swatch);
+        item.appendChild(value);
+        item.appendChild(document.createTextNode(' ' + k.text));
+        legend.appendChild(item);
+      });
+      box.appendChild(row);
+      box.appendChild(legend);
+      after.parentNode.insertBefore(box, after.nextSibling);
+      after = box;
+    });
+  }
   function buildTicks() {
     var kinds = [], pairs = [];
     if (types) types.forEach(function (t) { if (kinds.indexOf(t) === -1) kinds.push(t); });
@@ -334,20 +387,16 @@
     var byPair = shapeOf && types && pairs.length > shapes.length;
     while (ticks.firstChild) ticks.removeChild(ticks.firstChild);
     for (var i = 0; i < schema.num_layers; i++) {
-      var tick = document.createElement('i');
+      var adds = betweenOf(i);
+      var tick = tickFor(i, 'block ' + i + (types ? ' · ' + types[i] : '') + (shapeOf ? ' · ' + shapes[shapeOf[i]].label : '') +
+        adds.map(function (b) { return ' · then ' + b.label; }).join(''));
       if (byPair) tick.className = 't' + Math.min(pairs.indexOf(shapeOf[i] + '|' + types[i]), 4);
       else if (shapeOf) tick.className = 't' + Math.min(shapeOf[i], 4);
       else if (types) tick.className = 't' + kinds.indexOf(types[i]);
-      var adds = betweenOf(i);
       if (adds.length) tick.classList.add('between');
-      tick.title = 'block ' + i + (types ? ' · ' + types[i] : '') + (shapeOf ? ' · ' + shapes[shapeOf[i]].label : '') +
-        adds.map(function (b) { return ' · then ' + b.label; }).join('');
-      tick.setAttribute('role', 'button');
-      tick.setAttribute('tabindex', '0');
-      tick.setAttribute('aria-label', tick.title);
-      tick.setAttribute('data-block', i);
       ticks.appendChild(tick);
     }
+    buildFacets();
   }
   // The values the text model adds after block i, outside it (none on most families).
   function betweenOf(i) {
@@ -359,12 +408,14 @@
     slider.value = tick.getAttribute('data-block');
     update();
   }
-  ticks.addEventListener('click', function (e) { pickBlock(e.target.closest('[data-block]')); });
-  ticks.addEventListener('keydown', function (e) {
+  function onTick(e) { pickBlock(e.target.closest('[data-block]')); }
+  function onTickKey(e) {
     if (e.key !== 'Enter' && e.key !== ' ') return;
     e.preventDefault();
     pickBlock(e.target.closest('[data-block]'));
-  });
+  }
+  ticks.addEventListener('click', onTick);
+  ticks.addEventListener('keydown', onTickKey);
   function update() {
     var i = parseInt(slider.value, 10);
     var s = shapeOf ? shapeOf[i] : 0, adds = betweenOf(i);
@@ -378,8 +429,11 @@
     }
     label.textContent = 'i = ' + i;
     var t = types ? types[i] : null;
-    variant.textContent = (t ? t.replace(/_/g, ' ') : '') + (shapeOf ? (t ? ' · ' : '') + shapes[s].label : '');
-    Array.prototype.forEach.call(ticks.children, function (c, j) { c.classList.toggle('cur', j === i); });
+    var parts = (t ? [t.replace(/_/g, ' ')] : []).concat(shapeOf ? [shapes[s].label] : [], facets.map(function (f) { return facetText(f, i); }));
+    variant.textContent = parts.join(' · ');
+    Array.prototype.forEach.call(document.querySelectorAll('.ticks'), function (row) {
+      Array.prototype.forEach.call(row.children, function (c, j) { c.classList.toggle('cur', j === i); });
+    });
     shapes[s].subs.forEach(function (k) {
       var sub = schema.sublayers[k], sc = mainSvg.querySelector('[data-scoring-for="' + keyOf(sub) + '"]');
       if (sc && sub.moe.scoring_of[i]) sc.textContent = sub.moe.scoring_of[i];
@@ -409,7 +463,7 @@
       p.hidden = p.getAttribute('data-ckpts').split(' ').indexOf(id) === -1;
     });
     // the block and its slider, from this checkpoint's blocks
-    shapes = shapesOf(schema); shapeOf = schema.shape_of; types = schema.layer_types; drawnShape = null;
+    shapes = shapesOf(schema); shapeOf = schema.shape_of; types = schema.layer_types; facets = schema.facets || []; drawnShape = null;
     slider.max = schema.num_layers - 1;
     if (parseInt(slider.value, 10) > schema.num_layers - 1) slider.value = 0;
     buildTicks();

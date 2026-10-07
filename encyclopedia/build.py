@@ -968,6 +968,9 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
     between = between_schema(owner, block_spec, info, by_host, base, stream, nodes)
     if between:
         schema["between"] = between
+    facets = tick_facets(owner, block_spec, info)
+    if facets:
+        schema["facets"] = facets
     return schema
 
 
@@ -1012,6 +1015,27 @@ def between_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any],
             layout="Residual", dims="batch seq hidden")
         out.append({"value": value, "mask": mask, "label": spec["label"], "blocks": blocks, "identity": identity})
     return out
+
+
+def tick_facets(owner: str, block_spec: dict[str, Any], info: dict[str, Any]) -> list[dict[str, Any]]:
+    """The BLOCK's ``tick_facets`` this checkpoint draws: each a per-block config list of strings, as a row of
+    ticks under the slider's. A facet whose key the text config leaves unset, or whose blocks all have one
+    value, draws no row; a list of another length than the blocks, or a value the facet does not describe,
+    fails the build."""
+    facets = []
+    for facet in block_spec.get("tick_facets", []):
+        key, label, texts = facet["key"], facet["label"], facet["values"]
+        of = getattr(info.get("text_config"), key, None)
+        if of is None:
+            continue
+        assert isinstance(of, list) and all(isinstance(v, str) for v in of) and len(of) == info["num_layers"], \
+            f"{owner}: tick facet config.{key} is not a list of {info['num_layers']} strings, one per block"
+        kinds = list(dict.fromkeys(of))
+        for value in kinds:
+            assert value in texts, f"{owner}: tick facet {key!r} has no text for the value {value!r}; it has {sorted(texts)}"
+        if len(kinds) > 1:
+            facets.append({"key": key, "label": label, "kinds": [{"value": v, "text": texts[v]} for v in kinds], "of": of})
+    return facets
 
 
 INTERIOR_SHORT = {

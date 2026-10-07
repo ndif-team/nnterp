@@ -20,6 +20,24 @@ CHECKPOINTS = [
     "ibm-granite/granite-guardian-3.2-3b-a800m", "ibm-research/PowerMoE-3b",
 ]
 
+#: Checkpoints that ship their tokenizer as `vocab.json` and `merges.txt` only, with no `tokenizer.json`.
+GPT2_FILES_ONLY = {"ibm-granite/granite-3.0-3b-a800m-instruct"}
+
+
+def load(checkpoint, **kwargs):
+    """The page's model, built on the meta device. ``ibm-granite/granite-3.0-3b-a800m-instruct`` has no ``tokenizer.json``,
+    and transformers' ``AutoTokenizer`` maps ``granitemoe`` to the generic ``TokenizersBackend``, which cannot
+    build from ``vocab.json`` and ``merges.txt``; the GPT-2 tokenizer its ``tokenizer_config.json`` names
+    can, so it is loaded by type and handed over."""
+    from transformers import AutoTokenizer
+
+    from nnterp import StandardizedTransformer
+
+    if checkpoint in GPT2_FILES_ONLY:
+        kwargs["tokenizer"] = AutoTokenizer.from_pretrained(checkpoint, tokenizer_type="gpt2")
+    return StandardizedTransformer(checkpoint, **kwargs)
+
+
 #: Granite lineage (205, set by granite); GraniteMoE sits beside it.
 PALETTE = {"hue": 215}
 VLLM = False

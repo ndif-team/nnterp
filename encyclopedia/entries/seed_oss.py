@@ -17,7 +17,7 @@ CHECKPOINTS = [
     "ByteDance-Seed/Seed-OSS-36B-Instruct",
 ]
 
-PALETTE = {"hue": 21}
+PALETTE = {"hue": 258}
 VLLM = False
 QUIRKS = ["qkv-bias"]
 

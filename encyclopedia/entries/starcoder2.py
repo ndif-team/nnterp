@@ -18,8 +18,8 @@ CHECKPOINTS = [
     "bigcode/starcoder2-15b-instruct-v0.1",
 ]
 
-#: Beside codegen's 234, another code model.
-PALETTE = {"hue": 238}
+#: Beside gpt_bigcode's 39, StarCoder's family.
+PALETTE = {"hue": 43}
 VLLM = False
 QUIRKS = ["layernorm", "qkv-bias", "sliding-window"]
 

@@ -255,3 +255,12 @@ def test_tuple_blocks_are_read_off_the_scan():
         model.skip_layers(0, 0)
         logits = model.logits.save()
     assert logits.shape[-1] == model.vocab_size
+
+
+def test_family_default_at_load_runs_the_check():
+    """``family=default`` skips the lookup (no warning) but not the check on the built tree."""
+    with warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        with pytest.raises(UnsupportedFamily, match="found no embed_tokens, layers, norm, lm_head"):
+            StandardizedTransformer("hf-internal-testing/tiny-random-RwkvForCausalLM", family=default)
+    assert not any("no family for model_type" in str(warning.message) for warning in caught)

@@ -26,7 +26,7 @@ def load(checkpoint, **kwargs):
 
 
 #: No kin among the entries; set in the largest free gap of the hue table.
-PALETTE = {"hue": 228}
+PALETTE = {"hue": 171}
 VLLM = False
 QUIRKS = ["fused-qkv", "qkv-bias", "qk-norm", "partial-rotary", "squared-relu", "layernorm"]
 

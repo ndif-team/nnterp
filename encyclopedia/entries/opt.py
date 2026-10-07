@@ -17,7 +17,7 @@ CHECKPOINTS = [
 ]
 
 #: OPT and XGLM share the block (fairseq's decoder layer); OPT sets the lineage's hue.
-PALETTE = {"hue": 31}
+PALETTE = {"hue": 336}
 VLLM = False
 QUIRKS = ["no-mlp", "position-embeddings", "layernorm", "qkv-bias"]
 

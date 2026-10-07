@@ -1,8 +1,8 @@
 """The best-effort family, for a ``model_type`` no family module covers.
 
 `nnterp.families.lookup` falls back to this module, with a warning, when the
-checkpoint's ``model_type`` has neither a module here nor a registered family.
-It covers no ``MODEL_TYPES``: it is never matched by name.
+checkpoint's ``model_type`` has neither a module here nor a registered family;
+no ``model_type`` names it.
 
 ``RENAME`` lists the spellings the shipped families use for the containers
 (``model``, ``transformer``, ``gpt_neox``, ``model.decoder``, ``backbone``,
@@ -49,8 +49,6 @@ from ..components import (
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
-
-MODEL_TYPES = ()
 
 #: The containers the shipped families keep their modules in, and what each root module is spelled there.
 CONTAINERS = ("model", "transformer", "gpt_neox", "model.decoder", "backbone", "model.language_model", "language_model.model")

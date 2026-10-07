@@ -186,7 +186,6 @@ def test_lookup_falls_back_to_the_default_with_a_warning():
     with pytest.warns(UserWarning, match="no family for model_type 'not_a_model_type'"):
         assert families.lookup("not_a_model_type") is default
     assert "default" not in families.known()
-    assert default.MODEL_TYPES == ()
 
 
 def test_registered_and_shipped_families_win_without_a_warning():

@@ -172,6 +172,12 @@ CONFIG_KEYS = (
     "num_kv_shared_layers",
     "mamba_num_heads", "mamba_head_dim", "n_groups", "ssm_state_size", "chunk_size", "mlp_hidden_act",
     "moe_shared_expert_intermediate_size", "moe_latent_size",
+    # scalars an entry's notes rely on
+    "attention_bias", "use_sliding_window", "max_window_layers", "decoder_sparse_step", "shared_expert_intermediate_size",
+    "logit_scale", "use_qk_norm", "n_group", "topk_group", "clip_qkv", "d_inner", "time_step_min",
+    "enable_moe_block", "hidden_size_per_layer_input", "attention_k_eq_v", "use_bidirectional_attention",
+    "interleave_moe_layer_step", "intermediate_size_mlp", "no_rope_layer_interval", "attention_chunk_size",
+    "attn_temperature_tuning", "attn_scale", "floor_scale",
 )
 
 #: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.

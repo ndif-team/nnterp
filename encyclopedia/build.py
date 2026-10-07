@@ -526,18 +526,47 @@ def projector_caption(projector_input: str) -> str:
 
 
 def moe_sizes(moe: Any) -> dict[str, Any] | None:
-    """A mixture's sizes, its scoring and its parts' classes, off the first `Moe` the blocks have."""
+    """A mixture's sizes, its scoring and its parts' classes, off the first `Moe` the blocks have.
+
+    The router and the experts are the envoy's own children or, where the envoy hands them down from
+    its block (GraniteMoE-Hybrid's ``block_sparse_moe``), its ``router`` and ``experts``. The shared
+    expert is a child under one of `SHARED_NAMES`, else what ``shared_expert_output`` reads: a sibling
+    on the block (``../shared_mlp.output``, GraniteMoE-Shared) or the host itself (``output``,
+    GraniteMoE-Hybrid's ``mlp``); ``shared_at`` is then its path from the block, the host's name
+    standing for the host."""
     if moe is None:
         return None
     modules = moe._module._modules
-    router = next((modules[name] for name in ("router", "gate") if modules.get(name) is not None), None)
+
+    def part(names: tuple[str, ...], attr: str) -> Any:
+        found = next((modules[name] for name in names if modules.get(name) is not None), None)
+        if found is None:
+            try:
+                found = getattr(moe, attr)._module
+            except Exception:
+                found = None
+        return found
+
+    router, experts = part(("router", "gate"), "router"), part(("experts",), "experts")
     shared = next((modules[name] for name in SHARED_NAMES if modules.get(name) is not None), None)
-    return {
+    shared_at = None
+    if shared is None:
+        key = getattr(inspect.getattr_static(moe, "shared_expert_output", None), "key", None)
+        if isinstance(key, str) and key.startswith("../") and key.endswith(".output"):
+            sibling = key[3:-len(".output")]
+            shared = moe.parent._module._modules.get(sibling)
+            shared_at = sibling if shared is not None else None
+        elif key == "output":
+            shared, shared_at = moe._module, ""
+    sizes = {
         "num_experts": moe.num_experts, "top_k": moe.top_k, "scoring": type(moe).SCORING,
         "router": type(router).__name__ if router is not None else None,
-        "experts": type(modules["experts"]).__name__ if modules.get("experts") is not None else None,
+        "experts": type(experts).__name__ if experts is not None else None,
         "shared": type(shared).__name__ if shared is not None else None,
     }
+    if shared_at is not None:
+        sizes["shared_at"] = shared_at
+    return sizes
 
 
 def mixer_kernels(mixer: Any) -> dict[str, str] | None:
@@ -679,8 +708,9 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                     f"`{moe['experts']}`, {moe['num_experts']} experts. Each token runs through the {moe['top_k']} it is routed to; "
                     "`expert_outputs` holds each slot's weighted output and `routed_output` their sum.")
             if "shared" in parts:
+                at = moe.get("shared_at")
                 nodes[f"moe.{key}.shared"] = node(
-                    "the shared expert", f"{expr}.shared_experts",
+                    "the shared expert", f"{expr}.shared_experts" if at is None else f"{base}.{at or host}",
                     f"`{moe['shared']}`. Every token runs through it; `shared_expert_output` is what it adds beside `routed_output`.")
         nodes[f"contrib.{key}"] = value_node(contribution, "contribution")
         # A norm's node is its native name; on a sublayer drawn on one block class it is the sublayer's

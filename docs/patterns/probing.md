@@ -158,7 +158,7 @@ random = [logit_gap(torch.nn.functional.normalize(torch.randn_like(direction), d
 
 `add_special_tokens=False` keeps the BOS token out of the ids (`tokenizer.encode(" great")[0]`
 is the BOS id on Llama and Gemma); the assertion catches a word that is more than one token
-(Mistral's sentencepiece tokenizer splits `" Paris"` into `['▁', '▁Paris']`), in which case try
+(Mixtral-8x7B's sentencepiece tokenizer, which the tiny Mistral checkpoint carries, splits `" Paris"` into `['▁', '▁Paris']`), in which case try
 it without the leading space or pick another word.
 
 A direction that decodes and steers nothing is also a result: a feature the model

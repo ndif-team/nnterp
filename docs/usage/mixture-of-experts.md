@@ -81,13 +81,17 @@ Recomputing the weights from `router_logits` also needs the family's normalizati
 top-k, a config flag: OLMoE (and Qwen1.5-MoE) leave `norm_topk_prob` off, so the weights
 are the softmax's top-k entries themselves and a token's weights sum to less than one
 (0.33 to 0.77 on one block of OLMoE-1B-7B), while Mixtral renormalizes them to one. Some
-families also scale the weights after (`routed_scaling_factor`). Read `expert_weights`
+families also scale the weights after (`routed_scaling_factor`): DeepSeek-V2 leaves
+`norm_topk_prob` off and multiplies the chosen softmax entries by `routed_scaling_factor`,
+16 on the 236B checkpoints (V2, V2-Chat, V2.5) and 1.0 on V2-Lite, so its weights are the
+softmax entries times that factor. Read `expert_weights`
 rather than recomputing it where you can.
 
 ## Recipes
 
-Each runs as written on the tiny Mixtral above; on every MoE family with the values it
-has ([below](#per-family-caveats)).
+Each runs as written on the tiny Mixtral above, and on every MoE family with the values it
+has ([below](#per-family-caveats)), JetMoE needing `expert_indices` read before
+`expert_weights` ([read order](#read-order-within-a-mixture)).
 
 ```python
 prompts = ["The Eiffel Tower is in the city of", "def add(a, b):\n    return a + b"]
@@ -111,6 +115,7 @@ prompt = "The Eiffel Tower is in the city of"
 with model.trace(prompt):
     moe.expert_weights = moe.expert_weights.masked_fill(moe.expert_indices == 3, 0)
     ablated = model.logits.save()
+# (JetMoE computes the indices first: idx = moe.expert_indices, then masked_fill(idx == 3, 0))
 
 # Ablate one slot: the last token's first choice, in place
 with model.trace(prompt):
@@ -131,7 +136,10 @@ with model.trace(prompt):
 Zeroing a slot's weight removes exactly that slot's term from `routed_output`; the suite
 checks it against `expert_outputs` on every family. A rerouted slot computes
 `w * expert_e2(x)`; the other tokens are untouched up to the grouped matmul's rounding
-(their groups change size). [expert-ablation](../patterns/expert-ablation.md) sweeps every
+(their groups change size). An edit also reaches the routing of later blocks: a token
+whose stream changes can pick other experts downstream, so compare edited runs with a
+clean run in float32, where the rest of the forward rounds the same way.
+[expert-ablation](../patterns/expert-ablation.md) sweeps every
 expert's effect on a target token.
 
 ## `experts_implementation=` and what eager loses
@@ -166,9 +174,15 @@ shared expert runs differs:
 | `shared_expert_output` comes | families |
 | --- | --- |
 | first, before the router | Hunyuan, ERNIE, Laguna, Gemma-4 (the dense MLP runs first) |
-| between the router and the experts | AFMoE |
+| after `router_logits`, before `expert_weights` / `expert_indices` (read at the experts' arguments) | AFMoE |
 | after `routed_output` | DeepSeek-V2/V3/V3.2/V4, GLM-4-MoE(-Lite), GLM-5, dots.llm1, Solar Open, Nemotron-H, the Qwen families (the gated product), GraniteMoE-Shared and -Hybrid |
 | after the routing, before `routed_output` | Llama 4 |
+
+On Qwen2-MoE, Qwen3-Next and Qwen3.5-MoE only the gated product (`shared_expert_output`)
+comes after `routed_output`: the ungated shared expert (`mlp.shared_expert.output`) runs
+first, before `router_logits`. On JetMoE the router computes the indices before the
+weights, so read `expert_indices` before `expert_weights` (the ablation below binds the
+indices first there).
 
 An out-of-order read raises nnsight's `OutOfOrderError`; read one value per trace when
 in doubt, as the suite does.
@@ -186,12 +200,13 @@ without it, edit in place under several invokes.
 
 | family | what differs |
 | --- | --- |
-| Gemma-4 (26B-A4B) | No MoE module: `router` and `experts` are the block's children; `layers[i].mlp`, the dense MLP, reads them through its parent and hosts the values. The router runs on the block's input with its own norm and returns probabilities; `router_logits` is its projection (`router.proj`). `shared_expert_output` is the dense MLP's output; the identity is `mlp_output == post_feedforward_layernorm(post_feedforward_layernorm_1(shared_expert_output) + post_feedforward_layernorm_2(routed_output))`. On a dense checkpoint every mixture value is unavailable. |
+| Gemma-4 (26B-A4B) | No MoE module: `router` and `experts` are the block's children; `layers[i].mlp`, the dense MLP, reads them through its parent and hosts the values. The router runs on the stream after the attention's add (not the block's input) with its own norm and returns probabilities; `router_logits` is its projection (`router.proj`). `shared_expert_output` is the dense MLP's output; the identity is `mlp_output == post_feedforward_layernorm(post_feedforward_layernorm_1(shared_expert_output) + post_feedforward_layernorm_2(routed_output))`. On a dense checkpoint every mixture value is unavailable. |
 | GraniteMoE-Hybrid | `mlp` is the shared expert (`shared_mlp`); it reads `block_sparse_moe`'s `router` and `experts` through its parent. `shared_expert_output` is `mlp.output`; `routed_output + shared_expert_output == mlp_output / residual_multiplier`. GraniteMoE-Shared: `shared_expert_output` is the block's `shared_mlp`, the same identity. |
 | Llama 4 | The router scatters the sigmoid of the top-k logits into dense scores over every expert, every expert runs on every token scaled on its *input* by its score, and the routed sum is added into the shared expert's output tensor in place. `router_logits` and `expert_indices` (the router's top-k) are served, `routed_output` is the sum over experts, `shared_expert_output` a copy carried back by a transform; `expert_weights` and `expert_outputs` are unavailable. |
 | JetMoE | No experts module: the router takes the top-k of its logits, softmaxes them and sorts the slots by expert. `expert_indices` / `expert_weights` are its top-k indices and gates in token order; `routed_output` is the routed sum before the mixture's `+ bias`; `expert_outputs` (sorted by expert) is unavailable. Read order: logits, indices, weights. |
+| FlexOlmo | The released checkpoints route every token to every expert (`num_experts_per_tok == num_experts`) with `norm_topk_prob` off: `expert_weights` is the whole softmax, summing to one, and ablating an expert's slot removes its share without rerouting. |
 | DBRX | The router (`router.layer`) returns the logits alone; the FFN's `route_tokens_to_experts` takes a softmax top-k and p-normalizes. The experts loop over experts in their own forward, so `expert_outputs` is unavailable. |
-| ZAYA | `router_logits` has `num_experts + 1` columns: the last is **skip**. A slot that picks it has weight 0 and index **0**, an alias of expert 0, so mask `expert_weights != 0` when counting usage. The router carries a state from the previous block. |
+| ZAYA | `router_logits` has `num_experts + 1` columns: the last is **skip**. A slot that picks it has weight 0 and index **0**, an alias of expert 0, so mask `expert_weights != 0` when counting usage. On ZAYA1-8B and ZAYA1-74B-preview (top 1) the skip class's balancing bias is -1 and some expert's is positive on every block, so skip is never chosen there; the tiny picks it. The router carries a state from the previous block. |
 | Nemotron-H | With `moe_latent_size` the experts run in a latent width between `fc1_latent_proj` and `fc2_latent_proj`: `routed_output` is the up projection's output and `expert_outputs` is unavailable. |
 | DeepSeek-V4 | On a `hash_moe` block the token ids pick the experts (`tid2eid[input_ids]`): writing `router_logits` changes `expert_weights`, not `expert_indices`. `SCORING` is per block. |
 | Laguna | `router_logits` is before the router's tanh softcap; `routed_output` is the experts' sum times `routed_scaling_factor`, so `expert_outputs.sum(2) * routed_scaling_factor == routed_output`. |

@@ -7,9 +7,12 @@ so the contributions are the modules' outputs and the base holds.
 ``post_attention_layernorm`` (the Llama meaning; VaultGemma has no norm after the
 attention). The embedding module scales its own output by ``sqrt(hidden_size)``,
 so ``token_embeddings`` is ``layers[0].input``. The attention runs the shared
-eager forward with Gemma-2's score softcapping inside it (``attention_scores`` are
-the capped scores entering the softmax); ``final_logit_softcapping`` applies to
-the logits after ``lm_head``, which the root's ``project_on_vocab`` reads.
+eager forward with Gemma-2's score softcapping inside it where
+``attn_logit_softcapping`` is set (``attention_scores`` are then the capped scores
+entering the softmax), and ``final_logit_softcapping``, where set, applies to the
+logits after ``lm_head``, which the root's ``project_on_vocab`` follows. The released
+``google/vaultgemma-1b`` sets both caps to null and every block to full attention,
+so it caps nothing; the pinned tiny sets both.
 """
 
 from transformers.models.vaultgemma.modeling_vaultgemma import VaultGemmaAttention, VaultGemmaDecoderLayer, VaultGemmaMLP

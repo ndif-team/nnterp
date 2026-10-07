@@ -38,6 +38,9 @@ previous block's router state into its input and scores ``num_experts + 1``
 classes with a small MLP (``router_mlp``), whose output is ``router_logits``: the
 last column is **skip**. A slot that picks it runs no expert: its weight is 0 and
 its index **0**, an alias of expert 0, so usage counts mask ``expert_weights == 0``.
+The router picks on its softmax plus ``balancing_biases``; on ZAYA1-8B and
+ZAYA1-74B-preview (``num_experts_per_tok`` 1) the skip class's bias is -1 and some
+expert's is positive on every block, so skip is never chosen there; the tiny picks it.
 """
 
 from typing import TYPE_CHECKING

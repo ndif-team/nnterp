@@ -24,7 +24,9 @@ image's patches to ``max_soft_tokens`` rows at position ``(-1, -1)``, and the
 embedder runs on every row; the wrapper strips the padded rows of the
 projector's output before scattering, so ``vision.image_features`` is read at
 the scatter (the first ``inputs_embeds.masked_scatter`` of
-``Gemma4UnifiedModel.forward``, an `ImageScatter`).
+``Gemma4UnifiedModel.forward``, an `ImageScatter`). Audio is embedded the same
+way, without blocks: ``model.embed_audio`` keeps its native name, and there is no
+``audio_tower``.
 """
 
 from typing import Any

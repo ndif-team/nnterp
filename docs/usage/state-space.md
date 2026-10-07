@@ -70,7 +70,7 @@ Decide which blocks hold a Mamba-2 mixer *outside* the trace, as above.
 
 | family | blocks | `linear_attn` is | the rest of the block |
 | --- | --- | --- | --- |
-| `mamba2` | every block | `mixer` | `norm` as `input_layernorm`; no `self_attn`, no `mlp` |
+| `mamba2` | every block | `mixer` | the pre-norm keeps its native name `norm` (no `input_layernorm` alias); no `self_attn`, no `mlp` |
 | `nemotron_h` | `layers_block_type == "linear_attention"` | `mixer` | one sublayer per block: the `mixer` is `linear_attn`, `self_attn` or `mlp` by its class |
 | `bamba` | all but `attn_layer_indices` | `mamba` | `self_attn` on the others; `feed_forward` as `mlp` on every block |
 | `falcon_h1` | every block, beside `self_attn` | `mamba` | both mixers in parallel, then `feed_forward` as `mlp` |
@@ -138,11 +138,14 @@ reach `dt`. Three consequences:
   keeps more of the state *and* writes at half strength, and `decays = 0` ("keep
   everything") sets `dt` to zero, which writes nothing: the state stays at zero
   through a whole prompt. There is no way to change the decay alone.
-- **`betas[:, t] = 0` is the exact "skip this token"**: no write and `exp(0) = 1`, no
-  decay, so the state after token `t` equals the state after `t - 1` bit for bit.
+- **`betas[:, t] = 0` is the exact "skip this token" on Mamba-2**: no write and
+  `exp(0) = 1`, no decay, so the state after token `t` equals the state after `t - 1`
+  bit for bit. Nemotron-H's scan clamps `dt` to at least `time_step_min` (0.001 on the
+  released configs), so there a written 0 runs as 0.001 and the state still moves.
 - **Writing the same values back is not a no-op.** The round trip through the
-  softplus's inverse rounds `dt`: `mix.betas = mix.betas` moves float32 logits by about
-  1e-4 and bf16 logits by up to 1.0 on mamba2-130m. As a control, compare against an
+  softplus's inverse rounds `dt`: `mix.betas = mix.betas` on every block moves float32
+  logits by about 2e-4 and bf16 logits by up to 1.8 on mamba2-130m (on block 0 alone
+  the bf16 round trip happened to be exact). As a control, compare against an
   unedited run in float32, not against a write-back.
 
 ```python
@@ -180,7 +183,7 @@ every token of the call:
 ```python
 from nnterp import chunk_per_token
 
-chunk_per_token(model)                         # this model only; the logits are unchanged
+chunk_per_token(model)                         # this model only; the logits change by rounding
 with model.trace(prompt):
     states = mix.states.save()                 # [batch, seq, heads, state_dim, head_dim]
     final = mix.state_output.save()            # == states[:, -1]
@@ -198,6 +201,10 @@ is that step's one token, `state_output` with a sequence axis of 1, and
 
 `states` is a copy, `new_states[:, 1:]` transposed to the key-side-first
 `States` layout, and read-only: an edit to it does not reach the scan.
+
+Chunking per token computes the same scan in another order, so the logits move by
+rounding: about 2e-4 in float32 on mamba2-130m, and up to 1.25 in bf16 on one prompt.
+Compare runs made under the same chunking, or in float32.
 
 - **Per model, not per family.** `chunk_per_token` sets an attribute of each
   mixer module of the model you pass, which the forward reads on every call;
@@ -268,15 +275,24 @@ mamba2_chunk_scan, but this process dispatches it to an optimized kernel
 nnterp.route_kernels(model.family, 'torch'), to read these`. `route_kernels(family,
 "torch")` binds the family's two kernel names to transformers' pure-torch
 functions, process-wide; a prompt keeps the chunked scan. Call it before the
-first trace of the layer; `route_kernels(family, "default")` restores the
+first trace that reads a value inside the mixer (a plain trace before it does
+not fix the kernels); `route_kernels(family, "default")` restores the
 optimized kernels. On a CPU the optimized kernels do not run at all, so a
-model with `mamba_ssm` installed needs the routing to run on CPU. Only the
+model with `mamba_ssm` installed needs the routing before any trace on CPU:
+unrouted, a `layer_output` read fails with `ValueError: Pointer argument cannot
+be accessed from Triton (cpu tensor?)` when a GPU is visible and `RuntimeError:
+invalid argument to exchangeDevice` when none is. Only the
 two scan kernels are routed: the values are read at the scan call, so the
 short convolution's kernel (`causal_conv1d`, when installed) does not affect
 them.
 
 ## Gotchas
 
+- **A mixer's submodule and its kernel values do not mix in one trace.** Reading a
+  submodule's value (`linear_attn.in_proj.output`) and then a kernel value (`betas`) raises
+  `OutOfOrderError` naming an op at the top of the mixer's forward (`use_precomputed_states_0`): the kernel
+  values look up that op to see which kernel runs, and the submodule read has already
+  passed it. The other order is out of forward order too. Read them in separate traces.
 - **Route before the layer is traced**, with the family module before loading
   (`nnterp.families.mamba2`) or `model.family` after; see
   [recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md).
@@ -300,7 +316,8 @@ them.
   raises `Unavailable` there.
 - **Falcon-H1 with `mamba_rms_norm` off** passes the gate into the decode
   kernel, so a decode step's `attention_head_outputs` is gated by `silu(z)`
-  where a prompt's is not.
+  where a prompt's is not. That is Falcon-H1-0.5B and the Falcon-H1-Tiny checkpoints
+  (their `linear_attn.norm` is an identity); 1.5B and up set it.
 
 ## Related
 

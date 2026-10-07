@@ -1,4 +1,4 @@
-"""GLM-4 (the first generation: GLM-4-9B, ``GlmForCausalLM``) (``GlmForCausalLM``).
+"""GLM-4 (``GlmForCausalLM``), the first generation: GLM-4-9B.
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual

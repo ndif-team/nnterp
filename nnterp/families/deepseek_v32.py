@@ -18,8 +18,10 @@ attention mask (every unselected key set to the dtype's minimum) before the shar
 
 While a prompt is no longer than ``index_topk`` (2048 on the released checkpoints) the
 indexer selects every causal key and the pattern is the dense causal one. The indexer's
-selection is ``self_attn.indexer.output``, the ``[batch, query, index_topk]`` int32 key
-indices; it has no standard name. The first ``first_k_dense_replace`` blocks (per
+selection is ``self_attn.indexer.output``, the ``[batch, query, min(index_topk, keys)]``
+int32 key indices; it has no standard name. On a prompt shorter than ``index_topk`` it
+holds every key, future ones included (masked in the index scores, so ranked last), and
+the causal mask removes those. The first ``first_k_dense_replace`` blocks (per
 ``mlp_layer_types``) have a dense MLP, the rest a mixture of experts. The sizes are
 DeepSeek-V2's.
 """

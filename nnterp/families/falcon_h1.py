@@ -40,8 +40,9 @@ The config's µP multipliers, and where each is handled:
 
 With ``mamba_rms_norm`` false the decode step passes the gate into the update
 kernel, so a decode step's ``attention_head_outputs`` is gated by
-``silu(z)`` where a prompt's is not; with it true (the released checkpoints)
-both are ungated. The block returns a one-element tuple.
+``silu(z)`` where a prompt's is not; with it true (Falcon-H1 1.5B and up,
+H1R-7B) both are ungated. Falcon-H1-0.5B and the Falcon-H1-Tiny checkpoints set it
+false, and their ``linear_attn.norm`` is an identity. The block returns a one-element tuple.
 """
 
 from typing import TYPE_CHECKING

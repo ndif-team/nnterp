@@ -9,7 +9,10 @@ llava-interleave (a ``llava`` wrapper) and LLaVA-OneVision put a SigLIP tower at
 is ``vision.norm``), and the projector ``model.multi_modal_projector``, which is
 ``projector``. OneVision feeds the projector the image's crops and then unpads
 its output and adds newline tokens, so ``vision.image_features``, read at the
-scatter (`ImageScatter`), is not the projector's output there.
+scatter (`ImageScatter`), is not the projector's output there. Both set
+``vision_feature_layer`` -1 with strategy ``"full"``: the projector reads the last
+block's ``layer_output`` before ``post_layernorm``, so a ``vision.tower_output``
+write does not reach the text model.
 """
 
 from transformers.models.llava.modeling_llava import LlavaModel

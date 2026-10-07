@@ -57,10 +57,15 @@ sum to one and are lower-triangular.
 | `attention_probabilities` | the pattern the values are mixed with: the dropout's output after the softmax, in the model dtype, an attention sink's column already dropped | `Pattern`: `batch heads query key` |
 | `attention_head_outputs` | what the interface returns, each head's mix of the values, before the reshape to `[batch, seq, hidden]` and the output projection | `HeadOutputs`: `batch seq heads head_dim` |
 
+On a Llama-style attention `attention_head_outputs.flatten(-2)` is `o_proj.input`, the
+concatenated head outputs, and `self_attn.o_proj.input` is readable under any
+`attn_implementation` (checked equal on the tiny Gemma 3 under eager and sdpa). That is
+where Gemma Scope 2's attention SAEs read, not `attention_output`.
+
 Each block's sizes are on its attention, read off the module: `attn.num_heads`,
 `attn.num_kv_heads`, `attn.head_dim` and `attn.qk_head_dim` (`head_dim` except
 under latent attention and on MiMo-V2-Flash). The root's `model.num_heads`, ...
-are the config's and equal every block's except on Gemma-4 and MiMo-V2-Flash,
+are the config's and equal every block's except on Gemma-4, MiMo-V2-Flash and Laguna,
 whose blocks differ. Every value's layout is on the descriptor, one of the named
 aliases in `nnterp.components`: `Attention.attention_keys.layout is Keys`, and
 `Attention.attention_keys.dims` is `("batch", "kv_heads", "seq", "qk_head_dim")`.
@@ -134,7 +139,10 @@ with model.trace(prompt):
 ### Recomputing by hand
 
 The softmax scale is the module's, `attn._module.scaling`, not always `1/sqrt(head_dim)`
-(Granite-SWA's is `attention_multiplier`, 0.0078 on granite-swash-2b against 0.088), and
+(Granite-SWA's is `attention_multiplier`, 0.0078 on granite-swash-2b against 0.088;
+Granite's and GraniteMoE's is `attention_multiplier` too, `1/head_dim`, 0.015625 on
+granite-3.0-2b against `1/sqrt(64)` = 0.125, so `attention_scores` are an eighth of a
+Llama-scaled product), and
 under grouped-query attention query head `h` reads key/value head `h // groups`:
 `repeat_interleave`, not `repeat`. With both, the served values reproduce the scores on
 the causal entries and the head outputs:
@@ -340,7 +348,7 @@ families do not, and the six values stay available through all of them:
   `v_proj`; their values are `v_norm(k_proj(x))`, the keys' projection before
   `k_norm` and the rotary embedding. `attention_values` is that tensor.
 - **Per-layer sizes.** Sliding blocks have `head_dim` 256, full blocks 512, and
-  on every released size but E4B the two kinds have different
+  on 26B-A4B, 31B and 12B (not on E2B or E4B) the two kinds have different
   `num_key_value_heads`. `model.head_dim` and `model.num_kv_heads` are the
   config's top-level values, the sliding blocks'; read a full block's widths off
   its tensors (`attention_keys.shape`) or `model.config.get_text_config().per_layer_config[i]`.
@@ -376,7 +384,12 @@ values (and the pattern's key axis) are as long as the cache:
   values before the queries and keys. An out-of-order read raises `OutOfOrderError`, and
   inside a `tracer.iter` body the error can name a later location than the one
   you misplaced.
-- **GPT-2 and MPT queries, keys and values: assign, do not edit in place.**
+- **The first trace that reads a projection's output and then an interior value fails.**
+  On a fresh model `self_attn.q_proj.output` followed by `attention_queries` raises
+  `OutOfOrderError` naming an `attention_interface` input, on the first such trace only:
+  nnsight builds `self_attn.source` lazily, after the forward has started. Touch
+  `model.layers[i].self_attn.source` outside a trace first, or read them in two traces.
+- **GPT-2 and GPT-BigCode queries, MPT queries, keys and values: assign, do not edit in place** (or edit under `torch.no_grad()`). GPT-2's and GPT-BigCode's keys and values take an in-place edit.
 - **`hasattr(attn, "attention_probabilities")` raises `Unavailable`** when the
   value is unavailable; use `attn.support()` or `model.support(layer=i)`.
 - **A sink model's pattern rows sum to less than one**, and its

@@ -11,6 +11,9 @@ interleaved rotary.
 The model multiplies the head's output by ``config.logit_scale`` to make the
 logits, so the family defines ``project_on_vocab`` with that step, and the
 logit lens on the last block equals ``logits``.
+
+Aya Vision 32B (``aya_vision`` with a ``cohere`` text config) loads through this
+family. It binds no tower keys, so that load has no ``vision`` or ``projector``.
 """
 
 from typing import TYPE_CHECKING

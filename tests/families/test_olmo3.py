@@ -14,10 +14,12 @@ from nnterp.families import olmo3
 def _patched_checkpoint(repo="yujiepan/olmo-3-tiny-random"):
     """The tiny checkpoint with its config in transformers 5.17's per-layer-type rope form.
 
-    The checkpoint predates the format: its flat ``rope_parameters`` no longer
-    parses for a model with ``layer_types``. The weights and tokenizer are
-    symlinked, only ``config.json`` is rewritten. The family itself needs
-    nothing.
+    The checkpoint's flat ``rope_parameters`` does not parse for a model with
+    ``layer_types``, so the rewrite copies it to every layer type, YaRN on the
+    sliding blocks too; the released Olmo 3 configs resolve to YaRN on the
+    full-attention blocks and plain rotary on the sliding ones. The weights and
+    tokenizer are symlinked, only ``config.json`` is rewritten. The family itself
+    needs nothing.
     """
     snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
     patched = tempfile.mkdtemp(prefix="olmo3-")

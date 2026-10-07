@@ -6,6 +6,14 @@ block (``granitemoe.py``): ``block_sparse_moe``, routed experts only, is ``mlp``
 and the block adds each sublayer's output times ``residual_multiplier``, so
 ``attention_output`` and ``mlp_output`` are the scaled copies. ``embedding_multiplier``
 and ``logits_scaling`` are as on Granite.
+
+Where the config sets ``shared_intermediate_size`` (1280 on
+``ibm-granite/granite-swash-3b-a600m``; 0 on the pinned tiny) the block also runs a
+``shared_mlp`` beside the experts and adds the sum. This family binds ``mlp_output`` to
+the routed experts' output times ``residual_multiplier`` only, and
+``shared_expert_output`` reports no shared expert, so on that checkpoint
+``input + attention_output + mlp_output`` misses ``layer_output`` by the shared
+expert's term; read ``layers[i]._module.shared_mlp`` (or its envoy) for it.
 """
 
 from transformers.models.granitemoe_swa.modeling_granitemoe_swa import (

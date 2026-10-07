@@ -151,7 +151,7 @@ A softmax-attention module. The base class reads everything but `attention_outpu
 | Value | Layout | Base location | Assignable | Availability |
 |---|---|---|---|---|
 | `attention_output` | `Residual` | the module's `.output`, first tensor | yes; in place reaches the model | always |
-| `attention_queries` | `Queries` | argument 1 of `attention_interface_1`, after RoPE | assign; in place except on GPT-2 (split views) and MPT (`chunk`) | `interface_reason` |
+| `attention_queries` | `Queries` | argument 1 of `attention_interface_1`, after RoPE | assign; in place except on GPT-2 and GPT-BigCode (split views) and MPT (`chunk`), outside `torch.no_grad()` | `interface_reason` |
 | `attention_keys` | `Keys` | argument 2, before `repeat_kv` | as above | `interface_reason` |
 | `attention_values` | `Values` | argument 3, before `repeat_kv` | as above | `interface_reason` |
 | `attention_scores` | `Pattern` | the input of `nn_functional_softmax_0` inside the interface: scaled and masked | yes; in place reaches the model | `interface_reason` |
@@ -482,7 +482,7 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 - `hasattr(envoy, "attention_probabilities")` raises `Unavailable` when the value is unavailable; ask `support()` instead.
 - The interior attention values need `attn_implementation="eager"`, which the constructor does not force; BLOOM and MPT are the exception (their pattern is their own dropout and carries no `attn_implementation` predicate).
 - `get_topk_closest_tokens(hidden)` takes a residual-stream tensor and projects it itself; passing `project_on_vocab`'s output fails inside `norm` with a shape error.
-- GPT-2's and MPT's queries, keys and values are views of one fused tensor: assign, do not edit in place. Falcon's `mlp_output` is a copy; assignment and in-place edits reach the model through a transform.
+- GPT-2's and GPT-BigCode's queries and MPT's queries, keys and values are views of one fused tensor: assign, do not edit in place (or edit under `torch.no_grad()`). Falcon's `mlp_output` is a copy; assignment and in-place edits reach the model through a transform.
 - `model.logits` is the output's `.logits` (softcapped on Gemma-2, scaled on Cohere and Granite); `model.lm_head.output` is the raw projection, and `model.project_on_vocab(model.layers[-1].layer_output)` is `logits`.
 - `next_token_probs`, `input_size` and `states` are read-only.
 - `route_kernels(model.family, "torch")` before tracing a DeltaNet layer whose `state` you want; a forward `.source` has already instrumented keeps the binding it was compiled with.

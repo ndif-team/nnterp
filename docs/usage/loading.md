@@ -46,6 +46,11 @@ Every argument other than `rename`, `envoys` and `tokenizer_kwargs` goes straigh
 `task="image-text-to-text"` loads a vision-language checkpoint as its wrapper with its
 processor, which is what gives it `model.vision` ([vision.md](vision.md)).
 
+Without `dtype` the weights load in the checkpoint's own dtype (its config's
+`torch_dtype`), on CPU too: `facebook/opt-125m` loads in float16, `Qwen/Qwen2.5-0.5B`
+in bfloat16, `openai-community/gpt2` in float32. Pass `dtype=torch.float32` when CPU
+work needs full precision.
+
 ## How the family is chosen
 
 The constructor reads the checkpoint's config before any model is built, with

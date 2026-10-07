@@ -20,7 +20,10 @@ for a vision-language wrapper, processor; no weights). The `REFERENCE` checkpoin
 in the Hub cache or reachable; any other checkpoint whose config cannot be read (gated without
 access, no such repository, offline and not cached) is listed on the page, greyed out, with the
 reason, and the build goes on. Checkpoints whose configs differ only in their name share one
-build. A single entry's build writes its page and not the index. Open `encyclopedia/site/index.html`.
+build. A single entry's build writes its page and not the index, and stops at the first error. The
+full build goes on past an entry that fails to import or render: it prints `FAILED <model_type>: <error>`,
+writes the index from the pages that built, and exits non-zero naming the failed entries. Open
+`encyclopedia/site/index.html`.
 
 ## The page, top to bottom
 

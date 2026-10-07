@@ -1205,14 +1205,25 @@ def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path
     if (out / "static").exists():
         shutil.rmtree(out / "static")
     shutil.copytree(HERE / "static", out / "static")
-    written, cards = [], []
-    for entry in entries.load_all():
-        if only and entry.MODEL_TYPE not in only:
+    written, cards, failed = [], [], []
+    for name in entries.names():
+        if only and name not in only:
             continue
-        read, default = read_entry(entry)
-        model = page_model(entry, read, default)
+        # A single entry's build raises; the full build reports an entry that fails to load or render
+        # and goes on, so one entry in progress does not keep the index from the others.
+        try:
+            entry = entries.load(name)
+            read, default = read_entry(entry)
+            model = page_model(entry, read, default)
+            html = env.get_template("family.html.j2").render(**model)
+        except Exception as error:
+            if only:
+                raise
+            print(f"FAILED {name}: {type(error).__name__}: {error}")
+            failed.append(name)
+            continue
         path = out / f"{entry.MODEL_TYPE}.html"
-        path.write_text(env.get_template("family.html.j2").render(**model))
+        path.write_text(html)
         written.append(path)
         blocks = model["blocks"]
         cards.append({**{k: model[k] for k in ("model_type", "title", "subtitle", "palette", "checkpoints", "quirks", "vllm",
@@ -1225,6 +1236,8 @@ def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path
         index.write_text(env.get_template("index.html.j2").render(**index_model(cards)))
         written.append(index)
         print(f"wrote {index.relative_to(HERE.parent)}")
+    if failed:
+        raise SystemExit(f"{len(failed)} entr{'y' if len(failed) == 1 else 'ies'} failed: {', '.join(failed)}")
     return written
 
 

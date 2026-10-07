@@ -13,10 +13,10 @@ SUBTITLE = (
 REFERENCE = "baidu/ERNIE-4.5-21B-A3B-Base-PT"
 #: The tiny checkpoint the test suite builds the page from (both blocks a mixture of 8 experts, top 2, 2 shared).
 PINNED = "hf-tiny-v2/tiny-random-Ernie4_5_MoeForCausalLM"
-#: baidu/ERNIE-4.5-300B-A47B-Base-PT and -PT are left out: their mixture has no shared expert, and the build
-#: draws BLOCK's interior chips on every checkpoint, so shared_expert_output fails their build.
+#: The 300B-A47B checkpoints' mixture has no shared expert: their page draws no shared panel.
 CHECKPOINTS = [
     "baidu/ERNIE-4.5-21B-A3B-Base-PT", "baidu/ERNIE-4.5-21B-A3B-PT", "baidu/ERNIE-4.5-21B-A3B-Thinking",
+    "baidu/ERNIE-4.5-300B-A47B-Base-PT", "baidu/ERNIE-4.5-300B-A47B-PT",
 ]
 
 #: ERNIE lineage: ernie4_5 sets 180; 185 sits beside it, short of cohere2's 188.

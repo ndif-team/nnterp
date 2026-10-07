@@ -192,8 +192,9 @@ The entry states facts about a family, and each one has a source. Before writing
        (three to a row; a box with more than six grows a row at a time). On a `"moe"` sublayer the
        chips are the mixture's values and each is drawn in its part's panel: `router_logits`,
        `expert_weights`, `expert_indices` in the router's, `expert_outputs`, `routed_output` in the
-       routed experts', `shared_expert_output` in the shared expert's (list it only where the
-       mixture has one: the build checks). The panels show the scoring, `top_k of num_experts` and
+       routed experts', `shared_expert_output` in the shared expert's (list it where some
+       checkpoint's mixture has one; a checkpoint whose mixture has none, ERNIE-4.5's 300B-A47B, draws
+       no shared chip or panel). The panels show the scoring, `top_k of num_experts` and
        the parts' classes, all read off the family's first `Moe`. On a `"mixer"` sublayer the
        chips are the mixer's values (`attention_queries`/`keys`/`values` as the family maps them,
        `decays`, `betas`, `state_input`, `attention_head_outputs`, `state_output`, `states`), and

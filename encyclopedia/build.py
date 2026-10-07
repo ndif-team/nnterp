@@ -783,6 +783,9 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                 spec["label"], f"{base}.{host}",
                 f"{' / '.join(classes)} under its standard name. " + spec.get("detail", "").format(**fmt), extra=extra)
         for name in spec.get("interior", []):
+            if kind == "moe" and name == "shared_expert_output" and (name not in by_host[host] or not moe.get("shared")):
+                # this checkpoint's mixture has no shared expert (ERNIE-4.5's 300B-A47B): no shared chip or panel
+                continue
             assert name in by_host[host], f"{owner}: {host} has no value {name!r}"
             chip = {"name": name, "short": INTERIOR_SHORT.get(name, name)}
             if kind == "moe":

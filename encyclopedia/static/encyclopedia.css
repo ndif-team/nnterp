@@ -261,6 +261,8 @@ pre .rn { font-weight: 500; }
 .prose table { border-collapse: collapse; width: 100%; font-size: 14px; } .prose th, .prose td { border-bottom: 1px solid var(--hair); text-align: left; padding: 6px 8px; } .prose th { border-bottom: 1.5px solid var(--line); }
 .docstring p:first-child { font-weight: 600; }
 .quirk-list { position: sticky; top: 16px; }
+/* a sidebar's mono lines (the envoys) carry long class names: they break inside the column */
+.quirk-list .mono { overflow-wrap: anywhere; }
 .quirk { margin: 0.6rem 0 1rem; }
 .quirk .body-md { margin-top: 6px; }
 

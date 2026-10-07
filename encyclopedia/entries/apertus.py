@@ -20,8 +20,8 @@ CHECKPOINTS = [
     "swiss-ai/Apertus-v1.1-4B", "swiss-ai/Apertus-v1.1-4B-Instruct",
 ]
 
-#: No kin among the entries; 21 sits between mamba's 17 and falcon_mamba's 26, the largest free gap.
-PALETTE = {"hue": 21}
+#: No kin among the entries; 42 sits between gpt_bigcode's 39 and exaone4's 46, one of the largest free gaps.
+PALETTE = {"hue": 42}
 VLLM = False
 QUIRKS = ["qk-norm"]
 

@@ -14,8 +14,8 @@ REFERENCE = "microsoft/bitnet-b1.58-2B-4T"
 PINNED = "hf-tiny-v2/tiny-random-BitNetForCausalLM"
 CHECKPOINTS = ["microsoft/bitnet-b1.58-2B-4T", "microsoft/bitnet-b1.58-2B-4T-bf16"]
 
-#: No kin among the entries; 238 sits between codegen's 234 and bloom's 242, the largest free gap.
-PALETTE = {"hue": 238}
+#: No kin among the entries; 258 sits between qwen3_5_moe_text's 255 and nemotron's 262, one of the largest free gaps.
+PALETTE = {"hue": 258}
 VLLM = False
 QUIRKS = ["squared-relu"]
 

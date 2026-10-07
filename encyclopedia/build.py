@@ -112,7 +112,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "chunked-attention": ("Chunked attention", "Some blocks attend within fixed-length chunks of the sequence rather than over a sliding window; config.layer_types says which."),
     "multimodal-rotary": ("Multimodal rotary", "M-RoPE: three position streams, temporal, height and width, folded into one rotation before the blocks; text positions after an image resume from the image's largest position."),
     "interleaved-moe": ("Interleaved mixture", "Mixture-of-experts blocks alternate with dense blocks at a fixed step (interleave_moe_layer_step); where the step is above 1, the mixture's values exist on some blocks only."),
-    "sliding-window": ("Sliding window", "Some blocks attend over a window; config.layer_types says which."),
+    "sliding-window": ("Sliding window", "Some blocks, or every block, attend only over a window of the latest positions (config.sliding_window); where the config has layer_types, it says which."),
     "scaled-embeddings": ("Scaled embeddings", "The embedding output is multiplied before block 0; token_embeddings is the scaled tensor."),
     "embedding-multiplier": ("Embedding multiplier", "The model multiplies the embedding module's output before block 0; token_embeddings is the unscaled tensor, layers[0].input the scaled one."),
     "gain-norm": ("1 + weight norm gain", "The norm multiplies by (1 + weight), so the gain is not norm.weight."),

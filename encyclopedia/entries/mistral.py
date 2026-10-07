@@ -164,7 +164,7 @@ pinned tiny checkpoint a 64 × 64 image is three rows of 576 patches, the projec
 #: The Llama lineage sits at the hash of `llama` (148); Gemma's 133, 145 and 157 are near, so this family takes 152.
 PALETTE = {"hue": 152}
 VLLM = True
-QUIRKS: list[str] = []
+QUIRKS: list[str] = ["sliding-window"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.

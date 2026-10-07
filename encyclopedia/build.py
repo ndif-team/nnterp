@@ -85,6 +85,7 @@ NAME_ROLES = {
 QUIRKS: dict[str, tuple[str, str]] = {
     "tuple-blocks": ("Tuple blocks", "The block returns (hidden_states, ...); layer_output is the first element."),
     "sandwich-norms": ("Sandwich norms", "Each sublayer is normed before and after; the stream receives the post-norm's output."),
+    "post-ln": ("Post-LN", "Each norm follows its sublayer's residual add, on the stream itself: the next sublayer reads the normed stream, layer_output is a norm's output, and input plus the contributions is not layer_output."),
     "post-norms": ("Post-norms only", "Each sublayer is normed after, not before: it reads the raw stream, and the stream receives the post-norm's output."),
     "residual-inside-module": ("Residual inside the module", "A sublayer adds the residual itself; the contribution is the tensor before the add."),
     "scaled-residual-adds": ("Scaled residual adds", "A multiplier sits between a sublayer and the stream, or scales the whole block."),
@@ -1197,8 +1198,33 @@ def site_palette() -> dict[str, Any]:
     return {**generated, "paper": PAPER, "css": css_variables(generated["fills"], generated["deeps"], PAPER)}
 
 
-def quirks(entry: ModuleType) -> list[dict[str, str]]:
-    return [quirk(slug, entry.MODEL_TYPE) for slug in entry.QUIRKS]
+def quirk_spec(entry: ModuleType, spec: str | dict[str, Any]) -> dict[str, Any]:
+    """One item of an entry's ``QUIRKS``: a slug (the family's, on every checkpoint), or ``{"slug": ..., "when":
+    <predicate on the text config>}`` for a quirk that holds on some checkpoints only. Returns ``{"slug", "when"}``,
+    ``when`` ``None`` on a plain slug."""
+    if isinstance(spec, str):
+        return {"slug": spec, "when": None}
+    where = f"{entry.MODEL_TYPE}: QUIRKS item {spec!r}"
+    assert isinstance(spec, dict) and set(spec) == {"slug", "when"}, f"{where} is neither a slug nor a dict of slug and when"
+    assert callable(spec["when"]), f"{where}: when is a function of the checkpoint's text config"
+    return {"slug": spec["slug"], "when": spec["when"]}
+
+
+def quirks(entry: ModuleType, info: dict[str, Any] | None = None) -> list[dict[str, str]]:
+    """The entry's quirks: every one without ``info``; with a checkpoint's ``info``, the ones that hold on it (a
+    conditional one's ``when`` is read on its text config)."""
+    out = []
+    for spec in (quirk_spec(entry, item) for item in entry.QUIRKS):
+        if info is not None and spec["when"] is not None and not spec["when"](info["text_config"]):
+            continue
+        out.append(quirk(spec["slug"], entry.MODEL_TYPE))
+    return out
+
+
+def quirk_union(entry: ModuleType, models: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """The index card's quirks: those that hold on some checkpoint the page shows, in the entry's order."""
+    held = {q["slug"] for m in models.values() for q in m["family_quirks"]}
+    return [q for q in quirks(entry) if q["slug"] in held]
 
 
 #: A small eye, marking a vision-language checkpoint in the selector, the checkpoints ledger and the index.
@@ -1288,9 +1314,11 @@ def ledgers(info: dict[str, Any]) -> list[dict[str, Any]]:
     return out
 
 
-def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: list[dict[str, str]]) -> dict[str, Any]:
+def checkpoint_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     """Everything on the page that depends on the checkpoint: what its panes render, and ``data`` for the page's
-    script (the block's schema and node texts, the identity, and the tower's on a vision-language checkpoint)."""
+    script (the block's schema and node texts, the identity, and the tower's on a vision-language checkpoint).
+    The quirks are the ones that hold on this checkpoint."""
+    family_quirks = quirks(entry, info)
     roles = name_roles(entry, info)
     block = block_schema(entry.MODEL_TYPE, entry.BLOCK, info)
     strip = strip_schema(entry, info)
@@ -1359,8 +1387,7 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
     by_id = {c["id"]: c for c in read}
     assert "info" in by_id[default], f"{entry.MODEL_TYPE}: the default checkpoint {default} is unavailable: {by_id[default].get('unavailable')}"
     info = by_id[default]["info"]
-    family_quirks = quirks(entry)
-    models = {c["id"]: checkpoint_model(entry, c["info"], family_quirks) for c in read if "info" in c}
+    models = {c["id"]: checkpoint_model(entry, c["info"]) for c in read if "info" in c}
     module = environment().get_template("panes.html.j2").make_module({"eye": EYE})
     panes: dict[str, list[dict[str, Any]]] = {}
     for name in PANES:
@@ -1395,7 +1422,7 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
         "option_groups": [(label, items) for label, items in groups if items],
         "checkpoints": [{"id": o["id"], "url": o["url"]} for o in options],
         "vllm": getattr(entry, "VLLM", False),
-        "quirks": family_quirks + ([quirk("vision", entry.MODEL_TYPE)] if towers_found else []),
+        "quirks": quirk_union(entry, models) + ([quirk("vision", entry.MODEL_TYPE)] if towers_found else []),
         "notes": md(entry.NOTES, roles=roles),
         "docstring": md(info["docstring"], rst=True, roles=roles),
         "panes": panes,

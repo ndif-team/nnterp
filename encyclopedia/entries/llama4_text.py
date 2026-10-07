@@ -162,7 +162,7 @@ encoding with `model.processor` and cast `pixel_values` to the model's dtype bef
 #: Llama lineage: `llama` hashes to 148; Llama 4 takes the side above it.
 PALETTE = {"hue": 162}
 VLLM = False
-QUIRKS = ["qk-norm", "nope-blocks", "mixture-of-experts"]
+QUIRKS = ["qk-norm", "nope-blocks", "chunked-attention", "mixture-of-experts", "interleaved-moe"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.

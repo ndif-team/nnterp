@@ -70,7 +70,7 @@ prompt = model.processor.apply_chat_template(content)
 #: The Qwen lineage sits at 285 (qwen2), 297 (qwen3) and 273 (qwen3_5_text); this family takes 279.
 PALETTE = {"hue": 279}
 VLLM = False
-QUIRKS = ["qkv-bias"]
+QUIRKS = ["qkv-bias", "multimodal-rotary"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.

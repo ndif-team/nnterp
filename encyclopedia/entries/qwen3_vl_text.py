@@ -105,7 +105,7 @@ and `.output` before `vision.tower_output`; then `vision.image_features`; then, 
 #: The Qwen lineage sits at 285 (qwen2), 297 (qwen3) and 273 (qwen3_5_text); Qwen3-VL takes 303.
 PALETTE = {"hue": 303}
 VLLM = False
-QUIRKS = ["qk-norm"]
+QUIRKS = ["qk-norm", "multimodal-rotary"]
 
 #: What the visualization draws. The DeepStack add after blocks 0-2 is the text model's, outside the block, and the
 #: block schema has no node for a value added between blocks: it is in the strip's `layers` note, the identity note

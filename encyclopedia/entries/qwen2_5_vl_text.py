@@ -98,7 +98,7 @@ template writes the three for an `{"type": "image"}` entry.
 #: The Qwen lineage sits at 285 (qwen2), 297 (qwen3) and 273 (qwen3_5_text); this family takes 291.
 PALETTE = {"hue": 291}
 VLLM = False
-QUIRKS = ["qkv-bias"]
+QUIRKS = ["qkv-bias", "multimodal-rotary"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.

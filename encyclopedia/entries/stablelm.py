@@ -22,7 +22,12 @@ CHECKPOINTS = [
 #: Set by hues.py (lineage: GPT-NeoX).
 PALETTE = {"hue": 69}
 VLLM = False
-QUIRKS = ["layernorm", "partial-rotary", "qkv-bias", "parallel-blocks", "qk-norm"]
+QUIRKS = [
+    "layernorm", "partial-rotary",
+    {"slug": "qkv-bias", "when": lambda config: config.use_qkv_bias},  # StableLM 2 1.6B and its zephyr
+    {"slug": "parallel-blocks", "when": lambda config: config.use_parallel_residual},  # StableLM-2-12B
+    {"slug": "qk-norm", "when": lambda config: config.qk_layernorm},  # StableLM-2-12B
+]
 
 ATTENTION_INTERIOR = [
     "attention_queries", "attention_keys", "attention_values",

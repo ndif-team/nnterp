@@ -19,7 +19,10 @@ CHECKPOINTS = [
 #: Set by hues.py (lineage: OPT).
 PALETTE = {"hue": 78}
 VLLM = False
-QUIRKS = ["no-mlp", "position-embeddings", "layernorm", "qkv-bias"]
+QUIRKS = [
+    "no-mlp", "position-embeddings", "layernorm", "qkv-bias",
+    {"slug": "post-ln", "when": lambda config: not config.do_layer_norm_before},  # opt-350m
+]
 
 ATTENTION_INTERIOR = [
     "attention_queries", "attention_keys", "attention_values",

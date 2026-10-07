@@ -31,17 +31,20 @@ from nnterp import StandardizedTransformer
 # nanochat has no family module: this warns "nnterp has no family for model_type 'nanochat'; ..."
 model = StandardizedTransformer("hf-tiny-v2/tiny-random-NanoChatForCausalLM", attn_implementation="eager")
 print(model.layers[0])                                               # the native names and the aliases the default bound
-{name: reason for name, reason in model.support().items() if reason}  # {}: NanoChat spells everything like Llama
+{name: reason for name, reason in model.support().items() if reason}
+# {'self_attn.attention_output': 'the default family cannot tell what this sublayer adds to the stream; ...',
+#  'mlp.mlp_output': ...}
 ```
 
-On a checkpoint that does not, the dict lists what the default could not find or vouch
-for (the default forced onto Gemma-2 gives `self_attn.attention_output` and
-`mlp.mlp_output`, "the block passes it through `self.post_attention_layernorm` before
-adding it to the stream"). Each reason names the spot a family module fixes: a module
-under a name the default does not know is a `RENAME` entry; "the block passes it through
-`self.post_attention_layernorm`" is an `attention_output` keyed on that norm's output
-([overriding-values.md](overriding-values.md)); "makes no `attention_interface` call" is
-an interior mapped onto the family's own arithmetic. The family replaces the default entirely once its module exists: `lookup`
+The default always lists the two contributions, and `model.project_on_vocab` raises
+`Unavailable` ("the default family cannot tell what follows lm_head"): a family module
+says what the block adds (an `attention_output` keyed on a post-norm's output on Gemma-2,
+[overriding-values.md](overriding-values.md)) and what follows the head (a
+`def project_on_vocab(model, hidden)` for a softcap or a scale). Anything further in the
+dict names another spot: "no self_attn module found under the names the default family
+knows" is a `RENAME` entry, and "the attention does its own arithmetic rather than
+transformers' shared attention interface" is an interior mapped onto the family's own
+arithmetic. The family replaces the default entirely once its module exists: `lookup`
 finds it first.
 
 ## Canonical pattern

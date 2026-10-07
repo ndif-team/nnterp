@@ -341,7 +341,7 @@ The base of the hosts.
 | `lookup` | `lookup(model_type: str) -> ModuleType` | The family for `model_type`: a registered one, else `nnterp.families.<model_type>`, imported on first use. With neither, warns and returns `default`. |
 | `register` | `register(family: ModuleType, *model_types: str) -> ModuleType` | Add a family (any module or object with `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under `model_types`, or, with none given, the type its `__name__` ends in (`TypeError` for a nameless `SimpleNamespace`); consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
 | `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (98), alphabetical; not `default`. |
-| `default` | module | The best-effort family for a `model_type` with none: `RENAME` over the shipped spellings, `ENVOYS` keyed on the standard names, `check(model)` at load. See [../usage/loading.md](../usage/loading.md#an-architecture-with-no-family). |
+| `default` | module | The best-effort family for a `model_type` with none: `RENAME` over the shipped spellings, `ENVOYS` keyed on the standard names, `check(model)` at load (run when the family is `default` itself; a copy calls it). Serves `layer_output`, the root values, the sizes and the interface interior; `attention_output`, `mlp_output` and `project_on_vocab` raise `Unavailable`. See [../usage/loading.md](../usage/loading.md#an-architecture-with-no-family). |
 | `all_families` | `all_families() -> list[ModuleType]` | Every shipped family, imported. For tooling and tests. |
 | `REGISTRY` | `dict[str, ModuleType]` | `model_type -> family` for what `register` added. |
 | `UnsupportedFamily` | `ValueError` subclass | No family covers the checkpoint and the default cannot standardize it. |
@@ -470,7 +470,7 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 | Exception | Raised when |
 |---|---|
 | `nnterp.Unavailable` (`RuntimeError`) | A standard value this checkpoint does not have is read or written: `"<path>.<name> is not available: <reason>"`, at that line, before the model runs. `support()` gives the same reason without raising. `hasattr(envoy, name)` also raises it. |
-| `nnterp.UnsupportedFamily` (`ValueError`) | The checkpoint's `model_type` has no family and the default family cannot standardize it (no blocks, embedding, final norm or head under a name it knows, or blocks that do not pass a `[batch, seq, hidden]` stream); the message suggests a `rename=` when the module tree gives one. |
+| `nnterp.UnsupportedFamily` (`ValueError`) | The checkpoint's `model_type` has no family and the default family cannot standardize it (no blocks, embedding, final norm or head under a name it knows, blocks that do not pass a `[batch, seq, hidden]` stream, or a shape scan that cannot run on fake tensors, the error named); the message suggests a `rename=` when the module tree gives one. |
 | `nnsight.intervention.source.SourceNotAvailable` | An `EProperty`'s path names an operation that is not under `.source` in this run: the forward took a path the family does not expect. |
 | `nnterp.prompt_utils.TokenizationError` | A word has no standalone first token under the tokenizer. |
 | `AttributeError` | Assigning a read-only value: `next_token_probs`, `input_size`, `states`, or any `DerivedEProperty`. |

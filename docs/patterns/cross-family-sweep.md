@@ -161,8 +161,9 @@ top-1 grid, an [activation-patching](activation-patching.md) layer sweep, a
 - Names bound inside a trace do not survive it; every container above is made
   outside and every entry is a `.save()`.
 - A `model_type` nnterp has no family for loads with the best-effort default family and a
-  warning; check `model.support()` before sweeping it (or raises `UnsupportedFamily` when the
-  default cannot standardize it).
+  warning (or raises `UnsupportedFamily` when the default cannot standardize it). It serves
+  `layer_output` and the interface interior but not `attention_output`, `mlp_output` or
+  `project_on_vocab`; check `model.support()` before sweeping it.
 
 ## Related
 

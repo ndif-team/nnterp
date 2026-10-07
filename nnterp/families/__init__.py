@@ -37,7 +37,7 @@ REGISTRY: dict[str, ModuleType] = {}
 
 
 class UnsupportedFamily(ValueError):
-    """No toolkit standardizes the checkpoint: it has no family, and the best-effort `default` cannot find what the root needs."""
+    """No toolkit standardizes the checkpoint: it has no family, and the best-effort `default` cannot standardize it."""
 
 
 def known() -> list[str]:
@@ -48,10 +48,11 @@ def known() -> list[str]:
 def lookup(model_type: str) -> ModuleType:
     """The toolkit for ``model_type``: a registered one, else the module of that name, imported on first use.
 
-    With neither, `default` with a warning: its standardization is a guess,
-    which it checks at load (raising `UnsupportedFamily` when the guess finds
-    no blocks, embedding, final norm or head), and what it could not find or
-    trust is unavailable in ``model.support()``.
+    With neither, `default` with a warning: its standardization is a name
+    guess, which it checks at load (raising `UnsupportedFamily` when the guess
+    finds no blocks, embedding, final norm or head, or the stream's shape does
+    not hold), and what a guess cannot make safe (the contributions, the logit
+    lens) is unavailable.
     """
     if model_type in REGISTRY:
         return REGISTRY[model_type]

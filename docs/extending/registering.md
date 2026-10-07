@@ -126,7 +126,11 @@ only, the same as a module. It needs `RENAME` and `ENVOYS`. No model type is nam
 none is checked against the checkpoint, so a family can be applied to a checkpoint whose
 `model_type` it was not written for (a fork with the same module classes under a new
 type, say). Functions named after a root size or `project_on_vocab` win over the
-root's rule exactly as on a shipped family.
+root's rule exactly as on a shipped family. The load-time check of the best-effort default
+runs only when the family *is* `nnterp.families.default`: a copy of it
+(`types.SimpleNamespace(**vars(default))`) skips it, so call `default.check(model)` after
+the load, or register the default itself under the model type
+(`families.register(default, "<model_type>")`), which keeps the check and drops the warning.
 
 Extending a shipped family is the common case. `vars(module)` copies everything the
 module defines, its size functions included, so only what changes is written:

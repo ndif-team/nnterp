@@ -264,15 +264,23 @@ The default family has no checkpoint of its own; it is tested against the
 families that do. `load_default(repo)` registers `default` under the
 checkpoint's `model_type` for one load. `forced(name)` builds a `FamilySuite`
 subclass from a shipped family's suite settings with the default forced on,
-so the whole suite runs on GPT-2, Llama, GPT-NeoX, Phi and OPT (OPT's missing
-`mlp` is listed unavailable). `test_default_reads_what_the_family_reads` loads
-every shipped family's checkpoint both ways (but the Mamba-kernel families,
-whose mixers need `route_kernels`) and asserts that every value the default
-reports available is bit-identical to the dedicated family's, and that the
-logits are. The rest pin the warning on NanoChat (a `model_type` with no
-family, compared against the raw model), the reasons for Gemma-2's post-norms
-and BLOOM's residual-taking sublayers, and the refusals (RWKV's names,
-GPT-NeoX-Japanese's container, Gemma-3n's parallel streams).
+so the suite runs on GPT-2, Llama, GPT-NeoX, Phi and OPT, with the
+contributions listed unavailable (and OPT's missing `mlp`); `DefaultSuite`
+replaces the tests that read a contribution or the logit lens with ones that
+assert the refusal. `test_default_reads_what_the_family_reads` loads every
+shipped family's checkpoint both ways (but the Mamba-kernel families, whose
+mixers need `route_kernels`; mixtures with `experts_implementation=
+"batched_mm"`, so the scan runs) and asserts that every value the default
+serves is bit-identical to the dedicated family's, and that the logits are;
+`REFUSED` lists the families it refuses at load (DBRX's data-dependent
+shapes, DeepSeek-V4's parallel streams) and `NO_OP` the pattern reads that
+fail loudly on a family whose eager attention forward has no softmax. The rest
+pin NanoChat (a `model_type` with no family: the warning, the stream and
+logits against the raw model, the one reason for the contributions and the
+lens, `steer` and `skip_layers`), Gemma-2's contributions reported
+unavailable rather than wrong, and the refusals (RWKV's names,
+GPT-NeoX-Japanese's container, Gemma-3n's parallel streams, Inkling's scan
+under `grouped_mm`).
 
 ## The root tests
 

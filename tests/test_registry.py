@@ -39,8 +39,8 @@ def test_import_is_lazy():
 
 def test_unknown_family_falls_back_to_the_default():
     """A model_type with no family gets the best-effort default, with a warning; tests/families/test_default.py has the rest."""
-    with pytest.warns(UserWarning, match="no family for model_type 'zamba'"):
-        model = StandardizedTransformer("hf-tiny-v2/tiny-random-ZambaForCausalLM")
+    with pytest.warns(UserWarning, match="no family for model_type 'nanochat'"):
+        model = StandardizedTransformer("hf-tiny-v2/tiny-random-NanoChatForCausalLM")
     assert model.family is families.default
 
 

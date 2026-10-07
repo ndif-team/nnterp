@@ -1,10 +1,9 @@
 """The best-effort default family: forced onto families that have their own, and on a model_type that has none.
 
-Forced onto a shipped family's checkpoint, the default must run the whole
-`FamilySuite` (GPT-2, Llama, GPT-NeoX, OPT, Phi), and every value it reports
-available must read exactly what the dedicated family reads, on every shipped
-family whose checkpoint runs here: where the dedicated family does arithmetic
-of its own, the default reports the value unavailable instead of a wrong number.
+Forced onto a shipped family's checkpoint, the default must run the
+`FamilySuite` (GPT-2, Llama, GPT-NeoX, OPT, Phi) with the contributions and the
+logit lens unavailable, and every value it serves must read exactly what the
+dedicated family reads, on every shipped family whose checkpoint it loads.
 """
 
 import importlib
@@ -15,11 +14,12 @@ import pytest
 import torch
 from nnsight import TransformersModel  # nnsight before any transformers submodule
 from nnsight.intervention.envoy import Envoy
-from suite import PROMPT, FamilySuite, recurrent_mixer
+from nnsight.intervention.source import SourceNotAvailable
+from suite import INTERIOR, PROMPT, FamilySuite, recurrent_mixer
 from transformers import AutoConfig
 
-from nnterp import StandardizedTransformer, UnsupportedFamily, families
-from nnterp.components import SelectiveScan, StateSpace
+from nnterp import StandardizedTransformer, Unavailable, UnsupportedFamily, families
+from nnterp.components import Moe, SelectiveScan, StateSpace
 from nnterp.families import default
 
 
@@ -43,8 +43,16 @@ def dedicated_suite(name):
     )
 
 
+#: What the default reports for the values it does not serve.
+NOT_SERVED = {"self_attn.attention_output": "cannot tell what this sublayer adds", "mlp.mlp_output": "cannot tell what this sublayer adds"}
+
+
 class DefaultSuite(FamilySuite):
-    """`FamilySuite` with the default family forced onto the checkpoint."""
+    """`FamilySuite` with the default family forced onto the checkpoint.
+
+    The tests that read a contribution or the logit lens check instead that
+    the default refuses them.
+    """
 
     FAMILY = default
 
@@ -57,11 +65,64 @@ class DefaultSuite(FamilySuite):
         """A module the default found on no block is listed as unavailable, not left out (OPT's ``mlp``)."""
         return super().expected_values(model) | {"mlp.mlp_output"}
 
+    def test_every_value_reads_a_tensor_on_every_layer(self, model):
+        read = {}
+        with model.trace(PROMPT):
+            for layer in model.layers:
+                read[layer.path] = layer.layer_output.save()
+        assert all(value.shape[-1] == model.hidden_size for value in read.values()) and len(read) == len(model.layers)
+
+    def test_contribution_identity(self, model):
+        with pytest.raises(Unavailable, match="cannot tell what this sublayer adds"):
+            model.layers[0].self_attn.attention_output
+
+    def test_interior_writes_are_causal(self, model):
+        block = self.attn_block(model)
+        with model.trace(PROMPT):
+            clean = model.logits.save()
+        for name in INTERIOR:
+            with model.trace(PROMPT):
+                attn = block.self_attn
+                setattr(attn, name, getattr(attn, name) * 0)
+                logits = model.logits.save()
+            assert not torch.equal(clean, logits), name
+
+    def test_boundary_writes_land(self, model):
+        with model.trace(PROMPT):
+            clean = model.logits.save()
+        with model.trace(PROMPT):
+            model.layers[0].layer_output = model.layers[0].layer_output * 0
+            edited = model.logits.save()
+        assert not torch.equal(clean, edited)
+
+    def test_skip_layers_hands_the_stream_straight_through(self, model):
+        last = model.num_layers - 1
+        with model.trace(PROMPT):
+            first = model.layers[0].layer_output.save()
+            model.skip_layers(1, last)
+            skipped_last = model.layers[last].layer_output.save()
+        assert torch.equal(skipped_last, first)
+
+    def test_project_on_vocab_is_the_logit_lens(self, model):
+        with model.trace(PROMPT):
+            resid = model.layers[-1].layer_output.save()
+        with pytest.raises(Unavailable, match="cannot tell what follows lm_head"):
+            model.project_on_vocab(resid)
+        with pytest.raises(Unavailable, match="cannot tell what follows lm_head"):
+            model.get_topk_closest_tokens(resid[0, -1], k=3)
+
+    def test_logits_are_the_models_output(self, model):
+        with model.trace(PROMPT):
+            logits = model.logits.save()
+            result = model.output.logits.save()
+        assert torch.equal(logits, result) and logits.shape[-1] == model.vocab_size
+
 
 def forced(name, **overrides):
     """A `DefaultSuite` over the shipped family ``name``'s checkpoint and suite settings."""
     source = dedicated_suite(name)
     settings = {key: getattr(source, key) for key in dir(source) if key.isupper() and key != "FAMILY"}
+    settings["EXPECTED_UNAVAILABLE"] = {**NOT_SERVED, **settings.get("EXPECTED_UNAVAILABLE", {}), **overrides.pop("EXPECTED_UNAVAILABLE", {})}
     return type(f"TestDefaultOn{source.__name__.removeprefix('Test')}", (DefaultSuite,), {**settings, **overrides})
 
 
@@ -85,28 +146,59 @@ def nanochat():
 def test_unknown_model_type_loads_with_the_default(nanochat):
     assert nanochat.family is default
     assert type(nanochat.layers[0]) is default.Layer and type(nanochat.layers[0].self_attn) is default.Attention
-    assert all(reason is None for reason in nanochat.support().values())
+    support = nanochat.support()
+    assert {name for name, reason in support.items() if reason is not None} == {"self_attn.attention_output", "mlp.mlp_output"}
     assert (nanochat.num_layers, nanochat.num_heads, nanochat.head_dim, nanochat.intermediate_size) == (2, 2, 16, 32)
 
 
 def test_unknown_model_type_reads_the_raw_model(nanochat):
-    """Each standard value is the native module's, and the contributions add up to the stream."""
+    """The stream, the logits and the attention pattern are the native model's, bit for bit."""
     raw = TransformersModel(NANOCHAT, task="text-generation", dispatch=True, attn_implementation="eager")
     native, standard = [], []
     with raw.trace(PROMPT):
         for layer in raw.model.layers:
-            native.append((layer.self_attn.output[0].save(), layer.mlp.output.save(), layer.output.save()))
+            native.append(layer.output.save())
         logits = raw.output.logits.save()
     with nanochat.trace(PROMPT):
+        pattern = nanochat.layers[0].self_attn.attention_probabilities.save()
         for layer in nanochat.layers:
-            standard.append((layer.input.save(), layer.self_attn.attention_output.save(), layer.mlp.mlp_output.save(), layer.layer_output.save()))
-        lens = nanochat.project_on_vocab(nanochat.layers[-1].layer_output).save()
+            standard.append(layer.layer_output.save())
         ours = nanochat.logits.save()
-    for (attn, mlp, out), (x, our_attn, our_mlp, our_out) in zip(native, standard):
-        assert torch.equal(our_attn, attn) and torch.equal(our_mlp, mlp) and torch.equal(our_out, out)
-        torch.testing.assert_close(x + our_attn + our_mlp, our_out)
+    for out, our_out in zip(native, standard):
+        assert torch.equal(our_out, out)
     assert torch.equal(ours, logits)
-    torch.testing.assert_close(lens, logits)
+    torch.testing.assert_close(pattern.sum(-1), torch.ones_like(pattern.sum(-1)))
+
+
+def test_contributions_and_the_lens_are_unavailable(nanochat):
+    """What a sublayer adds to the stream, and what follows lm_head, are not served, with one reason each."""
+    reason = "the default family cannot tell what this sublayer adds to the stream; add a family module (docs/extending/adding-a-family.md)"
+    assert nanochat.support(layer=0)["self_attn.attention_output"] == reason
+    assert nanochat.support(layer=0)["mlp.mlp_output"] == reason
+    with pytest.raises(Unavailable, match=re.escape(reason)):
+        with nanochat.trace(PROMPT):
+            nanochat.layers[0].mlp.mlp_output.save()
+    with nanochat.trace(PROMPT):
+        resid = nanochat.layers[-1].layer_output.save()
+    with pytest.raises(Unavailable, match="the default family cannot tell what follows lm_head"):
+        nanochat.project_on_vocab(resid)
+    with pytest.raises(Unavailable, match="the default family cannot tell what follows lm_head"):
+        nanochat.get_topk_closest_tokens(resid[0, -1])
+
+
+def test_steer_and_skip_layers_work_on_the_stream(nanochat):
+    vector = torch.ones(nanochat.hidden_size)
+    with nanochat.trace(PROMPT):
+        clean = nanochat.layers[0].layer_output.save()
+    with nanochat.trace(PROMPT):
+        nanochat.steer(0, vector, token_positions=-1)
+        steered = nanochat.layers[0].layer_output.save()
+    torch.testing.assert_close(steered[:, -1], clean[:, -1] + vector.to(clean))
+    with nanochat.trace(PROMPT):
+        first = nanochat.layers[0].layer_output.save()
+        nanochat.skip_layers(1, -1)
+        last = nanochat.layers[-1].layer_output.save()
+    assert torch.equal(last, first)
 
 
 # -- the default against every dedicated family -----------------------------------------
@@ -152,11 +244,31 @@ def read(model, layer, host, value):
     return saved["value"]
 
 
+#: Shipped families the default refuses at load: the scan cannot run their forward, or their stream is not [batch, seq, hidden].
+REFUSED = {
+    "dbrx": r"its shape check could not run under fake tensors \(GuardOnDataDependentSymNode",
+    "deepseek_v4": r"the blocks do not pass a \[batch, seq, hidden\] stream",
+}
+#: Shipped families whose eager attention forward is their own, without the op a pattern value is read at: those reads fail loudly, naming the op.
+NO_OP = {
+    "gpt_oss": {"attention_scores"},
+    "mimo_v2_flash": {"attention_scores"},
+    "granite_swa": {"attention_scores", "attention_probabilities"},
+    "granitemoe_swa": {"attention_scores", "attention_probabilities"},
+}
+
+
 @pytest.mark.parametrize("name", comparable())
 def test_default_reads_what_the_family_reads(name):
-    """Wherever the default reports a value available, it reads exactly what the dedicated family reads."""
+    """Wherever the default serves a value the dedicated family also serves, it reads exactly what that family reads."""
     source = dedicated_suite(name)
     kwargs = dict(dispatch=True, attn_implementation="eager", **source.LOAD_KWARGS)
+    if any(issubclass(envoy, Moe) for envoy in getattr(families, name).ENVOYS.values()):
+        kwargs.setdefault("experts_implementation", "batched_mm")  # grouped_mm has no float32 fake-tensor kernel for the scan
+    if name in REFUSED:
+        with pytest.raises(UnsupportedFamily, match=REFUSED[name]):
+            load_default(source.REPO, **kwargs)
+        return
     dedicated = StandardizedTransformer(source.REPO, **kwargs)
     model = load_default(source.REPO, **kwargs)
     compared = 0
@@ -165,6 +277,10 @@ def test_default_reads_what_the_family_reads(name):
         for host, value in VALUES:
             key = f"{host}.{value}" if host else value
             if ours.get(key, "absent") is not None:
+                continue
+            if value in NO_OP.get(name, ()):
+                with pytest.raises(SourceNotAvailable, match="has no operation 'nn_functional_"):
+                    read(model, i, host, value)
                 continue
             other = counterpart(dedicated, model, i, host)
             their_key = f"{other}.{value}" if other else value
@@ -194,27 +310,14 @@ def test_registered_and_shipped_families_win_without_a_warning():
         assert families.lookup("gpt2") is families.gpt2
 
 
-def test_post_norm_contributions_are_unavailable():
-    """Gemma-2 norms each sublayer's output before adding it: the module output is not the contribution."""
+def test_post_norm_contributions_are_unavailable_not_wrong():
+    """Gemma-2 norms each sublayer's output before adding it; forced through the default, the contributions are refused, the stream served."""
     model = load_default(dedicated_suite("gemma2").REPO)
     support = model.support(layer=0)
-    assert "post_attention_layernorm" in support["self_attn.attention_output"]
-    assert "post_feedforward_layernorm" in support["mlp.mlp_output"]
+    assert "cannot tell what this sublayer adds" in support["self_attn.attention_output"]
+    assert "cannot tell what this sublayer adds" in support["mlp.mlp_output"]
     assert support["layer_output"] is None
-
-
-def test_residual_inside_the_sublayer_is_unavailable():
-    """BLOOM's attention and MLP take the residual and add it themselves."""
-    model = load_default(dedicated_suite("bloom").REPO)
-    support = model.support(layer=0)
-    assert "takes `residual`" in support["self_attn.attention_output"]
-    assert "takes `residual`" in support["mlp.mlp_output"]
-    assert "attention_interface" in support["self_attn.attention_probabilities"]
-
-
-def test_a_value_the_default_cannot_trust_raises_at_the_read():
-    model = load_default(dedicated_suite("gemma2").REPO)
-    with pytest.raises(Exception, match="post_attention_layernorm"):
+    with pytest.raises(Unavailable, match="cannot tell what this sublayer adds"):
         with model.trace(PROMPT):
             model.layers[0].self_attn.attention_output.save()
 
@@ -264,3 +367,13 @@ def test_family_default_at_load_runs_the_check():
         with pytest.raises(UnsupportedFamily, match="found no embed_tokens, layers, norm, lm_head"):
             StandardizedTransformer("hf-internal-testing/tiny-random-RwkvForCausalLM", family=default)
     assert not any("no family for model_type" in str(warning.message) for warning in caught)
+
+
+def test_a_scan_that_cannot_run_is_refused():
+    """A forward the shape scan cannot run (grouped expert matmuls on fake float32 tensors) leaves the guess unchecked: refused, naming the error."""
+    repo = "hf-tiny-v2/tiny-random-InklingForCausalLM"
+    with pytest.warns(UserWarning, match="no family for model_type"):
+        with pytest.raises(UnsupportedFamily, match=r"its shape check could not run under fake tensors \(RuntimeError: .*experts_implementation='batched_mm'"):
+            StandardizedTransformer(repo)
+    with pytest.warns(UserWarning, match="no family for model_type"):
+        assert StandardizedTransformer(repo, experts_implementation="batched_mm").family is default

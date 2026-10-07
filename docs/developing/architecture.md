@@ -251,9 +251,13 @@ purpose: `import nnterp` must import no transformers modeling module
   on the standard names (nnsight matches them on alias paths; `"layers.*"`
   reaches the blocks), and it defines `check(model)`, which
   `StandardizedTransformer.__init__` calls on the built tree when the family
-  is `default`: the required root modules, a shape-only `scan`, and the
-  per-sublayer reasons (read off the forwards' source) that `support()`
-  reports. It raises `UnsupportedFamily` when the guess cannot stand.
+  is `default` (by identity: a copy skips it): the required root modules and
+  a shape-only `scan` of the stream and the logits, raising
+  `UnsupportedFamily` when the guess cannot stand or the scan cannot run. It
+  serves `layer_output`, the root values, the sizes and the interface
+  interior; `attention_output`, `mlp_output` and `project_on_vocab` are
+  `Unavailable` with one reason each, since what a sublayer adds and what
+  follows the head are code a name does not show.
 - `register(family, *model_types)` (`:73-97`) writes each of `model_types`,
   or with none the last component of `family.__name__`, into `REGISTRY`
   (`:36`), which `lookup` consults first, so a module from outside the

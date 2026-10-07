@@ -92,7 +92,10 @@ class StandardizedTransformer(TransformersModel):
             any object with ``RENAME`` and ``ENVOYS`` (and, like a shipped
             family, any size function or ``project_on_vocab`` it defines). It
             applies to this model only; the config is not read for it, and
-            no model type is named or checked.
+            no model type is named or checked. ``nnterp.families.default``
+            itself runs its load-time check; a copy of it (a
+            ``SimpleNamespace`` spread from its ``vars``) does not, so call
+            ``default.check(model)`` after the load.
         rename: Extra aliases, merged over the family's; a key given here wins.
         envoys: Extra ``envoys=`` entries, merged over the family's ``ENVOYS``
             (and nnsight's tensor-parallel envoys when the load shards); a key
@@ -172,7 +175,7 @@ class StandardizedTransformer(TransformersModel):
             },
             **kwargs,
         )
-        # The default family is a guess, confirmed on the built tree.
+        # The default family is a guess, confirmed on the built tree (a copy of it calls the check itself).
         if self.family is default:
             default.check(self)
         for key, value in (tokenizer_kwargs or {}).items():

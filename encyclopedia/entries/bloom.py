@@ -125,11 +125,12 @@ same order. The three values are views of that output; in-place edits of them la
 ```python
 attn = model.layers[1].self_attn
 with model.trace(prompt):
-    fused = attn.query_key_value.output.save()
+    h = model.layers[1].input_layernorm.output.save()
     q = attn.attention_queries.save()
 
+fused = torch.nn.functional.linear(h, attn.query_key_value.weight, attn.query_key_value.bias)
 per_head = fused.view(*fused.shape[:2], model.num_heads, 3, model.head_dim)
-assert torch.equal(per_head[..., 0, :].transpose(1, 2), q)
+torch.testing.assert_close(per_head[..., 0, :].transpose(1, 2), q)
 W = attn.query_key_value.weight.view(model.num_heads, 3, model.head_dim, -1)
 W_q = W[:, 0]                                  # [heads, head_dim, hidden]
 ```

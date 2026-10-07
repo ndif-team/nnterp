@@ -88,7 +88,7 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 - [docs/extending/registering.md](docs/extending/registering.md) — `nnterp.families.register(family, *model_types)`
 
 ### "The encyclopedia: a web page per family"
-- [encyclopedia/README.md](encyclopedia/README.md) — `encyclopedia/build.py` renders `encyclopedia/entries/<model_type>.py` (hand-written: block schema, quirks, notes) merged with a meta build of the family into static HTML under `encyclopedia/site/`; `entries/gemma2.py` is the reference entry; `tests/test_encyclopedia.py` builds every entry from its pinned checkpoint
+- [encyclopedia/README.md](encyclopedia/README.md) — `encyclopedia/build.py` renders `encyclopedia/entries/<model_type>.py` (hand-written: block schema, quirks, notes; one entry for each of the 98 families) merged with a meta build of the family into static HTML under `encyclopedia/site/`; `entries/gemma2.py` is the reference entry; a family's hue comes from `encyclopedia/hues.py` (add the family to its `LAYOUT` and run it with `--write`, never pick a hue by hand); a page's checkpoint selector swaps every per-checkpoint part (sizes, `support()`, printout) of the entry's `CHECKPOINTS`; an entry's `WRAPPERS` describes its vision-language wrappers (`llama.py` is the reference) and `encyclopedia/vision/` holds each vision encoder two or more families host; `tests/test_encyclopedia.py` builds every entry from its pinned checkpoint and each wrapper from its pinned tiny one
 
 ### "Change nnterp itself"
 - [docs/developing/index.md](docs/developing/index.md) — architecture, descriptor internals, the recurrent mixer (`RecurrentMixer`, DeltaNet) and its occurrence arithmetic, tests, transformers compatibility, gotchas, contributing

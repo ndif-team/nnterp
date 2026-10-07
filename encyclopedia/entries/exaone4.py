@@ -18,6 +18,8 @@ CHECKPOINTS = [
     "LGAI-EXAONE/EXAONE-4.0.1-32B",
 ]
 
+#: Set by hues.py (no kin, in a gap between lineages).
+PALETTE = {"hue": 182}
 VLLM = True
 QUIRKS = ["post-norms", "qk-norm", "sliding-window", "nope-blocks"]
 

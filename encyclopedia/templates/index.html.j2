@@ -17,22 +17,30 @@
 <section class="frame section">
   <div class="topbar"><h2 class="disp-section">Find a <em>family</em></h2><span class="micro">search by family, checkpoint, quirk or value</span></div>
   <input class="search" id="search" type="search" placeholder="gemma, Llama-3.1-8B, sandwich, attention_probabilities …" autocomplete="off">
-  <div class="chips filters" id="filters">
-    {% for q in quirks %}<button class="chip chip-ink" data-filter="{{ q.slug }}">{{ q.label }}</button>{% endfor %}
+  <div id="filters">
+    <div class="chips filters">
+      {% for q in quirks %}<button class="chip chip-ink" data-filter="{{ q.slug }}">{{ q.label }}</button>{% endfor %}
+    </div>
+    {% if towers %}
+    <div class="chips filters filters-towers">
+      <span class="micro">{{ eye }} vision encoders</span>
+      {% for t in towers %}<button class="chip chip-ink" data-filter="{{ t.slug }}">{{ t.label }}</button>{% endfor %}
+    </div>
+    {% endif %}
   </div>
 
   <div class="cards" id="cards">
     {% for p in pages %}
     <a class="card card-family" href="{{ p.model_type }}.html" style="{{ p.palette.css }}"
-       data-search="{{ p.title }} {{ p.model_type }} {{ p.architecture }} {{ p.checkpoints|map(attribute='id')|join(' ') }} {{ p.quirks|map(attribute='label')|join(' ') }}"
-       data-quirks="{{ p.quirks|map(attribute='slug')|join(' ') }}">
+       data-search="{{ p.title }} {{ p.model_type }} {{ p.architecture }} {{ p.checkpoints|map(attribute='id')|join(' ') }} {{ p.quirks|map(attribute='label')|join(' ') }} {{ p.towers|join(' ') }} {{ p.wrappers|join(' ') }}"
+       data-quirks="{{ (p.quirks|map(attribute='slug')|list + p.tower_slugs)|join(' ') }}">
       <div class="topstrip"></div>
       <div class="card-body">
         <div class="petals petals-sm" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
         <h3 class="card-name">{% for line in p.title.split(" / ") %}<span class="line">{{ line }}</span>{% endfor %}</h3>
         <p class="body-md">{{ p.subtitle }}</p>
         <div class="dashed"></div>
-        <div class="specs"><div class="spec"><span>model_type</span><span>{{ p.model_type }}</span></div><div class="spec"><span>blocks</span><span>{{ p.num_layers }}</span></div><div class="spec"><span>vLLM</span><span>{{ 'yes' if p.vllm else 'no' }}</span></div></div>
+        <div class="specs"><div class="spec"><span>model_type</span><span>{{ p.model_type }}</span></div><div class="spec"><span>blocks</span><span>{{ p.blocks }}</span></div>{% if p.towers %}<div class="spec"><span>vision</span><span>{{ eye }}{{ p.towers|join(' · ') }}</span></div>{% endif %}<div class="spec"><span>vLLM</span><span>{{ 'yes' if p.vllm else 'no' }}</span></div></div>
         <div class="chips">{% for q in p.quirks %}<span class="chip chip-sm">{{ q.label }}</span>{% endfor %}</div>
       </div>
     </a>

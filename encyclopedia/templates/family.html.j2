@@ -2,57 +2,50 @@
 {% block title %}{{ title }} · nnterp encyclopedia{% endblock %}
 {% block description %}{{ subtitle }}{% endblock %}
 {% block masthead_right %}{{ model_type }} · {{ family_module }}{% endblock %}
-{% block colophon %}built {{ built }} · nnterp {{ versions.nnterp }} · transformers {{ versions.transformers }} · reference {{ reference }}{% endblock %}
+{% block colophon %}built {{ built }} · nnterp {{ versions.nnterp }} · transformers {{ versions.transformers }} · reference <span id="colophon-reference">{{ default }}</span>{% endblock %}
+
+{# One copy of each distinct rendering of a per-checkpoint part; the page's script shows the selected checkpoint's. #}
+{% macro pane(name) %}{% for p in panes[name] %}<div class="pane" data-pane="{{ name }}" data-ckpts="{{ p.ckpts|join(' ') }}"{% if not p.shown %} hidden{% endif %}>{{ p.html }}</div>{% endfor %}{% endmacro %}
 
 {% block body %}
 <section class="hero frame">
   <div class="hero-text">
-    <p class="micro-lg eyebrow">family <span class="mono">{{ model_type }}</span> · <span class="mono">{{ architecture }}</span></p>
+    <p class="micro-lg eyebrow">family <span class="mono">{{ model_type }}</span></p>
     <h1 class="disp-title">{% for line in title.split(" / ") %}<span class="line">{{ line }}</span>{% endfor %}</h1>
     <p class="subtitle">{{ subtitle }}</p>
-    <div class="chips">
-      {% for q in quirks %}<a class="chip" href="#notes" title="{{ q.blurb }}">{{ q.label }}</a>{% endfor %}
-    </div>
+    {{ pane("chips") }}
   </div>
   <aside class="hero-side">
     <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
-  </aside>
-</section>
-
-<section class="frame ledger-block">
-  <details class="fold">
-    <summary><span class="micro">checkpoints</span></summary>
-    <div class="ledger">
-      <div class="ledger-head"><span>checkpoint</span><span>on the Hub</span><span class="hide-sm">role</span></div>
-      {% for c in checkpoints %}
-      <div class="ledger-row"><a class="mono-md" href="{{ c.url }}">{{ c.id.split('/')[1] }}</a><a class="mono" href="{{ c.url }}">{{ c.id }}</a><span class="hide-sm">{% if c.id == reference %}<span class="chip chip-sm">this page's sizes</span>{% endif %}</span></div>
-      {% endfor %}
-      <div class="ledger-row"><a class="mono-md" href="https://huggingface.co/{{ pinned }}">{{ pinned.split('/')[1] }}</a><a class="mono" href="https://huggingface.co/{{ pinned }}">{{ pinned }}</a><span class="hide-sm"><span class="chip chip-sm">the test suite's</span></span></div>
+    {% set current = options|selectattr('id', 'equalto', default)|first %}
+    <div class="ckpt" id="ckpt">
+      <span class="micro ckpt-label" id="ckpt-label">checkpoint</span>
+      <button type="button" class="ckpt-button" id="ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="ckpt-list" aria-labelledby="ckpt-label ckpt-button">
+        <span class="ckpt-current"><span class="mono-md" id="ckpt-name">{{ current.name }}</span><span class="ckpt-eye" id="ckpt-eye"{% if not current.vision %} hidden{% endif %}>{{ eye }}</span></span>
+        <span class="ckpt-caret" aria-hidden="true">▾</span>
+      </button>
+      <div class="ckpt-list" id="ckpt-list" role="listbox" tabindex="-1" aria-labelledby="ckpt-label" hidden>
+        {% for label, items in option_groups %}
+        <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-{{ loop.index }}">
+          <p class="micro ckpt-group-label" id="ckpt-group-{{ loop.index }}">{{ label }}</p>
+          {% for o in items %}
+          <div class="ckpt-option" role="option" id="ckpt-option-{{ o.id|replace('/', '--')|replace('.', '_') }}" data-ckpt="{{ o.id }}" data-name="{{ o.name }}"
+               aria-selected="{{ 'true' if o.id == default else 'false' }}"{% if o.vision %} data-vision="1"{% endif %}
+               {% if o.reason %} aria-disabled="true" title="not available in the encyclopedia: {{ o.reason }}"{% else %} title="{{ o.id }}{% if o.vision %} · {{ o.wrapper }}, {{ o.tower }} vision encoder{% endif %}"{% endif %}>
+            <span class="mono">{{ o.name }}</span>{% if o.vision %}<span class="ckpt-eye" aria-label="vision-language">{{ eye }}</span>{% endif %}
+          </div>
+          {% endfor %}
+        </div>
+        {% endfor %}
+      </div>
+      <a class="ckpt-hub" id="ckpt-hub" href="{{ current.url }}" title="{{ current.id }} on the Hugging Face Hub" aria-label="{{ current.id }} on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
     </div>
-  </details>
+  </aside>
 </section>
 
 <section class="frame section" id="block">
   <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
-  {% if block.shapes %}
-  <p class="lead">One of {{ num_layers }} blocks, of {{ block.shapes|length }} shapes. Hover any part for the nnterp name that reads it; click to pin.
-  The slider picks a block, its tick's colour gives the shape, and the diagram redraws for it.</p>
-  {% else %}
-  <p class="lead">One of {{ num_layers }} identical blocks. Hover any part for the nnterp name that reads it; click to pin.
-  {% if layer_types and layer_types|unique|list|length > 1 %}The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.{% endif %}</p>
-  {% endif %}
-
-  <div class="strip" id="strip">
-    <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
-    <span class="strip-arrow">→</span>
-    <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× {{ num_layers }}</small></div>
-    <span class="strip-arrow">→</span>
-    <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final norm</small></div>
-    <span class="strip-arrow">→</span>
-    <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>unembedding</small></div>
-    <span class="strip-arrow">→</span>
-    <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>{% set slugs = quirks|map(attribute='slug')|list %}{% if 'softcapped-logits' in slugs %}softcapped{% elif 'scaled-logits' in slugs %}scaled{% else %}the output{% endif %}</small></div>
-  </div>
+  {{ pane("block_head") }}
 
   <div class="viz">
     <div class="viz-panel">
@@ -73,58 +66,30 @@
       </div>
     </aside>
   </div>
-  <p class="identity"><span class="micro">identity</span> <code>{{ identity_html }}</code></p>
+  <p class="identity" id="identity"><span class="micro">identity</span> <code>{{ identity_html }}</code></p>
+  {{ pane("tower") }}
 </section>
 
 <section class="frame section" id="support">
   <div class="topbar"><h2 class="disp-section">The <em>API</em></h2><span class="micro">02 · support()</span></div>
   <h3 class="ttl-row">Values, by host</h3>
-  {% if eager_only %}<p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition. Here, {{ eager_only|length }} values need <span class="mono">attn_implementation="eager"</span>.</p>{% endif %}
-  {% for host, rows in values.items() %}
-  <div class="ledger values">
-    <div class="ledger-head"><span><span class="role-{{ host_roles[host] }}">{% if host == 'root' %}model{% elif host == 'layer' %}model.layers[i]{% else %}model.layers[i].{{ host }}{% endif %}</span>{% if rows and rows[0].module %} <span class="mono dim">{{ module_classes[host]|join(' / ') if host in module_classes else rows[0].module }}</span>{% endif %}</span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
-    {% for row in rows %}
-    <div class="ledger-row" data-node="{% if host == 'root' %}{{ 'strip.' ~ {'token_embeddings': 'embed', 'logits': 'logits'}.get(row.name, '') }}{% endif %}">
-      <span class="mono-md name role-{{ host_roles[host] }}">{% if row.condition %}<span class="warn" tabindex="0" data-tip="{{ 'Needs attn_implementation="eager". ' if row.condition.kind == 'eager' }}{{ row.condition.reason }}">&#x26A0;&#xFE0E;</span>{% endif %}{{ row.name }}</span>
-      <span class="hide-sm mono">{% if row.layout %}{{ row.layout }} <span class="dim">[{{ row.dims }}]</span>{% else %}<span class="dim">scalar</span>{% endif %}</span>
-      <span class="body-md">{{ row.description }}</span>
-      <span class="hide-sm body-md where">{{ row.where|md }}</span>
-    </div>
-    {% endfor %}
-  </div>
-  {% endfor %}
+  {{ pane("values") }}
 
   <h3 class="ttl-row">Printout</h3>
-  <p class="body-md dim">What <span class="mono">print(model)</span> shows: the native modules and, among them, the standard names and every standard value with its layout.{% if returns_tuple %} The block returns a tuple; <span class="mono">layer_output</span> is its first element.{% endif %}</p>
-  <pre class="repr"><code>{{ repr_html }}</code></pre>
+  {{ pane("printout") }}
 
-  <div class="card">
-    <div class="topstrip"></div>
-    <div class="card-body">
-      <h3 class="card-name">Sizes</h3>
-      <p class="body-md">Root sizes, each a <span class="mono">StandardizedProperty</span> read off the config of <span class="mono">{{ reference }}</span>; below the rule, the config keys they come from.</p>
-      <div class="specs specs-cols">
-        {% for name, value in sizes %}<div class="spec"><span>model.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
-      </div>
-      <div class="dashed"></div>
-      <div class="specs specs-cols specs-dim">
-        {% for key, value in config %}<div class="spec"><span>{{ key }}</span><span>{{ value if value is not iterable or value is string else (value|length ~ ' entries' if value|length > 6 else value|join(', ')) }}</span></div>{% endfor %}
-      </div>
-    </div>
-  </div>
+  {{ pane("config") }}
 </section>
 
 <section class="frame section" id="notes">
-  <div class="topbar"><h2 class="disp-section"><em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
   <div class="grid-notes">
     <div class="prose">{{ notes }}</div>
-    {% if quirks %}
     <aside class="quirk-list">
-      <p class="micro">quirks</p>
-      {% for q in quirks %}<div class="quirk"><span class="chip">{{ q.label }}</span><p class="body-md">{{ q.blurb }}</p></div>{% endfor %}
+      {{ pane("quirk_list") }}
     </aside>
-    {% endif %}
   </div>
+  {{ pane("vision_notes") }}
 </section>
 
 <section class="frame section" id="source">
@@ -135,13 +100,13 @@
       <p class="micro">sources</p>
       <p class="body-md"><a href="{{ source_url }}">{{ family_file }}</a><br><a href="{{ test_url }}">tests/families/test_{{ model_type }}.py</a><br><a href="{{ families_url }}">docs/reference/families.md</a></p>
       <p class="micro">envoys</p>
-      <p class="body-md mono">{{ block_class }} → Layer{% for alias, classes in module_classes.items() %}{% for cls in classes %}<br>{{ cls }} → {{ alias }}{% endfor %}{% endfor %}</p>
+      <p class="body-md mono">{% for cls in block_class_names %}{% if not loop.first %}<br>{% endif %}{{ cls }} → Layer{% endfor %}{% for alias, classes in module_classes.items() %}{% for cls in classes %}<br>{{ cls }} → {{ alias }}{% endfor %}{% endfor %}</p>
+      {{ pane("envoys") }}
     </aside>
   </div>
 </section>
 
-<script type="application/json" id="block-schema">{{ block_json|safe }}</script>
-<script type="application/json" id="nodes-json">{{ nodes_json|safe }}</script>
+<script type="application/json" id="checkpoints-json">{{ checkpoints_json|safe }}</script>
 {% endblock %}
 
 {% block scripts %}<script src="static/block.js"></script>{% endblock %}

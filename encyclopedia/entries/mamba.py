@@ -16,7 +16,8 @@ CHECKPOINTS = [
     "state-spaces/mamba-1.4b-hf", "state-spaces/mamba-2.8b-hf",
 ]
 
-#: The first entry of the Mamba lineage: no PALETTE, so the hue is the hash of "mamba" (17).
+#: Set by hues.py (lineage: Mamba).
+PALETTE = {"hue": 359}
 VLLM = False
 QUIRKS = ["mamba1", "fp32-residual"]
 

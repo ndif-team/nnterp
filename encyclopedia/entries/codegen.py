@@ -19,8 +19,8 @@ CHECKPOINTS = [
     "Salesforce/codegen-16B-mono", "Salesforce/codegen-16B-multi", "Salesforce/codegen-16B-nl",
 ]
 
-#: GPT-J's kin: GPT-J's hashed hue is 222.
-PALETTE = {"hue": 234}
+#: Set by hues.py (lineage: GPT-J).
+PALETTE = {"hue": 57}
 VLLM = False
 QUIRKS = ["parallel-blocks", "fused-qkv", "partial-rotary", "interleaved-rotary", "own-attention-arithmetic",
           "layernorm", "tuple-blocks"]

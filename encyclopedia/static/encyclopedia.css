@@ -193,6 +193,18 @@ pre .rn { font-weight: 500; }
 .strip-node:hover .mono, .strip-node.active .mono { color: var(--ink); }
 .strip-layers { border-width: 2.5px; }
 .strip-arrow { font-family: var(--mono); opacity: 0.6; }
+/* an edge that is a value (a blockless vision encoder's tower_output): hoverable like a node */
+.strip-edge { display: inline-flex; flex-direction: column; align-items: center; gap: 2px; padding: 4px 6px; cursor: help; opacity: 0.85; }
+.strip-edge small { font-size: 11px; }
+.strip-edge:hover, .strip-edge.active { background: var(--mark); opacity: 1; }
+.tower-card-only { max-width: 520px; }
+/* a node the path does not go through (a final norm the projector skips) hangs under the node it follows, dimmed */
+.strip-fork { position: relative; }
+.strip-branch { position: absolute; top: calc(100% + 6px); left: 14px; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+.strip:has(.strip-fork) { row-gap: 4.2rem; margin-bottom: 4.6rem; }
+.strip-off { opacity: 0.5; border-style: dashed; min-width: 0; }
+.strip-off:hover, .strip-off.active { opacity: 1; }
+.strip-projector small { max-width: 26ch; overflow-wrap: anywhere; }
 .viz { display: grid; grid-template-columns: 1fr 320px; gap: clamp(16px, 2vw, 32px); align-items: start; }
 .viz-panel { border: 1.5px solid var(--line); background: var(--paper); box-shadow: 8px 8px 0 var(--ink); padding: 14px 16px 18px; }
 .slider-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
@@ -202,35 +214,40 @@ pre .rn { font-weight: 500; }
 .ticks i { flex: 1; display: block; background: var(--tint); }
 .ticks i.t0 { background: var(--c1); } .ticks i.t1 { background: var(--c2); } .ticks i.t2 { background: var(--c3); } .ticks i.t3 { background: var(--c4); } .ticks i.t4 { background: var(--c5); }
 .ticks i.cur { outline: 2px solid var(--ink); outline-offset: 1px; }
-#block-svg { width: 100%; height: auto; display: block; font-family: var(--sans); }
+.ticks i[data-block] { cursor: pointer; }
+.ticks i[data-block]:hover { filter: brightness(0.85); outline: 1px solid var(--line); outline-offset: 1px; }
+.ticks i[data-block]:focus-visible { outline: 2px dashed var(--ink); outline-offset: 1px; }
+#block-svg, .tower-svg { width: 100%; height: auto; display: block; font-family: var(--sans); }
 /* every part of the diagram sits in a group with a role class: boxes take the role's fill
    and its deep as the stroke, edges and the stream the deep; hovered, a box turns deep and
    its labels paper */
-#block-svg .box { fill: var(--paper); stroke: var(--role-deep, var(--ink)); stroke-width: 1.5; }
-#block-svg .box-sub { stroke-width: 2; }
-#block-svg .box-part { stroke-width: 1; }
-#block-svg .stream { stroke: var(--stream-deep); stroke-width: 4; fill: none; }
-#block-svg .edge { stroke: var(--ink); stroke-width: 1.5; fill: none; }
-#block-svg .edge-contrib { stroke: var(--role-deep); stroke-width: 3; fill: none; }
-#block-svg .plus { fill: var(--paper); stroke: var(--stream-deep); stroke-width: 2; }
-#block-svg .plus-sign { font-family: var(--disp); font-weight: 900; font-size: 22px; fill: var(--stream-deep); }
-#block-svg .label { font-family: var(--disp); font-weight: 900; font-size: 24px; letter-spacing: -0.01em; fill: var(--ink); }
-#block-svg .label-sm { font-family: var(--mono); font-size: 11px; fill: var(--ink); }
-#block-svg .label-role { font-family: var(--mono); font-size: 11px; fill: var(--role-deep); font-weight: 500; }
-#block-svg .label-dim { font-family: var(--sans); font-size: 11.5px; fill: var(--ink); opacity: 0.75; }
-#block-svg .chip-r { fill: var(--ink); }
-#block-svg .chip-t { font-family: var(--mono); font-size: 11px; fill: var(--paper); text-anchor: middle; }
-#block-svg .hit { fill: transparent; stroke: transparent; cursor: help; }
-#block-svg [data-node] { cursor: help; }
-#block-svg .hot .box { fill: var(--role, var(--tint)); }
-#block-svg .hot .plus { fill: var(--stream); }
-#block-svg .hot .label-dim { opacity: 1; }
-#block-svg .hot .label-role { fill: var(--role-deep); }
-#block-svg .hot.chipnode .chip-r { fill: var(--role-deep); } #block-svg .hot.chipnode .chip-t { fill: var(--paper); }
-#block-svg .hot .edge-contrib, #block-svg .hot .stream { stroke-width: 6; }
+:is(#block-svg, .tower-svg) .box { fill: var(--paper); stroke: var(--role-deep, var(--ink)); stroke-width: 1.5; }
+:is(#block-svg, .tower-svg) .box-sub { stroke-width: 2; }
+:is(#block-svg, .tower-svg) .box-part { stroke-width: 1; }
+:is(#block-svg, .tower-svg) .stream { stroke: var(--stream-deep); stroke-width: 4; fill: none; }
+:is(#block-svg, .tower-svg) .edge { stroke: var(--ink); stroke-width: 1.5; fill: none; }
+:is(#block-svg, .tower-svg) .edge-contrib { stroke: var(--role-deep); stroke-width: 3; fill: none; }
+:is(#block-svg, .tower-svg) .plus { fill: var(--paper); stroke: var(--stream-deep); stroke-width: 2; }
+:is(#block-svg, .tower-svg) .plus-sign { font-family: var(--disp); font-weight: 900; font-size: 22px; fill: var(--stream-deep); }
+:is(#block-svg, .tower-svg) .label { font-family: var(--disp); font-weight: 900; font-size: 24px; letter-spacing: -0.01em; fill: var(--ink); }
+:is(#block-svg, .tower-svg) .label-sm { font-family: var(--mono); font-size: 11px; fill: var(--ink); }
+:is(#block-svg, .tower-svg) .label-role { font-family: var(--mono); font-size: 11px; fill: var(--role-deep); font-weight: 500; }
+:is(#block-svg, .tower-svg) .label-dim { font-family: var(--sans); font-size: 11.5px; fill: var(--ink); opacity: 0.75; }
+:is(#block-svg, .tower-svg) .chip-r { fill: var(--ink); }
+:is(#block-svg, .tower-svg) .chip-t { font-family: var(--mono); font-size: 11px; fill: var(--paper); text-anchor: middle; }
+:is(#block-svg, .tower-svg) .hit { fill: transparent; stroke: transparent; cursor: help; }
+:is(#block-svg, .tower-svg) [data-node] { cursor: help; }
+:is(#block-svg, .tower-svg) .hot .box { fill: var(--role, var(--tint)); }
+:is(#block-svg, .tower-svg) .hot .plus { fill: var(--stream); }
+:is(#block-svg, .tower-svg) .hot .label-dim { opacity: 1; }
+:is(#block-svg, .tower-svg) .hot .label-role { fill: var(--role-deep); }
+:is(#block-svg, .tower-svg) .hot.chipnode .chip-r { fill: var(--role-deep); } :is(#block-svg, .tower-svg) .hot.chipnode .chip-t { fill: var(--paper); }
+:is(#block-svg, .tower-svg) .hot .edge-contrib, :is(#block-svg, .tower-svg) .hot .stream { stroke-width: 6; }
 .node-card { position: sticky; top: 16px; }
 .node-card .topstrip { background: var(--role, var(--mark)); }
 .node-card .expr { font-family: var(--mono); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; margin: 0.2rem 0 0.6rem; }
+/* a long expression in a card's sentences breaks inside the card rather than running past its edge */
+.node-card .card-body p, .node-card .card-body code { overflow-wrap: anywhere; }
 .node-card .eyebrow { color: var(--role-deep, var(--mark-deep)); }
 .node-card.pinned .topstrip { background: var(--ink); }
 .node-card .cond { border: 1.5px solid var(--line); padding: 8px 10px; font-size: 12.5px; margin-top: 10px; background: var(--paper-dk); }
@@ -244,13 +261,15 @@ pre .rn { font-weight: 500; }
 .prose h2 { font-family: var(--disp); font-weight: 900; font-size: clamp(26px, 2.4vw, 38px); line-height: 0.95; letter-spacing: -0.012em; margin: 2rem 0 0.6rem; }
 .prose h2:first-child { margin-top: 0.4rem; }
 .prose p, .prose li { font-size: clamp(15px, 1vw, 17px); }
-.prose code { background: var(--paper-dk); padding: 1px 4px; }
+.prose code { background: var(--paper-dk); padding: 1px 4px; overflow-wrap: anywhere; }
 .prose pre code { background: none; padding: 0; }
 .prose strong { font-weight: 700; }
 .prose a { text-decoration: underline; text-decoration-color: var(--mark-deep); }
 .prose table { border-collapse: collapse; width: 100%; font-size: 14px; } .prose th, .prose td { border-bottom: 1px solid var(--hair); text-align: left; padding: 6px 8px; } .prose th { border-bottom: 1.5px solid var(--line); }
 .docstring p:first-child { font-weight: 600; }
 .quirk-list { position: sticky; top: 16px; }
+/* a sidebar's mono lines (the envoys) carry long class names: they break inside the column */
+.quirk-list .mono { overflow-wrap: anywhere; }
 .quirk { margin: 0.6rem 0 1rem; }
 .quirk .body-md { margin-top: 6px; }
 
@@ -265,6 +284,82 @@ pre .rn { font-weight: 500; }
 .card-stub .card-name { opacity: 0.55; font-size: 22px; }
 .hidden { display: none; }
 
+/* per-checkpoint panes: one shows at a time */
+.pane[hidden] { display: none !important; }
+
+/* the eye: a vision-language checkpoint */
+.eye { width: 1.35em; height: 0.8em; vertical-align: -0.06em; fill: none; stroke: currentColor; stroke-width: 1.7; overflow: visible; }
+.eye circle { fill: currentColor; stroke: none; }
+.ckpt-eye { display: inline-flex; margin-left: 6px; color: var(--mark-deep); }
+.ckpt-eye[hidden] { display: none; }
+
+/* the checkpoint selector, in the hero beside the circles */
+.ckpt { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.ckpt-label { opacity: 0.8; }
+.ckpt-button { display: flex; align-items: center; justify-content: space-between; gap: 14px; min-width: 220px; max-width: 320px; padding: 9px 12px 9px 14px;
+  background: var(--paper); color: var(--ink); border: 1.5px solid var(--line); font: inherit; cursor: pointer; text-align: left; }
+.ckpt-button:hover, .ckpt-button[aria-expanded="true"] { box-shadow: 5px 5px 0 var(--ink); }
+.ckpt-button:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.ckpt-current { display: inline-flex; align-items: center; min-width: 0; }
+.ckpt-current .mono-md { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ckpt-caret { font-family: var(--mono); font-size: 12px; color: var(--mark-deep); }
+.ckpt-list { position: absolute; top: calc(100% + 8px); right: 0; z-index: 60; width: max-content; min-width: 100%; max-width: min(380px, calc(100vw - 32px));
+  max-height: min(70vh, 560px); overflow: auto; background: var(--paper); border: 1.5px solid var(--line); box-shadow: 7px 7px 0 var(--ink); padding: 6px 0; outline: none; }
+.ckpt-list:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.ckpt-group + .ckpt-group { border-top: 1px dashed var(--line); margin-top: 6px; padding-top: 4px; }
+.ckpt-group-label { margin: 6px 14px 4px; opacity: 0.6; }
+.ckpt-option { display: flex; align-items: center; gap: 2px; padding: 6px 14px 6px 11px; border-left: 3px solid transparent; cursor: pointer; }
+.ckpt-option .mono { font-size: 12.5px; }
+.ckpt-option.is-active { background: var(--mark); }
+.ckpt-option.is-active .ckpt-eye { color: var(--ink); }
+.ckpt-option[aria-selected="true"] { border-left-color: var(--ink); font-weight: 600; }
+.ckpt-option[aria-disabled="true"] { opacity: 0.42; cursor: not-allowed; }
+.ckpt-hub { display: inline-flex; color: var(--ink); opacity: 0.8; }
+.ckpt-hub:hover, .ckpt-hub:focus-visible { color: var(--ink); opacity: 1; }
+.ckpt-hub:focus-visible { outline: 2px solid var(--mark-deep); outline-offset: 2px; }
+.hf { height: 28px; width: auto; display: block; }
+/* a fold that holds a vision part: its summary carries a styled title and a micro tag */
+.fold-titled > summary { justify-content: flex-start; align-items: baseline; gap: 6px 14px; flex-wrap: wrap; }
+.fold-titled > summary h2, .fold-titled > summary h3 { margin: 0; }
+/* a fold's title: the display face a little larger than the body, "The" in ink and the rest in the accent */
+.fold-heading { font-family: var(--disp); font-weight: 900; font-size: clamp(18px, 1.25vw, 21px); line-height: 1.1; letter-spacing: 0; }
+.fold-heading em { font-style: normal; color: var(--mark-deep); }
+.fold-titled > summary .fold-tag { flex: 0 1 auto; opacity: 0.75; }
+.fold-titled > summary::before { align-self: center; }
+.fold-titled[open] > summary { margin-bottom: 1.2rem; }
+.vision-fold { margin-top: clamp(16px, 1.8vw, 28px); }
+
+/* the tower, under the text block */
+.tower-scope { margin-top: clamp(28px, 3vw, 48px); }
+.ttl-row em { font-style: normal; color: var(--mark-deep); }
+.tower-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 32px; margin: 0 0 1.4rem; }
+.tower-facts > div { border-top: 1px solid var(--hair); padding-top: 6px; }
+.tower-facts dt { opacity: 0.75; }
+.tower-facts dd { margin: 4px 0 0; }
+.tower-facts code { background: var(--paper-dk); padding: 1px 4px; font-size: 0.88em; }
+.ledger-part { margin: 2.6rem 0 0.6rem; opacity: 0.8; }
+.card-tower { margin-top: clamp(16px, 1.8vw, 28px); }
+/* a card whose body folds: closed, only its band shows, labelled; open, the band is bare and the body titled */
+.card-fold { display: block; }
+.card-fold > summary { list-style: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 0 14px; cursor: pointer; height: auto; min-height: clamp(26px, 2.2vw, 32px); }
+.card-fold > summary::-webkit-details-marker { display: none; }
+.card-fold > summary:focus-visible { outline: 2px solid var(--ink); outline-offset: -4px; }
+.card-fold-mark::before { content: '+'; font-family: var(--disp); font-weight: 900; font-size: 20px; line-height: 1; }
+.card-fold[open] > summary .card-fold-label { visibility: hidden; }
+.card-fold[open] .card-fold-mark::before { content: '×'; }
+.card-tower .topstrip { background: var(--stream); }
+
+/* the vision part of the notes */
+.vision-notes { margin-top: 2.6rem; }
+.vision-notes .prose > h2 { margin-top: 1.6rem; }
+.vision-notes .prose > h2:first-child { margin-top: 0.4rem; }
+.prose h3 { font-family: var(--disp); font-weight: 700; font-size: clamp(21px, 1.8vw, 28px); line-height: 1.05; margin: 1.6rem 0 0.5rem; }
+
+/* the index: the tower filters under the quirks */
+.filters-towers { margin-top: -0.8rem; }
+.filters-towers .micro { align-self: center; margin-right: 6px; opacity: 0.75; }
+.spec .eye { margin-right: 4px; }
+
 @media (max-width: 900px) {
   .hero { grid-template-columns: 1fr; align-items: start; }
   .hero-side { flex-direction: row; align-items: center; justify-content: flex-start; flex-wrap: wrap; }
@@ -276,4 +371,7 @@ pre .rn { font-weight: 500; }
   .hide-sm { display: none; }
   .checklist { columns: 1; }
   .viz-panel { box-shadow: 5px 5px 0 var(--ink); }
+  .ckpt { align-items: flex-start; }
+  .ckpt-list { left: 0; right: auto; }
+  .tower-facts { grid-template-columns: 1fr; }
 }

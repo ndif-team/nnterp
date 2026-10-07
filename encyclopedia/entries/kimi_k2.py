@@ -16,8 +16,8 @@ CHECKPOINTS = [
     "moonshotai/Kimi-K2-Thinking", "moonshotai/Kimi-K2.5", "moonshotai/Kimi-K2.6", "moonshotai/Kimi-K2.7-Code",
 ]
 
-#: Kimi lineage: set here; kimi_linear sits at 342.
-PALETTE = {"hue": 330}
+#: Set by hues.py (lineage: DeepSeek).
+PALETTE = {"hue": 337}
 VLLM = False
 QUIRKS = ["latent-attention", "mixture-of-experts", "dense-first-blocks"]
 

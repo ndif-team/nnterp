@@ -25,8 +25,8 @@ CHECKPOINTS = [
     "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Base-BF16", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
 ]
 
-#: Nemotron lineage, beside nemotron (262).
-PALETTE = {"hue": 250}
+#: Set by hues.py (lineage: Nemotron).
+PALETTE = {"hue": 226}
 VLLM = False
 QUIRKS = ["one-sublayer-blocks", "hybrid", "mamba2", "nope-blocks", "squared-relu", "mixture-of-experts"]
 

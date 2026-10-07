@@ -1,0 +1,187 @@
+{# The parts of a family page that depend on the checkpoint. build.page_model renders each macro once per
+   checkpoint, keeps one copy of each distinct result, and the page shows the selected checkpoint's.
+   Every macro takes `c`, the checkpoint's model (build.checkpoint_model). #}
+
+{% macro chips(c) %}
+<div class="chips">
+  {% for q in c.quirks %}<a class="chip" href="#notes" title="{{ q.blurb }}">{{ q.label }}</a>{% endfor %}
+</div>
+{% endmacro %}
+
+{% macro block_head(c) %}
+{% if c.block.shapes %}
+<p class="lead">One block of the stack. Hover any part for the nnterp name that reads it; click to pin.
+The slider picks a block, its tick's colour gives the shape, and the diagram redraws for it.</p>
+{% else %}
+<p class="lead">One block of the stack. Hover any part for the nnterp name that reads it; click to pin.
+{% if c.layer_types and c.layer_types|unique|list|length > 1 %}The slider picks a block; this family's blocks differ by <span class="mono">{{ c.layer_types_key }}</span>.{% endif %}</p>
+{% endif %}
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× {{ c.num_layers }}</small></div>
+  {% if "norm" in c.root_names %}
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final norm</small></div>
+  {% endif %}
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>unembedding</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>{{ c.logits_label }}</small></div>
+</div>
+{% endmacro %}
+
+{% macro tower(c) %}
+{% if c.tower %}
+{% set t = c.tower %}
+<details class="fold fold-titled tower-scope">
+  <summary><h2 class="fold-heading">The <em>vision encoder</em></h2><span class="micro fold-tag">· {{ t.title }} · {{ t.module_class }}</span></summary>
+  <p class="lead">The image's path into the text model{% if t.num_layers %}, then one block of the vision encoder{% endif %}. Hover any part for the nnterp name that reads it; click to pin.</p>
+  <div class="strip tower-strip">
+    <div class="strip-node" data-node="v:path.image"><span class="mono role-stream">image</span><small>pixel_values</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.patch_embed"><span class="mono role-stream">patch_embed</span><small>patch_embeddings</small></div>
+    {% if not t.num_layers %}
+    {# no blocks: the patch embedding runs on to the projector, and tower_output is that edge #}
+    <span class="strip-arrow strip-edge" data-node="v:path.tower_output"><small class="mono">tower_output</small><span aria-hidden="true">→</span></span>
+    {% else %}
+    <span class="strip-arrow">→</span>
+    {% if t.has_norm and not t.norm_read %}
+    {# the projector reads a block before the final norm: the norm hangs off the path, dimmed #}
+    <div class="strip-fork">
+      <div class="strip-node strip-layers" data-node="v:path.layers"><span class="mono role-stream">layers</span><small>× {{ t.num_layers }}</small></div>
+      <div class="strip-branch"><span class="strip-arrow" aria-hidden="true">↳</span><div class="strip-node strip-off" data-node="v:path.norm"><span class="mono role-norm">norm</span><small>tower_output · not read</small></div></div>
+    </div>
+    {% else %}
+    <div class="strip-node strip-layers" data-node="v:path.layers"><span class="mono role-stream">layers</span><small>× {{ t.num_layers }}{% if not t.has_norm %} · tower_output{% endif %}</small></div>
+    {% if t.has_norm %}
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.norm"><span class="mono role-norm">norm</span><small>tower_output</small></div>
+    {% endif %}
+    {% endif %}
+    <span class="strip-arrow">→</span>
+    {% endif %}
+    <div class="strip-node strip-projector" data-node="v:path.projector"><span class="mono role-stream">projector</span><small>{{ t.projector.caption }}</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.features"><span class="mono role-stream">image_features</span><small>at the scatter</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.scatter"><span class="mono role-stream">layers[0].input</span><small>at image_token_mask</small></div>
+  </div>
+  <dl class="tower-facts">
+    <div><dt class="micro">rows</dt><dd class="body-md">{{ t.rows|inline }}</dd></div>
+    <div><dt class="micro">positions</dt><dd class="body-md">{{ t.positions|inline }}</dd></div>
+    <div><dt class="micro">masking</dt><dd class="body-md">{{ t.masking|inline }}</dd></div>
+    <div><dt class="micro">final norm</dt><dd class="body-md">{{ t.norm|inline }}</dd></div>
+  </dl>
+  {% if t.num_layers %}
+  <div class="viz">
+    <div class="viz-panel">
+      <svg class="tower-svg" role="img" aria-label="The vision encoder's block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each node of the image's path, and each box, edge and ⊕ of the vision encoder's block, names what nnterp calls it.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity"><span class="micro">identity</span> <code>{{ t.identity_html|safe }}</code></p>
+  {% else %}
+  <aside class="card node-card tower-card-only">
+    <div class="topstrip"></div>
+    <div class="card-body">
+      <p class="micro eyebrow">hover a part</p>
+      <p class="body-md">Each node of the image's path names what nnterp calls it.</p>
+    </div>
+  </aside>
+  {% endif %}
+</details>
+{% endif %}
+{% endmacro %}
+
+{% macro values(c) %}
+{% if c.conditional %}<p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition.</p>{% endif %}
+{% for ledger in c.ledgers %}
+{% if ledger.tower %}<p class="micro ledger-part">the vision encoder · {{ ledger.tower }}</p>{% endif %}
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-{{ ledger.role }}">{{ ledger.label }}</span>{% if ledger.classes %} <span class="mono dim">{{ ledger.classes }}</span>{% endif %}</span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  {% for row in ledger.rows %}
+  <div class="ledger-row" data-node="{{ ledger.nodes.get(row.name, '') }}">
+    <span class="mono-md name role-{{ ledger.role }}">{% if row.condition %}<span class="warn" tabindex="0" data-tip="{{ 'Needs attn_implementation="eager". ' if row.condition.kind == 'eager' }}{{ row.condition.reason }}">&#x26A0;&#xFE0E;</span>{% endif %}{{ row.name }}</span>
+    <span class="hide-sm mono">{% if row.layout %}{{ row.layout }} <span class="dim">[{{ row.dims }}]</span>{% else %}<span class="dim">scalar</span>{% endif %}</span>
+    <span class="body-md">{{ row.description }}</span>
+    <span class="hide-sm body-md where">{{ row.where|md }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endmacro %}
+
+{% macro printout(c) %}
+<p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">{{ c.reference }}</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>{{ c.repr_html }}</code></pre>
+{% endmacro %}
+
+{% macro config(c) %}
+<div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+      {% for name, value in c.sizes %}<div class="spec"><span>model.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
+    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+      {% for key, value in c.config %}<div class="spec"><span>{{ key }}</span><span>{{ value if value is not iterable or value is string else (value|length ~ ' entries' if value|length > 6 else value|join(', ')) }}</span></div>{% endfor %}
+    </div>
+  </div>
+</div>
+{% if c.tower %}
+<details class="card card-tower card-fold">
+  <summary class="topstrip"><span class="micro card-fold-label">Vision Config</span><span class="card-fold-mark" aria-hidden="true"></span></summary>
+  <div class="card-body">
+    <h3 class="card-name">Vision Config</h3>
+    <div class="specs specs-cols">
+      {% for name, value in c.tower.sizes %}<div class="spec"><span>model.vision.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
+    </div>
+  </div>
+</details>
+{% endif %}
+{% endmacro %}
+
+{% macro vision_notes(c) %}
+{% if c.tower %}
+<details class="fold fold-titled vision-fold vision-notes">
+<summary><h3 class="ttl-row">Vision <em>notes</em></h3><span class="micro fold-tag">· {{ c.tower.title }} · {{ c.tower.wrapper }}</span></summary>
+<div class="grid-notes">
+  <div class="prose">
+    <h2>The {{ c.tower.title }} vision encoder</h2>
+    {{ c.tower.notes }}
+    <h2>{{ c.tower.wrapper }}</h2>
+    {{ c.tower.wrapper_notes }}
+  </div>
+  {% if c.vision_quirks %}
+  <aside class="quirk-list">
+    <p class="micro">vision quirks</p>
+    {% for q in c.vision_quirks %}<div class="quirk"><span class="chip">{{ q.label }}</span><p class="body-md">{{ q.blurb }}</p></div>{% endfor %}
+  </aside>
+  {% endif %}
+</div>
+</details>
+{% endif %}
+{% endmacro %}
+
+{% macro quirk_list(c) %}
+{% if c.family_quirks %}
+<p class="micro">quirks</p>
+{% for q in c.family_quirks %}<div class="quirk"><span class="chip">{{ q.label }}</span><p class="body-md">{{ q.blurb }}</p></div>{% endfor %}
+{% endif %}
+{% endmacro %}
+
+{% macro envoys(c) %}
+{% if c.tower %}
+<p class="micro">the vision encoder's envoys</p>
+<p class="body-md mono">{% for native, envoy in c.tower.envoys %}{{ native }} → {{ envoy }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{% endif %}
+{% endmacro %}

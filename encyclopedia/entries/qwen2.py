@@ -26,10 +26,77 @@ CHECKPOINTS = [
     "Qwen/QwQ-32B",
     "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B", "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B",
     "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B", "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B",
+    # Vision-language wrappers around a Qwen2 text model, each a key of WRAPPERS by its config's model_type.
+    "llava-hf/llava-interleave-qwen-0.5b-hf",  # model_type llava
+    "llava-hf/llava-onevision-qwen2-0.5b-ov-hf", "llava-hf/llava-onevision-qwen2-7b-ov-hf",
 ]
 
-#: A hue for the Qwen lineage; its other families (qwen2_moe, qwen3, ...) can sit within about 15 degrees of it.
-PALETTE = {"hue": 285}
+#: The vision-language wrappers of this family, keyed by the wrapper's config.model_type. The vision encoder comes from
+#: the checkpoint's vision_config.model_type (encyclopedia/vision/); what a config does not say is here.
+WRAPPERS = {
+    "llava": {
+        "title": "llava-interleave",
+        # The family suite's TestLlavaInterleaveVision runs on this real checkpoint (where CUDA is); the meta build is cheap.
+        "pinned": "llava-hf/llava-interleave-qwen-0.5b-hf",
+        "projector": "a two-layer MLP (linear_1, GELU, linear_2) over the last block's patches, before post_layernorm",
+        "projector_input": "the last block's `layer_output`, before `vision.norm`",
+        "notes": """
+## The projector reads the last block, before the final norm
+
+`vision_feature_layer` is `-1` and `vision_feature_select_strategy` is `"full"`: the projector
+receives the vision encoder's last hidden state whole, which is `vision.layers[-1].layer_output`, the
+stream before `post_layernorm`. `vision.tower_output`, the norm's output, is computed and
+discarded, so a write to it does not reach the text model; a write to the last block's
+`layer_output` does. Checked on LLaVA-OneVision's pinned tiny checkpoint, whose wrapper selects the
+features with the same code and the same two settings:
+
+```python
+with model.trace(prompt, images=[image]):
+    stream = model.vision.layers[-1].layer_output.save()
+    fed = model.projector.input.save()
+
+torch.equal(fed, stream)   # True
+```
+
+## One token per patch
+
+`multi_modal_projector` maps each patch to one token: `linear_1` from the vision encoder's 1152 to the
+text model's 1024, GELU, `linear_2`. The processor resizes every image to 384 × 384, so an image is
+27 × 27 = 729 image tokens whatever its shape, and `vision.image_features` is
+`model.projector.output` flattened over the images, `[729, 1024]` per image. The scatter is
+`LlavaModel`'s, as on Llava 1.5.
+""",
+    },
+    "llava_onevision": {
+        "title": "LLaVA-OneVision",
+        "pinned": "hf-tiny-v2/tiny-random-LlavaOnevisionForConditionalGeneration",
+        "projector": "a two-layer MLP (linear_1, GELU, linear_2) over each crop's last-block patches; the wrapper unpads its output and adds newline tokens",
+        "projector_input": "each crop's last-block `layer_output`, before `vision.norm`",
+        "quirks": ["tiled-images", "unpadded-features"],
+        "notes": """
+## Crops as rows, and features that are not the projector's output
+
+The processor cuts an image into a base image and crops at a resolution from
+`image_grid_pinpoints` (36 of them, 384 to 2304 pixels a side), each a row of the vision encoder's
+batch. The projector reads `vision.layers[-1].layer_output` of every crop whole
+(`vision_feature_layer` `-1`, strategy `"full"`), before `post_layernorm`, so
+`vision.tower_output` does not reach the text model. The wrapper then unpads the crops' features
+to the image's aspect ratio and appends `image_newline` after each row of patches, so
+`vision.image_features` has another row count than `model.projector.output`: the features are read
+at the scatter, and `layers[0].input[vision.image_token_mask] == vision.image_features` holds.
+
+On `llava-onevision-qwen2-0.5b-ov-hf` a 384 × 384 image is the base image and one crop, 2 × 729
+projector rows, and 1485 image tokens: the base image's 729, the crop's 729 and 27 newlines. An
+image 768 wide and 384 high is the base and two crops, and 2214 image tokens. On the pinned tiny checkpoint
+the projector returns 8 rows (the base image and one crop, 4 patches each) and
+`vision.image_features` 10, 2 of them `image_newline`. Edit `vision.image_features` for what the
+text model receives.
+""",
+    },
+}
+
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 282}
 VLLM = True
 QUIRKS = ["qkv-bias"]
 

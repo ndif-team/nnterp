@@ -21,10 +21,50 @@ CHECKPOINTS = [
     "Qwen/Qwen3.6-27B",
 ]
 
-#: The Qwen lineage sits at 285 (qwen2) and 297 (qwen3); this family takes 273.
-PALETTE = {"hue": 273}
+#: The vision-language wrapper every checkpoint above is, keyed by its config.model_type. The vision encoder comes from
+#: the checkpoint's vision_config.model_type (encyclopedia/vision/qwen_vit.py); what a config does not say is here.
+WRAPPERS = {
+    "qwen3_5": {
+        "title": "Qwen3.5",
+        "pinned": "yujiepan/qwen3.5-tiny-random",
+        "projector": "merger, inside the vision encoder: a LayerNorm on each patch, then an MLP (linear_fc1, GELU, "
+                     "linear_fc2) over each 2 × 2 block of patches concatenated, one image token per block",
+        "projector_input": "the merger's input: the last block's output",
+        "notes": """
+## The merger folds four patches into one image token
+
+`model.projector` is `model.visual.merger`, the vision encoder's last module: `norm` (a LayerNorm over
+`vision_hidden`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
+`4 * vision_hidden` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. So an image
+of `t * h * w` patches (its `image_grid_thw` row) is `t * h * w / 4` image tokens, and
+`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden]`. On 0.8B the
+merger maps 4 × 768 = 3072 to 1024; a patch is 16 pixels, so an image token covers 32 × 32 pixels.
+
+```python
+with model.trace(prompt, images=[red, wide]):
+    mask = model.vision.image_token_mask.save()
+    fed = model.projector.input.save()          # [patches, vision_hidden]
+    features = model.vision.image_features.save()
+    first = model.layers[0].input.save()
+
+fed.shape[0] // 4 == mask.sum()                 # True: one image token per 2 x 2 block
+torch.equal(first[mask], features)              # True
+```
+
+## No DeepStack
+
+`vision_config.deepstack_visual_indexes` is empty on every checkpoint: the image reaches the text
+model only through `vision.image_features`; the text blocks have no `deepstack_output`. The vision encoder is otherwise Qwen3-VL's, with its learned `pos_embed`: 12 blocks of width 768
+on 0.8B, 24 of width 1024 on 2B and 4B, 27 of width 1152 on 9B and 27B.
+
+""",
+    },
+}
+
+#: Set by hues.py (lineage: Qwen).
+PALETTE = {"hue": 310}
 VLLM = False
-QUIRKS = ["hybrid", "gated-query", "qk-norm", "partial-rotary", "gain-norm"]
+QUIRKS = ["hybrid", "gated-query", "qk-norm", "partial-rotary", "gain-norm", "multimodal-rotary"]
 
 #: Real-value numbers below come from runs on Qwen3.5-0.8B (float32) and Qwen3.5-9B (bfloat16), with
 #: transformers' pure-torch DeltaNet kernels (flash-linear-attention and causal-conv1d not installed).
@@ -249,12 +289,14 @@ embedding and the unembedding are one matrix, so an edit to `embed_tokens.weight
 ## What loads as this family
 
 Every checkpoint here is multimodal: its config is `Qwen3_5ForConditionalGeneration`
-(`model_type` `qwen3_5`) with a `text_config` of `model_type` `qwen3_5_text`. nnterp picks the
-family from the `text_config`, and the text-generation task builds `Qwen3_5ForCausalLM` from the
-checkpoint's `model.language_model` weights; the vision tower (`model.visual`) and the
-multi-token-prediction block (`mtp`) that the checkpoints also ship are not loaded, so the model
-takes text only. The mixture-of-experts releases, Qwen3.5-35B-A3B, 122B-A10B, 397B-A17B and
-Qwen3.6-35B-A3B, are `qwen3_5_moe_text`.
+(`model_type` `qwen3_5`) with a `text_config` of `model_type` `qwen3_5_text`, and nnterp picks the
+family from the `text_config`. With `task="image-text-to-text"`, as this page builds them, the
+wrapper loads with its processor: the text model at `model.language_model`, the vision encoder at
+`model.visual` as `model.vision`. With the default `task="text-generation"` it builds
+`Qwen3_5ForCausalLM` from the `model.language_model` weights, without the vision encoder, and takes text
+only; the text model's names and values are the same under both. The multi-token-prediction block
+(`mtp`) the checkpoints ship is loaded by neither. The mixture-of-experts releases,
+Qwen3.5-35B-A3B, 122B-A10B, 397B-A17B and Qwen3.6-35B-A3B, are `qwen3_5_moe_text`.
 
 ## Sparse autoencoders
 

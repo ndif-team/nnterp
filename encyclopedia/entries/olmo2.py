@@ -23,6 +23,26 @@ CHECKPOINTS = [
     "allenai/OLMo-2-0325-32B-Instruct",
 ]
 
+#: Checkpoints that ship their tokenizer as `vocab.json` and `merges.txt` only, with no `tokenizer.json`.
+GPT2_FILES_ONLY = {"allenai/OLMo-2-0325-32B-SFT"}
+
+
+def load(checkpoint, **kwargs):
+    """The page's model, built on the meta device. ``allenai/OLMo-2-0325-32B-SFT`` has no ``tokenizer.json``,
+    and transformers' ``AutoTokenizer`` maps ``olmo2`` to the generic ``TokenizersBackend``, which cannot
+    build from ``vocab.json`` and ``merges.txt``; the GPT-2 tokenizer its ``tokenizer_config.json`` names
+    can, so it is loaded by type and handed over."""
+    from transformers import AutoTokenizer
+
+    from nnterp import StandardizedTransformer
+
+    if checkpoint in GPT2_FILES_ONLY:
+        kwargs["tokenizer"] = AutoTokenizer.from_pretrained(checkpoint, tokenizer_type="gpt2")
+    return StandardizedTransformer(checkpoint, **kwargs)
+
+
+#: Set by hues.py (lineage: OLMo).
+PALETTE = {"hue": 98}
 VLLM = False
 QUIRKS = ["post-norms", "qk-norm"]
 

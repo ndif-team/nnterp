@@ -13,8 +13,8 @@ REFERENCE = "moonshotai/Kimi-Linear-48B-A3B-Instruct"
 PINNED = "yujiepan/kimi-linear-tiny-random"
 CHECKPOINTS = ["moonshotai/Kimi-Linear-48B-A3B-Base", "moonshotai/Kimi-Linear-48B-A3B-Instruct"]
 
-#: Kimi lineage, beside kimi_k2 (330).
-PALETTE = {"hue": 342}
+#: Set by hues.py (lineage: DeepSeek).
+PALETTE = {"hue": 340}
 VLLM = False
 QUIRKS = ["hybrid", "latent-attention", "nope-blocks", "mixture-of-experts", "dense-first-blocks"]
 

@@ -12,6 +12,14 @@ comes from ``entries/<model_type>.py``: the title and subtitle, the block schema
 the visualization draws, the quirk tags, the palette and the notes. The output
 is static HTML under ``site/``; ``static/`` is copied beside it.
 
+A page has one selector over the entry's checkpoints, and every part that
+depends on the checkpoint (sizes, ``support()``, the printout, the tower of a
+vision-language wrapper) is built for each of them and swapped by the page's
+script. A checkpoint is read from its config: a ``model_type`` transformers maps
+to image-text-to-text, and the entry describes in ``WRAPPERS``, loads with
+``task="image-text-to-text"`` and brings its tower, whose facts live in
+``vision/<tower>.py``; a config that cannot be read is listed and said so.
+
 Every page colours five roles, attention, the MLP, the norms, the residual
 stream and the family's mark, from a palette ``palette.py`` generates for the
 family, and the same role takes the same colour in the diagram, the ledgers,
@@ -43,13 +51,17 @@ from pygments.formatters import HtmlFormatter  # noqa: E402
 from pygments.lexers import PythonLexer  # noqa: E402
 
 import nnterp  # noqa: E402  (import nnterp before any transformers.models module)
-from nnterp import StandardizedTransformer  # noqa: E402
+from nnterp import StandardizedTransformer, Unavailable  # noqa: E402
 from nnterp.components import Moe, RecurrentMixer, Standard  # noqa: E402
 from nnterp.components.moe import SHARED_NAMES  # noqa: E402
 from nnterp.components.standard import values as class_values  # noqa: E402
+from nnterp.components.vision import Vision, scatter_host  # noqa: E402
+from transformers import AutoConfig  # noqa: E402
+from transformers.models.auto.modeling_auto import MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES  # noqa: E402
 
 import entries  # noqa: E402
 import palette as palettes  # noqa: E402
+import vision as towers  # noqa: E402
 
 GITHUB = "https://github.com/ndif-team/nnterp/blob/0.8-refactor"
 
@@ -64,6 +76,7 @@ HOST_ROLES = {"root": "stream", "layer": "stream", "self_attn": "attention", "li
 NAME_ROLES = {
     "model": "stream", "layers": "stream", "embed_tokens": "stream", "lm_head": "stream", "logits": "stream",
     "norm": "norm", "self_attn": "attention", "linear_attn": "attention", "mlp": "mlp",
+    "vision": "stream", "patch_embed": "stream", "projector": "stream",
 }
 
 #: Quirk slugs an entry may carry, with the label and one line the index and the page show.
@@ -107,7 +120,30 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "dense-first-blocks": ("Dense first blocks", "The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
     "unnormalized-routing": ("Unnormalized routing", "The expert weights are the router's softmax entries for the chosen experts, not renormalized over them: a token's expert_weights sum to less than one."),
     "one-sublayer-blocks": ("One sublayer per block", "Each block is one norm and one sublayer, so it adds one contribution to the stream, and support() reports the hosts it does not hold missing on it."),
+    # The vision side (docs/usage/vision.md). `vision` marks a family some of whose checkpoints carry a tower; a
+    # vision-language checkpoint's page adds its tower's and its wrapper's slugs from the rest.
+    "vision": ("Vision-language", "Some checkpoints carry a vision tower: model.vision, its blocks, the projector, and the image values where the image enters the text model."),
+    "cls-token": ("CLS token", "The tower's stream carries a class token beside the patches (CLIP's first, Llama 4's last), so the patch axis is one longer than the patch grid."),
+    "packed-tower": ("Packed tower", "Every image's patches run in one row, [1, all patches, vision_hidden]; the processor's grid sizes split it."),
+    "variable-resolution": ("Variable resolution", "The tower takes images of any resolution, so vision.image_size raises Unavailable; each image's grid is in the processor's output."),
+    "padded-patches": ("Padded patches", "Each image's patches are padded to a fixed row count; the padded rows are masked as keys but run through every block, so they are rows of layer_output."),
+    "tiled-images": ("Tiled images", "The processor cuts an image into crops or tiles, each a row of the tower's batch."),
+    "deepstack": ("DeepStack", "Tower blocks feed the text model again after its first blocks: layers[k].deepstack_output is added at the image positions, outside the block."),
+    "unpadded-features": ("Unpadded features", "The wrapper unpads the projector's output and adds a newline token per row, so projector.output is not image_features."),
+    "pooled-projector": ("Pooled projector", "The projector pools or pixel-shuffles neighbouring patches into one token, so an image has fewer tokens than patches."),
+    "encoder-free": ("Encoder-free", "No tower blocks: raw patches go through one embedder into the text stream, so vision.num_layers is 0."),
 }
+
+#: The vision quirk slugs: a page shows them on a vision-language checkpoint, the index keeps them off its first filter row.
+VISION_QUIRKS = ("cls-token", "packed-tower", "variable-resolution", "padded-patches", "tiled-images", "deepstack",
+                 "unpadded-features", "pooled-projector", "encoder-free")
+#: The task a vision-language checkpoint loads with, and the config model_types transformers maps to it.
+IMAGE_TASK = "image-text-to-text"
+IMAGE_TEXT_TO_TEXT = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES
+TOWER_SIZE_NAMES = ("num_layers", "hidden_size", "num_heads", "head_dim", "intermediate_size", "patch_size", "image_size")
+#: What the strip's embed node adds on a vision-language checkpoint.
+IMAGE_SENTENCE = ("On this checkpoint the projected image features replace the image tokens' embeddings before block 0: "
+                  "layers[0].input[vision.image_token_mask] == vision.image_features.")
 
 ROOT_NAMES = ("embed_tokens", "layers", "norm", "lm_head")
 SIZE_NAMES = ("num_layers", "hidden_size", "num_heads", "num_kv_heads", "head_dim", "qk_head_dim", "vocab_size", "intermediate_size")
@@ -151,6 +187,11 @@ def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
         match = VALUE_LINE.match(str(value))
         assert match, str(value)
         key, select = getattr(value, "key", None), getattr(value, "select", None)
+        if isinstance(host, Vision) and getattr(value, "locate", None) is not None:
+            # a location the tower finds from itself (image_features: the scatter, wherever the family keys
+            # it), with the argument it selects there
+            key = value.locate(host)
+            select = select(host) if callable(select) else select
         # `unavailable(reason)`: a value the family declares it does not have; its key falls back to its
         # own name and names no location, so it is read nowhere.
         nowhere = isinstance(getattr(value, "unavailable", None), str)
@@ -181,6 +222,12 @@ def humanize_key(key: Any, select: int | None) -> str:
         element = f", argument `{named[1]}`" if named else ", the element that call returns it in"
     else:
         element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
+    if key.startswith("/"):
+        # a path from the model's root, not from the host
+        inner = key[1:]
+        if inner in ("input", "inputs"):
+            return "the model's own inputs, at the root" + element
+        return humanize_key(inner, select).replace("inside `", "inside `model.", 1)  # the root's child, as a user writes it
     if key.startswith("<"):
         # a location the value finds per call: a recurrent mixer's kernel, whichever fires on this call
         name = key[1:-1]
@@ -234,12 +281,16 @@ def runs_mixture(child: Any) -> bool:
     return isinstance(child, Moe) and child.no_mixture() is None
 
 
-def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any]:
-    """What nnterp knows about the entry's family, read off a meta build of ``reference``."""
+def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | None = None) -> dict[str, Any]:
+    """What nnterp knows about the entry's family, read off a meta build of ``reference``.
+
+    With ``wrapper`` (the checkpoint's ``model_type``, a key of the entry's ``WRAPPERS``), the checkpoint
+    is a vision-language wrapper: it loads with ``task="image-text-to-text"`` and ``vision`` holds its tower."""
     reference = reference or entry.REFERENCE
     load = getattr(entry, "load", StandardizedTransformer)
-    eager = load(reference, attn_implementation="eager")
-    default = load(reference)
+    task = {"task": IMAGE_TASK} if wrapper else {}
+    eager = load(reference, attn_implementation="eager", **task)
+    default = load(reference, **task)
     family = eager.family
     assert family.__name__.rsplit(".", 1)[1] == entry.MODEL_TYPE, (family.__name__, entry.MODEL_TYPE)
     num_layers = eager.num_layers
@@ -271,12 +322,15 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
     # a value of this model: it is left off the page rather than marked as conditional.
     absent = {name for name, why in support_eager.items()
               if isinstance(why, dict) and len(why) == num_layers and all(STRUCTURAL.match(w) for w in why.values())}
+    # A tower's block values are per tower block: "every block" is every block of the tower.
+    tower_layers = eager.vision.num_layers if wrapper else None
     support = []
     for name in support_eager:
         if name in absent:
             continue
-        under_eager = summarize_reason(support_eager[name], num_layers)
-        under_default = summarize_reason(support_default.get(name), num_layers)
+        blocks = tower_layers if name.startswith("vision.") else num_layers
+        under_eager = summarize_reason(support_eager[name], blocks)
+        under_default = summarize_reason(support_default.get(name), blocks)
         if under_eager is None and under_default is not None:
             condition = {"kind": "eager", "reason": under_default}
         elif under_eager is not None:
@@ -347,6 +401,63 @@ def introspect(entry: ModuleType, reference: str | None = None) -> dict[str, Any
         "docstring": doc,
         "children": list(children),
         "versions": {"nnterp": nnterp.__version__, "transformers": importlib.import_module("transformers").__version__},
+        "vision": vision_info(entry, eager, wrapper, conditions) if wrapper else None,
+    }
+
+
+def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[str, Any]) -> dict[str, Any]:
+    """A vision-language checkpoint's tower: which tower (by ``vision_config.model_type``), its sizes, its values
+    with their ``support()`` conditions (the ``vision.`` rows), what the diagram needs to draw its block, the
+    projector, and the envoy classes on the tower's modules."""
+    vision = model.vision
+    config = model.config.vision_config
+    tower = towers.resolve(entry, wrapper, config.model_type)
+    module_class = type(vision._module).__name__
+    assert module_class in tower["module_classes"], \
+        f"{entry.MODEL_TYPE}: {wrapper}'s tower is a {module_class}; {tower['slug']} lists {tower['module_classes']}"
+    layer = vision.layers[0]
+    children = StandardizedTransformer._standard_children(layer)
+    hosts = [("vision", "model.vision", vision, "vision."), ("layer", "model.vision.layers[i]", layer, "vision.")]
+    hosts += [(alias, f"model.vision.layers[i].{alias}", child, f"vision.{alias}.") for alias, child in children.items()]
+    values: dict[str, list[dict[str, Any]]] = {}
+    for alias, expr, host, prefix in hosts:
+        rows = value_rows(host, expr)
+        for row in rows:
+            row.update(condition=conditions.get(prefix + row["name"]), host=alias, module=type(host._module).__name__)
+        values[alias] = rows
+    sizes = []
+    for name in TOWER_SIZE_NAMES:
+        try:
+            sizes.append((name, getattr(vision, name)))
+        except Unavailable:  # a tower that takes any resolution
+            sizes.append((name, "varies"))
+    vision_config = config.to_dict()
+    scatter = scatter_host(model)
+    envoys = [(type(envoy._module).__name__, type(envoy).__name__) for envoy in (vision, layer, *children.values())]
+    if scatter is not None:
+        envoys.append((type(scatter[1]._module).__name__, type(scatter[1]).__name__))
+    return {
+        "wrapper": wrapper,
+        "wrapper_fields": entry.WRAPPERS[wrapper],
+        "tower": tower,
+        "module_class": module_class,
+        "layer_class": type(layer._module).__name__,
+        "path": vision.path,
+        "sizes": sizes,
+        "values": values,
+        "has_norm": "norm" in vision._aliases or isinstance(getattr(type(vision), "norm", None), property),
+        "projector": {"class": type(model.projector._module).__name__, "path": model.projector.path},
+        "envoys": envoys,
+        # what block_schema reads, for the tower's block
+        "block": {
+            "values": {"layer": values["layer"], **{alias: values[alias] for alias in children}},
+            "sizes": [(name, value) for name, value in sizes],
+            "config": [(key, vision_config[key]) for key in CONFIG_KEYS if vision_config.get(key) is not None],
+            "moe": None, "mixer": None, "support": [], "layer_types": None,
+            "num_layers": vision.num_layers,
+            "host_classes": {alias: [(type(child._module).__name__, False, len(child.values()))] for alias, child in children.items()},
+            "block_hosts": [{alias: False for alias in StandardizedTransformer._standard_children(block)} for block in vision.layers],
+        },
     }
 
 
@@ -405,7 +516,8 @@ def drawn(specs: list[dict[str, Any]], hosts: dict[str, bool]) -> tuple[int, ...
                  and (spec["kind"] not in ("mlp", "moe") or hosts[spec["host"]] == (spec["kind"] == "moe")))
 
 
-def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
+def block_schema(name: str, spec: dict[str, Any], info: dict[str, Any], base: str = "model.layers[i]",
+                 stream: str = "residual stream") -> dict[str, Any]:
     """The entry's BLOCK, checked against the family and enriched with every node's hover card.
 
     The sublayers are listed once, in forward order; each block draws the ones its children
@@ -415,12 +527,15 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
 
     A host that runs a mixture on some checkpoints of the family and not on others (Gemma-4's
     ``mlp``) lists both sublayers; a checkpoint draws the one its blocks have, and the other is
-    left out of the schema."""
+    left out of the schema.
+
+    ``name`` is what an assertion names (the entry's model_type), ``spec`` the BLOCK, ``base`` the block's
+    expression (``model.vision.layers[i]`` for a tower's block) and ``stream`` what its stream is called."""
     by_host = {alias: {row["name"]: row for row in rows} for alias, rows in info["values"].items()}
     sizes = dict(info["sizes"])
     moe = info["moe"] or {}
     fmt = {**sizes, **{k: v for k, v in info["config"]}, **{k: moe[k] for k in ("num_experts", "top_k") if k in moe}}
-    specs = entry.BLOCK["sublayers"]
+    specs = spec["sublayers"]
     hosts = [s["host"] for s in specs]
     # A host drawn by two sublayers (a dense MLP and a mixture) keys its nodes by kind as well.
     keys = [s["host"] if hosts.count(s["host"]) == 1 else f"{s['host']}-{s['kind']}" for s in specs]
@@ -429,11 +544,11 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     for i, (shape, block_hosts) in enumerate(zip(shape_of, info["block_hosts"])):
         named = [h for h in block_hosts if h in hosts]
         assert sorted(named) == sorted(specs[k]["host"] for k in shape), \
-            f"{entry.MODEL_TYPE}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
+            f"{name}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
     shown = sorted({k for shape in shape_of for k in shape})
     for k in range(len(specs)):
         assert k in shown or any(hosts[j] == hosts[k] for j in shown), \
-            f"{entry.MODEL_TYPE}: no block has BLOCK's {keys[k]!r} sublayer"
+            f"{name}: no block has BLOCK's {keys[k]!r} sublayer"
     # Only the sublayers this checkpoint's blocks draw: the shapes index into what is left.
     position = {k: n for n, k in enumerate(shown)}
     shape_of = [tuple(position[k] for k in shape) for shape in shape_of]
@@ -442,8 +557,8 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     sublayers = []
     for k, spec in enumerate(specs):
         host, key, kind = spec["host"], keys[k], spec["kind"]
-        assert host in by_host, f"{entry.MODEL_TYPE}: BLOCK names host {host!r}; the block has {list(by_host)}"
-        assert kind in KINDS, f"{entry.MODEL_TYPE}: kind {kind!r}; known: {KINDS}"
+        assert host in by_host, f"{name}: BLOCK names host {host!r}; the block has {list(by_host)}"
+        assert kind in KINDS, f"{name}: kind {kind!r}; known: {KINDS}"
         contribution = by_host[host][spec["contribution"]]
         sub = {
             "host": host, "kind": kind, "label": spec["label"],
@@ -465,21 +580,21 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
             if routed:
                 extra += f" `{'`, `'.join(name.split('.', 1)[1] for name in routed)}` need `nnterp.route_kernels(model.family, \"torch\")` before the first trace."
         nodes[f"sub.{key}"] = node(
-            spec["label"], f"model.layers[i].{host}",
+            spec["label"], f"{base}.{host}",
             f"{' / '.join(classes)} under its standard name. " + spec.get("detail", "").format(**fmt), extra=extra)
         for name in spec.get("interior", []):
-            assert name in by_host[host], f"{entry.MODEL_TYPE}: {host} has no value {name!r}"
+            assert name in by_host[host], f"{name}: {host} has no value {name!r}"
             chip = {"name": name, "short": INTERIOR_SHORT.get(name, name)}
             if kind == "moe":
-                assert name in MOE_PARTS, f"{entry.MODEL_TYPE}: {name!r} is not a mixture's value; a moe sublayer draws {list(MOE_PARTS)}"
+                assert name in MOE_PARTS, f"{name}: {name!r} is not a mixture's value; a moe sublayer draws {list(MOE_PARTS)}"
                 chip["part"] = MOE_PARTS[name]
             sub["interior"].append(chip)
             nodes[f"interior.{key}.{name}"] = value_node(by_host[host][name], "inside the sublayer")
         if kind == "moe":
             parts = {chip["part"] for chip in sub["interior"]}
-            assert "shared" not in parts or moe.get("shared"), f"{entry.MODEL_TYPE}: the mixture has no shared expert to draw"
+            assert "shared" not in parts or moe.get("shared"), f"{name}: the mixture has no shared expert to draw"
             sub["moe"] = {"num_experts": moe["num_experts"], "top_k": moe["top_k"], "scoring": moe["scoring"]}
-            expr = f"model.layers[i].{host}"
+            expr = f"{base}.{host}"
             if "router" in parts:
                 nodes[f"moe.{key}.router"] = node(
                     "the router", f"{expr}.router",
@@ -497,50 +612,54 @@ def block_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
         nodes[f"contrib.{key}"] = value_node(contribution, "contribution")
         if spec.get("pre_norm"):
             nodes[f"norm.{spec['pre_norm']}"] = node(
-                "pre-norm", f"model.layers[i].{spec['pre_norm']}",
-                f"A native module under its own name. Its output is what `{host}` reads: `model.layers[i].{host}.input`.",
+                "pre-norm", f"{base}.{spec['pre_norm']}",
+                f"A native module under its own name. Its output is what `{host}` reads: `{base}.{host}.input`.",
                 extra=spec.get("pre_norm_note"))
         if spec.get("post_norm"):
             nodes[f"norm.{spec['post_norm']}"] = node(
-                "post-norm", f"model.layers[i].{spec['post_norm']}",
+                "post-norm", f"{base}.{spec['post_norm']}",
                 f"A native module under its own name. Its output is the contribution: `{contribution['expr']}`.",
                 extra=spec.get("post_norm_note"))
         sublayers.append(sub)
 
     shapes = list(dict.fromkeys(shape_of))
     single = len(shapes) == 1
-    assert single or "identity" not in entry.BLOCK, f"{entry.MODEL_TYPE}: a BLOCK with several shapes takes no identity"
+    assert single or "identity" not in spec, f"{name}: a BLOCK with several shapes takes no identity"
 
     layer_output = by_host["layer"]["layer_output"]
-    nodes["stream.input"] = node("residual stream", "model.layers[i].input",
-                                 "The residual stream entering the block, a tensor on every family.",
-                                 layout="Residual", dims="batch seq hidden")
-    nodes["stream.output"] = value_node(layer_output, "residual stream")
+    entering = by_host["layer"].get("layer_output", {})
+    nodes["stream.input"] = node(stream, f"{base}.input",
+                                 "The residual stream entering the block, a tensor on every family." if stream == "residual stream"
+                                 else f"The {stream} entering the block.",
+                                 layout="Residual" if stream == "residual stream" else entering.get("layout"),
+                                 dims="batch seq hidden" if stream == "residual stream" else entering.get("dims"))
+    nodes["stream.output"] = value_node(layer_output, stream)
     drawn_shapes = []
     for s, shape in enumerate(shapes):
         subs = [sublayers[k] for k in shape]
         mids = []
         # Between two sequential sublayers the stream has a value of its own; a parallel block has no such point.
-        for k in range(len(subs) - 1 if entry.BLOCK.get("topology", "sequential") == "sequential" else 0):
+        for k in range(len(subs) - 1 if spec.get("topology", "sequential") == "sequential" else 0):
             nxt = subs[k + 1]
             after = subs[k]["label"].lower()
             mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
             if nxt["pre_norm"]:
-                nodes[mid] = node("residual stream", f"model.layers[i].{nxt['pre_norm']}.input",
+                nodes[mid] = node(stream, f"{base}.{nxt['pre_norm']}.input",
                                   f"The stream after the {after} add, as the next pre-norm receives it. No standard value of its own.")
             else:
-                nodes[mid] = node("residual stream", f"model.layers[i].{nxt['host']}.input",
+                nodes[mid] = node(stream, f"{base}.{nxt['host']}.input",
                                   f"The stream after the {after} add, as the next sublayer receives it. No standard value of its own.")
             mids.append(mid)
         terms = " + ".join(f"{sub['host']}.{sub['contribution']}" for sub in subs)
-        identity = entry.BLOCK.get("identity", f"layers[i].input + {terms} == layer_output")
+        identity = spec.get("identity", f"{base.removeprefix('model.')}.input + {terms} == layer_output")
         plus = "plus" if single else f"plus.{s}"
-        nodes[plus] = node("the add", identity, entry.BLOCK.get("identity_note", "The contribution identity nnterp's suite checks on this family."))
+        checked = "on this family" if stream == "residual stream" else "on every tower block"
+        nodes[plus] = node("the add", identity, spec.get("identity_note", f"The contribution identity nnterp's suite checks {checked}."))
         drawn_shapes.append({"subs": list(shape), "mids": mids, "plus": plus, "identity": identity,
                              "label": " + ".join(sub["label"] for sub in subs)})
 
     schema = {
-        "topology": entry.BLOCK.get("topology", "sequential"),
+        "topology": spec.get("topology", "sequential"),
         "sublayers": sublayers,
         "identity": drawn_shapes[0]["identity"],  # block 0's; a hybrid's page swaps it as the slider moves
         "num_layers": info["num_layers"],
@@ -576,7 +695,38 @@ def strip_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     }
     for key, note in strip.items():
         nodes[f"strip.{key}"]["extra"] = note
+    if info.get("vision"):
+        embed = nodes["strip.embed"]
+        embed["extra"] = f"{embed['extra']} {IMAGE_SENTENCE}" if embed["extra"] else IMAGE_SENTENCE
     return {"nodes": nodes, "notes": strip}
+
+
+def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
+    """The image's path into the text model, as hover nodes: the image, the patch embedding, the tower's
+    blocks, its final norm where it has one, the projector, the features and where they enter."""
+    tower, wrapper = v["tower"], v["wrapper_fields"]
+    root = {row["name"]: row for row in v["values"]["vision"]}
+    layer = {row["name"]: row for row in v["values"]["layer"]}
+    blocks = value_node(layer["layer_output"], "the tower's blocks")
+    blocks["extra"] = f"{v['block']['num_layers']} blocks of {v['layer_class']}; the one drawn below is any of them."
+    nodes = {
+        "path.image": node("the image", "pixel_values", f"What the processor hands the tower. {tower['rows']}"),
+        "path.patch_embed": {**value_node(root["patch_embeddings"], "patch embedding"), "extra": tower["positions"]},
+        "path.layers": blocks,
+        "path.projector": node(
+            "projector", "model.projector",
+            f"`{v['projector']['class']}` at `{v['projector']['path']}`: {wrapper['projector']}.",
+            extra="`model.projector.input` is what it receives, `model.projector.output` what it returns."),
+        "path.features": value_node(root["image_features"], "image features"),
+        "path.scatter": {**value_node(root["image_token_mask"], "into the text model"),
+                         "extra": "`model.layers[0].input[model.vision.image_token_mask] == model.vision.image_features`: "
+                                  "the features replace the image tokens' embeddings before block 0."},
+    }
+    if v["has_norm"]:
+        nodes["path.norm"] = {**value_node(root["tower_output"], "final norm"), "extra": f"`model.vision.norm`. {tower['norm']}"}
+    else:
+        nodes["path.layers"]["extra"] += f" `model.vision.tower_output` is the last block's `layer_output`: {tower['norm']}"
+    return nodes
 
 
 # -- rendering ------------------------------------------------------------------------
@@ -590,6 +740,8 @@ def name_roles(entry: ModuleType, info: dict[str, Any]) -> dict[str, str]:
             roles.update({row["name"]: HOST_ROLES[host] for row in rows})
     for sub in entry.BLOCK["sublayers"]:
         roles.update({sub[key]: "norm" for key in ("pre_norm", "post_norm") if sub.get(key)})
+    if info.get("vision"):  # the tower's own values belong to the stream; its blocks' take their hosts' roles, as above
+        roles.update({row["name"]: "stream" for row in info["vision"]["values"]["vision"]})
     return roles
 
 
@@ -597,7 +749,7 @@ LEXER = PythonLexer()
 FORMATTER = HtmlFormatter(nowrap=True)
 NAME_SPAN = re.compile(r'<span class="n">(\w+)</span>')
 FENCE = re.compile(r'<pre><code(?: class="language-(\w+)")?>(.*?)</code></pre>', re.S)
-MODULE_LINE = re.compile(r"^\((?P<name>\w+)\): (?P<cls>[\w.]+)(?P<args>\(.*)?$")
+MODULE_LINE = re.compile(r"^\((?P<name>[\w/]+)\): (?P<cls>[\w.]+)(?P<args>\(.*)?$")
 
 
 def highlight_python(code: str, roles: dict[str, str]) -> Markup:
@@ -622,6 +774,24 @@ def root_printout(model: Any) -> str:
         else:
             out.append(lines[i])
         i += 1
+    if "vision" not in model._aliases:
+        return "\n".join(out)
+    # The tower likewise: a native container whose every child is mounted on the tower under a standard name
+    # (CLIP's and SigLIP's `encoder`, holding only `layers`) is left out; one with other children stays.
+    vision = model.vision
+    mounted = set(vision._aliases.values())
+    containers = {path.split(".")[0] for path in mounted if "." in path}
+    full = {name for name in containers
+            if all(f"{name}.{child}" in mounted for child, _ in vision._module.get_submodule(name).named_children())}
+    start = next(k for k, line in enumerate(out) if line.startswith("  (vision): "))
+    lines, out, i = out, out[:start], start
+    while i < len(lines):
+        name = re.match(r"    \((\w+)\): ", lines[i])
+        if name and name[1] in full and lines[i].endswith("("):
+            i = lines.index("    )", i)
+        else:
+            out.append(lines[i])
+        i += 1
     return "\n".join(out)
 
 
@@ -641,7 +811,7 @@ def highlight_repr(text: str, roles: dict[str, str]) -> Markup:
                          f'<span class="rd">[{html.escape(value["dims"])}]</span>: '
                          f'<span class="rd">{html.escape(value["desc"])}</span>')
         elif module:
-            role = roles.get(module["name"])
+            role = roles.get(module["name"].split("/")[0])
             name = f'<span class="rn{" role-" + role if role else ""}">({html.escape(module["name"])})</span>'
             args = f'<span class="rd">{html.escape(module["args"])}</span>' if module["args"] and module["args"] != "(" else html.escape(module["args"] or "")
             lines.append(f'{indent}{name}: {html.escape(module["cls"])}{args}')
@@ -703,47 +873,187 @@ def site_palette() -> dict[str, Any]:
 
 
 def quirks(entry: ModuleType) -> list[dict[str, str]]:
+    return [quirk(slug, entry.MODEL_TYPE) for slug in entry.QUIRKS]
+
+
+#: A small eye, marking a vision-language checkpoint in the selector, the checkpoints ledger and the index.
+EYE = Markup('<svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false">'
+             '<path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg>')
+#: The parts of a family page built once per checkpoint, each a template macro in panes.html.j2; the page holds
+#: one copy per distinct rendering and shows the selected checkpoint's.
+PANES = ("chips", "block_head", "tower", "values", "printout", "sizes", "vision_notes", "quirk_list", "envoys")
+
+
+def unavailable_reason(error: BaseException) -> str:
+    """Why a checkpoint's config cannot be read, in a few words: the Hub's error class where one is in the chain."""
+    from huggingface_hub.errors import GatedRepoError, LocalEntryNotFoundError, RepositoryNotFoundError
+
+    seen: BaseException | None = error
+    while seen is not None:
+        if isinstance(seen, GatedRepoError):
+            return "the repository is gated, and this build has no access to it"
+        if isinstance(seen, RepositoryNotFoundError):
+            return "no such repository on the Hub"
+        if isinstance(seen, LocalEntryNotFoundError):
+            return "its config is not in the Hub cache, and the build is offline"
+        seen = seen.__cause__ or seen.__context__
+    text = str(error).strip()
+    return f"{type(error).__name__}: {text.splitlines()[0] if text else 'no message'}"[:240]
+
+
+def read_checkpoint(entry: ModuleType, checkpoint: str, cache: dict[Any, dict[str, Any]]) -> dict[str, Any]:
+    """One checkpoint as the page holds it: ``info`` from `introspect`, or ``unavailable`` saying why its config
+    cannot be read (gated, missing, offline), so the page lists it greyed out and the build goes on.
+
+    The task comes from the config: a ``model_type`` transformers maps to image-text-to-text, and the entry
+    describes in ``WRAPPERS``, loads as that wrapper with its tower; any other loads for text generation, as a
+    page always has. An entry with a ``load`` builds its checkpoints itself (its configs need more than
+    ``AutoConfig``). Checkpoints whose configs differ only in their name share one introspection."""
+    key, wrapper = checkpoint, None
+    if not hasattr(entry, "load"):
+        try:
+            config = AutoConfig.from_pretrained(checkpoint)
+        except Exception as error:  # noqa: BLE001 - whatever makes a config unreadable is a reason the page states
+            return {"id": checkpoint, "unavailable": unavailable_reason(error)}
+        if config.model_type in IMAGE_TEXT_TO_TEXT and config.model_type in getattr(entry, "WRAPPERS", {}):
+            wrapper = config.model_type
+        fields = {k: v for k, v in config.to_dict().items() if k != "_name_or_path"}
+        key = (wrapper, json.dumps(fields, sort_keys=True, default=str))
+    if key not in cache:
+        cache[key] = introspect(entry, checkpoint, wrapper=wrapper)
+    return {"id": checkpoint, "info": {**cache[key], "reference": checkpoint}}
+
+
+def ledgers(info: dict[str, Any]) -> list[dict[str, Any]]:
+    """The API's ledgers, one per host: the text model's, then on a vision-language checkpoint the tower's."""
     out = []
-    for slug in entry.QUIRKS:
-        assert slug in QUIRKS, f"{entry.MODEL_TYPE}: unknown quirk {slug!r}; known: {sorted(QUIRKS)}"
-        label, blurb = QUIRKS[slug]
-        out.append({"slug": slug, "label": label, "blurb": blurb})
+    for host, rows in info["values"].items():
+        label = "model" if host == "root" else "model.layers[i]" if host == "layer" else f"model.layers[i].{host}"
+        label = Markup(html.escape(label).replace(".", ".<wbr>"))  # a long host name breaks at its dots
+        classes = " / ".join(info["module_classes"][host]) if host in info["module_classes"] else (rows[0]["module"] if rows else "")
+        nodes = {"token_embeddings": "strip.embed", "logits": "strip.logits"} if host == "root" else {}
+        out.append({"label": label, "role": HOST_ROLES.get(host, "mlp"), "classes": classes, "rows": rows, "nodes": nodes})
+    v = info.get("vision")
+    if v:
+        for host, rows in v["values"].items():
+            label = "model.vision" if host == "vision" else "model.vision.layers[i]" if host == "layer" else f"model.vision.layers[i].{host}"
+            label = Markup(html.escape(label).replace(".", ".<wbr>"))
+            role = "stream" if host in ("vision", "layer") else HOST_ROLES.get(host, "mlp")
+            out.append({"label": label, "role": role, "classes": rows[0]["module"] if rows else "", "rows": rows, "nodes": {},
+                        "tower": v["tower"]["title"] if host == "vision" else None})
     return out
 
 
-def page_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
-    block = block_schema(entry, info)
-    strip = strip_schema(entry, info)
-    nodes = {**block["nodes"], **strip["nodes"]}
-    eager_only = [row["name"] for row in info["support"] if row["condition"] and row["condition"]["kind"] == "eager"]
-    other = [row for row in info["support"] if row["condition"] and row["condition"]["kind"] == "other"]
+def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: list[dict[str, str]]) -> dict[str, Any]:
+    """Everything on the page that depends on the checkpoint: what its panes render, and ``data`` for the page's
+    script (the block's schema and node texts, the identity, and the tower's on a vision-language checkpoint)."""
     roles = name_roles(entry, info)
+    block = block_schema(entry.MODEL_TYPE, entry.BLOCK, info)
+    strip = strip_schema(entry, info)
+    nodes = {**block.pop("nodes"), **strip["nodes"]}
     for shape in block.get("shapes", []):
         shape["identity_html"] = str(highlight_python(shape["identity"], roles))
+    block["roles"] = {s.get("key", s["host"]): HOST_ROLES.get(s["host"], "mlp") for s in block["sublayers"]}
+    data: dict[str, Any] = {"schema": block, "nodes": nodes, "identity_html": str(highlight_python(block["identity"], roles)), "tower": None}
+    shown = list(family_quirks)
+    model: dict[str, Any] = {**info, "block": block, "roles": roles, "ledgers": ledgers(info),
+                             "eager_only": [row["name"] for row in info["support"] if row["condition"] and row["condition"]["kind"] == "eager"],
+                             "repr_html": highlight_repr(info["repr"], roles), "logits_label": logits_label(family_quirks)}
+    v = info.get("vision")
+    if v:
+        tower, wrapper = v["tower"], v["wrapper_fields"]
+        schema = block_schema(f"{entry.MODEL_TYPE} ({tower['slug']} tower)", tower["block"], v["block"],
+                              base="model.vision.layers[i]", stream="tower's stream")
+        tower_nodes = schema.pop("nodes")
+        attention = next((key for key in tower_nodes if key.startswith("sub.") and "self_attn" in key), None)
+        if attention:
+            tower_nodes[attention]["extra"] += " " + tower["masking"]
+        tower_nodes.update(tower_path_nodes(v))
+        nodes.update({"v:" + key: value for key, value in tower_nodes.items()})
+        schema["roles"] = {s.get("key", s["host"]): HOST_ROLES.get(s["host"], "mlp") for s in schema["sublayers"]}
+        data["tower"] = {"schema": schema, "identity_html": str(highlight_python(schema["identity"], roles))}
+        seen = {q["slug"] for q in shown}
+        for slug in ["vision", *tower["quirks"], *wrapper.get("quirks", [])]:
+            if slug not in seen:
+                seen.add(slug)
+                shown.append(quirk(slug, f"{entry.MODEL_TYPE} {v['wrapper']}"))
+        model["tower"] = {
+            "title": tower["title"], "wrapper": wrapper["title"], "schema": schema, "identity_html": data["tower"]["identity_html"],
+            "rows": tower["rows"], "positions": tower["positions"], "masking": tower["masking"], "norm": tower["norm"],
+            "has_norm": v["has_norm"], "num_layers": v["block"]["num_layers"], "layer_class": v["layer_class"],
+            "module_class": v["module_class"], "projector": v["projector"], "sizes": v["sizes"], "envoys": v["envoys"],
+            # The parts' headings are h2; the notes' own headings sit under them.
+            "notes": Markup(str(md(tower["notes"], roles=roles)).replace("<h2", "<h3").replace("</h2>", "</h3>")),
+            "wrapper_notes": Markup(str(md(wrapper.get("notes", ""), roles=roles)).replace("<h2", "<h3").replace("</h2>", "</h3>")),
+        }
+    model["quirks"] = shown
+    model["data"] = data
+    return model
+
+
+def logits_label(family_quirks: list[dict[str, str]]) -> str:
+    slugs = {q["slug"] for q in family_quirks}
+    return "softcapped" if "softcapped-logits" in slugs else "scaled" if "scaled-logits" in slugs else "the output"
+
+
+def quirk(slug: str, where: str) -> dict[str, str]:
+    assert slug in QUIRKS, f"{where}: unknown quirk {slug!r}; known: {sorted(QUIRKS)}"
+    label, blurb = QUIRKS[slug]
+    return {"slug": slug, "label": label, "blurb": blurb}
+
+
+def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> dict[str, Any]:
+    """The page: the family's shared parts from the default checkpoint, and every available checkpoint's panes."""
+    by_id = {c["id"]: c for c in read}
+    assert "info" in by_id[default], f"{entry.MODEL_TYPE}: the default checkpoint {default} is unavailable: {by_id[default].get('unavailable')}"
+    info = by_id[default]["info"]
+    family_quirks = quirks(entry)
+    models = {c["id"]: checkpoint_model(entry, c["info"], family_quirks) for c in read if "info" in c}
+    module = environment().get_template("panes.html.j2").make_module({"eye": EYE})
+    panes: dict[str, list[dict[str, Any]]] = {}
+    for name in PANES:
+        groups: dict[str, list[str]] = {}
+        for cid, model in models.items():
+            groups.setdefault(str(getattr(module, name)(model)).strip(), []).append(cid)
+        panes[name] = [{"html": Markup(text), "ckpts": ids, "shown": default in ids} for text, ids in groups.items()]
+    wrappers = getattr(entry, "WRAPPERS", {})
+    options = []
+    for c in read:
+        v = models[c["id"]]["vision"] if c["id"] in models else None
+        options.append({
+            "id": c["id"], "name": c["id"].split("/")[-1], "url": f"https://huggingface.co/{c['id']}",
+            "reason": c.get("unavailable"), "vision": bool(v),
+            "tower": v["tower"]["title"] if v else None, "wrapper": v["wrapper_fields"]["title"] if v else None,
+            "group": "unavailable" if "unavailable" in c else "vision" if v else "text",
+        })
+    groups = [(label, [o for o in options if o["group"] == key])
+              for key, label in (("text", "text"), ("vision", "vision-language"), ("unavailable", "not available"))]
+    pinned = [entry.PINNED] + [w["pinned"] for w in wrappers.values() if w["pinned"] != entry.PINNED]
+    roles = models[default]["roles"]
+    available = [models[o["id"]] for o in options if o["id"] in models]
+    towers_found = list(dict.fromkeys(m["tower"]["title"] for m in available if m.get("tower")))
     return {
         **info,
         "model_type": entry.MODEL_TYPE,
         "title": entry.TITLE,
         "subtitle": entry.SUBTITLE,
         "palette": palette(entry),
-        "checkpoints": [{"id": c, "url": f"https://huggingface.co/{c}"} for c in entry.CHECKPOINTS],
-        "pinned": entry.PINNED,
+        "default": default,
+        "options": options,
+        "option_groups": [(label, items) for label, items in groups if items],
+        "checkpoints": [{"id": o["id"], "url": o["url"]} for o in options],
+        "pinned": pinned,
         "vllm": getattr(entry, "VLLM", False),
-        "quirks": quirks(entry),
+        "quirks": family_quirks + ([quirk("vision", entry.MODEL_TYPE)] if towers_found else []),
         "notes": md(entry.NOTES, roles=roles),
         "docstring": md(info["docstring"], rst=True, roles=roles),
-        "host_roles": {host: HOST_ROLES.get(host, "mlp") for host in info["values"]},
-        "repr_html": highlight_repr(info["repr"], roles),
-        "identity_html": highlight_python(block["identity"], roles),
-        "block": block,
-        "strip": strip,
-        "nodes_json": embed_json(nodes),
-        "block_json": embed_json({**{k: v for k, v in block.items() if k != "nodes"},
-                                  "roles": {s.get("key", s["host"]): HOST_ROLES.get(s["host"], "mlp") for s in block["sublayers"]}}),
-        "eager_only": eager_only,
-        "other_conditions": other,
-        "available": sum(1 for row in info["support"] if row["condition"] is None),
-        "total": len(info["support"]),
+        "panes": panes,
+        "eye": EYE,
+        "identity_html": Markup(models[default]["data"]["identity_html"]),
+        "checkpoints_json": embed_json({"default": default, "checkpoints": {cid: m["data"] for cid, m in models.items()}}),
+        "blocks": sorted({m["num_layers"] for m in available}),
+        "towers": towers_found,
+        "wrappers": list(dict.fromkeys(m["tower"]["wrapper"] for m in available if m.get("tower"))),
         "source_url": f"{GITHUB}/{info['family_file']}",
         "test_url": f"{GITHUB}/tests/families/test_{entry.MODEL_TYPE}.py",
         "families_url": f"{GITHUB}/docs/reference/families.md",
@@ -755,20 +1065,41 @@ def environment() -> Environment:
     env = Environment(loader=FileSystemLoader(HERE / "templates"), autoescape=True, trim_blocks=True, lstrip_blocks=True)
     env.filters["md"] = md
     env.filters["code"] = lambda s: Markup(f"<code>{html.escape(str(s))}</code>")
+    # a sentence with code names in backticks, as the hover cards show it
+    env.filters["inline"] = lambda s: Markup(re.sub(r"`([^`]+)`", r"<code>\1</code>", html.escape(str(s))))
     return env
 
 
-def build_page(entry: ModuleType, reference: str | None = None) -> str:
-    """One family page as HTML."""
-    info = introspect(entry, reference)
-    return environment().get_template("family.html.j2").render(**page_model(entry, info))
+def read_entry(entry: ModuleType, reference: str | None = None, checkpoints: list[str] | None = None) -> tuple[list[dict[str, Any]], str]:
+    """The entry's checkpoints, each read (`read_checkpoint`), and the default one: ``reference`` or the entry's
+    ``REFERENCE``. Given a ``reference`` and no ``checkpoints``, that one alone (the test suite's pinned build)."""
+    default = reference or entry.REFERENCE
+    ids = list(checkpoints or ([reference] if reference else entry.CHECKPOINTS))
+    if default not in ids:
+        ids.insert(0, default)
+    cache: dict[Any, dict[str, Any]] = {}
+    return [read_checkpoint(entry, checkpoint, cache) for checkpoint in ids], default
+
+
+def build_page(entry: ModuleType, reference: str | None = None, checkpoints: list[str] | None = None) -> str:
+    """One family page as HTML: over ``checkpoints`` (the entry's by default), opening on ``reference``."""
+    read, default = read_entry(entry, reference, checkpoints)
+    return environment().get_template("family.html.j2").render(**page_model(entry, read, default))
 
 
 def index_model(built: list[dict[str, Any]]) -> dict[str, Any]:
     done = {page["model_type"] for page in built}
     stubs = [name for name in nnterp.families.known() if name not in done]
+    found = list(dict.fromkeys(title for page in built for title in page["towers"]))
     return {"pages": built, "stubs": stubs, "total": len(nnterp.families.known()), "built": dt.date.today().isoformat(),
-            "palette": site_palette(), "quirks": [{"slug": s, "label": l} for s, (l, _) in QUIRKS.items()]}
+            "palette": site_palette(), "eye": EYE,
+            # the vision slugs live on the pages; the first filter row keeps the text quirks and the Vision chip
+            "quirks": [{"slug": s, "label": l} for s, (l, _) in QUIRKS.items() if s not in VISION_QUIRKS],
+            "towers": [{"slug": tower_slug(title), "label": title} for title in found]}
+
+
+def tower_slug(title: str) -> str:
+    return "tower-" + re.sub(r"[^a-z0-9]+", "-", title.lower()).strip("-")
 
 
 def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path]:
@@ -781,13 +1112,16 @@ def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path
     for entry in entries.load_all():
         if only and entry.MODEL_TYPE not in only:
             continue
-        info = introspect(entry)
-        model = page_model(entry, info)
+        read, default = read_entry(entry)
+        model = page_model(entry, read, default)
         path = out / f"{entry.MODEL_TYPE}.html"
         path.write_text(env.get_template("family.html.j2").render(**model))
         written.append(path)
-        cards.append({k: model[k] for k in ("model_type", "title", "subtitle", "palette", "checkpoints", "quirks", "vllm",
-                                             "num_layers", "architecture", "family_module")})
+        blocks = model["blocks"]
+        cards.append({**{k: model[k] for k in ("model_type", "title", "subtitle", "palette", "checkpoints", "quirks", "vllm",
+                                                "architecture", "family_module", "towers", "wrappers")},
+                      "blocks": str(blocks[0]) if len(blocks) == 1 else f"{blocks[0]}–{blocks[-1]}",
+                      "tower_slugs": [tower_slug(t) for t in model["towers"]]})
         print(f"wrote {path.relative_to(HERE.parent)}")
     if not only:
         index = out / "index.html"

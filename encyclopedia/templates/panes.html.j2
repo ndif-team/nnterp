@@ -1,0 +1,154 @@
+{# The parts of a family page that depend on the checkpoint. build.page_model renders each macro once per
+   checkpoint, keeps one copy of each distinct result, and the page shows the selected checkpoint's.
+   Every macro takes `c`, the checkpoint's model (build.checkpoint_model). #}
+
+{% macro chips(c) %}
+<div class="chips">
+  {% for q in c.quirks %}<a class="chip" href="#notes" title="{{ q.blurb }}">{{ q.label }}</a>{% endfor %}
+</div>
+{% endmacro %}
+
+{% macro block_head(c) %}
+{% if c.block.shapes %}
+<p class="lead">One of {{ c.num_layers }} blocks, of {{ c.block.shapes|length }} shapes. Hover any part for the nnterp name that reads it; click to pin.
+The slider picks a block, its tick's colour gives the shape, and the diagram redraws for it.</p>
+{% else %}
+<p class="lead">One of {{ c.num_layers }} identical blocks. Hover any part for the nnterp name that reads it; click to pin.
+{% if c.layer_types and c.layer_types|unique|list|length > 1 %}The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.{% endif %}</p>
+{% endif %}
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× {{ c.num_layers }}</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final norm</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>unembedding</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>{{ c.logits_label }}</small></div>
+</div>
+{% endmacro %}
+
+{% macro tower(c) %}
+{% if c.tower %}
+{% set t = c.tower %}
+<div class="tower-scope">
+  <h3 class="ttl-row"><span>The <em>tower</em></span> <span class="mono dim">{{ t.title }} · {{ t.module_class }}</span></h3>
+  <p class="lead">The image's path into the text model on {{ t.wrapper }}, then one of the tower's {{ t.num_layers }} blocks. Hover any part for the nnterp name that reads it; click to pin.</p>
+  <div class="strip tower-strip">
+    <div class="strip-node" data-node="v:path.image"><span class="mono role-stream">image</span><small>pixel_values</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.patch_embed"><span class="mono role-stream">patch_embed</span><small>patch_embeddings</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node strip-layers" data-node="v:path.layers"><span class="mono role-stream">layers</span><small>× {{ t.num_layers }}{% if not t.has_norm %} · tower_output{% endif %}</small></div>
+    {% if t.has_norm %}
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.norm"><span class="mono role-norm">norm</span><small>tower_output</small></div>
+    {% endif %}
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.projector"><span class="mono role-stream">projector</span><small>input → output</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.features"><span class="mono role-stream">image_features</span><small>at the scatter</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.scatter"><span class="mono role-stream">layers[0].input</span><small>at image_token_mask</small></div>
+  </div>
+  <dl class="tower-facts">
+    <div><dt class="micro">rows</dt><dd class="body-md">{{ t.rows|inline }}</dd></div>
+    <div><dt class="micro">positions</dt><dd class="body-md">{{ t.positions|inline }}</dd></div>
+    <div><dt class="micro">masking</dt><dd class="body-md">{{ t.masking|inline }}</dd></div>
+    <div><dt class="micro">final norm</dt><dd class="body-md">{{ t.norm|inline }}</dd></div>
+  </dl>
+  <div class="viz">
+    <div class="viz-panel">
+      <svg class="tower-svg" role="img" aria-label="The tower's block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each node of the image's path, and each box, edge and ⊕ of the tower's block, names what nnterp calls it.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity"><span class="micro">identity</span> <code>{{ t.identity_html|safe }}</code></p>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro values(c) %}
+{% if c.eager_only %}<p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition. Here, {{ c.eager_only|length }} values need <span class="mono">attn_implementation="eager"</span>.</p>{% endif %}
+{% for ledger in c.ledgers %}
+{% if ledger.tower %}<p class="micro ledger-part">the tower · {{ ledger.tower }}</p>{% endif %}
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-{{ ledger.role }}">{{ ledger.label }}</span>{% if ledger.classes %} <span class="mono dim">{{ ledger.classes }}</span>{% endif %}</span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  {% for row in ledger.rows %}
+  <div class="ledger-row" data-node="{{ ledger.nodes.get(row.name, '') }}">
+    <span class="mono-md name role-{{ ledger.role }}">{% if row.condition %}<span class="warn" tabindex="0" data-tip="{{ 'Needs attn_implementation="eager". ' if row.condition.kind == 'eager' }}{{ row.condition.reason }}">&#x26A0;&#xFE0E;</span>{% endif %}{{ row.name }}</span>
+    <span class="hide-sm mono">{% if row.layout %}{{ row.layout }} <span class="dim">[{{ row.dims }}]</span>{% else %}<span class="dim">scalar</span>{% endif %}</span>
+    <span class="body-md">{{ row.description }}</span>
+    <span class="hide-sm body-md where">{{ row.where|md }}</span>
+  </div>
+  {% endfor %}
+</div>
+{% endfor %}
+{% endmacro %}
+
+{% macro printout(c) %}
+<p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">{{ c.reference }}</span>: the native modules and, among them, the standard names and every standard value with its layout.{% if c.returns_tuple %} The block returns a tuple; <span class="mono">layer_output</span> is its first element.{% endif %}{% if c.tower %} The tower's blocks follow the text model's.{% endif %}</p>
+<pre class="repr"><code>{{ c.repr_html }}</code></pre>
+{% endmacro %}
+
+{% macro sizes(c) %}
+<div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Sizes</h3>
+    <p class="body-md">Root sizes, each a <span class="mono">StandardizedProperty</span> read off the config of <span class="mono">{{ c.reference }}</span>; below the rule, the config keys they come from.</p>
+    <div class="specs specs-cols">
+      {% for name, value in c.sizes %}<div class="spec"><span>model.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
+    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+      {% for key, value in c.config %}<div class="spec"><span>{{ key }}</span><span>{{ value if value is not iterable or value is string else (value|length ~ ' entries' if value|length > 6 else value|join(', ')) }}</span></div>{% endfor %}
+    </div>
+  </div>
+</div>
+{% if c.tower %}
+<div class="card card-tower">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Tower sizes</h3>
+    <p class="body-md">The {{ c.tower.title }} tower's sizes, on <span class="mono">model.vision</span>, read off <span class="mono">config.vision_config</span>; the root's stay the text model's.</p>
+    <div class="specs specs-cols">
+      {% for name, value in c.tower.sizes %}<div class="spec"><span>model.vision.{{ name }}</span><span>{{ value }}</span></div>{% endfor %}
+    </div>
+  </div>
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro vision_notes(c) %}
+{% if c.tower %}
+<div class="prose vision-notes">
+  <p class="micro vision-mark">{{ eye }} vision · {{ c.tower.wrapper }}</p>
+  <h2>The {{ c.tower.title }} tower</h2>
+  {{ c.tower.notes }}
+  <h2>{{ c.tower.wrapper }}</h2>
+  {{ c.tower.wrapper_notes }}
+</div>
+{% endif %}
+{% endmacro %}
+
+{% macro quirk_list(c) %}
+{% if c.quirks %}
+<p class="micro">quirks</p>
+{% for q in c.quirks %}<div class="quirk"><span class="chip">{{ q.label }}</span><p class="body-md">{{ q.blurb }}</p></div>{% endfor %}
+{% endif %}
+{% endmacro %}
+
+{% macro envoys(c) %}
+{% if c.tower %}
+<p class="micro">the tower's envoys</p>
+<p class="body-md mono">{% for native, envoy in c.tower.envoys %}{{ native }} → {{ envoy }}{% if not loop.last %}<br>{% endif %}{% endfor %}</p>
+{% endif %}
+{% endmacro %}

@@ -51,6 +51,7 @@ Reads within one trace follow the forward: the pattern is produced inside block 
 | `unavailable`, `route_kernels`, `route_delta_rule` | A value a family lacks; the recurrent kernel switch, and its DeltaNet spelling. |
 | `chunk_per_token` | A Mamba-2 model's chunk scan with a chunk size of 1, so `StateSpace.states` reads the state after every token. |
 | `Unavailable`, `UnsupportedFamily` | The two exceptions nnterp raises itself. |
+| `Vision` | A vision tower's root envoy (`model.vision`): its blocks at `layers` (`VisionLayer`, with `VisionAttention`, `VisionMlp` from `nnterp.components`), its sizes, `image_token_mask`, `patch_embeddings`, `tower_output`, `image_features`, `support()`; `PixtralVision` for Pixtral's packed tower, `QwenVision` and `QwenVisionAttention` for the Qwen ViT, and `ImageScatter`, keyed on the wrapper's model, for where `image_features` is read. See [../usage/vision.md](../usage/vision.md). |
 
 `nnterp.families`, `nnterp.components`, `nnterp.prompt_utils` and `nnterp.nnsight_utils` are imported as modules.
 
@@ -68,7 +69,7 @@ StandardizedTransformer(repo_id, *args, rename=None, envoys=None, tokenizer_kwar
 | `rename` | `dict[str, str \| list[str]] \| None` | Extra nnsight aliases, merged over the family's `RENAME`; a key given here wins. |
 | `envoys` | `dict \| None` | Extra `envoys=` entries, merged over the family's `ENVOYS` (and nnsight's tensor-parallel envoys on a sharded load); a key given here wins. Keys are module types or native paths, never aliases. |
 | `tokenizer_kwargs` | `dict \| None` | Attributes set on the loaded tokenizer: `{"padding_side": "left"}`, a `pad_token`. |
-| `**kwargs` | | Passed to `TransformersModel`: `dispatch=True`, `attn_implementation="eager"`, `dtype=`, `device=` (one device; `device_map="cpu"` does not keep a model off the GPU), `device_map=`, `revision=`, `trust_remote_code=`. `task` defaults to `"text-generation"`. |
+| `**kwargs` | | Passed to `TransformersModel`: `dispatch=True`, `attn_implementation="eager"`, `dtype=`, `device=` (one device; `device_map="cpu"` does not keep a model off the GPU), `device_map=`, `revision=`, `trust_remote_code=`. `task` defaults to `"text-generation"`; `task="image-text-to-text"` loads a multimodal checkpoint as its wrapper, with its processor. |
 
 The constructor reads the checkpoint's config first (`AutoConfig`; a multimodal config's `text_config`), looks up `config.model_type` in `nnterp.families`, and raises `UnsupportedFamily` before any weights load when no family covers it. `attn_implementation` is not forced: the checkpoint's own default (`sdpa` on most) stays, and the interior attention values then report unavailable in `support()`.
 
@@ -96,7 +97,7 @@ Every row is an `EProperty` on the root, listed in `repr(model)` with its descri
 | `project_on_vocab` | `project_on_vocab(hidden: Tensor) -> Tensor` | inside (on a live value) or outside (on a saved one) | The logit lens: `lm_head(norm(hidden))`, then what the model does to the head's output to make its logits: the text config's `final_logit_softcapping` if set (Gemma-2), else nothing; a family's `def project_on_vocab(model, hidden)` is bound in its place (Cohere's `* logit_scale`, Granite's `/ logits_scaling`). On the last block's `layer_output` it equals `logits`. |
 | `get_topk_closest_tokens` | `get_topk_closest_tokens(hidden: Tensor, k: int = 5) -> list[dict[str, float]]` | outside, on a saved `[..., hidden]` tensor | `project_on_vocab` then softmax; one `{token: probability}` per position, row-major over the leading axes. Takes a residual-stream tensor, not logits. |
 | `probs_to_dict` | `probs_to_dict(probs: Tensor, k: int = 5) -> dict[str, float]` | outside | The `k` most likely tokens of one `[vocab]` distribution. |
-| `support` | `support(layer: int \| None = None) -> dict[str, Any]` | outside; nothing runs | Without `layer`: every root value and every block value, `None` when available on every block, else `{layer: reason}`. With `layer`: that block's values by dotted name (`"self_attn.attention_probabilities"`), `None` or the reason, including `"no <module> module on this block"`. The keys come from the tree: every `Standard` child of any block, under its standard name, so a value added through `envoys=` is listed as `self_attn.<name>`, a module some blocks lack (a hybrid's `self_attn`) is reported missing on those, and a module no block has (OPT's `mlp`) has no key. |
+| `support` | `support(layer: int \| None = None) -> dict[str, Any]` | outside; nothing runs | Without `layer`: every root value and every block value, `None` when available on every block, else `{layer: reason}`. With `layer`: that block's values by dotted name (`"self_attn.attention_probabilities"`), `None` or the reason, including `"no <module> module on this block"`. The keys come from the tree: every `Standard` child of any block, under its standard name, so a value added through `envoys=` is listed as `self_attn.<name>`, a module some blocks lack (a hybrid's `self_attn`) is reported missing on those, and a module no block has (OPT's `mlp`) has no key. A `Standard` child of the root (the vision tower) adds its own `support()` rows under its standard name (`"vision.image_features"`); a tower no image reaches adds none. |
 
 ### Sizes, outside a trace
 
@@ -127,6 +128,7 @@ Each is a `StandardizedProperty`: it reads the config by the plain rule unless t
 | `model.embed_tokens`, `model.norm`, `model.lm_head` | The embedding, the final norm, the unembedding, as envoys. |
 | `model.layers[i].self_attn`, `.mlp`, `.linear_attn` | The family's `Attention`, `Mlp`, `LinearAttention`; `linear_attn` on a hybrid's DeltaNet blocks only, `mlp` absent on OPT. |
 | `model.layers[i].input_layernorm`, `.post_attention_layernorm` | Aliases of the block's norms where the family has them; their meaning varies by family (see [families.md](families.md)). |
+| `model.vision`, `model.projector` | On a multimodal wrapper whose family names them: the vision tower (a `Vision`; `vision.layers[i]`, `vision.patch_embed`, `vision.norm`; sizes `num_layers`, `hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size`; values in [`Vision`](#vision)) and the last module before the scatter into the text stream. |
 | `model.add_prefix_false_tokenizer` | The checkpoint's tokenizer loaded with `add_prefix_space=False`, so `"word"` and `" word"` differ; loaded on first use. |
 | `model.tokenizer`, `model.config` | nnsight's, unchanged. |
 
@@ -149,7 +151,7 @@ A softmax-attention module. The base class reads everything but `attention_outpu
 | Value | Layout | Base location | Assignable | Availability |
 |---|---|---|---|---|
 | `attention_output` | `Residual` | the module's `.output`, first tensor | yes; in place reaches the model | always |
-| `attention_queries` | `Queries` | argument 1 of `attention_interface_1`, after RoPE | assign; in place except on GPT-2 (split views) and MPT (`chunk`) | `interface_reason` |
+| `attention_queries` | `Queries` | argument 1 of `attention_interface_1`, after RoPE | assign; in place except on GPT-2 and GPT-BigCode (split views) and MPT (`chunk`), outside `torch.no_grad()` | `interface_reason` |
 | `attention_keys` | `Keys` | argument 2, before `repeat_kv` | as above | `interface_reason` |
 | `attention_values` | `Values` | argument 3, before `repeat_kv` | as above | `interface_reason` |
 | `attention_scores` | `Pattern` | the input of `nn_functional_softmax_0` inside the interface: scaled and masked | yes; in place reaches the model | `interface_reason` |
@@ -303,14 +305,32 @@ A Mamba-2 (SSD) mixer (`layers[i].linear_attn` on Mamba-2, Nemotron-H, Bamba and
 
 `heads` is the module's `num_heads`, `groups` its `n_groups`, `head_dim` its `head_dim`, `state_dim` (the state's `key_dim`) its `ssm_state_size`; the state's `value_dim` is `head_dim`.
 
+## `Vision`
+
+`model.vision`, a multimodal wrapper's vision tower, on a family that names it ([../usage/vision.md](../usage/vision.md) lists the towers and wrappers); its blocks are `VisionLayer`, `VisionAttention`, `VisionMlp` (the text components with the stream values annotated `Patches`; a tower that runs on `[patches, vision_hidden]` is served with a leading images axis of 1). `PixtralVision` reads `patch_embeddings` at the packed row entering `ln_pre`. The Qwen ViT's root is a `QwenVision` (its sizes add `spatial_merge_size` and `window_size`) and its attention a `QwenVisionAttention`: the queries, keys and values whole before the per-image split, the head outputs at the concatenation after it, and the scores and pattern unavailable (`PER_IMAGE`). The two image values are the tower's although neither is read inside it: their keys are anchored at the model's root (`"/inputs"`, and the scatter, `"/model.source.inputs_embeds_masked_scatter_0.inputs"` on a Llava wrapper, `"/source.inputs_embeds_masked_scatter_0.inputs"` on Llama 4, whose family names `ROOT_SCATTER`), walked from `vision.root`. Every tower value is unavailable with `no_images()`'s reason on a load no image reaches.
+
+| Value | Layout | Read at | Assignable | Unavailable when |
+|---|---|---|---|---|
+| `image_token_mask` | `ImageTokenMask` | the model's inputs (`"/inputs"`), so first in the invoke: `input_ids == config.image_token_id` | no (`AttributeError`: assign `input_ids`) | `no_images()`, or the config names no `image_token_id` |
+| `patch_embeddings` | `Patches` | `patch_embed.output`, one row per patch before any position embedding, CLS token or pre-norm (a convolution's grid flattened, a view); on `PixtralVision` the packed row entering `ln_pre` | yes | `no_images()` |
+| `tower_output` | `Patches` | the last block's stream after `vision.norm` where there is one, before any pooling, CLS dropping or adapter: the tower's `last_hidden_state`, or where the stream is on a tower that returns something after those (Llama 4: `layernorm_post`; Gemma 4: the encoder) | yes | `no_images()` |
+| `image_features` | `ImageFeatures` | the features argument of the scatter in the wrapper model's forward (`ImageScatter.scatter`, `.scatter_argument`; the root's own forward where the family names `ROOT_SCATTER`) flat over the batch's image tokens: `layers[0].input[image_token_mask] == image_features` | yes; in-place edits land | as `image_token_mask`, or the family keys no `ImageScatter` on the wrapper's model |
+
+| Member | Signature | What |
+|---|---|---|
+| `no_images` | `no_images() -> str \| None` | Why no image reaches the model, or `None`: the family names no `projector`, or the load has no processor (a `task="text-generation"` load of a wrapper). The one place that decides. |
+| `support` | `support(layer: int \| None = None) -> dict[str, Any]` | The tower's values plus its block values over `vision.layers`, as `StandardizedTransformer.support` reports the text blocks'; with `layer`, that block's. Empty when `no_images()` gives a reason. `model.support()` carries the same rows prefixed `vision.`. |
+| sizes | `num_layers`, `hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size` | Read off the tower's own config; `image_size` raises `Unavailable` on a tower with no fixed resolution (the Qwen ViT, Pixtral, Gemma 4, Gemma 4 unified). |
+
 ## `Standard`
 
-The base of the four hosts.
+The base of the hosts.
 
 | Member | Signature | What |
 |---|---|---|
 | `values` | `classmethod values() -> dict[str, EProperty]` | This class's standard values by name, base classes first. |
 | `support` | `support() -> dict[str, str \| None]` | Each value here: `None` when available on this envoy, else the reason. |
+| `parent`, `root` | nnsight's `Envoy.parent` / `Envoy.root` | The envoy holding this one, and the model envoy at the top. What a value reads its block, or the model's config, processor and family, through (`Vision`'s image values, the Granite mixtures' `residual_multiplier`). |
 | `sourced` | `sourced: bool = False` (class attribute) | `True` on a subclass instruments the envoy's forward when it is built and again when real weights replace meta ones, for a value in that forward read after the call has started (Llama 4's `Layer`, whose `Mlp.mlp_output` follows `attention_output`). A path declares where a value is; this flag is what makes such a read serve rather than raise `OutOfOrderError`. |
 
 ## `nnterp.families`
@@ -319,7 +339,7 @@ The base of the four hosts.
 |---|---|---|
 | `lookup` | `lookup(model_type: str) -> ModuleType` | The family for `model_type`: a registered one, else `nnterp.families.<model_type>`, imported on first use. Raises `UnsupportedFamily` when there is neither. |
 | `register` | `register(family: ModuleType, *model_types: str) -> ModuleType` | Add a family (any module or object with `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under `model_types`, or, with none given, the type its `__name__` ends in (`TypeError` for a nameless `SimpleNamespace`); consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
-| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (94), alphabetical. |
+| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (98), alphabetical. |
 | `all_families` | `all_families() -> list[ModuleType]` | Every shipped family, imported. For tooling and tests. |
 | `REGISTRY` | `dict[str, ModuleType]` | `model_type -> family` for what `register` added. |
 | `UnsupportedFamily` | `ValueError` subclass | No module of that name and nothing registered. |
@@ -333,7 +353,7 @@ A family module, named after the `model_type` it covers, declares `RENAME: dict[
 
 | Descriptor | Signature | What |
 |---|---|---|
-| `EProperty` | `EProperty(key=None, description=None, unavailable=None, select=None)` | nnsight's `eproperty` plus availability and a path for a key. `key` is a path from the host envoy, dotted segments ending in `output`, `input` or `inputs`: `"output"` is the host's own output; a leading `../` (repeatable) steps to the parent by native name; another segment is a child module (aliases included) or, after a `source` segment, an operation; `source` drills into the current module's or operation's forward, instrumenting it for this run (`"source.attention_interface_1.source.nn_functional_softmax_0.output"`, `"../post_attention_layernorm.output"`, `"embed_tokens.output"`, `"../source.hidden_states_view_0.output"`). A function of the envoy returning such a path is allowed (a `RecurrentMixer`'s `kernel("inputs")`, Falcon's `by_alibi`). `None` means the attribute name. `select` picks an element: with `inputs` an int is a positional argument and a str a keyword, with `output` an int indexes the returned tuple; `input` is the call's first argument; a function of the envoy returning one of those (or `None`, the whole value) selects per access, before the served read (`SelectiveScan`'s `_argument(name)` and `StateSpace`'s `argument(name)`, whose two kernels take an argument in different places). A write with `select` (or on `input`) repacks the element and writes the whole value back. `unavailable` is a reason string, or a function of the envoy returning one or `None`, checked on every read and write; `reason(obj)` returns it. `path(obj)` and `inside_forward()` describe the key. A path is walked before every read or write; a missing op raises nnsight's `SourceNotAvailable`. |
+| `EProperty` | `EProperty(key=None, description=None, unavailable=None, select=None)` | nnsight's `eproperty` plus availability and a path for a key. `key` is a path from the host envoy, dotted segments ending in `output`, `input` or `inputs`: `"output"` is the host's own output; a leading `/` walks from the model's root instead of the host (`envoy.root`), aliases included (`"/inputs"`); a leading `../` (repeatable) steps to the parent by native name; another segment is a child module (aliases included) or, after a `source` segment, an operation; `source` drills into the current module's or operation's forward, instrumenting it for this run (`"source.attention_interface_1.source.nn_functional_softmax_0.output"`, `"../post_attention_layernorm.output"`, `"embed_tokens.output"`, `"../source.hidden_states_view_0.output"`). A function of the envoy returning such a path is allowed (a `RecurrentMixer`'s `kernel("inputs")`, Falcon's `by_alibi`). `None` means the attribute name. `select` picks an element: with `inputs` an int is a positional argument and a str a keyword, with `output` an int indexes the returned tuple; `input` is the call's first argument; a function of the envoy returning one of those (or `None`, the whole value) selects per access, before the served read (`SelectiveScan`'s `_argument(name)` and `StateSpace`'s `argument(name)`, whose two kernels take an argument in different places). A write with `select` (or on `input`) repacks the element and writes the whole value back. `unavailable` is a reason string, or a function of the envoy returning one or `None`, checked on every read and write; `reason(obj)` returns it. `path(obj)` and `inside_forward()` describe the key. A path is walked before every read or write; a missing op raises nnsight's `SourceNotAvailable`. |
 | `TokenEProperty` | `TokenEProperty(key=None, description=None, unavailable=None, select=None)` | An `EProperty` (in `nnterp/components/tokens.py`) for a value the model may hold flat over tokens, `[batch * seq, ...]`, one rank below its layout: `__get__` reads as `EProperty` does and serves this invoke's `[batch, seq, ...]` rows of the result, a view, so in-place edits land; `__set__` splices the assigned rows into the whole tensor the location holds, then writes as `EProperty` does. A tensor already at the layout's rank passes through both ways; preprocess, postprocess and transform see the model's own tensor. `Moe`'s routing values use it. |
 | `DerivedEProperty` | `DerivedEProperty(compute, description=None, unavailable=None)` | `compute(envoy)` runs at read time inside the trace over any served values; read-only (assignment raises `AttributeError`). Its layout is read off `compute`'s return annotation. |
 
@@ -341,11 +361,14 @@ Every descriptor exposes `.layout` (the layout alias the defining function's ret
 
 ### Layouts
 
-The twenty-seven `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the twenty-four envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
+The thirty-five `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the thirty-two envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
 
 | Name | Axes | Defined in | Carried by |
 |---|---|---|---|
 | `Residual` | `batch seq hidden` | `components/layer.py` | `layer_output`, `attention_output`, `mlp_output`, `token_embeddings` |
+| `Streams` | `batch seq streams hidden` | `components/layer.py` | `layer_output` on a hyper-connection family (DeepSeek-V4) |
+| `StreamWeights` | `batch seq streams` | `components/layer.py` | a hyper-connection family's `attention_post`, `mlp_post` |
+| `StreamMixing` | `batch seq streams streams` | `components/layer.py` | a hyper-connection family's `attention_comb`, `mlp_comb` |
 | `Logits` | `batch seq vocab` | `standardized.py` | `logits` |
 | `NextTokenProbs` | `batch vocab` | `standardized.py` | `next_token_probs` |
 | `Tokens` | `batch seq` (`Int`) | `standardized.py` | `input_ids`, `attention_mask` |
@@ -372,6 +395,9 @@ The twenty-seven `jaxtyping` types every standard value is annotated with, each 
 | `ExpertWeights` | `batch seq top_k` | `components/moe.py` | `expert_weights` |
 | `ExpertIndices` | `batch seq top_k` (`Int`) | `components/moe.py` | `expert_indices` |
 | `ExpertOutputs` | `batch seq top_k hidden` | `components/moe.py` | `expert_outputs` |
+| `Patches` | `images patches vision_hidden` | `components/vision.py` | a tower block's `layer_output`, `attention_output`, `mlp_output`; `vision.patch_embeddings`, `vision.tower_output` |
+| `ImageTokenMask` | `batch seq` (`Bool`) | `components/vision.py` | `vision.image_token_mask` |
+| `ImageFeatures` | `image_tokens hidden` | `components/vision.py` | `vision.image_features` |
 
 The axis names are the same on every layout (`batch` axis 0 everywhere, `seq` the token axis, `heads` the query heads, `kv_heads` the key/value heads, `head_dim` the width of values and head outputs, `qk_head_dim` that of queries and keys, `query`/`key` a pattern's two token axes, `key_dim`/`value_dim` a DeltaNet state's two sides, `channels`/`state_dim` a Mamba-1 state's, `groups` the `B`/`C` groups, `experts` a router's classes, `top_k` the routing slots); the comments above each alias state them, and [../usage/layouts.md](../usage/layouts.md) is the page.
 
@@ -456,16 +482,17 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 - `hasattr(envoy, "attention_probabilities")` raises `Unavailable` when the value is unavailable; ask `support()` instead.
 - The interior attention values need `attn_implementation="eager"`, which the constructor does not force; BLOOM and MPT are the exception (their pattern is their own dropout and carries no `attn_implementation` predicate).
 - `get_topk_closest_tokens(hidden)` takes a residual-stream tensor and projects it itself; passing `project_on_vocab`'s output fails inside `norm` with a shape error.
-- GPT-2's and MPT's queries, keys and values are views of one fused tensor: assign, do not edit in place. Falcon's `mlp_output` is a copy; assignment and in-place edits reach the model through a transform.
+- GPT-2's and GPT-BigCode's queries and MPT's queries, keys and values are views of one fused tensor: assign, do not edit in place (or edit under `torch.no_grad()`). Falcon's `mlp_output` is a copy; assignment and in-place edits reach the model through a transform.
 - `model.logits` is the output's `.logits` (softcapped on Gemma-2, scaled on Cohere and Granite); `model.lm_head.output` is the raw projection, and `model.project_on_vocab(model.layers[-1].layer_output)` is `logits`.
 - `next_token_probs`, `input_size` and `states` are read-only.
 - `route_kernels(model.family, "torch")` before tracing a DeltaNet layer whose `state` you want; a forward `.source` has already instrumented keeps the binding it was compiled with.
 - `import nnterp` (or `nnsight`) before any `transformers.models...modeling_*` import; the reverse order segfaults at import on this stack.
+- A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace, `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden]`.
 
 ## Related
 
 - [families.md](families.md): what each family relocates and what it lacks.
 - [glossary.md](glossary.md): the vocabulary these tables use.
-- [../usage/root-values.md](../usage/root-values.md), [../usage/methods.md](../usage/methods.md), [../usage/availability.md](../usage/availability.md), [../usage/layouts.md](../usage/layouts.md), [../usage/attention-interior.md](../usage/attention-interior.md), [../usage/delta-net.md](../usage/delta-net.md).
+- [../usage/root-values.md](../usage/root-values.md), [../usage/methods.md](../usage/methods.md), [../usage/availability.md](../usage/availability.md), [../usage/layouts.md](../usage/layouts.md), [../usage/attention-interior.md](../usage/attention-interior.md), [../usage/delta-net.md](../usage/delta-net.md), [../usage/vision.md](../usage/vision.md).
 - [../extending/custom-values.md](../extending/custom-values.md) and [../developing/eproperty-internals.md](../developing/eproperty-internals.md) for the descriptors in depth.
 - nnsight `docs/reference/api-quick-reference.md` for `trace`, `generate`, `session`, `tracer.iter`, `.source`, `remote=`.

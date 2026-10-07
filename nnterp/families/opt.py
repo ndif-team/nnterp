@@ -7,6 +7,15 @@ final_layer_norm}`` and ``lm_head``. There is no MLP module: ``fc1`` and
 and `StandardizedTransformer.support` says so. The block's own
 ``final_layer_norm`` is the pre-MLP norm; it keeps its native name, since a
 single-component alias would also bind on the decoder's final norm.
+
+The MLP path runs on the flattened ``[batch * seq, ...]`` stream, so
+``input + attention_output + fc2.output.view_as(layer_output) == layer_output``.
+The queries are scaled by ``head_dim**-0.5`` at ``q_proj``'s output, so
+``attention_queries`` are pre-scaled. ``facebook/opt-350m`` sets
+``do_layer_norm_before`` false (norms after the adds, so that identity does not
+hold), has no final norm (no ``norm``; ``project_on_vocab`` raises
+``AttributeError``) and wraps the stack in ``project_in`` / ``project_out``
+(512 <-> 1024): ``token_embeddings`` is 512 wide and ``layers[0].input`` 1024.
 """
 
 from typing import TYPE_CHECKING

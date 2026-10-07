@@ -1,0 +1,129 @@
+{% extends "base.html.j2" %}
+{% block title %}{{ title }} · nnterp encyclopedia{% endblock %}
+{% block description %}{{ subtitle }}{% endblock %}
+{% block masthead_right %}{{ model_type }} · {{ family_module }}{% endblock %}
+{% block colophon %}built {{ built }} · nnterp {{ versions.nnterp }} · transformers {{ versions.transformers }} · reference <span id="colophon-reference">{{ default }}</span>{% endblock %}
+
+{# One copy of each distinct rendering of a per-checkpoint part; the page's script shows the selected checkpoint's. #}
+{% macro pane(name) %}{% for p in panes[name] %}<div class="pane" data-pane="{{ name }}" data-ckpts="{{ p.ckpts|join(' ') }}"{% if not p.shown %} hidden{% endif %}>{{ p.html }}</div>{% endfor %}{% endmacro %}
+
+{# The checkpoint selector: a button and its listbox. The page has two, the hero's and the sticky bar's, over one
+   selected checkpoint (block.js); `prefix` keeps their ids apart, and the caller adds what sits under the button. #}
+{% macro selector(prefix, current) %}
+<div class="ckpt" id="{{ prefix }}ckpt" data-selector>
+  <span class="micro ckpt-label" id="{{ prefix }}ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="{{ prefix }}ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="{{ prefix }}ckpt-list" aria-labelledby="{{ prefix }}ckpt-label {{ prefix }}ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="{{ prefix }}ckpt-name">{{ current.name }}</span><span class="ckpt-eye ckpt-eye-current" id="{{ prefix }}ckpt-eye"{% if not current.vision %} hidden{% endif %}>{{ eye }}</span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="{{ prefix }}ckpt-list" role="listbox" tabindex="-1" aria-labelledby="{{ prefix }}ckpt-label" hidden>
+    {% for label, items in option_groups %}
+    <div class="ckpt-group" role="group" aria-labelledby="{{ prefix }}ckpt-group-{{ loop.index }}">
+      <p class="micro ckpt-group-label" id="{{ prefix }}ckpt-group-{{ loop.index }}">{{ label }}</p>
+      {% for o in items %}
+      <div class="ckpt-option" role="option" id="{{ prefix }}ckpt-option-{{ o.id|replace('/', '--')|replace('.', '_') }}" data-ckpt="{{ o.id }}" data-name="{{ o.name }}"
+           aria-selected="{{ 'true' if o.id == default else 'false' }}"{% if o.vision %} data-vision="1"{% endif %}
+           {% if o.reason %} aria-disabled="true" title="not available in the encyclopedia: {{ o.reason }}"{% else %} title="{{ o.id }}{% if o.vision %} · {{ o.wrapper }}, {{ o.tower }} vision encoder{% endif %}"{% endif %}>
+        <span class="mono">{{ o.name }}</span>{% if o.vision %}<span class="ckpt-eye" aria-label="vision-language">{{ eye }}</span>{% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </div>
+  {{ caller() if caller }}
+</div>
+{% endmacro %}
+
+{% block body %}
+{% set current = options|selectattr('id', 'equalto', default)|first %}
+<section class="hero frame">
+  <div class="hero-text">
+    <p class="micro-lg eyebrow">family <span class="mono">{{ model_type }}</span></p>
+    <h1 class="disp-title">{% for line in title.split(" / ") %}<span class="line">{{ line }}</span>{% endfor %}</h1>
+    <p class="subtitle">{{ subtitle }}</p>
+    {{ pane("chips") }}
+  </div>
+  <aside class="hero-side">
+    <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
+    {% call selector("", current) %}
+      {{ pane("hub") }}
+      <a class="ckpt-hub" id="ckpt-hub" href="{{ current.url }}" title="{{ current.id }} on the Hugging Face Hub" aria-label="{{ current.id }} on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
+    {% endcall %}
+  </aside>
+</section>
+
+{# Past the hero, a bar at the top keeps the family's name and the checkpoint selector in reach. #}
+<div class="stickybar" id="stickybar" aria-hidden="true">
+  <div class="frame stickybar-row">
+    <span class="stickybar-title">{{ title|replace(" / ", " · ") }}</span>
+    {% call selector("bar-", current) %}{% endcall %}
+  </div>
+</div>
+
+<section class="frame section" id="block">
+  <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
+  {{ pane("block_head") }}
+
+  <div class="viz">
+    <div class="viz-panel">
+      <div class="slider-row">
+        <label class="micro" for="layer">block</label>
+        <input type="range" id="layer" min="0" max="{{ num_layers - 1 }}" value="0">
+        <span class="mono" id="layer-label">i = 0</span>
+        <span class="mono variant" id="layer-variant"></span>
+      </div>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+      <svg id="block-svg" role="img" aria-label="The decoder block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card" id="node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each box, edge and ⊕ names what nnterp calls it, where the value is read, and its layout.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity" id="identity"><span class="micro">identity</span> <code>{{ identity_html }}</code></p>
+  {{ pane("tower") }}
+</section>
+
+<section class="frame section" id="support">
+  <div class="topbar"><h2 class="disp-section">The <em>API</em></h2><span class="micro">02 · support()</span></div>
+  <h3 class="ttl-row">Values, by host</h3>
+  {{ pane("values") }}
+
+  <h3 class="ttl-row">Printout</h3>
+  {{ pane("printout") }}
+
+  {{ pane("config") }}
+</section>
+
+<section class="frame section" id="notes">
+  <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <div class="grid-notes">
+    <div class="prose">{{ notes }}</div>
+    <aside class="quirk-list">
+      {{ pane("quirk_list") }}
+    </aside>
+  </div>
+  {{ pane("vision_notes") }}
+</section>
+
+<section class="frame section" id="source">
+  <div class="topbar"><h2 class="disp-section">From the <em>family module</em></h2><span class="micro">04 · {{ family_file }}</span></div>
+  <div class="grid-notes">
+    <div class="prose docstring">{{ docstring }}</div>
+    <aside class="quirk-list">
+      <p class="micro">sources</p>
+      <p class="body-md"><a href="{{ source_url }}">{{ family_file }}</a><br><a href="{{ test_url }}">tests/families/test_{{ model_type }}.py</a><br><a href="{{ families_url }}">docs/reference/families.md</a></p>
+      <p class="micro">envoys</p>
+      <p class="body-md mono">{% for cls in block_class_names %}{% if not loop.first %}<br>{% endif %}{{ cls }} → Layer{% endfor %}{% for alias, classes in module_classes.items() %}{% for cls in classes %}<br>{{ cls }} → {{ alias }}{% endfor %}{% endfor %}</p>
+      {{ pane("envoys") }}
+    </aside>
+  </div>
+</section>
+
+<script type="application/json" id="checkpoints-json">{{ checkpoints_json|safe }}</script>
+{% endblock %}
+
+{% block scripts %}<script src="static/block.js"></script>{% endblock %}

@@ -54,9 +54,9 @@ torch.testing.assert_close(total, final, rtol=1e-4, atol=1e-3)   # the stream is
 
 `add_special_tokens=False` keeps the BOS token out of the target (`tokenizer.encode(" Paris")[0]`
 is the BOS id on Llama and Gemma). The assertion
-catches a word that is more than one token: Mistral's sentencepiece tokenizer gives
-`['▁', '▁Paris']` and Granite's `['ĠPar', 'is']`. Then try the word without the leading
-space (`"Paris"` is `['▁Paris']` on Mistral), or pick a target word that is one token.
+catches a word that is more than one token: Mixtral-8x7B's sentencepiece tokenizer (and the
+tiny Mistral and Mixtral checkpoints') gives `['▁', '▁Paris']` and Granite 3.x's `['ĠPar', 'is']`. Then try the word without the leading
+space (`"Paris"` is `['▁Paris']` there), or pick a target word that is one token.
 
 Then the linear DLA: `model.lm_head(x)` inside a trace runs the unembedding on any
 `[..., hidden]` tensor, stood down from the model's own call, so each term's logits

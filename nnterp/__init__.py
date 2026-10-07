@@ -18,7 +18,11 @@ and the root answers for the whole model: ``logits``, ``token_embeddings``,
 Each family under `nnterp.families` says how its own names map onto those, and
 `nnterp.components` holds the envoys that give standard modules standard values
 (``layer_output``, ``attention_output``, ``mlp_output``,
-``attention_probabilities``), which each family subclasses.
+``attention_probabilities``), which each family subclasses. On a multimodal
+checkpoint loaded with ``task="image-text-to-text"`` the vision tower is
+``model.vision`` (its blocks ``model.vision.layers[i]``, its values
+``model.vision.image_token_mask`` and ``model.vision.image_features``) and the
+projector ``model.projector``.
 """
 
 try:
@@ -33,14 +37,14 @@ except ImportError:  # a source tree that was never installed
 
 from .components import (
     Attention, DerivedEProperty, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard,
-    StateSpace, Unavailable, chunk_per_token, route_delta_rule, route_kernels, unavailable,
+    StateSpace, Unavailable, Vision, chunk_per_token, route_delta_rule, route_kernels, unavailable,
 )
 from .families import UnsupportedFamily
 from .standardized import StandardizedTransformer
 
 __all__ = [
     "Attention", "DerivedEProperty", "EProperty", "Layer", "LinearAttention", "Mlp", "Moe", "RecurrentMixer", "SelectiveScan",
-    "Standard", "StandardizedTransformer", "StateSpace", "Unavailable", "UnsupportedFamily", "chunk_per_token",
+    "Standard", "StandardizedTransformer", "StateSpace", "Unavailable", "UnsupportedFamily", "Vision", "chunk_per_token",
     "route_delta_rule", "route_kernels",
     "unavailable",
 ]

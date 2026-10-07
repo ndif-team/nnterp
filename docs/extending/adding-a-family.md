@@ -194,10 +194,11 @@ class Layer(Layer):
   (`"source.hidden_states_2.output"`, Laguna, with `sourced = True` since the read
   follows a child's), `unavailable(...)` where no tensor holds the value (DBRX's
   `expert_outputs`), and set `SCORING`. A mixture with no module of its own is hosted on
-  `layers[i].mlp`: the family's `Layer.__init__` hands the block's `router` and
-  `experts` envoys down (`self.mlp.router = self.router`, Gemma-4) and the `Mlp`
-  overrides `no_mixture()` for the checkpoints without one. A family never looks its
-  parent up through the interleaver's envoys
+  `layers[i].mlp`: the `Mlp` reads the block's `router` and `experts` through its
+  parent (a property returning `self.parent.router`, Gemma-4) and overrides
+  `no_mixture()` for the checkpoints without one. A value that needs something of its
+  block reads it through `self.parent`, and something of the model through `self.root`;
+  a family never looks its parent up through the interleaver's envoys
   ([../usage/mixture-of-experts.md](../usage/mixture-of-experts.md)).
 - **`LinearAttention`** (hybrids only): the base holds for transformers' pure-torch gated
   delta rule; Qwen3-Next, Qwen3.5 and OLMo-Hybrid subclass it with a docstring and nothing
@@ -218,6 +219,24 @@ module types may share one envoy class (Llama's `LlamaMLP` and a shared expert o
 same class); a mixture is keyed to its own (`DeepseekV2MLP: Mlp, DeepseekV2Moe: Moe`). `envoys=`
 matches by type or by native path suffix, never by alias, and nnsight tries type keys
 before path keys.
+
+### A multimodal wrapper
+
+A family whose checkpoints also load as an image-text-to-text wrapper adds the wrapper's
+spellings of the text stack to `RENAME` (`"model.language_model.layers": "layers"`, ...),
+keyed so a text-only checkpoint never resolves them. To name the wrapper's vision tower,
+add its root and projector keys from the model root (`"model.vision_tower": "vision"`,
+`"model.multi_modal_projector": "projector"`), its inner names keyed relative to the tower
+(`"encoder.layers": "layers"`, never a bare name a text block has), key `Vision`,
+`VisionLayer`, `VisionAttention`, `VisionMlp` from `nnterp.components` on the tower's module
+types in `ENVOYS`, and key `ImageScatter` on the wrapper's model type (`LlavaModel:
+ImageScatter`), whose forward writes the image features into the token embeddings: that is
+where `vision.image_features` is read. A wrapper that writes them in through a helper keys a
+subclass naming the call and its argument (`llama.py`'s `InputsMerger`); a wrapper that
+scatters in its own top-level forward has no inner model to key, so the family sets
+`ROOT_SCATTER` to the operation's name (`llama4_text.py`). Test it with a
+`VisionSuite` subclass. `gemma3_text.py` and `llama.py` are the worked examples;
+[../developing/vision-design.md](../developing/vision-design.md) has the rules.
 
 ### Sizes
 
@@ -387,7 +406,7 @@ Every class attribute of `FamilySuite`:
 | `FAMILY` | The family module the checkpoint must resolve to (`model.family is FAMILY`). |
 | `NATIVE` | Standard path to native path; each pair must be the same envoy, and every `layers.0.*` name must exist on every block. |
 | `EXPECTED_UNAVAILABLE` | `support()` key to a substring of the reason, for values this checkpoint lacks; every other value must report `None`. Default `{}`. |
-| `REFUSES_IN_PLACE_QKV` | torch refuses in-place edits on q/k/v that are views out of a `split`/`chunk` (GPT-2); the suite expects a `RuntimeError` and skips the in-place query edit. |
+| `REFUSES_IN_PLACE_QKV` | torch refuses in-place edits on queries that are views out of a `split`/`chunk` (GPT-2, GPT-BigCode, MPT); the suite expects a `RuntimeError` on the in-place query edit and skips it. |
 | `ATTENTION_SINK` | The pattern's rows sum to less than one (GPT-OSS). |
 | `KV_HEADS_EXPANDED` | Keys and values are read already expanded to `num_heads` (latent attention; Falcon's 40B layout). |
 | `MLP_WIDTH_KEY` | A config key naming the first block's MLP width when it is not `intermediate_size` (an all-MoE family's experts). |

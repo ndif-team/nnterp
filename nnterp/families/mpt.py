@@ -94,5 +94,5 @@ ENVOYS = {MptBlock: Layer, MptAttention: Attention, MptMLP: Mlp}
 # -- sizes: what MPT's config calls them --------------------------------------------
 
 def intermediate_size(model: "StandardizedTransformer") -> int:
-    """The MLP width is ``expansion_ratio`` times the hidden size."""
+    """The MLP width is ``expansion_ratio`` times the hidden size (transformers builds ``4 * hidden_size``; equal on the released checkpoints)."""
     return int(model.config.expansion_ratio * model.hidden_size)

@@ -42,7 +42,14 @@ with model.trace("The Eiffel Tower is in"):
 
 Every argument other than `rename`, `envoys` and `tokenizer_kwargs` goes straight to
 `TransformersModel`: `dispatch`, `dtype`, `device_map`, `attn_implementation`, `revision`,
-`trust_remote_code`, `task` and the rest. `task` defaults to `"text-generation"`.
+`trust_remote_code`, `task` and the rest. `task` defaults to `"text-generation"`;
+`task="image-text-to-text"` loads a vision-language checkpoint as its wrapper with its
+processor, which is what gives it `model.vision` ([vision.md](vision.md)).
+
+Without `dtype` the weights load in the checkpoint's own dtype (its config's
+`torch_dtype`), on CPU too: `facebook/opt-125m` loads in float16, `Qwen/Qwen2.5-0.5B`
+in bfloat16, `openai-community/gpt2` in float32. Pass `dtype=torch.float32` when CPU
+work needs full precision.
 
 ## How the family is chosen
 
@@ -52,11 +59,12 @@ arguments flow into the config read as well as the load. The config's `model_typ
 family: `nnterp.families.<model_type>` is imported on first use (`gpt2.py` for `gpt2`,
 `gemma3_text.py` for `gemma3_text`), and that module's `RENAME` and `ENVOYS` become
 nnsight's `rename=` and `envoys=`. A multimodal config nests the language model's config
-as `text_config`; the text-generation task builds that model, so its `model_type` is the
-one looked up.
+as `text_config`, and that `model_type` is the one looked up under either task: the family
+is the text model's (`gemma3_text` for a Gemma 3 wrapper, `llama` for Llava 1.5), and it
+carries the wrapper's spellings and the vision tower's names beside the text model's.
 
 A `model_type` with no family raises `UnsupportedFamily` before anything loads, naming every
-known model type, the list `nnterp.families.known()` returns (94 shipped families,
+known model type, the list `nnterp.families.known()` returns (98 shipped families,
 alphabetical):
 
 ```

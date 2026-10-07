@@ -65,7 +65,7 @@ once per class: `model` (`suite.py:88-92`), a `StandardizedTransformer` with
 | `FAMILY` | the family module the checkpoint must resolve to |
 | `NATIVE` | standard path → native path, usually built by `rows(container, layers, embed, norm, attn=, mlp=, ln1=, ln2=)` (`:58-73`); `LLAMA_ROWS` (`:76`) is the Llama layout |
 | `EXPECTED_UNAVAILABLE` | `support()` key → a substring of the reason, for values this checkpoint lacks; a module no block has (OPT's `mlp`) is absent from `support()` rather than unavailable, so it is not listed here |
-| `REFUSES_IN_PLACE_QKV` | q/k/v come out of a multi-view op (`split`, `chunk`), so torch refuses an in-place edit (GPT-2, MPT) |
+| `REFUSES_IN_PLACE_QKV` | the queries come out of a multi-view op (`split`, `chunk`), so torch refuses an in-place edit of them (GPT-2, GPT-BigCode, MPT) |
 | `ATTENTION_SINK` | the pattern's rows sum to less than one (GPT-OSS) |
 | `KV_HEADS_EXPANDED` | keys and values are read already expanded to `num_heads` (DeepSeek, Falcon 40B) |
 | `MLP_WIDTH_KEY` | a config key naming the MLP width when it is not `intermediate_size` |
@@ -246,6 +246,17 @@ the per-token state on `SCAN_BLOCK`, and meta-build a real checkpoint's config
 (`REAL`). On a model with no softmax attention (Mamba), `attn_block(model)`
 skips the pattern and interior tests and `expected_values` drops the
 `self_attn.*` names.
+A multimodal wrapper runs `FamilySuite` loaded with `LOAD_KWARGS = {"task":
+"image-text-to-text"}` (a subclass of the family's text class with the wrapper's
+`NATIVE` rows; `expected_values` adds the `vision.*` rows where the load has a
+processor), and its vision side runs `VisionSuite`
+(`tests/families/vision_suite.py`: the tower names and identity, the tower's values
+and `support` rows, the scatter `layers[0].input[vision.image_token_mask] ==
+vision.image_features`, causal edits, no `vision` host on a text-only checkpoint or
+load; `fix_processor` where a tiny checkpoint's processor disagrees with its model;
+`PixtralSuite` for the packed tower). `WrapperSuite`, in the same file, checks the text names
+on a wrapper built from a family's tiny text config where no tiny wrapper exists
+([vision-design.md](vision-design.md)).
 
 ## The root tests
 
@@ -297,8 +308,10 @@ session collector agrees; `compute_next_token_probs` rows sum to one.
 
 - Names bound inside a `with model.trace(...)` block do not survive it;
   the suite pre-binds containers (`read = {}`, `saved = None`) outside the
-  block (`suite.py:198`, `:472`). A plain list built inside the block needs
-  `.save()` too.
+  block (`suite.py:198`, `:472`). A list first bound inside the block is
+  gone after it even when its elements are saved (`xs = [v.save() for ...]` and
+  `ys = []; ys.append(v.save())` both raise `NameError` after the block); bind it
+  before the block, or save the list itself (`nnsight.save([...])`).
 - Reads in one trace follow the forward: the suite reads one interior value
   per trace (`:327`, `:340`) because families bind them at different points.
 - The class-scoped `model` fixture is shared by every test in the class;
@@ -313,6 +326,15 @@ session collector agrees; `compute_next_token_probs` rows sum to one.
   (`from suite import FamilySuite`); do not name another test helper that.
 - Run from the repository root: `git rev-parse --show-toplevel` is
   the nnterp checkout, and pytest's `testpaths` is relative to it.
+- The fixtures load with `dispatch=True` and no `device=`, so with a GPU visible every
+  tiny model lands on `cuda:0`; on a shared card a parallel run fails by the hundreds
+  (CUDA out of memory, cuBLAS errors). Run with `CUDA_VISIBLE_DEVICES=""` to keep the
+  suite on CPU.
+- The tiny checkpoints cannot show scale-dependent behaviour: on
+  `hf-tiny-v2/tiny-random-Olmo2ForCausalLM` the sublayer outputs have an RMS near 1e-6,
+  far below `sqrt(rms_norm_eps)` (3e-3), so the RMSNorms act linearly and scaling a
+  module's output moves the stream as scaling its contribution does. A test about norm
+  scale invariance needs real weights or scaled activations.
 
 ## Related
 

@@ -16,8 +16,8 @@ transform carrying an in-place edit back, as on Granite. The stream itself is
 also rescaled, so the contribution identity is
 ``layer_output == (h + residual_bias) * residual_scale + mlp_output`` with
 ``h == (input + residual_bias) * residual_scale + attention_output`` (each merge's
-own parameters, ``layers[i].post_*_residual_scale._module``, whose envoys the
-block hands each sublayer as ``merge``), the plain one only
+own parameters, ``layers[i].post_*_residual_scale._module``, which each sublayer
+reads through its parent as ``merge``), the plain one only
 at their initial values (scales one, biases zero). The model also scales and
 shifts the embedding module's output before the first block.
 
@@ -38,6 +38,9 @@ previous block's router state into its input and scores ``num_experts + 1``
 classes with a small MLP (``router_mlp``), whose output is ``router_logits``: the
 last column is **skip**. A slot that picks it runs no expert: its weight is 0 and
 its index **0**, an alias of expert 0, so usage counts mask ``expert_weights == 0``.
+The router picks on its softmax plus ``balancing_biases``; on ZAYA1-8B and
+ZAYA1-74B-preview (``num_experts_per_tok`` 1) the skip class's bias is -1 and some
+expert's is positive on every block, so skip is never chosen there; the tiny picks it.
 """
 
 from typing import TYPE_CHECKING
@@ -82,24 +85,19 @@ class Layer(Layer):
     """ZAYA's decoder block; returns ``(hidden_states, prev_router_hidden_states)``.
 
     Each sublayer's contribution is scaled by the merge that follows it, a sibling
-    module, so the block hands the attention and the MLP their merge's envoy
-    (``merge``) when it is built; the envoy outlives a weight swap, so its
-    ``_module`` is the loaded one.
+    module the attention and the MLP read through their parent (``merge``).
     """
 
     returns_tuple = True
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.self_attn.merge = self.post_attention_residual_scale
-        self.mlp.merge = self.post_mlp_residual_scale
 
 
 class Attention(Attention):
     """ZAYA's attention: the shared eager forward; the block adds its output shifted and scaled by ``post_attention_residual_scale``."""
 
-    #: Set by the block: the envoy of the merge that follows this sublayer.
-    merge: Envoy
+    @property
+    def merge(self) -> Envoy:
+        """The envoy of the merge that follows this sublayer, its sibling in the block."""
+        return self.parent.post_attention_residual_scale
 
     @EProperty(key="output", description="What the attention adds to the residual stream: its output plus the merge's hidden_states_bias, times its hidden_states_scale")
     def attention_output(self, value) -> Residual:
@@ -121,8 +119,10 @@ class Mlp(Moe):
     columns (the last is skip), already ``[batch, seq, ...]``.
     """
 
-    #: Set by the block: the envoy of the merge that follows this sublayer.
-    merge: Envoy
+    @property
+    def merge(self) -> Envoy:
+        """The envoy of the merge that follows this sublayer, its sibling in the block."""
+        return self.parent.post_mlp_residual_scale
 
     @EProperty(key="output", description="What the MLP adds to the residual stream: its output plus the merge's hidden_states_bias, times its hidden_states_scale")
     def mlp_output(self, value) -> Residual:

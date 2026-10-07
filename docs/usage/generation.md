@@ -58,6 +58,8 @@ Every value on the root and on the blocks answers for the current call:
 | `mlp.routed_output`, `shared_expert_output` | `[batch, prompt_len, hidden]` | `[batch, 1, hidden]` |
 | `model.logits` | `[batch, prompt_len, vocab]` | `[batch, 1, vocab]` |
 | `model.next_token_probs` | `[batch, vocab]` | `[batch, vocab]` |
+| `vision.image_token_mask` (a vision-language wrapper, `model.generate(prompt, images=[image], ...)`) | `[batch, prompt_len]`, the image tokens true | `[batch, 1]`, all false: the new token is text |
+| `vision.image_features`, the tower's blocks | the prompt call's only: the tower runs once, on the prompt | never reached: a read bound to a decode step has no occurrence ([vision.md](vision.md#image-positions-and-text-positions)) |
 
 On a decode step the pattern has one query row over every cached key, so
 `attention_probabilities[0, h, 0]` is what head `h` of the new token attends
@@ -117,7 +119,10 @@ and treat that warning as a read-order error.
   `do_sample=True`.
 - **`next_token_probs` is the last position of the current call.** On a decode
   step that is the one token; on the prompt call it is each row's last token,
-  which is each prompt's own last token only under left padding.
+  which is each prompt's own last token only under left padding. nnsight builds
+  `position_ids` from the attention mask, so a left-padded row computes what the
+  prompt alone does: on GPT-2 (float32) a padded row's `layer_output` at block 5 matches
+  the unpadded prompt's to 1.3e-5.
 - **The keys and values grow with the cache; the queries do not.** A head-wise
   edit of `attention_keys` on a decode step touches the whole context.
 - **On a DeltaNet hybrid, a decode step runs the recurrent kernel**, and

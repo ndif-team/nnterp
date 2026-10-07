@@ -13,7 +13,9 @@ operation by that flag. Without alibi the queries and keys leave
 dropout after it; with alibi there is no rotary, the pattern is the dropout
 after the second softmax, and the head outputs are flattened over batch and
 heads. The 40B layout (``ln_attn`` / ``ln_mlp``, ``new_decoder_architecture``)
-runs the same forward with its key/value heads already broadcast.
+runs the same forward with its key/value heads already broadcast. falcon-11B has
+the 40B layout with ``num_ln_in_parallel_attn`` 1: one ``input_layernorm`` feeds both
+sublayers, and 8 key/value heads serve its 32 query heads.
 """
 
 from typing import TYPE_CHECKING

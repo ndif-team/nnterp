@@ -1,4 +1,4 @@
-"""VaultGemma, end to end: Gemma's names with pre-norms only and logit softcapping."""
+"""VaultGemma, end to end: Gemma's names with pre-norms only and logit softcapping (the pinned tiny sets the caps; google/vaultgemma-1b sets them to null)."""
 
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT

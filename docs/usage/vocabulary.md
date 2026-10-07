@@ -55,6 +55,14 @@ for:
 | `model.layers[i].self_attn.input` | what enters the attention: the normed stream, or the block input where the block has no pre-norm (OLMo-2/3) |
 | `model.layers[i].mlp.input` | what enters the MLP: the pre-MLP norm's output, whatever the family calls that norm |
 
+On a vision-language checkpoint loaded with `task="image-text-to-text"`, the vision side has
+names too: `model.vision` (the tower), `model.vision.layers[i]` with their `self_attn` and
+`mlp`, `model.vision.patch_embed`, `model.vision.norm` and `model.projector`, on every wrapper
+[vision.md](vision.md) lists (SigLIP, CLIP, Pixtral, the Qwen ViT, Llama 4's and Gemma 4's
+towers). Where the image meets the text model is the tower's: `model.vision.image_token_mask`
+and `model.vision.image_features`, with
+`layers[0].input[vision.image_token_mask] == vision.image_features`.
+
 Where other families differ, their `RENAME` says how. The container keys change per
 family; the block keys only where a block spells a sublayer otherwise:
 
@@ -63,6 +71,7 @@ family; the block keys only where a block spells a sublayer otherwise:
 | Llama, Mistral, Qwen2/3, Gemma-1/2/3, Phi-3, OLMo, DeepSeek, GPT-OSS, hybrids | `model.{embed_tokens, layers, norm}` | none needed |
 | Llama 4 (text) | `model.{embed_tokens, layers, norm}`; `language_model.model.{embed_tokens, layers, norm}` and `language_model.lm_head` on a `Llama4ForConditionalGeneration` module | `feed_forward` -> `mlp` |
 | Gemma-3, Gemma-4 | `model.{embed_tokens, layers, norm}`; `model.language_model.{embed_tokens, layers, norm}` on a `Gemma3ForConditionalGeneration` / `Gemma4ForConditionalGeneration` (`lm_head` stays at the root) | none needed |
+| a multimodal wrapper of Llama, Qwen2/3/3.5, Mistral, Ministral 3, Gemma, Cohere 2, EXAONE 4 (loaded with `task="image-text-to-text"`) | `model.language_model.{embed_tokens, layers, norm}` (Idefics 3 / SmolVLM: `model.text_model.*`); `lm_head` stays at the root | none needed |
 | GPT-2 | `transformer.{wte, h, ln_f}` | `attn` -> `self_attn`, `ln_1` -> `input_layernorm`, `ln_2` -> `post_attention_layernorm` |
 | GPT-J | `transformer.{wte, h, ln_f}` | `attn` -> `self_attn`, `ln_1` -> `input_layernorm` |
 | GPT-Neo | `transformer.{wte, h, ln_f}` | `attn.attention` -> `self_attn` (the module inside the `attn` wrapper), `ln_1` -> `input_layernorm`, `ln_2` -> `post_attention_layernorm` |

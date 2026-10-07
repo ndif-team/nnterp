@@ -27,7 +27,9 @@ dependencies = ["nnsight>=0.8", "transformers", "jaxtyping"]
 models = ["sentencepiece", "tiktoken", "protobuf", "pillow"]
 # The vLLM engine (StandardizedVLLM).
 vllm = ["vllm"]
-test = ["pytest", "pytest-xdist"]
+test = ["pytest", "pytest-xdist", "jinja2", "markdown"]
+# The encyclopedia generator (encyclopedia/build.py).
+encyclopedia = ["jinja2", "markdown", "pygments"]
 
 [project.urls]
 "Homepage" = "https://github.com/ndif-team/nnterp"
@@ -40,3 +42,5 @@ nnterp = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# With -n, tests marked xdist_group(...) stay on one worker: a class around real weights loads its model once.
+addopts = "--dist loadgroup"

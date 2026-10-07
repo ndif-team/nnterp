@@ -11,7 +11,7 @@ sources: [nnterp/families/__init__.py, nnterp/components/eproperty.py]
 A family is one module under `nnterp/families/` named after its `model_type`; a value is an
 `EProperty` on an envoy subclass. Both are plain Python, and both can live outside nnterp.
 
-- [adding-a-family](adding-a-family.md) — `RENAME`, `Layer`/`Attention`/`Mlp` subclasses, `ENVOYS`, a `def <size>(model)` where the config spells a root size its own way, and the one test file that proves it.
+- [adding-a-family](adding-a-family.md) — `RENAME`, `Layer`/`Attention`/`Mlp` subclasses, `ENVOYS`, a `def <size>(model)` where the config spells a root size its own way, and the one test file that proves it; a family whose checkpoints load as image-text-to-text wrappers adds the tower's names, `Vision`/`VisionLayer` keys and an `ImageScatter` on the wrapper's model, with a `VisionSuite` subclass.
 - [overriding-values](overriding-values.md) — when the base does not hold: an `EProperty` keyed on a path (`../norm.output`, `source.<op>.input`, `source.<call>.inputs` with `select`), `unavailable` markers and predicates, `off_interface`, `seq_first`, a clone with a transform; a root size is a function in the family module, not a descriptor.
 - [custom-values](custom-values.md) — a new value on a block, attention or MLP, passed in through `envoys=`; it shows in the repr and in `support()`.
 - [finding-source-ops](finding-source-ops.md) — `print(envoy.source)`, `<call>.source` inside a trace, how nnsight names calls and bindings.

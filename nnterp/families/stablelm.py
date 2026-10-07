@@ -1,9 +1,11 @@
 """StableLM / StableLM-2 (``StableLmForCausalLM``).
 
-Llama's containers. With ``use_parallel_residual`` (StableLM-2) the block is
-parallel with one ``input_layernorm`` and a ``dropout``; without it there is a
-``post_attention_layernorm`` too. The attention norms its queries and keys
-(``q_layernorm`` / ``k_layernorm``).
+Llama's containers. With ``use_parallel_residual`` the block is parallel with one
+``input_layernorm`` and a ``dropout``; without it there is a
+``post_attention_layernorm`` too. Under ``qk_layernorm`` the attention norms its
+queries and keys per head (``q_layernorm`` / ``k_layernorm``). Of the released
+checkpoints only StableLM-2-12B sets both (as does the pinned tiny); StableLM-2-1.6B
+and StableLM-3B-4E1T are sequential with no q/k norms.
 """
 
 from transformers.models.stablelm.modeling_stablelm import StableLmAttention, StableLmDecoderLayer, StableLmMLP

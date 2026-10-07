@@ -62,9 +62,16 @@ only the post-norms, so `self_attn.input` is the block input there.
 ## The path
 
 A key is dotted segments ending in `output`, `input` or `inputs`, walked from the host
-envoy:
+envoy, or from the model's root when it starts with `/`:
 
 - `"output"` is the host's own output, the same location as `.output`.
+- A leading `/` anchors the path at the root (`envoy.root`, the model envoy) and walks
+  down from there the way a path below the host walks, aliases and `source` included:
+  `"/inputs"` is the model's inputs, read from the vision tower (`vision.image_token_mask`;
+  `vision.image_features` is read at the scatter in the wrapper model's forward,
+  `"/model.source.inputs_embeds_masked_scatter_0.inputs"`, from a key function), and
+  `"/norm.output"` is the final norm's from any block. Use it for a value that lives far
+  from its host; a sibling is `../name` (below).
 - A leading `../` steps to the parent module, as many times as written. After it, every
   segment is a *native* name: above the host the path is joined onto the native path as a
   string, so an alias does not resolve there. `"../post_attention_layernorm.output"` on
@@ -411,13 +418,13 @@ read-only (an assignment raises `AttributeError` pointing at `def <name>(model)`
 whose config spells a size its own way overrides it with a module-level function of the
 same name taking the model, which the descriptor calls instead of its rule. DeepSeek-V2's
 latent attention gives values and queries different widths, and the config's own
-`head_dim` key is the latent width that no served value has:
+`head_dim` key is set to `qk_rope_head_dim` (64), the rotary slice's width, which no served value has:
 
 ```python
 # nnterp/families/deepseek_v2.py
 
 def head_dim(model: "StandardizedTransformer") -> int:
-    """Width of one head's values and outputs: ``v_head_dim`` (the config's ``head_dim`` is the latent width, which no served value has)."""
+    """Width of one head's values and outputs: ``v_head_dim`` (the config's ``head_dim`` is set to ``qk_rope_head_dim``, the rotary slice's width, which no served value has)."""
     return model.config.v_head_dim
 
 

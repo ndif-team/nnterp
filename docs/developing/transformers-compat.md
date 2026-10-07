@@ -12,9 +12,11 @@ sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py,
 
 This is the one page in `docs/` that talks about versions. nnterp is
 developed on **transformers 5.17.0** and **nnsight 0.8.0** (the `dev`
-branch, at the eproperty-transform-raw merge), with torch 2.13 and
+branch, at the envoy-parent merge, nnsight #759, `b2bc0fd7`), with torch 2.13 and
 jaxtyping 0.3.11; `pyproject.toml` requires `nnsight>=0.8`, `transformers`
-and `jaxtyping`. The names a family binds to (`RENAME`, `ENVOYS`) are
+and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
+(below); no nnsight release has them yet, so the pin cannot say it, and a
+`dev` at or after `b2bc0fd7` is what nnterp runs on. The names a family binds to (`RENAME`, `ENVOYS`) are
 transformers' module names and classes, which move rarely. The **operation
 names** inside a forward that every `source.` path pins are what a
 release renames, and this page lists them, says how the suite guards them,
@@ -179,8 +181,20 @@ plain `import transformers` first is fine.
 
 ## What nnterp needs from nnsight
 
-Two behaviours of nnsight 0.8 as it stands, both used by nnterp as current
+Three behaviours of nnsight 0.8 as it stands, all used by nnterp as current
 behaviour:
+
+- **`Envoy.parent` and `Envoy.root`**: every envoy keeps a weak link to the
+  envoy that holds it, and `root` follows the links up to the model envoy
+  (nnsight #759). A value reads its block through `self.parent` (the Granite
+  mixtures' `residual_multiplier`, the Gemma-4 and GraniteMoE-Hybrid `Mlp`'s
+  `router` and `experts`, ZAYA's `merge`) and the model through `self.root`
+  (`Vision`'s config, processor and family), and a key with a leading `/` is
+  walked from `root` (`"/inputs"`). The link is dropped when an
+  envoy is pickled and rebuilt inside the payload, so a shipped tree whose top
+  is the model envoy keeps its root; a remote trace ships the model's whole
+  tree (checked with `remote="local"` on the Gemma 3 tiny wrapper: the
+  deserialized tower's root is the deserialized `StandardizedTransformer`).
 
 - **`envoys=` chooses the envoy class per module at construction**, by type
   (MRO) first and native path suffix second, before aliases bind

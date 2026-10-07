@@ -61,6 +61,12 @@ block's dtype passes, as the suite checks).
 Read the four in forward order within one trace: the block's `input`, then the attention,
 then the MLP, then the block's output.
 
+On a vision-language wrapper the tower's blocks carry the same three values over the patch
+stream (`model.vision.layers[i].layer_output`, `[images, patches, vision_hidden]`), and the
+text blocks' values hold the image positions too: `layer_output[vision.image_token_mask]`
+is the image rows, `layer_output[~vision.image_token_mask]` the text rows
+([vision.md](vision.md#image-positions-and-text-positions)).
+
 ## Tensor blocks and tuple blocks
 
 A Llama, GPT-2 or GPT-NeoX block returns `hidden_states` alone. A GPT-J, GPT-Neo, CodeGen,
@@ -204,7 +210,9 @@ division rounds, so a write at one position changes the others by rounding: abou
 relative in float32, one or two units in the last place in bf16. That can be a visible
 fraction of a small edit's effect: on granite-3.0-1b-a400m in bf16, a small edit at one
 position moved the logits at earlier positions, which the edit cannot reach causally,
-by 0.17, against 0.19 at the edited position. Load in float32 for fine-grained edits.
+by 0.17, against 0.19 at the edited position. That depends on the multiplier: 0.22 (Granite 3.x,
+granite-4.1-3b/8b, granite-4.0-1b) does not survive a bf16 divide-and-multiply exactly, while
+0.28, 0.263, 0.246 and 0.175 do and 1.0 (Granite 4.2) is exact. Load in float32 for fine-grained edits.
 ZAYA's contributions are computed copies the same way. `self_attn.output` and
 `mlp.output` stay the unscaled module outputs ([families](../reference/families.md#scaled-residual-adds)).
 

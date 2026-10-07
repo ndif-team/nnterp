@@ -5,8 +5,12 @@ mlp}, ln_f}`` and ``lm_head``, the residual added in the block, which returns a 
 tensor. The attention projects queries, keys and values with one fused ``c_attn``
 and runs the shared eager forward. Under ``multi_query`` (every released checkpoint)
 the keys and values are one head shared by every query head, so ``num_kv_heads`` is
-1. Queries, keys and values are split views of the one ``c_attn`` tensor. The MLP is
-``n_inner`` wide, ``4 * hidden_size`` when that is ``None``.
+1. Queries, keys and values are split views of the one ``c_attn`` tensor: torch
+refuses an in-place edit of ``attention_queries`` outside ``torch.no_grad()`` (assign
+instead), while keys and values take one. ``attention_softmax_in_fp32`` and
+``scale_attention_softmax_in_fp32`` are stored on the module but not read: the
+eager softmax runs in float32 regardless. The MLP is ``n_inner`` wide,
+``4 * hidden_size`` when that is ``None``.
 """
 
 from typing import TYPE_CHECKING

@@ -38,7 +38,11 @@ class EProperty(eproperty):
     Args:
         key: Where the value lives, relative to the host envoy: dotted segments
             ending in ``output``, ``input`` or ``inputs``. ``"output"`` is the
-            host's own output. A leading ``"../"`` (repeatable) steps to the
+            host's own output. A leading ``"/"`` anchors the path at the
+            model's root instead (``envoy.root``), walked down from there as a
+            relative path is, aliases included: ``"/inputs"`` is the model's
+            inputs, ``"/projector.output"`` the projector's output, from any
+            host. A leading ``"../"`` (repeatable) steps to the
             parent module by native name, another name to a child module
             (aliases included) or, under a ``source`` segment, to an
             operation: ``"source"`` drills into the current module's or
@@ -177,20 +181,29 @@ class EProperty(eproperty):
         """Whether the value is an operation inside a forward (a key function, or a ``source`` segment on its path)."""
         return self.locate is not None or "source" in (self.key or "").lstrip("./").split(".")
 
+    @staticmethod
+    def attribute(key: str) -> str:
+        """The served attribute a path ends in: ``output``, ``input`` or ``inputs``."""
+        return key.rsplit("/", 1)[-1].rsplit(".", 1)[-1]
+
     def _resolve(self, obj: Envoy, key: str) -> str:
         """The served location ``key`` names from ``obj``, walking (and drilling) the path."""
+        if key.startswith("/"):
+            # Anchored at the root: the rest is a relative path from there.
+            obj, key = obj.root, key[1:]
+            if key.startswith("../"):
+                raise ValueError(f"{self.name}: {key!r} climbs above the model's root")
         up = 0
         while key.startswith("../"):
             up, key = up + 1, key[3:]
         *walk, attribute = key.split(".")
         attribute = "input" if attribute in ("input", "inputs") else "output"
         if up:
-            # Above the host the path is arithmetic on names: an envoy knows its
-            # own path but not its parent, and the parent's forward, when the
-            # path goes into it, is instrumented already (`Standard.sourced`),
-            # so the location is served by its string. One level of ``source``
-            # is what that gives; a call inside the parent's forward would need
-            # the parent drilled, which only an envoy can do.
+            # Above the host the path is arithmetic on names: the parent's
+            # forward, when the path goes into it, is instrumented already
+            # (`Standard.sourced`), so the location is served by its string.
+            # One level of ``source`` is what that gives; a call inside the
+            # parent's forward would need the parent drilled at read time.
             parts = obj.path.split(".")[:-up]
             if walk.count("source") > 1:
                 raise ValueError(
@@ -262,7 +275,7 @@ class EProperty(eproperty):
                 return waiting.view
         select = self._selection(obj)  # before the read: a select function may read an earlier value of the call
         raw = Mediator.value(location)
-        value = self._pick(key.rsplit(".", 1)[-1], raw, select)
+        value = self._pick(self.attribute(key), raw, select)
         if self._preprocess is not None:
             value = self._preprocess(obj, value)
         if self._transform is not None:
@@ -279,7 +292,7 @@ class EProperty(eproperty):
             value = self._postprocess(obj, value)
         key = self.path(obj)
         location = self._resolve(obj, key)
-        attribute = key.rsplit(".", 1)[-1]
+        attribute = self.attribute(key)
         select = self._selection(obj)
         if select is not None or attribute == "input":
             value = self._put(attribute, Mediator.value(location), value, select)

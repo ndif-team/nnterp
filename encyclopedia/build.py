@@ -190,6 +190,8 @@ CONFIG_KEYS = (
     "interleave_moe_layer_step", "intermediate_size_mlp", "no_rope_layer_interval", "attention_chunk_size",
     "attn_temperature_tuning", "attn_scale", "floor_scale",
     "window_size",
+    "route_scale", "mup_enabled", "num_dense_layers", "moe_layer_start_index", "moe_k", "moe_num_shared_experts",
+    "ffn_dim", "do_layer_norm_before", "word_embed_proj_dim", "scale_embedding", "qk_layernorm",
 )
 
 #: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.

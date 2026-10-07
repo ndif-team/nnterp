@@ -141,7 +141,9 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
     tiny = entry.WRAPPERS[wrapper]["pinned"]
     page = build.build_page(entry, reference=entry.PINNED, checkpoints=[entry.PINNED, tiny])
     text, vision = checkpoint_data(page), checkpoint_data(page, tiny)
-    assert text["tower"] is None and vision["tower"] is not None
+    # A family whose every checkpoint is the wrapper (Qwen3.5) pins the same checkpoint for both: no text-only one to compare.
+    text_side = tiny != entry.PINNED
+    assert (text["tower"] is None or not text_side) and vision["tower"] is not None
     tower = vision["tower"]["schema"]
     assert [sub["host"] for sub in tower["sublayers"]] == ["self_attn", "mlp"]
     assert tower["identity"] == "vision.layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output"
@@ -156,7 +158,7 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
         assert nodes[f"v:path.{part}"]["expr"] == expr, part
     assert "layers[0].input[vision.image_token_mask] == vision.image_features" in nodes["strip.embed"]["extra"]
     shown = panes(page, tiny)
-    assert 'class="tower-svg"' in shown["tower"] and 'class="tower-svg"' not in panes(page, entry.PINNED)["tower"]
+    assert 'class="tower-svg"' in shown["tower"] and ('class="tower-svg"' not in panes(page, entry.PINNED)["tower"] or not text_side)
     for host in ("model.<wbr>vision", "model.<wbr>vision.<wbr>layers[i].<wbr>self_attn", "model.<wbr>vision.<wbr>layers[i].<wbr>mlp"):
         assert host in shown["values"], host
     for value in ("image_token_mask", "patch_embeddings", "tower_output", "image_features"):
@@ -165,9 +167,9 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
     for size in build.TOWER_SIZE_NAMES:
         assert f"model.vision.{size}</span>" in shown["config"], size
     assert '<h2 class="fold-heading">The <em>vision encoder</em></h2>' in shown["tower"]
-    assert vision["architecture"].endswith("ForConditionalGeneration") and text["architecture"].endswith("ForCausalLM")
+    assert vision["architecture"].endswith("ForConditionalGeneration") and (text["architecture"].endswith("ForCausalLM") or not text_side)
     assert f'href="https://huggingface.co/{entry.PINNED}"' in page and 'id="ckpt-hub"' in page
-    assert f'href="https://huggingface.co/{tiny}"' not in page, "only the selected checkpoint is linked, by the script"
+    assert f'href="https://huggingface.co/{tiny}"' not in page or not text_side, "only the selected checkpoint is linked, by the script"
     assert "Vision-language" in shown["chips"] and "<h2>" in shown["vision_notes"] and "<details" in shown["vision_notes"]
     assert "Vision-language" not in shown["quirk_list"] and "Vision-language" in shown["vision_notes"]
     assert f'data-ckpt="{tiny}"' in page and 'data-vision="1"' in page

@@ -39,7 +39,7 @@ GREYED = {
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 21}
 VLLM = False
-QUIRKS = ["scaled-residual-adds", "qk-norm"]
+QUIRKS = ["scaled-residual-adds", "qk-norm", "dynamic-mask"]
 
 #: Every real value in the notes was measured on Doge-260M in float32 on a GPU; the snippets also ran on the
 #: pinned tiny checkpoint (2 blocks, gates and A at their initial values: ones and zeros).

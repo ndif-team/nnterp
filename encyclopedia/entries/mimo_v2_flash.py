@@ -18,7 +18,10 @@ CHECKPOINTS = ["XiaomiMiMo/MiMo-V2-Flash", "XiaomiMiMo/MiMo-V2-Flash-Base"]
 #: Set by hues.py (lineage: MiniMax / MiMo).
 PALETTE = {"hue": 349}
 VLLM = False
-QUIRKS = ["attention-sink", "sliding-window", "partial-rotary", "mixture-of-experts", "dense-first-blocks"]
+QUIRKS = [
+    "attention-sink", "per-block-sizes", "sliding-window", "partial-rotary", "mixture-of-experts",
+    "dense-first-blocks",
+]
 
 #: The checkpoints have 309B parameters: nothing here ran on real weights. Every identity, shape and snippet ran on
 #: the pinned tiny checkpoint (block 0 full and dense, block 1 sliding and a mixture of 4 experts, top 2; queries and

@@ -22,7 +22,10 @@ CHECKPOINTS = [
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 194}
 VLLM = False
-QUIRKS = ["qk-norm", "sliding-window", "partial-rotary", "mixture-of-experts", "dense-first-blocks"]
+QUIRKS = [
+    "per-block-sizes", "qk-norm", "output-gate", "sliding-window", "partial-rotary", "mixture-of-experts",
+    "dense-first-blocks",
+]
 
 #: The smallest checkpoint has 33B parameters: nothing here ran on real weights. Every identity, shape and snippet
 #: ran on tests/families/test_laguna.py's copy of the pinned tiny checkpoint with 2 and 4 query heads (block 0 full

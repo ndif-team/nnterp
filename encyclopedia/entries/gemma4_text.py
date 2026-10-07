@@ -169,8 +169,8 @@ the same load.
 PALETTE = {"hue": 162}
 VLLM = False
 QUIRKS = [
-    "sandwich-norms", "scaled-residual-adds", "qk-norm", "sliding-window", "proportional-rotary", "borrowed-kv",
-    "mixture-of-experts", "scaled-embeddings", "softcapped-logits",
+    "sandwich-norms", "per-block-sizes", "scaled-residual-adds", "qk-norm", "sliding-window", "proportional-rotary",
+    "borrowed-kv", "mixture-of-experts", "scaled-embeddings", "softcapped-logits",
 ]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,

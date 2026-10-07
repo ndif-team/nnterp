@@ -23,7 +23,7 @@ CHECKPOINTS = [
 PALETTE = {"hue": 354}
 VLLM = False
 QUIRKS = [
-    "tuple-blocks", "scaled-residual-adds", "fp32-residual", "embedding-multiplier", "partial-rotary",
+    "tuple-blocks", "scaled-residual-adds", "fp32-residual", "embedding-multiplier", "partial-rotary", "conv-qk",
     "sliding-window", "mixture-of-experts", "unnormalized-routing",
 ]
 

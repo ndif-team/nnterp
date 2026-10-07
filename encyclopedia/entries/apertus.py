@@ -23,7 +23,7 @@ CHECKPOINTS = [
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 238}
 VLLM = False
-QUIRKS = ["qk-norm"]
+QUIRKS = ["qk-norm", "learned-activation"]
 
 #: Real values in the notes were measured on Apertus-v1.1-0.5B (the family's smallest checkpoint) on a GPU in
 #: float32; shapes, identities and read orders also ran on the pinned tiny checkpoint, whose hidden_act is gelu.

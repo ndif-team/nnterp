@@ -24,7 +24,10 @@ CHECKPOINTS = [
 #: Set by hues.py (lineage: DeepSeek).
 PALETTE = {"hue": 331}
 VLLM = False
-QUIRKS = ["hyper-connections", "attention-sink", "sliding-window", "sparse-attention", "interleaved-rotary", "mixture-of-experts"]
+QUIRKS = [
+    "hyper-connections", "attention-sink", "sliding-window", "sparse-attention", "interleaved-rotary",
+    "mixture-of-experts", "hash-routing",
+]
 
 #: Shapes, the block's formula, the stream mean, the readout, the key axis of each block type, the selection and the
 #: routing (both routers) were run on the pinned tiny checkpoint in float32 on CPU (7 blocks: 2 sliding, then

@@ -24,7 +24,7 @@ CHECKPOINTS = [
 PALETTE = {"hue": 230}
 VLLM = False
 QUIRKS = [
-    "sandwich-norms", "embedding-multiplier", "qk-norm", "sliding-window", "nope-blocks",
+    "sandwich-norms", "embedding-multiplier", "qk-norm", "output-gate", "sliding-window", "nope-blocks",
     "mixture-of-experts", "dense-first-blocks",
 ]
 

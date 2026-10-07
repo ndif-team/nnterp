@@ -17,7 +17,7 @@ CHECKPOINTS = ["microsoft/bitnet-b1.58-2B-4T", "microsoft/bitnet-b1.58-2B-4T-bf1
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 253}
 VLLM = False
-QUIRKS = ["squared-relu"]
+QUIRKS = ["quantized-linears", "sub-norms", "squared-relu"]
 
 #: Real values in the notes were measured on bitnet-b1.58-2B-4T-bf16 in bfloat16 on a GPU (its weights load as
 #: bfloat16 and are ternarized in every forward); shapes, identities and read orders also ran on the pinned tiny

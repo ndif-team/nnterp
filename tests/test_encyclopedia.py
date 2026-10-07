@@ -235,6 +235,45 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
     assert f'data-ckpt="{tiny}"' in page and 'data-vision="1"' in page
 
 
+def test_a_hyper_connection_block_draws_its_streams():
+    """A BLOCK with ``streams`` gives the schema its stream count and, per sublayer, the hyper-connection module; the
+    nodes name the block's mixing and weight values with their layouts, the collapse each pre-norm reads, the streams
+    between the sublayers and the readout on the strip. A BLOCK without ``streams`` gets none of it."""
+    entry = entries.load("deepseek_v4")
+    page = build.build_page(entry, reference=pinned(entry))
+    data = checkpoint_data(page)
+    schema, nodes = data["schema"], data["nodes"]
+    assert schema["streams"] == {"count": 4}
+    assert [sub["hc"] for sub in schema["sublayers"]] == ["attn_hc", "ffn_hc"]
+    for key, comb, post, norm in (("self_attn", "attention_comb", "attention_post", "input_layernorm"),
+                                  ("mlp", "mlp_comb", "mlp_post", "post_attention_layernorm")):
+        assert (nodes[f"hc.{key}"]["expr"], nodes[f"hc.{key}"]["layout"]) == (f"model.layers[i].{comb}", "StreamMixing")
+        assert (nodes[f"post.{key}"]["expr"], nodes[f"post.{key}"]["layout"]) == (f"model.layers[i].{post}", "StreamWeights")
+        assert nodes[f"collapse.{key}"]["expr"] == f"model.layers[i].{norm}.input"
+    assert nodes["stream.input"]["layout"] == nodes["stream.mid.0"]["layout"] == "Streams"
+    assert nodes["stream.mid.0"]["expr"] == "model.layers[i].ffn_hc.input"
+    assert nodes["plus"]["expr"] == entry.BLOCK["identity"]
+    assert nodes["strip.readout"]["expr"] == "model.model.hc_head" and nodes["strip.readout"]["extra"] == entry.STRIP["readout"]
+    assert 'data-node="strip.readout"' in page
+
+    plain = entries.load("llama")
+    page = build.build_page(plain, reference=plain.PINNED)
+    data = checkpoint_data(page)
+    assert "streams" not in data["schema"] and all("hc" not in sub for sub in data["schema"]["sublayers"])
+    assert not any(key.split(".")[0] in ("hc", "collapse", "post") for key in data["nodes"])
+    assert "strip.readout" not in data["nodes"] and 'data-node="strip.readout"' not in page
+    assert data["nodes"]["stream.input"]["layout"] == "Residual"
+
+
+def test_streams_name_the_blocks_stream_values():
+    """A ``streams`` value that is not the block's stream mixing or stream weights fails the build."""
+    entry = entries.load("deepseek_v4")
+    info = build.read_entry(entry, reference=pinned(entry))[0][0]["info"]
+    swapped = {**entry.BLOCK, "streams": {**entry.BLOCK["streams"], "post": {"self_attn": "attention_comb", "mlp": "mlp_post"}}}
+    with pytest.raises(AssertionError, match="no StreamWeights value"):
+        build.block_schema("deepseek_v4", swapped, info)
+
+
 def test_an_unreadable_checkpoint_is_listed_and_skipped():
     """A checkpoint whose config cannot be read is not dropped: the selector greys it out with the reason, it has
     no data, and the page builds from the others."""

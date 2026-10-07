@@ -438,6 +438,10 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
     if layer_types is None and isinstance(config.get("attention_layers"), list) and len(config["attention_layers"]) == num_layers:
         layer_types, layer_types_key = config["attention_layers"], "attention_layers"
 
+    # the module that collapses a hyper-connection model's streams before the final norm (DeepSeek-V4's hc_head)
+    streams = resolve_block(entry.MODEL_TYPE, entry.BLOCK, text_config).get("streams")
+    readout = locate_readout(eager, streams["readout"]) if streams and streams.get("readout") else None
+
     doc = inspect.getdoc(family) or ""
     return {
         "family_module": family.__name__,
@@ -471,6 +475,7 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "rename": list(family.RENAME.items()),
         "paths": paths,
         "root_names": root_names,
+        "readout": readout,
         "values": values,
         "support": support,
         "repr": root_printout(eager, tower=bool(wrapper)),
@@ -481,6 +486,16 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         # the parameters the meta model holds, which the page shows where the Hub has no safetensors metadata
         "meta_params": sum(p.numel() for p in eager._module.parameters()),
     }
+
+
+def locate_readout(model: Any, name: str) -> dict[str, str]:
+    """The root's module named ``name`` outside the blocks (DeepSeek-V4's ``hc_head``, under the native container),
+    as a user reaches it from the root, with its class."""
+    found = [(path, module) for path, module in model._module.named_modules()
+             if path.rsplit(".", 1)[-1] == name and ".layers." not in f".{path}."]
+    assert len(found) == 1, f"the model has {len(found)} modules named {name!r} outside its blocks"
+    path, module = found[0]
+    return {"expr": f"model.{path}", "class": type(module).__name__}
 
 
 #: The fields of a WRAPPERS record a ``per_checkpoint`` entry may override for one checkpoint.
@@ -779,6 +794,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
     shape_of = [tuple(position[k] for k in shape) for shape in shape_of]
     specs, keys = [specs[k] for k in shown], [keys[k] for k in shown]
     nodes: dict[str, dict[str, Any]] = {}
+    streams = stream_spec(owner, block_spec, specs, by_host, info)
     sublayers = []
     for k, spec in enumerate(specs):
         host, key, kind, native = spec["host"], keys[k], spec["kind"], is_native(spec)
@@ -886,6 +902,23 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                 "post-norm", f"{base}.{spec['post_norm']}",
                 f"A native module under its own name. Its output is the contribution: `{contribution['expr']}`.",
                 extra=spec.get("post_norm_note"))
+        if streams:
+            # the hyper-connection around this sublayer: its stream mixing, the collapse its pre-norm reads, and the
+            # per-stream weights its contribution enters the streams with
+            comb, post = by_host["layer"][streams["collapse"][host]], by_host["layer"][streams["post"][host]]
+            hc = comb["key"].rsplit(".", 1)[0]
+            hc_class = next(found[hc] for found in block_children if found and hc in found)
+            sub["hc"] = hc
+            reads = spec.get("pre_norm") or host
+            nodes[f"hc.{key}"] = value_node(comb, "stream mixing")
+            nodes[f"hc.{key}"]["extra"] = (f"`{hc}` ({hc_class}) reads the streams and returns this mixing, "
+                                           f"`{post['name']}` and the collapse `{reads}` reads.")
+            nodes[f"collapse.{key}"] = node(
+                "collapse", f"{base}.{reads}.input",
+                f"`{hc}`'s collapse of the streams, a weighted sum over the stream axis, `[batch, seq, hidden]`: what "
+                f"`{reads}` reads. No standard value of its own.")
+            nodes[f"post.{key}"] = value_node(post, "stream weights")
+            nodes[f"post.{key}"]["extra"] = f"Each stream receives `{spec['contribution']}` scaled by its entry here."
         if spec.get("stream_norm"):
             # a norm on the stream after this sublayer's add (a post-LN block, OPT-350m): it normalizes the sum
             norm_name, last = spec["stream_norm"], k == len(specs) - 1
@@ -908,11 +941,15 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
 
     layer_output = by_host["layer"]["layer_output"]
     entering = by_host["layer"].get("layer_output", {})
-    nodes["stream.input"] = node(stream, f"{base}.input",
-                                 "The residual stream entering the block, a tensor on every family." if stream == "residual stream"
-                                 else f"The {stream} entering the block.",
-                                 layout="Residual" if stream == "residual stream" else entering.get("layout"),
-                                 dims="batch seq hidden" if stream == "residual stream" else entering.get("dims"))
+    if streams:
+        nodes["stream.input"] = node(stream, f"{base}.input", "The residual streams entering the block.",
+                                     layout=entering.get("layout"), dims=entering.get("dims"))
+    else:
+        nodes["stream.input"] = node(stream, f"{base}.input",
+                                     "The residual stream entering the block, a tensor on every family." if stream == "residual stream"
+                                     else f"The {stream} entering the block.",
+                                     layout="Residual" if stream == "residual stream" else entering.get("layout"),
+                                     dims="batch seq hidden" if stream == "residual stream" else entering.get("dims"))
     nodes["stream.output"] = value_node(layer_output, stream)
     drawn_shapes = []
     for s, shape in enumerate(shapes):
@@ -931,7 +968,11 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             if k and paired[k - 1]:
                 after = f"{subs[k - 1]['label'].lower()} and {after}"
             mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
-            if subs[k].get("stream_norm"):
+            if streams:
+                nodes[mid] = node(stream, f"{base}.{nxt['hc']}.input",
+                                  f"The streams after the {after} add, as `{nxt['hc']}` receives them. No standard value of its own.",
+                                  layout=entering.get("layout"), dims=entering.get("dims"))
+            elif subs[k].get("stream_norm"):
                 nodes[mid] = node(stream, f"{base}.{subs[k]['stream_norm']}.output",
                                   f"The stream after the {after} add and `{subs[k]['stream_norm']}`, as the next sublayer "
                                   "receives it. No standard value of its own.")
@@ -968,6 +1009,8 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
     between = between_schema(owner, block_spec, info, by_host, base, stream, nodes)
     if between:
         schema["between"] = between
+    if streams:
+        schema["streams"] = {"count": streams["count"]}
     return schema
 
 
@@ -1014,6 +1057,36 @@ def between_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any],
     return out
 
 
+#: The layouts a hyper-connection's values have: the stream mixing and the per-stream weights (nnterp.components).
+STREAM_LAYOUTS = {"collapse": "StreamMixing", "post": "StreamWeights"}
+
+
+def stream_spec(owner: str, block_spec: dict[str, Any], specs: list[dict[str, Any]], by_host: dict[str, Any],
+                info: dict[str, Any]) -> dict[str, Any] | None:
+    """A hyper-connection block's ``streams``, checked: the stream count from its config key, and for every sublayer
+    drawn, the block's values that mix the streams around it (``collapse``) and weight its contribution (``post``)."""
+    spec = block_spec.get("streams")
+    if not spec:
+        return None
+    unknown = set(spec) - {"count_key", "collapse", "post", "readout"}
+    assert not unknown, f"{owner}: BLOCK's streams has unknown keys {sorted(unknown)}"
+    count = getattr(info["text_config"], spec["count_key"], None)
+    assert isinstance(count, int) and count > 1, f"{owner}: config.{spec['count_key']} is {count!r}, not a stream count"
+    assert block_spec.get("topology", "sequential") == "sequential" and not any(
+        s.get("parallel_with_next") or s.get("stream_norm") for s in specs), \
+        f"{owner}: a block with streams is sequential, with no parallel_with_next and no stream_norm"
+    for s in specs:
+        for field, layout in STREAM_LAYOUTS.items():
+            name = spec[field].get(s["host"])
+            assert name, f"{owner}: BLOCK's streams names no {field} value for {s['host']!r}"
+            row = by_host["layer"].get(name)
+            assert row and row["layout"] == layout, \
+                f"{owner}: streams {field} {name!r} is no {layout} value of the block ({row and row['layout']})"
+    assert by_host["layer"]["layer_output"]["layout"] == "Streams", f"{owner}: layer_output is not a Streams value"
+    assert not spec.get("readout") or info.get("readout"), f"{owner}: the model has no readout module {spec['readout']!r}"
+    return {**spec, "count": count}
+
+
 INTERIOR_SHORT = {
     "attention_queries": "q", "attention_keys": "k", "attention_values": "v", "attention_scores": "scores",
     "attention_probabilities": "pattern", "attention_head_outputs": "heads",
@@ -1046,6 +1119,13 @@ def strip_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     if "norm" not in info["root_names"]:
         # no final norm on this checkpoint (OPT-350m): the strip has no norm node
         del nodes["strip.norm"]
+    if info.get("readout"):
+        # a hyper-connection model collapses the last block's streams before the final norm
+        readout = info["readout"]
+        nodes["strip.readout"] = node(
+            "stream readout", readout["expr"],
+            f"`{readout['class']}`, a native module under its own name: it collapses the last block's streams into the "
+            "one `[batch, seq, hidden]` stream the final norm reads.")
     for key, note in strip.items():
         if f"strip.{key}" in nodes:
             nodes[f"strip.{key}"]["extra"] = note

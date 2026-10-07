@@ -56,7 +56,9 @@ rearrange them.
    The selector is the page's list of checkpoints; the suite's pinned tiny checkpoints are not on the
    page.
 2. **The block** (`01`). The model-level strip (`embed_tokens → layers → norm → lm_head → logits`;
-   a checkpoint with no final norm, OPT-350m, has no `norm` node and its `STRIP["norm"]` is not shown),
+   a checkpoint with no final norm, OPT-350m, has no `norm` node and its `STRIP["norm"]` is not shown;
+   a block with several residual streams adds the stream count under `layers` and the module that collapses
+   the streams, `hc_head` on DeepSeek-V4, between `layers` and `norm`),
    a slider over the blocks with one tick per block coloured by `config.layer_types` (GPT-Neo's
    `config.attention_layers` where there is none; by the block's
    shape on a family whose blocks come in several; by the pair of shape and layer type where the
@@ -65,7 +67,13 @@ rearrange them.
    vertical line, each sublayer as a row (pre-norm, the module with its interior values as chips,
    post-norm) whose contribution returns to an `⊕` on the stream. A mixture of experts draws a panel
    each for the router, the routed experts and the shared expert inside its box. On a family with
-   several block shapes the diagram and the identity under it redraw for the slider's block. Boxes
+   several block shapes the diagram and the identity under it redraw for the slider's block. A block
+   with several residual streams (hyper-connections, the `streams` field below) draws them as thin
+   parallel lines, the first one stronger; before each sublayer a box across them is the hyper-connection
+   (`attn_hc`, `ffn_hc`), whose hover is the block's stream mixing (`layers[i].attention_comb`,
+   `StreamMixing`), and its edge to the pre-norm is the collapse that norm reads; the contribution
+   enters the streams through a `× post` chip (`layers[i].attention_post`, `StreamWeights`) at a bar
+   with one `+` per stream. Boxes
    are outlines in their role's colour, clear inside. Hovering any part fills it lightly and shows, in
    the card beside the diagram, the nnterp expression that reads it, its layout and where it is read;
    clicking pins it. Under the diagram, the contribution identity as highlighted code. On a family
@@ -279,6 +287,17 @@ The entry states facts about a family, and each one has a source. Before writing
      carry a dot. On other blocks nothing changes. A checkpoint without a vision encoder draws none
      (the add needs an image), and blocks past a checkpoint's last are dropped (a tiny checkpoint
      with two blocks draws it on 0 and 1). The ledger lists the value as any other.
+   - `streams` (optional): a block whose residual is several parallel streams (hyper-connections,
+     DeepSeek-V4), `layer_output` a `Streams` value. A dict with `count_key`, the config key holding
+     the stream count (`"hc_mult"`); `collapse`, per sublayer host, the block's `StreamMixing` value
+     that mixes the streams around it (`{"self_attn": "attention_comb", "mlp": "mlp_comb"}`); `post`,
+     per host, the block's `StreamWeights` value its contribution enters the streams with
+     (`{"self_attn": "attention_post", "mlp": "mlp_post"}`); and optionally `readout`, the native name
+     of the module that collapses the last block's streams before the final norm (`"hc_head"`),
+     drawn on the strip. The hyper-connection box before each sublayer is the module its `collapse`
+     value is read off (`attn_hc`). The block is sequential, with no `parallel_with_next` and no
+     `stream_norm`; it is not a sum, so give `identity`. The build checks each value's layout and
+     that `layer_output` is `Streams`.
 
    **Blocks that differ.** `sublayers` lists every sublayer any block has, once, in forward order,
    and each block draws the ones that match its own children: a sublayer is drawn where its `host`
@@ -313,7 +332,7 @@ The entry states facts about a family, and each one has a source. Before writing
 6. **`STRIP`**: sentences for the model-level strip, keyed `embed`, `layers`, `norm`, `head`,
    `logits`; each is shown when that node is hovered. Give one wherever the family does something
    there: a scaled embedding, tied weights, a softcap, a logit scale, a position embedding added after
-   `embed_tokens`. The `logits` node's own label (`softcapped`, `scaled`, `the output`) follows the
+   `embed_tokens`. A block with `streams` and a `readout` also takes `readout`, shown on that node. The `logits` node's own label (`softcapped`, `scaled`, `the output`) follows the
    quirk slugs, not the note.
 7. **`QUIRKS`**: slugs from `build.QUIRKS`, in the order a reader should meet them. If the family has
    a property none covers, add a slug there with a label and one sentence, worded so it holds for
@@ -501,9 +520,9 @@ An entry is `entries/<model_type>.py`, plus, when needed, a new slug in `build.Q
 key appended to `build.CONFIG_KEYS`. It does not change the templates, the stylesheet, `block.js`
 or the page's sections. The diagram draws sublayers in sequence or in parallel, with optional norms
 around each; attention, a recurrent mixer, an MLP or a mixture of experts; and blocks whose
-sublayers differ from one index to the next (see *Blocks that differ*). When a family's block does
-not fit that (several parallel streams, a sublayer with no module, a block whose sublayers change
-order),
+sublayers differ from one index to the next (see *Blocks that differ*), on one residual stream or
+several (`streams`). When a family's block does not fit that (a sublayer with no module, a block
+whose sublayers change order),
 do not approximate it: write the rest of the entry, say what the schema lacks, and extend the
 generator as its own change, so every family with that shape gains it.
 

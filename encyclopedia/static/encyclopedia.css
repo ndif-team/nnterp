@@ -245,6 +245,12 @@ pre .rn { font-weight: 500; }
 :is(#block-svg, .tower-svg) .hot .label-role { fill: var(--role-deep); }
 :is(#block-svg, .tower-svg) .hot.chipnode .chip-r { fill: var(--role-deep); } :is(#block-svg, .tower-svg) .hot.chipnode .chip-t { fill: var(--paper); }
 :is(#block-svg, .tower-svg) .hot .edge-contrib, :is(#block-svg, .tower-svg) .hot .stream { stroke-width: 6; }
+/* a hyper-connection block's parallel streams: thin lines, the first one stronger */
+:is(#block-svg, .tower-svg) .stream-hl { stroke-width: 3; }
+:is(#block-svg, .tower-svg) .stream-thin { stroke-width: 1.5; opacity: 0.6; }
+:is(#block-svg, .tower-svg) .hot .stream-hl { stroke-width: 4.5; }
+:is(#block-svg, .tower-svg) .hot .stream-thin { stroke-width: 3; opacity: 1; }
+:is(#block-svg, .tower-svg) .plus-sign-sm { font-size: 15px; }
 .node-card { position: sticky; top: 16px; }
 .node-card .topstrip { background: var(--role, var(--mark)); }
 .node-card .expr { font-family: var(--mono); font-size: 13px; font-weight: 500; overflow-wrap: anywhere; margin: 0.2rem 0 0.6rem; }

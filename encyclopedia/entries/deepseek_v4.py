@@ -76,6 +76,12 @@ BLOCK = {
     "identity_note": "layers[i].input and layer_output are [batch, seq, streams, hidden]. combᵀ · x mixes the streams "
                      "(comb.transpose(-1, -2) @ x); post ⊗ y writes y into every stream (post[..., None] * y[..., None, :]). "
                      "Exact in float32 on every block of the tiny checkpoint; the stream mean is the additive part.",
+    "streams": {
+        "count_key": "hc_mult",
+        "collapse": {"self_attn": "attention_comb", "mlp": "mlp_comb"},
+        "post": {"self_attn": "attention_post", "mlp": "mlp_post"},
+        "readout": "hc_head",
+    },
 }
 
 STRIP = {
@@ -83,6 +89,8 @@ STRIP = {
              "expanded to [batch, seq, streams, hidden]. The tokenizer prepends nothing.",
     "layers": "Each block takes and returns the four streams. The checkpoints' multi-token-prediction blocks "
               "(num_nextn_predict_layers) are not built: layers holds num_hidden_layers blocks.",
+    "readout": "hc_head weights each of the last layer_output's streams by its content and sums them; "
+               "project_on_vocab applies it before norm.",
     "norm": "norm reads hc_head's output, a learned, content-dependent weighted sum over the streams of the last "
             "layer_output; project_on_vocab applies hc_head before it.",
     "head": "lm_head has its own weight (tie_word_embeddings is false); logits is lm_head.output.",

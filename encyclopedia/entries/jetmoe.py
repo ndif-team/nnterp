@@ -20,7 +20,7 @@ CHECKPOINTS = ["jetmoe/jetmoe-8b", "jetmoe/jetmoe-8b-sft"]
 #: between exaone4 (46) and olmo2 (58).
 PALETTE = {"hue": 52}
 VLLM = False
-QUIRKS = ["mixture-of-experts"]
+QUIRKS = ["attention-experts", "mixture-of-experts"]
 
 #: The real checkpoints are 8B parameters: nothing here ran on real weights. Every identity and shape in
 #: the notes, and every snippet, ran on the pinned tiny checkpoint (2 blocks, 4 experts, top 2, 2 key/value

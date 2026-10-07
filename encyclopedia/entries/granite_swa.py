@@ -17,7 +17,7 @@ CHECKPOINTS = ["ibm-granite/granite-swash-2b"]
 #: Granite lineage (205, set by granite); Granite SWA sits beside it.
 PALETTE = {"hue": 199}
 VLLM = False
-QUIRKS = ["scaled-residual-adds", "sliding-window", "embedding-multiplier", "scaled-logits"]
+QUIRKS = ["scaled-residual-adds", "sliding-window", "sink-scaled-heads", "embedding-multiplier", "scaled-logits"]
 
 #: Numbers in the notes come from granite-swash-2b's weights in bfloat16 on an RTX A6000; the snippets also ran
 #: on the pinned tiny checkpoint, and on a copy of it with Granite's multipliers away from 1.0.

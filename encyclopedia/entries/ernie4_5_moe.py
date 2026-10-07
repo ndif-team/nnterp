@@ -55,6 +55,7 @@ BLOCK = {
         {
             "host": "mlp",
             "kind": "moe",
+            "part_order": ["shared", "router", "experts"],
             "label": "MoE",
             "pre_norm": "post_attention_layernorm",
             "contribution": "mlp_output",

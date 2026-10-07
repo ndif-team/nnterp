@@ -796,6 +796,10 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             "pre_norm": spec.get("pre_norm"), "post_norm": spec.get("post_norm"),
             "contribution": spec["contribution"], "interior": [],
         }
+        if "part_order" in spec:
+            assert kind == "moe" and sorted(spec["part_order"]) == ["experts", "router", "shared"], \
+                f"{owner}: part_order on {key!r} orders a mixture's 'router', 'experts' and 'shared', each once"
+            sub["part_order"] = spec["part_order"]
         if key != host:
             sub["key"] = key
         if spec.get("parallel_with_next"):

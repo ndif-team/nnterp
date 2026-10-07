@@ -42,6 +42,7 @@ BLOCK = {
         {
             "host": "mlp",
             "kind": "moe",
+            "part_order": ["shared", "router", "experts"],
             "label": "MoE",
             "pre_norm": "post_attention_layernorm",
             "pre_norm_note": "Named for its place on the stream, after the attention's add: it is the mixture's input norm.",

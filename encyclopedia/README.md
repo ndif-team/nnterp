@@ -199,7 +199,9 @@ The entry states facts about a family, and each one has a source. Before writing
        `expert_weights`, `expert_indices` in the router's, `expert_outputs`, `routed_output` in the
        routed experts', `shared_expert_output` in the shared expert's (list it where some
        checkpoint's mixture has one; a checkpoint whose mixture has none, ERNIE-4.5's 300B-A47B, draws
-       no shared chip or panel). The panels show the scoring, `top_k of num_experts` and
+       no shared chip or panel). The panels stack router, routed experts, shared expert; where the
+       mixture runs them in another order, `part_order` gives it (`["shared", "router", "experts"]` on
+       Qwen2-MoE, HunYuan, ERNIE-4.5, Laguna; `["router", "shared", "experts"]` on AFMoE). The panels show the scoring, `top_k of num_experts` and
        the parts' classes, all read off the family's first `Moe`; the scoring is read per block, and
        where it differs (DeepSeek-V4's hash-routed first blocks) the router panel shows the slider's block's. On a `"mixer"` sublayer the
        chips are the mixer's values (`attention_queries`/`keys`/`values` as the family maps them,

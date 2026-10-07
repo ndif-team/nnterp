@@ -38,8 +38,11 @@
   var SNORM = { w: 170, h: 44, gap: 22 }, SN = 60;
   var PARTS = [['router', 'router'], ['experts', 'routed experts'], ['shared', 'shared expert']];
   function keyOf(sub) { return sub.key || sub.host; }
+  // in the forward's order: router, routed experts, shared expert, unless the sublayer gives its own (part_order)
   function partsOf(sub) {
-    return PARTS.filter(function (p) { return sub.interior.some(function (v) { return v.part === p[0]; }); });
+    var order = sub.part_order || PARTS.map(function (p) { return p[0]; });
+    return order.map(function (name) { return PARTS.filter(function (p) { return p[0] === name; })[0]; })
+      .filter(function (p) { return sub.interior.some(function (v) { return v.part === p[0]; }); });
   }
   function heightOf(sub) {
     var chips = sub.interior ? sub.interior.length : 0;

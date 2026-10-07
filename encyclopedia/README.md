@@ -212,7 +212,9 @@ The entry states facts about a family, and each one has a source. Before writing
        numbers come from the reference config and are not typed; on a mixture `{num_experts}` and
        `{top_k}` are the `Moe`'s own. Where a config key and a root size share a name the config's
        value wins, so name the key you mean (`{v_head_dim}` on latent attention, whose config
-       `head_dim` need not be the values' width). The box shows about 30 characters
+       `head_dim` need not be the values' width). A key the checkpoint leaves unset or `null`
+       (`sliding_window` on StarCoder2's tiny checkpoint) shows as `—`; a name that is no size and
+       no key in `CONFIG_KEYS` fails the build. The box shows about 30 characters
        beside the host's name when the sublayer has interior chips (the rest is ellipsised; the hover
        card has the whole line), so keep it short: `"12 heads × 64, fused c_attn"`;
      - `variants`: `{layer_type: detail}` keyed on the values of `config.layer_types` (or of

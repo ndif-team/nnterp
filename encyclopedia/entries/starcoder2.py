@@ -37,7 +37,7 @@ BLOCK = {
                 "attention_queries", "attention_keys", "attention_values",
                 "attention_scores", "attention_probabilities", "attention_head_outputs",
             ],
-            "detail": "{num_heads} heads, {num_kv_heads} kv; sliding window",
+            "detail": "{num_heads} heads, {num_kv_heads} kv; window {sliding_window}",
         },
         {
             "host": "mlp",

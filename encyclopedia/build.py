@@ -693,6 +693,16 @@ def drawn(specs: list[dict[str, Any]], hosts: dict[str, bool], block_class: str 
                  and (is_native(spec) or spec["kind"] not in ("mlp", "moe") or hosts[spec["host"]] == (spec["kind"] == "moe")))
 
 
+class Detail(dict):
+    """What a ``detail`` or ``variants`` string formats over. A config key or size this checkpoint leaves unset
+    (``sliding_window`` null on a tiny checkpoint) formats as a dash; a name that is neither is a typo and raises."""
+
+    def __missing__(self, key: str) -> str:
+        if key in CONFIG_KEYS or key in SIZE_NAMES or key in ("num_experts", "top_k"):
+            return "—"
+        raise KeyError(key)
+
+
 def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], base: str = "model.layers[i]",
                  stream: str = "residual stream") -> dict[str, Any]:
     """The entry's BLOCK, checked against the family and enriched with every node's hover card.
@@ -713,7 +723,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
     by_host = {alias: {row["name"]: row for row in rows} for alias, rows in info["values"].items()}
     sizes = dict(info["sizes"])
     moe = info["moe"] or {}
-    fmt = {**sizes, **{k: v for k, v in info["config"]}, **{k: moe[k] for k in ("num_experts", "top_k") if k in moe}}
+    fmt = Detail({**sizes, **{k: v for k, v in info["config"]}, **{k: moe[k] for k in ("num_experts", "top_k") if k in moe}})
     specs = block_spec["sublayers"]
     hosts = [s["host"] for s in specs]
     # A host drawn by two sublayers keys its nodes by the block class a sublayer names (a host whose
@@ -773,8 +783,8 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             contribution = by_host[host][spec["contribution"]]
         sub = {
             "host": host, "kind": kind, "label": spec["label"],
-            "detail": spec.get("detail", "").format(**fmt),
-            "variants": {k2: v.format(**fmt) for k2, v in spec.get("variants", {}).items()},
+            "detail": spec.get("detail", "").format_map(fmt),
+            "variants": {k2: v.format_map(fmt) for k2, v in spec.get("variants", {}).items()},
             "pre_norm": spec.get("pre_norm"), "post_norm": spec.get("post_norm"),
             "contribution": spec["contribution"], "interior": [],
         }
@@ -787,7 +797,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             nodes[f"sub.{key}"] = node(
                 spec["label"], f"{base}.{host}",
                 f"`{native_class}` at the native path `{host}`: this sublayer has no standard host, so the block's own "
-                "modules are its parts. " + spec.get("detail", "").format(**fmt), extra=spec.get("host_note"))
+                "modules are its parts. " + spec.get("detail", "").format_map(fmt), extra=spec.get("host_note"))
         matched = [] if native else [(c, n) for c, is_moe, n in info["host_classes"][host]
                                      if kind not in ("mlp", "moe") or is_moe == (kind == "moe")]
         classes, count = [c for c, _ in matched], max((n for _, n in matched), default=0)
@@ -802,7 +812,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         if not native:
             nodes[f"sub.{key}"] = node(
                 spec["label"], f"{base}.{host}",
-                f"{' / '.join(classes)} under its standard name. " + spec.get("detail", "").format(**fmt), extra=extra)
+                f"{' / '.join(classes)} under its standard name. " + spec.get("detail", "").format_map(fmt), extra=extra)
         for name in spec.get("interior", []):
             if kind == "moe" and name == "shared_expert_output" and (name not in by_host[host] or not moe.get("shared")):
                 # this checkpoint's mixture has no shared expert (ERNIE-4.5's 300B-A47B): no shared chip or panel

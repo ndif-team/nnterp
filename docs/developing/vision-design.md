@@ -1,6 +1,6 @@
 ---
 title: Vision design
-one_liner: How nnterp standardizes the vision side of image-text-to-text checkpoints — the tower under model.vision with its blocks and the image values, the projector, where image_features is read, where the code lives, how loading and the suite work, what does not fit, and the phases.
+one_liner: How nnterp standardizes the vision side of image-text-to-text checkpoints — the tower under model.vision with its blocks and the image values, the projector, where image_features is read, where the code lives, how loading and the suite work, what does not fit, and what is left.
 tags: [developing, design, vision, multimodal, families]
 related: [docs/usage/vision.md, docs/developing/architecture.md, docs/developing/eproperty-internals.md, docs/developing/testing.md, docs/extending/adding-a-family.md]
 sources: [nnterp/components/vision.py, nnterp/components/standard.py, nnterp/standardized.py, nnterp/components/eproperty.py, nnterp/families/gemma3_text.py, nnterp/families/gemma.py, nnterp/families/llama.py, nnterp/families/qwen2.py, nnterp/families/cohere2.py, nnterp/families/mistral.py, nnterp/families/ministral3.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/gemma4_unified_text.py, nnterp/families/qwen2_vl_text.py, nnterp/families/qwen2_5_vl_text.py, nnterp/families/qwen3_vl_text.py, nnterp/families/qwen3_vl_moe_text.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_5_moe_text.py, tests/families/vision_suite.py, tests/families/qwen_vision_suite.py, tests/families/suite.py]
@@ -441,32 +441,33 @@ The pinned checkpoints, all loadable offline once cached:
 | `gemma4_text` | `yujiepan/gemma-4-e-tiny-random` (with audio, so the audio path is checked on the same load); the text suite also runs on `trl-internal-testing/tiny-Gemma4ForConditionalGeneration` under `image-text-to-text` | real check: `google/gemma-4-E2B` |
 | `gemma4_unified_text` | a tiny wrapper the test builds once into the temp dir: `google/gemma-4-12B`'s config (config only is cached) with `hf-tiny-v2/tiny-random-Gemma4UnifiedForCausalLM`'s text config, a 16-wide embedder, random weights, and a processor from that checkpoint's tokenizer plus the default image processor | no tiny wrapper is published; 12B's own names are checked on meta |
 
-## Phases
+## What is done, what is left
 
-**Phase 0, the wrappers' text stacks.** Families whose checkpoints load as wrappers under
-`image-text-to-text` carry the wrapper spellings of their text stack: `qwen3_5_text`,
-`qwen3_5_moe_text`, `llama` (`model.language_model.*` and Idefics 3's `model.text_model.*`),
-`qwen2`, `mistral`, `ministral3`, `gemma`, `cohere2`, `exaone4`, `qwen3`. Done.
+The wrappers' text stacks carry their wrapper spellings (`model.language_model.*`, Idefics 3's
+`model.text_model.*`) on `qwen3_5_text`, `qwen3_5_moe_text`, `llama`, `qwen2`, `mistral`,
+`ministral3`, `gemma`, `cohere2`, `exaone4`, `qwen3`. Every tower with a tiny checkpoint is
+named and served: SigLIP on `gemma3_text`, `gemma` (PaliGemma), `qwen2` (llava-interleave,
+LLaVA-OneVision), `cohere2` (Aya Vision, Cohere2-Vision) and `llama` (DeepSeek-VL, Idefics 3's
+and SmolVLM's ViT); CLIP on `llama` (Llava 1.5, VipLlava, LLaVA-NeXT) and `mistral` (LLaVA-NeXT,
+BakLLaVA); Pixtral on `mistral` and `ministral3`; the Qwen ViT on `qwen2_vl_text`,
+`qwen2_5_vl_text`, `qwen3_vl_text` (with `deepstack_output`), `qwen3_vl_moe_text`,
+`qwen3_5_text`, `qwen3_5_moe_text`; Llama 4's ViT on `llama4_text` (the root as the scatter's
+host); Gemma 4's ViT on `gemma4_text`; Gemma 4 unified's embedder on `gemma4_unified_text`.
+`image_features` is read at the scatter on every one, and `VisionSuite` runs on each.
 
-**Phase 1, the per-image towers.** `components/vision.py` with the image values on the tower,
-`VisionSuite`; SigLIP on `gemma3_text`, CLIP on `llama` (Llava 1.5). Done.
+Left, in rough order of value:
 
-**Phase 2, every tower with a tiny checkpoint.** SigLIP on `gemma` (PaliGemma), `qwen2`
-(llava-interleave, LLaVA-OneVision), `cohere2` (Aya Vision, Cohere2-Vision) and `llama`
-(DeepSeek-VL, Idefics 3's and SmolVLM's ViT); CLIP on `llama` (VipLlava, LLaVA-NeXT) and
-`mistral` (LLaVA-NeXT, BakLLaVA); Pixtral on `mistral` and `ministral3`; the new text
-families on the VL classes (`qwen2_vl_text`, `qwen2_5_vl_text`, `qwen3_vl_text` with
-`deepstack_output`, `qwen3_vl_moe_text`) and the Qwen ViT on them and on `qwen3_5_text`,
-`qwen3_5_moe_text`; Llama 4's ViT on `llama4_text` (the root as the scatter's host); Gemma
-4's ViT on `gemma4_text`; Gemma 4 unified's embedder. `image_features` is read at the
-scatter on every wrapper. Done. Left: MoonViT for `kimi_k2` (a matching tiny), and from
-nnsight the task derived from the config (`image-text-to-text` where
-`AutoModelForImageTextToText` maps it, after which nnterp drops its `text-generation`
-default), batching several image-carrying invokes in one trace, `mm_token_type_ids` padded
-as a row field (so two text invokes on Gemma 4's wrapper batch), and the image-text-to-text
-mapping checked first when inferring a pre-loaded wrapper module's task.
-
-**Phase 3, the rest.** Video and audio values (`video_token_mask`, `video_features`,
-`audio_token_mask`, `audio_features`), Mllama's family (`mllama_text_model`) with a
-`CrossAttention` component, and the long tail (InternViT, Janus, Video-Llava's separate
-image and video towers, LLaVA-NeXT-Video).
+- From nnsight, the task derived from the config (`image-text-to-text` where
+  `AutoModelForImageTextToText` maps it; nnsight #755), after which nnterp drops its
+  `text-generation` default; batching several image-carrying invokes in one trace (the batcher
+  has to collate `pixel_values`); `mm_token_type_ids` padded as a row field, so two text invokes
+  on Gemma 4's wrapper batch; the image-text-to-text mapping checked first when inferring a
+  pre-loaded wrapper module's task.
+- MoonViT for `kimi_k2` (needs a matching tiny checkpoint); the towers of EXAONE 4.5 and
+  LightOnOCR, whose text names bind but whose towers are native-only.
+- Video and audio values (`video_token_mask`, `video_features`, `audio_token_mask`,
+  `audio_features`; Gemma 4's audio tower as `model.audio` by the same pattern), Mllama's
+  family (`mllama_text_model`) with a `CrossAttention` component, and the long tail (InternViT,
+  Janus, Video-Llava's separate image and video towers, LLaVA-NeXT-Video).
+- `scatter_host` walks nnsight's private `_named_children`; a public way to enumerate a root's
+  children would remove that.

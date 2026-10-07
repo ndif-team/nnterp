@@ -61,6 +61,12 @@ block's dtype passes, as the suite checks).
 Read the four in forward order within one trace: the block's `input`, then the attention,
 then the MLP, then the block's output.
 
+On a vision-language wrapper the tower's blocks carry the same three values over the patch
+stream (`model.vision.layers[i].layer_output`, `[images, patches, vision_hidden]`), and the
+text blocks' values hold the image positions too: `layer_output[vision.image_token_mask]`
+is the image rows, `layer_output[~vision.image_token_mask]` the text rows
+([vision.md](vision.md#image-positions-and-text-positions)).
+
 ## Tensor blocks and tuple blocks
 
 A Llama, GPT-2 or GPT-NeoX block returns `hidden_states` alone. A GPT-J, GPT-Neo, CodeGen,

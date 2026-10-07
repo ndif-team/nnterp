@@ -349,6 +349,15 @@ The queries and keys are served after `q_norm` / `k_norm` and the rotary
 embedding, and the softmax scale is 1 (`scaling = 1.0`), so the scores are the
 plain dot products of what is served.
 
+## On a vision-language wrapper
+
+The text blocks' pattern has the image tokens as ordinary positions, so
+`attention_probabilities[0, :, -1, mask[0]].sum(-1)`, with `mask` the tower's
+`vision.image_token_mask` read first in the trace, is each head's mass from the last token
+onto the image. The tower's own blocks serve the same six values over the patches
+(`model.vision.layers[i].self_attn.attention_probabilities`, `[images, heads, patches,
+patches]`, no causal mask), with the per-tower caveats in [vision.md](vision.md#the-values).
+
 ## Under `generate`
 
 The values are per forward call. On a decode step the queries, the scores,

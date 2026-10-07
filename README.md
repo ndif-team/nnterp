@@ -70,6 +70,7 @@ print(model.support(layer=5)["self_attn.attention_probabilities"])
 | mixture of experts | `router_logits`, `expert_weights`, `expert_indices`, `expert_outputs`, `routed_output`, `shared_expert_output` | [mixture-of-experts](docs/usage/mixture-of-experts.md) |
 | recurrent mixers and hybrids | `linear_attn` on gated DeltaNet, Mamba and Mamba-2 blocks: queries, keys, values, `decays`, `betas`, the recurrent state | [delta-net](docs/usage/delta-net.md), [selective-scan](docs/usage/selective-scan.md), [state-space](docs/usage/state-space.md) |
 | the whole model | `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, and the sizes (`num_layers`, `hidden_size`, `head_dim`, ...) | [root-values](docs/usage/root-values.md) |
+| vision-language models | `model.vision.layers[i]` (the tower's blocks, same values over the patches), `model.projector`, `vision.image_token_mask`, `vision.image_features` (what enters the text model at the image tokens); load with `task="image-text-to-text"` | [vision](docs/usage/vision.md) |
 | methods | `steer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens` | [methods](docs/usage/methods.md) |
 
 Every value has one axis layout on every family, named in `nnterp.components`
@@ -94,8 +95,10 @@ with model.trace("The Eiffel Tower is in"):
 
 98 families, among them GPT-2, Llama, Mistral, Qwen 2/3/3.5, Gemma 1-4, Phi, OLMo, GPT-NeoX,
 DeepSeek-V2/V3, GPT-OSS, Mixtral, Falcon, BLOOM, Mamba, Jamba and Nemotron-H, developed
-against transformers 5.17. The full table, with each family's native names and quirks, is
-[docs/reference/families.md](docs/reference/families.md).
+against transformers 5.17. Sixteen of them also name the vision tower of their
+image-text-to-text wrappers (Llava, LLaVA-NeXT, Gemma 3, PaliGemma, Mistral 3, Pixtral,
+Qwen2-VL to Qwen3.5, Llama 4, Gemma 4, Idefics 3, Aya Vision, ...). The full table, with each
+family's native names and quirks, is [docs/reference/families.md](docs/reference/families.md).
 
 ## Installation
 

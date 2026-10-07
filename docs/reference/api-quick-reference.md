@@ -487,11 +487,12 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 - `next_token_probs`, `input_size` and `states` are read-only.
 - `route_kernels(model.family, "torch")` before tracing a DeltaNet layer whose `state` you want; a forward `.source` has already instrumented keeps the binding it was compiled with.
 - `import nnterp` (or `nnsight`) before any `transformers.models...modeling_*` import; the reverse order segfaults at import on this stack.
+- A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace, `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden]`.
 
 ## Related
 
 - [families.md](families.md): what each family relocates and what it lacks.
 - [glossary.md](glossary.md): the vocabulary these tables use.
-- [../usage/root-values.md](../usage/root-values.md), [../usage/methods.md](../usage/methods.md), [../usage/availability.md](../usage/availability.md), [../usage/layouts.md](../usage/layouts.md), [../usage/attention-interior.md](../usage/attention-interior.md), [../usage/delta-net.md](../usage/delta-net.md).
+- [../usage/root-values.md](../usage/root-values.md), [../usage/methods.md](../usage/methods.md), [../usage/availability.md](../usage/availability.md), [../usage/layouts.md](../usage/layouts.md), [../usage/attention-interior.md](../usage/attention-interior.md), [../usage/delta-net.md](../usage/delta-net.md), [../usage/vision.md](../usage/vision.md).
 - [../extending/custom-values.md](../extending/custom-values.md) and [../developing/eproperty-internals.md](../developing/eproperty-internals.md) for the descriptors in depth.
 - nnsight `docs/reference/api-quick-reference.md` for `trace`, `generate`, `session`, `tracer.iter`, `.source`, `remote=`.

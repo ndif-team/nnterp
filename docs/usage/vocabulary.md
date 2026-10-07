@@ -56,10 +56,12 @@ for:
 | `model.layers[i].mlp.input` | what enters the MLP: the pre-MLP norm's output, whatever the family calls that norm |
 
 On a vision-language checkpoint loaded with `task="image-text-to-text"`, the vision side has
-names too: `model.vision` (the tower), `model.vision.layers[i]`, `model.vision.patch_embed`,
-`model.vision.norm` and `model.projector`, on Gemma 3 and Llava 1.5 today ([vision.md](vision.md)).
-Where the image meets the text model is the tower's: `model.vision.image_token_mask` and
-`model.vision.image_features`, with `layers[0].input[vision.image_token_mask] == vision.image_features`.
+names too: `model.vision` (the tower), `model.vision.layers[i]` with their `self_attn` and
+`mlp`, `model.vision.patch_embed`, `model.vision.norm` and `model.projector`, on every wrapper
+[vision.md](vision.md) lists (SigLIP, CLIP, Pixtral, the Qwen ViT, Llama 4's and Gemma 4's
+towers). Where the image meets the text model is the tower's: `model.vision.image_token_mask`
+and `model.vision.image_features`, with
+`layers[0].input[vision.image_token_mask] == vision.image_features`.
 
 Where other families differ, their `RENAME` says how. The container keys change per
 family; the block keys only where a block spells a sublayer otherwise:

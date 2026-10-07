@@ -1,8 +1,8 @@
 ---
 title: Vision-language models
 one_liner: "Load an image-text-to-text checkpoint with `task=\"image-text-to-text\"`, pass an image, and read the tower (`model.vision`, `vision.layers[i]`), the `projector`, and the tower's `vision.image_token_mask` and `vision.image_features`, where `layers[0].input[vision.image_token_mask] == vision.image_features`."
-tags: [usage, vision, multimodal, image-text-to-text, vision tower, projector, image_features, image_token_mask, Patches, siglip, clip, pixtral, qwen-vl, llama4, gemma3, gemma4, encoder-free, packed tower, deepstack, m-rope, llava, llava-next, llava-onevision, paligemma, idefics3, smolvlm, aya-vision, mistral3]
-related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/root-values.md, docs/usage/availability.md, docs/usage/layouts.md, docs/developing/vision-design.md, docs/reference/families.md]
+tags: [usage, vision, multimodal, image-text-to-text, vision tower, projector, image_features, image_token_mask, image positions, generate, Patches, siglip, clip, pixtral, qwen-vl, llama4, gemma3, gemma4, encoder-free, packed tower, deepstack, m-rope, llava, llava-next, llava-onevision, paligemma, idefics3, smolvlm, aya-vision, mistral3]
+related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/root-values.md, docs/usage/availability.md, docs/usage/layouts.md, docs/usage/generation.md, docs/patterns/image-pathway.md, docs/developing/vision-design.md, docs/reference/families.md]
 sources: [nnterp/components/vision.py, nnterp/standardized.py, nnterp/families/gemma3_text.py, nnterp/families/gemma.py, nnterp/families/llama.py, nnterp/families/qwen2.py, nnterp/families/cohere2.py, nnterp/families/mistral.py, nnterp/families/ministral3.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/gemma4_unified_text.py, nnterp/families/qwen2_vl_text.py, nnterp/families/qwen2_5_vl_text.py, nnterp/families/qwen3_vl_text.py, nnterp/families/qwen3_vl_moe_text.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_5_moe_text.py, tests/families/vision_suite.py, tests/families/qwen_vision_suite.py]
 ---
 
@@ -48,9 +48,11 @@ with model.trace(prompt, images=[image]):
     ablated = model.logits.save()
 ```
 
-Run on `trl-internal-testing/tiny-LlavaForConditionalGeneration`: `mask` is `(1, 592)`
-with 576 image tokens, `pattern` `(1, 4, 577, 577)`, `patches` `(1, 577, 16)` (CLIP's CLS
-token first), `features` `(576, 16)`. The same body runs on every wrapper in
+On `llava-hf/llava-1.5-7b-hf`: `mask` is `(1, 592)` with 576 image tokens, `pattern`
+`(1, 16, 577, 577)`, `patches` `(1, 577, 1024)` (CLIP's CLS token first), `features`
+`(576, 4096)`, and `torch.equal` is `True`; the tower has 24 blocks of width 1024, the text
+model 32 of width 4096. The same body runs on `trl-internal-testing/tiny-LlavaForConditionalGeneration`
+in a second on a CPU (every width 16, 4 tower heads), and on every wrapper in
 [the coverage list](#which-wrappers), less the lines a tower does not serve: the Qwen ViT has
 no `pattern`, and Gemma 4 unified's embedder has no blocks. On Gemma 4 (`google/gemma-4-E2B`, whose base checkpoint has no chat
 template: write the prompt as `f"{model.processor.image_token} ..."`) with a red 224x224
@@ -148,6 +150,63 @@ actually receives. On Llama 4 the tower runs a pixel-shuffle adapter after `towe
 `tower_output` into each soft token and strips the padding, which is `projector.input`; the
 encoder-free embedder has no blocks to end a stream, so its `tower_output` is the states
 before the projection, `projector.input` itself.
+
+## Image positions and text positions
+
+Every value of the text model is over the whole sequence, image tokens and text tokens
+alike: `layers[i].layer_output` is `[batch, seq, hidden]` with 576 of its 592 rows the image
+on Llava 1.5, and the text blocks' pattern has the image tokens as ordinary key positions.
+`vision.image_token_mask` is what splits them:
+
+```python
+with model.trace(prompt, images=[image]):
+    mask = model.vision.image_token_mask.save()                     # first: it comes off the inputs
+    pattern = model.layers[0].self_attn.attention_probabilities.save()
+    out = model.layers[0].layer_output.save()
+    model.layers[1].layer_output[mask] = 0                          # a one-sided edit: the image positions only
+    logits = model.logits.save()
+
+out[mask].shape, out[~mask].shape         # (576, 4096), (16, 4096): the image rows, the text rows
+to_image = pattern[0, :, -1, mask[0]].sum(-1)   # [heads]: each head's mass from the last token onto the image
+```
+
+- Boolean indexing flattens the batch: `out[mask]` is `[image_tokens, hidden]` over every row
+  of the batch in row-major order, the order of `vision.image_features`, so
+  `layers[0].input[mask] == vision.image_features` row for row. To keep the batch shape, mask
+  instead of indexing (`out.masked_fill(~mask[..., None], 0)`), or index one row
+  (`out[0, mask[0]]`).
+- A one-sided edit is an in-place write through the mask: `h = model.layers[k].layer_output`
+  then `h[mask] = 0`, or `h[mask] = h[mask].mean(0)` to mean-ablate the image positions, and
+  the text positions are untouched. The mask can be the proxy itself (`m =
+  model.vision.image_token_mask; h[m] = 0`); read it before the tower's values either way.
+- What a one-sided edit shows, on `llava-hf/llava-1.5-7b-hf` asked the color of a red square
+  (clean: `Red` at 0.99): zeroing the image positions of `layer_output` after block 4 leaves
+  `Red` at 0.01, after block 8 at 0.11, after block 16 at 0.38, after block 24 at 0.99. The
+  text positions have read the image out by the middle of the stack; the last token's mass
+  onto the image is 0.73 at block 0, under 0.1 by block 3, and 0.1 to 0.26 again across blocks
+  10 to 24, where single heads put up to 0.95 of their mass on it.
+  [docs/patterns/image-pathway.md](../patterns/image-pathway.md) is the recipe.
+
+Under `generate` the tower runs on the prompt call only. `vision.image_token_mask` is
+`[batch, prompt_len]` on step 0 and `[batch, 1]`, all false, on every decode step (the new
+token is text); `vision.image_features` and the tower's values have one occurrence, step 0's,
+so read them under `tracer.iter[0]` (the mask first), and an edit before any step lands on
+the prompt call:
+
+```python
+masks = []
+with model.generate(prompt, images=[image], max_new_tokens=3, do_sample=False) as tracer:
+    with tracer.iter[0]:
+        mask = model.vision.image_token_mask.save()                 # (1, 592), 576 true
+        features = model.vision.image_features.save()               # (576, 4096)
+    for step in tracer.iter[1:3]:
+        masks.append(model.vision.image_token_mask.save())          # (1, 1), false
+    ids = tracer.result.save()
+
+with model.generate(prompt, images=[image], max_new_tokens=3, do_sample=False) as tracer:
+    model.vision.image_features[:] = 0                              # the model generates without the image
+    ablated = tracer.result.save()
+```
 
 ## Inputs
 
@@ -289,4 +348,11 @@ names bind but `image_features` is `Unavailable` and says so.
   towers and projectors are native-only, and there is no `model.vision` there.
 - Mllama: its text model is a type nnterp has no family for yet.
 - Video and audio values; batching several image-carrying invokes in one trace.
-- The design: [docs/developing/vision-design.md](../developing/vision-design.md).
+
+## Related
+
+- [docs/patterns/image-pathway.md](../patterns/image-pathway.md): ablating, patching and attending to the image, as a recipe with real numbers.
+- [layouts.md](layouts.md): `Patches`, `ImageTokenMask`, `ImageFeatures`.
+- [availability.md](availability.md): the text-only-load reason and the `vision.` rows of `support()`.
+- [generation.md](generation.md): the values per step under `generate`.
+- [docs/developing/vision-design.md](../developing/vision-design.md): the design, what does not fit, what is left.

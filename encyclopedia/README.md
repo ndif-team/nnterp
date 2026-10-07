@@ -36,7 +36,7 @@ Every family page has the same sections in the same order. An entry fills them; 
 rearrange them.
 
 1. **Hero.** `family <model_type>`, the title, a one-sentence subtitle, the
-   quirk chips (each links to the notes), five overlapping circles in the family's five colours, and
+   quirk chips (each links to the notes; the quirks that hold on the shown checkpoint), five overlapping circles in the family's five colours, and
    under them the **checkpoint selector**: a button naming the shown checkpoint that opens a list of
    the entry's `CHECKPOINTS`, text checkpoints first, then the vision-language ones, each marked with
    an eye, then any the build could not read, greyed out and not selectable, their hover saying
@@ -104,8 +104,8 @@ rearrange them.
    On a vision-language checkpoint the ledgers go on with the vision encoder's hosts (`model.vision`,
    `model.vision.layers[i]`, `.self_attn`, `.mlp`), with the same `⚠` convention: the vision encoder's
    attention interior needs eager. Everything in this section is the selected checkpoint's.
-4. **The Notes** (`03`). The entry's notes on the left, the quirks with their one-line explanations on
-   the right. On a vision-language checkpoint *Vision notes* follow, a fold closed at first (tagged `· CLIP ·
+4. **The Notes** (`03`). The entry's notes on the left, the quirks that hold on the shown checkpoint with
+   their one-line explanations on the right. On a vision-language checkpoint *Vision notes* follow, a fold closed at first (tagged `· CLIP ·
    Llava 1.5`): the vision encoder module's `NOTES` under "The <title> vision encoder", then the
    wrapper's `notes` under its title, beside the vision quirks; the family's quirk list stays the
    family's.
@@ -115,13 +115,14 @@ rearrange them.
    family's `RENAME` lines for the vision encoder are not singled out.
 
 The index lists every family in `nnterp.families.known()`: a card with the family's circles, title,
-subtitle and quirks for each entry (blocks as a range when its checkpoints differ; an eye and the
+subtitle and quirks for each entry (the quirks that hold on any of its checkpoints; blocks as a range when its checkpoints differ; an eye and the
 vision encoders found, `CLIP · SigLIP`, and the `Vision-language` chip when any checkpoint has a vision encoder), a
 stub for each family not written yet, a search box (title, `model_type`, org, architecture, Hub ids,
 quirks, vision encoders, wrappers) and three filter rows, each a fold closed at first whose label opens it and
 counts the filters on in it: **Org** (each org's Hub avatar and
 name; a card shows when it is any org chosen), **Quirks** (the text quirks and `Vision-language`) and
-**Vision encoders** (the encoders found); a card shows when it has every quirk and encoder chosen. A
+**Vision encoders** (the encoders found); a card shows when it has every quirk and encoder chosen, a quirk
+counting when it holds on any of the family's checkpoints. A
 card carries its org's logo, the name on hover. The org is the author of the entry's `REFERENCE`, or the entry's `ORG`.
 
 ## Where each part comes from
@@ -133,9 +134,9 @@ card carries its org's logo, the name on hover. The org is the author of the ent
   hue), and all syntax highlighting.
 - **Per checkpoint**, from a meta build of each: the sizes and config card, the slider's
   `num_layers` and `layer_types` (and the block's shapes), the `support()` rows and their `⚠`, the
-  printout, the colophon's reference, and on a vision-language wrapper which vision encoder, its sizes, its
-  `vision.*` rows and the wrapper's printout. **Shared**, the family's: the block schema, the
-  vocabulary, the quirks, the notes and the family module section.
+  printout, the colophon's reference, the quirks that hold on it, and on a vision-language wrapper which vision
+  encoder, its sizes, its `vision.*` rows and the wrapper's printout. **Shared**, the family's: the block schema,
+  the vocabulary, the notes and the family module section.
 - **Derived from the config**: a checkpoint loads with `task="image-text-to-text"` when its
   `config.model_type` is a key of transformers' `MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES` (the
   mapping is keyed by `model_type`) and of the entry's `WRAPPERS`; any other loads for text
@@ -302,9 +303,15 @@ The entry states facts about a family, and each one has a source. Before writing
 7. **`QUIRKS`**: slugs from `build.QUIRKS`, in the order a reader should meet them. If the family has
    a property none covers, add a slug there with a label and one sentence, worded so it holds for
    every family that will carry it (check the list first: another entry may have added it). A family
-   with nothing that departs from the plain block has `QUIRKS = []`. The quirks are the family's and
-   show on every checkpoint: where only some checkpoints have the property (StableLM-2-12B's parallel
-   block and q/k norms), keep the slug and say which in the notes.
+   with nothing that departs from the plain block has `QUIRKS = []`. A slug holds on every checkpoint.
+   Where only some checkpoints have the property, the item is a dict instead:
+   `{"slug": "parallel-blocks", "when": lambda config: config.use_parallel_residual}`, a predicate on the
+   checkpoint's text config (as `BLOCK`'s), so it holds on the pinned tiny checkpoint as on the public
+   ones. Each checkpoint's chips, quirk list and `logits` label show the quirks that hold on it; the
+   index card shows those that hold on any checkpoint on the page, as plain chips. StableLM (`qkv-bias`
+   on 1.6B, `parallel-blocks` and `qk-norm` on 12B), OPT (`post-ln` on 350m), Llama 4 (`interleaved-moe` on Maverick) and VaultGemma
+   (`softcapped-logits` on a config that sets `final_logit_softcapping`) carry such items. The notes still
+   say which checkpoints have the property.
 
    The vision slugs are not an entry's: a page adds them on a vision-language checkpoint, from the
    vision encoder module's `QUIRKS` and the wrapper's `quirks`, after `vision` (`Vision-language`: some

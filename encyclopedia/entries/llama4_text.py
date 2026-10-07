@@ -162,7 +162,11 @@ encoding with `model.processor` and cast `pixel_values` to the model's dtype bef
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 244}
 VLLM = False
-QUIRKS = ["qk-norm", "nope-blocks", "chunked-attention", "mixture-of-experts", "interleaved-moe"]
+QUIRKS = [
+    "qk-norm", "nope-blocks", "chunked-attention", "mixture-of-experts",
+    # Maverick (interleave_moe_layer_step 2); Scout's step is 1, a mixture on every block
+    {"slug": "interleaved-moe", "when": lambda config: config.interleave_moe_layer_step > 1},
+]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.

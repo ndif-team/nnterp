@@ -16,7 +16,11 @@ CHECKPOINTS = ["google/vaultgemma-1b"]
 #: Set by hues.py (lineage: Gemma).
 PALETTE = {"hue": 168}
 VLLM = False
-QUIRKS = ["scaled-embeddings", "gain-norm"]
+QUIRKS = [
+    "scaled-embeddings", "gain-norm",
+    # null on google/vaultgemma-1b; set (30) on the pinned tiny checkpoint
+    {"slug": "softcapped-logits", "when": lambda config: config.final_logit_softcapping is not None},
+]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.

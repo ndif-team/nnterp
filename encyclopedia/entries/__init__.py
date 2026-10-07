@@ -13,7 +13,8 @@ An entry declares::
                  {"colors": [five hex fills], "deeps": [five hex, optional]} gives them outright;
                  "paper" tints the page; the hue is hues.py's (run it after adding a family)
     VLLM         whether the family also runs on StandardizedVLLM
-    QUIRKS       slugs from build.QUIRKS
+    QUIRKS       slugs from build.QUIRKS, or {slug, when: predicate on the config} for a quirk
+                 some checkpoints have
     BLOCK        the block schema the visualization draws (see gemma2.py; kimi_linear.py for blocks that differ;
                  falcon.py for a list of (predicate on the config, block) pairs, one layout per checkpoint)
     load         optional: load(checkpoint, **kwargs) -> StandardizedTransformer, for a checkpoint a

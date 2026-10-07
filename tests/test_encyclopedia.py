@@ -66,8 +66,8 @@ def block_of(entry):
 def test_entry_builds_a_page(name):
     entry = entries.load(name)
     assert name in nnterp.families.known()
-    for slug in entry.QUIRKS:
-        assert slug in build.QUIRKS, slug
+    for item in entry.QUIRKS:
+        assert build.quirk_spec(entry, item)["slug"] in build.QUIRKS, item
     page = build.build_page(entry, reference=pinned(entry))
     assert entry.TITLE in page
     data = checkpoint_data(page)
@@ -129,6 +129,40 @@ def test_palette_colour_maths_round_trips():
     for color in (build.INK, build.PAPER, "#3D9F47"):
         assert palette.oklch_to_hex(*palette.hex_to_oklch(color)) == color
     assert palette.contrast("#000000", "#FFFFFF") == pytest.approx(21)
+
+
+def test_a_quirk_can_hold_on_some_checkpoints():
+    """A QUIRKS item may be a dict with ``when``, a predicate on the text config: each checkpoint's
+    chips and quirk list show the ones that hold on it, and the index card the union."""
+    from types import SimpleNamespace
+
+    entry = SimpleNamespace(MODEL_TYPE="fake", QUIRKS=[
+        "layernorm",
+        {"slug": "parallel-blocks", "when": lambda config: config.parallel},
+        {"slug": "qkv-bias", "when": lambda config: not config.parallel},
+    ])
+    small = {"text_config": SimpleNamespace(parallel=False)}
+    big = {"text_config": SimpleNamespace(parallel=True)}
+    slugs = lambda quirks: [q["slug"] for q in quirks]  # noqa: E731
+    assert slugs(build.quirks(entry)) == ["layernorm", "parallel-blocks", "qkv-bias"]
+    assert slugs(build.quirks(entry, small)) == ["layernorm", "qkv-bias"]
+    assert slugs(build.quirks(entry, big)) == ["layernorm", "parallel-blocks"]
+    models = {c: {"family_quirks": build.quirks(entry, info)} for c, info in (("a/small", small), ("a/big", big))}
+    assert slugs(build.quirk_union(entry, models)) == ["layernorm", "parallel-blocks", "qkv-bias"]
+    # one that holds on no checkpoint the page shows is off the card
+    assert slugs(build.quirk_union(entry, {"a/small": models["a/small"]})) == ["layernorm", "qkv-bias"]
+    for bad in ({"slug": "qkv-bias"}, {"slug": "qkv-bias", "when": True}, {"slug": "qkv-bias", "checkpoints": ["a/small"]},
+                {"slug": "qkv-bias", "when": lambda c: True, "checkpoints": ["a/small"]}):
+        with pytest.raises(AssertionError):
+            build.quirk_spec(entry, bad)
+
+    # StableLM's pinned checkpoint has StableLM-2-12B's shape: parallel, q/k norms, no q/k/v bias
+    stablelm = entries.load("stablelm")
+    page = build.build_page(stablelm, reference=pinned(stablelm))
+    shown = panes(page, pinned(stablelm))
+    for part in ("chips", "quirk_list"):
+        assert "Parallel block" in shown[part] and "Query/key norms" in shown[part], part
+        assert "Biased q, k, v" not in shown[part], part
 
 
 def test_quirk_slugs_are_unique():

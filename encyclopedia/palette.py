@@ -147,6 +147,26 @@ def deepen(fills: list[str]) -> list[str]:
     return [oklch_to_hex(DEEP_L, C, h) for _, C, h in map(hex_to_oklch, fills)]
 
 
+#: The petals of the pages' seal (``.petals`` in encyclopedia.css), as each disc's left and top edge in
+#: units of the seal's width; a disc is 0.46 of the width across.
+PETALS = ((0, 0.10), (0.34, 0), (0.54, 0.30), (0.20, 0.46), (0.50, 0.56))
+PETAL = 0.46
+
+
+def favicon(fills: list[str]) -> str:
+    """The petals as a 32x32 SVG: the five fills as overlapping discs, in the seal's order, on no background."""
+    right = max(left for left, _ in PETALS) + PETAL
+    bottom = max(top for _, top in PETALS) + PETAL
+    scale = 32 / max(right, bottom)
+    dx, dy = (32 - right * scale) / 2, (32 - bottom * scale) / 2
+    r = PETAL * scale / 2
+    discs = "".join(
+        f"<circle cx='{dx + (left + PETAL / 2) * scale:.1f}' cy='{dy + (top + PETAL / 2) * scale:.1f}' r='{r:.1f}' fill='{fill}'/>"
+        for (left, top), fill in zip(PETALS, fills)
+    )
+    return f"<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>{discs}</svg>"
+
+
 def check(fills: list[str], deeps: list[str], paper: str, ink: str) -> list[str]:
     """Every way the palette falls short, as messages; an empty list is a pass."""
     problems = []

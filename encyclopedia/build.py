@@ -36,6 +36,7 @@ import json
 import re
 import shutil
 import sys
+import urllib.parse
 from pathlib import Path
 from types import ModuleType
 from typing import Any
@@ -1315,13 +1316,19 @@ def palette(entry: ModuleType) -> dict[str, Any]:
     problems = palettes.check(fills, deeps, paper, INK)
     if problems:
         raise ValueError(f"{entry.MODEL_TYPE}: the palette does not pass:\n  " + "\n  ".join(problems))
-    return {"fills": fills, "deeps": deeps, "paper": paper, "css": css_variables(fills, deeps, paper)}
+    return {"fills": fills, "deeps": deeps, "paper": paper, "css": css_variables(fills, deeps, paper), "icon": icon(fills)}
 
 
 def site_palette() -> dict[str, Any]:
     """The index's own palette, generated like a family's from a fixed name."""
     generated = palettes.generate(palettes.hue_of("nnterp"))
-    return {**generated, "paper": PAPER, "css": css_variables(generated["fills"], generated["deeps"], PAPER)}
+    return {**generated, "paper": PAPER, "css": css_variables(generated["fills"], generated["deeps"], PAPER),
+            "icon": icon(generated["fills"])}
+
+
+def icon(fills: list[str]) -> str:
+    """The tab's icon: the petals in five fills (`palette.favicon`), as an SVG data URI."""
+    return "data:image/svg+xml," + urllib.parse.quote(palettes.favicon(fills), safe="/=:.,")
 
 
 def quirk_spec(entry: ModuleType, spec: str | dict[str, Any]) -> dict[str, Any]:
@@ -1557,7 +1564,6 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
         "eye": EYE,
         "identity_html": Markup(models[default]["data"]["identity_html"]),
         "checkpoints_json": embed_json({"default": default, "checkpoints": {cid: m["data"] for cid, m in models.items()}}),
-        "blocks": sorted({m["num_layers"] for m in available}),
         "towers": towers_found,
         "wrappers": list(dict.fromkeys(m["tower"]["wrapper"] for m in available if m.get("tower"))),
         "source_url": f"{GITHUB}/{info['family_file']}",
@@ -1638,11 +1644,9 @@ def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path
         path = out / f"{entry.MODEL_TYPE}.html"
         path.write_text(html)
         written.append(path)
-        blocks = model["blocks"]
         hub.save()
         cards.append({**{k: model[k] for k in ("model_type", "title", "subtitle", "org", "palette", "checkpoints", "quirks", "vllm",
                                                 "architecture", "family_module", "towers", "wrappers")},
-                      "blocks": str(blocks[0]) if len(blocks) == 1 else f"{blocks[0]}–{blocks[-1]}",
                       "tower_slugs": [tower_slug(t) for t in model["towers"]]})
         print(f"wrote {path.relative_to(HERE.parent)}")
     # static/ is copied after the pages, so the org avatars a build downloads are in it

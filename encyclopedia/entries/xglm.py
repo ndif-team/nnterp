@@ -20,8 +20,8 @@ PALETTE = {"hue": 346}
 VLLM = False
 QUIRKS = ["no-mlp", "scaled-embeddings", "position-embeddings", "own-attention-arithmetic", "layernorm", "qkv-bias"]
 
-#: What the visualization draws: the attention and its pre-norm. The MLP path (final_layer_norm,
-#: fc1, activation_fn, fc2) has no module, so it is no sublayer; the identity names fc2.output.
+#: What the visualization draws: the attention and its pre-norm, then the MLP path, which has no module:
+#: final_layer_norm, fc1, activation_fn and fc2 sit on the block, so the sublayer is hosted on the native fc2.
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -37,6 +37,19 @@ BLOCK = {
             ],
             "detail": "{num_heads} heads × {head_dim}, own bmm",
             "pre_norm_note": "Native name self_attn_layer_norm, a LayerNorm with a bias.",
+        },
+        {
+            "host": "fc2",
+            "kind": "mlp",
+            "label": "MLP",
+            "pre_norm": "final_layer_norm",
+            "reads": "fc1",
+            "pre_norm_note": "The block's own final_layer_norm, a LayerNorm with a bias; the decoder's last norm is "
+                             "layer_norm, model.norm.",
+            "contribution": "fc2.output",
+            "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, {activation_function}",
+            "host_note": ("No mlp module: final_layer_norm, fc1, activation_fn and fc2 sit on the block, and fc2.output, "
+                          "[batch, seq, hidden], is what the path adds."),
         },
     ],
     "identity": "layers[i].input + self_attn.attention_output + fc2.output == layer_output",

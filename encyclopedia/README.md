@@ -169,7 +169,14 @@ The entry states facts about a family, and each one has a source. Before writing
    - `topology`: `"sequential"` (each sublayer reads the stream after the one before it) or
      `"parallel"` (one read feeds every sublayer and the block sums them).
    - `sublayers`: in forward order, each a dict with
-     - `host`: the standard name the sublayer has on the block (`self_attn`, `linear_attn`, `mlp`);
+     - `host`: the standard name the sublayer has on the block (`self_attn`, `linear_attn`, `mlp`), or,
+       where the block has no module for it, a native dotted path on the block (OPT's and XGLM's MLP
+       path is `final_layer_norm`, `fc1`, `activation_fn` and `fc2` on the block itself, so its host is
+       `"fc2"`). A sublayer on a native path is an `"attention"` or an `"mlp"` with no `interior`; its
+       `contribution` is a module output named from the block (`"fc2.output"`), which the identity uses
+       as written; `reads` names the module whose input is the pre-norm's output (`"fc1"`), and
+       `host_note` is shown on its box's and its contribution's hovers (the shape it runs on). The
+       ledgers stay as nnterp serves them: a native path has no host there;
      - `kind`: `"attention"`, `"mixer"` (a recurrent mixer, `linear_attn`: DeltaNet, KDA, a
        selective scan), `"mlp"` or `"moe"` (a mixture of experts, `mlp` where it is a `Moe`);
        `label`: the box's title (`"Attention"`, `"Linear attention"`, `"MLP"`, `"MoE"`);

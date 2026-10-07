@@ -81,7 +81,9 @@ def test_entry_builds_a_page(name):
     assert {sub["host"] for sub in drawn} == {host for host, _ in listed}
     for sub in drawn:
         key = sub.get("key", sub["host"])
-        assert nodes[f"contrib.{key}"]["expr"] == f"model.layers[i].{sub['host']}.{sub['contribution']}"
+        # a sublayer on a native path (OPT's fc2) names its contribution from the block: `fc2.output`
+        term = sub["contribution"] if sub.get("native") else f"{sub['host']}.{sub['contribution']}"
+        assert nodes[f"contrib.{key}"]["expr"] == f"model.layers[i].{term}"
         for value in sub["interior"]:
             assert f"interior.{key}.{value['name']}" in nodes
         if sub["kind"] == "moe":
@@ -95,7 +97,8 @@ def test_entry_builds_a_page(name):
     for shape in shapes:
         for k in shape["subs"]:
             sub = drawn[k]
-            assert "identity" in block or f"{sub['host']}.{sub['contribution']}" in shape["identity"]
+            term = sub["contribution"] if sub.get("native") else f"{sub['host']}.{sub['contribution']}"
+            assert "identity" in block or term in shape["identity"]
     assert '"identity"' in page and "stream.output" in page
     for k in range(1, 6):
         assert f"--c{k}: #" in page and f"--c{k}-deep: #" in page

@@ -303,9 +303,15 @@ def has_module(envoy: Any, name: str) -> bool:
     return True
 
 
-def children_of(layer: Any) -> tuple[str, ...]:
-    """A block's children as a BLOCK may name them: the native modules' names and the block's aliases."""
-    return tuple(sorted({name for name, _ in layer._module.named_children()} | set(layer._aliases)))
+def children_of(layer: Any) -> dict[str, str]:
+    """A block's modules as a BLOCK may name them, each with its class: the native children and grandchildren
+    by native path (``fc2``, ``attn.attention``), and the block's aliases."""
+    found = {}
+    for name, child in layer._module.named_children():
+        found[name] = type(child).__name__
+        found.update({f"{name}.{inner}": type(module).__name__ for inner, module in child.named_children()})
+    found.update({alias: type(layer._module.get_submodule(path)).__name__ for alias, path in layer._aliases.items()})
+    return found
 
 
 def runs_mixture(child: Any) -> bool:
@@ -644,13 +650,21 @@ def block_variants(spec: Any) -> list[dict[str, Any]]:
     return [spec] if isinstance(spec, dict) else [] if callable(spec) else [block for _, block in spec]
 
 
-def drawn(specs: list[dict[str, Any]], hosts: dict[str, bool], block_class: str | None = None) -> tuple[int, ...]:
+def is_native(spec: dict[str, Any]) -> bool:
+    """A sublayer hosted on a native path of the block (OPT's and XGLM's ``fc2``), not on a standard host."""
+    return spec["host"] not in HOST_ROLES
+
+
+def drawn(specs: list[dict[str, Any]], hosts: dict[str, bool], block_class: str | None = None,
+          native: dict[str, str] | None = None) -> tuple[int, ...]:
     """The sublayers one block draws, as indices into ``specs``: ``hosts`` maps each of the block's
     standard children to whether it is a mixture, and ``block_class`` is the block's native class. A
-    spec with a ``block`` key is drawn only on blocks of that class; one without, on every class."""
-    return tuple(k for k, spec in enumerate(specs) if spec["host"] in hosts
+    spec with a ``block`` key is drawn only on blocks of that class; one without, on every class. A
+    sublayer on a native path is drawn where the block has that module (``native``, its modules by path)."""
+    return tuple(k for k, spec in enumerate(specs)
+                 if (spec["host"] in (native or {}) if is_native(spec) else spec["host"] in hosts)
                  and spec.get("block", block_class) == block_class
-                 and (spec["kind"] not in ("mlp", "moe") or hosts[spec["host"]] == (spec["kind"] == "moe")))
+                 and (is_native(spec) or spec["kind"] not in ("mlp", "moe") or hosts[spec["host"]] == (spec["kind"] == "moe")))
 
 
 def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], base: str = "model.layers[i]",
@@ -684,24 +698,32 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         assert "block" not in s or s["block"] in block_classes, \
             f"{owner}: BLOCK's {s['host']!r} names block class {s['block']!r}; the blocks are {sorted(set(block_classes))}"
 
-    shape_of = [drawn(specs, hosts, cls) for hosts, cls in zip(info["block_hosts"], block_classes)]
+    block_children = info.get("block_children") or [None] * len(info["block_hosts"])
+    shape_of = [drawn(specs, hosts, cls, native) for hosts, cls, native in zip(info["block_hosts"], block_classes, block_children)]
     for i, (shape, block_hosts) in enumerate(zip(shape_of, info["block_hosts"])):
         named = [h for h in block_hosts if h in hosts]
-        assert sorted(named) == sorted(specs[k]["host"] for k in shape), \
+        assert sorted(named) == sorted(specs[k]["host"] for k in shape if not is_native(specs[k])), \
             f"{owner}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
         # every norm drawn on a block is one of its children, by native name or alias
         for k in shape:
             for where in ("pre_norm", "post_norm"):
                 norm_name = specs[k].get(where)
                 assert not norm_name or "block_children" not in info or norm_name in info["block_children"][i], \
-                    f"{owner}: BLOCK's {keys[k]!r} names {where} {norm_name!r}; block {i}'s children are {list(info['block_children'][i])}"
+                    f"{owner}: BLOCK's {keys[k]!r} names {where} {norm_name!r}; block {i} has no such module"
     shown = sorted({k for shape in shape_of for k in shape})
     # A sublayer no block draws is the other half of an mlp/moe pair, or its host is on no block of this
     # checkpoint (granitemoehybrid's attention-only checkpoints build no Mamba mixer): the checkpoint draws
     # the shapes it has. A host that is no standard host is a typo, not an absence.
     present = {alias for block_hosts in info["block_hosts"] for alias in block_hosts}
     for k in range(len(specs)):
-        assert hosts[k] in HOST_ROLES, f"{owner}: BLOCK names host {hosts[k]!r}; the standard hosts are {list(HOST_ROLES)[2:]}"
+        if is_native(specs[k]):
+            # a native path: drawn like an MLP or an attention, it has no values of its own
+            assert any(hosts[k] in (native or {}) for native in block_children), \
+                f"{owner}: BLOCK names host {hosts[k]!r}, which is no standard host ({list(HOST_ROLES)[2:]}) and no module of the block"
+            assert specs[k]["kind"] in ("attention", "mlp") and not specs[k].get("interior"), \
+                f"{owner}: a sublayer on the native path {hosts[k]!r} is an attention or an MLP, with no interior values"
+            assert k in shown, f"{owner}: no block has BLOCK's {keys[k]!r} sublayer"
+            continue
         assert k in shown or any(hosts[j] == hosts[k] for j in shown) or hosts[k] not in present, \
             f"{owner}: no block has BLOCK's {keys[k]!r} sublayer"
     # Only the sublayers this checkpoint's blocks draw: the shapes index into what is left.
@@ -711,10 +733,18 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
     nodes: dict[str, dict[str, Any]] = {}
     sublayers = []
     for k, spec in enumerate(specs):
-        host, key, kind = spec["host"], keys[k], spec["kind"]
-        assert host in by_host, f"{owner}: BLOCK names host {host!r}; the block has {list(by_host)}"
+        host, key, kind, native = spec["host"], keys[k], spec["kind"], is_native(spec)
+        assert native or host in by_host, f"{owner}: BLOCK names host {host!r}; the block has {list(by_host)}"
         assert kind in KINDS, f"{owner}: kind {kind!r}; known: {KINDS}"
-        contribution = by_host[host][spec["contribution"]]
+        if native:
+            # a plain module output on the block, which nnterp serves no standard value for
+            native_class = next(found[host] for found in block_children if found and host in found)
+            path = spec["contribution"]
+            contribution = {"expr": f"{base}.{path}", "layout": None, "dims": None, "condition": None,
+                            "description": f"`{path}`, a plain module output and no standard value: what this sublayer adds to the stream.",
+                            "where": humanize_key(path, None)}
+        else:
+            contribution = by_host[host][spec["contribution"]]
         sub = {
             "host": host, "kind": kind, "label": spec["label"],
             "detail": spec.get("detail", "").format(**fmt),
@@ -726,8 +756,15 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             sub["key"] = key
         if spec.get("parallel_with_next"):
             sub["parallel_with_next"] = True
-        matched = [(c, n) for c, is_moe, n in info["host_classes"][host] if kind not in ("mlp", "moe") or is_moe == (kind == "moe")]
-        classes, count = [c for c, _ in matched], max(n for _, n in matched)
+        if native:
+            sub["native"] = True
+            nodes[f"sub.{key}"] = node(
+                spec["label"], f"{base}.{host}",
+                f"`{native_class}` at the native path `{host}`: this sublayer has no standard host, so the block's own "
+                "modules are its parts. " + spec.get("detail", "").format(**fmt), extra=spec.get("host_note"))
+        matched = [] if native else [(c, n) for c, is_moe, n in info["host_classes"][host]
+                                     if kind not in ("mlp", "moe") or is_moe == (kind == "moe")]
+        classes, count = [c for c, _ in matched], max((n for _, n in matched), default=0)
         extra = f"{count} standard value{'s' if count != 1 else ''}; `.input` is what the sublayer reads."
         if kind == "mixer" and info["mixer"]:
             kernels = info["mixer"]
@@ -736,9 +773,10 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                       and "route_kernels" in row["condition"]["reason"]]
             if routed:
                 extra += f" `{'`, `'.join(name.split('.', 1)[1] for name in routed)}` need `nnterp.route_kernels(model.family, \"torch\")` before the first trace."
-        nodes[f"sub.{key}"] = node(
-            spec["label"], f"{base}.{host}",
-            f"{' / '.join(classes)} under its standard name. " + spec.get("detail", "").format(**fmt), extra=extra)
+        if not native:
+            nodes[f"sub.{key}"] = node(
+                spec["label"], f"{base}.{host}",
+                f"{' / '.join(classes)} under its standard name. " + spec.get("detail", "").format(**fmt), extra=extra)
         for name in spec.get("interior", []):
             assert name in by_host[host], f"{owner}: {host} has no value {name!r}"
             chip = {"name": name, "short": INTERIOR_SHORT.get(name, name)}
@@ -768,6 +806,8 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                     "the shared expert", f"{expr}.shared_experts" if at is None else f"{base}.{at or host}",
                     f"`{moe['shared']}`. Every token runs through it; `shared_expert_output` is what it adds beside `routed_output`.")
         nodes[f"contrib.{key}"] = value_node(contribution, "contribution")
+        if native and spec.get("host_note"):
+            nodes[f"contrib.{key}"]["extra"] = spec["host_note"]
         # A norm's node is its native name; on a sublayer drawn on one block class it is the sublayer's
         # own, since the same name can be a pre-norm on one class and a post-norm on another.
         for where in ("pre_norm", "post_norm"):
@@ -776,7 +816,8 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         if spec.get("pre_norm"):
             nodes[sub.get("pre_norm_node", f"norm.{spec['pre_norm']}")] = node(
                 "pre-norm", f"{base}.{spec['pre_norm']}",
-                f"A native module under its own name. Its output is what `{host}` reads: `{base}.{host}.input`.",
+                f"A native module under its own name. Its output is what `{spec.get('reads', host)}` reads: "
+                f"`{base}.{spec.get('reads', host)}.input`.",
                 extra=spec.get("pre_norm_note"))
         if spec.get("post_norm"):
             nodes[sub.get("post_norm_node", f"norm.{spec['post_norm']}")] = node(
@@ -821,7 +862,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                 nodes[mid] = node(stream, f"{base}.{nxt['host']}.input",
                                   f"The stream after the {after} add, as the next sublayer receives it. No standard value of its own.")
             mids.append(mid)
-        terms = [f"{sub['host']}.{sub['contribution']}" for sub in subs]
+        terms = [sub["contribution"] if sub.get("native") else f"{sub['host']}.{sub['contribution']}" for sub in subs]
         for k in reversed(range(len(subs))):
             if paired[k]:
                 terms[k:k + 2] = [f"({terms[k]} + {terms[k + 1]})"]
@@ -917,6 +958,13 @@ def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
 
 # -- rendering ------------------------------------------------------------------------
 
+def host_role(sub: dict[str, Any]) -> str:
+    """The role a drawn sublayer takes: its standard host's, or, on a native path, its kind's."""
+    if sub["host"] in HOST_ROLES:
+        return HOST_ROLES[sub["host"]]
+    return "attention" if sub["kind"] in ("attention", "mixer") else "mlp"
+
+
 def name_roles(entry: ModuleType, info: dict[str, Any]) -> dict[str, str]:
     """The role that colours each nnterp name in code and in the printout: a value takes its
     host's role, a sublayer's own name wins over the block's, the block's norms are norms."""
@@ -928,6 +976,8 @@ def name_roles(entry: ModuleType, info: dict[str, Any]) -> dict[str, str]:
     for spec in block_variants(entry.BLOCK) or [resolve_block(entry.MODEL_TYPE, entry.BLOCK, info.get("text_config"))]:
         for sub in spec["sublayers"]:
             roles.update({sub[key]: "norm" for key in ("pre_norm", "post_norm") if sub.get(key)})
+            if is_native(sub):  # a sublayer on a native path (OPT's fc2) takes its kind's role
+                roles[sub["host"]] = host_role(sub)
     if info.get("vision"):  # the tower's own values belong to the stream; its blocks' take their hosts' roles, as above
         roles.update({row["name"]: "stream" for row in info["vision"]["values"]["vision"]})
     return roles
@@ -1153,7 +1203,7 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
     nodes = {**block.pop("nodes"), **strip["nodes"]}
     for shape in block.get("shapes", []):
         shape["identity_html"] = str(highlight_python(shape["identity"], roles))
-    block["roles"] = {s.get("key", s["host"]): HOST_ROLES.get(s["host"], "mlp") for s in block["sublayers"]}
+    block["roles"] = {s.get("key", s["host"]): host_role(s) for s in block["sublayers"]}
     data: dict[str, Any] = {"schema": block, "nodes": nodes, "identity_html": str(highlight_python(block["identity"], roles)), "tower": None,
                             "architecture": info["architecture"], "url": f"https://huggingface.co/{info['reference']}"}
     shown = list(family_quirks)
@@ -1173,7 +1223,7 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
             attention = next((key for key in tower_nodes if key.startswith("sub.") and "self_attn" in key), None)
             if attention:
                 tower_nodes[attention]["extra"] += " " + tower["masking"]
-            schema["roles"] = {s.get("key", s["host"]): HOST_ROLES.get(s["host"], "mlp") for s in schema["sublayers"]}
+            schema["roles"] = {s.get("key", s["host"]): host_role(s) for s in schema["sublayers"]}
         tower_nodes.update(tower_path_nodes(v))
         nodes.update({"v:" + key: value for key, value in tower_nodes.items()})
         data["tower"] = {"schema": schema, "identity_html": str(highlight_python(schema["identity"], roles)) if schema else None}

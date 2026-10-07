@@ -964,7 +964,53 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
     if not single:
         schema["shapes"] = drawn_shapes
         schema["shape_of"] = [shapes.index(shape) for shape in shape_of]
+    between = between_schema(owner, block_spec, info, by_host, base, stream, nodes)
+    if between:
+        schema["between"] = between
     return schema
+
+
+def between_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], by_host: dict[str, dict[str, Any]],
+                   base: str, stream: str, nodes: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """The BLOCK's ``between`` entries: a value the text model adds to the stream after some blocks, outside them, at
+    the positions a mask marks (Qwen3-VL's DeepStack). Each is drawn on its blocks only, as an add after
+    ``layer_output``. The add happens on an image prompt, so a checkpoint without a vision encoder draws none; blocks
+    past the checkpoint's last are dropped (a tiny checkpoint with fewer blocks than the list)."""
+    specs = block_spec.get("between", [])
+    specs = [specs] if isinstance(specs, dict) else specs
+    if not specs:
+        return []
+    assert base == "model.layers[i]", f"{owner}: `between` is the text model's, on the text block's BLOCK"
+    vision = info.get("vision")
+    if not vision:
+        return []
+    out = []
+    for spec in specs:
+        value, mask, blocks = spec["value"], spec["mask"], spec["blocks"]
+        assert value in by_host["layer"], f"{owner}: between's {value!r} is no value of model.layers[i]"
+        host, _, name = mask.partition(".")
+        assert host == "vision" and name in {row["name"] for row in vision["values"]["vision"]}, \
+            f"{owner}: between's mask {mask!r} is no value of model.vision"
+        assert blocks == sorted(set(blocks)) and all(isinstance(b, int) and b >= 0 for b in blocks), \
+            f"{owner}: between's blocks are distinct block indices in order"
+        blocks = [b for b in blocks if b < info["num_layers"]]
+        row = by_host["layer"][value]
+        identity = f"layers[i+1].input[{mask}] == layer_output[{mask}] + {value}"
+        where = f"after block{'s' if len(blocks) > 1 else ''} {blocks_range(blocks).replace('-', ' to ')} only"
+        fact = (f"The text model adds it to the stream at the positions `{mask}` marks, outside the block, {where}: "
+                f"`{identity}`, and `layers[i+1].input == layer_output` at every other position.")
+        nodes[f"between.value.{value}"] = {**value_node(row, f"{spec['label']}, between blocks"),
+                                           "extra": fact + (" " + spec["note"] if spec.get("note") else "")}
+        nodes[f"between.plus.{value}"] = node(
+            "the add, between blocks", identity,
+            f"The text model's add after `layer_output`, at the positions `{mask}` marks, {where}. Not in the block: "
+            f"`layer_output` is the stream before it.")
+        nodes[f"between.next.{value}"] = node(
+            stream, "model.layers[i+1].input",
+            f"The stream entering the next block: `layer_output` with `{value}` added at the positions `{mask}` marks.",
+            layout="Residual", dims="batch seq hidden")
+        out.append({"value": value, "mask": mask, "label": spec["label"], "blocks": blocks, "identity": identity})
+    return out
 
 
 INTERIOR_SHORT = {
@@ -1297,6 +1343,8 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any], family_quirks: lis
     nodes = {**block.pop("nodes"), **strip["nodes"]}
     for shape in block.get("shapes", []):
         shape["identity_html"] = str(highlight_python(shape["identity"], roles))
+    for between in block.get("between", []):
+        between["identity_html"] = str(highlight_python(between["identity"], roles))
     block["roles"] = {s.get("key", s["host"]): host_role(s) for s in block["sublayers"]}
     data: dict[str, Any] = {"schema": block, "nodes": nodes, "identity_html": str(highlight_python(block["identity"], roles)), "tower": None,
                             "architecture": info["architecture"], "url": f"https://huggingface.co/{info['reference']}"}

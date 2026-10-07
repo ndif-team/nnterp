@@ -88,6 +88,16 @@ widen of an edit to a tensor whose leading axis is not the batch (nnsight PR #73
 
 ## Gotchas
 
+- **One expert can carry the position-0 sink.** On granite-3.0-1b-a400m-base block 5's
+  expert 4 takes the first token with weight above 0.99 and ablating it costs about 9.6
+  nats on the next token, through position 0 alone. Rank experts on positions 1 onward
+  (or ablate per position) before reading a large effect as a mechanism.
+- **JetMoE computes the indices first.** Bind `idx = moe.expert_indices` before reading
+  `moe.expert_weights`, then `masked_fill(idx == e, 0)`; the order above raises
+  `OutOfOrderError` there.
+- **An edit reroutes later blocks.** An edit to one token's stream changes that token's
+  routing at later mixture blocks (a norm-4 edit at block 3 of granite-3.0-1b-a400m-base
+  reroutes the last token on every later block); its effect includes the rerouting.
 - **Unused experts read zero.** An expert no token of the prompt chose has no slots to
   zero; its effect is exactly zero, not "unimportant".
 - **ZAYA's skip slots alias expert 0.** A skipped slot has index 0 and weight 0; zeroing

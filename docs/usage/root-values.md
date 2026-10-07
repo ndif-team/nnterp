@@ -186,7 +186,7 @@ reads, are in [families.md](../reference/families.md#logits-scales-and-sizes)):
 | --- | --- | --- |
 | `falcon` | `num_kv_heads` | `config.num_kv_heads` on the 40B layout (`new_decoder_architecture`); `1` under `multi_query`; else `num_heads` |
 | `falcon` | `intermediate_size` | `config.ffn_hidden_size` |
-| `deepseek_v2`, `deepseek_v3` | `head_dim` | `config.v_head_dim`, the width of one head's values and outputs. The config's own `head_dim` key is the latent width, which no served value has. |
+| `deepseek_v2`, `deepseek_v3` | `head_dim` | `config.v_head_dim`, the width of one head's values and outputs. The config's own `head_dim` key is set to `qk_rope_head_dim` (64 on the released checkpoints), the rotary slice's width, which no served value has. |
 | `deepseek_v2`, `deepseek_v3` | `qk_head_dim` | `config.qk_nope_head_dim + config.qk_rope_head_dim` |
 | `gpt2`, `gptj`, `codegen` | `intermediate_size` | `config.n_inner`, `None` meaning `4 * hidden_size`. GPT-2's config also carries an `intermediate_size` key the model never reads. |
 | `gpt_neo` | `intermediate_size` | `config.intermediate_size`, `None` meaning `4 * hidden_size` |

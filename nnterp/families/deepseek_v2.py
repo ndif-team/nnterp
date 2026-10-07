@@ -45,7 +45,7 @@ ENVOYS = {DeepseekV2DecoderLayer: Layer, DeepseekV2Attention: Attention, Deepsee
 # -- sizes: multi-head latent attention gives queries and keys their own width ------
 
 def head_dim(model: "StandardizedTransformer") -> int:
-    """Width of one head's values and outputs: ``v_head_dim`` (the config's ``head_dim`` is the latent width, which no served value has)."""
+    """Width of one head's values and outputs: ``v_head_dim`` (the config's ``head_dim`` is set to ``qk_rope_head_dim``, the rotary slice's width, which no served value has)."""
     return model.config.get_text_config().v_head_dim
 
 

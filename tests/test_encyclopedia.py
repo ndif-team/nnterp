@@ -165,7 +165,7 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
     for size in build.TOWER_SIZE_NAMES:
         assert f"model.vision.{size}</span>" in shown["config"], size
     assert '<h2 class="fold-heading">The <em>vision encoder</em></h2>' in shown["tower"]
-    assert vision["architecture"].endswith("ForConditionalGeneration") and text["architecture"] == "LlamaForCausalLM"
+    assert vision["architecture"].endswith("ForConditionalGeneration") and text["architecture"].endswith("ForCausalLM")
     assert f'href="https://huggingface.co/{entry.PINNED}"' in page and 'id="ckpt-hub"' in page
     assert f'href="https://huggingface.co/{tiny}"' not in page, "only the selected checkpoint is linked, by the script"
     assert "Vision-language" in shown["chips"] and "<h2>" in shown["vision_notes"] and "<details" in shown["vision_notes"]

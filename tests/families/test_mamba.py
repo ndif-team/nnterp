@@ -13,6 +13,7 @@ NATIVE["layers.0.linear_attn"] = "backbone.layers.0.mixer"
 
 class TestMamba(SelectiveScanSuite, FamilySuite):
     REPO = "hf-internal-testing/tiny-random-MambaForCausalLM"
+    DECODE_MASK_COVERS_CACHE = False  # a decode step is fed the new token's mask only
     FAMILY = mamba
     NATIVE = NATIVE
     REAL = ("state-spaces/mamba-130m-hf", 24, 768, 1536)

@@ -12,11 +12,12 @@ from nnterp.families import olmo3
 
 
 def _patched_checkpoint(repo="yujiepan/olmo-3-tiny-random"):
-    """The tiny checkpoint with its config in transformers 5.17's per-layer-type rope form.
+    """The tiny checkpoint with its config in the per-layer-type rope form.
 
     The checkpoint's flat ``rope_parameters`` does not parse for a model with
-    ``layer_types``, so the rewrite copies it to every layer type, YaRN on the
-    sliding blocks too; the released Olmo 3 configs resolve to YaRN on the
+    ``layer_types`` before transformers 5.18; from 5.18 it parses, but both layer
+    types get plain rotary and the YaRN keys are left unused at the top level. The
+    rewrite copies it to every layer type, YaRN on the sliding blocks too; the released Olmo 3 configs resolve to YaRN on the
     full-attention blocks and plain rotary on the sliding ones. The weights and
     tokenizer are symlinked, only ``config.json`` is rewritten. The family itself
     needs nothing.

@@ -20,10 +20,16 @@ forward with q/k norms and a *dynamic mask*: ``dt_proj`` of the values, through
 ``attention_scores`` carry it. The MLP is a gated ``DogeMLP``, or the cross-domain
 mixture ``DogeCDMoE`` under ``is_moe``, which returns ``(hidden_states, router_logits)``.
 
-Doge-20M, -40M and -260M load and run on transformers 5.17. The ``is_moe``
-checkpoints that load (Doge-40M-MoE) fail in the forward: the block passes
-``DogeCDMoE``'s tuple to dropout (``TypeError``).
+Doge-20M, -40M and -260M load and run. The ``is_moe`` checkpoints that load
+(Doge-40M-MoE) run from transformers 5.18, whose block takes the first element of
+``DogeCDMoE``'s tuple; before, the block passes the tuple to dropout
+(``TypeError``). Where it runs, ``mlp_output`` is the mixture's hidden states
+(dense MLP plus routed experts); the six mixture values stay unavailable, since
+the product-key routing has no router or experts module to read them at.
 """
+
+import transformers
+from packaging.version import Version
 
 from transformers.models.doge.modeling_doge import DogeAttention, DogeCDMoE, DogeDecoderLayer, DogeMLP
 
@@ -48,12 +54,16 @@ class Mlp(Mlp):
     """Doge's MLP or cross-domain mixture (``(hidden_states, router_logits)``); the output is added unscaled, so the base holds."""
 
 
-#: Why none of the cross-domain mixture's values are served.
-CANNOT_RUN = "transformers 5.17 cannot run DogeCDMoE: the block drops out its tuple output"
+#: Why none of the cross-domain mixture's values are served: transformers before 5.18 cannot run it at all.
+CANNOT_RUN = (
+    "DogeCDMoE routes by product keys over embedding experts: no router or experts module to read the mixture values at"
+    if Version(transformers.__version__) >= Version("5.18")
+    else "transformers < 5.18 cannot run DogeCDMoE: the block passes its tuple output to dropout"
+)
 
 
 class Moe(Moe, Mlp):
-    """Doge's cross-domain mixture (``is_moe``): product-key routing over a dense MLP. Every mixture value is unavailable: transformers cannot run it."""
+    """Doge's cross-domain mixture (``is_moe``): product-key routing over a dense MLP. Every mixture value is unavailable (`CANNOT_RUN`); ``mlp_output`` is served where transformers runs it (>= 5.18)."""
 
     def no_mixture(self) -> str:
         return CANNOT_RUN

@@ -28,8 +28,9 @@ def _grouped_checkpoint(repo="hf-tiny-v2/tiny-random-MiniMaxM2ForCausalLM"):
     The tiny checkpoint has as many kv heads as heads, ``head_dim == hidden_size //
     num_heads`` and a full rotary; MiniMax-M2.5 has 8 kv heads for 48 and ``head_dim``
     128 on a 3072 residual, and its Hub config sets ``rotary_dim`` 64 (a half-width
-    rotary), which transformers 5.17's native ``MiniMaxM2Config`` does not carry into
-    ``rope_parameters``, so a native load rotates the whole head. This copy has 2 kv
+    rotary), which ``MiniMaxM2Config`` carries into ``rope_parameters`` as
+    ``partial_rotary_factor`` from transformers 5.18 (before, a native load rotates
+    the whole head). This copy has 2 kv
     heads for 4, ``head_dim`` 16 on a 32 residual and ``partial_rotary_factor`` 0.5,
     to exercise a partial rotary.
     """
@@ -64,3 +65,16 @@ class TestMiniMaxM2Grouped(FamilySuite):
             queries = model.layers[1].self_attn.attention_queries.save()
         assert keys.shape[1] == 2 and keys.shape[-1] == 16
         assert queries.shape[1] == 4 and queries.shape[-1] == 16
+
+
+def test_released_rotary_dim_is_a_half_rotary():
+    """MiniMax-M2.5's Hub config gives ``rotary_dim`` 64 of a 128 head: a half rotary from transformers 5.18, the whole head before."""
+    import transformers
+    from packaging.version import Version
+    from transformers import AutoConfig
+    from transformers.models.minimax_m2.modeling_minimax_m2 import MiniMaxM2RotaryEmbedding
+
+    config = AutoConfig.from_pretrained("MiniMaxAI/MiniMax-M2.5")
+    assert (config.rotary_dim, config.head_dim) == (64, 128)
+    rotated = 2 * MiniMaxM2RotaryEmbedding(config).inv_freq.shape[0]
+    assert rotated == (64 if Version(transformers.__version__) >= Version("5.18") else 128)

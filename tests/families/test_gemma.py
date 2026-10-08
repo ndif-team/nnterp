@@ -14,6 +14,16 @@ class TestGemma(FamilySuite):
     FAMILY = gemma
     NATIVE = LLAMA_ROWS
 
+    def test_legacy_gelu_runs_as_tanh_from_5_18(self, model):
+        """The checkpoint's config says ``gelu``, the legacy Gemma 1 value: transformers >= 5.18 runs the tanh GELU, earlier the exact one."""
+        import transformers
+        from packaging.version import Version
+        from transformers.activations import GELUTanh
+
+        modern = Version(transformers.__version__) >= Version("5.18")
+        assert model.config.hidden_act == ("gelu_pytorch_tanh" if modern else "gelu")
+        assert isinstance(model.layers[0].mlp._module.act_fn, GELUTanh) == modern
+
 
 class TestPaliGemmaWrapper(WrapperSuite):
     """PaliGemma: the text stack at ``model.language_model``. Its processor refuses a prompt without an image, so the

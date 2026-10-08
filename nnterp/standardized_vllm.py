@@ -166,6 +166,16 @@ class StandardizedVLLM(Standardized, VLLM):
         """
         return project(self, hidden, self.lm_head)
 
+    # -- forward order -------------------------------------------------------------
+
+    def order(self, layer: int | None = None) -> dict[str, int]:
+        """Not supported on the vllm engine: the forward order is measured on `StandardizedTransformer` only."""
+        raise NotImplementedError("model.order is not supported on the vllm engine; it is measured on a StandardizedTransformer")
+
+    def rank(self, name: str, layer: int | None = None) -> tuple[int, int]:
+        """Not supported on the vllm engine: the forward order is measured on `StandardizedTransformer` only."""
+        raise NotImplementedError("model.rank is not supported on the vllm engine; it is measured on a StandardizedTransformer")
+
     # -- remote ------------------------------------------------------------------
 
     def _remoteable_class(self) -> type:

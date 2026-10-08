@@ -13,9 +13,9 @@ from nnsight.intervention.envoy import Envoy
 from nnsight.modeling.transformers import TransformersModel
 from torch import Tensor
 
-from . import families
+from . import families, order as forward_order
 from .families import default
-from .components import EProperty, Layer, Residual
+from .components import EProperty, Layer, Residual, Unavailable
 from .components.standard import blocks_support, standard_children, values
 from .components.vision import Vision
 
@@ -342,6 +342,7 @@ class StandardizedTransformer(Standardized, TransformersModel):
     ) -> None:
         kwargs.setdefault("task", "text-generation")
         self._add_prefix_false_tokenizer = None
+        self._order = None  # (kernel generation, ranks): see `order`
         if family is None:
             config = self._read_config(repo_id, kwargs)
             # A multimodal checkpoint's config nests the language model's; the
@@ -482,6 +483,65 @@ class StandardizedTransformer(Standardized, TransformersModel):
     @input_size.postprocess
     def input_size(self, value: Any) -> Any:
         raise AttributeError("input_size is the ids' shape and cannot be assigned; assign input_ids")
+
+    # -- forward order (outside a trace) -------------------------------------------
+
+    def order(self, layer: int | None = None) -> dict[str, int]:
+        """The forward order of the available values: name -> rank, the order a single invoke reads them in.
+
+        With ``layer``, that block's values by dotted name (``"layer_output"``,
+        ``"self_attn.attention_queries"``), ranked from 0. Without, the root's
+        values (``input_ids``, ``token_embeddings``, ``logits``, ...), ranked
+        from 0 across the whole forward: those before the blocks first, then
+        those after. Values with equal ranks are served at one location, so
+        either can be read first; a value the checkpoint does not have
+        (`support`) is not listed. Sorting by rank::
+
+            sorted(model.order(0), key=model.order(0).get)
+
+        Measured, not tabled: the first call runs one probe `scan` (meta
+        tensors, no real weights or dispatch needed; see `nnterp.order`) and
+        the result is kept on the model until `nnterp.route_kernels` or
+        `nnterp.chunk_per_token` changes what fires. `rank` is the same
+        measurement as one sortable tuple per value.
+        """
+        table = forward_order.cached(self)
+        if layer is None:
+            return {**table[-1], **table[self.num_layers]}
+        return dict(table[range(self.num_layers)[layer]])
+
+    def rank(self, name: str, layer: int | None = None) -> tuple[int, int]:
+        """Where a value falls in the forward: ``(side, rank)``, which sorts in the order a single invoke reads them in.
+
+        A root value (``rank("logits")``) is ``(-1, r)`` when the model
+        serves it before the blocks (``input_ids``, ``attention_mask``,
+        ``input_size``, ``token_embeddings``) and ``(num_layers, r)`` after
+        them (``logits``, ``next_token_probs``). A block value
+        (``rank("self_attn.attention_queries", layer=3)``, the dotted name
+        `support` lists) is ``(layer, r)``. ``r`` is `order`'s rank, so equal
+        tuples mean one location, and either read order is legal. Negative
+        layers count from the end.
+
+        Raises:
+            Unavailable: the checkpoint has no such value (`support` gives the reason).
+            KeyError: there is no value of that name (a block value needs ``layer``).
+        """
+        table = forward_order.cached(self)
+        if layer is None:
+            sides = (-1, self.num_layers)
+            root = values(type(self))
+            reason = root[name].reason(self) if name in root else "absent"
+        else:
+            layer = range(self.num_layers)[layer]
+            sides = (layer,)
+            reason = self.support(layer).get(name, "absent")
+        for side in sides:
+            if name in table[side]:
+                return side, table[side][name]
+        if reason == "absent":
+            where = "the root" if layer is None else f"block {layer}"
+            raise KeyError(f"{name!r} is not a value of {where}; a block value takes layer=, by its dotted support() name")
+        raise Unavailable(f"{name} is not available{'' if layer is None else f' on block {layer}'}: {reason}")
 
     # -- tokenizers ---------------------------------------------------------------
 

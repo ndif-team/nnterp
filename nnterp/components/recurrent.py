@@ -37,6 +37,10 @@ from .standard import Standard, first_tensor, rewrap
 State = Float[Tensor, "batch heads key_dim value_dim"]
 States = Float[Tensor, "batch seq heads key_dim value_dim"]
 
+#: Counts the rebindings of what fires inside the mixers (`route_kernels`, `chunk_per_token`), so a model's
+#: measured forward order (`nnterp.order`) is measured again under the new kernels.
+generation = 0
+
 
 def _name(op: str) -> str:
     """The module-level function an op calls: ``torch_chunk_gated_delta_rule_0`` -> ``torch_chunk_gated_delta_rule``."""
@@ -127,6 +131,8 @@ def route_kernels(family, kernel: str = "torch") -> None:
         raise ValueError(f"kernel must be 'torch' or 'default', not {kernel!r}")
     for name, function in bindings.items():
         setattr(module, name, function)
+    global generation
+    generation += 1
 
 
 def route_delta_rule(family, kernel: str = "recurrent") -> None:

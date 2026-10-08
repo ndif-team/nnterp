@@ -13,6 +13,7 @@ from torch import Tensor
 
 from .eproperty import DerivedEProperty, EProperty, Unavailable, unavailable
 from .linear_attention import Gates
+from . import recurrent
 from .recurrent import RecurrentMixer, State, States, kernel, needs_torch_kernels, per_call
 
 #: The layouts at the scan call, tokens before heads. SSD's ``C`` and ``B`` are projected once per *group* of
@@ -83,6 +84,7 @@ def chunk_per_token(model: Any, enabled: bool = True) -> None:
         module = envoy._module
         built = module.__dict__.setdefault("_nnterp_chunk_size", module.chunk_size)
         module.chunk_size = 1 if enabled else built
+    recurrent.generation += 1
 
 
 def needs_per_token_chunks(envoy: Any) -> str | None:

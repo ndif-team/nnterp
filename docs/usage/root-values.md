@@ -132,6 +132,11 @@ torch.allclose(logits, other_logits)              # True: the second trace ran o
 assigned; assign input_ids`). A `torch.Size` bound inside the block does not survive the
 trace; save `torch.tensor(model.input_size)` if you need it outside.
 
+Under `model.generate`, `attention_mask` has one column per cached and new position at
+every step, `[batch, past + seq]`. When the batch has no padding, transformers (5.18 and
+later) calls the model with no mask at all; the read then serves the all-ones mask it
+would have passed, so code that masks pad positions runs unchanged.
+
 The six print with the model. The `token_embeddings` description says "entering the first
 block", which holds only where the model adds nothing after the embedding module (above):
 

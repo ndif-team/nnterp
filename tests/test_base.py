@@ -434,3 +434,22 @@ def test_get_topk_closest_tokens_returns_k_per_position(gpt2):
     for row in top:
         assert len(row) == k
         assert list(row.values()) == sorted(row.values(), reverse=True)
+
+
+@pytest.mark.parametrize("prompts", [["Hello world"], ["Hello world", "Hi"]], ids=["unpadded", "padded"])
+def test_attention_mask_under_generate_covers_every_position(gpt2, prompts):
+    """One column per cached and new position at every step, with or without padding.
+
+    transformers 5.18+ calls the model with no mask when the batch has no padding.
+    """
+    with gpt2.generate(prompts, max_new_tokens=3, do_sample=False) as tracer:
+        masks = list().save()
+        for step in tracer.iter[:]:
+            masks.append(gpt2.attention_mask)
+    prompt_len = masks[0].shape[1]
+    assert [tuple(m.shape) for m in masks] == [(len(prompts), prompt_len + i) for i in range(3)]
+    assert all(m[:, prompt_len:].eq(1).all() for m in masks)
+    if len(prompts) == 1:
+        assert all(m.eq(1).all() for m in masks)
+    else:
+        assert masks[0].eq(0).any()

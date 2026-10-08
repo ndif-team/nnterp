@@ -466,8 +466,20 @@ class StandardizedTransformer(Standardized, TransformersModel):
 
     @EProperty(key="inputs", description="The attention mask the model was called with; zeros are padding")
     def attention_mask(self, value: Any) -> Tokens:
-        """The attention mask the model was called with, ``[batch, seq]``; zeros are padding. Assignable."""
-        return value[1]["attention_mask"]
+        """The attention mask the model was called with, ``[batch, seq]``; zeros are padding. Assignable.
+
+        ``generate`` (transformers 5.18 and later) drops a mask with no padding before the
+        first forward, so the model is called without one; the read then serves the ones
+        that mask held, one per cached and new position, as the model was called before.
+        """
+        kwargs = value[1]
+        mask = kwargs.get("attention_mask")
+        if mask is not None:
+            return mask
+        ids = kwargs["input_ids"]
+        cache = kwargs.get("past_key_values")
+        past = cache.get_seq_length() if cache is not None else 0
+        return torch.ones(ids.shape[0], past + ids.shape[1], dtype=torch.long, device=ids.device)
 
     @attention_mask.postprocess
     def attention_mask(self, value: Tensor) -> Any:

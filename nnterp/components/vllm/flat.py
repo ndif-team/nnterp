@@ -63,11 +63,31 @@ class Flat(EProperty):
             (the queries, keys and values), ``"last"`` ``[1, tokens, heads,
             head_dim]`` (the head outputs). The width of a head is the
             ``head_size`` of the module the key names, vLLM's attention layer.
+        batch: Whether the tensor already carries the batch axis, ``[1,
+            tokens, ...]``, as it does inside the transformers model vLLM's
+            transformers backend runs: its rows are then ``tensor[0]``, served
+            and handed back the same way. A function of the host for a value
+            whose model decides (the root's ``token_embeddings``).
+        factor: For a value that is the tensor times a scalar of the model
+            (Granite's ``residual_multiplier``), a function of the host
+            giving that scalar. The value is served multiplied and is a
+            computed copy: a write goes back divided by the factor, and a
+            read that edits nothing hands the model's tensor back untouched,
+            so dividing never rounds a clean forward.
     """
 
-    def __init__(self, *args: Any, heads: str | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self, *args: Any, heads: str | None = None, batch: bool | Callable[[Envoy], bool] = False,
+        factor: Callable[[Envoy], float] | None = None, **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.heads = heads
+        self.batch = batch
+        self.factor = factor
+
+    def _batched(self, obj: Envoy) -> bool:
+        """Whether the tensor ``obj`` serves here carries the batch axis already."""
+        return self.batch(obj) if callable(self.batch) else self.batch
 
     def _layout(self, obj: Envoy) -> dict:
         """How this value's rows are laid out for the reader: the keyword arguments of `batched` and `unbatched`."""
@@ -80,18 +100,30 @@ class Flat(EProperty):
     def __call__(self, preprocess: Callable) -> "Flat":
         @functools.wraps(preprocess)
         def read(envoy: Envoy, value: torch.Tensor) -> torch.Tensor:
-            return preprocess(envoy, batched(value, **self._layout(envoy)))
+            return preprocess(envoy, self._view(envoy, value))
 
         super().__call__(read)
         self._transform = self._hand_back
         return self
 
+    def _view(self, obj: Envoy, value: torch.Tensor) -> torch.Tensor:
+        """What a read of ``value`` serves: its rows as a private ``[1, tokens, ...]`` copy, times the factor."""
+        view = batched(value[0] if self._batched(obj) else value, **self._layout(obj))
+        return view if self.factor is None else view * self.factor(obj)
+
     def _rows(self, obj: Envoy, value: torch.Tensor, rows: torch.Tensor) -> torch.Tensor:
+        if self.factor is not None:
+            value = value / self.factor(obj)
+        if self._batched(obj):
+            return unbatched(value, rows[0], f"{obj.path}.{self.name}", **self._layout(obj)).unsqueeze(0)
         return unbatched(value, rows, f"{obj.path}.{self.name}", **self._layout(obj))
 
     def _hand_back(self, obj: Envoy, view: torch.Tensor, raw: Any) -> Any:
         attribute, select = self.attribute(self.path(obj)), self._selection(obj)
-        return self._put(attribute, raw, self._rows(obj, view, self._pick(attribute, raw, select)), select)
+        rows = self._pick(attribute, raw, select)
+        if self.factor is not None and torch.equal(view, self._view(obj, rows)):
+            return raw  # nothing edited: dividing the product back would round
+        return self._put(attribute, raw, self._rows(obj, view, rows), select)
 
     def __set__(self, obj: Envoy, value: torch.Tensor) -> None:
         self._check(obj)

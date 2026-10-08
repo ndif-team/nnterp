@@ -107,8 +107,13 @@ vLLM's families are `nnterp/families/vllm/<model_type>.py`
 `nnterp/components/vllm/` (`flat.py`, `layer.py`, `attention.py`, `mlp.py`,
 mirroring `nnterp/components/`): `Flat`, an `EProperty` over a `[tokens, ...]`
 tensor served as a private `[1, tokens, ...]` copy and handed back by a
-transform, and `FusedLayer`, whose stream is the sum of the
-`(hidden_states, residual)` pair a fused block takes and returns. The block
+transform (times a `factor`, divided back on a write, where the value is a
+scaled copy), and `FusedLayer`, whose stream is the sum of the
+`(hidden_states, residual)` pair a fused block takes and returns.
+`transformers_backend.py` holds the bases of the families vLLM runs through
+its transformers backend, where transformers' own modules run inside the
+engine with the batch axis kept and the engine's attention layer outside
+the module tree. The block
 runs in the engine's worker against the client's envoy classes, pickled by
 reference, the way a remote trace does. [usage/vllm](../usage/vllm.md).
 

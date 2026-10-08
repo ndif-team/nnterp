@@ -67,7 +67,7 @@ def close(got, want, tolerance, name=""):
 
 
 @torch.no_grad()
-def transformers_values(repo, skip):
+def transformers_values(repo, skip, load=None):
     """`PROMPT` through `StandardizedTransformer` in float32: the standard values, and the logits under three edits.
 
     Without gradients: a value saved with its graph keeps the weights it was
@@ -75,7 +75,7 @@ def transformers_values(repo, skip):
     The attention's interior is read one value a trace: each transformers
     family reads its own in its own order.
     """
-    hf = StandardizedTransformer(repo, device_map="cuda", dtype=torch.float32, attn_implementation="eager")
+    hf = StandardizedTransformer(repo, device_map="cuda", dtype=torch.float32, attn_implementation="eager", **(load or {}))
     ids = hf.tokenizer(PROMPT)["input_ids"]
     picked = sorted({0, hf.num_layers // 2, hf.num_layers - 1})
     middle = picked[len(picked) // 2]
@@ -137,6 +137,8 @@ class VLLMFamilySuite:
     UNAVAILABLE = frozenset({"attention_mask"})
     #: Engine arguments this checkpoint needs.
     ENGINE: dict = {}
+    #: Arguments the transformers reference needs to load this checkpoint (a VL wrapper's ``task``).
+    REFERENCE: dict = {}
     #: The engine's dtype. The reference is float32 either way; a kernel that only runs in half precision is
     #: compared at the tolerances its class sets.
     DTYPE = "float32"
@@ -144,7 +146,7 @@ class VLLMFamilySuite:
     @pytest.fixture(scope="class")
     def reference(self, request):
         """The transformers engine's values for `PROMPT`; its model is off the card before vLLM sizes itself from what is free."""
-        values = transformers_values(request.cls.REPO, request.cls.SKIP)
+        values = transformers_values(request.cls.REPO, request.cls.SKIP, request.cls.REFERENCE)
         gc.collect()
         torch.cuda.empty_cache()
         return values

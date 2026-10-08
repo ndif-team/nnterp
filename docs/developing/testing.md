@@ -308,18 +308,27 @@ engine, and engines sharing a card overrun their memory fractions. The
 directory is not named `vllm`: with `tests/` on the path that would be
 importable as `vllm`.
 
-A family's file names a real checkpoint both engines load (`MEMORY` is its
-engine's share of the card), because vLLM's attention kernels need a head
-width of at least 16 (32 in float32) and the tiny random checkpoints of
-`tests/families/` are narrower. The reference reads the attention's interior
-one value a trace, since each transformers family reads its own in its own
-order. Class attributes say what a family differs in: `SERVED` (the interior
-values vLLM serves; `()` on DeepSeek), `UNAVAILABLE`, `TOLERANCE` and
-`KERNEL_TOLERANCE` (set, with the measurement beside them, on the two
-checkpoints whose sharp softmax the two kernels sum differently: Qwen2.5-0.5B
-and Pythia-70m), `DTYPE` and `ENGINE`. DeepSeek's file has two classes, one
-per attention backend. 27 tests a class, 25 to 80 s each; the checkpoints are
-about 150 GB together.
+A family's file names a checkpoint both engines load (`MEMORY` is its
+engine's share of the card): a small real one where one is published, else a
+tiny one, or a copy of one resized and written once to the temp directory by
+the test (Laguna, MiMo-V2-Flash, Llama 4, Ministral 3, HyperCLOVA X, ...),
+because vLLM's attention kernels need a head width of at least 16 (32 in
+float32; narrower can hang the engine) and most of its MLPs take SiLU only.
+The reference reads the attention's interior one value a trace, since each
+transformers family reads its own in its own order. Class attributes say
+what a family differs in: `SERVED` (the interior values vLLM serves; `()` on
+the latent-attention families), `UNAVAILABLE`, `TOLERANCE` and
+`KERNEL_TOLERANCE` (set, with the measurement beside them, where the two
+engines' attention kernels differ more than the default allows), `DTYPE`,
+`ENGINE` (engine arguments: `language_model_only=True` on the
+vision-language wrappers, `hf_overrides` where a checkpoint has to be told
+what vLLM misreads) and `REFERENCE` (arguments of the transformers
+reference's load: a wrapper's `task`, or a config value set to what vLLM
+builds). The latent-attention families' files have two classes, one per
+attention backend. Two classes skip on a stock install, with the condition
+in their file: Apertus (nnsight's meta build must answer `.cpu().item()`)
+and DBRX (vLLM 0.27.1's loader does not find the experts). About 27 tests a
+class, 25 to 80 s each; the checkpoints are about 250 GB together.
 
 ## The root tests
 

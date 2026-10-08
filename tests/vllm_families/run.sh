@@ -14,7 +14,7 @@ for family in "${families[@]}"; do
     for class in $(grep -oE '^class Test[A-Za-z0-9_]+' "$file" | cut -d' ' -f2); do
         log="${TMPDIR:-/tmp}/nnterp-vllm-$family-$class.log"
         "${PYTHON:-python}" -m pytest -q -p no:cacheprovider -o addopts= "$file::$class" > "$log" 2>&1 || status=1
-        echo "$family $class: $(grep -E '^(FAILED|ERROR) |passed|failed' "$log" | tail -5 | tr '\n' ' ')"
+        echo "$family $class: $(grep -E '^(FAILED|ERROR) |passed|failed|skipped' "$log" | tail -5 | tr '\n' ' ')"
     done
 done
 exit $status

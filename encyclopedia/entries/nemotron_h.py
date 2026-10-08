@@ -23,7 +23,158 @@ CHECKPOINTS = [
     "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-Base-BF16", "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16",
     "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-Base-BF16", "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16",
     "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Base-BF16", "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16",
+    "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16",
 ]
+
+def _omni_processor(repo: str):
+    """The checkpoint's processor, or, where it ships no processor files (the pinned tiny wrapper), one built from its
+    tokenizer as tests/families/test_nemotron_h.py builds it."""
+    from transformers import AutoProcessor, AutoTokenizer, ParakeetFeatureExtractor
+    from transformers.models.nemotron_h_omni import (
+        image_processing_nemotron_h_omni as image, processing_nemotron_h_omni as processing,
+        video_processing_nemotron_h_omni as video,
+    )
+
+    try:
+        return AutoProcessor.from_pretrained(repo)
+    except OSError:
+        tokenizer = AutoTokenizer.from_pretrained(repo)
+        return processing.NemotronH_Omni_Reasoning_V3Processor(
+            image_processor=image.NemotronH_Omni_Reasoning_V3ImageProcessor(min_num_patches=16, max_num_patches=24),
+            video_processor=video.NemotronH_Omni_Reasoning_V3VideoProcessor(), feature_extractor=ParakeetFeatureExtractor(),
+            tokenizer=tokenizer, chat_template=tokenizer.chat_template,
+        )
+
+
+#: The vision-language wrapper of this family, keyed by the wrapper's config.model_type (transformers 5.18 and later).
+#: Its RADIO vision encoder is hosted by this family alone, so it is inline (``tower``). Shapes, orders and identities
+#: were checked on the pinned tiny wrapper under transformers 5.19 (float32, eager, pure-torch kernels), with the
+#: processor tests/families/test_nemotron_h.py builds (the tiny checkpoint ships none, and leaves image_token_id unset).
+#: The released Omni checkpoint keeps its original config (model_type NemotronH_Nano_Omni_Reasoning_V3, remote code),
+#: which transformers' AutoConfig does not read, so the page lists it greyed out with that reason.
+WRAPPERS = {
+    "nemotron_h_omni": {
+        "title": "NemotronH Omni",
+        "pinned": "hf-tiny-v2/tiny-random-NemotronH_Omni_Reasoning_V3",
+        "processor": _omni_processor,
+        "projector": "multi_modal_projector: each image's patch rows (the CLS and register tokens dropped) pixel-shuffled "
+                     "2 × 2 into one row 4 × vision_hidden wide, then an RMSNorm, linear_1, squared ReLU and linear_2",
+        "projector_input": "the pixel shuffle of each image's patch rows of the last block's output",
+        "quirks": ["pooled-projector"],
+        "tower": {
+            "TITLE": "RADIO",
+            "VISION_CONFIG_TYPES": ["radio"],
+            "MODULE_CLASSES": ["RadioModel"],
+            "BLOCK": {
+                "topology": "sequential",
+                "sublayers": [
+                    {
+                        "host": "self_attn",
+                        "kind": "attention",
+                        "label": "Attention",
+                        "pre_norm": "input_layernorm",
+                        "contribution": "attention_output",
+                        # one interface call per image for several images: no pattern, so scores, probabilities and head outputs are Unavailable
+                        "interior": ["attention_queries", "attention_keys", "attention_values"],
+                        "detail": "{num_heads} heads × {head_dim}, per image, layer-scaled",
+                    },
+                    {
+                        "host": "mlp",
+                        "kind": "mlp",
+                        "label": "MLP",
+                        "pre_norm": "post_attention_layernorm",
+                        "contribution": "mlp_output",
+                        "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}, layer-scaled",
+                    },
+                ],
+            },
+            "ROWS": ("One row, packed: every image of the invoke in one row, `[1, tokens, vision_hidden]`. Each image is its "
+                     "`num_cls_tokens + num_registers` prefix tokens, then its patches in raster order; the processor's "
+                     "`image_grid_hw` (patches per side) splits the row."),
+            "MASKING": ("No causal mask. With one image the attention runs once over the row; with several, once per image "
+                        "(split at `cu_seqlens`), so no token attends to another image's."),
+            "POSITIONS": ("`patch_embeddings` is `patch_projection`'s output, before the prefix tokens and the position "
+                          "embeddings. A learned position table, resampled to each image's grid, is added to the patches; "
+                          "the prefix tokens have no position. No rotary."),
+            "NORM": ("None after the last block: `vision.tower_output` is the last block's stream, prefix tokens included. "
+                     "A checkpoint whose language model has multi-token-prediction layers adds `vision_final_layernorm` "
+                     "before the pixel shuffle, outside the vision encoder."),
+            "QUIRKS": ["packed-tower", "variable-resolution", "cls-token"],
+            "NOTES": """
+## The block scales what each sublayer adds
+
+```
+h   = x + layer_scale1(self_attn(input_layernorm(x)))
+out = h + layer_scale2(mlp(post_attention_layernorm(h)))      # fc1, GELU, fc2
+```
+
+Both norms are LayerNorms (native `norm1`, `norm2`). `layer_scale1` and `layer_scale2` multiply
+each channel by a learned `lambda1`, so `attention_output` and `mlp_output` are the scales'
+outputs, and `vision.layers[i].input + attention_output + mlp_output == layer_output` holds.
+`self_attn.output[0]` is the attention before its scale.
+
+## Every image in one row, behind its prefix tokens
+
+The row holds each image's `num_cls_tokens` CLS tokens and `num_registers` register tokens, then
+its `h * w` patches. On the pinned tiny checkpoint (2 CLS, 1 register) an image the processor
+puts on a 4 × 4 grid is `[1, 19, 32]` at every block, and `patch_embeddings` is its 16 patches,
+`[1, 16, 32]`. The prefix tokens reach the text model only through the attention: the wrapper
+drops them before the pixel shuffle, so a write to the last block's `layer_output[:, :3]` leaves
+the logits unchanged and a write to its patch rows changes them.
+
+## Queries, keys and values whole; no pattern
+
+With several images the attention makes one call per image, so no single call holds the block's
+pattern: `attention_scores`, `attention_probabilities` and `attention_head_outputs` are
+`Unavailable`. `attention_queries`, `attention_keys` and `attention_values` are served whole,
+`[1, heads, tokens, head_dim]`; split them at `self_attn.inputs[1]["cu_seqlens"]` (absent for one
+image) to compute one image's pattern.
+""",
+        },
+        "notes": """
+## The projector reads the pixel-shuffled patches
+
+The wrapper takes each image's patch rows of the last block's stream (the prefix tokens dropped),
+lays them out on the image's grid and pixel-shuffles each 2 × 2 block into one row
+4 × `vision_hidden` wide (`downsample_ratio` 0.5). `model.projector` is
+`multi_modal_projector`: an RMSNorm, `linear_1` to `projector_hidden_size` (20480 on the released
+checkpoint), a squared ReLU and `linear_2` to the text model's width. An image of `h × w` patches
+is `h * w / 4` image tokens.
+
+```python
+with model.trace(prompt, images=[image]):
+    mask = model.vision.image_token_mask.save()
+    fed = model.projector.input.save()          # [image_tokens, 4 * vision_hidden]
+    features = model.vision.image_features.save()
+    first = model.layers[0].input.save()
+
+fed.shape[0] == mask.sum()                      # True: one row per image token
+torch.equal(first[mask], features)              # True
+```
+
+`vision.tower_output` holds the same stream, prefix tokens included, but it is served at the
+vision encoder's output, after the encoder has handed the wrapper its patch rows: a write there does
+not reach the text model. Edit the image inside the encoder at `vision.layers[-1].layer_output`, or
+after it at `model.projector.input` or `vision.image_features`.
+
+## The root scatters
+
+`NemotronH_Omni_Reasoning_V3` has no inner model: the whole Nemotron-H model sits at
+`language_model` (`language_model.model.layers`, `language_model.lm_head`) and the wrapper's own
+forward runs the vision encoder, the projector and `inputs_embeds.masked_scatter`, so
+`vision.image_features` is read at the root. The text names bind through `language_model`, and
+the text model's kernels are routed as on Nemotron-H (`route_kernels`).
+
+## Image tokens
+
+`vision.image_token_mask` marks the config's `image_token_id`. The pinned tiny checkpoint ships no
+processor files and leaves `image_token_id` unset; build the processor from its tokenizer and set
+the id from the processor, as its test does. The checkpoint also carries an audio tower
+(`audio_tower`, `embed_audio`) that nnterp does not name. Under `generate` the vision encoder runs
+before the prompt's forward, so its values come before `vision.image_token_mask` in a block.
+""",
+    },
+}
 
 #: Set by hues.py (lineage: Nemotron).
 PALETTE = {"hue": 226}

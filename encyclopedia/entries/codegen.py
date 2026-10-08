@@ -241,7 +241,7 @@ sizes, from the configs:
 (`mp_num = 8`), not 4, so the class mixes columns of the queries, values and keys. On a 13-line
 Python sample codegen2-1B's loss is 8.93 as loaded and 0.34 after regrouping each
 `qkv_proj.weight` from 8 groups of `[q | v | k]` to 4. The 7B and 16B code uses 4 groups. With
-`trust_remote_code=True` the remote code fails to import on transformers 5.17 (it imports
+`trust_remote_code=True` the remote code fails to import on transformers 5.17 and 5.19 (it imports
 `transformers.onnx`). CodeGen2.5 (`Salesforce/codegen25-7b-mono`, ...) is a `LlamaForCausalLM`
 and loads as Llama.
 """

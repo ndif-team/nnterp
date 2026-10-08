@@ -174,7 +174,9 @@ The experts hold their weights as stacked parameters, `experts.gate_up_proj`
 (`[num_experts, hidden, 2 × intermediate]`) and `experts.down_proj`, each with a bias. The
 gate and up halves are interleaved, gate on the even columns and up on the odd ones. The gate is
 clamped above at 7 and the up half to [−7, 7] (`swiglu_limit`), and the activation is
-`(up + 1) · gate · sigmoid(1.702 · gate)`. An expert's output carries its `down_proj` bias, so
+`(up + 1) · gate · sigmoid(1.702 · gate)` (`swiglu_alpha`). Since transformers 5.19 the experts read
+both from the config (`swiglu_limit` is 7.0 in every released config, `swiglu_alpha` takes its 1.702
+default); earlier releases fixed them in the code. An expert's output carries its `down_proj` bias, so
 every slot adds a weighted bias, and `expert_outputs` is that output times the slot's weight.
 
 ## Ablating an expert touches only the tokens routed to it

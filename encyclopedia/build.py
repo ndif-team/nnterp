@@ -344,6 +344,10 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
     reference = reference or entry.REFERENCE
     load = getattr(entry, "load", StandardizedTransformer)
     task = {"task": IMAGE_TASK} if wrapper else {}
+    # a wrapper whose checkpoint ships no processor files names a function that builds one (NemotronH Omni's tiny)
+    make_processor = entry.WRAPPERS[wrapper].get("processor") if wrapper else None
+    if make_processor:
+        task["processor"] = make_processor(reference)
     eager = load(reference, attn_implementation="eager", **task)
     default = load(reference, **task)
     family = eager.family
@@ -1406,7 +1410,8 @@ def read_checkpoint(entry: ModuleType, checkpoint: str, cache: dict[Any, dict[st
     key, wrapper = checkpoint, None
     if not hasattr(entry, "load"):
         try:
-            config = AutoConfig.from_pretrained(checkpoint)
+            # never the remote-code prompt: a config transformers cannot read itself is a reason the page states
+            config = AutoConfig.from_pretrained(checkpoint, trust_remote_code=False)
         except Exception as error:  # noqa: BLE001 - whatever makes a config unreadable is a reason the page states
             return {"id": checkpoint, "unavailable": unavailable_reason(error)}
         if config.model_type in IMAGE_TEXT_TO_TEXT and config.model_type in getattr(entry, "WRAPPERS", {}):

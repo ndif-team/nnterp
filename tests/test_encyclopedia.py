@@ -185,6 +185,8 @@ def wrapped():
 def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
     """The wrapper's pinned tiny checkpoint, selected on its family's page, brings the vision encoder: its module is
     found, its block is drawn with the encoder's names, the vision ledgers carry its values, and its config shows."""
+    if wrapper not in build.IMAGE_TEXT_TO_TEXT:
+        pytest.skip(f"this transformers has no {wrapper} (HyperCLOVA X Vision V2 and NemotronH Omni are in 5.18 and later)")
     entry = entries.load(name)
     # Where the suite rewrites the pinned checkpoint into a local copy (Llama 4), the page is built from the copy.
     text_pin = pinned(entry) if os.path.isdir(pinned(entry)) else entry.PINNED
@@ -227,7 +229,8 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
     for size in build.TOWER_SIZE_NAMES:
         assert f"model.vision.{size}</span>" in shown["config"], size
     assert '<h2 class="fold-heading">The <em>vision encoder</em></h2>' in shown["tower"]
-    assert vision["architecture"].endswith("ForConditionalGeneration") and (text["architecture"].endswith("ForCausalLM") or not text_side)
+    # the wrapper's image-text-to-text class (NemotronH Omni's is NemotronH_Omni_Reasoning_V3, not a ...ForConditionalGeneration)
+    assert vision["architecture"] in build.IMAGE_TEXT_TO_TEXT.values() and (text["architecture"].endswith("ForCausalLM") or not text_side)
     assert f'href="https://huggingface.co/{text_pin}"' in page and 'id="ckpt-hub"' in page
     assert f'href="https://huggingface.co/{tiny}"' not in page or not text_side, "only the selected checkpoint is linked, by the script"
     assert "Vision-language" in shown["chips"] and "<h2>" in shown["vision_notes"] and "<details" in shown["vision_notes"]
@@ -344,6 +347,8 @@ def test_the_index_lists_every_vision_encoder_an_entry_resolves():
     for name in entries.names():
         entry = entries.load(name)
         for wrapper, fields in getattr(entry, "WRAPPERS", {}).items():
+            if wrapper not in build.IMAGE_TEXT_TO_TEXT:  # a wrapper newer than this transformers
+                continue
             repo = pinned(entry) if fields["pinned"] == entry.PINNED else fields["pinned"]  # the suite's copy, if any
             vision_type = AutoConfig.from_pretrained(repo).vision_config.model_type
             titles.add(vision.resolve(entry, wrapper, vision_type)["title"])

@@ -11,7 +11,7 @@ SUBTITLE = (
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "meta-llama/Llama-4-Scout-17B-16E"
 #: The tiny checkpoint the test suite builds the page from. The suite rewrites its config into a local copy
-#: (``attn_temperature_tuning`` from the int 4 to ``true``, which transformers 5.17 validates as a bool), and the
+#: (``attn_temperature_tuning`` from the int 4 to ``true``, which transformers (5.17 to 5.19) validates as a bool), and the
 #: page is built from that copy. It is a ``llama4`` wrapper with a four-block ``llama4_text`` model.
 PINNED = "yujiepan/llama-4-tiny-random"
 #: Every published checkpoint is a ``llama4`` wrapper (Llama4ForConditionalGeneration), a key of WRAPPERS, so the

@@ -13,7 +13,7 @@ REFERENCE = "Zyphra/ZAYA1-8B"
 #: The tiny checkpoint the test suite builds the page from (the suite runs a copy with qk_norm.temp set to one).
 PINNED = "hf-tiny-v2/tiny-random-ZayaForCausalLM"
 #: The -base, -reasoning-base and -legacy checkpoints keep the original layout's config (`rope_scaling: false`),
-#: which transformers 5.17 does not parse; the page lists them greyed out with that reason.
+#: which transformers (5.17 to 5.19) does not parse; the page lists them greyed out with that reason.
 CHECKPOINTS = [
     "Zyphra/ZAYA1-8B", "Zyphra/ZAYA1-8B-FP8-Experts", "Zyphra/ZAYA1-8B-MXFP4-Experts", "Zyphra/ZAYA1-74B-preview",
     "Zyphra/ZAYA1-base", "Zyphra/ZAYA1-reasoning-base", "Zyphra/ZAYA1-8B-legacy", "Zyphra/ZAYA1-74B-preview-legacy",

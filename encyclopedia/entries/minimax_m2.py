@@ -17,7 +17,11 @@ CHECKPOINTS = ["MiniMaxAI/MiniMax-M2", "MiniMaxAI/MiniMax-M2.1", "MiniMaxAI/Mini
 #: Set by hues.py (lineage: MiniMax / MiMo).
 PALETTE = {"hue": 346}
 VLLM = False
-QUIRKS = ["qk-norm", "mixture-of-experts"]
+QUIRKS = [
+    "qk-norm", "mixture-of-experts",
+    # rotary_dim 64 of 128, read as partial_rotary_factor 0.5 from transformers 5.18 on; earlier releases rotate the whole head
+    {"slug": "partial-rotary", "when": lambda config: (config.rope_parameters or {}).get("partial_rotary_factor", 1.0) < 1.0},
+]
 
 #: The checkpoints have 230B parameters: nothing here ran on real weights. Every identity, shape and snippet ran on
 #: the pinned tiny checkpoint (2 blocks, 8 experts, top 2; float32, eager); the sizes are the Hub configs', read on
@@ -98,6 +102,15 @@ with model.trace(prompt):
 `[batch, 8, seq, 128]` and query head `h` reads key/value head `h // 6`: an edit to one key/value head
 reaches 6 query heads. `head_dim` is the config's 128, so `num_heads * head_dim` (6144) is wider
 than the 3072-wide stream.
+
+## Rotary turns half of each head
+
+The Hub configs set `rotary_dim: 64` of each head's 128 dimensions. Since transformers 5.18
+`MiniMaxM2Config` reads it as `rope_parameters["partial_rotary_factor"]` 0.5 (#48486): the first 64
+dimensions of every query and key are rotated, as two halves of 32 (`rotate_half`), and dimensions 64
+to 127 of `attention_queries` and `attention_keys` are the normed projections unrotated, carrying no
+position. Up to 5.17 transformers ignored `rotary_dim` and rotated all 128 dimensions, which is not
+what the checkpoints were trained with.
 
 ## Load with eager for the attention interior
 

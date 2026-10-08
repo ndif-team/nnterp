@@ -315,7 +315,7 @@ A Mamba-2 (SSD) mixer (`layers[i].linear_attn` on Mamba-2, Nemotron-H, Bamba and
 
 | Value | Layout | Read at | Assignable | Unavailable when |
 |---|---|---|---|---|
-| `image_token_mask` | `ImageTokenMask` | the model's inputs (`"/inputs"`), so first in the invoke: `input_ids == config.image_token_id` | no (`AttributeError`: assign `input_ids`) | `no_images()`, or the config names no `image_token_id` |
+| `image_token_mask` | `ImageTokenMask` | the model's inputs (`"/inputs"`), so first in a trace (under `generate` on transformers 5.18 and later, after the tower: [vision.md](../usage/vision.md)): `input_ids == config.image_token_id` | no (`AttributeError`: assign `input_ids`) | `no_images()`, or the config names no `image_token_id` |
 | `patch_embeddings` | `Patches` | `patch_embed.output`, one row per patch before any position embedding, CLS token or pre-norm (a convolution's grid flattened, a view); on `PixtralVision` the packed row entering `ln_pre` | yes | `no_images()` |
 | `tower_output` | `Patches` | the last block's stream after `vision.norm` where there is one, before any pooling, CLS dropping or adapter: the tower's `last_hidden_state`, or where the stream is on a tower that returns something after those (Llama 4: `layernorm_post`; Gemma 4: the encoder) | yes | `no_images()` |
 | `image_features` | `ImageFeatures` | the features argument of the scatter in the wrapper model's forward (`ImageScatter.scatter`, `.scatter_argument`; the root's own forward where the family names `ROOT_SCATTER`) flat over the batch's image tokens: `layers[0].input[image_token_mask] == image_features` | yes; in-place edits land | as `image_token_mask`, or the family keys no `ImageScatter` on the wrapper's model |
@@ -492,7 +492,7 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 - `next_token_probs`, `input_size` and `states` are read-only.
 - `route_kernels(model.family, "torch")` before tracing a DeltaNet layer whose `state` you want; a forward `.source` has already instrumented keeps the binding it was compiled with.
 - `import nnterp` (or `nnsight`) before any `transformers.models...modeling_*` import; the reverse order segfaults at import on this stack.
-- A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace, `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden]`.
+- A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace (after the tower under `generate` on transformers 5.18 and later), `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden]`.
 
 ## Related
 

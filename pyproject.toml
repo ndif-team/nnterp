@@ -20,7 +20,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: OS Independent",
 ]
-dependencies = ["nnsight>=0.8", "transformers", "jaxtyping"]
+dependencies = ["nnsight>=0.8", "transformers>=5.17", "jaxtyping"]
 
 [project.optional-dependencies]
 # Tokenizers and processors some families' checkpoints need beyond transformers' defaults.

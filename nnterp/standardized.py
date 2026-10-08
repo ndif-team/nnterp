@@ -26,16 +26,6 @@ NextTokenProbs = Float[Tensor, "batch vocab"]
 Tokens = Int[Tensor, "batch seq"]
 
 
-def _all_ones_mask(kwargs: dict[str, Any]) -> Tensor:
-    """The mask a call made with none stands for: ones over the cached tokens and the new ones, ``[batch, past + seq]``."""
-    tokens = kwargs.get("input_ids")
-    if tokens is None:
-        tokens = kwargs["inputs_embeds"]
-    cache = kwargs.get("past_key_values")
-    past = cache.get_seq_length() if cache is not None else 0
-    return torch.ones(tokens.shape[0], past + tokens.shape[1], dtype=torch.long, device=tokens.device)
-
-
 class StandardizedProperty:
     """A read-only value of the model that a family may define instead.
 
@@ -488,7 +478,12 @@ class StandardizedTransformer(Standardized, TransformersModel):
         """
         kwargs = value[1]
         if kwargs.get("attention_mask") is None:
-            kwargs["attention_mask"] = _all_ones_mask(kwargs)
+            tokens = kwargs.get("input_ids")
+            if tokens is None:
+                tokens = kwargs["inputs_embeds"]
+            cache = kwargs.get("past_key_values")
+            past = cache.get_seq_length() if cache is not None else 0
+            kwargs["attention_mask"] = torch.ones(tokens.shape[0], past + tokens.shape[1], dtype=torch.long, device=tokens.device)
         return kwargs["attention_mask"]
 
     @attention_mask.postprocess

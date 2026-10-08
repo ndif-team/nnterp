@@ -59,7 +59,7 @@ Every value on the root and on the blocks answers for the current call:
 | `model.logits` | `[batch, prompt_len, vocab]` | `[batch, 1, vocab]` |
 | `model.next_token_probs` | `[batch, vocab]` | `[batch, vocab]` |
 | `vision.image_token_mask` (a vision-language wrapper, `model.generate(prompt, images=[image], ...)`) | `[batch, prompt_len]`, the image tokens true | `[batch, 1]`, all false: the new token is text |
-| `vision.image_features`, the tower's blocks | the prompt call's only: the tower runs once, on the prompt | never reached: a read bound to a decode step has no occurrence ([vision.md](vision.md#image-positions-and-text-positions)) |
+| `vision.image_features`, the tower's blocks | step 0's only: the tower runs once, for the prompt (before the prompt call on transformers 5.18 and later, so before `image_token_mask`; [vision.md](vision.md)) | never reached: a read bound to a decode step has no occurrence ([vision.md](vision.md#image-positions-and-text-positions)) |
 
 On a decode step the pattern has one query row over every cached key, so
 `attention_probabilities[0, h, 0]` is what head `h` of the new token attends

@@ -13,7 +13,9 @@ sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py,
 This is the one page in `docs/` that talks about versions. nnterp is
 developed on **transformers 5.17.0** and **nnsight 0.8.0** (the `dev`
 branch, at the envoy-parent merge, nnsight #759, `b2bc0fd7`), with torch 2.13 and
-jaxtyping 0.3.11; `pyproject.toml` requires `nnsight>=0.8`, `transformers`
+jaxtyping 0.3.11, and runs on **transformers 5.19.0** as well: the suite passes on
+both (a test that needs a 5.18 class skips on 5.17), and every snippet in `docs/` that runs on CPU with a tiny checkpoint returns
+identical values on both wherever they do not depend on unseeded randomness; `pyproject.toml` requires `nnsight>=0.8`, `transformers`
 and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below); no nnsight release has them yet, so the pin cannot say it, and a
 `dev` at or after `b2bc0fd7` is what nnterp runs on. The names a family binds to (`RENAME`, `ENVOYS`) are
@@ -166,6 +168,12 @@ keys, and nnsight binds whichever resolves (`gpt_neox.py:17-20`).
    stream (`components/attention.py:64-67`).
 4. Re-run the family's file, then the whole suite. Update the version
    sentence at the top of this page.
+   Releases also move behaviour no op name pins. On 5.18 and later `generate`
+   calls the model with no `attention_mask` when the batch has no padding
+   (`model.attention_mask` serves the all-ones mask it would have had,
+   [root-values.md](../usage/root-values.md)), and encodes a wrapper's images before
+   the first forward, so under `generate` the tower's values come before
+   `vision.image_token_mask` ([vision.md](../usage/vision.md)).
 5. A checkpoint whose config no longer parses is a test-data problem, not a
    family problem: patch the config the way `tests/families/test_olmo3.py:14-32`
    does.

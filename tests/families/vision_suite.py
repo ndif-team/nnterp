@@ -18,6 +18,7 @@ import numpy as np
 import pytest
 import torch
 from nnsight.intervention.envoy import Envoy
+from nnsight.intervention.interleaver import OutOfOrderError
 from PIL import Image
 from suite import PROMPT, contributions
 
@@ -98,6 +99,14 @@ def clip_rows(tower="model.vision_tower"):
     rows = siglip_rows(tower)
     del rows["vision.norm"]
     return rows
+
+
+def encodes_images_in_generate(module):
+    """Whether transformers' ``generate`` runs the image encoder before the first forward (5.18 and later), on the condition
+    ``GenerationMixin._maybe_prepare_encoder_kwargs_for_generation`` checks: the forward takes ``mm_encoder_outputs`` and the
+    class lists images among its ``input_modalities`` (Qwen3.5's does not: it keeps the default ``"text"``)."""
+    supports = getattr(module, "_supports_mm_encoder_outputs", None)
+    return bool(supports and supports() and "image" in module.input_modalities)
 
 
 def align_processor(model, image_processor=None, **processor):
@@ -303,6 +312,45 @@ class VisionSuite:
         with pytest.raises(AttributeError, match="assign input_ids"):
             with model.trace(image_prompt(model), images=[IMAGE]):
                 model.vision.image_token_mask = torch.zeros(1, 1, dtype=torch.bool)
+
+    # -- under generate ---------------------------------------------------------------------
+
+    def test_generate_serves_the_image_values_on_the_prompt_call(self, model, clean):
+        """The tower and the scatter run once, for the prompt: the image values are the trace's, and an edit lands there."""
+        with model.generate(image_prompt(model), images=[IMAGE], max_new_tokens=2, do_sample=False):
+            mask = model.vision.image_token_mask.save()
+            features = model.vision.image_features.save()
+            first = model.layers[0].input.save()
+        assert torch.equal(mask, clean["mask"]) and torch.equal(first[mask], features)
+        torch.testing.assert_close(features, clean["features"])
+        with model.generate(image_prompt(model), images=[IMAGE], max_new_tokens=2, do_sample=False):
+            patches = model.vision.patch_embeddings.save()
+            model.vision.image_features[:] = 0
+            first = model.layers[0].input.save()
+        assert patches.shape[-1] == model.vision.hidden_size
+        assert (first[clean["mask"]] == 0).all()
+
+    def test_generate_encodes_the_images_before_the_prompt_call(self, model):
+        """Where transformers encodes the images in ``generate`` before the first forward (``mm_encoder_outputs``, 5.18 and
+        later), the tower's values come before ``image_token_mask``, which is read off the root's inputs; before that,
+        after it, as in a trace. ``image_features``, read at the scatter, is after both either way."""
+        early = encodes_images_in_generate(model._module)
+        with model.generate(image_prompt(model), images=[IMAGE], max_new_tokens=2, do_sample=False):
+            if early:
+                model.vision.patch_embeddings.save()
+                model.vision.image_token_mask.save()
+            else:
+                model.vision.image_token_mask.save()
+                model.vision.patch_embeddings.save()
+            model.vision.image_features.save()
+        with pytest.raises(OutOfOrderError):
+            with model.generate(image_prompt(model), images=[IMAGE], max_new_tokens=2, do_sample=False):
+                if early:
+                    model.vision.image_token_mask.save()
+                    model.vision.patch_embeddings.save()
+                else:
+                    model.vision.patch_embeddings.save()
+                    model.vision.image_token_mask.save()
 
     def text_input(self, model):
         """What a text-only trace is given: the prompt, or its encoding where the processor demands an image (PaliGemma)."""

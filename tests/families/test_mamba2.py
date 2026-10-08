@@ -9,6 +9,7 @@ from nnterp.families import mamba2
 
 class TestMamba2(StateSpaceChecks, FamilySuite):
     REPO = "yujiepan/mamba2-tiny-random"
+    DECODE_MASK_COVERS_CACHE = False  # a decode step is fed the new token's mask only
     FAMILY = mamba2
     ATTENTION_NORM = "norm"                # the block norm keeps its native name
     NATIVE = {

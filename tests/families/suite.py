@@ -168,6 +168,8 @@ class FamilySuite:
     MOE_UNAVAILABLE: dict = {}
     #: Router classes beyond the experts: ZAYA's skip class is one more column of ``router_logits``.
     ROUTER_EXTRA_CLASSES = 0
+    #: A decode step's attention mask covers the cache and the new token (a pure state-space model's covers the new token only).
+    DECODE_MASK_COVERS_CACHE = True
 
     @pytest.fixture(scope="class")
     def model(self, request):
@@ -424,6 +426,29 @@ class FamilySuite:
             assert torch.allclose(sums, torch.ones_like(sums), atol=8 * eps, rtol=0)
         assert torch.equal(probs.tril(), probs)  # causal
 
+    def test_attention_interior_under_generate(self, model):
+        """Scores and pattern on the prompt and on a decode step of an unpadded generate, where transformers >= 5.18 passes no mask."""
+        block = self.attn_block(model)
+        unavailable = block.self_attn.support()
+        names = [name for name in ("attention_scores", "attention_probabilities") if not unavailable.get(name)]
+        if not names:
+            pytest.skip("no attention interior on this checkpoint")
+        read = {name: [] for name in names}
+        with model.generate(PROMPT, max_new_tokens=2, min_new_tokens=2, do_sample=False, use_cache=True) as tracer:  # a tiny config may turn the cache off
+            for _ in tracer.iter[:2]:
+                for name in names:
+                    read[name].append(getattr(block.self_attn, name).save())
+        n = len(model.tokenizer(PROMPT).input_ids)
+        for name, (prompt, step) in read.items():
+            assert prompt.shape[-2] == n and step.shape[-2] == 1, (name, tuple(prompt.shape), tuple(step.shape))
+        if "attention_probabilities" in read:
+            for probs in read["attention_probabilities"]:
+                sums = probs.sum(-1).float()
+                if self.ATTENTION_SINK:
+                    assert (sums < 1).all() and (sums > 0).all()
+                else:
+                    assert torch.allclose(sums, torch.ones_like(sums), atol=8 * torch.finfo(probs.dtype).eps, rtol=0)
+
     def test_pattern_across_layers_and_traces(self, model):
         block = self.attn_block(model)
         last = self.attn_block(model, last=True)
@@ -657,6 +682,16 @@ class FamilySuite:
         assert ids[0].tolist() == model.tokenizer(PROMPT).input_ids
         text = repr(model)
         assert all(listed(name, text) for name in ("input_ids", "attention_mask", "input_size"))
+
+    def test_attention_mask_under_generate(self, model):
+        """Each step's mask covers the cache and the new token, all ones, though generate (transformers >= 5.18) passes none unpadded."""
+        masks = []
+        with model.generate(PROMPT, max_new_tokens=2, min_new_tokens=2, do_sample=False) as tracer:
+            for _ in tracer.iter[:2]:
+                masks.append(model.attention_mask.save())
+        n = len(model.tokenizer(PROMPT).input_ids)
+        assert [tuple(mask.shape) for mask in masks] == [(1, n), (1, n + 1 if self.DECODE_MASK_COVERS_CACHE else 1)]
+        assert all(mask.bool().all() for mask in masks)
 
     def test_assigning_input_ids_runs_other_ids(self, model):
         other = "A completely different prompt here"

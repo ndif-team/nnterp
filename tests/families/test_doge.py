@@ -4,7 +4,10 @@ import glob
 import os
 import tempfile
 
+import pytest
 import torch
+import transformers
+from packaging.version import Version
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
 from nnterp.families import doge
@@ -91,3 +94,51 @@ class TestDogeGated(FamilySuite):
             mlp = model.layers[0].mlp.mlp_output.save()
             out = model.layers[0].layer_output.save()
         assert not torch.allclose(x + attn + mlp, out)
+
+
+def _moe_checkpoint(repo=REPO):
+    """The tiny checkpoint's config with ``is_moe`` set (16 product-key experts, top 4), randomly initialised, with its tokenizer."""
+    from transformers import AutoConfig, AutoModelForCausalLM
+
+    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    patched = tempfile.mkdtemp(prefix="nnterp-doge-moe-")
+    config = AutoConfig.from_pretrained(snapshot)
+    config.is_moe, config.num_experts, config.num_experts_per_tok = True, 16, 4
+    torch.manual_seed(0)
+    AutoModelForCausalLM.from_config(config).save_pretrained(patched)
+    for name in os.listdir(snapshot):
+        if name.startswith("tokenizer") or name.endswith((".jinja", "special_tokens_map.json")):
+            target = os.path.join(patched, name)
+            if not os.path.exists(target):
+                os.symlink(os.path.realpath(os.path.join(snapshot, name)), target)
+    return patched
+
+
+class TestDogeMoe:
+    """The cross-domain mixture: it runs from transformers 5.18; its mixture values are unavailable either way."""
+
+    @pytest.fixture(scope="class")
+    def model(self):
+        from nnterp import StandardizedTransformer
+
+        return StandardizedTransformer(_moe_checkpoint(), attn_implementation="eager")
+
+    def test_mixture_values_say_why(self, model):
+        assert isinstance(model.layers[0].mlp, doge.Moe)
+        support = model.support(layer=0)
+        assert support["mlp.mlp_output"] is None
+        assert all(support[f"mlp.{name}"] == doge.CANNOT_RUN for name in ("router_logits", "expert_weights", "routed_output"))
+
+    @pytest.mark.skipif(Version(transformers.__version__) < Version("5.18"), reason="transformers < 5.18 cannot run DogeCDMoE")
+    def test_mlp_output_is_the_mixtures_hidden_states(self, model):
+        with model.trace(PROMPT):
+            raw = model.layers[0].mlp.output[0].save()
+            mlp = model.layers[0].mlp.mlp_output.save()
+        assert torch.equal(mlp, raw)
+        gated_identity(model)
+
+    @pytest.mark.skipif(Version(transformers.__version__) >= Version("5.18"), reason="transformers >= 5.18 runs DogeCDMoE")
+    def test_forward_fails_before_5_18(self, model):
+        with pytest.raises(TypeError, match="dropout"):
+            with model.trace(PROMPT):
+                model.logits.save()

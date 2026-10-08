@@ -9,7 +9,10 @@ queries and keys are read where they enter the interface, after the norms and
 the rotary, so nothing changes. Every block's MLP is a sparse mixture of experts
 with a sigmoid router and a correction bias; it returns the routed hidden states
 as a bare tensor. ``intermediate_size`` is the experts' width and ``head_dim`` is
-the config's.
+the config's. The released configs give the rotary width as ``rotary_dim`` (64 of
+128): transformers >= 5.18 reads it as ``partial_rotary_factor`` 0.5, so half of
+each query and key head is rotated; earlier versions ignore it and rotate the
+whole head.
 """
 
 from transformers.models.minimax_m2.modeling_minimax_m2 import (

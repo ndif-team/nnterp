@@ -24,6 +24,18 @@ from .components.vision import Vision
 Logits = Float[Tensor, "batch seq vocab"]
 NextTokenProbs = Float[Tensor, "batch vocab"]
 Tokens = Int[Tensor, "batch seq"]
+
+
+def _all_ones_mask(kwargs: dict[str, Any]) -> Tensor:
+    """The mask a call made with none stands for: ones over the cached tokens and the new ones, ``[batch, past + seq]``."""
+    tokens = kwargs.get("input_ids")
+    if tokens is None:
+        tokens = kwargs["inputs_embeds"]
+    cache = kwargs.get("past_key_values")
+    past = cache.get_seq_length() if cache is not None else 0
+    return torch.ones(tokens.shape[0], past + tokens.shape[1], dtype=torch.long, device=tokens.device)
+
+
 class StandardizedProperty:
     """A read-only value of the model that a family may define instead.
 
@@ -466,8 +478,18 @@ class StandardizedTransformer(Standardized, TransformersModel):
 
     @EProperty(key="inputs", description="The attention mask the model was called with; zeros are padding")
     def attention_mask(self, value: Any) -> Tokens:
-        """The attention mask the model was called with, ``[batch, seq]``; zeros are padding. Assignable."""
-        return value[1]["attention_mask"]
+        """The attention mask the model was called with, ``[batch, seq]``; zeros are padding. Assignable.
+
+        ``generate`` on transformers >= 5.18 calls the model with no mask when
+        no prompt is padded; the all-ones mask that stands for is installed
+        into the call on read (what earlier versions passed), so it is served
+        and edits to it reach the model. On a decode step it covers the cache
+        and the new token, ``[batch, past + seq]``, as the passed mask does.
+        """
+        kwargs = value[1]
+        if kwargs.get("attention_mask") is None:
+            kwargs["attention_mask"] = _all_ones_mask(kwargs)
+        return kwargs["attention_mask"]
 
     @attention_mask.postprocess
     def attention_mask(self, value: Tensor) -> Any:

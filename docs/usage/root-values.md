@@ -238,6 +238,10 @@ same way: [adding-a-family](../extending/adding-a-family.md#sizes).
   the same trace; `logits` and `next_token_probs` after them all.
 - **Assigning `input_ids` does not resize the mask.** Assign `attention_mask` to match when
   the new ids have another length.
+- **`attention_mask` under an unpadded `generate`.** transformers >= 5.18 drops the mask
+  when no prompt is padded and calls the model with none; reading `attention_mask` then
+  installs the all-ones mask that stands for (`[batch, past + seq]` on a decode step, as an
+  earlier version passed) into the call, so the read and in-place edits behave as before.
 - **`intermediate_size` is the dense MLP's width.** For an all-MoE family read
   `config.moe_intermediate_size`, or a block's `layers[i].mlp.intermediate_size`.
 - **A size is read-only.** `model.hidden_size = 5` raises `AttributeError: hidden_size is

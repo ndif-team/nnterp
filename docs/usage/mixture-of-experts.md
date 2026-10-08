@@ -212,7 +212,7 @@ without it, edit in place under several invokes.
 | Laguna | `router_logits` is before the router's tanh softcap; `routed_output` is the experts' sum times `routed_scaling_factor`, so `expert_outputs.sum(2) * routed_scaling_factor == routed_output`. |
 | Qwen2-MoE, Qwen3-Next, Qwen3.5-MoE | `shared_expert_output` is the shared expert's output times its sigmoid gate, the product the mixture adds; `moe.shared_experts.output` is the ungated one. |
 | GraniteMoE, -SWA, -Shared, -Hybrid | `mlp_output` is the scaled term the block adds, the mixture's output times `residual_multiplier` (0.22 on granite-3.0-1b-a400m); `expert_outputs`, `routed_output` and `shared_expert_output` are unscaled, about 4.5 times what reaches the stream there. Multiply by `model.config.residual_multiplier` to compare them with `mlp_output` or another family's experts. |
-| Doge | Its cross-domain mixture (`is_moe`) cannot run in transformers 5.17 (the block drops out its tuple output), so every mixture value is unavailable. |
+| Doge | Its cross-domain mixture (`is_moe`) routes by product keys over embedding experts, with no router or experts module, so every mixture value is unavailable; `mlp_output` is served from transformers 5.18, before which the block passes the mixture's tuple to dropout and the forward fails. |
 
 `model.support()` lists the six values under `mlp.`; on a family with dense blocks beside
 mixture blocks (DeepSeek-V3, GLM-4-MoE, Llama 4, Jamba, ...), a dense block reports

@@ -342,7 +342,7 @@ class StandardizedTransformer(Standardized, TransformersModel):
     ) -> None:
         kwargs.setdefault("task", "text-generation")
         self._add_prefix_false_tokenizer = None
-        self._order = None  # (kernel generation, ranks): see `order`
+        self._order = None  # the measured ranks: see `order`
         if family is None:
             config = self._read_config(repo_id, kwargs)
             # A multimodal checkpoint's config nests the language model's; the
@@ -491,8 +491,8 @@ class StandardizedTransformer(Standardized, TransformersModel):
 
         With ``layer``, that block's values by dotted name (`support`'s), from
         0. Without, the root's, numbered across the whole forward. Measured by
-        a probe run on first use (`nnterp.order.probe`) and kept until
-        `route_kernels` or `chunk_per_token`.
+        a probe run on first use (`nnterp.order.probe`) and kept on the model,
+        so route kernels (`route_kernels`, `chunk_per_token`) before the first.
         """
         table = forward_order.cached(self)
         if layer is None:

@@ -105,25 +105,17 @@ def test_a_forward_meta_tensors_cannot_run_is_probed_for_real():
     assert model.rank("logits") == (model.num_layers, 2)
 
 
-def test_route_kernels_invalidates_the_order():
-    model = StandardizedTransformer(QWEN3_5, attn_implementation="eager", dispatch=True)
-    chunked = model.order(0)
+def test_routed_kernels_add_the_state():
+    """Kernels are routed before the model runs; the order is then measured under them."""
+    chunked = StandardizedTransformer(QWEN3_5, attn_implementation="eager").order(0)
     assert "linear_attn.state" not in chunked and "linear_attn.states" not in chunked
-    kept = model._order
-    model.order(3)
-    assert model._order is kept                                    # measured once, then kept
     route_kernels(qwen3_5_text, "torch")
     try:
-        routed = model.order(0)
-        assert routed["linear_attn.state"] < routed["linear_attn.states"] < routed["linear_attn.attention_head_outputs"]
-        assert set(routed) - set(chunked) == {"linear_attn.state", "linear_attn.states"}
-        # The probe left the mixer's forward plain, so it runs the kernel routed after the first probe.
-        with model.trace("Hello world"):
-            states = model.layers[0].linear_attn.states.save()
-        assert states.shape[1] == len(model.tokenizer("Hello world").input_ids)
+        routed = StandardizedTransformer(QWEN3_5, attn_implementation="eager").order(0)
     finally:
         route_kernels(qwen3_5_text, "default")
-    assert model.order(0) == chunked
+    assert routed["linear_attn.state"] < routed["linear_attn.states"] < routed["linear_attn.attention_head_outputs"]
+    assert set(routed) - set(chunked) == {"linear_attn.state", "linear_attn.states"}
 
 
 def test_vllm_raises():

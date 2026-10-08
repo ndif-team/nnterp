@@ -239,10 +239,11 @@ reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_outpu
 - **Measured, then kept.** The first call runs one probe `model.scan` (meta tensors, no
   weights or dispatch needed; `nnterp.order.probe` says how). A forward that cannot run on
   meta tensors (Granite, OPT, a grouped-mm mixture of experts in float32) is probed with a
-  `trace` instead, which loads the weights. The result stays on the model until
-  `nnterp.route_kernels` or `nnterp.chunk_per_token` changes what fires; with torch kernels
-  routed, a DeltaNet block also ranks `state` and `states`, and routing after `order()`
-  still takes effect.
+  `trace` instead, which loads the weights. The result is measured once and kept on the
+  model, so set `nnterp.route_kernels` and `nnterp.chunk_per_token` before the model is
+  dispatched, traced or measured: the same rule kernel routing already has for traces
+  (`sourced` envoys instrument at dispatch). With torch kernels routed, a DeltaNet block
+  also ranks `state` and `states`.
 - **One forward pass.** The order is within one call of the model. Under `generate`, every
   step repeats it; `tracer.iter` picks the step. The vision tower's values
   (`vision.*`) are not ranked, and `StandardizedVLLM` raises `NotImplementedError`.

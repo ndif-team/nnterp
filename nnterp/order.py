@@ -5,9 +5,7 @@ from __future__ import annotations
 from typing import Any
 
 import nnsight
-from nnsight.intervention.source import STATE
 
-from .components import recurrent
 from .components.eproperty import DerivedEProperty
 from .components.standard import standard_children, values
 
@@ -38,25 +36,16 @@ def probe(model: Any, targets: list[tuple[int | None, str, Any, Any]], run: Any)
     and values) tie: either read order is legal. A derived value, computed from
     several locations, is its own location ``(layer, name)``.
     """
-    # Reading a value instruments its forward, and the instrumented copy keeps the module globals it
-    # was built with, so a later `route_kernels` would never reach it: put back every forward found plain.
-    # TODO: delete this once nnsight's `.source` stops snapshotting module globals (function_like copies fn.__globals__).
-    plain = [m for m in model._module.modules() if not getattr(m.__dict__.get(STATE), "sourced", False)]
-    try:
-        with run() as tracer:
-            seen = nnsight.save([])
-            with tracer.invoke("The quick brown fox"):  # any short text: the order does not depend on it
-                pass
-            for layer, name, host, prop in targets:
-                with tracer.invoke():
-                    getattr(host, prop.name)  # parks until the forward reaches it; nothing to save
-                    # Resolved after the read, when any drill is built.
-                    location = (layer, name) if isinstance(prop, DerivedEProperty) else prop._resolve(host, prop.path(host))
-                    seen.append((layer, name, location))
-    finally:
-        for m in plain:
-            if (state := m.__dict__.get(STATE)) is not None and state.sourced:
-                state.body, state.sourced, state.compiled = state.original, False, None
+    with run() as tracer:
+        seen = nnsight.save([])
+        with tracer.invoke("The quick brown fox"):  # any short text: the order does not depend on it
+            pass
+        for layer, name, host, prop in targets:
+            with tracer.invoke():
+                getattr(host, prop.name)  # parks until the forward reaches it; nothing to save
+                # Resolved after the read, when any drill is built.
+                location = (layer, name) if isinstance(prop, DerivedEProperty) else prop._resolve(host, prop.path(host))
+                seen.append((layer, name, location))
     return list(seen)
 
 
@@ -100,9 +89,7 @@ def compute(model: Any) -> dict[int, dict[str, int]]:
 
 
 def cached(model: Any) -> dict[int, dict[str, int]]:
-    """`compute`, once per model and kernel binding: `route_kernels` and `chunk_per_token` change what fires, so they invalidate it."""
-    generation, table = model._order or (None, None)
-    if generation != recurrent.generation:
-        table = compute(model)
-        model._order = (recurrent.generation, table)
-    return table
+    """`compute`, once per model: route kernels before the model runs, so what fires never changes after."""
+    if model._order is None:
+        model._order = compute(model)
+    return model._order

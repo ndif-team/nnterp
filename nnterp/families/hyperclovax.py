@@ -16,6 +16,14 @@ softmax scale passed to the shared interface; ``embedding_multiplier`` scales th
 embedding module's output before the first block (``token_embeddings`` times it is
 ``layers[0].input``); ``logits_scaling`` *multiplies* the head's output (Granite
 divides), so the family's ``project_on_vocab`` does the same.
+
+HyperCLOVA X Vision V2 (``HyperCLOVAXVisionV2ForConditionalGeneration``, model
+type ``hyperclovax_vision_v2``, transformers 5.18 and later) wraps this text model
+at ``model.language_model``. Its tower is the Qwen2.5-VL ViT at ``model.vision_model``,
+``vision`` (a `QwenVision`: packed, windowed, its own ``merger`` inside), and a linear
+``model.projector`` after the tower, ``projector``, maps the merger's output onto
+the text width; ``vision.image_features`` is read at the scatter in
+``HyperCLOVAXVisionV2Model``'s forward (`ImageScatter`).
 """
 
 from typing import TYPE_CHECKING
@@ -27,8 +35,19 @@ from transformers.models.hyperclovax.modeling_hyperclovax import (
     HyperCLOVAXMLP,
 )
 
-from ..components import Attention, EProperty, Layer, Mlp, Residual
+from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
+    Qwen2_5_VLMLP, Qwen2_5_VLVisionAttention, Qwen2_5_VLVisionBlock, Qwen2_5_VisionTransformerPretrainedModel,
+)
+
+from ..components import (
+    Attention, EProperty, ImageScatter, Layer, Mlp, QwenVision, QwenVisionAttention, Residual, VisionLayer, VisionMlp,
+)
 from .granitemoe import scaled_back
+
+try:  # the vision wrapper arrived in transformers 5.18
+    from transformers.models.hyperclovax_vision_v2.modeling_hyperclovax_vision_v2 import HyperCLOVAXVisionV2Model
+except ImportError:
+    HyperCLOVAXVisionV2Model = None
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -37,6 +56,17 @@ RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.norm": "norm",
+    # The same text model inside HyperCLOVA X Vision V2, loaded with task="image-text-to-text".
+    "model.language_model.embed_tokens": "embed_tokens",
+    "model.language_model.layers": "layers",
+    "model.language_model.norm": "norm",
+    # Its Qwen2.5-VL ViT and the linear projector after it. The tower's inner keys are names no text block has.
+    "model.vision_model": "vision",
+    "model.projector": "projector",
+    "blocks": "layers",
+    "attn": "self_attn",
+    "norm1": "input_layernorm",
+    "norm2": "post_attention_layernorm",
 }
 
 
@@ -77,9 +107,16 @@ class Mlp(Mlp):
 
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
-ENVOYS = {HyperCLOVAXDecoderLayer: Layer, HyperCLOVAXAttention: Attention, HyperCLOVAXMLP: Mlp}
+ENVOYS = {
+    HyperCLOVAXDecoderLayer: Layer, HyperCLOVAXAttention: Attention, HyperCLOVAXMLP: Mlp,
+    # The Qwen2.5-VL ViT of HyperCLOVA X Vision V2: one attention call per window, so a QwenVisionAttention.
+    Qwen2_5_VisionTransformerPretrainedModel: QwenVision, Qwen2_5_VLVisionBlock: VisionLayer,
+    Qwen2_5_VLVisionAttention: QwenVisionAttention, Qwen2_5_VLMLP: VisionMlp,
+}
+if HyperCLOVAXVisionV2Model is not None:
+    ENVOYS[HyperCLOVAXVisionV2Model] = ImageScatter  # the wrapper's forward scatters the image features: vision.image_features
 
 
 def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:
     """The logit lens as the model makes its logits: the final norm, ``lm_head``, then times ``logits_scaling``."""
-    return model.lm_head(model.norm(hidden)) * model.config.logits_scaling
+    return model.lm_head(model.norm(hidden)) * model.config.get_text_config().logits_scaling

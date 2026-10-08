@@ -3,7 +3,7 @@ title: Vision design
 one_liner: How nnterp standardizes the vision side of image-text-to-text checkpoints — the tower under model.vision with its blocks and the image values, the projector, where image_features is read, where the code lives, how loading and the suite work, what does not fit, and what is left.
 tags: [developing, design, vision, multimodal, families]
 related: [docs/usage/vision.md, docs/developing/architecture.md, docs/developing/eproperty-internals.md, docs/developing/testing.md, docs/extending/adding-a-family.md]
-sources: [nnterp/components/vision.py, nnterp/components/standard.py, nnterp/standardized.py, nnterp/components/eproperty.py, nnterp/families/gemma3_text.py, nnterp/families/gemma.py, nnterp/families/llama.py, nnterp/families/qwen2.py, nnterp/families/cohere2.py, nnterp/families/mistral.py, nnterp/families/ministral3.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/gemma4_unified_text.py, nnterp/families/qwen2_vl_text.py, nnterp/families/qwen2_5_vl_text.py, nnterp/families/qwen3_vl_text.py, nnterp/families/qwen3_vl_moe_text.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_5_moe_text.py, tests/families/vision_suite.py, tests/families/qwen_vision_suite.py, tests/families/suite.py]
+sources: [nnterp/components/vision.py, nnterp/components/standard.py, nnterp/standardized.py, nnterp/components/eproperty.py, nnterp/families/gemma3_text.py, nnterp/families/gemma.py, nnterp/families/llama.py, nnterp/families/qwen2.py, nnterp/families/cohere2.py, nnterp/families/mistral.py, nnterp/families/ministral3.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/gemma4_unified_text.py, nnterp/families/qwen2_vl_text.py, nnterp/families/qwen2_5_vl_text.py, nnterp/families/qwen3_vl_text.py, nnterp/families/qwen3_vl_moe_text.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_5_moe_text.py, nnterp/families/hyperclovax.py, nnterp/families/nemotron_h.py, tests/families/vision_suite.py, tests/families/qwen_vision_suite.py, tests/families/suite.py]
 ---
 
 # Vision design
@@ -193,6 +193,23 @@ an alias for, as it lists the `Standard` children of a block.
   `Unavailable` with `PER_IMAGE`, which says to split the queries and keys at `cu_seqlens`
   and never tells the user to load eager. Pixtral is packed too but calls the interface
   once over the whole row with a block-diagonal mask, so its interior is whole.
+- **RADIO's attention** (NemotronH Omni) makes one interface call over the packed row for one
+  image (`attention_interface_1`) and one per image for several (`attention_interface_3`), so
+  which op holds the interior depends on the input. `RadioAttention` serves the queries, keys
+  and values whole at the `transpose_0..2` that end their preparation and marks the scores,
+  pattern and head outputs `Unavailable` with `RADIO_PER_IMAGE`, as on the Qwen ViT. Its block
+  scales each sublayer's output (`layer_scale1`, `layer_scale2`), so the contributions are the
+  scales' outputs.
+- **`generate` encodes the images before the prompt call** on transformers 5.18 and later
+  (`GenerationMixin._prepare_multimodal_encoder_kwargs_for_generation` calls the base
+  model's `get_image_features` and hands the forward `mm_encoder_outputs`), on every wrapper
+  whose forward takes `mm_encoder_outputs` and whose class lists images in its
+  `input_modalities`. The tower then runs before the root's forward, so its values precede
+  `image_token_mask` (read off the root's inputs); `image_features`, at the scatter, is
+  unchanged. nnterp does not undo it: the order is transformers', and `VisionSuite` pins it
+  per wrapper (`test_generate_encodes_the_images_before_the_prompt_call`). Qwen3.5 and
+  Qwen3.5-MoE keep the default `input_modalities = "text"`, so their towers still run inside
+  the prompt call.
 - **Pixtral's patch embedding.** The convolution runs on the batch padded to its largest
   image and each image is cropped to its own grid before the grids are concatenated, so the
   convolution's output is not the tower's stream. On `PixtralVision`, `patch_embeddings` is
@@ -441,20 +458,24 @@ The pinned checkpoints, all loadable offline once cached:
 | `qwen3_5_text`, `qwen3_5_moe_text` | `yujiepan/qwen3.5-tiny-random`, `yujiepan/qwen3.5-moe-tiny-random` | real check: `Qwen/Qwen3.5-0.8B` (text side) |
 | `llama4_text` | `yujiepan/llama-4-tiny-random`, config-patched as its text test does, in bfloat16 (its image processor returns bfloat16 pixels, which a float32 tower refuses); the text suite also runs on it under `image-text-to-text` | |
 | `gemma4_text` | `yujiepan/gemma-4-e-tiny-random` (with audio, so the audio path is checked on the same load); the text suite also runs on `trl-internal-testing/tiny-Gemma4ForConditionalGeneration` under `image-text-to-text` | real check: `google/gemma-4-E2B` |
+| `hyperclovax` | `hf-tiny-v2/tiny-random-HyperCLOVAXVisionV2ForConditionalGeneration` (transformers 5.18 and later; the classes skip before) | processor set to the model: merge size 1, the config's image token |
+| `nemotron_h` | `hf-tiny-v2/tiny-random-NemotronH_Omni_Reasoning_V3` (transformers 5.18 and later) | ships no processor files: the test builds the processor from its tokenizer with a 16 to 24 patch budget, and sets the unset `image_token_id`; pure-torch kernels (`route_kernels`) |
 | `gemma4_unified_text` | a tiny wrapper the test builds once into the temp dir: `google/gemma-4-12B`'s config (config only is cached) with `hf-tiny-v2/tiny-random-Gemma4UnifiedForCausalLM`'s text config, a 16-wide embedder, random weights, and a processor from that checkpoint's tokenizer plus the default image processor | no tiny wrapper is published; 12B's own names are checked on meta |
 
 ## What is done, what is left
 
 The wrappers' text stacks carry their wrapper spellings (`model.language_model.*`, Idefics 3's
 `model.text_model.*`) on `qwen3_5_text`, `qwen3_5_moe_text`, `llama`, `qwen2`, `mistral`,
-`ministral3`, `gemma`, `cohere2`, `exaone4`, `qwen3`. Every tower with a tiny checkpoint is
+`ministral3`, `gemma`, `cohere2`, `exaone4`, `qwen3`, `hyperclovax`, `nemotron_h`. Every tower with a tiny checkpoint is
 named and served: SigLIP on `gemma3_text`, `gemma` (PaliGemma), `qwen2` (llava-interleave,
 LLaVA-OneVision), `cohere2` (Aya Vision, Cohere2-Vision) and `llama` (DeepSeek-VL, Idefics 3's
 and SmolVLM's ViT); CLIP on `llama` (Llava 1.5, VipLlava, LLaVA-NeXT) and `mistral` (LLaVA-NeXT,
 BakLLaVA); Pixtral on `mistral` and `ministral3`; the Qwen ViT on `qwen2_vl_text`,
 `qwen2_5_vl_text`, `qwen3_vl_text` (with `deepstack_output`), `qwen3_vl_moe_text`,
 `qwen3_5_text`, `qwen3_5_moe_text`; Llama 4's ViT on `llama4_text` (the root as the scatter's
-host); Gemma 4's ViT on `gemma4_text`; Gemma 4 unified's embedder on `gemma4_unified_text`.
+host); Gemma 4's ViT on `gemma4_text`; Gemma 4 unified's embedder on `gemma4_unified_text`;
+the Qwen2.5-VL ViT of HyperCLOVA X Vision V2 on `hyperclovax`; RADIO on `nemotron_h`
+(NemotronH Omni, the root as the scatter's host).
 `image_features` is read at the scatter on every one, and `VisionSuite` runs on each.
 
 Left, in rough order of value:
@@ -467,6 +488,7 @@ Left, in rough order of value:
   pre-loaded wrapper module's task.
 - MoonViT for `kimi_k2` (needs a matching tiny checkpoint); the towers of EXAONE 4.5 and
   LightOnOCR, whose text names bind but whose towers are native-only.
+- NemotronH Omni's audio tower (Parakeet, `audio_tower`) and its `embed_audio`, native-only.
 - Video and audio values (`video_token_mask`, `video_features`, `audio_token_mask`,
   `audio_features`; Gemma 4's audio tower as `model.audio` by the same pattern), Mllama's
   family (`mllama_text_model`) with a `CrossAttention` component, and the long tail (InternViT,

@@ -1,12 +1,21 @@
-"""HyperCLOVA X, end to end: a sandwich block whose post-norms' outputs are added times residual_multiplier."""
+"""HyperCLOVA X, end to end: a sandwich block whose post-norms' outputs are added times residual_multiplier; and
+HyperCLOVA X Vision V2's Qwen2.5-VL tower and linear projector (transformers 5.18 and later)."""
 
+import pytest
 import test_granite
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from qwen_vision_suite import PER_IMAGE_UNAVAILABLE, WIDE, QwenVisionSuite
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, rows
+from vision_suite import IMAGE, align_processor, image_prompt
 
+from nnterp.components import QwenVision, QwenVisionAttention
 from nnterp.families import hyperclovax
 
 REPO = "hf-tiny-v2/tiny-random-HyperCLOVAXForCausalLM"
+VISION_REPO = "hf-tiny-v2/tiny-random-HyperCLOVAXVisionV2ForConditionalGeneration"
+needs_vision_wrapper = pytest.mark.skipif(
+    hyperclovax.HyperCLOVAXVisionV2Model is None, reason="HyperCLOVA X Vision V2 is in transformers 5.18 and later"
+)
 
 
 class TestHyperCLOVAX(FamilySuite):
@@ -64,3 +73,54 @@ class TestHyperCLOVAXWithoutPostNorm(FamilySuite):
             mlp = model.layers[0].mlp.mlp_output.save()
         torch.testing.assert_close(attn, attn_raw * 0.22)
         torch.testing.assert_close(mlp, mlp_raw * 0.22)
+
+
+def align_vision_processor(model):
+    """The tiny checkpoint's processor merges 2x2 blocks where its tower's merger takes 1x1, and its image token is not
+    the config's: set both to the model's."""
+    align_processor(model, image_processor={"merge_size": model.config.vision_config.spatial_merge_size})
+
+
+@needs_vision_wrapper
+class TestHyperCLOVAXVisionWrapper(TestHyperCLOVAX):
+    """HyperCLOVA X Vision V2 loaded as the wrapper with its processor: the text stack at ``model.language_model``."""
+
+    REPO = VISION_REPO
+    NATIVE = rows("model.language_model", "layers", "embed_tokens", "norm")
+    LOAD_KWARGS = {"task": "image-text-to-text"}
+    EXPECTED_UNAVAILABLE = PER_IMAGE_UNAVAILABLE
+
+
+@needs_vision_wrapper
+class TestHyperCLOVAXVision(QwenVisionSuite):
+    """The Qwen2.5-VL ViT at ``model.vision_model`` (its merger inside) and the linear ``model.projector`` after it."""
+
+    REPO = VISION_REPO
+    FAMILY = hyperclovax
+    TEXT_REPO = TestHyperCLOVAX.REPO
+    WINDOWED = True
+    VISION_NATIVE = {
+        **{key: value.replace("model.visual", "model.vision_model") for key, value in QwenVisionSuite.VISION_NATIVE.items()},
+        "projector": "model.projector",
+    }
+    fix_processor = staticmethod(align_vision_processor)
+
+    def test_the_tower_is_packed(self, model):
+        """The Qwen ViT as on Qwen2.5-VL, but the projector is the linear layer after the tower, not its merger."""
+        assert isinstance(model.vision, QwenVision)
+        assert all(isinstance(layer.self_attn, QwenVisionAttention) for layer in model.vision.layers)
+        assert model.projector._module is model.get("model.projector")._module
+        assert model.vision.merger._module is model.get("model.vision_model.merger")._module
+
+    def test_the_merger_output_is_in_scatter_order_unless_windowed(self, model):
+        """The merger's output is in window order; the tower restores the order, so the projector's is the scatter's."""
+        with model.trace(image_prompt(model), images=[WIDE]):
+            mask = model.vision.image_token_mask.save()
+            merged = model.vision.merger.output.save()
+            projected = model.projector.output.save()
+            features = model.vision.image_features.save()
+            first = model.layers[0].input.save()
+        assert torch.equal(first[mask], features)
+        assert torch.equal(projected, features)
+        assert merged.shape[0] == features.shape[0]
+        torch.testing.assert_close(model.projector._module(merged).sort(0).values, features.sort(0).values)

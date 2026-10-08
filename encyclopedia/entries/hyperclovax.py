@@ -12,7 +12,61 @@ SUBTITLE = (
 REFERENCE = "naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"
 #: The tiny checkpoint the test suite builds the page from.
 PINNED = "hf-tiny-v2/tiny-random-HyperCLOVAXForCausalLM"
-CHECKPOINTS = ["naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"]
+#: Think-32B is a HyperCLOVA X Vision V2 wrapper (model_type hyperclovax_vision_v2, a key of WRAPPERS), which
+#: transformers builds from 5.18 on; on an earlier release its config does not read and the page greys it out.
+CHECKPOINTS = ["naver-hyperclovax/HyperCLOVAX-SEED-Think-14B", "naver-hyperclovax/HyperCLOVAX-SEED-Think-32B"]
+
+#: The vision-language wrapper of this family, keyed by the wrapper's config.model_type. Its vision encoder is the
+#: Qwen ViT (encyclopedia/vision/qwen_vit.py). Shapes, orders and identities were checked on the pinned tiny wrapper
+#: under transformers 5.19 (float32, eager, its processor set to the model as tests/families/test_hyperclovax.py
+#: does); the sizes are Think-32B's config.
+WRAPPERS = {
+    "hyperclovax_vision_v2": {
+        "title": "HyperCLOVA X Vision V2",
+        "pinned": "hf-tiny-v2/tiny-random-HyperCLOVAXVisionV2ForConditionalGeneration",
+        "projector": "a linear (model.projector, with a bias) from the merger's out_hidden_size to the text model's width, "
+                     "after the vision encoder; the merger inside the encoder folds each 2 × 2 block of patches first",
+        "projector_input": "the merger's output, back in the image tokens' order",
+        "notes": """
+## A linear projector after the merger
+
+The vision encoder is Qwen2.5-VL's at `model.vision_model`, its `merger` inside, so the merger is
+`vision.merger`, not the `projector`. `model.projector` is one `nn.Linear` with a bias after the
+encoder: on Think-32B the encoder is 32 blocks of 1280, the merger folds each 2 × 2 block of patches
+into one 5120-wide row (`out_hidden_size`), and the projector maps 5120 to the text model's 5120.
+`vision.image_features` is `model.projector.output`, and the scatter holds exactly:
+
+```python
+with model.trace(prompt, images=[image]):
+    mask = model.vision.image_token_mask.save()
+    fed = model.projector.input.save()           # [image_tokens, out_hidden_size]
+    projected = model.projector.output.save()
+    features = model.vision.image_features.save()
+    first = model.layers[0].input.save()
+
+torch.equal(projected, features)                # True
+torch.equal(first[mask], features)              # True
+```
+
+## The projector reads the merger's output in token order
+
+The encoder runs its blocks in window order and restores the image tokens' order after the merger,
+so `vision.merger.output` is in window order and `model.projector.input` holds the same rows in the
+image tokens' order. An image of one 112 × 112 window has the two orders the same. Edit the image
+at `model.projector.input` or `vision.image_features` to address a token by its position; an edit at
+`vision.merger.output` lands on the window-ordered row. `vision.tower_output` is served at the
+encoder's output, after the merger has read it, so a write there does not reach the text model.
+
+## Image tokens
+
+The processor expands each image to `t * h * w / 4` copies of `<|IMAGE_PAD|>` (the config's
+`image_token_id`, 128060 on Think-32B), one per merged block of its `image_grid_thw` row, and
+`vision.image_token_mask` marks those. Under `generate` the encoder runs before the prompt's forward,
+so in a block the encoder's values come before `vision.image_token_mask`; `vision.image_features` is
+read at the scatter as in a trace.
+""",
+    },
+}
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 273}

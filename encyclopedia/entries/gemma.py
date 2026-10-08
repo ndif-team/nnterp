@@ -186,10 +186,13 @@ attention, and eager serves the interior values.
 
 ## The activation follows the config
 
-The MLP is `down_proj(act(gate_proj(x)) * up_proj(x))` with the config's `hidden_act`. The
-`gemma-2b` and `gemma-7b` configs (and their `-it` and `codegemma-2b`) say `gelu`, which transformers
-runs as the exact erf GELU; Gemma 1.1, `codegemma-7b` and PaliGemma's text config give
-`gelu_pytorch_tanh`, the tanh approximation.
+The MLP is `down_proj(act(gate_proj(x)) * up_proj(x))` with the config's `hidden_act`. Every
+checkpoint runs the tanh approximation of GELU (`gelu_pytorch_tanh`) since transformers 5.18. The
+`gemma-2b` and `gemma-7b` configs (and their `-it` and `codegemma-2b`) say `gelu`, a legacy value
+meant as the tanh approximation, and since 5.18 `GemmaConfig` rewrites it to `gelu_pytorch_tanh`
+when it loads (#49084), so `model.config.hidden_act` reads `gelu_pytorch_tanh`; up to 5.17 transformers
+ran those checkpoints with the exact erf GELU. Gemma 1.1, `codegemma-7b` and PaliGemma's text config
+give `gelu_pytorch_tanh` themselves.
 
 ## The readout
 

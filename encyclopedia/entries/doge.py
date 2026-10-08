@@ -8,7 +8,7 @@ SUBTITLE = (
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
-#: Doge-260M is the largest dense checkpoint whose weights load in transformers 5.17.
+#: Doge-260M is the largest dense checkpoint whose weights load in transformers (5.17 to 5.19).
 REFERENCE = "SmallDoge/Doge-260M"
 #: The tiny checkpoint the test suite builds the page from.
 PINNED = "hf-tiny-v2/tiny-random-DogeForCausalLM"
@@ -21,13 +21,13 @@ CHECKPOINTS = [
     "SmallDoge/Doge-20M-MoE", "SmallDoge/Doge-120M-MoE",
 ]
 
-#: Checkpoints whose safetensors (read from their headers on 2026-10-07) do not fit transformers 5.17's
+#: Checkpoints whose safetensors (read from their headers on 2026-10-07) do not fit transformers' (5.17 to 5.19)
 #: DogeForCausalLM: they hold the layout of the repositories' own remote code. Their configs build a model, but
 #: each block's ``A`` and ``dt_proj`` are twice ``num_key_value_heads`` wide where transformers builds
 #: ``num_key_value_heads``, and the attention has no ``q_norm`` or ``k_norm``, so ``from_pretrained`` raises on the
 #: size mismatch. The page lists them greyed out with the reason.
 GREYED = {
-    checkpoint: "transformers 5.17 does not load its weights: A and dt_proj are twice num_key_value_heads wide, "
+    checkpoint: "transformers does not load its weights: A and dt_proj are twice num_key_value_heads wide, "
                 "and the attention has no q_norm or k_norm"
     for checkpoint in (
         "SmallDoge/Doge-20M-Instruct", "SmallDoge/Doge-60M", "SmallDoge/Doge-60M-Instruct",
@@ -165,18 +165,22 @@ the rest. The choice reads the bias alone, not the query's score. A dropped key 
 ## Loading
 
 The attention interior needs `attn_implementation="eager"`; the default `sdpa` load adds the same
-bias. Doge-20M, Doge-40M and Doge-260M load in transformers 5.17. In the Instruct checkpoints and in
+bias. Before transformers 5.18 the `sdpa` load of an unpadded prompt was not causal: the block skipped
+the causal mask and handed `sdpa` the bias alone, so every position saw the later ones (on the pinned
+tiny checkpoint the logits moved by 0.35 against eager). Since 5.18 the mask is always built (#48821),
+and the two loads' logits agree to 2e-7. Doge-20M, Doge-40M and Doge-260M load in transformers. In the Instruct checkpoints and in
 Doge-60M, -160M and -320M, `A` and `dt_proj` are twice `num_key_value_heads` wide and the attention has
 no `q_norm` or `k_norm`, so transformers' `DogeForCausalLM` does not load them (they are greyed out in
 the selector). Doge-260M's tokenizer prepends `<|begin_of_text|>` (id 128000).
 
-## The cross-domain mixture does not run
+## The cross-domain mixture
 
 On the `is_moe` checkpoints `mlp` is `DogeCDMoE`: a dense SwiGLU MLP of `intermediate_size` plus
 `num_experts` one-neuron experts (rows of `down_embed` and `up_embed`) that `router_gate` retrieves
-by product keys, `num_experts_per_tok` per token. It returns `(hidden_states, router_logits)`, and
-transformers 5.17's block passes that tuple to dropout, so a forward of Doge-40M-MoE or Doge-180M-MoE
-raises a `TypeError`. Their pages read the model's structure; every mixture value is unavailable.
+by product keys, `num_experts_per_tok` per token. It returns `(hidden_states, router_logits)`. Up to
+transformers 5.17 the block passed that tuple to dropout, so a forward of Doge-40M-MoE or Doge-180M-MoE
+raised a `TypeError`; since 5.18 the block takes the hidden states out of the tuple (#49179) and the
+mixture runs. nnterp still reports every mixture value unavailable.
 
 ## The readout
 

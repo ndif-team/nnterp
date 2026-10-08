@@ -109,7 +109,7 @@ mixture on the other 75. The configs carry one multi-token-prediction block
 qk_rope_head_dim`, 192 + 64 = 256), `attention_values` and `attention_head_outputs` `head_dim`
 (`v_head_dim`, also 256). The config's `head_dim` is set to `qk_rope_head_dim` (64), which no
 served value has. Queries go through a compressed rank (`q_lora_rank` 2048: `q_a_proj`,
-`q_a_layernorm`, `q_b_proj`; `self_attn.q_proj` is `None`). Keys and values are expanded from one
+`q_a_layernorm`, `q_b_proj`; there is no `self_attn.q_proj`, which up to transformers 5.17 was an attribute set to `None`). Keys and values are expanded from one
 latent per token (`kv_lora_rank` 512) for every head, so `attention_keys` has `num_heads` (64)
 heads, and the last 64 dimensions of every head's key are one shared rotary key. The scores are
 scaled by `qk_head_dim ** -0.5` (`self_attn.scaling`, 0.0625).

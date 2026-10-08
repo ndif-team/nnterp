@@ -104,7 +104,7 @@ transformers does not build it, so `model.layers` has 61 blocks.
 qk_rope_head_dim`, 128 + 64 = 192), `attention_values` and `attention_head_outputs` `head_dim`
 (`v_head_dim`, 128). The config's `head_dim` is `qk_rope_head_dim` (64), which no served value
 has. Queries go through a compressed rank (`q_lora_rank` 1536: `q_a_proj`, `q_a_layernorm`,
-`q_b_proj`; `self_attn.q_proj` is `None`). Keys and values are expanded from one latent per token
+`q_b_proj`; there is no `self_attn.q_proj`, which up to transformers 5.17 was an attribute set to `None`). Keys and values are expanded from one latent per token
 (`kv_lora_rank` 512) for every head, so `attention_keys` has `num_heads` (128) heads, and the last
 64 dimensions of every head's key are one shared rotary key.
 

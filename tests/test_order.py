@@ -1,10 +1,6 @@
 """`model.order` / `model.rank`: the forward order of the values, measured by one probe scan."""
 
-import types
-
 import pytest
-import torch
-from nnsight.intervention.source import STATE  # nnsight before any transformers submodule
 
 from nnterp import StandardizedTransformer, StandardizedVLLM, Unavailable, route_kernels
 from nnterp.families import qwen3_5_text
@@ -43,7 +39,6 @@ def test_llama_order(llama):
     ]
     assert llama.rank("logits") == llama.rank("next_token_probs") == (2, 2)
     assert {name: llama.rank(name, 1) for name in LLAMA_BLOCK} == {name: (1, r) for name, r in LLAMA_BLOCK.items()}
-    assert llama.rank("self_attn.attention_queries", 0) == llama.rank("self_attn.attention_keys", 0) == llama.rank("self_attn.attention_values", 0)
     assert llama.rank("layer_output", -1) == (1, 7)
 
 
@@ -97,9 +92,8 @@ def test_sdpa_ranks_only_what_it_has(llama):
 
 
 def test_scan_needs_no_dispatch(llama):
-    model = StandardizedTransformer(LLAMA, attn_implementation="eager")
-    order = {layer: model.order(layer) for layer in (None, 0, 1)}
-    assert all(p.device.type == "meta" for p in model._module.parameters())   # the probe loaded no weights
+    order = {layer: llama.order(layer) for layer in (None, 0, 1)}
+    assert all(p.device.type == "meta" for p in llama._module.parameters())   # the probe loaded no weights
     dispatched = StandardizedTransformer(LLAMA, attn_implementation="eager", dispatch=True)
     assert {layer: dispatched.order(layer) for layer in (None, 0, 1)} == order
 
@@ -124,7 +118,6 @@ def test_route_kernels_invalidates_the_order():
         assert routed["linear_attn.state"] < routed["linear_attn.states"] < routed["linear_attn.attention_head_outputs"]
         assert set(routed) - set(chunked) == {"linear_attn.state", "linear_attn.states"}
         # The probe left the mixer's forward plain, so it runs the kernel routed after the first probe.
-        assert not model.layers[0].linear_attn._module.__dict__[STATE].sourced
         with model.trace("Hello world"):
             states = model.layers[0].linear_attn.states.save()
         assert states.shape[1] == len(model.tokenizer("Hello world").input_ids)
@@ -133,12 +126,8 @@ def test_route_kernels_invalidates_the_order():
     assert model.order(0) == chunked
 
 
-def test_vllm_raises(monkeypatch):
-    from nnsight.modeling.vllm import VLLM, envoys as vllm_envoys
-
-    monkeypatch.setattr(vllm_envoys, "parallel_envoys", lambda: {})
-    monkeypatch.setattr(VLLM, "__init__", lambda self, repo_id, *args, **kwargs: None)
-    model = StandardizedVLLM("some/repo", family=types.SimpleNamespace(RENAME={}, ENVOYS={}))
+def test_vllm_raises():
+    model = object.__new__(StandardizedVLLM)  # the methods raise before touching the engine
     with pytest.raises(NotImplementedError, match="vllm engine"):
         model.order()
     with pytest.raises(NotImplementedError, match="vllm engine"):

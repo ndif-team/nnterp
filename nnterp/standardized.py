@@ -487,40 +487,23 @@ class StandardizedTransformer(Standardized, TransformersModel):
     # -- forward order (outside a trace) -------------------------------------------
 
     def order(self, layer: int | None = None) -> dict[str, int]:
-        """The forward order of the available values: name -> rank, the order a single invoke reads them in.
+        """The available values in forward order: name -> rank; equal ranks are one location, either read first.
 
-        With ``layer``, that block's values by dotted name (``"layer_output"``,
-        ``"self_attn.attention_queries"``), ranked from 0. Without, the root's
-        values (``input_ids``, ``token_embeddings``, ``logits``, ...), ranked
-        from 0 across the whole forward: those before the blocks first, then
-        those after. Values with equal ranks are served at one location, so
-        either can be read first; a value the checkpoint does not have
-        (`support`) is not listed. Sorting by rank::
-
-            sorted(model.order(0), key=model.order(0).get)
-
-        Measured, not tabled: the first call runs one probe `scan` (meta
-        tensors, no real weights or dispatch needed; see `nnterp.order`) and
-        the result is kept on the model until `nnterp.route_kernels` or
-        `nnterp.chunk_per_token` changes what fires. `rank` is the same
-        measurement as one sortable tuple per value.
+        With ``layer``, that block's values by dotted name (`support`'s), from
+        0. Without, the root's, numbered across the whole forward. Measured by
+        a probe run on first use (`nnterp.order.probe`) and kept until
+        `route_kernels` or `chunk_per_token`.
         """
         table = forward_order.cached(self)
         if layer is None:
             return {**table[-1], **table[self.num_layers]}
-        return dict(table[range(self.num_layers)[layer]])
+        return dict(table[range(self.num_layers)[layer]])  # negative layers count from the end; IndexError past it
 
     def rank(self, name: str, layer: int | None = None) -> tuple[int, int]:
-        """Where a value falls in the forward: ``(side, rank)``, which sorts in the order a single invoke reads them in.
+        """Where a value falls in the forward: ``(side, r)``, which sorts reads into forward order.
 
-        A root value (``rank("logits")``) is ``(-1, r)`` when the model
-        serves it before the blocks (``input_ids``, ``attention_mask``,
-        ``input_size``, ``token_embeddings``) and ``(num_layers, r)`` after
-        them (``logits``, ``next_token_probs``). A block value
-        (``rank("self_attn.attention_queries", layer=3)``, the dotted name
-        `support` lists) is ``(layer, r)``. ``r`` is `order`'s rank, so equal
-        tuples mean one location, and either read order is legal. Negative
-        layers count from the end.
+        ``side`` is ``-1`` or ``num_layers`` for a root value served before or
+        after the blocks, else ``layer``; ``r`` is `order`'s rank.
 
         Raises:
             Unavailable: the checkpoint has no such value (`support` gives the reason).
@@ -528,17 +511,17 @@ class StandardizedTransformer(Standardized, TransformersModel):
         """
         table = forward_order.cached(self)
         if layer is None:
-            sides = (-1, self.num_layers)
-            root = values(type(self))
-            reason = root[name].reason(self) if name in root else "absent"
+            for side in (-1, self.num_layers):
+                if name in table[side]:
+                    return side, table[side][name]
+            value = values(type(self)).get(name)
+            reason = value and value.reason(self)
         else:
-            layer = range(self.num_layers)[layer]
-            sides = (layer,)
-            reason = self.support(layer).get(name, "absent")
-        for side in sides:
-            if name in table[side]:
-                return side, table[side][name]
-        if reason == "absent":
+            layer = range(self.num_layers)[layer]  # negative layers count from the end; IndexError past it
+            if name in table[layer]:
+                return layer, table[layer][name]
+            reason = self.support(layer).get(name)
+        if not reason:
             where = "the root" if layer is None else f"block {layer}"
             raise KeyError(f"{name!r} is not a value of {where}; a block value takes layer=, by its dotted support() name")
         raise Unavailable(f"{name} is not available{'' if layer is None else f' on block {layer}'}: {reason}")

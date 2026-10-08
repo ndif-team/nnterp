@@ -237,13 +237,12 @@ reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_outpu
   are absent from `order(i)`, and `rank` raises `Unavailable` with `support()`'s reason;
   a name that is no value at all raises `KeyError`.
 - **Measured, then kept.** The first call runs one probe `model.scan` (meta tensors, no
-  weights or dispatch needed) with an empty invoke per value, and appends each value's
-  location as the forward reaches it. A forward that cannot run on meta tensors (Granite,
-  OPT, a grouped-mm mixture of experts in float32) is probed with a `trace` instead. The
-  result stays on the model until `nnterp.route_kernels` or `nnterp.chunk_per_token`
-  changes what fires; with torch kernels routed, a DeltaNet block also ranks `state` and
-  `states`. The probe leaves every forward it instrumented as it found it, so routing after
-  `order()` still takes effect.
+  weights or dispatch needed; `nnterp.order.probe` says how). A forward that cannot run on
+  meta tensors (Granite, OPT, a grouped-mm mixture of experts in float32) is probed with a
+  `trace` instead, which loads the weights. The result stays on the model until
+  `nnterp.route_kernels` or `nnterp.chunk_per_token` changes what fires; with torch kernels
+  routed, a DeltaNet block also ranks `state` and `states`, and routing after `order()`
+  still takes effect.
 - **One forward pass.** The order is within one call of the model. Under `generate`, every
   step repeats it; `tracer.iter` picks the step. The vision tower's values
   (`vision.*`) are not ranked, and `StandardizedVLLM` raises `NotImplementedError`.

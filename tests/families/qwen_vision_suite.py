@@ -1,0 +1,307 @@
+"""The Qwen ViT's checks, written once for the six families that host it.
+
+`QwenVisionSuite` is `VisionSuite` on a packed tower: the tower runs on
+``[patches, vision_hidden]`` over every image of the invoke, so its stream
+values are served ``[1, patches, vision_hidden]``; its attention runs one call
+per image, so the queries, keys, values and head outputs are served whole
+around those calls and the pattern is `Unavailable` (`PER_IMAGE`); the sizes are
+the Qwen vision config's spellings, and ``image_grid_thw`` says how many
+patches each image has.
+"""
+
+import numpy as np
+import pytest
+import torch
+from PIL import Image
+from vision_suite import IMAGE, VisionSuite, image_prompt
+
+from nnterp import StandardizedTransformer, Unavailable
+from nnterp.components import (
+    PER_IMAGE, HeadOutputs, ImageFeatures, Keys, Patches, Queries, QwenVision, QwenVisionAttention, Values, pinned,
+)
+
+#: The tower's pattern, unavailable on every block: the attention runs one call per image.
+PER_IMAGE_VALUES = {"self_attn.attention_scores": PER_IMAGE, "self_attn.attention_probabilities": PER_IMAGE}
+#: What a `FamilySuite` on a wrapper loaded with its processor expects of the tower's rows.
+PER_IMAGE_UNAVAILABLE = {f"vision.{name}": reason for name, reason in PER_IMAGE_VALUES.items()}
+
+#: A second image, larger and not square: more patches than `IMAGE`, and several attention windows on Qwen2.5-VL.
+WIDE = Image.fromarray((np.random.RandomState(1).rand(256, 320, 3) * 255).astype("uint8"))
+
+
+class QwenVisionSuite(VisionSuite):
+    """Subclass per family hosting the Qwen ViT: set the class attributes, as for `VisionSuite`."""
+
+    VISION_NATIVE = {
+        "vision": "model.visual",
+        "vision.layers": "model.visual.blocks",
+        "vision.patch_embed": "model.visual.patch_embed",
+        "vision.layers.0.self_attn": "model.visual.blocks.0.attn",
+        "vision.layers.0.mlp": "model.visual.blocks.0.mlp",
+        "vision.layers.0.input_layernorm": "model.visual.blocks.0.norm1",
+        "vision.layers.0.post_attention_layernorm": "model.visual.blocks.0.norm2",
+        "projector": "model.visual.merger",
+    }
+    #: A text-only load of the family, or ``None`` where every checkpoint loads as the wrapper.
+    TEXT_REPO = None
+    #: Whether the tower holds its patches in window order (Qwen2.5-VL), so the merger's output is not in scatter order.
+    WINDOWED = False
+    EXPECTED_VISION_UNAVAILABLE = PER_IMAGE_VALUES
+
+    def patches_of(self, model, images):
+        """How many patches the processor cuts ``images`` into: ``image_grid_thw``'s products, summed."""
+        grid = model.processor(text=image_prompt(model, images=len(images)), images=images, return_tensors="pt")["image_grid_thw"]
+        return int(grid.prod(-1).sum())
+
+    # -- names and sizes --------------------------------------------------------------
+
+    def test_the_tower_is_packed(self, model):
+        assert isinstance(model.vision, QwenVision)
+        assert all(isinstance(layer.self_attn, QwenVisionAttention) for layer in model.vision.layers)
+        assert model.projector._module is model.vision._module.merger  # the projector is inside the tower
+
+    def test_the_qwen_sizes(self, model):
+        """What only the Qwen ViT has: the merge block, the window, no fixed resolution."""
+        vision, config = model.vision, model.config.vision_config
+        assert vision.num_layers == config.depth
+        assert vision.spatial_merge_size == config.spatial_merge_size
+        assert vision.window_size == getattr(config, "window_size", None)
+        with pytest.raises(Unavailable, match="any resolution"):
+            vision.image_size
+
+    # -- availability ------------------------------------------------------------------
+
+    def test_a_text_only_checkpoint_has_no_vision_host(self):
+        if self.TEXT_REPO is None:
+            pytest.skip("transformers has no text-only class for this config: every checkpoint loads as the wrapper")
+        super().test_a_text_only_checkpoint_has_no_vision_host()
+
+    def test_the_pattern_is_unavailable_with_the_per_image_reason(self, model):
+        attn = model.vision.layers[0].self_attn
+        for name in PER_IMAGE_VALUES:
+            with pytest.raises(Unavailable, match="one interface call per image.*cu_seqlens"):
+                getattr(attn, name.removeprefix("self_attn."))
+        assert "eager" not in PER_IMAGE  # loading eager would not help: the reason does not say it would
+
+    def test_the_interior_holds_whatever_the_attention_implementation(self):
+        """Under sdpa the pattern's reason is still the per-image one and the whole q/k/v/head outputs are served; the text side's says eager."""
+        sdpa = StandardizedTransformer(self.REPO, task="image-text-to-text", dispatch=True, attn_implementation="sdpa", dtype=torch.float32)
+        support = sdpa.vision.support()
+        assert all(reason == PER_IMAGE for name in PER_IMAGE_VALUES for reason in support[name].values())
+        assert all(support[f"self_attn.{name}"] is None for name in ("attention_queries", "attention_keys", "attention_values", "attention_head_outputs"))
+        assert "attn_implementation='eager'" in str(sdpa.support()["self_attn.attention_probabilities"])
+
+    def test_the_interior_is_the_per_image_calls_whole(self, model):
+        """Two images: q/k/v are the per-image calls' arguments concatenated, the head outputs their returns concatenated,
+        and the output projection of the head outputs is ``attention_output``; edits to the whole queries land."""
+        for layer in model.vision.layers:
+            attn = layer.self_attn
+            calls = []
+            with model.trace(image_prompt(model, images=2), images=[IMAGE, WIDE]):
+                bounds = attn.inputs[1]["cu_seqlens"].save()
+                queries = attn.attention_queries.save()
+                keys = attn.attention_keys.save()
+                values = attn.attention_values.save()
+                for i in range(len(bounds) - 1):  # one read per pin: the i-th call's arguments, then its return
+                    with pinned(i):
+                        args = attn.source.attention_interface_2.inputs[0]
+                    with pinned(i):
+                        returned = attn.source.attention_interface_2.output[0]
+                    calls.append((args[1].save(), args[2].save(), args[3].save(), returned.save()))
+                heads = attn.attention_head_outputs.save()
+                out = attn.attention_output.save()
+            assert len(calls) == len(bounds) - 1 >= 2  # one call per image (per window on a windowed block)
+            n, width = self.patches_of(model, [IMAGE, WIDE]), model.vision.hidden_size
+            assert isinstance(queries, Queries) and isinstance(keys, Keys) and isinstance(values, Values) and isinstance(heads, HeadOutputs)
+            assert queries.shape == keys.shape == values.shape == (1, model.vision.num_heads, n, model.vision.head_dim)
+            assert torch.equal(queries, torch.cat([q for q, _, _, _ in calls], dim=2))
+            assert torch.equal(keys, torch.cat([k for _, k, _, _ in calls], dim=2))
+            assert torch.equal(values, torch.cat([v for _, _, v, _ in calls], dim=2))
+            assert heads.shape == (1, n, model.vision.num_heads, model.vision.head_dim)
+            assert torch.equal(heads, torch.cat([o for _, _, _, o in calls], dim=1))
+            torch.testing.assert_close(out[0], attn.proj._module(heads.reshape(n, width)))
+        attn = model.vision.layers[0].self_attn
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            attn.attention_queries[:] = 0
+            first = attn.source.attention_interface_2.inputs[0][1].save()
+        assert (first == 0).all()
+
+    # -- the packed layout -----------------------------------------------------------------
+
+    def test_values_are_the_packed_stream_with_a_leading_one(self, model):
+        vision, layer = model.vision, model.vision.layers[0]
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            patches = vision.patch_embeddings.save()
+            native_patches = vision.patch_embed.output.save()
+            attn = layer.self_attn.attention_output.save()
+            native_attn = layer.self_attn.output.save()
+            mlp = layer.mlp.mlp_output.save()
+            out = layer.layer_output.save()
+            native_out = layer.output.save()
+            tower = vision.tower_output.save()
+        n = self.patches_of(model, [IMAGE])
+        for value in (patches, attn, mlp, out, tower):
+            assert isinstance(value, Patches) and value.shape == (1, n, vision.hidden_size)
+        assert native_out.shape == (n, vision.hidden_size)  # natively packed, no images axis
+        assert torch.equal(patches[0], native_patches) and torch.equal(attn[0], native_attn) and torch.equal(out[0], native_out)
+
+    def test_writes_with_a_leading_one_land(self, model, clean):
+        layer = model.vision.layers[0]
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            replacement = torch.zeros_like(layer.layer_output)
+            layer.layer_output = replacement
+            entering = model.vision.layers[1].input.save()
+            features = model.vision.image_features.save()
+        assert entering.dim() == 2 and (entering == 0).all()
+        assert not torch.allclose(features, clean["features"])
+
+    # -- the image features ------------------------------------------------------------------
+
+    def test_one_image_token_per_merge_block(self, model, clean):
+        """The merger folds each ``spatial_merge_size``-square block of patches into one image token."""
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            merged = model.projector.output.save()
+        assert merged.shape == clean["features"].shape
+        assert clean["features"].shape[0] * model.vision.spatial_merge_size ** 2 == self.patches_of(model, [IMAGE])
+
+    def test_the_merger_output_is_in_scatter_order_unless_windowed(self, model):
+        """On a large image, Qwen2.5-VL's merger output is in window order and the tower restores the order after it."""
+        with model.trace(image_prompt(model), images=[WIDE]):
+            mask = model.vision.image_token_mask.save()
+            merged = model.projector.output.save()
+            features = model.vision.image_features.save()
+            first = model.layers[0].input.save()
+        assert torch.equal(first[mask], features)
+        if self.WINDOWED:
+            assert not torch.equal(merged, features)
+            assert torch.equal(merged.sort(0).values, features.sort(0).values)  # the same rows, permuted
+        else:
+            assert torch.equal(merged, features)
+
+
+def rotate_half(x):
+    half = x.shape[-1] // 2
+    return torch.cat((-x[..., half:], x[..., :half]), dim=-1)
+
+
+class MRopeSuite:
+    """Mixed into a Qwen-VL text family's `FamilySuite`: the queries and keys at the interface are M-RoPE-rotated."""
+
+    def test_queries_and_keys_are_rotated_by_mrope(self, model):
+        """``rotary_emb`` folds the three position streams into one cos/sin; the attention rotates with it before the interface."""
+        attn = model.layers[0].self_attn
+        rotary = model.layers.parent.rotary_emb
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            positions = rotary.inputs[0][1].save()
+            cos, sin = attn.inputs[1]["position_embeddings"]
+            cos, sin = cos.save(), sin.save()
+            q = (attn.q_norm if hasattr(attn, "q_norm") else attn.q_proj).output.save()
+            k = (attn.k_norm if hasattr(attn, "k_norm") else attn.k_proj).output.save()
+        with model.trace(image_prompt(model), images=[IMAGE]):  # the interface is reached by drilling in before the module runs
+            queries = attn.attention_queries.save()
+            keys = attn.attention_keys.save()
+        assert positions.shape[0] in (3, 4)  # temporal, height, width (a fourth, the text positions, rides in front on Qwen3-VL)
+        streams = positions[-3:]
+        assert not torch.equal(streams[1], streams[2])  # the image's rows and columns differ: three streams, not one
+        batch, seq = queries.shape[0], queries.shape[2]
+        q = q.reshape(batch, seq, -1, attn.head_dim).transpose(1, 2)
+        k = k.reshape(batch, seq, -1, attn.head_dim).transpose(1, 2)
+        cos, sin = cos.unsqueeze(1), sin.unsqueeze(1)
+        torch.testing.assert_close(queries, q * cos + rotate_half(q) * sin)
+        torch.testing.assert_close(keys, k * cos + rotate_half(k) * sin)
+
+
+class DeepstackSuite:
+    """Mixed into Qwen3-VL's text families' `FamilySuite`: the deepstack features the text model adds after its first blocks."""
+
+    def entering(self, model, k):
+        """What receives block ``k``'s stream: block ``k + 1``, or the final norm after the last block."""
+        return model.layers[k + 1] if k + 1 < len(model.layers) else model.norm
+
+    def expected_values(self, model):
+        return super().expected_values(model) | {"deepstack_output"}
+
+    def test_values_match_their_annotations(self, model, monkeypatch):
+        """The base traces a text-only prompt, where the text model makes no deepstack call; the deepstack value's
+        layout is checked on an image (`test_deepstack_output_is_what_the_text_model_adds`)."""
+        layer = type(model.layers[0])
+        support = layer.support
+        monkeypatch.setattr(layer, "support", lambda self: {**support(self), "deepstack_output": "needs an image"})
+        super().test_values_match_their_annotations(model)
+
+    def deepstack_count(self, model):
+        return min(len(model.config.vision_config.deepstack_visual_indexes), model.num_layers)
+
+    def test_deepstack_is_listed_and_available_on_the_first_blocks(self, model):
+        support = model.support()
+        count = self.deepstack_count(model)
+        if count == model.num_layers:
+            assert support["deepstack_output"] is None
+        else:
+            assert set(support["deepstack_output"]) == set(range(count, model.num_layers))
+        assert type(model.layers[0]).deepstack_output.layout is ImageFeatures
+
+    def test_deepstack_output_is_what_the_text_model_adds(self, model):
+        """``layers[k+1].input[mask] == layers[k].layer_output[mask] + layers[k].deepstack_output``; the rest of the stream passes."""
+        count = self.deepstack_count(model)
+        outs, added, entering, merged = [], [], [], []   # made outside the block: names bound inside do not survive it
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            mask = model.vision.image_token_mask.save()
+            for k in range(count):
+                merged.append(model.vision.deepstack_merger_list[k].output.save())
+            for k in range(count):
+                outs.append(model.layers[k].layer_output.save())
+                added.append(model.layers[k].deepstack_output.save())
+                entering.append(self.entering(model, k).input.save())
+        for k in range(count):
+            assert isinstance(added[k], ImageFeatures) and added[k].shape == (int(mask.sum()), model.hidden_size)
+            assert torch.equal(added[k], merged[k])  # merger k's output, for block k
+            assert torch.equal(entering[k][mask], outs[k][mask] + added[k])
+            assert torch.equal(entering[k][~mask], outs[k][~mask])
+
+    def test_reading_a_later_blocks_deepstack_alone(self, model):
+        """Each block's read asks for its own occurrence of the call, not the next one the model reaches."""
+        last = self.deepstack_count(model) - 1
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            alone = model.layers[last].deepstack_output.save()
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            merged = model.vision.deepstack_merger_list[last].output.save()
+        assert torch.equal(alone, merged)
+
+    def test_deepstack_writes_land(self, model):
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            clean = model.logits.save()
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            out = model.layers[0].layer_output.save()
+            model.layers[0].deepstack_output[:] = 0
+            entering = self.entering(model, 0).input.save()
+            zeroed = model.logits.save()
+        assert torch.equal(entering, out)
+        assert not torch.allclose(zeroed, clean)
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            mask = model.vision.image_token_mask.save()
+            out = model.layers[0].layer_output.save()
+            replacement = torch.ones_like(model.layers[0].deepstack_output)
+            model.layers[0].deepstack_output = replacement
+            entering = self.entering(model, 0).input.save()
+        assert torch.equal(entering[mask], out[mask] + 1)
+
+    def test_deepstack_is_unavailable_past_the_taps(self):
+        """With more text blocks than tower taps, the blocks past them have no deepstack_output and the stream passes."""
+        from transformers import AutoConfig, AutoModelForImageTextToText, AutoProcessor
+
+        config = AutoConfig.from_pretrained(self.REPO)
+        taps = len(config.vision_config.deepstack_visual_indexes)
+        config.text_config.num_hidden_layers = taps + 2
+        torch.manual_seed(0)
+        module = AutoModelForImageTextToText.from_config(config, attn_implementation="eager", dtype=torch.float32).eval()
+        model = StandardizedTransformer(module, processor=AutoProcessor.from_pretrained(self.REPO), task="image-text-to-text")
+        support = model.support()["deepstack_output"]
+        assert set(support) == {taps, taps + 1}
+        assert all(f"blocks 0..{taps - 1} only" in reason for reason in support.values())
+        with pytest.raises(Unavailable, match="deepstack features after blocks"):
+            model.layers[taps].deepstack_output
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            out = model.layers[taps].layer_output.save()
+            entering = model.layers[taps + 1].input.save()
+        assert torch.equal(entering, out)

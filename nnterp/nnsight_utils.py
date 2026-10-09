@@ -1,450 +1,134 @@
+"""Collecting activations and next-token distributions over many prompts.
+
+Written against the standard values: a layer's activation is ``model.layers[i].layer_output`` unless a
+``get_activations(model, layer)`` of your own says otherwise.
+"""
+
 from __future__ import annotations
 
-from typing import Union, Callable
-import torch as th
-import torch.nn as nn
+from typing import Callable
+
+import torch
 from torch.utils.data import DataLoader
 
-from nnsight import LanguageModel, NNsight
-from nnsight.intervention.envoy import Envoy
-from nnsight.intervention.tracing.globals import Object
-from transformers import PreTrainedModel
+from .standardized import StandardizedTransformer
 
-from .utils import TraceTensor, unpack_tuple
-from .standardized_transformer import StandardizationMixin, StandardizedTransformer
-from .rename_utils import get_rename_dict, RenameConfig
-
-GetModuleOutput = Callable[[LanguageModel, int], TraceTensor]
+GetActivations = Callable[[StandardizedTransformer, int], torch.Tensor]
 
 
-def get_embed_tokens(model: LanguageModel) -> nn.Module:
-    """
-    Get the token embedding layer of the model
-    """
-    return model.embed_tokens
+def layer_output(model: StandardizedTransformer, layer: int) -> torch.Tensor:
+    """The default ``get_activations``: the residual stream leaving block ``layer``."""
+    return model.layers[layer].layer_output
 
 
-def get_layers(model: LanguageModel) -> list[Envoy]:
-    """
-    Get the layers of the model
-    """
-    if isinstance(model, StandardizedTransformer):
-        return model.layers
-    return model.model.layers
+def _check_index(model: StandardizedTransformer, idx: int) -> None:
+    side = model.tokenizer.padding_side
+    if idx < 0 and side != "left":
+        raise ValueError(f"a negative token index needs left padding, and the tokenizer pads {side!r}")
+    if idx > 0 and side != "right":
+        raise ValueError(f"a positive token index needs right padding, and the tokenizer pads {side!r}")
 
 
-def get_num_layers(nn_model: LanguageModel):
-    """
-    Get the number of layers in the model
-    Args:
-        nn_model: The NNSight model
-    Returns:
-        The number of layers in the model
-    """
-    return len(get_layers(nn_model))
-
-
-def get_layer(nn_model: LanguageModel, layer: int) -> Envoy:
-    """
-    Get the layer of the model
-    Args:
-        nn_model: The NNSight model
-        layer: The layer to get
-    Returns:
-        The Envoy for the layer
-    """
-    return get_layers(nn_model)[layer]
-
-
-def get_layer_input(nn_model: LanguageModel, layer: int) -> Union[int, Object]:
-    """
-    Get the hidden state input of a layer
-    Args:
-        nn_model: The NNSight model
-        layer: The layer to get the input of
-    Returns:
-        The Proxy for the input of the layer
-    """
-    return get_layer(nn_model, layer).input
-
-
-def get_layer_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
-    """
-    Get the residual stream after the layer
-    Args:
-        nn_model: The NNSight model
-        layer: The layer to get the output of
-    Returns:
-        The Proxy for the output of the layer
-    """
-    output = get_layer(nn_model, layer).output
-    return unpack_tuple(output)
-
-
-def get_attention(nn_model: LanguageModel, layer: int) -> Envoy:
-    """
-    Get the attention module of a layer
-    Args:
-        nn_model: The NNSight model
-        layer: The layer to get the attention module of
-    Returns:
-        The Envoy for the attention module of the layer
-    """
-    return get_layer(nn_model, layer).self_attn
-
-
-def get_attention_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
-    """
-    Get the output of the attention block of a layer
-    Args:
-        nn_model: The NNSight model
-        layer: The layer to get the output of
-    Returns:
-        The Proxy for the output of the attention block of the layer
-    """
-    if isinstance(nn_model, StandardizationMixin):
-        # Follows the standardized output source, which can differ from the module
-        # output on architectures that add the residual inside the module (issue #51)
-        return nn_model.attentions_output[layer]
-    return unpack_tuple(get_attention(nn_model, layer).output)
-
-
-def get_mlp(nn_model: LanguageModel, layer: int) -> Envoy:
-    """
-    Get the MLP module of a layer
-    """
-    return get_layer(nn_model, layer).mlp
-
-
-def get_mlp_output(nn_model: LanguageModel, layer: int) -> TraceTensor:
-    """
-    Get the output of the MLP of a layer
-    """
-    if isinstance(nn_model, StandardizationMixin):
-        return nn_model.mlps_output[layer]
-    return unpack_tuple(get_mlp(nn_model, layer).output)
-
-
-def get_logits(nn_model: LanguageModel) -> TraceTensor:
-    """
-    Get the logits of the model
-    Args:
-        nn_model: The NNSight model
-    Returns:
-        The Proxy for the logits of the model
-    """
-    return nn_model.output.logits
-
-
-def get_unembed_norm(nn_model: LanguageModel) -> Envoy:
-    """
-    Get the last layer norm of the model
-    Args:
-        nn_model: The NNSight model
-    Returns:
-        The Envoy for the last layer norm of the model
-    """
-    if isinstance(nn_model, StandardizedTransformer):
-        return nn_model.ln_final
-    return nn_model.model.norm
-
-
-def get_unembed(nn_model: LanguageModel) -> Envoy:
-    """
-    Get the unembed module of the model
-    Args:
-        nn_model: The NNSight model
-    Returns:
-        The Envoy for the unembed module of the model
-    """
-    return nn_model.lm_head
-
-
-def project_on_vocab(nn_model: LanguageModel, h: TraceTensor) -> TraceTensor:
-    """
-    Project the hidden states on the vocabulary, after applying the model's last layer norm
-    Args:
-        nn_model: The NNSight model
-        h: The hidden states to project
-    Returns:
-        The Proxy for the hidden states projected on the vocabulary
-    """
-    ln_out = get_unembed_norm(nn_model)(h)
-    return nn_model.lm_head(ln_out)
-
-
-def get_next_token_probs(nn_model: LanguageModel) -> TraceTensor:
-    """
-    Get the probabilities of the model
-    Args:
-        nn_model: The NNSight model
-    Returns:
-        The Proxy for the probabilities of the model
-    """
-    return get_logits(nn_model)[:, -1, :].softmax(-1)
-
-
-def set_layer_output(nn_model: LanguageModel, layer: int, tensor: TraceTensor):
-    """
-    Set the output of a layer to a certain tensor.
-    Args:
-        nn_model: The NNSight model
-        layer: The layer to set the output of
-        tensor: The tensor to set the output of the layer to
-    """
-    if isinstance(get_layer(nn_model, layer).output, tuple):
-        get_layer(nn_model, layer).output = (
-            tensor,
-            *get_layer(nn_model, layer).output[1:],
-        )
-    else:
-        get_layer(nn_model, layer).output = tensor
-
-
-class ModuleAccessor:
-    """
-    Module that allows to use the NNsight and nnterp renaming utilities on huggingface models, to get the pytorch nn.Module objects with the same standardized names as the StandardizedTransformer class::
-
-        ModuleAccessor
-        ├── embed_tokens
-        ├── layers
-        │   ├── self_attn
-        │   └── mlp
-        ├── ln_final
-        └── lm_head
-
-    Args:
-        model: The huggingface model to access
-        rename_config: An optional nnterp RenameConfig if your model has custom module names
-        rename: An optional dictionary to allow you to have your own custom renaming operations
-
-    """
-
-    def __init__(
-        self,
-        model: PreTrainedModel,
-        rename_config: RenameConfig | None = None,
-        rename: dict[str, str] | None = None,
-    ):
-        full_rename = get_rename_dict(rename_config=rename_config)
-        if rename is not None:
-            full_rename.update(rename)
-        self.nn_model = NNsight(model, rename=full_rename)
-
-    def __getattr__(self, name: str) -> nn.Module:
-        attr = getattr(self.nn_model, name)
-        if hasattr(attr, "_module"):
-            return attr._module
-        else:
-            raise AttributeError(f"Attribute {name} is not a module")
-
-    def get_embed_tokens(self) -> nn.Module:
-        return self.nn_model.embed_tokens._module
-
-    def get_layers(self) -> nn.ModuleList:
-        return self.nn_model.layers._module
-
-    def get_mlp(self, layer: int) -> nn.Module:
-        return self.nn_model.layers[layer].mlp._module
-
-    def get_attention(self, layer: int) -> nn.Module:
-        return self.nn_model.layers[layer].self_attn._module
-
-    def get_unembed_norm(self) -> nn.Module:
-        return self.nn_model.ln_final._module
-
-    def get_unembed(self) -> nn.Module:
-        return self.nn_model.lm_head._module
-
-
-@th.no_grad
+@torch.no_grad()
 def get_token_activations(
-    nn_model: LanguageModel,
-    prompts=None,
-    layers=None,
-    get_activations: GetModuleOutput | None = None,
-    remote=False,
+    model: StandardizedTransformer,
+    prompts: str | list[str] | None = None,
+    layers: list[int] | None = None,
+    get_activations: GetActivations | None = None,
+    remote: bool = False,
     idx: int | None = None,
     tracer=None,
-):
-    """
-    Collect the hidden states of the last token of each prompt at each layer
+) -> torch.Tensor:
+    """The activation at one token position of each prompt, at each layer.
 
     Args:
-        nn_model: The NNSight model
-        prompts: The prompts to collect activations for. Can be None if you call this from an existing tracer.
-        layers: The layers to collect activations for, default to all layers
-        get_activations: The function to get the activations, default to layer output
-        remote: Whether to run the model on the remote device
-        idx: The index of the token to collect activations for
-        tracer: A tracer object to use to collect activations. If None, a new tracer is created.
+        model: The standardized model.
+        prompts: What to run; ``None`` when called inside an open ``tracer``.
+        layers: Which blocks; default all.
+        get_activations: ``(model, layer) -> tensor`` giving a ``[batch, seq, ...]``
+            value; default `layer_output`.
+        remote: Run on NDIF.
+        idx: The token position; default ``-1``, the last token. A negative
+            index needs left padding, a positive one right padding.
+        tracer: An open trace to read from instead of opening one.
 
     Returns:
-        The hidden states of the last token of each prompt at each layer, moved to cpu. If open_context is False, returns a list of
-        Proxies. Dimensions are (num_layers, num_prompts, hidden_size)
+        ``[num_layers, num_prompts, hidden]`` on the CPU (still on the
+        model's device when read inside a caller's ``tracer``).
     """
     if tracer is None and prompts is None:
-        raise ValueError("prompts must be provided if tracer is None")
-    if get_activations is None:
-        get_activations = get_layer_output
-    if idx is None:
-        idx = -1
-    if idx < 0 and nn_model.tokenizer.padding_side != "left":
-        raise ValueError(
-            f"negative index is currently only supported with left padding, not {nn_model.tokenizer.padding_side}"
-        )
-    if idx > 0 and nn_model.tokenizer.padding_side != "right":
-        raise ValueError(
-            f"positive index is currently only supported with right padding, not {nn_model.tokenizer.padding_side}"
-        )
-    if layers is None:
-        layers = list(range(get_num_layers(nn_model)))
-    last_layer = max(layers)
-    if min(layers) < 0:
-        last_layer = max(last_layer, get_num_layers(nn_model) + min(layers))
-
-    # Collect the hidden states of the last token of each prompt at each layer
+        raise ValueError("prompts must be given when no tracer is")
+    get_activations = get_activations or layer_output
+    idx = -1 if idx is None else idx
+    _check_index(model, idx)
+    layers = list(range(model.num_layers)) if layers is None else layers
     acts = []
     if tracer is None:
-        with nn_model.trace(prompts, remote=remote) as tracer:
+        with model.trace(prompts, remote=remote) as tracer:
             for layer in layers:
-                acts.append(get_activations(nn_model, layer)[:, idx].cpu().save())
+                acts.append(get_activations(model, layer)[:, idx].cpu().save())
             tracer.stop()
     else:
-        device = get_layer_output(nn_model, 0).device
         for layer in layers:
-            acts.append(get_activations(nn_model, layer)[:, idx].to(device))
-    return th.stack(acts)
+            acts.append(get_activations(model, layer)[:, idx])
+    return torch.stack(acts)
 
 
-@th.no_grad
+@torch.no_grad()
 def collect_last_token_activations_session(
-    nn_model,
-    prompts,
-    batch_size,
-    layers=None,
-    get_activations=None,
-    remote=False,
-    idx=None,
-):
-    """
-    Collect the hidden states of the specified token of each prompt at each layer in batches using a nnsight session.
-
-    Args:
-        nn_model: The NNSight model
-        prompts: The prompts to collect activations for
-        batch_size: The batch size to use
-        layers: The layers to collect activations for, default to all layers
-        get_activations: The function to get the activations, default to layer output
-        remote: Whether to run the model on the remote device
-        idx: The index of the token to collect activations for. Default is -1 (last token).
-
-    Returns:
-        The hidden states of the specified token of each prompt at each layer, moved to cpu.
-        Dimensions are (num_layers, num_prompts, hidden_size)
-    """
-    if layers is None:
-        layers = list(range(get_num_layers(nn_model)))
-    last_layer = max(layers)
-    if min(layers) < 0:
-        last_layer = max(last_layer, get_num_layers(nn_model) + min(layers))
-    if get_activations is None:
-        get_activations = get_layer_output
-    if idx is None:
-        idx = -1
-    if idx < 0 and nn_model.tokenizer.padding_side != "left":
-        raise ValueError("negative index is currently only supported with left padding")
-    if idx > 0 and nn_model.tokenizer.padding_side != "right":
-        raise ValueError(
-            "positive index is currently only supported with right padding"
-        )
-    with nn_model.session(remote=remote) as session:
-        dl = DataLoader(prompts, batch_size=batch_size)
+    model: StandardizedTransformer,
+    prompts: list[str],
+    batch_size: int,
+    layers: list[int] | None = None,
+    get_activations: GetActivations | None = None,
+    remote: bool = False,
+    idx: int | None = None,
+) -> torch.Tensor:
+    """`get_token_activations` over batches inside one ``model.session``, so a remote run is one request."""
+    get_activations = get_activations or layer_output
+    idx = -1 if idx is None else idx
+    _check_index(model, idx)
+    layers = list(range(model.num_layers)) if layers is None else layers
+    with model.session(remote=remote):
         all_acts = []
-        for batch in dl:
-            with nn_model.trace(batch) as tracer:
-                acts = []
-                for layer in layers:
-                    acts.append(
-                        get_activations(nn_model, layer)[
-                            :,
-                            idx,
-                        ]
-                        .cpu()
-                        .save()
-                    )
+        for batch in DataLoader(prompts, batch_size=batch_size):
+            with model.trace(batch) as tracer:
+                acts = [get_activations(model, layer)[:, idx].cpu().save() for layer in layers]
                 tracer.stop()
-            all_acts.append(th.stack(acts).save())
-        all_acts = th.cat(all_acts, dim=1).save()
+            all_acts.append(torch.stack(acts).save())
+        all_acts = torch.cat(all_acts, dim=1).save()
     return all_acts
 
 
 def collect_token_activations_batched(
-    nn_model: LanguageModel,
-    prompts,
-    batch_size,
-    layers=None,
-    get_activations: GetModuleOutput | None = None,
-    remote=False,
-    idx=None,
+    model: StandardizedTransformer,
+    prompts: list[str],
+    batch_size: int,
+    layers: list[int] | None = None,
+    get_activations: GetActivations | None = None,
+    remote: bool = False,
+    idx: int | None = None,
     tqdm=None,
-    use_session=True,
-):
-    """
-    Collect the hidden states of the last token of each prompt at each layer in batches
+    use_session: bool = True,
+) -> torch.Tensor:
+    """`get_token_activations` over batches; ``[num_layers, num_prompts, hidden]`` on the CPU.
 
-    Args:
-        nn_model: The NNSight model
-        prompts: The prompts to collect activations for
-        batch_size: The batch size to use
-        layers: The layers to collect activations for, default to all layers
-        get_activations: The function to get the activations, default to layer output
-        remote: Whether to run the model on the remote device
-        idx: The index of the token to collect activations for. Default is -1 (last token).
-        tqdm: Whether to use tqdm to show progress, default to None (no progress bar)
-        use_session: Whether to use a nnsight session to collect activations. Not sure why you'd want turn that off but who knows
-
-    Returns:
-        The hidden states of the specified token of each prompt at each layer, moved to cpu.
-        Dimensions are (num_layers, num_prompts, hidden_size)
+    A remote run goes through `collect_last_token_activations_session` (one
+    request) unless ``use_session`` is off. ``tqdm`` is a progress-bar factory
+    to wrap the batch loop with, or ``None``.
     """
     if use_session and remote:
-        return collect_last_token_activations_session(
-            nn_model,
-            prompts,
-            batch_size,
-            layers,
-            get_activations,
-            remote,
-            idx,
-        )
-    num_prompts = len(prompts)
-    acts = []
-    it = range(0, num_prompts, batch_size)
-    if tqdm is not None:
-        it = tqdm(it)
-    for i in it:
-        batch = prompts[i : min(i + batch_size, num_prompts)]
-        acts_batch = get_token_activations(
-            nn_model, batch, layers, get_activations, remote, idx
-        )
-        acts.append(acts_batch)
-    return th.cat(acts, dim=1)
+        return collect_last_token_activations_session(model, prompts, batch_size, layers, get_activations, remote, idx)
+    steps = range(0, len(prompts), batch_size)
+    acts = [
+        get_token_activations(model, prompts[i : i + batch_size], layers, get_activations, remote, idx)
+        for i in (tqdm(steps) if tqdm is not None else steps)
+    ]
+    return torch.cat(acts, dim=1)
 
 
-def compute_next_token_probs(
-    nn_model: LanguageModel, prompt: str | list[str], remote=False
-) -> th.Tensor:
-    """
-    Get the probabilities of the next token for the prompt
-    Args:
-        nn_model: The NNSight model
-        prompt: The prompt to get the probabilities for
-        remote: Whether to run the model on the remote device
-    Returns:
-        The probabilities of the next token for the prompt
-    """
-    with nn_model.trace(prompt, remote=remote):
-        out = nn_model.output.logits
-        out = out[:, -1].softmax(-1).cpu().save()
-    return out
+def compute_next_token_probs(model: StandardizedTransformer, prompt: str | list[str], remote: bool = False) -> torch.Tensor:
+    """The next-token distribution of each prompt, ``[num_prompts, vocab]`` on the CPU."""
+    with model.trace(prompt, remote=remote):
+        probs = model.next_token_probs.cpu().save()
+    return probs

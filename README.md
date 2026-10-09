@@ -1,186 +1,152 @@
-<!-- TODO: add a logo <p align="center">
-  <img src="./nnterp_logo.png" alt="nnterp" width="300">
-</p> -->
+# nnterp
 
-<h3 align="center">
-A unified interface for mechanistic interpretability of transformers
-</h3>
-
-<p align="center">
-<i>Created by <a href="https://github.com/butanium">Clément Dumas</a></i>
-</p>
-
-<p align="center">
-| <a href="https://ndif-team.github.io/nnterp/"><b>Documentation</b></a> | <a href="https://github.com/ndif-team/nnterp"><b>GitHub</b></a> | <a href="https://discord.gg/6uFJmCSwW7"><b>Discord</b></a> | <a href="https://discuss.ndif.us/"><b>Forum</b></a> | <a href="https://x.com/ndif_team"><b>Twitter</b></a> | <a href="https://arxiv.org/abs/2511.14465"><b>Paper</b></a> |
-</p>
-
-<p align="center">
-<a href="https://colab.research.google.com/github/ndif-team/nnterp/blob/main/demo.ipynb"><img src="https://colab.research.google.com/assets/colab-badge.svg"></img></a>
-</p>
-
----
-
-## About
-
-**nnterp** is a unified interface for all transformer models that puts best NNsight practices for LLMs in everyone's hands.
-
-Built on top of [NNsight](https://github.com/ndif-team/nnsight), nnterp provides a standardized interface for mechanistic interpretability research across all transformer architectures. Unlike `transformer_lens` which reimplements transformers, `nnterp` preserves the original HuggingFace implementations while solving the naming convention chaos through intelligent renaming.
-
-## Why nnterp?
-
-**The Problem**: Every transformer model uses different naming conventions - GPT-2 uses `transformer.h`, LLaMA uses `model.layers`, OPT uses something else entirely. This makes mechanistic interpretability research painful as you can't just change the name of the model and expect the rest of your code to work.
-
-**The Solution**: `nnterp` standardizes all models to use something close to the LLaMA naming convention:
-```
-StandardizedTransformer
-├── layers
-│   ├── self_attn
-│   └── mlp
-├── ln_final
-└── lm_head
-```
-and include built-in properties like `model.logits` and `model.next_token_probs`.
-
-Unlike other libraries that reimplement transformers, `nnterp` uses `NNsight`'s renaming feature to work with the original HuggingFace implementations, ensuring perfect compatibility and preventing subtle bugs. `nnterp` also includes automatic testing to ensure models are correctly standardized. When you load a model, it runs fast validation checks. See the [documentation](https://ndif-team.github.io/nnterp/model-validation.html) for details.
-
-## Installation
-- `pip install nnterp` - Basic installation
-- `pip install nnterp[display]` - Includes visualization dependencies
-<!-- - `pip install nnterp[vllm]` - Includes vLLM support for efficient inference (NOT supported yet) -->
-
-
-## Examples
-
-Here is a simple example where we load a model and access its standardized internals:
+nnterp gives every transformer family the same module names and the same standard values,
+on top of [nnsight](https://github.com/ndif-team/nnsight). `StandardizedTransformer` is an
+nnsight `TransformersModel`, so `trace`, `generate`, `.save()`, `tracer.iter` and
+`remote=True` work as they do in nnsight. An experiment written once runs on GPT-2, Llama,
+Qwen, Gemma, Mamba and the other supported families.
 
 ```python
-from nnterp import load_model
+from nnterp import StandardizedTransformer
 
-model = load_model("gpt2")  # or "meta-llama/Llama-2-7b-hf", etc.
-# load_model auto-detects VLMs:
-# vlm = load_model("Qwen/Qwen2-VL-2B-Instruct")  # returns StandardizedVLM
+model = StandardizedTransformer("openai-community/gpt2")   # or a Llama, a Pythia, ...
 
-with model.trace("The Eiffel Tower is in the city of"):
-    # Unified interface across all models (must follow forward pass order!)
-    attention_output = model.attentions_output[3]
-    mlp_output = model.mlps_output[3]
-    layer_5_output = model.layers_output[5]
+with model.trace("The Eiffel Tower is in"):
+    attn = model.layers[5].self_attn.attention_output.save()   # what attention adds
+    resid = model.layers[5].layer_output.save()                # the residual stream leaving block 5
+    logits = model.logits.save()
 
-    # Built-in utilities
+print(attn.shape, resid.shape, logits.shape)
+# torch.Size([1, 7, 768]) torch.Size([1, 7, 768]) torch.Size([1, 7, 50257])
+```
+
+## The idea
+
+**One vocabulary.** Every family answers to Llama's names, lifted out of the inner `.model`:
+`model.embed_tokens`, `model.layers[i]`, `model.layers[i].self_attn`, `model.layers[i].mlp`,
+`model.norm`, `model.lm_head`. They are nnsight aliases, so GPT-2's `model.transformer.h[5]`
+and `model.layers[5]` are the same envoy and the native names keep working.
+
+**Standard values.** A name says which module; a value says which tensor, and it means the
+same thing on every family. `layer_output` is the residual stream leaving a block, whether
+the block returns a tensor or a tuple. `attention_output` and `mlp_output` are what each
+sublayer adds to the residual stream, wherever the family adds the residual or applies a
+post-sublayer norm, so on every family
+
+```
+layers[i].input + attention_output + mlp_output == layers[i].layer_output
+```
+
+Values can be read, edited in place, or assigned.
+
+**Ask before you trace.** Not every checkpoint has every value. `model.support()` says what
+this one has and, for anything missing, why; reading a missing value raises
+`nnterp.Unavailable` with the same reason.
+
+```python
+import torch
+from nnterp import StandardizedTransformer
+
+model = StandardizedTransformer("openai-community/gpt2")
+
+with model.trace("The Eiffel Tower is in"):
+    block = model.layers[5]
+    x = block.input.save()
+    a = block.self_attn.attention_output.save()
+    m = block.mlp.mlp_output.save()
+    out = block.layer_output.save()
+
+print(torch.allclose(x + a + m, out, atol=1e-4))   # True
+print(model.support(layer=5)["self_attn.attention_probabilities"])
+# read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'
+```
+
+## What you get
+
+| area | values and methods | docs |
+| --- | --- | --- |
+| residual stream | `layer_output`, `attention_output`, `mlp_output`, `self_attn.input`, `mlp.input` | [residual-stream](docs/usage/residual-stream.md) |
+| attention interior | `attention_probabilities`, `attention_queries` / `keys` / `values`, `attention_scores`, `attention_head_outputs` (load with `attn_implementation="eager"`) | [attention-interior](docs/usage/attention-interior.md) |
+| mixture of experts | `router_logits`, `expert_weights`, `expert_indices`, `expert_outputs`, `routed_output`, `shared_expert_output` | [mixture-of-experts](docs/usage/mixture-of-experts.md) |
+| recurrent mixers and hybrids | `linear_attn` on gated DeltaNet, Mamba and Mamba-2 blocks: queries, keys, values, `decays`, `betas`, the recurrent state | [delta-net](docs/usage/delta-net.md), [selective-scan](docs/usage/selective-scan.md), [state-space](docs/usage/state-space.md) |
+| the whole model | `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, and the sizes (`num_layers`, `hidden_size`, `head_dim`, ...) | [root-values](docs/usage/root-values.md) |
+| vision-language models | `model.vision.layers[i]` (the tower's blocks, same values over the patches), `model.projector`, `vision.image_token_mask`, `vision.image_features` (what enters the text model at the image tokens); load with `task="image-text-to-text"` | [vision](docs/usage/vision.md) |
+| methods | `steer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens` | [methods](docs/usage/methods.md) |
+| the vLLM engine | `StandardizedVLLM`: the same names, values and layouts on nnsight's `VLLM`, batch axis 1 | [vllm](docs/usage/vllm.md) |
+
+Every value has one axis layout on every family, named in `nnterp.components`
+([layouts](docs/usage/layouts.md)).
+
+```python
+import torch
+from nnterp import StandardizedTransformer
+
+model = StandardizedTransformer("openai-community/gpt2", attn_implementation="eager")
+vector = torch.randn(model.hidden_size)
+
+with model.trace("The Eiffel Tower is in"):
+    pattern = model.layers[3].self_attn.attention_probabilities.save()  # [batch, heads, query, key]
+    lens = model.project_on_vocab(model.layers[6].layer_output).save()  # logit lens at block 6
+    model.steer(8, vector, factor=3, token_positions=-1)                # add to block 8's output
+    model.skip_layers(10, 11)                                           # blocks 10..11 do not run
     logits = model.logits.save()
 ```
 
----
+## Supported families
 
-### Standardized Naming
+98 families, among them GPT-2, Llama, Mistral, Qwen 2/3/3.5, Gemma 1-4, Phi, OLMo, GPT-NeoX,
+DeepSeek-V2/V3, GPT-OSS, Mixtral, Falcon, BLOOM, Mamba, Jamba and Nemotron-H, developed
+against transformers 5.17 and run on 5.19; 60 of them also run on vLLM
+([docs/usage/vllm.md](docs/usage/vllm.md)). Sixteen of them also name the vision tower of their
+image-text-to-text wrappers (Llava, LLaVA-NeXT, Gemma 3, PaliGemma, Mistral 3, Pixtral,
+Qwen2-VL to Qwen3.5, Llama 4, Gemma 4, Idefics 3, Aya Vision, ...). The full table, with each
+family's native names and quirks, is [docs/reference/families.md](docs/reference/families.md).
 
-All models use the same naming convention:
+## Installation
 
-```python
-with model.trace("Hello world"):
-    # Attention and MLP components (access in forward pass order!)
-    attn_out = model.attentions_output[3]
-    mlp_out = model.mlps_output[3]
-    layer_3_output = model.layers_output[3]
-
-    # Layer I/O - works for GPT-2, LLaMA, Gemma, etc.
-    layer_5_output = model.layers_output[5]
-
-    # Direct interventions - add residual from layer 3 to layer 10
-    model.layers_output[10] = model.layers_output[10] + layer_3_output
+```
+pip install nnterp
 ```
 
----
+Extras:
 
-### Built-in Interventions
+- `pip install "nnterp[models]"`: the tokenizers and processors some checkpoints need
+  (`sentencepiece`, `tiktoken`, `protobuf`, `pillow`).
+- `pip install "nnterp[vllm]"`: vLLM.
+- `pip install "nnterp[test]"`: `pytest` and `pytest-xdist`, for the test suite.
 
-Common mechanistic interpretability interventions with best practices built-in:
+nnterp requires nnsight 0.8.0 or later. PyPI has only the 0.8.0rc1 pre-release, which
+`nnsight>=0.8` does not accept, so `pip install nnterp` resolves once nnsight 0.8.0 is published.
 
-```python
-from nnterp.interventions import logit_lens, patchscope_lens
+## Documentation
 
-# Logit lens: decode hidden states at each layer
-layer_probs = logit_lens(model, ["The capital of France is"])
-# Shape: (batch, layers, vocab_size)
+- [docs/usage/](docs/usage/index.md): one page per feature; start with
+  [loading](docs/usage/loading.md) and [vocabulary](docs/usage/vocabulary.md).
+- [docs/patterns/](docs/patterns/index.md): logit lens, steering, attention patterns,
+  ablation, activation patching, probing and more, written once against the standard values.
+- [docs/extending/](docs/extending/index.md): add a family, override a value, add your own value,
+  register a family or pass one at load (`StandardizedTransformer(repo_id, family=my_family)`).
+- [docs/reference/](docs/reference/index.md): the API quick reference, the families table, a glossary.
+- [docs/developing/](docs/developing/index.md): internals, testing, transformers compatibility.
+- [CLAUDE.md](CLAUDE.md) routes a task to the right page.
+- [GAPS.md](GAPS.md) maps the nnterp 1.x API onto this one, for users of nnterp 1.x.
 
-# Patchscope: patch hidden states across prompts
-from nnterp.interventions import TargetPrompt
-target = TargetPrompt("The capital of France is", index_to_patch=-1)
-patchscope_probs = patchscope_lens(
-    model,
-    source_prompts=["The capital of England is"],
-    target_patch_prompts=target,
-    layers=10
-)
+## I found a bug
 
-# Activation steering
-import torch
-steering_vector = torch.randn(model.hidden_size)
-with model.trace("Hello, how are you?"):
-    model.steer(layers=[5, 10], steering_vector=steering_vector, factor=1.5)
-
-# Steer specific token positions or batch elements
-with model.trace(["Hello, how are you?", "Goodbye, world!"]):
-    model.steer(layers=5, steering_vector=steering_vector, token_positions=0)  # first token only
-    model.steer(layers=5, steering_vector=steering_vector, batch_index=0)  # first prompt only
-```
-
----
-
-### Prompt and Target Tracking
-
-Track probabilities for specific tokens across interventions:
-
-```python
-from nnterp.prompt_utils import Prompt, run_prompts
-
-prompts = [
-    Prompt.from_strings(
-        "The capital of France is",
-        {"target": "Paris", "other": ["London", "Madrid"]},
-        model.tokenizer
-    )
-]
-
-# Get probabilities for all target categories
-results = run_prompts(model, prompts)
-# Returns: {"target": tensor([0.85]), "other": tensor([0.12])}
-
-# Combine with interventions
-results = run_prompts(model, prompts, get_probs_func=logit_lens)
-# Returns probabilities across all layers
-```
----
-
-More examples and detailed documentation can be found at [ndif-team.github.io/nnterp](https://ndif-team.github.io/nnterp/)
-
-
-## I found a bug!
-
-Before opening an issue, make sure that you have a MWE (minimal working example) that reproduces the issue, and if possible, the equivalent code using `NNsight.LanguageModel`. If the NNsight MWE also fails, please open an issue on the [NNsight repository](https://github.com/ndif-team/nnsight/issues/). Also make sure that you can load the model with `AutoModelForCausalLM` from `transformers`.
-
+Before opening an issue, reduce it to a minimal working example. If you can, write the
+same code with nnsight's `TransformersModel` on the native module names: if that also fails,
+the bug is in nnsight, so open it on the [nnsight tracker](https://github.com/ndif-team/nnsight/issues).
+Also check that the model loads with `AutoModelForCausalLM` from transformers. Then open an
+issue on the [nnterp tracker](https://github.com/ndif-team/nnterp/issues).
 
 ## Contributing
-Contribution are welcome! If a functionality is missing, and you implemented it for your reasearch, please open a PR, so that people in the community can benefit from it. That include adding support for new models with custom renamings!
 
-## Next steps
-Here are some nice features that could be cool to have, and for which I'd be happy to accept PRs (ordered by most to least useful imo):
-- [ ] Add helpers for getting gradients
-- [ ] Add helpers for `NNsight`'s cache as it returns raw tuple outputs instead of nice vectors.
-- [ ] Add access to k/q/v
-
-## Development
-- Install the development environment with `make dev` or `uv sync --all-extras`. Add `uv pip install flash-attn --no-build-isolation` to support models like `Phi` that require `flash-attn`.
-- Install pre-commit hooks with `pre-commit install` to automatically update `docs/llms.txt` when modifying RST files and format the code with `black`.
-You might encounter the error `with block not found at line xyz` when running the tests. In this case run `make clean` to remove the python cache and try again (NOTE: this should be fixed in latest `NNsight` versions).
-- Create a git tag with the version number `git tag vx.y.z; git push origin vx.y.z`
-- Build with `python -m build`
-- Publish with e.g. `twine upload dist/*x.y.z*`
-- Test with `uv run pytest nnterp/tests` or `uv run pytest nnterp/tests --model-names gpt2` to test with a specific model. Also you can use `uv run pytest nnterp/tests --class-names LlamaForCausalLM` to test with a specific class.
-<!--commented out as it is likely fixed now - test with `pytest --cache-clear`. **cache-clear is mandatory for now otherwise `NNsight`'s source can break.** It might not be sufficient, in which case you can do `make clean` to remove Python cache. -->
-
+Contributions are welcome: a family that is not supported yet, a value you needed for your
+research, a fix. Read [docs/developing/contributing.md](docs/developing/contributing.md) for
+the style and workflow, and the list of open items.
 
 ## Citation
+
 If you use `nnterp` in your research, you can cite it as:
 
 ```bibtex

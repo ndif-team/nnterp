@@ -1,0 +1,76 @@
+{% extends "base.html.j2" %}
+{% block title %}nnterp encyclopedia{% endblock %}
+{% block masthead_right %}{{ pages|length }} of {{ total }} families written{% endblock %}
+{% block body %}
+<section class="hero frame hero-index">
+  <div class="hero-text">
+    <p class="micro-lg eyebrow">one page per family</p>
+    <h1 class="disp-title">The <em>families</em></h1>
+    <p class="subtitle">How each transformer family looks through nnterp's standard names and values: the block drawn, <span class="mono">support()</span> explained, and what to know before you trace it.</p>
+  </div>
+  <aside class="hero-side">
+    <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
+    <div class="seal"><span>{{ total }}</span></div>
+  </aside>
+</section>
+
+<section class="frame section">
+  <div class="topbar"><h2 class="disp-section">Find a <em>family</em></h2><span class="micro">search by family, checkpoint, quirk or value</span></div>
+  <input class="search" id="search" type="search" placeholder="gemma, Llama-3.1-8B, sandwich, attention_probabilities …" autocomplete="off">
+  {# an org: a filter chip with its logo and name, or on a card its logo alone, named by the image's alt and title #}
+  {% macro org_chip(o, tag) %}<{{ tag }} class="chip chip-ink chip-org{% if not o.avatar %} no-avatar{% endif %}"{% if tag == "button" %} type="button" data-org-filter="{{ o.id }}" aria-pressed="false"{% endif %} title="{{ o.id }} on the Hub">{% if o.avatar %}<img src="static/{{ o.avatar }}" alt="" width="18" height="18" loading="lazy">{% endif %}{{ o.name }}</{{ tag }}>{% endmacro %}
+  {% macro org_logo(o) %}{% if o.avatar %}<span class="org-logo"><img src="static/{{ o.avatar }}" alt="{{ o.name }}" title="{{ o.name }}" width="22" height="22" loading="lazy"></span>{% else %}{{ org_chip(o, "span") }}{% endif %}{% endmacro %}
+  {% macro filter_label(text) %}<summary class="micro filter-label"><span>{{ text }}</span><span class="filter-count" aria-live="polite"></span></summary>{% endmacro %}
+  <div id="filters">
+    {% if orgs %}
+    <details class="filter-group">
+      {{ filter_label("Org") }}
+      <div class="chips filters filters-orgs">
+        {% for o in orgs %}{{ org_chip(o, "button") }}{% endfor %}
+      </div>
+    </details>
+    {% endif %}
+    <details class="filter-group">
+      {{ filter_label("Quirks") }}
+      <div class="chips filters">
+        {% for q in quirks %}<button type="button" class="chip chip-ink" aria-pressed="false" data-filter="{{ q.slug }}">{{ q.label }}</button>{% endfor %}
+      </div>
+    </details>
+    {% if towers %}
+    <details class="filter-group filters-towers">
+      {{ filter_label(eye ~ " Vision encoders") }}
+      <div class="chips filters">
+        {% for t in towers %}<button type="button" class="chip chip-ink" aria-pressed="false" data-filter="{{ t.slug }}">{{ t.label }}</button>{% endfor %}
+      </div>
+    </details>
+    {% endif %}
+  </div>
+
+  <div class="cards" id="cards">
+    {% for p in pages %}
+    <a class="card card-family" href="{{ p.model_type }}.html" style="{{ p.palette.css }}"
+       data-search="{{ p.title }} {{ p.model_type }}{% if p.org %} {{ p.org.id }} {{ p.org.name }}{% endif %} {{ p.architecture }} {{ p.checkpoints|map(attribute='id')|join(' ') }} {{ p.quirks|map(attribute='label')|join(' ') }} {{ p.towers|join(' ') }} {{ p.wrappers|join(' ') }}"
+       data-quirks="{{ (p.quirks|map(attribute='slug')|list + p.tower_slugs)|join(' ') }}"{% if p.org %} data-org="{{ p.org.id }}"{% endif %}>
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <div class="card-head">
+          <div class="petals petals-sm" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
+          {% if p.org %}{{ org_logo(p.org) }}{% endif %}
+        </div>
+        <h3 class="card-name">{% for line in p.title.split(" / ") %}<span class="line">{{ line }}</span>{% endfor %}</h3>
+        <p class="body-md">{{ p.subtitle }}</p>
+        <div class="dashed"></div>
+        <div class="specs"><div class="spec"><span>model_type</span><span>{{ p.model_type }}</span></div>{% if p.towers %}<div class="spec"><span>vision</span><span>{{ eye }}{{ p.towers|join(' · ') }}</span></div>{% endif %}<div class="spec"><span>vLLM</span><span>{{ 'yes' if p.vllm else 'no' }}</span></div></div>
+        <div class="chips">{% for q in p.quirks %}<span class="chip chip-sm">{{ q.label }}</span>{% endfor %}</div>
+      </div>
+    </a>
+    {% endfor %}
+    {% for name in stubs %}
+    <div class="card card-stub" data-search="{{ name }}" data-quirks="">
+      <div class="card-body"><h3 class="card-name">{{ name }}</h3><p class="body-md dim">nnterp.families.{{ name }} · page not written yet</p></div>
+    </div>
+    {% endfor %}
+  </div>
+  <p class="body-md dim" id="count"></p>
+</section>
+{% endblock %}

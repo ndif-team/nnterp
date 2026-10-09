@@ -13,9 +13,9 @@ from nnsight.intervention.envoy import Envoy
 from nnsight.modeling.transformers import TransformersModel
 from torch import Tensor
 
-from . import families
+from . import families, order as forward_order
 from .families import default
-from .components import EProperty, Layer, Residual
+from .components import EProperty, Layer, Residual, Unavailable
 from .components.standard import blocks_support, standard_children, values
 from .components.vision import Vision
 
@@ -344,6 +344,7 @@ class StandardizedTransformer(Standardized, TransformersModel):
     ) -> None:
         kwargs.setdefault("task", "text-generation")
         self._add_prefix_false_tokenizer = None
+        self._order = None  # the measured ranks: see `order`
         if family is None:
             config = self._read_config(repo_id, kwargs)
             # A multimodal checkpoint's config nests the language model's; the
@@ -499,6 +500,48 @@ class StandardizedTransformer(Standardized, TransformersModel):
     @input_size.postprocess
     def input_size(self, value: Any) -> Any:
         raise AttributeError("input_size is the ids' shape and cannot be assigned; assign input_ids")
+
+    # -- forward order (outside a trace) -------------------------------------------
+
+    def order(self, layer: int | None = None) -> dict[str, int]:
+        """The available values in forward order: name -> rank; equal ranks are one location, either read first.
+
+        With ``layer``, that block's values by dotted name (`support`'s), from
+        0. Without, the root's, numbered across the whole forward. Measured by
+        a probe run on first use (`nnterp.order.probe`) and kept on the model,
+        so route kernels (`route_kernels`, `chunk_per_token`) before the first.
+        """
+        table = forward_order.cached(self)
+        if layer is None:
+            return {**table[-1], **table[self.num_layers]}
+        return dict(table[range(self.num_layers)[layer]])  # negative layers count from the end; IndexError past it
+
+    def rank(self, name: str, layer: int | None = None) -> tuple[int, int]:
+        """Where a value falls in the forward: ``(side, r)``, which sorts reads into forward order.
+
+        ``side`` is ``-1`` or ``num_layers`` for a root value served before or
+        after the blocks, else ``layer``; ``r`` is `order`'s rank.
+
+        Raises:
+            Unavailable: the checkpoint has no such value (`support` gives the reason).
+            KeyError: there is no value of that name (a block value needs ``layer``).
+        """
+        table = forward_order.cached(self)
+        if layer is None:
+            for side in (-1, self.num_layers):
+                if name in table[side]:
+                    return side, table[side][name]
+            value = values(type(self)).get(name)
+            reason = value and value.reason(self)
+        else:
+            layer = range(self.num_layers)[layer]  # negative layers count from the end; IndexError past it
+            if name in table[layer]:
+                return layer, table[layer][name]
+            reason = self.support(layer).get(name)
+        if not reason:
+            where = "the root" if layer is None else f"block {layer}"
+            raise KeyError(f"{name!r} is not a value of {where}; a block value takes layer=, by its dotted support() name")
+        raise Unavailable(f"{name} is not available{'' if layer is None else f' on block {layer}'}: {reason}")
 
     # -- tokenizers ---------------------------------------------------------------
 

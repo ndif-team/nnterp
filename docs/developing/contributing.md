@@ -168,6 +168,12 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
   appear in the repr (§3 item 1).
 - **Containers are lifted to the root**, `model.layers` not `model.model.layers`;
   the final norm keeps Llama's `norm`, not `ln_final` (§3 items 2-3).
+- **Forward order is measured, not tabled**: nnterp 1.x's hand-maintained
+  `Address.order` becomes `model.order()` / `model.rank(name, layer)`, read
+  off one probe `scan` per model and block shape (`nnterp/order.py`), so a
+  family's quirk (Falcon's values before its queries) is in the ranks
+  without anyone writing it down (§2a "Forward-order"). The probe runs on
+  `StandardizedTransformer`; `StandardizedVLLM` raises.
 - **Eager attention is not forced at load**; `attention_probabilities` says
   `eager` is needed when the checkpoint runs `sdpa` (§3 item 5;
   `tests/test_registry.py:88-92`).
@@ -178,10 +184,6 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
 
 ### Open (from GAPS.md sections 2 and 4)
 
-- **Forward-order ranking metadata** (nnterp 1.x's `Address.order` /
-  `Internals.rank`): a way to sort several reads into the order the forward
-  reaches them, so a user does not learn Falcon's values-before-queries rule
-  by an `OutOfOrderError` (§2a "Forward-order").
 - **Load-time validation**: a causal check that a written pattern moves the
   logits, a refusal of heterogeneous layer classes (Mllama's cross-attention
   blocks would be plain `Envoy`s with no `layer_output`), detection of

@@ -3,7 +3,7 @@ title: Availability
 one_liner: "`model.support()` says which standard values this checkpoint has and why not, before any trace; reading an unavailable one raises `nnterp.Unavailable` at that line."
 tags: [usage, support, Unavailable, SourceNotAvailable, eager, hybrids]
 related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/residual-stream.md, docs/usage/layouts.md]
-sources: [nnterp/standardized.py, nnterp/components/standard.py, nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/opt.py]
+sources: [nnterp/standardized.py, nnterp/order.py, nnterp/components/standard.py, nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/opt.py]
 ---
 
 # Availability
@@ -193,6 +193,60 @@ A vision-language wrapper adds its tower's rows under `vision.` (`"vision.image_
 without the prefix; a text-only checkpoint has no `model.vision` attribute at all, so guard
 on `getattr(model, "vision", None)` first and on `support()` second
 ([vision.md](vision.md#availability)).
+
+## Forward order: `order` and `rank`
+
+Within one invoke, values are read in the order the forward reaches them. `model.order()`
+says that order for the values `support()` lists as available, and `model.rank()` gives one
+sortable tuple per value. Like `support()`, both are asked outside a trace.
+
+```python
+from nnterp import StandardizedTransformer
+
+model = StandardizedTransformer("hf-internal-testing/tiny-random-LlamaForCausalLM", attn_implementation="eager")
+
+model.order(0)
+# {'layer_input': 0, 'self_attn.attention_queries': 1, 'self_attn.attention_keys': 1,
+#  'self_attn.attention_values': 1, 'self_attn.attention_scores': 2,
+#  'self_attn.attention_probabilities': 3, 'self_attn.attention_head_outputs': 4,
+#  'self_attn.attention_output': 5, 'mlp.mlp_output': 6, 'layer_output': 7}
+model.order()
+# {'input_ids': 0, 'attention_mask': 0, 'input_size': 0, 'token_embeddings': 1,
+#  'logits': 2, 'next_token_probs': 2}
+
+model.rank("input_ids")                            # (-1, 0): before the blocks
+model.rank("self_attn.attention_queries", 1)       # (1, 1)
+model.rank("logits")                               # (2, 2): num_layers, after the blocks
+
+reads = [("logits", None), ("layer_output", 1), ("mlp.mlp_output", 0), ("token_embeddings", None)]
+reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_output@0, layer_output@1, logits
+```
+
+- **A rank is `(side, r)`.** `side` is `-1` for a root value the model serves before the
+  blocks, the layer for a block value (named as in `support(layer=i)`), and `num_layers`
+  for a root value after the blocks; `r` is the value's place in `order(side's layer)`.
+  Sorting reads by rank sorts them into forward order, layer by layer.
+- **Equal ranks are one location.** The queries, keys and values are the arguments of one
+  attention call, so either can be read first. On Falcon the values come before the
+  queries and keys (`rank("self_attn.attention_values", 0) < rank("self_attn.attention_queries", 0)`);
+  on a Qwen3.5 linear-attention block the kernel's inputs (queries, keys, values, `betas`,
+  `decays`, `state_input`) share one rank.
+- **Per block shape.** A hybrid's blocks differ: `order(0)` on Qwen3.5 lists the
+  `linear_attn.*` values and `order(3)` the `self_attn.*` ones.
+- **Unavailable values are not ranked.** Loaded with `sdpa`, the scores and the pattern
+  are absent from `order(i)`, and `rank` raises `Unavailable` with `support()`'s reason;
+  a name that is no value at all raises `KeyError`.
+- **Measured, then kept.** The first call runs one probe `model.scan` (meta tensors, no
+  weights or dispatch needed; `nnterp.order.probe` says how). A forward that cannot run on
+  meta tensors (Granite, OPT, a grouped-mm mixture of experts in float32) is probed with a
+  `trace` instead, which loads the weights. The result is measured once and kept on the
+  model, so set `nnterp.route_kernels` and `nnterp.chunk_per_token` before the model is
+  dispatched, traced or measured: the same rule kernel routing already has for traces
+  (`sourced` envoys instrument at dispatch). With torch kernels routed, a DeltaNet block
+  also ranks `state` and `states`.
+- **One forward pass.** The order is within one call of the model. Under `generate`, every
+  step repeats it; `tracer.iter` picks the step. The vision tower's values
+  (`vision.*`) are not ranked, and `StandardizedVLLM` raises `NotImplementedError`.
 
 ## Gotchas
 

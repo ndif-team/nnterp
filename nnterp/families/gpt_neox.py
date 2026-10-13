@@ -8,7 +8,7 @@ binds only where it resolves, so both spellings map to ``lm_head``.
 
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXAttention, GPTNeoXLayer, GPTNeoXMLP
 
-from ..components import Attention, EProperty, Layer, Mlp, PARALLEL, Residual
+from ..components import Attention, EProperty, Layer, Mlp, PARALLEL
 
 RENAME = {
     "gpt_neox.embed_in": "embed_tokens",
@@ -30,8 +30,8 @@ class Layer(Layer):
     ``x + attn(ln1(x)) + mlp(ln2(x))``. The contribution identity holds either
     way; only the norm names change meaning.
 
-    With ``use_parallel_residual`` there is no stream between the sublayers, and the MLP reads
-    ``input_layernorm``'s output; without it the block is the pre-norm one.
+    With ``use_parallel_residual`` there is no stream between the sublayers, and the MLP reads its
+    own norm of the block's input, ``post_attention_layernorm``'s output, as on the pre-norm block.
     """
 
     layer_mid = EProperty(
@@ -39,13 +39,6 @@ class Layer(Layer):
         description="The residual stream after the attention add",
         unavailable=lambda block: PARALLEL if block.root.config.use_parallel_residual else None,
     )
-
-    @EProperty(
-        lambda block: "input_layernorm.output" if block.root.config.use_parallel_residual else "post_attention_layernorm.output",
-        description="The normed stream entering the MLP",
-    )
-    def mlp_norm_output(self, value) -> Residual:
-        return value
 
 
 

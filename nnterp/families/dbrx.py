@@ -12,7 +12,7 @@ a mixture of experts (`Moe`) returning the hidden states. Its router's projectio
 a child ``nn.Linear``, ``router.layer``, whose output is the logits; the FFN's own
 ``route_tokens_to_experts`` takes a softmax top-k and p-normalizes the weights
 (``moe_normalize_expert_weights``). The experts are DBRX's own loop over experts,
-taking and returning ``[batch, seq, hidden]``, so the per-slot outputs are
+taking and returning ``[batch, seq, hidden_size]``, so the per-slot outputs are
 unavailable.
 """
 

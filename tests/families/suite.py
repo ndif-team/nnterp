@@ -16,8 +16,9 @@ from nnsight.intervention.envoy import Envoy
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.components import (
-    Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
-    Vision, first_tensor,
+    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, QUERY, SEQ, STATE_DIM, STREAMS,
+    VALUE_DIM, Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
+    Vision, axis_size, first_tensor,
 )
 from nnterp.components.standard import in_width
 
@@ -114,7 +115,7 @@ def near(actual, expected, like, ulps: int = 16):
 
 
 def expert_by_hand(host, x: torch.Tensor, expert: int, weight: torch.Tensor) -> torch.Tensor:
-    """``weight * expert(x)`` for one token ``x`` ``[hidden]``, computed outside the model.
+    """``weight * expert(x)`` for one token ``x`` ``[hidden_size]``, computed outside the model.
 
     From the experts' stacked weights where they are the plain gated layout
     (``gate_up_proj`` / ``down_proj``, ``_apply_gate``, no bias, not
@@ -606,29 +607,31 @@ class FamilySuite:
     # -- layouts -------------------------------------------------------------------
 
     def axis_sizes(self, model, host):
-        """What each axis name in a value's annotation must be on this model."""
+        """What each axis that is not a fact about the model must be on this model, off the input and the modules."""
         seq = len(model.tokenizer(PROMPT).input_ids)
-        sizes = {"batch": 1, "seq": seq, "query": seq, "key": seq, "hidden": model.hidden_size, "vocab": model.vocab_size}
+        sizes = {BATCH: 1, SEQ: seq, QUERY: seq, KEY: seq}
         streams = getattr(model.config.get_text_config(), "hc_mult", None)
         if streams:  # a hyper-connection residual (DeepSeek-V4): the parallel copies of the stream
-            sizes["streams"] = streams
-        if self.attn_blocks(model):  # a state-space model has no heads to size
-            sizes.update(heads=model.num_heads, kv_heads=model.num_heads if self.KV_HEADS_EXPANDED else model.num_kv_heads,
-                         head_dim=model.head_dim, qk_head_dim=model.qk_head_dim)
+            sizes[STREAMS] = streams
         module = getattr(host, "_module", None)
         if isinstance(host, LinearAttention):
             if hasattr(module, "num_v_heads"):  # a gated DeltaNet
-                sizes.update(heads=module.num_v_heads, key_dim=module.head_k_dim, value_dim=module.head_v_dim)
+                sizes.update({MIXER_HEADS: module.num_v_heads, KEY_DIM: module.head_k_dim, VALUE_DIM: module.head_v_dim})
             else:  # Kimi Delta Attention: one head size for keys and values
-                sizes.update(heads=module.num_heads, key_dim=module.head_dim, value_dim=module.head_dim)
+                sizes.update({MIXER_HEADS: module.num_heads, KEY_DIM: module.head_dim, VALUE_DIM: module.head_dim})
         if isinstance(host, SelectiveScan):
-            sizes.update(groups=1, channels=module.intermediate_size, state_dim=module.ssm_state_size)
+            sizes.update({GROUPS: 1, CHANNELS: module.intermediate_size, STATE_DIM: module.ssm_state_size})
         if isinstance(host, StateSpace):
-            sizes.update(heads=module.num_heads, groups=module.n_groups, state_dim=module.ssm_state_size,
-                         head_dim=module.head_dim, key_dim=module.ssm_state_size, value_dim=module.head_dim)
-        if isinstance(host, Moe) and host.no_mixture() is None:
-            sizes.update(experts=host.num_experts + self.ROUTER_EXTRA_CLASSES, top_k=host.top_k)
+            sizes.update({MIXER_HEADS: module.num_heads, GROUPS: module.n_groups, STATE_DIM: module.ssm_state_size,
+                          KEY_DIM: module.ssm_state_size, VALUE_DIM: module.head_dim})
         return sizes
+
+    def model_size(self, host, axis):
+        """A model-fact axis's size by `axis_size`, where the family's tensor differs from it by design."""
+        if axis == KV_HEADS and self.KV_HEADS_EXPANDED:
+            return axis_size(host, HEADS)
+        size = axis_size(host, axis)
+        return size + self.ROUTER_EXTRA_CLASSES if axis == EXPERTS else size
 
     def test_values_match_their_annotations(self, model):
         """Every value's tensor has the rank, dtype and axis sizes its `Float[Tensor, "..."]` annotation says.
@@ -663,8 +666,10 @@ class FamilySuite:
                 assert isinstance(saved, value.layout), (host.path, name, tuple(saved.shape), value.dims)
                 sizes = self.axis_sizes(model, host)
                 for axis, size in zip(value.dims, saved.shape):
-                    if axis in sizes and not (axis == "head_dim" and self.KV_HEADS_EXPANDED):
-                        assert size == sizes[axis], (host.path, name, axis, size, sizes[axis])
+                    if axis == HEAD_DIM and self.KV_HEADS_EXPANDED:
+                        continue
+                    expected = sizes[axis] if axis in sizes else self.model_size(host, axis)  # every other axis resolves
+                    assert size == expected, (host.path, name, axis, size, expected)
                 checked += 1
         assert checked >= (11 if attention else 4)  # root 3 + layer 1 + attention 7, plus the MLP and linear hosts where present
 
@@ -864,7 +869,7 @@ class FamilySuite:
         return 1.0
 
     def mixture_output(self, model, host):
-        """What ``routed_output + shared_expert_output`` equals: the mixture's own output, ``[batch, seq, hidden]``."""
+        """What ``routed_output + shared_expert_output`` equals: the mixture's own output, ``[batch, seq, hidden_size]``."""
         with model.trace(PROMPT):
             out = host.output.save()
         out = first_tensor(out)

@@ -2,7 +2,7 @@
 
 vLLM has no SmolLM3 of its own: it runs transformers' modules, so the tree
 and the block are transformers' (see `nnterp.components.vllm.transformers_backend`),
-with Llama's names, the stream ``[1, tokens, hidden]`` and the engine's
+with Llama's names, the stream ``[1, tokens, hidden_size]`` and the engine's
 attention layer mounted as the attention's ``attn`` child. The block is
 Llama's, pre-norm with the residual added in the block, so the
 contributions are the modules' outputs. Every fourth block's attention

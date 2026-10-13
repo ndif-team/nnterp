@@ -39,7 +39,7 @@ class Attention(Attention):
     # ``_reshape`` splits the fused projection into ``(query, key, value)``,
     # heads first (the keys are transposed for the score matmul only later);
     # the scores are the softmax's input after the mask; the head outputs are
-    # the ``bmm`` result, ``[batch * heads, seq, head_dim]``.
+    # the ``bmm`` result, ``[batch * num_heads, seq, head_dim]``.
 
     @EProperty("source.self__reshape_0.output", select=0, description=Attention.attention_queries.description)
     def attention_queries(self, value) -> Queries:

@@ -11,7 +11,7 @@ exist here and `StandardizedTransformer.support` says so. The block's own
 returns a bare tensor. The attention does its own arithmetic whatever
 ``attn_implementation`` says (the model has no other): queries scaled by
 ``1/sqrt(head_dim)`` as they are projected, queries, keys and values flattened to
-``[batch * heads, seq, head_dim]`` for ``torch.bmm``, the mask added and clamped,
+``[batch * num_heads, seq, head_dim]`` for ``torch.bmm``, the mask added and clamped,
 softmax, dropout, ``bmm`` with the values; the interior needs no eager load.
 """
 
@@ -45,13 +45,13 @@ _softmax.__name__ = "nn_functional_softmax_0|nn_functional_softmax_1"
 
 
 def _heads_first(envoy: "Envoy", value: torch.Tensor) -> torch.Tensor:
-    """A ``[batch * heads, ...]`` tensor viewed as ``[batch, heads, ...]``."""
+    """A ``[batch * num_heads, ...]`` tensor viewed as ``[batch, num_heads, ...]``."""
     heads = envoy._module.num_heads
     return value.view(value.shape[0] // heads, heads, *value.shape[1:])
 
 
 def _flat(value: torch.Tensor) -> torch.Tensor:
-    """A ``[batch, heads, ...]`` tensor back to the ``[batch * heads, ...]`` the forward holds."""
+    """A ``[batch, num_heads, ...]`` tensor back to the ``[batch * num_heads, ...]`` the forward holds."""
     return value.reshape(value.shape[0] * value.shape[1], *value.shape[2:])
 
 
@@ -66,7 +66,7 @@ class Attention(Attention):
     # them for ``bmm`` (the keys and values after the cache update), viewed back
     # to heads first; the scores are the softmax's input, masked; the pattern is
     # the dropout's output; the head outputs are the ``bmm`` result viewed back to
-    # ``[batch, heads, seq, head_dim]``, served tokens first. Every read is a view
+    # ``[batch, num_heads, seq, head_dim]``, served tokens first. Every read is a view
     # of the tensor the forward holds, so in-place edits reach the model, and a
     # write is reshaped back to the forward's layout.
 

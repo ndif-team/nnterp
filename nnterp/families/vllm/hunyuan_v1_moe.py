@@ -40,11 +40,11 @@ class Layer(FusedLayer):
     """The decoder block: ``forward(positions, hidden_states, residual, kv_states) -> (hidden_states, residual, kv_states)``."""
 
     def skip_with(self, hidden: torch.Tensor) -> None:
-        """Skip this block, handing ``hidden`` (``[1, tokens, hidden]``) on as its residual stream, and no keys and values."""
+        """Skip this block, handing ``hidden`` (``[1, tokens, hidden_size]``) on as its residual stream, and no keys and values."""
         hidden = hidden.squeeze(0)
         self.skip((hidden, torch.zeros_like(hidden), None))
 
-    @EProperty("output", description="The residual stream leaving the block: hidden_states + residual, [1, tokens, hidden]")
+    @EProperty("output", description="The residual stream leaving the block: hidden_states + residual, [1, tokens, hidden_size]")
     def layer_output(self, value: tuple) -> Residual:
         return self._stream(value[0], value[1])
 
@@ -64,7 +64,7 @@ class Layer(FusedLayer):
 class Attention(Attention):
     """The attention: returns ``(output, (keys, values))``, and the output is what the block adds."""
 
-    @Flat("output", select=0, description="What the attention adds to the residual stream, [1, tokens, hidden]")
+    @Flat("output", select=0, description="What the attention adds to the residual stream, [1, tokens, hidden_size]")
     def attention_output(self, value) -> Residual:
         return value
 

@@ -3,9 +3,9 @@
 vLLM runs a family through its own implementation, which differs from
 transformers' in three ways a value has to absorb:
 
-* **No batch axis.** A request's activations are ``[tokens, hidden]``: every
+* **No batch axis.** A request's activations are ``[tokens, hidden_size]``: every
   prompt token on the prefill, one row on each decode step. The values keep
-  nnterp's layouts, so they are served as ``[1, tokens, hidden]`` and code
+  nnterp's layouts, so they are served as ``[1, tokens, hidden_size]`` and code
   written against ``[:, -1]`` runs on both engines.
 * **Live buffers.** A served tensor is the model's own, and the next fused
   kernel rewrites it after the block has read it, so a saved reference comes
@@ -20,7 +20,7 @@ transformers' in three ways a value has to absorb:
 
 The attention module hands its queries, keys and values to vLLM's attention
 layer (its ``attn`` child) and gets the per-head outputs back, each
-``[tokens, heads * head_dim]``; they are that child's inputs and output,
+``[tokens, num_heads * head_dim]``; they are that child's inputs and output,
 served in nnterp's layouts with the heads split out. What the layer computes
 between them (the scores, the pattern) is inside its kernel, not Python on
 this engine, so those two are recomputed from the queries and keys:

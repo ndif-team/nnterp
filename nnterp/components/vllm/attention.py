@@ -36,7 +36,7 @@ def on_decode_step(envoy: Envoy) -> str | None:
 
 
 def scores(self: "Attention") -> Pattern:
-    """The scaled, masked scores the kernel's softmax runs on, ``[1, heads, query, key]``, recomputed.
+    """The scaled, masked scores the kernel's softmax runs on, ``[1, num_heads, query, key]``, recomputed.
 
     ``queries @ keys.T * scale``, softcapped where the layer softcaps, plus
     the ALiBi bias where the layer has slopes, with the keys a query may not
@@ -65,7 +65,7 @@ def scores(self: "Attention") -> Pattern:
 
 
 def probabilities(self: "Attention") -> Pattern:
-    """The attention pattern, ``[1, heads, query, key]``: the softmax of `attention_scores`, in float32 then the model's dtype."""
+    """The attention pattern, ``[1, num_heads, query, key]``: the softmax of `attention_scores`, in float32 then the model's dtype."""
     values = self.attention_scores
     return values.float().softmax(-1).to(values.dtype)
 
@@ -77,7 +77,7 @@ class Attention(standard.Attention):
     and values and calls vLLM's attention layer on them, ``self.attn(q, k,
     v)``, which returns the per-head outputs the output projection then
     mixes. Those four are the ``attn`` child's inputs and output, each
-    ``[tokens, heads * head_dim]``, served with the heads split out by the
+    ``[tokens, num_heads * head_dim]``, served with the heads split out by the
     module's own ``head_dim``. A family whose attention module names that
     child, or its head width, another way points the values at it.
 
@@ -96,35 +96,35 @@ class Attention(standard.Attention):
 
     attention_scores = DerivedEProperty(
         scores,
-        description="The scores entering the softmax, [1, heads, query, key], recomputed from the queries and keys; prefill only, read-only",
+        description="The scores entering the softmax, [1, num_heads, query, key], recomputed from the queries and keys; prefill only, read-only",
         unavailable=on_decode_step,
     )
     attention_probabilities = DerivedEProperty(
         probabilities,
-        description="The attention pattern, [1, heads, query, key], recomputed from the queries and keys; prefill only, read-only",
+        description="The attention pattern, [1, num_heads, query, key], recomputed from the queries and keys; prefill only, read-only",
         unavailable=on_decode_step,
     )
 
-    @Flat("attn.inputs", select=0, heads="first", description="The queries entering vLLM's attention layer, [1, heads, tokens, head_dim]")
+    @Flat("attn.inputs", select=0, heads="first", description="The queries entering vLLM's attention layer, [1, num_heads, tokens, head_dim]")
     def attention_queries(self, value: torch.Tensor) -> Queries:
         """The queries the attention layer receives, after the projection, any query norm and the rotary embedding."""
         return value
 
-    @Flat("attn.inputs", select=1, heads="first", description="The keys entering vLLM's attention layer, [1, kv_heads, tokens, head_dim]")
+    @Flat("attn.inputs", select=1, heads="first", description="The keys entering vLLM's attention layer, [1, num_kv_heads, tokens, head_dim]")
     def attention_keys(self, value: torch.Tensor) -> Keys:
         """This step's keys as the attention layer receives them; ``num_kv_heads`` wide under grouped-query attention."""
         return value
 
-    @Flat("attn.inputs", select=2, heads="first", description="The values entering vLLM's attention layer, [1, kv_heads, tokens, head_dim]")
+    @Flat("attn.inputs", select=2, heads="first", description="The values entering vLLM's attention layer, [1, num_kv_heads, tokens, head_dim]")
     def attention_values(self, value: torch.Tensor) -> Values:
         """This step's values as the attention layer receives them; ``num_kv_heads`` wide under grouped-query attention."""
         return value
 
-    @Flat("attn.output", heads="last", description="The per-head outputs before the output projection, [1, tokens, heads, head_dim]")
+    @Flat("attn.output", heads="last", description="The per-head outputs before the output projection, [1, tokens, num_heads, head_dim]")
     def attention_head_outputs(self, value: torch.Tensor) -> HeadOutputs:
         """Each head's output as the attention layer returns it, before the output projection mixes them."""
         return value
 
-    @Flat("output", description="What the attention adds to the residual stream, [1, tokens, hidden]")
+    @Flat("output", description="What the attention adds to the residual stream, [1, tokens, hidden_size]")
     def attention_output(self, value: torch.Tensor) -> Residual:
         return value

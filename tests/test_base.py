@@ -387,11 +387,57 @@ def test_value_repr_line_names_the_layout():
     from nnterp.standardized import StandardizedTransformer as Root
 
     assert str(Layer.layer_output) == (
-        "(layer_output) -> Residual [batch seq hidden]: The residual stream leaving the block, a tensor even when the block returns a tuple"
+        "(layer_output) -> Residual [batch seq hidden_size]: The residual stream leaving the block, a tensor even when the block returns a tuple"
     )
-    assert str(Attention.attention_probabilities).startswith("(attention_probabilities) -> Pattern [batch heads query key]: ")
+    assert str(Attention.attention_probabilities).startswith("(attention_probabilities) -> Pattern [batch num_heads query key]: ")
     assert str(LinearAttention.state_input).startswith("(state_input) -> State | None [batch heads key_dim value_dim]: ")
     assert str(Root.input_size) == "(input_size): [batch, seq] of the current call; read-only"
+
+
+# -- axis names and sizes ----------------------------------------------------------
+
+def test_layouts_are_spelled_with_the_size_names():
+    """The axis constants render to the plain names: a model-fact axis is named as the size attribute that holds it."""
+    from nnterp.components import Moe
+    from nnterp.standardized import StandardizedTransformer as Root
+
+    assert Layer.layer_output.dims == ("batch", "seq", "hidden_size")
+    assert Attention.attention_keys.dims == ("batch", "num_kv_heads", "seq", "qk_head_dim")
+    assert Attention.attention_probabilities.dims == ("batch", "num_heads", "query", "key")
+    assert Attention.attention_head_outputs.dims == ("batch", "seq", "num_heads", "head_dim")
+    assert Moe.router_logits.dims == ("batch", "seq", "num_experts")
+    assert Root.logits.dims == ("batch", "seq", "vocab_size")
+
+
+def test_axis_size_resolves_by_name_up_the_tree(gpt2):
+    """A size is read off the value's own envoy, else the first one above it that holds it, up to the root."""
+    from nnterp import axis_size
+
+    attn = gpt2.layers[0].self_attn
+    assert axis_size(gpt2.layers[0], "hidden_size") == gpt2.hidden_size  # from the root
+    assert axis_size(attn, "hidden_size") == gpt2.hidden_size
+    assert axis_size(attn, "num_heads") == attn.num_heads == gpt2.config.n_head  # from the attention itself
+    assert axis_size(attn, "head_dim") == gpt2.config.n_embd // gpt2.config.n_head
+    assert axis_size(gpt2, "vocab_size") == gpt2.vocab_size  # the logits' last axis, on the root
+    assert [axis_size(attn, axis) for axis in Attention.attention_queries.dims[1::2]] == [attn.num_heads, attn.qk_head_dim]
+
+
+@pytest.mark.parametrize("axis", ["batch", "seq", "query", "key"])
+def test_axis_size_refuses_an_axis_that_is_not_a_model_fact(gpt2, axis):
+    """The batch, the sequence and the pattern's two token axes have no size but the tensor's."""
+    from nnterp import axis_size
+
+    with pytest.raises(ValueError, match=f"axis '{axis}' .* is not a fact about the model"):
+        axis_size(gpt2.layers[0].self_attn, axis)
+
+
+def test_axis_size_ignores_the_modules_own_attributes(gpt2):
+    """Only envoy classes hold sizes: GPT-2's attention module has ``embed_dim``, which is not a size nnterp declares."""
+    from nnterp import axis_size
+
+    assert hasattr(gpt2.layers[0].self_attn._module, "embed_dim")
+    with pytest.raises(ValueError):
+        axis_size(gpt2.layers[0].self_attn, "embed_dim")
 
 
 # -- top-k tokens ----------------------------------------------------------------

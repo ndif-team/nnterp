@@ -244,10 +244,10 @@ def read(model, layer, host, value):
     return saved["value"]
 
 
-#: Shipped families the default refuses at load: the scan cannot run their forward, or their stream is not [batch, seq, hidden].
+#: Shipped families the default refuses at load: the scan cannot run their forward, or their stream is not [batch, seq, hidden_size].
 REFUSED = {
     "dbrx": r"its shape check could not run under fake tensors \(GuardOnDataDependentSymNode",
-    "deepseek_v4": r"the blocks do not pass a \[batch, seq, hidden\] stream",
+    "deepseek_v4": r"the blocks do not pass a \[batch, seq, hidden_size\] stream",
 }
 #: Shipped families whose eager attention forward is their own, without the op a pattern value is read at: those reads fail loudly, naming the op.
 NO_OP = {
@@ -344,9 +344,9 @@ def test_unknown_container_is_refused_with_a_rename():
 
 
 def test_a_stream_of_another_shape_is_refused():
-    """Gemma-3n's blocks carry several parallel streams (``[streams, batch, seq, hidden]``), which the default cannot name."""
+    """Gemma-3n's blocks carry several parallel streams (``[streams, batch, seq, hidden_size]``), which the default cannot name."""
     with pytest.warns(UserWarning, match="gemma3n_text"):
-        with pytest.raises(UnsupportedFamily, match=r"the blocks do not pass a \[batch, seq, hidden\] stream"):
+        with pytest.raises(UnsupportedFamily, match=r"the blocks do not pass a \[batch, seq, hidden_size\] stream"):
             StandardizedTransformer("hf-tiny-v2/tiny-random-Gemma3nForCausalLM")
 
 

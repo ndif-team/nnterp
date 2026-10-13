@@ -64,7 +64,7 @@ class Attention(Attention):
 
     @Flat(
         post_norm("post_norm1"), factor=residual_multiplier,
-        description="What the attention adds to the residual stream: the post-attention norm's output times residual_multiplier, [1, tokens, hidden]",
+        description="What the attention adds to the residual stream: the post-attention norm's output times residual_multiplier, [1, tokens, hidden_size]",
     )
     def attention_output(self, value) -> Residual:
         return value
@@ -75,7 +75,7 @@ class Mlp(Mlp):
 
     @Flat(
         post_norm("post_norm2"), factor=residual_multiplier,
-        description="What the MLP adds to the residual stream: the post-MLP norm's output times residual_multiplier, [1, tokens, hidden]",
+        description="What the MLP adds to the residual stream: the post-MLP norm's output times residual_multiplier, [1, tokens, hidden_size]",
     )
     def mlp_output(self, value) -> Residual:
         return value

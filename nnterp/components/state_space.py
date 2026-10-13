@@ -14,16 +14,17 @@ from torch import Tensor
 from .eproperty import DerivedEProperty, EProperty, Unavailable, unavailable
 from .linear_attention import Gates
 from .recurrent import RecurrentMixer, State, States, kernel, needs_torch_kernels, per_call
+from .standard import BATCH, GROUPS, HEAD_DIM, MIXER_HEADS, SEQ, STATE_DIM, module_int, unsized
 
 #: The layouts at the scan call, tokens before heads. SSD's ``C`` and ``B`` are projected once per *group* of
 #: heads (``n_groups``, which divides ``num_heads``) and live on the state's ``state_dim`` side; the values
 #: ``x`` and each head's read of the state are per head, ``head_dim`` wide. The state itself is the base's
 #: `State` (``batch heads key_dim value_dim``): here ``key_dim`` is ``state_dim`` and ``value_dim`` is
 #: ``head_dim``.
-SSDQueries = Float[Tensor, "batch seq groups state_dim"]
-SSDKeys = Float[Tensor, "batch seq groups state_dim"]
-SSDValues = Float[Tensor, "batch seq heads head_dim"]
-SSDHeadOutputs = Float[Tensor, "batch seq heads head_dim"]
+SSDQueries = Float[Tensor, f"{BATCH} {SEQ} {GROUPS} {STATE_DIM}"]
+SSDKeys = Float[Tensor, f"{BATCH} {SEQ} {GROUPS} {STATE_DIM}"]
+SSDValues = Float[Tensor, f"{BATCH} {SEQ} {MIXER_HEADS} {HEAD_DIM}"]
+SSDHeadOutputs = Float[Tensor, f"{BATCH} {SEQ} {MIXER_HEADS} {HEAD_DIM}"]
 
 
 def argument(name: str):
@@ -201,6 +202,14 @@ class StateSpace(RecurrentMixer):
     #: Where each kernel's call site passes each argument: a position, or a keyword.
     CHUNK_ARGUMENTS = {"hidden_states": 0, "dt": 1, "A": 2, "B": 3, "C": 4, "dt_bias": "dt_bias", "state": "initial_states"}
     RECURRENT_ARGUMENTS = {"state": 0, "hidden_states": 1, "dt": 2, "A": 3, "B": 4, "C": 5, "dt_bias": "dt_bias"}
+
+    @property
+    def head_dim(self) -> int:
+        """Width of one head's values and outputs: the mixer's ``head_dim``, which on a hybrid is not its softmax attention's."""
+        size = module_int(self._module, "head_dim")
+        if size is None:
+            raise unsized(self, "head_dim")
+        return size
 
     # -- the call ------------------------------------------------------------------
 

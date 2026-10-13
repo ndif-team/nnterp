@@ -31,11 +31,11 @@ from torch import Tensor
 
 from .eproperty import DerivedEProperty, EProperty, Unavailable
 from .layer import Residual
-from .standard import Standard, first_tensor, rewrap
+from .standard import BATCH, KEY_DIM, MIXER_HEADS, SEQ, VALUE_DIM, Standard, first_tensor, rewrap
 
 #: The recurrent state alone, one ``key_dim`` by ``value_dim`` matrix per head, and stacked along the tokens.
-State = Float[Tensor, "batch heads key_dim value_dim"]
-States = Float[Tensor, "batch seq heads key_dim value_dim"]
+State = Float[Tensor, f"{BATCH} {MIXER_HEADS} {KEY_DIM} {VALUE_DIM}"]
+States = Float[Tensor, f"{BATCH} {SEQ} {MIXER_HEADS} {KEY_DIM} {VALUE_DIM}"]
 
 
 def _name(op: str) -> str:

@@ -2,8 +2,8 @@
 
 Nearly every mixture in transformers computes the same thing::
 
-    logits, w, idx = router(x)          # logits [tokens, experts]; w, idx [tokens, top_k]; tokens = batch * seq
-    routed = experts(x, idx, w)         # [tokens, hidden]
+    logits, w, idx = router(x)          # logits [tokens, num_experts]; w, idx [tokens, top_k]; tokens = batch * seq
+    routed = experts(x, idx, w)         # [tokens, hidden_size]
     out = routed (+ shared(x))
 
 and the experts module's call receives ``(hidden, top_k_index, top_k_weights)``.
@@ -31,16 +31,16 @@ from torch import Tensor
 from .tokens import TokenEProperty
 from .layer import Residual
 from .mlp import Mlp
-from .standard import module_int, unsized
+from .standard import BATCH, EXPERTS, HIDDEN, SEQ, TOP_K, module_int, unsized
 
 #: The router's logits, one column per expert (ZAYA adds a "skip" column).
-RouterLogits = Float[Tensor, "batch seq experts"]
+RouterLogits = Float[Tensor, f"{BATCH} {SEQ} {EXPERTS}"]
 #: The weight each selected expert's output is scaled by, one per routing slot.
-ExpertWeights = Float[Tensor, "batch seq top_k"]
+ExpertWeights = Float[Tensor, f"{BATCH} {SEQ} {TOP_K}"]
 #: The expert each routing slot sends the token to.
-ExpertIndices = Int[Tensor, "batch seq top_k"]
+ExpertIndices = Int[Tensor, f"{BATCH} {SEQ} {TOP_K}"]
 #: Each routing slot's weighted expert output: slot ``j`` is ``weight[j] * expert[indices[j]](x)``.
-ExpertOutputs = Float[Tensor, "batch seq top_k hidden"]
+ExpertOutputs = Float[Tensor, f"{BATCH} {SEQ} {TOP_K} {HIDDEN}"]
 
 #: The operation inside a router's forward that produces the logits: ``router_logits = F.linear(x, self.weight)``.
 LOGITS = "F_linear_0"
@@ -91,13 +91,13 @@ class Moe(Mlp):
     ``shared_experts`` are the standard child names; a family aliases its
     own):
 
-    * ``router_logits`` ``[batch, seq, experts]``: before the scoring, at the
+    * ``router_logits`` ``[batch, seq, num_experts]``: before the scoring, at the
       operation in the router's forward that produces them (`LOGITS`), so a
       write changes the routing.
     * ``expert_weights`` / ``expert_indices`` ``[batch, seq, top_k]``: the
       experts module's arguments. Zero a weight to ablate that slot; write an
       index to reroute (the weight is not recomputed).
-    * ``expert_outputs`` ``[batch, seq, top_k, hidden]``: each slot's weighted
+    * ``expert_outputs`` ``[batch, seq, top_k, hidden_size]``: each slot's weighted
       output, inside transformers' ``grouped_mm`` / ``batched_mm`` experts
       forward; unavailable under ``experts_implementation="eager"``.
     * ``routed_output``: the experts' sum, ``expert_outputs.sum(2)``.
@@ -153,7 +153,7 @@ class Moe(Mlp):
 
     @TokenEProperty(f"router.source.{LOGITS}.output", description="The router's logits, one per expert, before the scoring", unavailable=mixture_reason)
     def router_logits(self, value: torch.Tensor) -> RouterLogits:
-        """The router's logits, ``[batch, seq, experts]``, where the router's forward produces them.
+        """The router's logits, ``[batch, seq, num_experts]``, where the router's forward produces them.
 
         Before the scoring (`SCORING`) and any selection bias, so
         ``softmax(router_logits)`` is the routing distribution on a softmax
@@ -186,7 +186,7 @@ class Moe(Mlp):
         description="Each routing slot's weighted expert output", unavailable=needs_grouped_experts,
     )
     def expert_outputs(self, value: torch.Tensor) -> ExpertOutputs:
-        """Each slot's expert output times its weight, ``[batch, seq, top_k, hidden]``, before the slots are summed.
+        """Each slot's expert output times its weight, ``[batch, seq, top_k, hidden_size]``, before the slots are summed.
 
         ``expert_outputs.sum(2) == routed_output``. The model's own tensor in
         transformers' ``grouped_mm`` (the default) and ``batched_mm`` experts
@@ -196,10 +196,10 @@ class Moe(Mlp):
 
     @TokenEProperty("experts.output", description="The routed experts' combined output", unavailable=mixture_reason)
     def routed_output(self, value: torch.Tensor) -> Residual:
-        """The routed experts' weighted sum, ``[batch, seq, hidden]``, without the shared expert."""
+        """The routed experts' weighted sum, ``[batch, seq, hidden_size]``, without the shared expert."""
         return value
 
     @TokenEProperty("shared_experts.output", description="The shared expert's output", unavailable=no_shared_expert)
     def shared_expert_output(self, value: torch.Tensor) -> Residual:
-        """What the shared expert adds beside the routed ones, ``[batch, seq, hidden]``; unavailable on a mixture without one."""
+        """What the shared expert adds beside the routed ones, ``[batch, seq, hidden_size]``; unavailable on a mixture without one."""
         return value

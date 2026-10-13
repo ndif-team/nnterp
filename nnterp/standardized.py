@@ -16,14 +16,14 @@ from torch import Tensor
 from . import families, order as forward_order
 from .families import default
 from .components import EProperty, Layer, Residual, Unavailable
-from .components.standard import blocks_support, standard_children, values
+from .components.standard import BATCH, SEQ, VOCAB, blocks_support, standard_children, values
 from .components.vision import Vision
 
 #: The layouts of the root's values: the logits, the next-token distribution at the last position, and one
 #: integer per token (``input_ids``, ``attention_mask``).
-Logits = Float[Tensor, "batch seq vocab"]
-NextTokenProbs = Float[Tensor, "batch vocab"]
-Tokens = Int[Tensor, "batch seq"]
+Logits = Float[Tensor, f"{BATCH} {SEQ} {VOCAB}"]
+NextTokenProbs = Float[Tensor, f"{BATCH} {VOCAB}"]
+Tokens = Int[Tensor, f"{BATCH} {SEQ}"]
 
 
 class StandardizedProperty:
@@ -116,7 +116,7 @@ class Standardized:
     ) -> None:
         """Add ``factor * vector`` to the residual stream leaving the given blocks.
 
-        ``vector`` is ``[hidden]`` (or broadcastable to the selected slice).
+        ``vector`` is ``[hidden_size]`` (or broadcastable to the selected slice).
         ``token_positions`` restricts the positions and ``batch_index`` the
         row; both default to all. The add is in place on ``layer_output``, so
         it reaches the model. Inside a trace, with ``layers`` ascending.
@@ -128,7 +128,7 @@ class Standardized:
             out[rows, cols] += factor * vector.to(out)
 
     def probs_to_dict(self, probs: torch.Tensor, k: int = 5) -> dict[str, float]:
-        """The ``k`` most likely tokens of one ``[vocab]`` distribution, as ``{token: probability}``, most likely first.
+        """The ``k`` most likely tokens of one ``[vocab_size]`` distribution, as ``{token: probability}``, most likely first.
 
         Keyed by the decoded text. Where two or more of the ``k`` decode to
         the same text (partial UTF-8 byte tokens all decode to ``'\ufffd'``),
@@ -150,7 +150,7 @@ class Standardized:
         return {key: value.item() for key, value in zip(keys, values)}
 
     def get_topk_closest_tokens(self, hidden: torch.Tensor, k: int = 5) -> list[dict[str, float]]:
-        """The ``k`` most likely next tokens for each position of ``hidden``, ``[..., hidden]``.
+        """The ``k`` most likely next tokens for each position of ``hidden``, ``[..., hidden_size]``.
 
         `project_on_vocab` then softmax, one ``{token: probability}`` per
         position, in row-major order over the leading dimensions.
@@ -393,7 +393,7 @@ class StandardizedTransformer(Standardized, TransformersModel):
 
     @EProperty(key="output", description="The logits the model returns, after anything it does past lm_head (a softcap, a scale)")
     def logits(self, value: Any) -> Logits:
-        """The logits the model returns, ``[batch, seq, vocab]``.
+        """The logits the model returns, ``[batch, seq, vocab_size]``.
 
         Read off the model's output, so a family that softcaps after
         ``lm_head`` (Gemma-2) is already accounted for; ``lm_head.output`` is
@@ -409,7 +409,7 @@ class StandardizedTransformer(Standardized, TransformersModel):
 
     @EProperty("embed_tokens.output", description="The embedding module's output; layers[0].input is what enters the first block")
     def token_embeddings(self, value: torch.Tensor) -> Residual:
-        """The embedding module's output, ``[batch, seq, hidden]``.
+        """The embedding module's output, ``[batch, seq, hidden_size]``.
 
         Positional embeddings and embedding norms (GPT-2's ``wpe``, BLOOM's
         ``word_embeddings_layernorm``) are applied after this by the families
@@ -419,7 +419,7 @@ class StandardizedTransformer(Standardized, TransformersModel):
 
     @EProperty(key="output", description="The next-token distribution at the last position; derived, read-only")
     def next_token_probs(self, value: Any) -> NextTokenProbs:
-        """The next-token distribution at the last position, ``[batch, vocab]``.
+        """The next-token distribution at the last position, ``[batch, vocab_size]``.
 
         ``logits[:, -1].softmax(-1)``, derived from the model's output; the
         last position is the last token of every row only under left padding.

@@ -53,7 +53,7 @@ def get_token_activations(
         tracer: An open trace to read from instead of opening one.
 
     Returns:
-        ``[num_layers, num_prompts, hidden]`` on the CPU (still on the
+        ``[num_layers, num_prompts, hidden_size]`` on the CPU (still on the
         model's device when read inside a caller's ``tracer``).
     """
     if tracer is None and prompts is None:
@@ -111,7 +111,7 @@ def collect_token_activations_batched(
     tqdm=None,
     use_session: bool = True,
 ) -> torch.Tensor:
-    """`get_token_activations` over batches; ``[num_layers, num_prompts, hidden]`` on the CPU.
+    """`get_token_activations` over batches; ``[num_layers, num_prompts, hidden_size]`` on the CPU.
 
     A remote run goes through `collect_last_token_activations_session` (one
     request) unless ``use_session`` is off. ``tqdm`` is a progress-bar factory
@@ -128,7 +128,7 @@ def collect_token_activations_batched(
 
 
 def compute_next_token_probs(model: StandardizedTransformer, prompt: str | list[str], remote: bool = False) -> torch.Tensor:
-    """The next-token distribution of each prompt, ``[num_prompts, vocab]`` on the CPU."""
+    """The next-token distribution of each prompt, ``[num_prompts, vocab_size]`` on the CPU."""
     with model.trace(prompt, remote=remote):
         probs = model.next_token_probs.cpu().save()
     return probs

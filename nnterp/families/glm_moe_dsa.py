@@ -6,7 +6,7 @@ in the block): multi-head latent attention with DeepSeek Sparse Attention, the
 indexer's top-k selection folded into the attention mask before the shared
 ``attention_interface`` call under eager, so the interior is the base's and means what
 it means on ``deepseek_v32``: ``attention_scores`` carry the sparse mask,
-``attention_probabilities`` is the dense ``[batch, heads, query, key]`` pattern, zero
+``attention_probabilities`` is the dense ``[batch, num_heads, query, key]`` pattern, zero
 outside each query's selected keys. While a prompt is no longer than ``index_topk``
 the selection is every causal key.
 

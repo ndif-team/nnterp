@@ -41,7 +41,7 @@ class Layer(standard.Layer):
     STREAM = 0
 
     def skip_with(self, hidden: torch.Tensor) -> None:
-        """Skip this block, handing ``hidden`` (``[1, tokens, hidden]``) on as its residual stream.
+        """Skip this block, handing ``hidden`` (``[1, tokens, hidden_size]``) on as its residual stream.
 
         Safe on a request that runs alone. The engine batches whatever is in
         flight into one step, and a skipped block has to answer for all of
@@ -50,11 +50,11 @@ class Layer(standard.Layer):
         hidden = hidden.squeeze(0)
         self.skip((hidden, hidden) if self.returns_tuple else hidden)
 
-    @Flat("inputs", select=lambda envoy: envoy.STREAM, description="The residual stream entering the block, [1, tokens, hidden]")
+    @Flat("inputs", select=lambda envoy: envoy.STREAM, description="The residual stream entering the block, [1, tokens, hidden_size]")
     def layer_input(self, value: torch.Tensor) -> Residual:
         return value
 
-    @Flat("output", select=lambda envoy: 0 if envoy.returns_tuple else None, description="The residual stream leaving the block, [1, tokens, hidden]")
+    @Flat("output", select=lambda envoy: 0 if envoy.returns_tuple else None, description="The residual stream leaving the block, [1, tokens, hidden_size]")
     def layer_output(self, value: torch.Tensor) -> Residual:
         return value
 
@@ -79,7 +79,7 @@ class FusedLayer(standard.Layer):
     RESIDUAL = (2, "residual")
 
     def skip_with(self, hidden: torch.Tensor) -> None:
-        """Skip this block, handing ``hidden`` (``[1, tokens, hidden]``) on as its residual stream.
+        """Skip this block, handing ``hidden`` (``[1, tokens, hidden_size]``) on as its residual stream.
 
         Safe on a request that runs alone. The engine batches whatever is in
         flight into one step, and a skipped block has to answer for all of
@@ -102,7 +102,7 @@ class FusedLayer(standard.Layer):
 
     # -- the stream entering the block ---------------------------------------------
 
-    @EProperty("inputs", description="The residual stream entering the block: hidden_states + residual, [1, tokens, hidden]")
+    @EProperty("inputs", description="The residual stream entering the block: hidden_states + residual, [1, tokens, hidden_size]")
     def layer_input(self, value: tuple) -> Residual:
         return self._stream(argument(value, *self.HIDDEN), argument(value, *self.RESIDUAL))
 
@@ -120,7 +120,7 @@ class FusedLayer(standard.Layer):
 
     # -- the stream leaving it -------------------------------------------------------
 
-    @EProperty("output", description="The residual stream leaving the block: hidden_states + residual, [1, tokens, hidden]")
+    @EProperty("output", description="The residual stream leaving the block: hidden_states + residual, [1, tokens, hidden_size]")
     def layer_output(self, value: tuple) -> Residual:
         return self._stream(*value)
 

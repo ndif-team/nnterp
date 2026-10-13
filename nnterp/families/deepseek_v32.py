@@ -11,7 +11,7 @@ attention mask (every unselected key set to the dtype's minimum) before the shar
 
 - ``attention_scores`` are the scaled scores with that sparse mask added, so an
   unselected key reads as the dtype's minimum, like a future one.
-- ``attention_probabilities`` is the dense ``[batch, heads, query, key]`` pattern of
+- ``attention_probabilities`` is the dense ``[batch, num_heads, query, key]`` pattern of
   the sparse attention: exactly zero outside each query's selected keys, rows summing
   to one over the selection. A written pattern is used as written, so a write can put
   weight on keys the indexer did not select.

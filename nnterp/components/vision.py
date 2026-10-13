@@ -41,17 +41,17 @@ from .attention import Attention, HeadOutputs, Keys, Queries, Values
 from .eproperty import EProperty, Unavailable
 from .layer import Layer
 from .mlp import Mlp
-from .standard import Standard, blocks_support, first_tensor, rewrap
+from .standard import BATCH, IMAGES, IMAGE_TOKENS, PATCHES, SEQ, TEXT_HIDDEN, VISION_HIDDEN, Standard, blocks_support, first_tensor, rewrap
 
 #: A vision tower's stream: the tower's own batch (one row per image or crop) by its tokens (the patches,
 #: with CLIP's CLS token first), ``vision_hidden`` wide. The tower blocks' ``layer_output``,
 #: ``attention_output``, ``mlp_output``, and the tower's ``patch_embeddings`` and ``tower_output``.
-Patches = Float[Tensor, "images patches vision_hidden"]
+Patches = Float[Tensor, f"{IMAGES} {PATCHES} {VISION_HIDDEN}"]
 #: Which positions of the text batch hold an image token: ``vision.image_token_mask``.
-ImageTokenMask = Bool[Tensor, "batch seq"]
+ImageTokenMask = Bool[Tensor, f"{BATCH} {SEQ}"]
 #: What the text model receives at the image tokens, flat over every image token of the batch in row-major
 #: (scatter) order, the text model's ``hidden`` wide: ``vision.image_features``.
-ImageFeatures = Float[Tensor, "image_tokens hidden"]
+ImageFeatures = Float[Tensor, f"{IMAGE_TOKENS} {TEXT_HIDDEN}"]
 
 
 def image_token_id(config: Any) -> int | None:

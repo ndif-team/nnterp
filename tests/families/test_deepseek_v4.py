@@ -126,8 +126,8 @@ class TestDeepseekV4(FamilySuite):
             head = model.model.hc_head.output.save()
             logits = model.logits.save()
         assert torch.equal(model.project_on_vocab(resid), logits)
-        torch.testing.assert_close(model.project_on_vocab(resid[0, -1]), logits[0, -1])  # one position, [streams, hidden]
-        torch.testing.assert_close(model.project_on_vocab(head), logits)  # plain [batch, seq, hidden]: norm and lm_head only
+        torch.testing.assert_close(model.project_on_vocab(resid[0, -1]), logits[0, -1])  # one position, [streams, hidden_size]
+        torch.testing.assert_close(model.project_on_vocab(head), logits)  # plain [batch, seq, hidden_size]: norm and lm_head only
         torch.testing.assert_close(model.project_on_vocab(attn), model.lm_head(model.norm(attn)))
         per_stream = model.lm_head(model.norm(resid[:, :, 0]))
         assert per_stream.shape == logits.shape and not torch.equal(per_stream, logits)

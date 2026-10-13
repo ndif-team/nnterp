@@ -52,7 +52,7 @@ class Attention(Attention):
 
     attention_probabilities = DerivedEProperty(
         probabilities,
-        description="The attention pattern with the sink column dropped, [1, heads, query, key], recomputed; prefill only, read-only",
+        description="The attention pattern with the sink column dropped, [1, num_heads, query, key], recomputed; prefill only, read-only",
         unavailable=on_decode_step,
     )
 

@@ -42,7 +42,7 @@ class Attention(Attention):
 
     @Flat(
         "../post_attention_layernorm.output",
-        description="What the attention adds to the residual stream: the post-attention norm's output, [1, tokens, hidden]",
+        description="What the attention adds to the residual stream: the post-attention norm's output, [1, tokens, hidden_size]",
     )
     def attention_output(self, value) -> Residual:
         return value
@@ -53,7 +53,7 @@ class Mlp(Mlp):
 
     @Flat(
         "../post_feedforward_layernorm.output",
-        description="What the MLP adds to the residual stream: the post-feedforward norm's output, [1, tokens, hidden]",
+        description="What the MLP adds to the residual stream: the post-feedforward norm's output, [1, tokens, hidden_size]",
     )
     def mlp_output(self, value) -> Residual:
         return value

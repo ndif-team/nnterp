@@ -239,7 +239,7 @@ class Mlp(Moe):
 
     @TokenEProperty("router.proj.output", description=Moe.router_logits.description, unavailable=mixture_reason)
     def router_logits(self, value) -> RouterLogits:
-        """The router's projection, ``[batch, seq, experts]``: the router returns their softmax."""
+        """The router's projection, ``[batch, seq, num_experts]``: the router returns their softmax."""
         return value
 
     @TokenEProperty("output", description="The dense MLP's output, before its post-norm: the shared expert beside the mixture", unavailable=mixture_reason)

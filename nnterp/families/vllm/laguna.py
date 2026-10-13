@@ -52,7 +52,7 @@ class Attention(Attention):
 class Mlp(Mlp):
     """The dense MLP or the mixture of experts; its output is what the block adds, but on the shared expert."""
 
-    @Flat("output", description="What the MLP adds to the residual stream, [1, tokens, hidden]", unavailable=_not_a_block_mlp)
+    @Flat("output", description="What the MLP adds to the residual stream, [1, tokens, hidden_size]", unavailable=_not_a_block_mlp)
     def mlp_output(self, value) -> Residual:
         return value
 

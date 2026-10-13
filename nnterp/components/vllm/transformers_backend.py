@@ -9,7 +9,7 @@ Three things differ, and these envoys absorb them:
 
 * **The batch axis is there.** The backend adds a batch axis of one to the
   engine's flat rows before calling the model and strips it after, so inside
-  the model a request's activations are ``[1, tokens, hidden]``. The values
+  the model a request's activations are ``[1, tokens, hidden_size]``. The values
   are served as private copies all the same (`Flat` with ``batch=True``),
   handed back when the block moves on, so they behave as every vLLM value
   does: a saved one stays what it was read as, and an edit reaches the model.
@@ -22,7 +22,7 @@ Three things differ, and these envoys absorb them:
   before any family is in play, and the client's must not hold it, since a
   request names its modules by their paths in the worker's), so it is the
   layer the vLLM `Attention` base reads: the queries, keys and values are
-  its inputs and the head outputs its output, ``[tokens, heads * head_dim]``
+  its inputs and the head outputs its output, ``[tokens, num_heads * head_dim]``
   as on every vLLM family, and the pattern is recomputed from them, on the
   prefill only.
 * **Some modules are vLLM's.** The backend fuses the query, key and value
@@ -71,13 +71,13 @@ def engine_attention(envoy: Envoy) -> torch.nn.Module | None:
 
 
 class Layer(standard.Layer):
-    """A transformers block on vLLM: called with the stream ``[1, tokens, hidden]``, returning it."""
+    """A transformers block on vLLM: called with the stream ``[1, tokens, hidden_size]``, returning it."""
 
-    @Flat("input", batch=True, description="The residual stream entering the block, [1, tokens, hidden]")
+    @Flat("input", batch=True, description="The residual stream entering the block, [1, tokens, hidden_size]")
     def layer_input(self, value: torch.Tensor) -> Residual:
         return value
 
-    @Flat("output", select=lambda envoy: 0 if envoy.returns_tuple else None, batch=True, description="The residual stream leaving the block, [1, tokens, hidden]")
+    @Flat("output", select=lambda envoy: 0 if envoy.returns_tuple else None, batch=True, description="The residual stream leaving the block, [1, tokens, hidden_size]")
     def layer_output(self, value: torch.Tensor) -> Residual:
         return value
 
@@ -103,7 +103,7 @@ class Attention(VLLMAttention):
                 return self._add_envoy("attn", layer)
         return super().__getattr__(name)
 
-    @Flat("output", select=0, batch=True, description="What the attention adds to the residual stream, [1, tokens, hidden]")
+    @Flat("output", select=0, batch=True, description="What the attention adds to the residual stream, [1, tokens, hidden_size]")
     def attention_output(self, value: torch.Tensor) -> Residual:
         return value
 
@@ -111,6 +111,6 @@ class Attention(VLLMAttention):
 class Mlp(VLLMMlp):
     """A transformers MLP on vLLM: its output is what the block adds, unless a family's block norms it first."""
 
-    @Flat("output", batch=True, description="What the MLP adds to the residual stream, [1, tokens, hidden]")
+    @Flat("output", batch=True, description="What the MLP adds to the residual stream, [1, tokens, hidden_size]")
     def mlp_output(self, value: torch.Tensor) -> Residual:
         return value

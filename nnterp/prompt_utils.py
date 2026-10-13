@@ -103,7 +103,7 @@ class Prompt:
         return len(tokens) == len(set(tokens))
 
     def get_target_probs(self, probs: torch.Tensor, layer: int | None = None) -> dict[str, torch.Tensor]:
-        """Each target's probability mass from ``probs`` of shape ``[batch, layers, vocab]``; one layer if given."""
+        """Each target's probability mass from ``probs`` of shape ``[batch, layers, vocab_size]``; one layer if given."""
         target_probs = {name: probs[:, :, tokens].sum(dim=2).cpu() for name, tokens in self.target_tokens.items()}
         if layer is not None:
             target_probs = {name: p[:, layer] for name, p in target_probs.items()}
@@ -111,12 +111,12 @@ class Prompt:
 
     @torch.no_grad()
     def run(self, model: StandardizedTransformer, get_probs: Callable) -> dict[str, torch.Tensor]:
-        """``get_probs(model, prompt)`` (``[batch, layers, vocab]``) reduced to each target's mass."""
+        """``get_probs(model, prompt)`` (``[batch, layers, vocab_size]``) reduced to each target's mass."""
         return self.get_target_probs(get_probs(model, self.prompt))
 
 
 def next_token_probs_unsqueeze(model: StandardizedTransformer, prompt: str | list[str], remote: bool = False, **_) -> torch.Tensor:
-    """`compute_next_token_probs` with a layer axis of one, ``[batch, 1, vocab]``: the default ``get_probs``."""
+    """`compute_next_token_probs` with a layer axis of one, ``[batch, 1, vocab_size]``: the default ``get_probs``."""
     return compute_next_token_probs(model, prompt, remote=remote).unsqueeze(1)
 
 
@@ -133,7 +133,7 @@ def run_prompts(
     """Run prompts in batches; each target's probability mass per prompt, ``[num_prompts, layers]``.
 
     All prompts must name the same targets. ``get_probs_func(model, batch,
-    remote=..., **func_kwargs)`` returns ``[batch, layers, vocab]``; the
+    remote=..., **func_kwargs)`` returns ``[batch, layers, vocab_size]``; the
     default is the next-token distribution with one layer. ``tqdm`` is a
     progress-bar factory to wrap the batch loop with, or ``None``.
     """

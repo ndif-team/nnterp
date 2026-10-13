@@ -32,6 +32,8 @@ RENAME = {
     "model.decoder.layers": "layers",
     "model.decoder.final_layer_norm": "norm",
     "self_attn_layer_norm": "input_layernorm",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "out_proj": "o_proj",
 }
 
 

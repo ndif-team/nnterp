@@ -12,6 +12,7 @@ class TestJetMoe(FamilySuite):
     NATIVE = rows("model", "layers", "embed_tokens", "norm", attn="self_attention")
     MOE_UNAVAILABLE = {"expert_outputs": "sorted by expert"}
     KV_HEADS_EXPANDED = True  # keys and values are tiled to every routing slot before the interface
+    EXPECTED_UNAVAILABLE = {"self_attn.attention_premix": "a mixture of attention heads"}
 
     def test_attention_returns_router_logits_third(self, model):
         with model.trace(PROMPT):

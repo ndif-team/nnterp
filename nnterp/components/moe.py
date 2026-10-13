@@ -30,6 +30,7 @@ from torch import Tensor
 
 from .tokens import TokenEProperty
 from .layer import Residual
+from .eproperty import unavailable
 from .mlp import Mlp
 from .standard import BATCH, EXPERTS, HIDDEN, SEQ, TOP_K, module_int, unsized
 
@@ -110,6 +111,11 @@ class Moe(Mlp):
     the block's experts) says why not in `no_mixture`, the one place every
     value's availability starts from.
     """
+
+    #: A routed MLP has no single activation or down projection.
+    mlp_activation = unavailable("routed experts; read per-expert via the Moe component")
+    mlp_neurons = unavailable("routed experts; read per-expert via the Moe component")
+
 
     #: How the router turns logits into weights: ``"softmax"`` (over every expert, then top-k),
     #: ``"topk_softmax"`` (top-k logits, then a softmax over them), ``"sigmoid"`` (per expert),

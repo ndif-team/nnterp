@@ -13,7 +13,7 @@ from vllm_suite import LLAMA_ROWS, VLLMFamilySuite
 
 from nnterp.families.vllm import deepseek_v3
 
-UNAVAILABLE = frozenset({"attention_mask"} | {
+UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | frozenset({
     f"self_attn.{value}" for value in ("attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_probabilities", "attention_head_outputs")
 })
 

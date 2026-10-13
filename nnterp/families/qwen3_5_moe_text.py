@@ -43,6 +43,9 @@ RENAME = {
     "norm2": "post_attention_layernorm",
     "gate": "router",
     "shared_expert": "shared_experts",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "attn.proj": "attn.o_proj",
+    "linear_fc2": "down_proj",
 }
 
 

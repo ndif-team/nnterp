@@ -133,8 +133,11 @@ class VLLMFamilySuite:
     SKIP = None
     #: The attention values vLLM's implementation of this family serves (the scores and the pattern included).
     SERVED = (*INTERIOR, *PATTERN)
-    #: The values this family lacks on vLLM, by `support()` name.
-    UNAVAILABLE = frozenset({"attention_mask"})
+    #: The values this family lacks on vLLM, by `support()` name: the mask, and the module boundaries not mapped yet.
+    UNAVAILABLE = frozenset({
+        "attention_mask", "attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input",
+        "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons",
+    })
     #: Engine arguments this checkpoint needs.
     ENGINE: dict = {}
     #: Arguments the transformers reference needs to load this checkpoint (a VL wrapper's ``task``).

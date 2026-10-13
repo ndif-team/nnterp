@@ -54,6 +54,7 @@ class TestLaguna(FamilySuite):
     REPO = REPO
     FAMILY = laguna
     NATIVE = LLAMA_ROWS
+    PREMIX_IS_HEAD_OUTPUTS = False           # a gate on the heads before o_proj
 
     def test_dense_then_mixture(self, model):
         kinds = [type(layer.mlp._module).__name__ for layer in model.layers]
@@ -82,6 +83,7 @@ class TestLagunaPerLayerHeads(FamilySuite):
     REPO = _per_layer_heads_checkpoint()
     FAMILY = laguna
     NATIVE = LLAMA_ROWS
+    PREMIX_IS_HEAD_OUTPUTS = False
 
     def test_each_block_reports_its_own_heads(self, model):
         assert [layer.self_attn.num_heads for layer in model.layers] == HEADS

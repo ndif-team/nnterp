@@ -7,7 +7,7 @@ from typing import Any
 import torch
 
 from .. import layer as standard
-from ..eproperty import EProperty
+from ..eproperty import EProperty, unavailable
 from ..layer import Residual
 from .flat import Flat, unbatched
 
@@ -36,6 +36,13 @@ class Layer(standard.Layer):
     beside it (Exaone4's and Cohere's return ``(hidden_states, residual)``
     with the whole stream first, where a `FusedLayer` returns its two halves).
     """
+
+    #: The norms' and the MLP's flat rows are not served yet.
+    attention_norm_output = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
+    layer_mid = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
+    mlp_norm_output = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
+    mlp_input = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
+
 
     #: The index of the residual stream in the block's call.
     STREAM = 0
@@ -73,6 +80,13 @@ class FusedLayer(standard.Layer):
     a read that edits nothing changes nothing: the difference it hands back is
     exactly zero.
     """
+
+    #: The norms' and the MLP's flat rows are not served yet.
+    attention_norm_output = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
+    layer_mid = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
+    mlp_norm_output = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
+    mlp_input = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
+
 
     #: Where the two halves sit in the block's call: ``(index, name)``.
     HIDDEN = (1, "hidden_states")

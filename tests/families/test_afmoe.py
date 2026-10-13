@@ -13,6 +13,7 @@ class TestAfmoe(FamilySuite):
     FAMILY = afmoe
     NATIVE = LLAMA_ROWS
     MLP_NORM = "pre_mlp_layernorm"           # sandwich: post_attention_layernorm follows the attention
+    PREMIX_IS_HEAD_OUTPUTS = False           # a gate on the heads before o_proj
 
     def test_contributions_are_the_post_norms(self, model):
         with model.trace(PROMPT):

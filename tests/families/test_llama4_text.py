@@ -24,7 +24,7 @@ import tempfile
 
 import pytest
 import torch
-from suite import MOE, FamilySuite, LLAMA_ROWS, PROMPT, rows
+from suite import MOE, FamilySuite, LLAMA_ROWS, PROMPT, rows, MLP_INTERIOR
 from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
@@ -175,7 +175,7 @@ def test_a_wrapper_module_binds_through_language_model():
     assert model.norm is model.get("language_model.model.norm")
     assert all(type(layer) is llama4_text.Layer and type(layer.mlp) in (llama4_text.Mlp, llama4_text.Moe) for layer in model.layers)
     # the mixture values are per block (dense blocks have none) and two are unavailable on Llama 4: TestLlama4Text checks them
-    assert all(reason is None for name, reason in model.support().items() if name.removeprefix("mlp.") not in MOE)
+    assert all(reason is None for name, reason in model.support().items() if name.removeprefix("mlp.") not in MOE and name not in MLP_INTERIOR)
     causal = StandardizedTransformer(repo, attn_implementation="eager")
     parts = []  # filled inside the block: a name bound there does not survive the trace
     with model.trace(PROMPT):

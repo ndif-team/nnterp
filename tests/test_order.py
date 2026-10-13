@@ -18,12 +18,15 @@ LLAMA_BLOCK = {
     "self_attn.attention_scores": 3,
     "self_attn.attention_probabilities": 4,
     "self_attn.attention_head_outputs": 5,
-    "self_attn.attention_output": 6,
-    "layer_mid": 7,
-    "mlp_norm_output": 8,
-    "mlp_input": 9,
-    "mlp.mlp_output": 10,
-    "layer_output": 11,
+    "self_attn.attention_premix": 6,
+    "self_attn.attention_output": 7,
+    "layer_mid": 8,
+    "mlp_norm_output": 9,
+    "mlp_input": 10,
+    "mlp.mlp_activation": 11,
+    "mlp.mlp_neurons": 12,
+    "mlp.mlp_output": 13,
+    "layer_output": 14,
 }
 
 
@@ -45,7 +48,7 @@ def test_llama_order(llama):
     assert llama.rank("logits") == llama.rank("next_token_probs") == (2, 4)
     assert llama.rank("final_norm_output") == (2, 2) and llama.rank("lm_head_output") == (2, 3)
     assert {name: llama.rank(name, 1) for name in LLAMA_BLOCK} == {name: (1, r) for name, r in LLAMA_BLOCK.items()}
-    assert llama.rank("layer_output", -1) == (1, 11)
+    assert llama.rank("layer_output", -1) == (1, 14)
 
 
 def test_ranks_sort_reads_into_forward_order(llama):

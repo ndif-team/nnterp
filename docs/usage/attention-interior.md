@@ -77,6 +77,23 @@ tensor the values are multiplied with on every family: cast back to the model
 dtype, and on a sink model without the sink column. Under a sink the rows sum
 to less than one (GPT-OSS below).
 
+## `attention_premix`: the heads at the output projection
+
+`model.layers[i].self_attn.attention_premix` is what the output projection receives,
+`[batch, seq, num_heads, head_dim]` (`HeadOutputs`), split by head as a view of the projection's
+flat input. It is a module boundary, not an operation inside the eager forward, so it is
+served under any `attn_implementation`; on a plain attention it is the same tensor as
+`attention_head_outputs`, and on one with a gate or a norm between the heads and the
+projection (Qwen3-Next, Laguna) it is what comes after them. The projection is `o_proj`, a
+standard child name: a family that spells it `c_proj`, `dense`, `out_proj` or `wo` aliases it in
+its `RENAME`, so `model.layers[i].self_attn.o_proj` is the module on every family. In-place edits
+reach the model; assignment flattens the heads back.
+
+```python
+with model.trace(prompt):
+    model.layers[3].self_attn.attention_premix[:, :, 7] = 0     # head 7's output never reaches o_proj, under sdpa too
+```
+
 ## Requirement: eager attention
 
 All six live inside the eager attention forward. A model loaded with `sdpa`

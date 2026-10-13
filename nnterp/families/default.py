@@ -64,6 +64,21 @@ RENAME = {
     "norm_1": "input_layernorm",
     "norm_2": "post_attention_layernorm",
     "self_attn_layer_norm": "input_layernorm",
+    # the sublayers' interiors: the output projection, the activation and the down projection
+    "out_proj": "o_proj",
+    "dense": "o_proj",
+    "wo": "o_proj",
+    "attn.c_proj": "attn.o_proj",
+    "mlp.c_proj": "mlp.down_proj",
+    "act": "act_fn",
+    "activation_fn": "act_fn",
+    "activation": "act_fn",
+    "gelu_impl": "act_fn",
+    "fc2": "down_proj",
+    "dense_4h_to_h": "down_proj",
+    "fc_out": "down_proj",
+    "w2": "down_proj",
+    "output_linear": "down_proj",
 }
 
 #: Why a sublayer's contribution is not served.

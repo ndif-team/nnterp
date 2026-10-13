@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
 import torch
@@ -13,7 +14,7 @@ from torch import Tensor
 from .eproperty import EProperty
 from .layer import Residual
 from .standard import (
-    BATCH, HEAD_DIM, HEADS, KEY, KV_HEADS, QK_HEAD_DIM, QUERY, SEQ, Standard, first_tensor, in_width, module_int, rewrap, unsized,
+    BATCH, HEAD_DIM, HEADS, KEY, KV_HEADS, QK_HEAD_DIM, QUERY, SEQ, Standard, absent, first_tensor, in_width, module_int, rewrap, unsized,
 )
 
 
@@ -178,6 +179,24 @@ class Attention(Standard):
         dtype cast. Assign to replace them; in-place edits reach the model.
         """
         return value
+
+    @EProperty("o_proj.input", description="Every head's output side by side, as the output projection takes it", unavailable=partial(absent, name="o_proj", where="attention"))
+    def attention_premix(self, value: torch.Tensor) -> HeadOutputs:
+        """What the output projection receives, ``[batch, seq, num_heads, head_dim]``: the heads' outputs
+        after any gate the attention applies, split by head as a view of the projection's flat input.
+
+        The projection is ``o_proj``, the family aliasing its own spelling
+        (``c_proj``, ``dense``, ``out_proj``, ``wo``) in ``RENAME``. The same
+        numbers as `attention_head_outputs` on a plain attention, at a module
+        boundary rather than inside the eager forward, so it is served under any
+        ``attn_implementation``. In-place edits reach the model; assignment
+        flattens the heads back.
+        """
+        return value.view(*value.shape[:-1], self.num_heads, self.head_dim)
+
+    @attention_premix.postprocess
+    def attention_premix(self, value: torch.Tensor) -> torch.Tensor:
+        return value.reshape(*value.shape[:-2], -1)
 
     @EProperty(key="output", description="What the attention adds to the residual stream")
     def attention_output(self, value: Any) -> Residual:

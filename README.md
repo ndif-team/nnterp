@@ -65,7 +65,7 @@ print(model.support(layer=5)["self_attn.attention_probabilities"])
 
 | area | values and methods | docs |
 | --- | --- | --- |
-| residual stream | `layer_input`, `layer_output`, `attention_output`, `mlp_output`, and the module boundaries between them: `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input` | [residual-stream](docs/usage/residual-stream.md) |
+| residual stream | `layer_input`, `layer_output`, `attention_output`, `mlp_output`, and the module boundaries between them: `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`; inside the sublayers `attention_premix`, `mlp_activation`, `mlp_neurons` | [residual-stream](docs/usage/residual-stream.md) |
 | attention interior | `attention_probabilities`, `attention_queries` / `keys` / `values`, `attention_scores`, `attention_head_outputs` (load with `attn_implementation="eager"`) | [attention-interior](docs/usage/attention-interior.md) |
 | mixture of experts | `router_logits`, `expert_weights`, `expert_indices`, `expert_outputs`, `routed_output`, `shared_expert_output` | [mixture-of-experts](docs/usage/mixture-of-experts.md) |
 | recurrent mixers and hybrids | `linear_attn` on gated DeltaNet, Mamba and Mamba-2 blocks: queries, keys, values, `decays`, `betas`, the recurrent state | [delta-net](docs/usage/delta-net.md), [selective-scan](docs/usage/selective-scan.md), [state-space](docs/usage/state-space.md) |

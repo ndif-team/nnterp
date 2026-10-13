@@ -69,17 +69,22 @@ class TestFalcon(FamilySuite):
 
 
 
-def _alibi_checkpoint(repo="Rocketknight1/tiny-random-falcon-7b"):
-    """The 7B tiny checkpoint with ``alibi`` switched on in its config: the same weights, the other attention branch."""
+def _patched_checkpoint(repo, **overrides):
+    """A tiny checkpoint with its config overridden: the same weights (a norm the layout adds is random), another layout."""
     snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
-    patched = tempfile.mkdtemp(prefix="falcon-alibi-")
+    patched = tempfile.mkdtemp(prefix="falcon-")
     for name in os.listdir(snapshot):
         if name != "config.json":
             os.symlink(os.path.realpath(os.path.join(snapshot, name)), os.path.join(patched, name))
     config = json.load(open(os.path.join(snapshot, "config.json")))
-    config["alibi"] = True
+    config.update(overrides)
     json.dump(config, open(os.path.join(patched, "config.json"), "w"))
     return patched
+
+
+def _alibi_checkpoint(repo="Rocketknight1/tiny-random-falcon-7b"):
+    """The 7B tiny checkpoint with ``alibi`` switched on in its config: the same weights, the other attention branch."""
+    return _patched_checkpoint(repo, alibi=True)
 
 
 class TestFalconAlibi(FamilySuite):
@@ -114,3 +119,39 @@ class TestFalcon40B(FamilySuite):
     def test_new_decoder_architecture(self, model):
         assert model.config.new_decoder_architecture
         assert hasattr(model.layers[0], "ln_attn") and hasattr(model.layers[0], "ln_mlp")
+
+
+class TestFalconRW(FamilySuite):
+    """Falcon-RW's layout: ``parallel_attn`` false, a sequential pre-norm block with ``post_attention_layernorm``."""
+
+    REPO = _patched_checkpoint("Rocketknight1/tiny-random-falcon-7b", parallel_attn=False)
+    FAMILY = falcon
+    NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention")
+
+    def test_sequential_block(self, model):
+        assert not model.config.parallel_attn and not model.config.new_decoder_architecture
+        assert model.support(layer=0)["layer_mid"] is None
+        with model.trace(PROMPT):
+            mid = model.layers[0].layer_mid.save()
+            normed = model.layers[0].mlp_norm_output.save()
+            raw = model.layers[0].post_attention_layernorm.output.save()
+        assert torch.equal(normed, raw) and mid.shape == raw.shape
+
+
+class TestFalcon11B(FamilySuite):
+    """falcon-11B's layout: ``new_decoder_architecture`` with one norm (``num_ln_in_parallel_attn`` 1) feeding both sublayers."""
+
+    REPO = _patched_checkpoint("Rocketknight1/tiny-random-falcon-40b", num_ln_in_parallel_attn=1)
+    FAMILY = falcon
+    NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
+    KV_HEADS_EXPANDED = True
+    MLP_NORM = "input_layernorm"
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+
+    def test_one_norm_feeds_both(self, model):
+        assert model.config.new_decoder_architecture and model.config.num_ln_in_parallel_attn == 1
+        with model.trace(PROMPT):
+            attn = model.layers[0].attention_norm_output.save()
+            mlp = model.layers[0].mlp_norm_output.save()
+            raw = model.layers[0].input_layernorm.output.save()
+        assert torch.equal(attn, raw) and torch.equal(mlp, raw)

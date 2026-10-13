@@ -41,31 +41,47 @@ RENAME = {
 }
 
 
-class Layer(Layer):
-    """Falcon's parallel block; returns a tuple, which the base unwraps.
+def two_norms(block) -> bool:
+    """The 40B layout: ``ln_attn`` and ``ln_mlp`` each norm the block input (``num_ln_in_parallel_attn`` 2)."""
+    config = block.root.config
+    return config.new_decoder_architecture and config.num_ln_in_parallel_attn == 2
 
-    A parallel block: there is no stream between the sublayers, and the MLP reads the same normed input
-    as the attention (the 40B layout norms the block input twice, ``ln_attn`` and ``ln_mlp``).
+
+def parallel(block) -> bool:
+    """Whether the block is parallel: every layout but Falcon-RW's (``parallel_attn`` false, not ``new_decoder_architecture``)."""
+    config = block.root.config
+    return config.new_decoder_architecture or config.parallel_attn
+
+
+class Layer(Layer):
+    """Falcon's block; returns a tuple, which the base unwraps.
+
+    Three layouts: the 7B's and falcon-11B's parallel block, one ``input_layernorm`` feeding both sublayers;
+    the 40B's parallel block, ``ln_attn`` and ``ln_mlp`` each norming the block input; and Falcon-RW's
+    sequential pre-norm block, where ``layer_mid`` and ``post_attention_layernorm`` exist.
     """
 
-    layer_mid = unavailable(PARALLEL)
+    returns_tuple = True
 
     @EProperty(
-        lambda block: "ln_attn.output" if block.root.config.new_decoder_architecture else "input_layernorm.output",
+        lambda block: "ln_attn.output" if two_norms(block) else "input_layernorm.output",
         description="The normed stream entering the attention",
     )
     def attention_norm_output(self, value) -> Residual:
         return value
 
+    layer_mid = EProperty(
+        "post_attention_layernorm.input",
+        description="The residual stream after the attention add",
+        unavailable=lambda block: PARALLEL if parallel(block) else None,
+    )
+
     @EProperty(
-        lambda block: "ln_mlp.output" if block.root.config.new_decoder_architecture else "input_layernorm.output",
+        lambda block: "ln_mlp.output" if two_norms(block) else "input_layernorm.output" if parallel(block) else "post_attention_layernorm.output",
         description="The normed stream entering the MLP: the one norm feeds both sublayers, its own on the 40B layout",
     )
     def mlp_norm_output(self, value) -> Residual:
         return value
-
-
-    returns_tuple = True
 
 
 def alibi(envoy) -> bool:

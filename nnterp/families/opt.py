@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 from transformers.models.opt.modeling_opt import OPTAttention, OPTDecoderLayer
 
-from ..components import Attention, EProperty, FlatResidual, Layer, Mlp
+from ..components import POST_NORM_ATTENTION, POST_NORM_MLP, Attention, EProperty, FlatResidual, Layer, Mlp
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -37,21 +37,42 @@ RENAME = {
 }
 
 
+def norms_before(block) -> bool:
+    """``do_layer_norm_before``: the norms precede the sublayers (every OPT but the 350m, whose norms follow the adds)."""
+    return block.root.config.do_layer_norm_before
+
+
 class Layer(Layer):
     """OPT's decoder block; returns a bare tensor, so the base holds.
 
     The pre-MLP norm is the block's own ``final_layer_norm``, so ``layer_mid`` and ``mlp_norm_output``
     read there, flattened to ``[batch * seq, hidden]`` as the block holds the stream around its feed-forward
     path (``view(-1, hidden)``, and back at the end); there is no ``mlp`` module, so ``mlp_input`` does not exist.
+    With ``do_layer_norm_before`` false (OPT-350m) the norms follow the adds: the attention reads the stream
+    itself, ``layer_mid`` is ``self_attn_layer_norm``'s output, and no norm precedes the feed-forward path.
     """
 
-    @EProperty("final_layer_norm.input", description="The residual stream after the attention add, flattened to [batch * seq, hidden]")
-    def layer_mid(self, value) -> FlatResidual:
-        return value
+    attention_norm_output = EProperty(
+        "input_layernorm.output", description="The normed stream entering the attention",
+        unavailable=lambda block: None if norms_before(block) else POST_NORM_ATTENTION,
+    )
 
-    @EProperty("final_layer_norm.output", description="The normed stream entering the feed-forward path, flattened to [batch * seq, hidden]")
-    def mlp_norm_output(self, value) -> FlatResidual:
-        return value
+    @EProperty(
+        lambda block: "final_layer_norm.input" if norms_before(block) else "input_layernorm.output",
+        description="The residual stream after the attention add, flattened to [batch * seq, hidden]",
+    )
+    def layer_mid(self, value) -> FlatResidual:
+        return value.reshape(-1, value.shape[-1])  # a view: the block's own flat rows, or the norm's [batch, seq, hidden] output
+
+    @layer_mid.postprocess
+    def layer_mid(self, value):
+        current = self.final_layer_norm.input if norms_before(self) else self.input_layernorm.output
+        return value.view(current.shape)
+
+    mlp_norm_output = EProperty(
+        "final_layer_norm.output", description="The normed stream entering the feed-forward path, flattened to [batch * seq, hidden]",
+        unavailable=lambda block: None if norms_before(block) else POST_NORM_MLP,
+    )
 
 
 

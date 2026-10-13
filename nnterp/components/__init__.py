@@ -98,4 +98,9 @@ __all__ = [
     "chunk_per_token", "first_tensor", "image_token_id", "interface_reason", "mixture_reason", "needs_eager",
     "needs_grouped_experts", "needs_kernel_source", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert",
     "per_call", "pinned", "rewrap", "route_delta_rule", "route_kernels", "seq_first", "unavailable",
+    "Neurons",
+    "FlatResidual",
+    "PARALLEL",
+    "POST_NORM_ATTENTION",
+    "POST_NORM_MLP",
 ]

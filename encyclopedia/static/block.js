@@ -284,7 +284,7 @@
   // -- the side cards ---------------------------------------------------------------
   // The block's card shows the text model's parts; the tower's sub-section has a card of its own.
   var pinned = null;
-  function towerPane() { return document.querySelector('.pane[data-pane="tower"]:not([hidden_size])'); }
+  function towerPane() { return document.querySelector('.pane[data-pane="tower"]:not([hidden])'); }
   function cardFor(id) {
     var pane = id.indexOf(TOWER) === 0 ? towerPane() : null;
     return (pane && pane.querySelector('.node-card')) || mainCard;

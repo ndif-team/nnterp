@@ -36,13 +36,12 @@ VALUE_DIM = "value_dim"
 STATE_DIM = "state_dim"
 GROUPS = "groups"
 CHANNELS = "channels"
-#: A vision tower's images and patches, its width, and the text model's width at the scatter. The image
-#: features are served on ``vision``, whose ``hidden_size`` is the tower's, so their width is not `HIDDEN`.
+#: A vision tower's images, patches and image tokens: not facts about the model.
 IMAGES = "images"
 PATCHES = "patches"
-VISION_HIDDEN = "vision_hidden"
 IMAGE_TOKENS = "image_tokens"
-TEXT_HIDDEN = "hidden"
+#: The tower's width, a size of the model resolved on `Vision`; a different quantity from `HIDDEN`, so named apart.
+VISION_HIDDEN = "vision_hidden_size"
 
 
 def first_tensor(value: Any) -> torch.Tensor:

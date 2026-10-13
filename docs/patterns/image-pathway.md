@@ -17,7 +17,7 @@ the text model's sequence, and every text-block value covers it. nnterp gives th
 three handles that mean the same thing on every wrapper
 ([vision.md](../usage/vision.md)):
 
-- `vision.image_features`, `[image_tokens, hidden]`: what the text model receives at the
+- `vision.image_features`, `[image_tokens, hidden_size]`: what the text model receives at the
   image tokens, read at the scatter, so `layers[0].input[mask] == features` exactly.
   Ablate or patch here to change *the image as the text model sees it*.
 - `vision.image_token_mask`, `[batch, seq]`: which positions are the image. Index any

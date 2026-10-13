@@ -41,7 +41,7 @@ BLOCK = {
     ],
 }
 
-ROWS = ("One row, packed: every image's patches in one row, `[1, patches, vision_hidden]`, the processor's "
+ROWS = ("One row, packed: every image's patches in one row, `[1, patches, vision_hidden_size]`, the processor's "
         "`image_grid_thw` splitting it per image; each image's patches in merge-block order (each 2 × 2 block the "
         "merger folds is consecutive), and in window order inside the vision encoder on Qwen2.5-VL.")
 MASKING = ("The attention runs once per image, over that image's patches, so no patch attends to another image's; "
@@ -54,11 +54,11 @@ QUIRKS = ["packed-tower", "variable-resolution", "pooled-projector"]
 NOTES = """
 ## Every image in one row
 
-The vision encoder runs on `[patches, vision_hidden]`, the patches of every image in the invoke
+The vision encoder runs on `[patches, vision_hidden_size]`, the patches of every image in the invoke
 concatenated. Its stream values (`patch_embeddings`, every block's `layer_output`,
-`attention_output` and `mlp_output`, `tower_output`) are served `[1, patches, vision_hidden]`, a view with a
+`attention_output` and `mlp_output`, `tower_output`) are served `[1, patches, vision_hidden_size]`, a view with a
 leading images axis of 1, so in-place edits land; `vision.layers[i].input` and `.output` stay the
-native `[patches, vision_hidden]`, and the block identity holds across the two by broadcasting. The
+native `[patches, vision_hidden_size]`, and the block identity holds across the two by broadcasting. The
 processor's `image_grid_thw` (`[t, h, w]` per image, in patches; an image is two identical frames, so
 `t` is 1) splits the row: image `j` has `t * h * w` patches.
 
@@ -67,7 +67,7 @@ inputs = model.processor(text=prompt, images=[red, wide], return_tensors="pt")
 sizes = inputs["image_grid_thw"].prod(-1).tolist()   # patches per image
 with model.trace(prompt, images=[red, wide]):
     patches = model.vision.layers[1].layer_output.save()
-per_image = patches[0].split(sizes)                  # one [t*h*w, vision_hidden] each
+per_image = patches[0].split(sizes)                  # one [t*h*w, vision_hidden_size] each
 ```
 
 Inside an image the patches are in merge-block order: the `spatial_merge_size` ×
@@ -105,15 +105,15 @@ Qwen3.5's pinned tiny checkpoint).
 ## The merger is inside the vision encoder
 
 `model.projector` is the vision encoder's own `merger`: it norms each patch, concatenates each 2 × 2
-block into one `4 * vision_hidden` vector and runs a two-layer MLP to the text model's width, so
+block into one `4 * vision_hidden_size` vector and runs a two-layer MLP to the text model's width, so
 image tokens per image are `t * h * w / 4`. It reads the last block's stream with no norm between
-(`projector.input == tower_output[0]`, the native `[patches, vision_hidden]`). Because the merger
+(`projector.input == tower_output[0]`, the native `[patches, vision_hidden_size]`). Because the merger
 runs inside the vision encoder's forward, `vision.tower_output` (the encoder's output) is reached after
 it: read `model.projector.input` and `.output` before `vision.tower_output` in a trace.
 
 ## Sizes, and no `image_size`
 
-`model.vision` reads its sizes off the vision config: `hidden_size` is the encoder's width
+`model.vision` reads its sizes off the vision config: `vision_hidden_size` is the encoder's width
 (`embed_dim` on Qwen2-VL, whose config's `hidden_size` is the merger's output width),
 `num_heads`, `intermediate_size` (`embed_dim * mlp_ratio` on Qwen2-VL), `patch_size`, and two of
 its own, `spatial_merge_size` (2 on every line) and `window_size` (Qwen2.5-VL's window side in

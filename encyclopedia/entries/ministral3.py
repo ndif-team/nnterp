@@ -33,13 +33,13 @@ WRAPPERS = {
 ## The projector merges each 2 × 2 block of patches
 
 `model.multi_modal_projector` (the `projector`) reads the last block's stream with its leading 1
-dropped: `model.projector.input` is `vision.tower_output[0]`, `[patches, vision_hidden]`
+dropped: `model.projector.input` is `vision.tower_output[0]`, `[patches, vision_hidden_size]`
 (`vision_feature_layer` is `-1`). It norms each patch (`norm`, an RMSNorm), then `patch_merger`
 cuts each image's grid into 2 × 2 blocks (`spatial_merge_size`), concatenates each block's four
-patches into one `4 * vision_hidden` vector and maps it back to `vision_hidden` with
+patches into one `4 * vision_hidden_size` vector and maps it back to `vision_hidden_size` with
 `merging_layer`, a linear without bias; `linear_1`, GELU and `linear_2` take it to the text model's
 width. So an image of `rows × columns` patches is `(rows // 2) * (columns // 2)` image tokens, and
-`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden]`.
+`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`.
 
 ```python
 with model.trace(prompt, images=[square, wide]):

@@ -65,7 +65,7 @@ out = multimodal_embedder(h)             # projector: RMS norm, linear
 `model.vision` is `model.model.embed_vision`, a `Vision` with no `layers`: `vision.num_layers` is
 0 and `vision.num_heads`, `head_dim` and `intermediate_size` raise `Unavailable`. Each row of
 `pixel_values` is one merged patch of 48 × 48 pixels, 6912 values, and `patch_dense` maps it
-straight to `vision.hidden_size` (`mm_embed_dim`, 3840 on 12B). `patch_embeddings` and
+straight to `vision.vision_hidden_size` (`mm_embed_dim`, 3840 on 12B). `patch_embeddings` and
 `tower_output` are the embedder's only values.
 
 ## The padded rows run through the embedder

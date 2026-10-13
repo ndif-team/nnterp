@@ -96,9 +96,9 @@ The thirty-five names, their axes, and the values that carry each:
 | `ExpertWeights` | `batch seq top_k` | a mixture's `expert_weights` |
 | `ExpertIndices` | `batch seq top_k` (`Int`) | a mixture's `expert_indices` |
 | `ExpertOutputs` | `batch seq top_k hidden_size` | a mixture's `expert_outputs` |
-| `Patches` | `images patches vision_hidden` | a vision tower's `vision.layers[i].layer_output`, `attention_output`, `mlp_output`, and `vision.patch_embeddings`, `vision.tower_output` ([vision.md](vision.md)); the tower's attention interior keeps `Pattern`, `Queries`, ..., its `batch` being the images |
+| `Patches` | `images patches vision_hidden_size` | a vision tower's `vision.layers[i].layer_output`, `attention_output`, `mlp_output`, and `vision.patch_embeddings`, `vision.tower_output` ([vision.md](vision.md)); the tower's attention interior keeps `Pattern`, `Queries`, ..., its `batch` being the images |
 | `ImageTokenMask` | `batch seq` (`Bool`) | `vision.image_token_mask` |
-| `ImageFeatures` | `image_tokens hidden` | `vision.image_features` (flat over the batch's image tokens) |
+| `ImageFeatures` | `image_tokens hidden_size` | `vision.image_features` (flat over the batch's image tokens) |
 
 ## Axis names and sizes
 
@@ -117,6 +117,7 @@ about the model is named exactly as the size attribute that holds it:
 | `QK_HEAD_DIM` | `qk_head_dim` | the block's `self_attn.qk_head_dim` (a head's queries and keys; `head_dim` outside latent attention) |
 | `EXPERTS` | `num_experts` | the mixture's `num_experts` (the router's classes) |
 | `TOP_K` | `top_k` | the mixture's `top_k` (the routing slots per token) |
+| `VISION_HIDDEN` | `vision_hidden_size` | `vision.vision_hidden_size`, the tower's width (`Patches`); `image_features` is the text model's `hidden_size`, which the walk from `vision` finds on the root |
 
 `axis_size(envoy, axis)` returns the size of `axis` for a value served on `envoy`: the
 attribute named `axis` on `envoy` when its class declares it, else on the first envoy above
@@ -140,9 +141,8 @@ the tensor's: `BATCH` (`batch`, axis 0 everywhere), `SEQ` (`seq`, the token axis
 `KEY` (`query`, `key`, the pattern's two token axes), `STREAMS` (`streams`, the parallel
 copies of a hyper-connection residual, `hc_mult`), a recurrent mixer's `MIXER_HEADS`
 (`heads`), `KEY_DIM` / `VALUE_DIM` (a gated DeltaNet state's two sides), `STATE_DIM`,
-`GROUPS` and `CHANNELS` (a Mamba state's), and the vision tower's `IMAGES`, `PATCHES`,
-`VISION_HIDDEN` and `IMAGE_TOKENS` / `TEXT_HIDDEN` (`hidden`: the text model's width at the
-scatter, served on `vision`, whose own `hidden_size` is the tower's). A mixture routes
+`GROUPS` and `CHANNELS` (a Mamba state's), and the vision tower's `IMAGES`, `PATCHES` and
+`IMAGE_TOKENS`. A mixture routes
 tensors flat over tokens, `[batch * seq, ...]`; its values are served in these layouts, one
 invoke's rows each ([mixture-of-experts](mixture-of-experts.md)).
 

@@ -43,7 +43,7 @@ QUIRKS = ["cls-token"]
 NOTES = """
 ## The CLS token comes first
 
-`vision.patch_embeddings` is the patch grid alone, `[images, grid, vision_hidden]`. The class
+`vision.patch_embeddings` is the patch grid alone, `[images, grid, vision_hidden_size]`. The class
 embedding is prepended after it, so from `vision.layers[0].input` on the stream is one row longer:
 `[:, 0]` is the CLS token and `[:, 1:]` the patches in raster order. Slice `[:, 1:]` before mapping a
 row to a patch.

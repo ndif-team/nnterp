@@ -78,7 +78,7 @@ sandwich, so its contributions are the post-norms' outputs too
 they are present in ``vision.layers[i].layer_output``. There is no final norm:
 the tower's ``pooler`` zeroes the padded rows, average-pools the patches
 ``pooling_kernel_size`` by ``pooling_kernel_size`` and multiplies by
-``sqrt(vision hidden_size)`` (in float32); the tower then strips the padding and,
+``sqrt(vision_hidden_size)`` (in float32); the tower then strips the padding and,
 where the vision config sets ``standardize`` (26B-A4B, 31B), subtracts ``std_bias``
 and multiplies by ``std_scale``. So ``vision.tower_output`` is the encoder's output
 (the last block's stream, padded) and ``projector.input`` is the pooled, scaled
@@ -259,7 +259,7 @@ class Vision(Vision):
 
     @EProperty("encoder.output", description=Vision.tower_output.description, unavailable=no_tower_run)
     def tower_output(self, value) -> Patches:
-        """The encoder's output, ``[images, max_patches, vision_hidden]``: the last block's stream, padded rows included.
+        """The encoder's output, ``[images, max_patches, vision_hidden_size]``: the last block's stream, padded rows included.
 
         The tower then pools it in ``pooler`` and strips the padding, which is
         what reaches the projector (``projector.input``). Assign to replace it.

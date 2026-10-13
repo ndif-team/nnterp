@@ -13,7 +13,7 @@ the config, so every checkpoint loads as the wrapper (``task="image-text-to-text
 whose text stack sits at ``model.language_model``.
 
 The wrapper's Qwen ViT ``model.visual`` is ``vision`` (a `QwenVision`: packed,
-its patches ``[1, patches, vision_hidden]``) with its blocks ``vision.layers``;
+its patches ``[1, patches, vision_hidden_size]``) with its blocks ``vision.layers``;
 its ``merger`` is ``projector``, inside the tower.
 """
 

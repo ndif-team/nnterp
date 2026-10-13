@@ -58,7 +58,7 @@ WRAPPERS = {
         "pinned": "hf-tiny-v2/tiny-random-NemotronH_Omni_Reasoning_V3",
         "processor": _omni_processor,
         "projector": "multi_modal_projector: each image's patch rows (the CLS and register tokens dropped) pixel-shuffled "
-                     "2 × 2 into one row 4 × vision_hidden wide, then an RMSNorm, linear_1, squared ReLU and linear_2",
+                     "2 × 2 into one row 4 × vision_hidden_size wide, then an RMSNorm, linear_1, squared ReLU and linear_2",
         "projector_input": "the pixel shuffle of each image's patch rows of the last block's output",
         "quirks": ["pooled-projector"],
         "tower": {
@@ -88,7 +88,7 @@ WRAPPERS = {
                     },
                 ],
             },
-            "ROWS": ("One row, packed: every image of the invoke in one row, `[1, tokens, vision_hidden]`. Each image is its "
+            "ROWS": ("One row, packed: every image of the invoke in one row, `[1, tokens, vision_hidden_size]`. Each image is its "
                      "`num_cls_tokens + num_registers` prefix tokens, then its patches in raster order; the processor's "
                      "`image_grid_hw` (patches per side) splits the row."),
             "MASKING": ("No causal mask. With one image the attention runs once over the row; with several, once per image "
@@ -136,7 +136,7 @@ image) to compute one image's pattern.
 
 The wrapper takes each image's patch rows of the last block's stream (the prefix tokens dropped),
 lays them out on the image's grid and pixel-shuffles each 2 × 2 block into one row
-4 × `vision_hidden` wide (`downsample_ratio` 0.5). `model.projector` is
+4 × `vision_hidden_size` wide (`downsample_ratio` 0.5). `model.projector` is
 `multi_modal_projector`: an RMSNorm, `linear_1` to `projector_hidden_size` (20480 on the released
 checkpoint), a squared ReLU and `linear_2` to the text model's width. An image of `h × w` patches
 is `h * w / 4` image tokens.
@@ -144,7 +144,7 @@ is `h * w / 4` image tokens.
 ```python
 with model.trace(prompt, images=[image]):
     mask = model.vision.image_token_mask.save()
-    fed = model.projector.input.save()          # [image_tokens, 4 * vision_hidden]
+    fed = model.projector.input.save()          # [image_tokens, 4 * vision_hidden_size]
     features = model.vision.image_features.save()
     first = model.layers[0].input.save()
 

@@ -133,7 +133,7 @@ Each is a `StandardizedProperty`: it reads the config by the plain rule unless t
 | `model.embed_tokens`, `model.norm`, `model.lm_head` | The embedding, the final norm, the unembedding, as envoys. |
 | `model.layers[i].self_attn`, `.mlp`, `.linear_attn` | The family's `Attention`, `Mlp`, `LinearAttention`; `linear_attn` on a hybrid's DeltaNet blocks only, `mlp` absent on OPT. |
 | `model.layers[i].input_layernorm`, `.post_attention_layernorm` | Aliases of the block's norms where the family has them; their meaning varies by family (see [families.md](families.md)). |
-| `model.vision`, `model.projector` | On a multimodal wrapper whose family names them: the vision tower (a `Vision`; `vision.layers[i]`, `vision.patch_embed`, `vision.norm`; sizes `num_layers`, `hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size`; values in [`Vision`](#vision)) and the last module before the scatter into the text stream. |
+| `model.vision`, `model.projector` | On a multimodal wrapper whose family names them: the vision tower (a `Vision`; `vision.layers[i]`, `vision.patch_embed`, `vision.norm`; sizes `num_layers`, `vision_hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size`; values in [`Vision`](#vision)) and the last module before the scatter into the text stream. |
 | `model.add_prefix_false_tokenizer` | The checkpoint's tokenizer loaded with `add_prefix_space=False`, so `"word"` and `" word"` differ; loaded on first use. |
 | `model.tokenizer`, `model.config` | nnsight's, unchanged. |
 
@@ -313,7 +313,7 @@ A Mamba-2 (SSD) mixer (`layers[i].linear_attn` on Mamba-2, Nemotron-H, Bamba and
 
 ## `Vision`
 
-`model.vision`, a multimodal wrapper's vision tower, on a family that names it ([../usage/vision.md](../usage/vision.md) lists the towers and wrappers); its blocks are `VisionLayer`, `VisionAttention`, `VisionMlp` (the text components with the stream values annotated `Patches`; a tower that runs on `[patches, vision_hidden]` is served with a leading images axis of 1). `PixtralVision` reads `patch_embeddings` at the packed row entering `ln_pre`. The Qwen ViT's root is a `QwenVision` (its sizes add `spatial_merge_size` and `window_size`) and its attention a `QwenVisionAttention`: the queries, keys and values whole before the per-image split, the head outputs at the concatenation after it, and the scores and pattern unavailable (`PER_IMAGE`). The two image values are the tower's although neither is read inside it: their keys are anchored at the model's root (`"/inputs"`, and the scatter, `"/model.source.inputs_embeds_masked_scatter_0.inputs"` on a Llava wrapper, `"/source.inputs_embeds_masked_scatter_0.inputs"` on Llama 4, whose family names `ROOT_SCATTER`), walked from `vision.root`. Every tower value is unavailable with `no_images()`'s reason on a load no image reaches.
+`model.vision`, a multimodal wrapper's vision tower, on a family that names it ([../usage/vision.md](../usage/vision.md) lists the towers and wrappers); its blocks are `VisionLayer`, `VisionAttention`, `VisionMlp` (the text components with the stream values annotated `Patches`; a tower that runs on `[patches, vision_hidden_size]` is served with a leading images axis of 1). `PixtralVision` reads `patch_embeddings` at the packed row entering `ln_pre`. The Qwen ViT's root is a `QwenVision` (its sizes add `spatial_merge_size` and `window_size`) and its attention a `QwenVisionAttention`: the queries, keys and values whole before the per-image split, the head outputs at the concatenation after it, and the scores and pattern unavailable (`PER_IMAGE`). The two image values are the tower's although neither is read inside it: their keys are anchored at the model's root (`"/inputs"`, and the scatter, `"/model.source.inputs_embeds_masked_scatter_0.inputs"` on a Llava wrapper, `"/source.inputs_embeds_masked_scatter_0.inputs"` on Llama 4, whose family names `ROOT_SCATTER`), walked from `vision.root`. Every tower value is unavailable with `no_images()`'s reason on a load no image reaches.
 
 | Value | Layout | Read at | Assignable | Unavailable when |
 |---|---|---|---|---|
@@ -326,7 +326,7 @@ A Mamba-2 (SSD) mixer (`layers[i].linear_attn` on Mamba-2, Nemotron-H, Bamba and
 |---|---|---|
 | `no_images` | `no_images() -> str \| None` | Why no image reaches the model, or `None`: the family names no `projector`, or the load has no processor (a `task="text-generation"` load of a wrapper). The one place that decides. |
 | `support` | `support(layer: int \| None = None) -> dict[str, Any]` | The tower's values plus its block values over `vision.layers`, as `StandardizedTransformer.support` reports the text blocks'; with `layer`, that block's. Empty when `no_images()` gives a reason. `model.support()` carries the same rows prefixed `vision.`. |
-| sizes | `num_layers`, `hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size` | Read off the tower's own config; `image_size` raises `Unavailable` on a tower with no fixed resolution (the Qwen ViT, Pixtral, Gemma 4, Gemma 4 unified). |
+| sizes | `num_layers`, `vision_hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size` | Read off the tower's own config; `image_size` raises `Unavailable` on a tower with no fixed resolution (the Qwen ViT, Pixtral, Gemma 4, Gemma 4 unified). |
 
 ## `Standard`
 
@@ -402,11 +402,11 @@ The thirty-five `jaxtyping` types every standard value is annotated with, each d
 | `ExpertWeights` | `batch seq top_k` | `components/moe.py` | `expert_weights` |
 | `ExpertIndices` | `batch seq top_k` (`Int`) | `components/moe.py` | `expert_indices` |
 | `ExpertOutputs` | `batch seq top_k hidden_size` | `components/moe.py` | `expert_outputs` |
-| `Patches` | `images patches vision_hidden` | `components/vision.py` | a tower block's `layer_output`, `attention_output`, `mlp_output`; `vision.patch_embeddings`, `vision.tower_output` |
+| `Patches` | `images patches vision_hidden_size` | `components/vision.py` | a tower block's `layer_output`, `attention_output`, `mlp_output`; `vision.patch_embeddings`, `vision.tower_output` |
 | `ImageTokenMask` | `batch seq` (`Bool`) | `components/vision.py` | `vision.image_token_mask` |
-| `ImageFeatures` | `image_tokens hidden` | `components/vision.py` | `vision.image_features` |
+| `ImageFeatures` | `image_tokens hidden_size` | `components/vision.py` | `vision.image_features` |
 
-The axis names are plain string constants in `nnterp.components.standard` (exported by `nnterp.components`), and every alias is composed from them: the model facts are named as the size that holds them (`HIDDEN` = `hidden_size`, `VOCAB` = `vocab_size`, `HEADS` = `num_heads`, `KV_HEADS` = `num_kv_heads`, `HEAD_DIM` = `head_dim`, `QK_HEAD_DIM` = `qk_head_dim`, `EXPERTS` = `num_experts`, `TOP_K` = `top_k`), which `axis_size` resolves; the rest are not facts about the model (`BATCH`, `SEQ`, `QUERY`/`KEY` a pattern's two token axes, `STREAMS`, a recurrent mixer's `MIXER_HEADS` = `heads`, `KEY_DIM`/`VALUE_DIM` a DeltaNet state's two sides, `CHANNELS`/`STATE_DIM` a Mamba-1 state's, `GROUPS` the `B`/`C` groups, and the vision tower's `IMAGES`, `PATCHES`, `VISION_HIDDEN`, `IMAGE_TOKENS`, `TEXT_HIDDEN` = `hidden`). [../usage/layouts.md](../usage/layouts.md#axis-names-and-sizes) is the page.
+The axis names are plain string constants in `nnterp.components.standard` (exported by `nnterp.components`), and every alias is composed from them: the model facts are named as the size that holds them (`HIDDEN` = `hidden_size`, `VOCAB` = `vocab_size`, `HEADS` = `num_heads`, `KV_HEADS` = `num_kv_heads`, `HEAD_DIM` = `head_dim`, `QK_HEAD_DIM` = `qk_head_dim`, `EXPERTS` = `num_experts`, `TOP_K` = `top_k`, `VISION_HIDDEN` = `vision_hidden_size`, the tower's width on `model.vision`), which `axis_size` resolves; the rest are not facts about the model (`BATCH`, `SEQ`, `QUERY`/`KEY` a pattern's two token axes, `STREAMS`, a recurrent mixer's `MIXER_HEADS` = `heads`, `KEY_DIM`/`VALUE_DIM` a DeltaNet state's two sides, `CHANNELS`/`STATE_DIM` a Mamba-1 state's, `GROUPS` the `B`/`C` groups, and the vision tower's `IMAGES`, `PATCHES`, `IMAGE_TOKENS`). [../usage/layouts.md](../usage/layouts.md#axis-names-and-sizes) is the page.
 
 ### Availability predicates and constants
 
@@ -495,7 +495,7 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 - `next_token_probs`, `input_size` and `states` are read-only.
 - `route_kernels(model.family, "torch")` before tracing a DeltaNet layer whose `state` you want; a forward `.source` has already instrumented keeps the binding it was compiled with.
 - `import nnterp` (or `nnsight`) before any `transformers.models...modeling_*` import; the reverse order segfaults at import on this stack.
-- A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace (after the tower under `generate` on transformers 5.18 and later), `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden]`.
+- A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace (after the tower under `generate` on transformers 5.18 and later), `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden_size]`.
 
 ## Related
 

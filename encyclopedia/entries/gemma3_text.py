@@ -37,7 +37,7 @@ WRAPPERS = {
 `post_layernorm`, so `model.projector.input == model.vision.tower_output` and a write to the last
 block or to `tower_output` reaches the text model. It lays the 4096 patches out as their 64 × 64
 grid, averages each 4 × 4 block (`avg_pool`), norms the 256 averages with `mm_soft_emb_norm`
-(gain `1 + weight`) and multiplies them by `mm_input_projection_weight`, `[vision_hidden, hidden]`.
+(gain `1 + weight`) and multiplies them by `mm_input_projection_weight`, `[vision_hidden_size, hidden_size]`.
 `vision.image_features` is `model.projector.output` flattened over the images, `[256, hidden_size]`
 per image. On the pinned tiny checkpoint:
 

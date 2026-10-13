@@ -107,7 +107,7 @@ rearrange them.
    - *Config*: the root sizes and, under a rule, the config keys they come
      from (`architectures` is the checkpoint's own, a wrapper's on a vision-language checkpoint; the
      rest are the text config's). On a vision-language checkpoint a second card, *Vision Config*, whose body folds (closed at
-     first, only its band shows, labelled; open, the body is titled as the Config card is): `model.vision.num_layers`, `hidden_size`, `num_heads`,
+     first, only its band shows, labelled; open, the body is titled as the Config card is): `model.vision.num_layers`, `vision_hidden_size`, `num_heads`,
      `head_dim`, `intermediate_size`, `patch_size`, `image_size` (`varies` where nnterp raises
      `Unavailable`), then `spatial_merge_size` and `window_size` where the vision encoder's envoy defines
      them (the Qwen ViT's `QwenVision`).

@@ -82,7 +82,7 @@ A family whose blocks are of two kinds: Qwen3-Next, Qwen3.5 (text), Qwen3.5-MoE 
 
 ## Image features, image token mask
 
-The two values of a vision tower that say where the image enters the text model: `vision.image_token_mask` is `input_ids == image_token_id` (`[batch, seq]`, read off the model's inputs, so first in a trace), and `vision.image_features` is the tensor the wrapper scatters into the token embeddings at those positions (`[image_tokens, hidden]`, read at the scatter, assignable). `layers[0].input[vision.image_token_mask] == vision.image_features` on every wrapper. See [../usage/vision.md](../usage/vision.md#where-the-image-meets-the-text-model).
+The two values of a vision tower that say where the image enters the text model: `vision.image_token_mask` is `input_ids == image_token_id` (`[batch, seq]`, read off the model's inputs, so first in a trace), and `vision.image_features` is the tensor the wrapper scatters into the token embeddings at those positions (`[image_tokens, hidden_size]`, read at the scatter, assignable). `layers[0].input[vision.image_token_mask] == vision.image_features` on every wrapper. See [../usage/vision.md](../usage/vision.md#where-the-image-meets-the-text-model).
 
 ## Interface (`attention_interface_1`)
 
@@ -114,7 +114,7 @@ One call or assignment inside a module's forward as nnsight's `.source` names it
 
 ## Packed tower
 
-A vision tower that runs every image of the invoke as one sequence of patches (the Qwen ViT, Pixtral): its `Patches` values are `[1, all patches, vision_hidden]`, with the images axis 1, and the processor's per-image grid (`image_grid_thw`, `image_sizes`) says where one image's patches end. See [../usage/vision.md](../usage/vision.md#the-qwen-vit).
+A vision tower that runs every image of the invoke as one sequence of patches (the Qwen ViT, Pixtral): its `Patches` values are `[1, all patches, vision_hidden_size]`, with the images axis 1, and the processor's per-image grid (`image_grid_thw`, `image_sizes`) says where one image's patches end. See [../usage/vision.md](../usage/vision.md#the-qwen-vit).
 
 ## Parallel block
 
@@ -202,7 +202,7 @@ The random-weights checkpoint each family's test pins (`hf-internal-testing/tiny
 
 ## Tower, `Vision`
 
-The vision side of an image-text-to-text wrapper under its standard names: `model.vision` (a `Vision` envoy), `vision.layers[i]` (`VisionLayer`, with `VisionAttention` and `VisionMlp`), `vision.patch_embed`, `vision.norm`, the tower's sizes, `patch_embeddings` and `tower_output` (`Patches`, `[images, patches, vision_hidden]`), and the two image values. Named by the text model's family, since the family is one per `model_type` and the wrapper's `text_config.model_type` picks it. See [../usage/vision.md](../usage/vision.md#the-names).
+The vision side of an image-text-to-text wrapper under its standard names: `model.vision` (a `Vision` envoy), `vision.layers[i]` (`VisionLayer`, with `VisionAttention` and `VisionMlp`), `vision.patch_embed`, `vision.norm`, the tower's sizes, `patch_embeddings` and `tower_output` (`Patches`, `[images, patches, vision_hidden_size]`), and the two image values. Named by the text model's family, since the family is one per `model_type` and the wrapper's `text_config.model_type` picks it. See [../usage/vision.md](../usage/vision.md#the-names).
 
 ## Tuple block, `returns_tuple`
 

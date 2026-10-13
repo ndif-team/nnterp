@@ -35,13 +35,13 @@ prompt = model.processor.apply_chat_template(messages, add_generation_prompt=Tru
 with model.trace(prompt, images=[image]):
     mask = model.vision.image_token_mask.save()                  # [batch, seq] bool
     pattern = model.vision.layers[0].self_attn.attention_probabilities.save()   # [images, heads, patches, patches]
-    patches = model.vision.layers[0].layer_output.save()          # [images, patches, vision_hidden]
-    features = model.vision.image_features.save()                # [image_tokens, hidden]
+    patches = model.vision.layers[0].layer_output.save()          # [images, patches, vision_hidden_size]
+    features = model.vision.image_features.save()                # [image_tokens, hidden_size]
     first = model.layers[0].input.save()
     logits = model.logits.save()
 
 torch.equal(first[mask], features)                    # True: the features are what enters the text model
-model.vision.num_layers, model.vision.hidden_size     # the tower's sizes; model.num_layers is the text model's
+model.vision.num_layers, model.vision.vision_hidden_size     # the tower's sizes; model.num_layers is the text model's
 
 with model.trace(prompt, images=[image]):
     model.vision.image_features[:] = 0                # ablate every image token at once
@@ -100,24 +100,28 @@ without blocks too: `model.model.embed_audio`, native, and no `audio_tower`.
 | `patch_embeddings` | `vision` | `Patches` | the patch embedding's output, one row per patch, before any position embedding, CLS token or pre-norm |
 | `tower_output` | `vision` | `Patches` | the last block's stream after `vision.norm` where there is one, before any pooling, CLS dropping or adapter (on the Qwen ViT, which has no final norm, the last block's `layer_output`, served at the tower's output, after the merger) |
 | `image_token_mask` | `vision` | `ImageTokenMask` `[batch seq]` bool | `input_ids == config.image_token_id`, read off the model's inputs; read-only |
-| `image_features` | `vision` | `ImageFeatures` `[image_tokens hidden]` | what the wrapper scatters into the token embeddings, flat over every image token in row-major order; assignable, in-place edits land |
+| `image_features` | `vision` | `ImageFeatures` `[image_tokens hidden_size]` | what the wrapper scatters into the token embeddings, flat over every image token in row-major order; assignable, in-place edits land |
 
-`Patches` is `[images, patches, vision_hidden]`. What a row and the patch axis are, per tower:
+`Patches` is `[images, patches, vision_hidden_size]`. What a row and the patch axis are, per tower:
 
 | tower | rows | the patch axis |
 | --- | --- | --- |
 | SigLIP | one per image (per crop on LLaVA-OneVision, per tile on Idefics 3 and SmolVLM) | the patches, in raster order |
 | CLIP | one per image (per crop on LLaVA-NeXT) | the CLS token *first*, then the patches |
 | Pixtral | one, *packed*: every image's patches, image after image | each image has `(height // patch_size) * (width // patch_size)` patches, its `image_sizes` entry from the processor; `patch_embeddings` is the packed row as it enters `ln_pre` (the convolution's own output, `patch_embed.output`, is the padded grid) |
-| the Qwen ViT | one, *packed* (the tower runs on `[patches, vision_hidden]`, served with a leading 1) | every image's patches in merge-block order; on Qwen2.5-VL in window order inside the tower ([below](#the-qwen-vit)) |
+| the Qwen ViT | one, *packed* (the tower runs on `[patches, vision_hidden_size]`, served with a leading 1) | every image's patches in merge-block order; on Qwen2.5-VL in window order inside the tower ([below](#the-qwen-vit)) |
 | Llama 4's ViT | one per image tile | the patches, then the CLS token *last* (`patches + 1` rows); the tower drops it after `vision.norm` |
 | Gemma 4's ViT | one per image | the patches *padded* to `max_soft_tokens * pooling_kernel_size**2` rows (2520 by default). The padded rows (zero pixels at position `(-1, -1)`, `image_position_ids` in the processor's encoding) are masked as keys but run through every block, so they are rows of `layer_output`, with values; the pooler zeroes and strips them |
 | Gemma 4 unified's embedder | one per image | `patch_embeddings` and `tower_output` only, padded to `max_soft_tokens` rows (280) the same way |
 | RADIO | one, *packed*: every image's tokens, image after image | per image `num_cls_tokens + num_registers` prefix tokens, then its `image_grid_hw` patches in raster order; `patch_embeddings` is the patches alone, before the prefix and the position embedding. The attention makes one interface call for one image and one per image for several, so its queries, keys and values are served whole (`[1, num_heads, tokens, head_dim]`) and its scores, pattern and head outputs are `Unavailable` |
 
-The tower's sizes are on `model.vision`: `num_layers`, `hidden_size`, `num_heads`,
+The tower's sizes are on `model.vision`: `num_layers`, `vision_hidden_size`, `num_heads`,
 `head_dim`, `intermediate_size`, `patch_size`, `image_size`, read off the tower's own config
-(a tower that spells one its own way reports it under the plain name). The Qwen ViT, Pixtral,
+(a tower that spells one its own way reports it under these names). The tower's width is
+`vision_hidden_size`, apart from the text model's `hidden_size`: `axis_size` resolves
+`Patches`' last axis on `model.vision` and `image_features`' (`hidden_size`) on the root.
+The heads, head width, depth and MLP width keep the plain names, and on the tower's values
+they are the tower's. The Qwen ViT, Pixtral,
 RADIO, Gemma 4 and Gemma 4 unified take images of any resolution, so their `image_size` raises
 `Unavailable` saying where each image's grid is (`image_grid_thw`, `image_sizes`,
 `image_position_ids`, `image_grid_hw`). Gemma 4's `head_dim` is the config's (64 on E2B, with 12 heads over a
@@ -157,7 +161,7 @@ concatenates several blocks' streams. `model.projector.input` is what the projec
 actually receives. On Llama 4 the tower runs a pixel-shuffle adapter after `tower_output`
 (`vision.vision_adapter`, a quarter as many rows) whose output, flattened over the tiles, is
 `projector.input`; on Gemma 4 the tower's `pooler` average-pools 3x3 patches of
-`tower_output` into each soft token and multiplies by `sqrt(vision hidden_size)`, and the
+`tower_output` into each soft token and multiplies by `sqrt(vision_hidden_size)`, and the
 tower strips the padding and, where the vision config sets `standardize` (26B-A4B, 31B),
 subtracts `std_bias` and multiplies by `std_scale`; that is `projector.input`; the
 encoder-free embedder has no blocks to end a stream, so its `tower_output` is the states
@@ -182,7 +186,7 @@ out[mask].shape, out[~mask].shape         # (576, 4096), (16, 4096): the image r
 to_image = pattern[0, :, -1, mask[0]].sum(-1)   # [num_heads]: each head's mass from the last token onto the image
 ```
 
-- Boolean indexing flattens the batch: `out[mask]` is `[image_tokens, hidden]` over every row
+- Boolean indexing flattens the batch: `out[mask]` is `[image_tokens, hidden_size]` over every row
   of the batch in row-major order, the order of `vision.image_features`, so
   `layers[0].input[mask] == vision.image_features` row for row. To keep the batch shape, mask
   instead of indexing (`out.masked_fill(~mask[..., None], 0)`), or index one row
@@ -258,14 +262,14 @@ the trace raises `OutOfOrderError`.
 ## The Qwen ViT
 
 Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3-VL-MoE, Qwen3.5 and Qwen3.5-MoE share one tower at
-`model.visual`. It runs on `[patches, vision_hidden]`, every image of the invoke
+`model.visual`. It runs on `[patches, vision_hidden_size]`, every image of the invoke
 concatenated, and its attention calls the interface once per image (once per window on
 Qwen2.5-VL's windowed blocks). So:
 
 - Its `Patches` values (`patch_embeddings`, `tower_output`, `layer_input`, `layer_output`,
-  `attention_output`, `mlp_output`) are `[1, patches, vision_hidden]`: the packed tensor with
+  `attention_output`, `mlp_output`) are `[1, patches, vision_hidden_size]`: the packed tensor with
   a leading images axis of 1, a view, so in-place edits land; assign the same shape.
-  `vision.layers[i].output` stays the native `[patches, vision_hidden]`.
+  `vision.layers[i].output` stays the native `[patches, vision_hidden_size]`.
 - The tower has no final norm, so `tower_output` equals the last block's `layer_output` and
   the merger's input. It is served at the tower's output, which comes after the merger has
   run: read `projector.input` / `projector.output` before `tower_output` in one trace.
@@ -283,7 +287,7 @@ Qwen2.5-VL's windowed blocks). So:
   implementation: no one tensor is the block's pattern. Split the queries and keys at the
   attention's `cu_seqlens` argument (`self_attn.inputs[1]["cu_seqlens"]`) to compute a
   per-image pattern.
-- The sizes are the vision config's: `hidden_size` is the tower's width (`embed_dim` on
+- The sizes are the vision config's: `vision_hidden_size` is the tower's width (`embed_dim` on
   Qwen2-VL), `num_heads`, `intermediate_size`, `patch_size`, `spatial_merge_size`, and
   `window_size` (Qwen2.5-VL's, in pixels; `None` elsewhere).
 
@@ -309,7 +313,7 @@ torch.equal(first[mask], features)                     # True
 **Qwen3-VL's DeepStack.** On `qwen3_vl_text` and `qwen3_vl_moe_text` the tower also taps
 three of its blocks, and the text model adds each tap's merged features at the image
 positions after text blocks 0, 1 and 2, outside the blocks. `layers[k].deepstack_output`
-(`[image_tokens, hidden]`, assignable) is what is added after block `k`:
+(`[image_tokens, hidden_size]`, assignable) is what is added after block `k`:
 `layers[k+1].input[mask] == layers[k].layer_output[mask] + layers[k].deepstack_output`;
 on the other blocks it is `Unavailable` and `layers[k+1].input == layers[k].layer_output`.
 So `image_features` is not the only way the image reaches the text model there: on

@@ -143,7 +143,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     # vision-language checkpoint's page adds its tower's and its wrapper's slugs from the rest.
     "vision": ("Vision-language", "Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model."),
     "cls-token": ("CLS token", "The vision encoder's stream carries a class token beside the patches (CLIP's first, Llama 4's last), so the patch axis is one longer than the patch grid."),
-    "packed-tower": ("Packed vision encoder", "Every image's patches run in one row, [1, all patches, vision_hidden]; the processor's grid sizes split it."),
+    "packed-tower": ("Packed vision encoder", "Every image's patches run in one row, [1, all patches, vision_hidden_size]; the processor's grid sizes split it."),
     "variable-resolution": ("Variable resolution", "The vision encoder takes images of any resolution, so vision.image_size raises Unavailable; each image's grid is in the processor's output."),
     "padded-patches": ("Padded patches", "Each image's patches are padded to a fixed row count; the padded rows run through the vision encoder, masked as keys where it attends, so they are rows of its values."),
     "tiled-images": ("Tiled images", "The processor cuts an image into crops or tiles, each a row of the vision encoder's batch."),
@@ -159,7 +159,7 @@ VISION_QUIRKS = ("cls-token", "packed-tower", "variable-resolution", "padded-pat
 #: The task a vision-language checkpoint loads with, and the config model_types transformers maps to it.
 IMAGE_TASK = "image-text-to-text"
 IMAGE_TEXT_TO_TEXT = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES
-TOWER_SIZE_NAMES = ("num_layers", "hidden_size", "num_heads", "head_dim", "intermediate_size", "patch_size", "image_size")
+TOWER_SIZE_NAMES = ("num_layers", "vision_hidden_size", "num_heads", "head_dim", "intermediate_size", "patch_size", "image_size")
 #: Sizes only some vision encoders' envoys define (the Qwen ViT's `QwenVision`), shown after the others where the class has them.
 TOWER_OWN_SIZE_NAMES = ("spatial_merge_size", "window_size")
 #: What the strip's embed node adds on a vision-language checkpoint.

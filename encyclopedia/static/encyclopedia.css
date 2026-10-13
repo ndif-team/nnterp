@@ -293,13 +293,13 @@ pre .rn { font-weight: 500; }
 .hidden { display: none; }
 
 /* per-checkpoint panes: one shows at a time */
-.pane[hidden_size] { display: none !important; }
+.pane[hidden] { display: none !important; }
 
 /* the eye: a vision-language checkpoint */
 .eye { width: 1.35em; height: 0.8em; vertical-align: -0.06em; fill: none; stroke: currentColor; stroke-width: 1.7; overflow: visible; }
 .eye circle { fill: currentColor; stroke: none; }
 .ckpt-eye { display: inline-flex; margin-left: 6px; color: var(--mark-deep); }
-.ckpt-eye[hidden_size] { display: none; }
+.ckpt-eye[hidden] { display: none; }
 
 /* the checkpoint selector, in the hero beside the circles */
 .ckpt { position: relative; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }

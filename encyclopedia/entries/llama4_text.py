@@ -87,7 +87,7 @@ On Scout and Maverick the vision encoder is 34 blocks of 1408 wide, 16 heads of 
 ## The CLS token is the last row
 
 The tower appends its `class_embedding` after the 576 patches, so every `vision.layers[i]` value
-is `[tiles, 577, vision_hidden]` with the CLS at index `-1`, and `patch_embeddings` is the 576
+is `[tiles, 577, vision_hidden_size]` with the CLS at index `-1`, and `patch_embeddings` is the 576
 patches alone. `layernorm_post` norms all 577 rows; the tower then drops the CLS, so
 `vision.tower_output[:, -1]` reaches nothing: on the pinned tiny checkpoint a write to it leaves
 the logits bit-identical, and a write to `vision.tower_output[:, :-1]` changes them. Select the
@@ -102,7 +102,7 @@ into one row (`pixel_shuffle_ratio` 0.5) and runs a two-layer MLP with a GELU af
 
 ```python
 with model.trace(prompt, images=[image]):
-    out = model.vision.tower_output.save()              # [tiles, 577, vision_hidden]
+    out = model.vision.tower_output.save()              # [tiles, 577, vision_hidden_size]
     read = model.vision.vision_adapter.input.save()
     shuffled = model.vision.vision_adapter.output.save()
 

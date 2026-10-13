@@ -191,7 +191,7 @@ class RadioAttention(VisionAttention):
 
     @EProperty("../layer_scale1.output", description=VisionAttention.attention_output.description, unavailable=no_tower_run)
     def attention_output(self, value: torch.Tensor) -> Patches:
-        """What the attention adds to the tower's stream, ``[1, tokens, vision_hidden]``: its output times ``layer_scale1``."""
+        """What the attention adds to the tower's stream, ``[1, tokens, vision_hidden_size]``: its output times ``layer_scale1``."""
         return value
 
     @attention_output.postprocess
@@ -219,7 +219,7 @@ class RadioMlp(VisionMlp):
 
     @EProperty("../layer_scale2.output", description=VisionMlp.mlp_output.description, unavailable=no_tower_run)
     def mlp_output(self, value: torch.Tensor) -> Patches:
-        """What the MLP adds to the tower's stream, ``[1, tokens, vision_hidden]``: its output times ``layer_scale2``."""
+        """What the MLP adds to the tower's stream, ``[1, tokens, vision_hidden_size]``: its output times ``layer_scale2``."""
         return value
 
     @mlp_output.postprocess

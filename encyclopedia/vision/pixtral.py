@@ -33,7 +33,7 @@ BLOCK = {
     ],
 }
 
-ROWS = ("One row, packed: every image's patches, image after image, `[1, patches, vision_hidden]`; image `j` has "
+ROWS = ("One row, packed: every image's patches, image after image, `[1, patches, vision_hidden_size]`; image `j` has "
         "`(height // patch_size) * (width // patch_size)` patches in raster order, its `image_sizes` entry from the "
         "processor. `vision.patch_embeddings` is the packed row entering `ln_pre`; the convolution's own output, "
         "`patch_embed.output`, is the padded grid.")
@@ -49,8 +49,8 @@ NOTES = """
 
 The convolution runs on the processor's batch, padded to its largest image, and each image's grid
 is cropped back to its own size, flattened and concatenated: `vision.patch_embeddings` is
-`[1, patches, vision_hidden]`, the patches of every image in the invoke, image after image, each in
-raster order. `vision.patch_embed.output` is the padded grid, `[images, vision_hidden, rows, columns]`,
+`[1, patches, vision_hidden_size]`, the patches of every image in the invoke, image after image, each in
+raster order. `vision.patch_embed.output` is the padded grid, `[images, vision_hidden_size, rows, columns]`,
 and is not the stream. Every block value is served on the packed row, so the processor's
 `image_sizes` split it:
 
@@ -60,7 +60,7 @@ side = model.vision.patch_size
 sizes = [h // side * (w // side) for h, w in inputs["image_sizes"].tolist()]
 with model.trace(prompt, images=[square, wide]):
     patches = model.vision.layers[1].layer_output.save()
-per_image = patches[0].split(sizes)                 # one [patches_j, vision_hidden] each
+per_image = patches[0].split(sizes)                 # one [patches_j, vision_hidden_size] each
 ```
 
 On the pinned Mistral 3 tiny checkpoint a 36 × 36 and a 24 × 36 image at 6-pixel patches are

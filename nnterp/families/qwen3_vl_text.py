@@ -16,13 +16,13 @@ the image positions after text block ``k``, outside the block, in its own
 forward (``_deepstack_process``). So on blocks ``k < 3`` (fewer on a model
 with fewer blocks) the stream entering block ``k + 1`` is not block ``k``'s
 ``layer_output`` at the image positions. `Layer.deepstack_output` serves what
-is added there, ``[image_tokens, hidden]``:
+is added there, ``[image_tokens, hidden_size]``:
 ``layers[k+1].input[mask] == layers[k].layer_output[mask] + layers[k].deepstack_output``,
 the rest of the stream unchanged; on the other blocks it is `Unavailable` and
 ``layers[k+1].input == layers[k].layer_output``.
 
 The wrapper's Qwen ViT ``model.visual`` is ``vision`` (a `QwenVision`: packed,
-``[1, patches, vision_hidden]``, with a learned ``pos_embed`` added after
+``[1, patches, vision_hidden_size]``, with a learned ``pos_embed`` added after
 ``patch_embed``); its ``merger`` is ``projector``. The deepstack mergers keep
 their native path, ``vision.deepstack_merger_list[k]``.
 """
@@ -118,7 +118,7 @@ class Layer(Layer):
         unavailable=no_deepstack,
     )
     def deepstack_output(self, value) -> ImageFeatures:
-        """What the text model adds at the image tokens after this block, ``[image_tokens, hidden]``, flat in scatter order.
+        """What the text model adds at the image tokens after this block, ``[image_tokens, hidden_size]``, flat in scatter order.
 
         Merger ``k`` of the tower's deepstack (``vision.deepstack_merger_list[k]``,
         fed by tower block ``vision_config.deepstack_visual_indexes[k]``) for block

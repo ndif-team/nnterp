@@ -1,8 +1,8 @@
 """The Qwen ViT's checks, written once for the six families that host it.
 
 `QwenVisionSuite` is `VisionSuite` on a packed tower: the tower runs on
-``[patches, vision_hidden]`` over every image of the invoke, so its stream
-values are served ``[1, patches, vision_hidden]``; its attention runs one call
+``[patches, vision_hidden_size]`` over every image of the invoke, so its stream
+values are served ``[1, patches, vision_hidden_size]``; its attention runs one call
 per image, so the queries, keys, values and head outputs are served whole
 around those calls and the pattern is `Unavailable` (`PER_IMAGE`); the sizes are
 the Qwen vision config's spellings, and ``image_grid_thw`` says how many
@@ -111,7 +111,7 @@ class QwenVisionSuite(VisionSuite):
                 heads = attn.attention_head_outputs.save()
                 out = attn.attention_output.save()
             assert len(calls) == len(bounds) - 1 >= 2  # one call per image (per window on a windowed block)
-            n, width = self.patches_of(model, [IMAGE, WIDE]), model.vision.hidden_size
+            n, width = self.patches_of(model, [IMAGE, WIDE]), model.vision.vision_hidden_size
             assert isinstance(queries, Queries) and isinstance(keys, Keys) and isinstance(values, Values) and isinstance(heads, HeadOutputs)
             assert queries.shape == keys.shape == values.shape == (1, model.vision.num_heads, n, model.vision.head_dim)
             assert torch.equal(queries, torch.cat([q for q, _, _, _ in calls], dim=2))
@@ -141,8 +141,8 @@ class QwenVisionSuite(VisionSuite):
             tower = vision.tower_output.save()
         n = self.patches_of(model, [IMAGE])
         for value in (patches, attn, mlp, out, tower):
-            assert isinstance(value, Patches) and value.shape == (1, n, vision.hidden_size)
-        assert native_out.shape == (n, vision.hidden_size)  # natively packed, no images axis
+            assert isinstance(value, Patches) and value.shape == (1, n, vision.vision_hidden_size)
+        assert native_out.shape == (n, vision.vision_hidden_size)  # natively packed, no images axis
         assert torch.equal(patches[0], native_patches) and torch.equal(attn[0], native_attn) and torch.equal(out[0], native_out)
 
     def test_writes_with_a_leading_one_land(self, model, clean):

@@ -34,16 +34,16 @@ WRAPPERS = {
 ## The merger folds four patches into one image token
 
 `model.projector` is `model.visual.merger`, the vision encoder's last module: `norm` (a LayerNorm over
-`vision_hidden`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
-`4 * vision_hidden` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. So an image
+`vision_hidden_size`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
+`4 * vision_hidden_size` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. So an image
 of `t * h * w` patches (its `image_grid_thw` row) is `t * h * w / 4` image tokens, and
-`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden]`. On 0.8B the
+`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`. On 0.8B the
 merger maps 4 × 768 = 3072 to 1024; a patch is 16 pixels, so an image token covers 32 × 32 pixels.
 
 ```python
 with model.trace(prompt, images=[red, wide]):
     mask = model.vision.image_token_mask.save()
-    fed = model.projector.input.save()          # [patches, vision_hidden]
+    fed = model.projector.input.save()          # [patches, vision_hidden_size]
     features = model.vision.image_features.save()
     first = model.layers[0].input.save()
 

@@ -52,7 +52,7 @@ and ``multi_modal_projector``, the last module before the scatter, is
 blocks (``model.layers``, pre-norm, on the shared attention interface with a
 2D rotary embedding) are ``vision.layers``, and ``layernorm_post`` is
 ``vision.norm``. A CLS token is appended *after* the patches, so the tower's
-stream is ``[tiles, patches + 1, vision_hidden]`` with the CLS last (CLIP's is
+stream is ``[tiles, patches + 1, vision_hidden_size]`` with the CLS last (CLIP's is
 first); the tower drops it after ``layernorm_post``, then pixel-shuffles and
 projects the patches in ``vision.vision_adapter``, so ``vision.tower_output``
 is ``layernorm_post``'s output, CLS included, and ``projector.input`` is the
@@ -204,7 +204,7 @@ class Vision(Vision):
 
     @EProperty("norm.output", description=Vision.tower_output.description, unavailable=no_tower_run)
     def tower_output(self, value) -> Patches:
-        """The last block's stream after ``layernorm_post``, ``[tiles, patches + 1, vision_hidden]``, the CLS token last.
+        """The last block's stream after ``layernorm_post``, ``[tiles, patches + 1, vision_hidden_size]``, the CLS token last.
 
         The tower then drops the CLS and runs ``vision_adapter`` on the
         patches; an assignment here reaches the adapter and the text model.

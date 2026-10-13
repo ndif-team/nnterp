@@ -13,6 +13,7 @@ class TestXGLM(FamilySuite):
     FAMILY = xglm
     NATIVE = rows("model", "layers", "embed_tokens", "layer_norm", mlp=None, ln1="self_attn_layer_norm", ln2=None)
     MLP_NORM = "final_layer_norm"            # the block's own, native name
+    EXPECTED_UNAVAILABLE = {"mlp_input": "no mlp module"}
 
     def test_no_mlp_module(self, model):
         """No block has an MLP module, so `support()` lists no ``mlp`` value at all."""

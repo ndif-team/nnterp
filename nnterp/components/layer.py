@@ -21,6 +21,9 @@ if TYPE_CHECKING:
 
 #: The residual stream and everything added to it: ``layer_output``, the contributions, ``token_embeddings``, a sublayer's input.
 Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]
+#: The residual stream with its batch and sequence axes flattened, as a block that reshapes around a sublayer holds
+#: it (OPT's ``layer_mid`` and ``mlp_norm_output``).
+FlatResidual = Float[Tensor, f"tokens {HIDDEN}"]
 #: A hyper-connection residual (DeepSeek-V4): ``streams`` parallel copies of the stream, the block's own
 #: ``[batch, seq, streams, hidden_size]``. ``layer_output`` (and a block's input) on those families, in place of `Residual`.
 Streams = Float[Tensor, f"{BATCH} {SEQ} {STREAMS} {HIDDEN}"]
@@ -28,6 +31,12 @@ Streams = Float[Tensor, f"{BATCH} {SEQ} {STREAMS} {HIDDEN}"]
 StreamWeights = Float[Tensor, f"{BATCH} {SEQ} {STREAMS}"]
 #: A per-token ``streams x streams`` matrix mixing the streams: entry ``[j, k]`` is what stream ``j`` gives stream ``k``.
 StreamMixing = Float[Tensor, f"{BATCH} {SEQ} {STREAMS} {STREAMS}"]
+
+
+#: Reasons a family gives for a boundary its block does not have.
+PARALLEL = "a parallel block: the attention and the MLP read the same input, so there is no stream between them"
+POST_NORM_ATTENTION = "a post-norm block: the attention reads the residual stream itself, layer_input"
+POST_NORM_MLP = "a post-norm block: the MLP reads the residual stream itself, layer_mid"
 
 
 class Layer(Standard):

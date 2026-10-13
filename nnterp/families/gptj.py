@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 from transformers.models.gptj.modeling_gptj import GPTJAttention, GPTJBlock, GPTJMLP
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Values, needs_eager, seq_first,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, needs_eager, seq_first, unavailable,
 )
 
 if TYPE_CHECKING:
@@ -28,7 +28,18 @@ RENAME = {
 
 
 class Layer(Layer):
-    """GPT-J's parallel block; returns ``(hidden_states, present)``, which the base unwraps."""
+    """GPT-J's parallel block; returns ``(hidden_states, present)``, which the base unwraps.
+
+    A parallel block: there is no stream between the sublayers, and the MLP reads the same normed input
+    as the attention.
+    """
+
+    layer_mid = unavailable(PARALLEL)
+
+    @EProperty("input_layernorm.output", description="The normed stream entering the MLP: the one norm feeds both sublayers")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
+
 
     returns_tuple = True
 

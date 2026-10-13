@@ -25,6 +25,7 @@ class TestOlmoHybrid(FamilySuite):
     # Block 0 is a pre-norm linear block, so the suite's input_layernorm / post_attention_layernorm hold there;
     # the post-norm attention block's sublayer inputs have their own test below.
     EXPECTED_UNAVAILABLE = {
+        "attention_norm_output": "a post-norm block", "mlp_norm_output": "a post-norm block",
         **{name: "no self_attn module" for name in VALUES if name.startswith("self_attn.")},
         **{f"linear_attn.{name}": "no linear_attn module" for name in LINEAR if name not in ("state", "states")},
         "linear_attn.state": "",    # missing on the attention block, and needing route_kernels on the others

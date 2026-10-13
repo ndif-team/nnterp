@@ -10,3 +10,4 @@ class TestPhi(FamilySuite):
     FAMILY = phi
     NATIVE = rows("model", "layers", "embed_tokens", "final_layernorm", ln2=None)
     MLP_NORM = "input_layernorm"             # parallel: one norm feeds both sublayers
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}

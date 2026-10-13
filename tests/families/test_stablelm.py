@@ -10,6 +10,7 @@ class TestStableLm(FamilySuite):
     FAMILY = stablelm
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln2=None)
     MLP_NORM = "input_layernorm"             # parallel
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}   # use_parallel_residual on the tiny checkpoint
 
     def test_block_is_parallel(self, model):
         assert model.config.use_parallel_residual

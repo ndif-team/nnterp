@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 import torch
 from transformers.models.cohere.modeling_cohere import CohereAttention, CohereDecoderLayer, CohereMLP
 
-from ..components import Attention, Layer, Mlp
+from ..components import Attention, EProperty, Layer, Mlp, PARALLEL, Residual, unavailable
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -34,7 +34,18 @@ RENAME = {
 
 
 class Layer(Layer):
-    """Cohere's parallel block; returns a bare tensor, so the base holds."""
+    """Cohere's parallel block; returns a bare tensor, so the base holds.
+
+    A parallel block: there is no stream between the sublayers, and the MLP reads the same normed input
+    as the attention.
+    """
+
+    layer_mid = unavailable(PARALLEL)
+
+    @EProperty("input_layernorm.output", description="The normed stream entering the MLP: the one norm feeds both sublayers")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
+
 
 
 class Attention(Attention):

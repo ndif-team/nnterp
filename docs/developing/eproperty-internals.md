@@ -288,7 +288,7 @@ block.
   `RuntimeError: the availability check of model.transformer.h.0.attn.probe failed: 'GPT2Config' object has no attribute 'no_such_flag'`.
 - `layout` and `dims` (`:127-150`) read the return annotation of the stub with
   `typing.get_type_hints(func, include_extras=True)`. The annotation is one
-  of the thirty-five layout aliases, each defined in the file of the envoy that
+  of the thirty-six layout aliases, each defined in the file of the envoy that
   serves it (`Residual = Float[Tensor, "batch seq hidden_size"]` in `layer.py`,
   `Pattern` and `Keys` in `attention.py`, `State` in `recurrent.py`,
   `Logits` in `standardized.py`):

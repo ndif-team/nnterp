@@ -12,6 +12,7 @@ class TestFlexOlmo(FamilySuite):
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln1=None)
     ATTENTION_NORM = None                    # post-norms only: the block input enters the attention
     MLP_NORM = None                          # ... and the MLP takes the residual stream after the attention add
+    EXPECTED_UNAVAILABLE = {"attention_norm_output": "a post-norm block", "mlp_norm_output": "a post-norm block"}
 
     def test_contributions_are_the_post_norms(self, model):
         with model.trace(PROMPT):

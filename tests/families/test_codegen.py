@@ -13,6 +13,7 @@ class TestCodeGen(FamilySuite):
     FAMILY = codegen
     NATIVE = rows("transformer", "h", "wte", "ln_f", attn="attn", ln1="ln_1", ln2=None)
     MLP_NORM = "input_layernorm"             # parallel: ln_1 feeds both sublayers
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
 
     def test_block_returns_a_tuple(self, model):
         with model.trace(PROMPT):

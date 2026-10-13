@@ -54,6 +54,7 @@ class TestNemotronH(StateSpaceChecks, FamilySuite):
     }
     MLP_WIDTH_KEY = "moe_intermediate_size"
     EXPECTED_UNAVAILABLE = {
+        "attention_norm_output": "no input_layernorm module", "layer_mid": "no post_attention_layernorm module", "mlp_norm_output": "no post_attention_layernorm module", "mlp_input": "",
         **{name: "no self_attn module" for name in VALUES if name.startswith("self_attn.")},
         **{f"linear_attn.{name}": "no linear_attn module" for name in LINEAR if name not in ("state", "states")},
         "linear_attn.state": "",   # missing off the Mamba-2 blocks, and unavailable on them

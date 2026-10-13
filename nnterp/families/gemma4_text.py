@@ -95,8 +95,7 @@ from transformers.models.gemma4.modeling_gemma4 import (
 )
 
 from ..components import (
-    INTERFACE, Attention, EProperty, ImageScatter, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty,
-    Unavailable, Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
+    Attention, EProperty, INTERFACE, ImageScatter, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty, Unavailable, Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
 )
 from ..components.vision import no_tower_run, variable_resolution
 
@@ -133,7 +132,19 @@ class Layer(Layer):
     with per-layer embeddings. On a mixture-of-experts checkpoint the block's
     ``router`` and ``experts`` have no module of their own to host their values;
     its `Mlp` hosts them.
+
+    A sandwich block: ``post_attention_layernorm`` follows the attention, so ``layer_mid`` and
+    ``mlp_norm_output`` read ``pre_feedforward_layernorm``, the MLP's pre-norm.
     """
+
+    @EProperty("pre_feedforward_layernorm.input", description="The residual stream after the attention add")
+    def layer_mid(self, value) -> Residual:
+        return value
+
+    @EProperty("pre_feedforward_layernorm.output", description="The normed stream entering the MLP")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
+
 
     @EProperty(
         "post_per_layer_input_norm.output",

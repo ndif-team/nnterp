@@ -32,7 +32,7 @@ from transformers.models.olmo_hybrid.modeling_olmo_hybrid import (
     OlmoHybridMLP,
 )
 
-from ..components import Attention, EProperty, Layer, LinearAttention, Mlp, Residual
+from ..components import Attention, EProperty, Layer, LinearAttention, Mlp, POST_NORM_ATTENTION, POST_NORM_MLP, Residual
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -41,8 +41,31 @@ RENAME = {
 }
 
 
+def post_norm(block) -> bool:
+    """Whether this is an attention block: post-norms only, the block input entering the attention."""
+    return getattr(block, "self_attn", None) is not None
+
+
 class Layer(Layer):
-    """OLMo-Hybrid's block, either class; returns a bare tensor, so the base holds."""
+    """OLMo-Hybrid's block, either class; returns a bare tensor, so the base holds.
+
+    The linear block is the pre-norm one; the attention block is post-norm, so there ``layer_mid`` is what
+    the MLP is called with and the two pre-norm outputs do not exist.
+    """
+
+    attention_norm_output = EProperty(
+        "input_layernorm.output", description="The normed stream entering the mixer",
+        unavailable=lambda block: POST_NORM_ATTENTION if post_norm(block) else None,
+    )
+
+    @EProperty(lambda block: "mlp.input" if post_norm(block) else "post_attention_layernorm.input", description="The residual stream after the mixer's add")
+    def layer_mid(self, value) -> Residual:
+        return value
+
+    mlp_norm_output = EProperty(
+        "post_attention_layernorm.output", description="The normed stream entering the MLP",
+        unavailable=lambda block: POST_NORM_MLP if post_norm(block) else None,
+    )
 
 
 class Attention(Attention):

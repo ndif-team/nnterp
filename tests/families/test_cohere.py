@@ -16,6 +16,7 @@ class TestCohere(FamilySuite):
     FAMILY = cohere
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln2=None)
     MLP_NORM = "input_layernorm"  # parallel: one norm feeds both sublayers
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
 
     def test_logits_are_the_head_times_logit_scale(self, model):
         scale = model.config.logit_scale
@@ -49,6 +50,7 @@ class TestCohereQkNorm(FamilySuite):
     FAMILY = cohere
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln2=None)
     MLP_NORM = "input_layernorm"
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
 
     def test_the_norms_are_there(self, model):
         assert model.layers[0].self_attn._module.use_qk_norm

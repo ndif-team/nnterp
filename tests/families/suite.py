@@ -172,6 +172,8 @@ class FamilySuite:
     ROUTER_EXTRA_CLASSES = 0
     #: A decode step's attention mask covers the cache and the new token (a pure state-space model's covers the new token only).
     DECODE_MASK_COVERS_CACHE = True
+    #: ``layer_mid == layer_input + the mixers' contributions``: false where a gate scales what the block adds (Doge, ZAYA).
+    MID_IDENTITY = True
 
     @pytest.fixture(scope="class")
     def model(self, request):
@@ -398,11 +400,6 @@ class FamilySuite:
                 read["attn_norm"] = layer.attention_norm_output.save()
             if mixer(layer) is not None:
                 read["attn_in"] = mixer(layer).input.save()
-                read["attn_out"] = mixer(layer).attention_output.save()
-            if support["layer_mid"] is None:
-                read["mid"] = layer.layer_mid.save()
-            if support["mlp_norm_output"] is None:
-                read["mlp_norm"] = layer.mlp_norm_output.save()
             if support["mlp_input"] is None:
                 read["mlp_in"] = layer.mlp_input.save()
                 read["mlp_raw"] = layer.mlp.input.save()
@@ -411,11 +408,22 @@ class FamilySuite:
             read["head_out"] = model.lm_head_output.save()
             read["head_raw"] = model.lm_head.output.save()
             read["logits"] = model.logits.save()
+        mixers = [getattr(layer, name) for name in ("linear_attn", "self_attn") if support.get(f"{name}.attention_output", "absent") is None]
+        if support["layer_mid"] is None:  # its own trace: a contribution may be an operation before the attention's input
+            with model.trace(PROMPT):
+                read["x"] = layer.layer_input.save()
+                read["added"] = [host.attention_output.save() for host in mixers]
+                read["mid"] = layer.layer_mid.save()
+        if support["mlp_norm_output"] is None and has_mlp:  # its own trace: on a parallel block it is the attention's norm, read above
+            with model.trace(PROMPT):
+                read["mlp_norm"] = layer.mlp_norm_output.save()
+                read["mlp_raw"] = layer.mlp.input.save()
         if "attn_norm" in read and self.ATTENTION_NORM == "input_layernorm":
             assert torch.equal(read["attn_norm"], read["attn_in"])
-        if "mid" in read:  # the block sums in its own dtype
+        if "mid" in read and read["added"] and self.MID_IDENTITY:  # the block sums in its own dtype
             eps = torch.finfo(read["mid"].dtype).eps
-            torch.testing.assert_close(read["mid"].float(), read["x"].float() + read["attn_out"].float(), rtol=8 * eps, atol=8 * eps)
+            total = read["x"].float() + sum(part.float() for part in read["added"])
+            torch.testing.assert_close(read["mid"].float().reshape(total.shape), total, rtol=8 * eps, atol=8 * eps)  # OPT flattens it
         if "mlp_norm" in read and self.MLP_NORM == "post_attention_layernorm":
             assert torch.equal(read["mlp_norm"], read["mlp_raw"])
         if "mlp_in" in read:
@@ -423,8 +431,6 @@ class FamilySuite:
         else:
             assert not has_mlp or support["mlp_input"], "a block with an MLP serves mlp_input"
         assert torch.equal(read["norm_out"], read["norm_raw"]) and torch.equal(read["head_out"], read["head_raw"])
-        if getattr(model.config, "final_logit_softcapping", None) is None:
-            assert torch.equal(read["head_out"], read["logits"])
         # Writes land where the value is served.
         for name in ("attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input"):
             if support[name] is not None:

@@ -1,6 +1,6 @@
 ---
 title: Layouts
-one_liner: "Every standard value has one axis layout on every family (two exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear), one of thirty-five named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
+one_liner: "Every standard value has one axis layout on every family (three exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear, `layer_mid` and `mlp_norm_output` are `FlatResidual` on OPT), one of thirty-six named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
 tags: [usage, layouts, shapes, jaxtyping, dims, axis_size, num_heads, num_kv_heads, hidden_size, Residual, Pattern, Streams, num_experts, top_k]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/reference/families.md, docs/usage/availability.md, docs/extending/custom-values.md]
 sources: [nnterp/components/eproperty.py, nnterp/components/standard.py, nnterp/components/moe.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/components/__init__.py]
@@ -11,7 +11,7 @@ sources: [nnterp/components/eproperty.py, nnterp/components/standard.py, nnterp/
 ## What this is for
 
 A value's shape is part of what it means. Each standard value is annotated with one of
-thirty-five named layouts, each defined in the file of the envoy that serves it (`Residual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Patches`, `ImageTokenMask`, `ImageFeatures` in `nnterp/components/vision.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
+thirty-six named layouts, each defined in the file of the envoy that serves it (`Residual`, `FlatResidual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Patches`, `ImageTokenMask`, `ImageFeatures` in `nnterp/components/vision.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
 re-exports the thirty-two envoy-level names, and the root's three come from `nnterp.standardized`.
 They are `jaxtyping` types composed from the axis names ([below](#axis-names-and-sizes)), such as
 `Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]` (`batch seq hidden_size`) and
@@ -61,11 +61,12 @@ from the base.
 
 ## The layouts
 
-The thirty-five names, their axes, and the values that carry each:
+The thirty-six names, their axes, and the values that carry each:
 
 | layout | axes | values |
 | --- | --- | --- |
-| `Residual` | `batch seq hidden_size` | `layer_output`, `attention_output`, `mlp_output`, `token_embeddings` (and the plain `self_attn.input`, `mlp.input`) |
+| `Residual` | `batch seq hidden_size` | `layer_input`, `layer_output`, `attention_output`, `mlp_output`, `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`, `token_embeddings`, `final_norm_output` |
+| `FlatResidual` | `tokens hidden_size` | OPT's `layer_mid` and `mlp_norm_output`: the stream with batch and sequence flattened, as its block holds it around the feed-forward path |
 | `Streams` | `batch seq streams hidden_size` | `layer_output` (and `layers[i].input`) on a hyper-connection family (DeepSeek-V4), in place of `Residual` |
 | `StreamWeights` | `batch seq streams` | a hyper-connection family's `attention_post`, `mlp_post` |
 | `StreamMixing` | `batch seq streams streams` | a hyper-connection family's `attention_comb`, `mlp_comb` |

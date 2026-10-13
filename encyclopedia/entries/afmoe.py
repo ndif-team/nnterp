@@ -140,7 +140,7 @@ attn = model.layers[1].self_attn
 with model.trace(prompt):
     gate = attn.gate_proj.output.save()
 with model.trace(prompt):
-    heads = attn.attention_head_outputs.save()    # [batch, seq, heads, head_dim], ungated
+    heads = attn.attention_head_outputs.save()    # [batch, seq, num_heads, head_dim], ungated
     o_in = attn.o_proj.input.save()
 
 torch.testing.assert_close(o_in, heads.flatten(-2) * gate.sigmoid())
@@ -160,9 +160,9 @@ position into the attention but the causal mask, and `attention_queries` is `q_n
 ```python
 attn = model.layers[1].self_attn                  # a full block on the pinned tiny
 with model.trace(prompt):
-    qn = attn.q_norm.output.save()                # [batch, seq, heads, head_dim]
+    qn = attn.q_norm.output.save()                # [batch, seq, num_heads, head_dim]
 with model.trace(prompt):
-    q = attn.attention_queries.save()             # [batch, heads, seq, head_dim]
+    q = attn.attention_queries.save()             # [batch, num_heads, seq, head_dim]
 
 torch.testing.assert_close(q, qn.transpose(1, 2))
 ```

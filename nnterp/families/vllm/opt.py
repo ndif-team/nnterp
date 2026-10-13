@@ -45,7 +45,7 @@ def query_scale(envoy) -> float:
 
 
 def scores(self: "Attention") -> Pattern:
-    """The causal scores, ``[1, heads, query, key]``: the pre-scaled queries times the keys, later keys at ``-inf``."""
+    """The causal scores, ``[1, num_heads, query, key]``: the pre-scaled queries times the keys, later keys at ``-inf``."""
     values = self.attention_queries @ self.attention_keys.transpose(-1, -2)
     position = torch.arange(values.shape[-1], device=values.device)
     return values.masked_fill(position[None, :] > position[:, None], float("-inf"))
@@ -60,13 +60,13 @@ class Attention(Attention):
 
     attention_scores = DerivedEProperty(
         scores,
-        description="The scores entering the softmax, [1, heads, query, key], recomputed from the pre-scaled queries and the keys; prefill only, read-only",
+        description="The scores entering the softmax, [1, num_heads, query, key], recomputed from the pre-scaled queries and the keys; prefill only, read-only",
         unavailable=on_decode_step,
     )
 
     @Flat(
         "attn.inputs", select=0, heads="first", factor=query_scale,
-        description="The queries entering vLLM's attention layer times head_dim**-0.5, as transformers scales them, [1, heads, tokens, head_dim]",
+        description="The queries entering vLLM's attention layer times head_dim**-0.5, as transformers scales them, [1, num_heads, tokens, head_dim]",
     )
     def attention_queries(self, value: torch.Tensor) -> Queries:
         return value

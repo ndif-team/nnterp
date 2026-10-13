@@ -34,16 +34,16 @@ WRAPPERS = {
 ## The merger folds four patches into one image token
 
 `model.projector` is `model.visual.merger`, the vision encoder's last module: `norm` (a LayerNorm over
-`vision_hidden`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
-`4 * vision_hidden` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. So an image
+`vision_hidden_size`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
+`4 * vision_hidden_size` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. So an image
 of `t * h * w` patches (its `image_grid_thw` row) is `t * h * w / 4` image tokens, and
-`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden]`. On 0.8B the
+`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`. On 0.8B the
 merger maps 4 × 768 = 3072 to 1024; a patch is 16 pixels, so an image token covers 32 × 32 pixels.
 
 ```python
 with model.trace(prompt, images=[red, wide]):
     mask = model.vision.image_token_mask.save()
-    fed = model.projector.input.save()          # [patches, vision_hidden]
+    fed = model.projector.input.save()          # [patches, vision_hidden_size]
     features = model.vision.image_features.save()
     first = model.layers[0].input.save()
 
@@ -178,7 +178,7 @@ its 256 query dimensions followed by its 256 gate dimensions, so the first half 
 before `o_proj`:
 
 ```
-q, gate = split per head(q_proj(x))             # [..., heads, 256] each
+q, gate = split per head(q_proj(x))             # [..., num_heads, 256] each
 q = rope(q_norm(q)); k = rope(k_norm(k_proj(x))); v = v_proj(x)
 out = o_proj(attention(q, k, v).flatten() * sigmoid(gate.flatten()))
 ```
@@ -305,6 +305,6 @@ and `-L0_100`, 32768 features), Qwen3.5-9B-Base (`Qwen/SAE-Res-Qwen3.5-9B-Base-W
 `-L0_100`, 65536) and the post-trained Qwen3.5-27B (`Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50` and
 `-L0_100`, 81920), one per block, TopK with `k` 50 or 100. Their hook point is `resid_post`, a
 forward hook on the decoder block's output, which is `model.layers[i].layer_output`, on DeltaNet
-and attention blocks alike. Each `layer<i>.sae.pt` holds `W_enc` `[d_sae, hidden]`, `b_enc`,
-`W_dec` `[hidden, d_sae]` and `b_dec` in float32.
+and attention blocks alike. Each `layer<i>.sae.pt` holds `W_enc` `[d_sae, hidden_size]`, `b_enc`,
+`W_dec` `[hidden_size, d_sae]` and `b_dec` in float32.
 """

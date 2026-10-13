@@ -112,8 +112,8 @@ stream[~padded]                         # the 2304 patches
 ## The pooler makes the soft tokens
 
 After the last block the vision encoder's `pooler` zeroes the padded rows, averages each 3 × 3
-block of patches by position (`pooling_kernel_size`), multiplies by √`vision_hidden` and drops
-the padding: 2304 patches become 256 soft tokens, `[soft_tokens, vision_hidden]` flat over the
+block of patches by position (`pooling_kernel_size`), multiplies by √`vision_hidden_size` and drops
+the padding: 2304 patches become 256 soft tokens, `[soft_tokens, vision_hidden_size]` flat over the
 images. That is `model.projector.input`. A write to `tower_output` at the padded rows changes
 nothing downstream; at the patches it reaches the text model. On 26B-A4B and 31B
 (`standardize`) the pooled tokens are then shifted by `std_bias` and scaled by `std_scale`, inside
@@ -124,7 +124,7 @@ the vision encoder.
 ## `embed_vision` projects the pooled soft tokens
 
 `model.embed_vision` (the `projector`) receives the pooler's soft tokens, not `tower_output`:
-`model.projector.input` is `[soft_tokens, vision_hidden]`, flat over the images. It norms them
+`model.projector.input` is `[soft_tokens, vision_hidden_size]`, flat over the images. It norms them
 without a gain (`embedding_pre_projection_norm`) and projects them to the text model's width
 (`embedding_projection`); `vision.image_features` is `model.projector.output`, and
 `layers[0].input[vision.image_token_mask] == vision.image_features` holds exactly. On the pinned

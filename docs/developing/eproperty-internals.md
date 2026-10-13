@@ -34,13 +34,13 @@ from transformers.models.llama.modeling_llama import LlamaAttention   # after `i
 
 import nnterp
 from nnterp import StandardizedTransformer
-from nnterp.components import EProperty, INTERFACE, interface_reason
+from nnterp.components import BATCH, HEAD_DIM, HEADS, SEQ, EProperty, INTERFACE, interface_reason
 from nnterp.families import llama
 
 
 class Attention(llama.Attention):
-    @EProperty(f"source.{INTERFACE}.source.repeat_kv_0.output", description="The keys after repeat_kv, [batch, heads, seq, head_dim]", unavailable=interface_reason)
-    def expanded_keys(self, value: torch.Tensor) -> Float[Tensor, "batch heads seq head_dim"]:
+    @EProperty(f"source.{INTERFACE}.source.repeat_kv_0.output", description="The keys after repeat_kv, [batch, num_heads, seq, head_dim]", unavailable=interface_reason)
+    def expanded_keys(self, value: torch.Tensor) -> Float[Tensor, f"{BATCH} {HEADS} {SEQ} {HEAD_DIM}"]:
         return value
 
 
@@ -49,12 +49,12 @@ attn = model.layers[0].self_attn
 
 Attention.expanded_keys.key                # 'source.attention_interface_1.source.repeat_kv_0.output'
 Attention.expanded_keys.inside_forward()   # True
-Attention.expanded_keys.dims               # ('batch', 'heads', 'seq', 'head_dim')
+Attention.expanded_keys.dims               # ('batch', 'num_heads', 'seq', 'head_dim')
 "(expanded_keys): The keys after repeat_kv" in repr(attn)   # True
 
 with model.trace("Hello world there"):
-    keys = attn.attention_keys.save()       # [batch, kv_heads, seq, head_dim], read first: repeat_kv fires later
-    expanded = attn.expanded_keys.save()    # [batch, heads, seq, head_dim]
+    keys = attn.attention_keys.save()       # [batch, num_kv_heads, seq, head_dim], read first: repeat_kv fires later
+    expanded = attn.expanded_keys.save()    # [batch, num_heads, seq, head_dim]
 ```
 
 ## The nnsight side, in six facts
@@ -289,7 +289,7 @@ block.
 - `layout` and `dims` (`:127-150`) read the return annotation of the stub with
   `typing.get_type_hints(func, include_extras=True)`. The annotation is one
   of the thirty-five layout aliases, each defined in the file of the envoy that
-  serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `layer.py`,
+  serves it (`Residual = Float[Tensor, "batch seq hidden_size"]` in `layer.py`,
   `Pattern` and `Keys` in `attention.py`, `State` in `recurrent.py`,
   `Logits` in `standardized.py`):
   `get_type_hints` evaluates the string annotation (the components use

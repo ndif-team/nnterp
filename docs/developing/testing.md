@@ -129,7 +129,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 
 | method | asserts |
 |---|---|
-| `test_interior_shapes` | q `[b, heads, s, qk_head_dim]`, k/v `[b, kv_heads, s, ·]`, scores and pattern `[b, heads, s, s]`, head outputs `[b, s, heads, ·]`; `pattern_from_scores(scores)` equals the pattern (overridable: GPT-OSS adds the sink column) |
+| `test_interior_shapes` | q `[b, num_heads, s, qk_head_dim]`, k/v `[b, num_kv_heads, s, ·]`, scores and pattern `[b, num_heads, s, s]`, head outputs `[b, s, num_heads, ·]`; `pattern_from_scores(scores)` equals the pattern (overridable: GPT-OSS adds the sink column) |
 | `test_interior_writes_are_causal` | zeroing each of the five interior values moves the logits; with head outputs zeroed the contribution is the same at every position |
 | `test_interior_in_place_edits` | zeroing scores and head outputs in place moves the logits; queries too, or raise `RuntimeError` matching `view` with `REFUSES_IN_PLACE_QKV` |
 
@@ -373,11 +373,11 @@ setting left padding and a pad token): `tokenizer_kwargs` are applied;
 `add_prefix_false_tokenizer`; the hacky (pear) implementation agrees;
 `Prompt.from_strings` names targets and detects collisions;
 `get_target_probs` reduces per target and per layer; `Prompt.run` with
-`next_token_probs_unsqueeze` gives `[1, 1, vocab]` distributions;
+`next_token_probs_unsqueeze` gives `[1, 1, vocab_size]` distributions;
 `run_prompts` batched equals one by one and refuses mismatched targets.
 
 `tests/test_nnsight_utils.py` (6 tests, same fixture): `get_token_activations`
-is `[num_layers, num_prompts, hidden]` on the CPU and equals
+is `[num_layers, num_prompts, hidden_size]` on the CPU and equals
 `layer_output[:, -1]`; it reads inside a caller's tracer; a positive index
 needs right padding; batched and one-at-a-time collection agree; the
 session collector agrees; `compute_next_token_probs` rows sum to one.

@@ -22,9 +22,9 @@ from nnsight.intervention.interleaver import OutOfOrderError
 from PIL import Image
 from suite import PROMPT, contributions
 
-from nnterp import StandardizedTransformer, Unavailable
+from nnterp import StandardizedTransformer, Unavailable, axis_size
 from nnterp.components import (
-    ImageFeatures, ImageScatter, ImageTokenMask, Patches, Pattern, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id,
+    HIDDEN, VISION_HIDDEN, ImageFeatures, ImageScatter, ImageTokenMask, Patches, Pattern, Vision, VisionAttention, VisionLayer, VisionMlp, image_token_id,
 )
 from nnterp.components.vision import scatter_call, scatter_host
 
@@ -44,8 +44,8 @@ IMAGE_WIDE = Image.fromarray((np.random.RandomState(1).rand(48, 96, 3) * 255).as
 
 
 def as_rows(native):
-    """A patch embedding's native output as rows of patches, ``[images, patches, vision_hidden]``: a convolution's grid
-    flattened, a packed tower's ``[patches, vision_hidden]`` with a leading 1."""
+    """A patch embedding's native output as rows of patches, ``[images, patches, vision_hidden_size]``: a convolution's grid
+    flattened, a packed tower's ``[patches, vision_hidden_size]`` with a leading 1."""
     if native.dim() == 4:
         return native.flatten(2).transpose(1, 2)
     return native.unsqueeze(0) if native.dim() == 2 else native
@@ -201,7 +201,7 @@ class VisionSuite:
         """The tower's sizes (off its config, whatever it calls them) are the ones its modules run with."""
         vision, layer = model.vision, model.vision.layers[0]
         assert vision.num_layers == len(vision.layers)
-        assert layer.input_layernorm._module.weight.shape[-1] == vision.hidden_size
+        assert layer.input_layernorm._module.weight.shape[-1] == vision.vision_hidden_size
         assert (layer.self_attn.num_heads, layer.self_attn.head_dim) == (vision.num_heads, vision.head_dim)
         assert layer.mlp.intermediate_size == vision.intermediate_size
         assert vision.patch_size == model.config.vision_config.patch_size
@@ -273,6 +273,18 @@ class VisionSuite:
         assert type(layer.self_attn).attention_probabilities.layout is Pattern
         assert type(model.vision).patch_embeddings.layout is Patches
 
+    def test_axis_size_tells_the_towers_width_from_the_text_models(self, model, clean):
+        """A tower value's ``vision_hidden_size`` resolves on `Vision`; ``image_features``' ``hidden_size``, served on
+        the same envoy, walks past it to the root's, the text width."""
+        vision = model.vision
+        assert type(vision).tower_output.dims[-1] == VISION_HIDDEN and type(vision).image_features.dims[-1] == HIDDEN
+        assert axis_size(vision, VISION_HIDDEN) == vision.vision_hidden_size
+        assert all(axis_size(layer, VISION_HIDDEN) == vision.vision_hidden_size for layer in (vision.layers[:1] if vision.num_layers else []))
+        assert axis_size(vision, HIDDEN) == model.hidden_size == clean["features"].shape[-1]
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            out = vision.tower_output.save()
+        assert out.shape[-1] == axis_size(vision, VISION_HIDDEN)
+
     # -- where the image meets the text model ------------------------------------------
 
     def test_image_token_mask_is_the_image_tokens(self, model, clean):
@@ -327,7 +339,7 @@ class VisionSuite:
             patches = model.vision.patch_embeddings.save()
             model.vision.image_features[:] = 0
             first = model.layers[0].input.save()
-        assert patches.shape[-1] == model.vision.hidden_size
+        assert patches.shape[-1] == model.vision.vision_hidden_size
         assert (first[clean["mask"]] == 0).all()
 
     def test_generate_encodes_the_images_before_the_prompt_call(self, model):
@@ -378,7 +390,7 @@ class VisionSuite:
                 out = layer.layer_output.save()
                 text_native = model.layers[0].input.save() if i == 0 else None
                 text = model.layers[0].layer_input.save() if i == 0 else None
-            assert isinstance(stream, Patches) and isinstance(out, Patches) and out.shape[-1] == model.vision.hidden_size
+            assert isinstance(stream, Patches) and isinstance(out, Patches) and out.shape[-1] == model.vision.vision_hidden_size
             assert stream.shape == out.shape and torch.equal(stream, as_rows(native))
             torch.testing.assert_close(stream + attn + mlp, out)
             if i == 0:
@@ -408,7 +420,7 @@ class VisionSuite:
             # An embedder with no blocks (Gemma 4 unified) ends no stream: its tower_output is what the projector receives.
             last = vision.layers[-1].layer_output.save() if vision.num_layers else model.projector.input.save()
             out = vision.tower_output.save()
-        assert isinstance(patches, Patches) and patches.shape[1:] == (self.patches_of(model, [IMAGE]), vision.hidden_size)
+        assert isinstance(patches, Patches) and patches.shape[1:] == (self.patches_of(model, [IMAGE]), vision.vision_hidden_size)
         assert torch.equal(patches, as_rows(native))
         norm = getattr(vision, "norm", None)
         torch.testing.assert_close(out, norm._module(last) if norm is not None else last)

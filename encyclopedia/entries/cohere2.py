@@ -82,7 +82,7 @@ torch.equal(first[mask], features)        # True: the scatter
 ```
 """ + _PIXEL_SHUFFLE + """
 On Aya Vision the shuffled vector is normed first: `model.projector.layernorm`, a LayerNorm with a
-bias over the `4 × vision_hidden` channels, precedes `linear_1`.
+bias over the `4 × vision_hidden_size` channels, precedes `linear_1`.
 
 ## 169 image tokens per tile
 

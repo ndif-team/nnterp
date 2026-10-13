@@ -67,16 +67,16 @@ class Attention(Attention):
 
     attention_probabilities = DerivedEProperty(
         probabilities,
-        description="The attention pattern, [1, heads, query, key], recomputed from the queries and keys with the sink; prefill only, read-only",
+        description="The attention pattern, [1, num_heads, query, key], recomputed from the queries and keys with the sink; prefill only, read-only",
         unavailable=on_decode_step,
     )
 
-    @ValueHeads("attn.inputs", select=2, heads="first", description="The values entering vLLM's attention layer, [1, kv_heads, tokens, v_head_dim]")
+    @ValueHeads("attn.inputs", select=2, heads="first", description="The values entering vLLM's attention layer, [1, num_kv_heads, tokens, v_head_dim]")
     def attention_values(self, value: torch.Tensor) -> Values:
         """This step's values as the attention layer receives them, after ``attention_value_scale``."""
         return value
 
-    @ValueHeads("attn.output", heads="last", description="The per-head outputs before the output projection, [1, tokens, heads, v_head_dim]")
+    @ValueHeads("attn.output", heads="last", description="The per-head outputs before the output projection, [1, tokens, num_heads, v_head_dim]")
     def attention_head_outputs(self, value: torch.Tensor) -> HeadOutputs:
         """Each head's output as the attention layer returns it, before the output projection mixes them."""
         return value

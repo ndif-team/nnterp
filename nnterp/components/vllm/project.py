@@ -8,13 +8,13 @@ import torch
 
 
 def project(model: Any, hidden: torch.Tensor, head: Any, bias: torch.Tensor | None = None) -> torch.Tensor:
-    """Logits for ``hidden`` (``[..., hidden]``): the model's final norm, then vLLM's logits processor over ``head``.
+    """Logits for ``hidden`` (``[..., hidden_size]``): the model's final norm, then vLLM's logits processor over ``head``.
 
     ``head`` is the module whose weight unembeds: ``lm_head`` where the model
     has one, the embedding where the two are tied into it (Gemma, Cohere).
     ``bias`` is the head's own, for a model whose logits add one (GPT-J, Phi).
     The processor applies the model's logit scale and softcap. The norm's
-    kernel takes ``[rows, hidden]``, and a norm that takes the residual
+    kernel takes ``[rows, hidden_size]``, and a norm that takes the residual
     beside the hidden state hands back a pair.
     """
     rows = hidden.reshape(-1, hidden.shape[-1]).contiguous()

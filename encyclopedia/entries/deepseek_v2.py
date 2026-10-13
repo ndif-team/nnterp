@@ -99,7 +99,7 @@ torch.testing.assert_close(x + attn + mlp, out)
 
 ## Latent attention: queries and keys are wider than values
 
-`attention_queries` and `attention_keys` are `[batch, heads, seq, qk_head_dim]`, with
+`attention_queries` and `attention_keys` are `[batch, num_heads, seq, qk_head_dim]`, with
 `qk_head_dim = qk_nope_head_dim + qk_rope_head_dim` (128 + 64 = 192); `attention_values` and
 `attention_head_outputs` are `head_dim` wide, which nnterp reads from `v_head_dim` (128). The
 config's own `head_dim` key is `qk_rope_head_dim`, the rotary width, which no served value has.

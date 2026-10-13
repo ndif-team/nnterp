@@ -46,7 +46,7 @@ with model.trace("The Eiffel Tower is in"):
     pattern = model.layers[2].self_attn.attention_probabilities.save()   # fires inside block 2 ...
     resid = model.layers[2].layer_output.save()                           # ... before the block returns
     logits = model.logits.save()
-# resid [batch, seq, hidden]; pattern [batch, heads, seq, seq]; logits [batch, seq, vocab]
+# resid [batch, seq, hidden_size]; pattern [batch, num_heads, seq, seq]; logits [batch, seq, vocab_size]
 ```
 
 Every line after the load is a fact one of the three layers establishes; the
@@ -217,7 +217,7 @@ family's subclass (`families/jetmoe.py`, `Mlp.intermediate_size`).
 
 ### The base envoys
 
-`Standard` (`components/standard.py:61-96`) is the `Envoy` subclass every
+`Standard` (`components/standard.py:129-164`) is the `Envoy` subclass every
 component derives from: `values()` collects the `EProperty`s of a class,
 base classes first (`:62-65`), `support()` maps each to its reason on
 this instance (`:67-69`), and `sourced` (`:50`, `False` here) is the flag a

@@ -8,7 +8,7 @@ the attention before the shared interface, so the base `Attention` holds, as on
 (``task="image-text-to-text"``), whose text stack sits at ``model.language_model``.
 
 The wrapper's Qwen ViT ``model.visual`` is ``vision`` (a `QwenVision`: packed,
-``[1, patches, vision_hidden]``, and in *window order*: the tower permutes the
+``[1, patches, vision_hidden_size]``, and in *window order*: the tower permutes the
 patches into attention windows at entry and restores the order after the
 merger, so the blocks' values and ``projector.output`` are in window order while
 ``vision.image_features``, read at the tower's output, is in the scatter's).

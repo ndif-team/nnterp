@@ -92,16 +92,16 @@ class Attention(Attention):
 
     attention_scores = DerivedEProperty(
         chunked_scores,
-        description="The scores entering the softmax, [1, heads, query, key], recomputed from the queries and keys; prefill only, read-only",
+        description="The scores entering the softmax, [1, num_heads, query, key], recomputed from the queries and keys; prefill only, read-only",
         unavailable=on_decode_step,
     )
 
-    @Interleaved("attn.inputs", select=0, heads="first", description="The queries entering vLLM's attention layer, [1, heads, tokens, head_dim], in transformers' channel order")
+    @Interleaved("attn.inputs", select=0, heads="first", description="The queries entering vLLM's attention layer, [1, num_heads, tokens, head_dim], in transformers' channel order")
     def attention_queries(self, value: torch.Tensor) -> Queries:
         """The queries the attention layer receives, each head's channels put back in transformers' order."""
         return pairs_first(value)
 
-    @Interleaved("attn.inputs", select=1, heads="first", description="The keys entering vLLM's attention layer, [1, kv_heads, tokens, head_dim], in transformers' channel order")
+    @Interleaved("attn.inputs", select=1, heads="first", description="The keys entering vLLM's attention layer, [1, num_kv_heads, tokens, head_dim], in transformers' channel order")
     def attention_keys(self, value: torch.Tensor) -> Keys:
         """This step's keys as the attention layer receives them, each head's channels put back in transformers' order."""
         return pairs_first(value)
@@ -110,7 +110,7 @@ class Attention(Attention):
 class Mlp(Mlp):
     """The dense MLP or the mixture of experts; its output is what the block adds, but on the shared expert."""
 
-    @Flat("output", description="What the MLP adds to the residual stream, [1, tokens, hidden]", unavailable=_not_a_block_feed_forward)
+    @Flat("output", description="What the MLP adds to the residual stream, [1, tokens, hidden_size]", unavailable=_not_a_block_feed_forward)
     def mlp_output(self, value) -> Residual:
         return value
 

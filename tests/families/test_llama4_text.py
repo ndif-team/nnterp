@@ -229,7 +229,7 @@ class TestLlama4Vision(VisionSuite):
             adapted = vision.vision_adapter.input.save()
         tiles, rows, _ = patches.shape
         assert rows == (vision.image_size // vision.patch_size) ** 2
-        assert out.shape == tower_output.shape == (tiles, rows + 1, vision.hidden_size)
+        assert out.shape == tower_output.shape == (tiles, rows + 1, vision.vision_hidden_size)
         cls = tower.layernorm_pre(tower.class_embedding + tower.positional_embedding_vlm[-1])
         torch.testing.assert_close(stream[:, -1], cls.expand(tiles, -1))
         assert torch.equal(adapted, tower_output[:, :-1])

@@ -34,7 +34,7 @@ prompt = "The Eiffel Tower is in the city of"
 lens = {}                                   # made outside the trace: a name bound inside does not survive it
 with model.trace(prompt):
     for i, layer in enumerate(model.layers):
-        lens[i] = model.project_on_vocab(layer.layer_output)[:, -1].save()   # [batch, vocab]
+        lens[i] = model.project_on_vocab(layer.layer_output)[:, -1].save()   # [batch, vocab_size]
     logits = model.logits.save()
 
 for i, row in lens.items():
@@ -54,7 +54,7 @@ does (see [Softcapping](#softcapping)).
 ```python
 LAYER = model.num_layers // 2
 with model.trace(prompt):
-    resid = model.layers[LAYER].layer_output.save()          # [batch, seq, hidden]
+    resid = model.layers[LAYER].layer_output.save()          # [batch, seq, hidden_size]
 
 model.get_topk_closest_tokens(resid[0, -1], k=5)             # one dict: the last position
 model.get_topk_closest_tokens(resid[0], k=1)                 # one dict per position
@@ -80,21 +80,21 @@ back out, so the lens on an intermediate block reads it on the same footing as t
 
 ## Parallel streams (DeepSeek-V4)
 
-DeepSeek-V4's `layer_output` is `[batch, seq, streams, hidden]`, several parallel copies
+DeepSeek-V4's `layer_output` is `[batch, seq, streams, hidden_size]`, several parallel copies
 of the stream, and the model reads them out through `hc_head`, a learned weighting of the
 streams, before `norm` and `lm_head`. The family's `project_on_vocab` does the same, so the
 canonical pattern above runs unchanged there, its lens has the stream axis collapsed
-(`[batch, seq, vocab]`), and the wiring check passes exactly. A lens on one stream is a
+(`[batch, seq, vocab_size]`), and the wiring check passes exactly. A lens on one stream is a
 different readout, which the model never makes:
 
 ```python
 model = StandardizedTransformer("deepseek-ai/DeepSeek-V4-Flash", dispatch=True)
 
 with model.trace(prompt):
-    resid = model.layers[3].layer_output.save()                   # [batch, seq, streams, hidden]
+    resid = model.layers[3].layer_output.save()                   # [batch, seq, streams, hidden_size]
 
-default = model.project_on_vocab(resid)                            # through hc_head: [batch, seq, vocab]
-stream_0 = model.lm_head(model.norm(resid[:, :, 0]))                # stream 0 alone: [batch, seq, vocab]
+default = model.project_on_vocab(resid)                            # through hc_head: [batch, seq, vocab_size]
+stream_0 = model.lm_head(model.norm(resid[:, :, 0]))                # stream 0 alone: [batch, seq, vocab_size]
 ```
 
 ## Variations
@@ -145,7 +145,7 @@ with model.trace(prompt):
 
 ### The lens on one sublayer's contribution
 
-`project_on_vocab` takes any `[..., hidden]` tensor, so it also reads what one
+`project_on_vocab` takes any `[..., hidden_size]` tensor, so it also reads what one
 sublayer *adds*: `model.project_on_vocab(layer.self_attn.attention_output)` or
 `model.project_on_vocab(layer.mlp.mlp_output)`. The final norm is nonlinear, so
 those do not sum to the block's lens; the linear form and the running-sum check
@@ -180,7 +180,7 @@ are in [contribution-decomposition](contribution-decomposition.md).
   padding; see [activations](../usage/activations.md).
 - The lens does not need the eager attention path. It reads module boundaries,
   so it works on an `sdpa` load; only the attention interior needs eager.
-- Reading every layer's `[batch, seq, vocab]` is `layers * seq * vocab` floats;
+- Reading every layer's `[batch, seq, vocab_size]` is `layers * seq * vocab` floats;
   index the position or take `argmax` inside the trace, as above.
 
 ## Related

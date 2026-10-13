@@ -29,8 +29,8 @@ ATTENTION_INTERIOR = [
     "attention_scores", "attention_probabilities", "attention_head_outputs",
 ]
 MLP_PATH_NOTE = ("No mlp module: final_layer_norm, fc1, activation_fn and fc2 sit on the block, and fc2.output is "
-                 "what the path adds. The path runs on the stream flattened to [batch * seq, hidden]: fc2.output "
-                 "is [batch * seq, hidden], row b * seq + t for prompt b, position t; unflatten(0, (batch, seq)) "
+                 "what the path adds. The path runs on the stream flattened to [batch * seq, hidden_size]: fc2.output "
+                 "is [batch * seq, hidden_size], row b * seq + t for prompt b, position t; unflatten(0, (batch, seq)) "
                  "is a view, so an in-place edit through it lands.")
 
 #: What the visualization draws on every pre-norm checkpoint: the attention and its pre-norm, then the MLP path,
@@ -64,7 +64,7 @@ PRE_NORM = {
     ],
     "identity": "layers[i].input + self_attn.attention_output + fc2.output.view_as(layer_output) == layer_output",
     "identity_note": "fc2.output is the MLP path's term: the block has no mlp module, and it flattens the stream to "
-                     "[batch * seq, hidden] before final_layer_norm and fc1. Exact on every pre-norm checkpoint.",
+                     "[batch * seq, hidden_size] before final_layer_norm and fc1. Exact on every pre-norm checkpoint.",
 }
 
 #: opt-350m (do_layer_norm_before false): each LayerNorm follows its add, on the stream. The attention reads the
@@ -81,7 +81,7 @@ POST_NORM = {
             "detail": "{num_heads} heads × {head_dim}, biased q/k/v",
             "stream_norm": "self_attn_layer_norm",
             "stream_norm_note": "A LayerNorm with a bias, after the attention's add: the attention reads the raw "
-                                "stream, and the MLP path reads this norm's output, flattened to [batch * seq, hidden].",
+                                "stream, and the MLP path reads this norm's output, flattened to [batch * seq, hidden_size].",
         },
         {
             "host": "fc2",
@@ -92,7 +92,7 @@ POST_NORM = {
             "host_note": MLP_PATH_NOTE,
             "stream_norm": "final_layer_norm",
             "stream_norm_note": "The block's own LayerNorm, with a bias, after the MLP path's add and the view back to "
-                                "[batch, seq, hidden]. The decoder has no final norm on this checkpoint.",
+                                "[batch, seq, hidden_size]. The decoder has no final norm on this checkpoint.",
         },
     ],
     "identity": "final_layer_norm((self_attn_layer_norm(layers[i].input + self_attn.attention_output).flatten(0, 1) "
@@ -125,7 +125,7 @@ NOTES = """
 
 ```
 h   = x + self_attn(self_attn_layer_norm(x))           # self_attn_layer_norm = input_layernorm
-f   = h.reshape(-1, hidden)                            # [batch * seq, hidden]
+f   = h.reshape(-1, hidden)                            # [batch * seq, hidden_size]
 out = (f + fc2(relu(fc1(final_layer_norm(f))))).view_as(x)
 ```
 

@@ -12,7 +12,9 @@ from torch import Tensor
 
 from .eproperty import EProperty
 from .layer import Residual
-from .standard import Standard, first_tensor, in_width, module_int, rewrap, unsized
+from .standard import (
+    BATCH, HEAD_DIM, HEADS, KEY, KV_HEADS, QK_HEAD_DIM, QUERY, SEQ, Standard, first_tensor, in_width, module_int, rewrap, unsized,
+)
 
 
 def needs_eager(envoy: Envoy) -> str | None:
@@ -28,15 +30,15 @@ def needs_eager(envoy: Envoy) -> str | None:
 INTERFACE = "attention_interface_1"
 
 #: The layouts of the interior, as transformers hands them to its attention interface: heads before tokens on
-#: the queries, keys and values; ``kv_heads`` wide under grouped-query attention; queries and keys ``qk_head_dim``
+#: the queries, keys and values; ``num_kv_heads`` wide under grouped-query attention; queries and keys ``qk_head_dim``
 #: deep and values ``head_dim`` deep (the same number outside latent attention).
-Queries = Float[Tensor, "batch heads seq qk_head_dim"]
-Keys = Float[Tensor, "batch kv_heads seq qk_head_dim"]
-Values = Float[Tensor, "batch kv_heads seq head_dim"]
+Queries = Float[Tensor, f"{BATCH} {HEADS} {SEQ} {QK_HEAD_DIM}"]
+Keys = Float[Tensor, f"{BATCH} {KV_HEADS} {SEQ} {QK_HEAD_DIM}"]
+Values = Float[Tensor, f"{BATCH} {KV_HEADS} {SEQ} {HEAD_DIM}"]
 #: A pattern over the tokens: the scores entering the softmax and the probabilities leaving it.
-Pattern = Float[Tensor, "batch heads query key"]
+Pattern = Float[Tensor, f"{BATCH} {HEADS} {QUERY} {KEY}"]
 #: Each head's output before they are concatenated and projected, tokens before heads.
-HeadOutputs = Float[Tensor, "batch seq heads head_dim"]
+HeadOutputs = Float[Tensor, f"{BATCH} {SEQ} {HEADS} {HEAD_DIM}"]
 
 #: The reason a family gives for an interface value it has not mapped onto its own arithmetic.
 NOT_ON_INTERFACE = (
@@ -46,7 +48,7 @@ NOT_ON_INTERFACE = (
 
 
 def seq_first(value: torch.Tensor) -> torch.Tensor:
-    """``[batch, heads, seq, head_dim]`` <-> ``[batch, seq, heads, head_dim]``, as a view.
+    """``[batch, num_heads, seq, head_dim]`` <-> ``[batch, seq, num_heads, head_dim]``, as a view.
 
     The standard layout of ``attention_head_outputs`` is what the shared
     interface returns, sequence before heads. A family whose own arithmetic
@@ -139,7 +141,7 @@ class Attention(Standard):
 
     @EProperty(f"source.{INTERFACE}.inputs", select=1, description="The queries entering attention", unavailable=interface_reason)
     def attention_queries(self, value: torch.Tensor) -> Queries:
-        """The queries the attention interface receives, ``[batch, heads, seq, head_dim]``.
+        """The queries the attention interface receives, ``[batch, num_heads, seq, head_dim]``.
 
         After the query projection and, on a family with rotary embeddings,
         after they are applied. Assign to replace them. In-place edits reach
@@ -151,7 +153,7 @@ class Attention(Standard):
 
     @EProperty(f"source.{INTERFACE}.inputs", select=2, description="The keys entering attention", unavailable=interface_reason)
     def attention_keys(self, value: torch.Tensor) -> Keys:
-        """The keys the attention interface receives, ``[batch, kv_heads, seq, qk_head_dim]``.
+        """The keys the attention interface receives, ``[batch, num_kv_heads, seq, qk_head_dim]``.
 
         Before ``repeat_kv``, so under grouped-query attention the head axis
         is ``num_kv_heads`` wide. Assign to replace them; in-place edits reach
@@ -161,7 +163,7 @@ class Attention(Standard):
 
     @EProperty(f"source.{INTERFACE}.inputs", select=3, description="The values entering attention", unavailable=interface_reason)
     def attention_values(self, value: torch.Tensor) -> Values:
-        """The values the attention interface receives, ``[batch, kv_heads, seq, head_dim]``.
+        """The values the attention interface receives, ``[batch, num_kv_heads, seq, head_dim]``.
 
         Before ``repeat_kv``, like the keys. Assign to replace them; in-place
         edits reach the model except on GPT-2 (see `attention_queries`).
@@ -170,7 +172,7 @@ class Attention(Standard):
 
     @EProperty(f"source.{INTERFACE}.source.nn_functional_softmax_0.input", description="The attention scores entering the softmax, masked", unavailable=interface_reason)
     def attention_scores(self, value: torch.Tensor) -> Pattern:
-        """The scaled, masked scores entering the softmax, ``[batch, heads, query, key]``.
+        """The scaled, masked scores entering the softmax, ``[batch, num_heads, query, key]``.
 
         ``softmax(attention_scores)`` is ``attention_probabilities`` up to the
         dtype cast. Assign to replace them; in-place edits reach the model.
@@ -199,7 +201,7 @@ class Attention(Standard):
         unavailable=interface_reason,
     )
     def attention_probabilities(self, value: torch.Tensor) -> Pattern:
-        """The attention pattern, ``[batch, heads, query, key]``.
+        """The attention pattern, ``[batch, num_heads, query, key]``.
 
         The post-softmax probabilities as the values are mixed with them: in
         the model's dtype, and with an attention sink's column already dropped.
@@ -214,10 +216,10 @@ class Attention(Standard):
 
     @EProperty(f"source.{INTERFACE}.output", select=0, description="The per-head outputs before the output projection", unavailable=interface_reason)
     def attention_head_outputs(self, value: torch.Tensor) -> HeadOutputs:
-        """Each head's output before they are concatenated and projected, ``[batch, seq, heads, head_dim]``.
+        """Each head's output before they are concatenated and projected, ``[batch, seq, num_heads, head_dim]``.
 
         What the attention interface returns; the module reshapes it to
-        ``[batch, seq, hidden]`` and applies the output projection to get
+        ``[batch, seq, hidden_size]`` and applies the output projection to get
         ``attention_output``. Assign to replace it, or edit it in place: the
         interface returns a contiguous tensor on most families and a plain
         transposed view on GPT-2, and torch accepts in-place edits on both.

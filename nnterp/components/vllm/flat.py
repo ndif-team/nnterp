@@ -15,9 +15,9 @@ from ..eproperty import EProperty
 def batched(rows: torch.Tensor, head_dim: int | None = None, heads_first: bool = False) -> torch.Tensor:
     """``[tokens, ...]`` as a private ``[1, tokens, ...]`` copy; with ``head_dim``, the last axis split into heads.
 
-    ``[tokens, heads * head_dim]`` (or ``[tokens, heads, head_dim]``, where a
-    module keeps its heads apart) becomes ``[1, tokens, heads, head_dim]``, or
-    ``[1, heads, tokens, head_dim]`` with ``heads_first``.
+    ``[tokens, num_heads * head_dim]`` (or ``[tokens, num_heads, head_dim]``, where a
+    module keeps its heads apart) becomes ``[1, tokens, num_heads, head_dim]``, or
+    ``[1, num_heads, tokens, head_dim]`` with ``heads_first``.
     """
     view = rows.clone().unsqueeze(0)
     if head_dim is None:
@@ -58,8 +58,8 @@ class Flat(EProperty):
     against the rows this request has before it is swapped in.
 
     Args:
-        heads: For a ``[tokens, heads * head_dim]`` tensor, where the head
-            axis goes: ``"first"`` serves ``[1, heads, tokens, head_dim]``
+        heads: For a ``[tokens, num_heads * head_dim]`` tensor, where the head
+            axis goes: ``"first"`` serves ``[1, num_heads, tokens, head_dim]``
             (the queries, keys and values), ``"last"`` ``[1, tokens, heads,
             head_dim]`` (the head outputs). The width of a head is the
             ``head_size`` of the module the key names, vLLM's attention layer.

@@ -41,17 +41,17 @@ from .attention import Attention, HeadOutputs, Keys, Queries, Values
 from .eproperty import EProperty, Unavailable
 from .layer import Layer
 from .mlp import Mlp
-from .standard import Standard, blocks_support, first_tensor, rewrap
+from .standard import BATCH, HIDDEN, IMAGES, IMAGE_TOKENS, PATCHES, SEQ, VISION_HIDDEN, Standard, blocks_support, first_tensor, rewrap
 
 #: A vision tower's stream: the tower's own batch (one row per image or crop) by its tokens (the patches,
-#: with CLIP's CLS token first), ``vision_hidden`` wide. The tower blocks' ``layer_output``,
+#: with CLIP's CLS token first), ``vision_hidden_size`` wide. The tower blocks' ``layer_output``,
 #: ``attention_output``, ``mlp_output``, and the tower's ``patch_embeddings`` and ``tower_output``.
-Patches = Float[Tensor, "images patches vision_hidden"]
+Patches = Float[Tensor, f"{IMAGES} {PATCHES} {VISION_HIDDEN}"]
 #: Which positions of the text batch hold an image token: ``vision.image_token_mask``.
-ImageTokenMask = Bool[Tensor, "batch seq"]
+ImageTokenMask = Bool[Tensor, f"{BATCH} {SEQ}"]
 #: What the text model receives at the image tokens, flat over every image token of the batch in row-major
-#: (scatter) order, the text model's ``hidden`` wide: ``vision.image_features``.
-ImageFeatures = Float[Tensor, "image_tokens hidden"]
+#: (scatter) order, the text model's ``hidden_size`` wide: ``vision.image_features``.
+ImageFeatures = Float[Tensor, f"{IMAGE_TOKENS} {HIDDEN}"]
 
 
 def image_token_id(config: Any) -> int | None:
@@ -135,7 +135,7 @@ def no_tower_run(envoy: Any) -> str | None:
 
 
 def as_patches(value: torch.Tensor) -> torch.Tensor:
-    """A tower's stream as `Patches`: a packed tower's ``[patches, vision_hidden]`` gets a leading images axis of 1 (a view)."""
+    """A tower's stream as `Patches`: a packed tower's ``[patches, vision_hidden_size]`` gets a leading images axis of 1 (a view)."""
     return value.unsqueeze(0) if value.dim() == 2 else value
 
 
@@ -178,7 +178,7 @@ class VisionLayer(Layer):
 
     @EProperty(key="input", description="The tower's stream entering the block", unavailable=no_tower_run)
     def layer_input(self, value: torch.Tensor) -> Patches:
-        """The tower's stream entering this block, ``[images, patches, vision_hidden]``, before any of its norms.
+        """The tower's stream entering this block, ``[images, patches, vision_hidden_size]``, before any of its norms.
 
         The block's first argument, with a packed tower's leading 1 (as
         ``layer_output``); a view: assign or edit in place.
@@ -191,7 +191,7 @@ class VisionLayer(Layer):
 
     @EProperty(key="output", description="The tower's stream leaving the block", unavailable=no_tower_run)
     def layer_output(self, value: Any) -> Patches:
-        """The tower's stream leaving this block, ``[images, patches, vision_hidden]``: a view; assign or edit in place."""
+        """The tower's stream leaving this block, ``[images, patches, vision_hidden_size]``: a view; assign or edit in place."""
         return as_patches(first_tensor(value))
 
     @layer_output.postprocess
@@ -207,7 +207,7 @@ class VisionAttention(Attention):
 
     @EProperty(key="output", description="What the attention adds to the tower's stream", unavailable=no_tower_run)
     def attention_output(self, value: Any) -> Patches:
-        """The attention sublayer's contribution to the tower's stream, ``[images, patches, vision_hidden]``."""
+        """The attention sublayer's contribution to the tower's stream, ``[images, patches, vision_hidden_size]``."""
         return as_patches(first_tensor(value))
 
     @attention_output.postprocess
@@ -220,7 +220,7 @@ class VisionMlp(Mlp):
 
     @EProperty(key="output", description="What the MLP adds to the tower's stream", unavailable=no_tower_run)
     def mlp_output(self, value: Any) -> Patches:
-        """The MLP sublayer's contribution to the tower's stream, ``[images, patches, vision_hidden]``."""
+        """The MLP sublayer's contribution to the tower's stream, ``[images, patches, vision_hidden_size]``."""
         return as_patches(first_tensor(value))
 
     @mlp_output.postprocess
@@ -245,10 +245,15 @@ class Vision(Standard):
     ``layers[0].input[image_token_mask] == image_features``. Both need an image
     to reach the model (`no_images`).
 
-    The sizes (`num_layers`, `hidden_size`, `num_heads`, `head_dim`,
+    The sizes (`num_layers`, `vision_hidden_size`, `num_heads`, `head_dim`,
     `intermediate_size`, `patch_size`, `image_size`) are read off the tower's
     own config, the plain spellings SigLIP's and CLIP's use; a tower that
-    spells one its own way overrides the property on a subclass.
+    spells one its own way overrides the property on a subclass. The tower's
+    width is a different quantity from the text model's ``hidden_size`` and
+    is named apart, so `axis_size` on ``image_features`` (text width, served
+    here) walks past the tower to the root; ``num_heads``, ``head_dim``,
+    ``num_layers`` and ``intermediate_size`` keep the plain names and shadow
+    the root's on purpose, because the tower's values want the tower's numbers.
 
     Attributes:
         layers: The tower's blocks, each a `VisionLayer`.
@@ -266,7 +271,7 @@ class Vision(Standard):
         return len(self.layers)
 
     @property
-    def hidden_size(self) -> int:
+    def vision_hidden_size(self) -> int:
         return self._module.config.hidden_size
 
     @property
@@ -275,8 +280,8 @@ class Vision(Standard):
 
     @property
     def head_dim(self) -> int:
-        """Width of one head: the config's ``head_dim`` when it says, else ``hidden_size // num_heads``."""
-        return getattr(self._module.config, "head_dim", None) or self.hidden_size // self.num_heads
+        """Width of one head: the config's ``head_dim`` when it says, else ``vision_hidden_size // num_heads``."""
+        return getattr(self._module.config, "head_dim", None) or self.vision_hidden_size // self.num_heads
 
     @property
     def intermediate_size(self) -> int:
@@ -310,9 +315,9 @@ class Vision(Standard):
 
     @EProperty("patch_embed.output", description="The patch embedding's output, one row per patch", unavailable=no_tower_run)
     def patch_embeddings(self, value: torch.Tensor) -> Patches:
-        """The patch embedding's output, ``[images, patches, vision_hidden]``, patches in raster order.
+        """The patch embedding's output, ``[images, patches, vision_hidden_size]``, patches in raster order.
 
-        On a convolution, which returns ``[images, vision_hidden, rows,
+        On a convolution, which returns ``[images, vision_hidden_size, rows,
         columns]``, a view of it with the grid flattened, so in-place edits
         land; on a linear patch embedding (Llama 4, Gemma 4), its output.
         Assign a tensor of the same shape to replace it. Position embeddings,
@@ -327,7 +332,7 @@ class Vision(Standard):
 
     @EProperty(key="output", description="The last block's stream after the tower's final norm, before any pooling or adapter", unavailable=no_tower_run)
     def tower_output(self, value: Any) -> Patches:
-        """The last block's stream after the final norm where the tower has one (`norm`), ``[images, patches, vision_hidden]``.
+        """The last block's stream after the final norm where the tower has one (`norm`), ``[images, patches, vision_hidden_size]``.
 
         Before any pooling, CLS dropping or adapter: the tower's
         ``last_hidden_state``, which a tower that returns something after
@@ -347,7 +352,7 @@ class Vision(Standard):
 
     @EProperty(image_scatter, select=scattered_argument, description="The image features the text model receives at the image tokens, flat over them", unavailable=no_image_features)
     def image_features(self, value: torch.Tensor) -> ImageFeatures:
-        """The image features the text model receives, ``[image_tokens, hidden]``, flat over every image token of the batch.
+        """The image features the text model receives, ``[image_tokens, hidden_size]``, flat over every image token of the batch.
 
         Read at the scatter: the tensor the wrapper's forward writes into the
         token embeddings at the image tokens in row-major order (`ImageScatter`),
@@ -461,9 +466,9 @@ class QwenVisionAttention(VisionAttention):
 class QwenVision(Vision):
     """The Qwen ViT (Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3.5): packed, its merger inside, at ``model.visual``.
 
-    The tower runs on ``[patches, vision_hidden]``, every image's patches
+    The tower runs on ``[patches, vision_hidden_size]``, every image's patches
     concatenated, so its stream values are `Patches` with 1 in the images
-    axis, ``[1, patches, vision_hidden]``, and its blocks' attention is a
+    axis, ``[1, patches, vision_hidden_size]``, and its blocks' attention is a
     `QwenVisionAttention`.
 
     The processor cuts each image into ``patch_size`` squares (two frames
@@ -482,7 +487,7 @@ class QwenVision(Vision):
     merger has run, so ``projector.input`` and ``projector.output`` are read
     before ``tower_output``.
 
-    Sizes, off the vision config: ``hidden_size`` is the tower's width
+    Sizes, off the vision config: ``vision_hidden_size`` is the tower's width
     (``embed_dim`` on Qwen2-VL, whose config's ``hidden_size`` is the merger's
     output width), ``num_heads``, ``intermediate_size`` (Qwen2-VL's is
     ``embed_dim * mlp_ratio``), ``patch_size``, ``spatial_merge_size`` and
@@ -491,7 +496,7 @@ class QwenVision(Vision):
     """
 
     @property
-    def hidden_size(self) -> int:
+    def vision_hidden_size(self) -> int:
         config = self._module.config
         return getattr(config, "embed_dim", None) or config.hidden_size
 
@@ -503,7 +508,7 @@ class QwenVision(Vision):
     def intermediate_size(self) -> int:
         config = self._module.config
         size = getattr(config, "intermediate_size", None)
-        return size if size else int(self.hidden_size * config.mlp_ratio)
+        return size if size else int(self.vision_hidden_size * config.mlp_ratio)
 
     image_size = property(variable_resolution)
 
@@ -523,7 +528,7 @@ class PixtralVision(Vision):
 
     The convolution runs on the batch padded to its largest image, each image
     is cropped to its own grid, and the grids are flattened and concatenated
-    into ``[1, all patches, vision_hidden]`` before ``ln_pre``; the blocks
+    into ``[1, all patches, vision_hidden_size]`` before ``ln_pre``; the blocks
     attend under a block-diagonal mask, so no patch sees another image's. So
     `Patches` has a leading 1 here, and ``patch_embeddings`` is that packed
     row as it enters ``ln_pre`` (the convolution's own output, ``patch_embed.output``,
@@ -540,7 +545,7 @@ class PixtralVision(Vision):
 
     @EProperty("ln_pre.input", description="Every image's patch embeddings packed in one row, entering the pre-norm", unavailable=no_tower_run)
     def patch_embeddings(self, value: torch.Tensor) -> Patches:
-        """Every image's patch embeddings, ``[1, all patches, vision_hidden]``, image after image, each in raster order.
+        """Every image's patch embeddings, ``[1, all patches, vision_hidden_size]``, image after image, each in raster order.
 
         What enters ``ln_pre``: the convolution's output cropped per image and
         concatenated. Assign a tensor of the same shape to replace it.

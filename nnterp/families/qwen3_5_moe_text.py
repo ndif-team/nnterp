@@ -10,7 +10,7 @@ default) builds ``Qwen3_5MoeForCausalLM`` out of it, ``task="image-text-to-text"
 wrapper, whose text stack sits at ``model.language_model``; ``RENAME`` carries both.
 
 On the wrapper the Qwen ViT ``model.visual`` is ``vision`` (a `QwenVision`: packed,
-``[1, patches, vision_hidden]``, with a learned ``pos_embed`` added after ``patch_embed``
+``[1, patches, vision_hidden_size]``, with a learned ``pos_embed`` added after ``patch_embed``
 and no deepstack), its blocks ``vision.layers``; its ``merger`` is ``projector``.
 """
 

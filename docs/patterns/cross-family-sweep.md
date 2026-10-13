@@ -124,14 +124,14 @@ device_map="auto"` to `StandardizedTransformer` like any `TransformersModel`.
 ### A per-family metric on the same prompt set
 
 Replace the single prompt with a list in each invoke; the saved log-probabilities are then
-`[prompts, vocab]` and the KL a vector. A list is left-padded, so the last position
+`[prompts, vocab_size]` and the KL a vector. A list is left-padded, so the last position
 is every prompt's last token.
 
 ### Layouts hold across the table
 
 Every value has one layout on every family (`attention_probabilities` is
-`[batch, heads, query, key]`, `attention_head_outputs` is
-`[batch, seq, heads, head_dim]`), so a metric written once indexes correctly
+`[batch, num_heads, query, key]`, `attention_head_outputs` is
+`[batch, seq, num_heads, head_dim]`), so a metric written once indexes correctly
 everywhere. Sizes differ: read `model.num_heads`, `model.head_dim`,
 `model.hidden_size` off the model, not off a config key, since the key differs by
 family (`n_head`, `num_attention_heads`).

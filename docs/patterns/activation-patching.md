@@ -42,7 +42,7 @@ assert len(ids) == 1, model.tokenizer.convert_ids_to_tokens(ids)   # one token, 
 paris = ids[0]
 
 with model.trace(clean):
-    clean_resid = model.layers[LAYER].layer_output.save()           # [1, seq, hidden]
+    clean_resid = model.layers[LAYER].layer_output.save()           # [1, seq, hidden_size]
 
 with model.trace() as tracer:
     with tracer.invoke(corrupt):

@@ -13,16 +13,17 @@ from torch import Tensor
 
 from .eproperty import DerivedEProperty, EProperty
 from .recurrent import RecurrentMixer, _dispatch, _modeling_module, _name, kernel, needs_recurrent_routing, needs_torch_kernels
+from .standard import BATCH, CHANNELS, GROUPS, SEQ, STATE_DIM
 
 #: The layouts at the scan, tokens before channels. ``B`` and ``C`` are one ``state_dim`` vector per token,
 #: shared by every channel: one group. The input, the step sizes and the read are one number per channel; the
 #: decay is per channel and state dimension; the state is one ``state_dim`` vector per channel.
-ScanQK = Float[Tensor, "batch seq groups state_dim"]
-ScanValues = Float[Tensor, "batch seq channels"]
-ScanSteps = Float[Tensor, "batch seq channels"]
-ScanDecays = Float[Tensor, "batch seq channels state_dim"]
-ScanState = Float[Tensor, "batch channels state_dim"]
-ScanStates = Float[Tensor, "batch seq channels state_dim"]
+ScanQK = Float[Tensor, f"{BATCH} {SEQ} {GROUPS} {STATE_DIM}"]
+ScanValues = Float[Tensor, f"{BATCH} {SEQ} {CHANNELS}"]
+ScanSteps = Float[Tensor, f"{BATCH} {SEQ} {CHANNELS}"]
+ScanDecays = Float[Tensor, f"{BATCH} {SEQ} {CHANNELS} {STATE_DIM}"]
+ScanState = Float[Tensor, f"{BATCH} {CHANNELS} {STATE_DIM}"]
+ScanStates = Float[Tensor, f"{BATCH} {SEQ} {CHANNELS} {STATE_DIM}"]
 
 
 def _decoding(envoy: Envoy) -> bool:

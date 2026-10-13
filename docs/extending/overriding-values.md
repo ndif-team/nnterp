@@ -121,7 +121,7 @@ needs a keyword argument, is an `inputs` path: the root's `input_ids` is
 that puts it back.
 
 The path can reach an operation in the parent's forward. Llama 4's mixture of experts
-returns its output flattened to `[batch * seq, hidden]` and the block views it back
+returns its output flattened to `[batch * seq, hidden_size]` and the block views it back
 (`residual + hidden_states.view(residual.shape)`), so its `mlp_output` is that view:
 
 ```python
@@ -329,7 +329,7 @@ Families whose attention ignores `attn_implementation` (BLOOM, MPT) pass no
 
 ## Layout: `seq_first` views
 
-`attention_head_outputs` is `[batch, seq, heads, head_dim]`, what the shared interface
+`attention_head_outputs` is `[batch, seq, num_heads, head_dim]`, what the shared interface
 returns. GPT-J, MPT and Falcon keep heads first at their own operation, so the family
 serves a transposed view on read and transposes back on write. `seq_first` is its own
 inverse, so both callbacks are the same function:
@@ -346,7 +346,7 @@ def attention_head_outputs(self, value):
 ```
 
 A view keeps in-place edits landing on the model's tensor. BLOOM's `bmm` result is
-`[batch * heads, seq, head_dim]`, so its family views and transposes on read and
+`[batch * num_heads, seq, head_dim]`, so its family views and transposes on read and
 reverses both on write in the `postprocess`.
 
 ## A clone carried back by a transform

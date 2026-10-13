@@ -140,7 +140,7 @@ torch.testing.assert_close(x + attn + mlp, out)
 ```
 
 On a Mamba block the middle term is `model.layers[i].linear_attn.attention_output`, the
-`out_proj` output of the mixer, the same `[batch, seq, hidden]` layout.
+`out_proj` output of the mixer, the same `[batch, seq, hidden_size]` layout.
 
 ## Loading: route the kernels
 
@@ -214,7 +214,7 @@ query heads over one key/value head.
 attn = model.layers[1].self_attn
 with model.trace(prompt):
     q_raw = attn.source.self_q_proj_0.output.save()
-    q = attn.attention_queries.save()          # [batch, heads, seq, head_dim]
+    q = attn.attention_queries.save()          # [batch, num_heads, seq, head_dim]
 
 b, s, _ = q_raw.shape
 assert torch.equal(q_raw.view(b, s, -1, model.head_dim).transpose(1, 2), q)

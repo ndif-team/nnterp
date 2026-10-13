@@ -87,7 +87,7 @@ On Scout and Maverick the vision encoder is 34 blocks of 1408 wide, 16 heads of 
 ## The CLS token is the last row
 
 The tower appends its `class_embedding` after the 576 patches, so every `vision.layers[i]` value
-is `[tiles, 577, vision_hidden]` with the CLS at index `-1`, and `patch_embeddings` is the 576
+is `[tiles, 577, vision_hidden_size]` with the CLS at index `-1`, and `patch_embeddings` is the 576
 patches alone. `layernorm_post` norms all 577 rows; the tower then drops the CLS, so
 `vision.tower_output[:, -1]` reaches nothing: on the pinned tiny checkpoint a write to it leaves
 the logits bit-identical, and a write to `vision.tower_output[:, :-1]` changes them. Select the
@@ -102,7 +102,7 @@ into one row (`pixel_shuffle_ratio` 0.5) and runs a two-layer MLP with a GELU af
 
 ```python
 with model.trace(prompt, images=[image]):
-    out = model.vision.tower_output.save()              # [tiles, 577, vision_hidden]
+    out = model.vision.tower_output.save()              # [tiles, 577, vision_hidden_size]
     read = model.vision.vision_adapter.input.save()
     shuffled = model.vision.vision_adapter.output.save()
 
@@ -213,7 +213,7 @@ BLOCK = {
         },
     ],
     "identity_note": "Exact on every block of the pinned tiny checkpoint, dense and mixture. mlp_output is the block's "
-                     ".view(residual.shape) of the feed-forward's output, which a mixture returns flattened to [batch * seq, hidden].",
+                     ".view(residual.shape) of the feed-forward's output, which a mixture returns flattened to [batch * seq, hidden_size].",
 }
 
 #: Notes on the model-level strip, by node.
@@ -251,9 +251,9 @@ torch.equal(x + attn + mlp, out)    # True
 
 ## `mlp_output` is the block's view, not the module's output
 
-A mixture returns `(out, router_logits)` with `out` flattened to `[batch * seq, hidden]`, and the
+A mixture returns `(out, router_logits)` with `out` flattened to `[batch * seq, hidden_size]`, and the
 block views it back into the residual's shape before the add. `mlp_output` is read at that view,
-`[batch, seq, hidden]` on every block, and an in-place edit of it lands on the mixture's own output
+`[batch, seq, hidden_size]` on every block, and an in-place edit of it lands on the mixture's own output
 tensor; `layers[i].mlp.output[0]` is the flat tensor. The view is an operation of the block's
 forward, read after the attention has returned, so the family's `Layer` is `sourced`: nnterp
 instruments the block's forward when the envoy is built.
@@ -274,7 +274,7 @@ mixture also runs its shared expert on every token. The router keeps the largest
 others to `-inf` and takes a sigmoid (`SCORING` `"sigmoid"`), so a token's score is between 0 and 1
 for its expert and 0 for the rest. Each expert's *input* is multiplied by its score, every expert
 runs on every token, and the routed sum is added in place to the shared expert's output. So
-`router_logits` (the router's projection, `[batch, seq, experts]`), `expert_indices` (its top 1),
+`router_logits` (the router's projection, `[batch, seq, num_experts]`), `expert_indices` (its top 1),
 `routed_output` (the sum over experts) and `shared_expert_output` (a copy, whose edits are carried
 back) are served, and `expert_weights` and `expert_outputs` are unavailable.
 

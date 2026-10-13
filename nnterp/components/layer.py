@@ -11,7 +11,7 @@ from jaxtyping import Float
 from torch import Tensor
 
 from .eproperty import EProperty
-from .standard import Standard, first_tensor, rewrap
+from .standard import BATCH, HIDDEN, SEQ, STREAMS, Standard, first_tensor, rewrap
 
 if TYPE_CHECKING:
     from .attention import Attention
@@ -19,14 +19,14 @@ if TYPE_CHECKING:
     from .mlp import Mlp
 
 #: The residual stream and everything added to it: ``layer_output``, the contributions, ``token_embeddings``, a sublayer's input.
-Residual = Float[Tensor, "batch seq hidden"]
+Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]
 #: A hyper-connection residual (DeepSeek-V4): ``streams`` parallel copies of the stream, the block's own
-#: ``[batch, seq, streams, hidden]``. ``layer_output`` (and a block's input) on those families, in place of `Residual`.
-Streams = Float[Tensor, "batch seq streams hidden"]
+#: ``[batch, seq, streams, hidden_size]``. ``layer_output`` (and a block's input) on those families, in place of `Residual`.
+Streams = Float[Tensor, f"{BATCH} {SEQ} {STREAMS} {HIDDEN}"]
 #: One weight per stream and token: how much of a sublayer's output each stream receives.
-StreamWeights = Float[Tensor, "batch seq streams"]
+StreamWeights = Float[Tensor, f"{BATCH} {SEQ} {STREAMS}"]
 #: A per-token ``streams x streams`` matrix mixing the streams: entry ``[j, k]`` is what stream ``j`` gives stream ``k``.
-StreamMixing = Float[Tensor, "batch seq streams streams"]
+StreamMixing = Float[Tensor, f"{BATCH} {SEQ} {STREAMS} {STREAMS}"]
 
 
 class Layer(Standard):

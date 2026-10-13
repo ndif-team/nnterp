@@ -104,7 +104,7 @@ class Attention(Attention):
 
     @EProperty(by_alibi("attn_output_1", "flatten_0"), description=Attention.attention_head_outputs.description, unavailable=needs_eager)
     def attention_head_outputs(self, value) -> HeadOutputs:
-        if alibi(self):  # [batch * heads, seq, head_dim] -> a [batch, seq, heads, head_dim] view
+        if alibi(self):  # [batch * num_heads, seq, head_dim] -> a [batch, seq, num_heads, head_dim] view
             heads = self._module.num_heads
             return value.view(-1, heads, *value.shape[1:]).transpose(1, 2)
         return seq_first(value)

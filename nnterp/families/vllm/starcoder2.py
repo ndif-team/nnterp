@@ -3,7 +3,7 @@
 vLLM has no StarCoder2 of its own: it runs transformers' modules, so the
 tree and the block are transformers' (see
 `nnterp.components.vllm.transformers_backend`), with Llama's names, the
-stream ``[1, tokens, hidden]`` and the engine's attention layer mounted as
+stream ``[1, tokens, hidden_size]`` and the engine's attention layer mounted as
 the attention's ``attn`` child. The block is Llama's, pre-norm with the
 residual added in the block, so the contributions are the modules' outputs.
 The norms are layer norms and the MLP is ``c_fc``/``c_proj`` with no gate.

@@ -187,7 +187,7 @@ def check(model: "StandardizedTransformer") -> None:
     Raises `UnsupportedFamily` when the root lacks one of `REQUIRED` or no
     block is a `Layer`; when, on a shape-only scan (fake tensors, so nothing
     loads or computes), block 0 does not take and the blocks do not return a
-    ``[batch, seq, hidden]`` stream or the logits do not start ``[batch,
+    ``[batch, seq, hidden_size]`` stream or the logits do not start ``[batch,
     seq]``; and when the scan itself fails, naming the error. Records on each
     block whether it returns a tuple.
     """
@@ -218,7 +218,7 @@ def check(model: "StandardizedTransformer") -> None:
     if len(stream) != 3 or stream[:2] != ids.shape or seen["first"] != stream or seen["last"] != stream:
         raise _refuse(
             model,
-            f"the blocks do not pass a [batch, seq, hidden] stream (block 0 takes {list(stream)} and returns "
+            f"the blocks do not pass a [batch, seq, hidden_size] stream (block 0 takes {list(stream)} and returns "
             f"{list(seen['first'])}, the last block returns {list(seen['last'])}, for ids {list(ids.shape)})",
             _rename(),
         )

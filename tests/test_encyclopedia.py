@@ -463,7 +463,7 @@ def test_a_value_added_between_blocks_is_drawn_on_its_blocks_only():
                                    "layer_output[vision.image_token_mask] + deepstack_output")
     nodes = data["nodes"]
     assert nodes["between.value.deepstack_output"]["expr"] == "model.layers[i].deepstack_output"
-    assert nodes["between.value.deepstack_output"]["dims"] == "image_tokens hidden"
+    assert nodes["between.value.deepstack_output"]["dims"] == "image_tokens hidden_size"
     assert nodes["between.plus.deepstack_output"]["expr"] == between["identity"]
     assert nodes["between.next.deepstack_output"]["expr"] == "model.layers[i+1].input"
     # a family without `between` has no such key or node

@@ -87,7 +87,7 @@ class Vision(Vision):
     projection (``projector.input``), both over the padded patches,
     ``[images, max_soft_tokens, mm_embed_dim]``.
     ``image_features`` is read at the wrapper's scatter, after the padded rows
-    are stripped. ``num_layers`` is 0; ``hidden_size`` is ``mm_embed_dim`` and
+    are stripped. ``num_layers`` is 0; ``vision_hidden_size`` is ``mm_embed_dim`` and
     ``patch_size`` the merged patch the embedder sees (``model_patch_size``).
     """
 
@@ -96,7 +96,7 @@ class Vision(Vision):
         return 0
 
     @property
-    def hidden_size(self) -> int:
+    def vision_hidden_size(self) -> int:
         return self._module.patch_dense.out_features
 
     @property

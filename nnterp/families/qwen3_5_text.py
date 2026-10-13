@@ -11,7 +11,7 @@ released checkpoint is a ``qwen3_5`` wrapper (``Qwen3_5ForConditionalGeneration`
 ``model.language_model``; ``RENAME`` carries both spellings.
 
 On the wrapper the Qwen ViT ``model.visual`` is ``vision`` (a `QwenVision`: packed,
-``[1, patches, vision_hidden]``, with a learned ``pos_embed`` added after ``patch_embed``
+``[1, patches, vision_hidden_size]``, with a learned ``pos_embed`` added after ``patch_embed``
 and no deepstack), its blocks ``vision.layers``; its ``merger`` is ``projector``.
 """
 

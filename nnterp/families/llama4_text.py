@@ -24,14 +24,14 @@ What differs from Llama, inside the attention and the feed-forward:
   block's pattern is zero across chunk boundaries.
 * **Interleaved mixture of experts.** Blocks in ``moe_layers`` carry a
   ``Llama4TextMoe`` (a shared expert plus routed experts) returning
-  ``(out, router_logits)`` with ``out`` flattened to ``[batch * seq, hidden]``;
+  ``(out, router_logits)`` with ``out`` flattened to ``[batch * seq, hidden_size]``;
   the others a dense ``Llama4TextMLP``. The block views either back into the
   residual's shape before adding it, so ``mlp_output`` is read at that view in
-  the block's forward: ``[batch, seq, hidden]`` on both kinds, and edits to it
+  the block's forward: ``[batch, seq, hidden_size]`` on both kinds, and edits to it
   reach the feed-forward's own output tensor.
   The shared expert is a ``Llama4TextMLP`` too, so it is an `Mlp`; its
   ``mlp_output`` is unavailable, since the block adds the mixture's sum.
-  The mixture is a `Moe` whose router returns dense scores ``[tokens, experts]``
+  The mixture is a `Moe` whose router returns dense scores ``[tokens, num_experts]``
   (the sigmoid of the top-k logits, zero elsewhere): the experts run on every
   token, each scaled on its *input* by its score, and the routed sum is added
   into the shared expert's output tensor in place. So ``router_logits`` (the
@@ -52,7 +52,7 @@ and ``multi_modal_projector``, the last module before the scatter, is
 blocks (``model.layers``, pre-norm, on the shared attention interface with a
 2D rotary embedding) are ``vision.layers``, and ``layernorm_post`` is
 ``vision.norm``. A CLS token is appended *after* the patches, so the tower's
-stream is ``[tiles, patches + 1, vision_hidden]`` with the CLS last (CLIP's is
+stream is ``[tiles, patches + 1, vision_hidden_size]`` with the CLS last (CLIP's is
 first); the tower drops it after ``layernorm_post``, then pixel-shuffles and
 projects the patches in ``vision.vision_adapter``, so ``vision.tower_output``
 is ``layernorm_post``'s output, CLS included, and ``projector.input`` is the
@@ -166,7 +166,7 @@ class Moe(Moe, Mlp):
 
     @TokenEProperty("router.source.forward_0.output", description=Moe.router_logits.description)
     def router_logits(self, value) -> RouterLogits:
-        """The router's projection, ``[batch, seq, experts]`` (the router is an ``nn.Linear`` whose forward calls its parent's)."""
+        """The router's projection, ``[batch, seq, num_experts]`` (the router is an ``nn.Linear`` whose forward calls its parent's)."""
         return value
 
     @TokenEProperty("router.source.torch_topk_0.output", select=1, description=Moe.expert_indices.description)
@@ -179,7 +179,7 @@ class Moe(Moe, Mlp):
 
     @TokenEProperty("source.sum_0.output", description=Moe.routed_output.description)
     def routed_output(self, value) -> Residual:
-        """The experts' outputs summed over the experts, ``[batch, seq, hidden]``: what the mixture adds into the shared expert's output."""
+        """The experts' outputs summed over the experts, ``[batch, seq, hidden_size]``: what the mixture adds into the shared expert's output."""
         return value
 
     @TokenEProperty("shared_experts.output", description="The shared expert's output (a copy, since the mixture adds the routed sum into the live tensor in place)")
@@ -204,7 +204,7 @@ class Vision(Vision):
 
     @EProperty("norm.output", description=Vision.tower_output.description, unavailable=no_tower_run)
     def tower_output(self, value) -> Patches:
-        """The last block's stream after ``layernorm_post``, ``[tiles, patches + 1, vision_hidden]``, the CLS token last.
+        """The last block's stream after ``layernorm_post``, ``[tiles, patches + 1, vision_hidden_size]``, the CLS token last.
 
         The tower then drops the CLS and runs ``vision_adapter`` on the
         patches; an assignment here reaches the adapter and the text model.

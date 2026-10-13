@@ -175,14 +175,14 @@ adjacent dimensions instead.
 
 Where `use_qk_norm` is true (GLM-4.5, 4.5-Base, 4.6, 4.7) the attention has `q_norm` and
 `k_norm`, RMSNorms over one head's 128 dimensions with one gain shared by every head, applied
-to `[batch, seq, heads, head_dim]` before the transpose and the rotary. An edit to one head's
+to `[batch, seq, num_heads, head_dim]` before the transpose and the rotary. An edit to one head's
 slice of `q_proj.output` is renormalized and loses its size; edit `attention_queries` or
 `attention_keys`, which come after the norm. GLM-4.5-Air and Air-Base have no `q_norm` or
 `k_norm`.
 
 ```python
 with model.trace(prompt):
-    normed = model.layers[1].self_attn.q_norm.output.save()   # [batch, seq, heads, head_dim]
+    normed = model.layers[1].self_attn.q_norm.output.save()   # [batch, seq, num_heads, head_dim]
 ```
 
 ## Attention

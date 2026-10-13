@@ -1,4 +1,4 @@
-"""`Standard`, the envoy every component derives from, the two helpers for tuple outputs, and the walk `support` makes over a block list."""
+"""`Standard`, the envoy every component derives from, the axis names every layout is spelled with, the two helpers for tuple outputs, and the walk `support` makes over a block list."""
 
 from __future__ import annotations
 
@@ -8,6 +8,40 @@ import torch
 from nnsight.intervention.envoy import Envoy
 
 from .eproperty import EProperty
+
+# -- axis names -----------------------------------------------------------------------
+# Every layout is composed from these. An axis that is a fact about the model is named as
+# the size attribute that holds it, so `axis_size` resolves it by name; the rest are not.
+
+#: Sizes of the model, resolved by `axis_size`: the root's, or a block's own on `Attention`, `Moe`, `StateSpace`.
+HIDDEN = "hidden_size"
+VOCAB = "vocab_size"
+HEADS = "num_heads"
+KV_HEADS = "num_kv_heads"
+HEAD_DIM = "head_dim"
+QK_HEAD_DIM = "qk_head_dim"
+EXPERTS = "num_experts"
+TOP_K = "top_k"
+#: Not facts about the model: their size is the tensor's.
+BATCH = "batch"
+SEQ = "seq"
+QUERY = "query"
+KEY = "key"
+#: A hyper-connection residual's parallel copies of the stream (DeepSeek-V4's ``hc_mult``); no envoy holds it.
+STREAMS = "streams"
+#: A recurrent mixer's heads and state sides, sized off the mixer's module; no envoy holds them.
+MIXER_HEADS = "heads"
+KEY_DIM = "key_dim"
+VALUE_DIM = "value_dim"
+STATE_DIM = "state_dim"
+GROUPS = "groups"
+CHANNELS = "channels"
+#: A vision tower's images, patches and image tokens: not facts about the model.
+IMAGES = "images"
+PATCHES = "patches"
+IMAGE_TOKENS = "image_tokens"
+#: The tower's width, a size of the model resolved on `Vision`; a different quantity from `HIDDEN`, so named apart.
+VISION_HIDDEN = "vision_hidden_size"
 
 
 def first_tensor(value: Any) -> torch.Tensor:
@@ -45,6 +79,39 @@ def unsized(envoy: Envoy, name: str) -> NotImplementedError:
     return NotImplementedError(
         f"{type(envoy._module).__name__} holds no {name} under a name {type(envoy).__name__} reads; "
         f"the family's {type(envoy).__name__} subclass overrides `{name}`"
+    )
+
+
+def axis_size(envoy: Envoy, axis: str) -> int:
+    """The size of layout axis ``axis`` on a value ``envoy`` serves.
+
+    An axis that is a fact about the model is named as the size that holds
+    it (`HIDDEN` is ``"hidden_size"``, `HEADS` ``"num_heads"``), so its size
+    is that attribute: on ``envoy`` when its class declares it (an
+    attention's ``num_heads``, a mixture's ``num_experts``), else on the
+    first envoy above it that does, up to the model's root (``hidden_size``,
+    ``vocab_size``)::
+
+        axis_size(model.layers[3], HIDDEN)          # model.hidden_size
+        axis_size(model.layers[3].self_attn, HEADS)  # this block's heads
+
+    Only an envoy's class counts (a property, the root's
+    `StandardizedProperty`), never an attribute of the wrapped module, which
+    can share a name and hold another number.
+
+    Raises:
+        ValueError: no envoy from ``envoy`` up to the root declares ``axis``:
+            it is not a fact about the model (the batch, the sequence, the
+            pattern's keys), and its size is the tensor's.
+    """
+    host = envoy
+    while host is not None:
+        if hasattr(type(host), axis):
+            return getattr(host, axis)
+        host = host.parent
+    raise ValueError(
+        f"axis {axis!r} of a value on {envoy.path or 'the model'} is not a fact about the model: "
+        "no envoy from there up to the root holds a size by that name"
     )
 
 

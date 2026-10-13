@@ -140,14 +140,14 @@ q_half = q[..., perm]          # in rotate_half's order
 
 Where `use_qk_norm` is true (Command R+ and Command R+ 08-2024), the attention has `q_norm` and
 `k_norm`, `CohereLayerNorm`s over each head's `head_dim` vector whose weight is
-`[heads, head_dim]`: every head has its own gain. They act on the projections before the rotary,
-on `[batch, seq, heads, head_dim]` tensors, and `attention_queries` and `attention_keys` are read
+`[num_heads, head_dim]`: every head has its own gain. They act on the projections before the rotary,
+on `[batch, seq, num_heads, head_dim]` tensors, and `attention_queries` and `attention_keys` are read
 after both. Command R and Command R 08-2024 have no `q_norm` or `k_norm`.
 
 ```python
 with model.trace(prompt):
     normed = model.layers[1].self_attn.q_norm.output.save()
-    # [batch, seq, heads, head_dim], before the rotary
+    # [batch, seq, num_heads, head_dim], before the rotary
 ```
 
 ## Attention

@@ -18,9 +18,9 @@ Three standard values give every decoder block the same three tensors:
 | `model.layers[i].self_attn.attention_output` | what the attention sublayer adds to the residual stream |
 | `model.layers[i].mlp.mlp_output` | what the MLP sublayer adds to the residual stream |
 
-All three are `[batch, seq, hidden]`, the `Residual` layout (`Layer.layer_output.layout is
+All three are `[batch, seq, hidden_size]`, the `Residual` layout (`Layer.layer_output.layout is
 nnterp.components.Residual`; see [layouts](layouts.md)), except `layer_output` on DeepSeek-V4,
-whose residual is several parallel streams, `[batch, seq, streams, hidden]`
+whose residual is several parallel streams, `[batch, seq, streams, hidden_size]`
 ([below](#where-the-families-differ)).
 
 `attention_output` and `mlp_output` are *contributions*, defined by one identity that
@@ -66,7 +66,7 @@ Read the four in forward order within one trace: the block's `input`, then the a
 then the MLP, then the block's output.
 
 On a vision-language wrapper the tower's blocks carry the same three values over the patch
-stream (`model.vision.layers[i].layer_output`, `[images, patches, vision_hidden]`), and the
+stream (`model.vision.layers[i].layer_output`, `[images, patches, vision_hidden_size]`), and the
 text blocks' values hold the image positions too: `layer_output[vision.image_token_mask]`
 is the image rows, `layer_output[~vision.image_token_mask]` the text rows
 ([vision.md](vision.md#image-positions-and-text-positions)).
@@ -273,10 +273,10 @@ parameters' initial values; `tests/families/test_doge.py` and `test_zaya.py` che
 gated forms on copies with the parameters moved.
 
 **DeepSeek-V4: parallel streams.** The residual between DeepSeek-V4's blocks is `hc_mult`
-parallel copies of the stream, `[batch, seq, streams, hidden]` (the model copies the
+parallel copies of the stream, `[batch, seq, streams, hidden_size]` (the model copies the
 embedding into each before block 0). `layer_output` and `layers[i].input` are that tensor,
 the block's own (layout `Streams`), and writes to them land natively. Each sublayer reads one
-weighted collapse of the streams and returns `[batch, seq, hidden]`; a hyper-connection
+weighted collapse of the streams and returns `[batch, seq, hidden_size]`; a hyper-connection
 (`attn_hc`, `ffn_hc`) weights that output into each stream and mixes the streams it is added
 to. `attention_output` and `mlp_output` are the sublayers' own outputs, unscaled, as on
 Gemma-4, and the weights are four values on the family's `Layer`:
@@ -321,7 +321,7 @@ On the pinned tiny checkpoint (`yujiepan/deepseek-v4-bf16-tiny-random`, `dtype=t
 the stream form is exact (difference `0.0`) on every block. The attention's output reaches
 `layer_output` mixed by `mlp_comb` as well, so what a sublayer "adds" is not one tensor in
 stream space. The plain `input + attention_output + mlp_output` is not the output: it
-adds `[batch, seq, hidden]` to `[batch, seq, streams, hidden]`, which raises a shape error
+adds `[batch, seq, hidden_size]` to `[batch, seq, streams, hidden_size]`, which raises a shape error
 at most prompt lengths and broadcasts silently into a wrong tensor when the prompt is one
 token or exactly `hc_mult` tokens long.
 
@@ -343,8 +343,8 @@ token or exactly `hc_mult` tokens long.
   parallel block sums `x + attn + mlp` in another order, so there it holds to rounding even
   in float32 (within 2e-5 absolute on Pythia-70m and CodeGen-350M), and within a few ulps
   in bf16 (Falcon). Compare with a tolerance in the block's dtype.
-- **`layer_output` is rank 4 on DeepSeek-V4.** `resid[:, -1]` is `[batch, streams, hidden]`
-  there, and anything written for a `[batch, seq, hidden]` stream (a probe, a hand-written
+- **`layer_output` is rank 4 on DeepSeek-V4.** `resid[:, -1]` is `[batch, streams, hidden_size]`
+  there, and anything written for a `[batch, seq, hidden_size]` stream (a probe, a hand-written
   lens) runs and answers per stream. Check `out.dim()` or the family's layout where a recipe
   crosses families; `model.project_on_vocab` collapses the streams the way the model does.
 - **Nothing bound inside a trace survives without `.save()`**, including the value you read

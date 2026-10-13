@@ -33,7 +33,7 @@ class Layer(Layer):
     returns_tuple = True
 
     def skip_with(self, hidden: torch.Tensor) -> None:
-        """Skip this block, handing ``hidden`` (``[1, tokens, hidden]``) on as its residual stream, with the ``None`` the block returns beside it."""
+        """Skip this block, handing ``hidden`` (``[1, tokens, hidden_size]``) on as its residual stream, with the ``None`` the block returns beside it."""
         self.skip((hidden.squeeze(0), None))
 
 
@@ -42,7 +42,7 @@ class Attention(Attention):
 
     @Flat(
         "../post_attention_layernorm.output",
-        description="What the attention adds to the residual stream: the post-attention norm's output, [1, tokens, hidden]",
+        description="What the attention adds to the residual stream: the post-attention norm's output, [1, tokens, hidden_size]",
     )
     def attention_output(self, value) -> Residual:
         return value
@@ -53,7 +53,7 @@ class Mlp(Mlp):
 
     @Flat(
         "../post_feedforward_layernorm.output",
-        description="What the MLP adds to the residual stream: the post-feedforward norm's output, [1, tokens, hidden]",
+        description="What the MLP adds to the residual stream: the post-feedforward norm's output, [1, tokens, hidden_size]",
     )
     def mlp_output(self, value) -> Residual:
         return value

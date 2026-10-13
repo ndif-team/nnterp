@@ -101,7 +101,7 @@ class TestGemma4UnifiedVision(VisionSuite):
 
     def test_sizes_are_the_towers(self, model):
         vision, config = model.vision, model.config.vision_config
-        assert (vision.num_layers, vision.hidden_size, vision.patch_size) == (0, config.mm_embed_dim, config.model_patch_size)
+        assert (vision.num_layers, vision.vision_hidden_size, vision.patch_size) == (0, config.mm_embed_dim, config.model_patch_size)
         for name in ("num_heads", "head_dim", "intermediate_size"):
             with pytest.raises(Unavailable, match="encoder-free"):
                 getattr(vision, name)
@@ -170,7 +170,7 @@ def test_the_12b_names_bind_on_meta():
     model = StandardizedTransformer("google/gemma-4-12B", tokenizer=StandardizedTransformer(TEXT_REPO).tokenizer)
     assert model.family is gemma4_unified_text and type(model._module).__name__ == "Gemma4UnifiedForConditionalGeneration"
     assert model.vision is model.get("model.embed_vision") and model.projector is model.get("model.embed_vision.multimodal_embedder")
-    assert (model.vision.hidden_size, model.vision.patch_size) == (3840, 48)
+    assert (model.vision.vision_hidden_size, model.vision.patch_size) == (3840, 48)
     assert model.vision.patch_embed._module.in_features == 48 * 48 * 3
     assert model.projector._module.embedding_projection.out_features == model.hidden_size == config.text_config.hidden_size
     assert model.vision.support() == {} and not any(name.startswith("vision.") for name in model.support())

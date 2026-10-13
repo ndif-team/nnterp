@@ -53,7 +53,7 @@ from pygments.lexers import PythonLexer  # noqa: E402
 
 import nnterp  # noqa: E402  (import nnterp before any transformers.models module)
 from nnterp import StandardizedTransformer, Unavailable  # noqa: E402
-from nnterp.components import Moe, RecurrentMixer, Standard  # noqa: E402
+from nnterp.components import Moe, RecurrentMixer, Residual, Standard  # noqa: E402
 from nnterp.components.moe import SHARED_NAMES  # noqa: E402
 from nnterp.components.standard import values as class_values  # noqa: E402
 from nnterp.components.vision import Vision, scatter_host  # noqa: E402
@@ -90,7 +90,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "post-norms": ("Post-norms only", "Each sublayer is normed after, not before: it reads the raw stream, and the stream receives the post-norm's output."),
     "residual-inside-module": ("Residual inside the module", "A sublayer adds the residual itself; the contribution is the tensor before the add."),
     "scaled-residual-adds": ("Scaled residual adds", "A multiplier sits between a sublayer and the stream, or scales the whole block."),
-    "hyper-connections": ("Hyper-connections", "Several parallel residual streams; layer_output is [batch, seq, streams, hidden]."),
+    "hyper-connections": ("Hyper-connections", "Several parallel residual streams; layer_output is [batch, seq, streams, hidden_size]."),
     "own-attention-arithmetic": ("Own attention arithmetic", "No shared attention interface; the interior is mapped onto the family's own ops."),
     "attention-sink": ("Attention sink", "A learned logit joins the softmax; pattern rows sum to less than one."),
     "sink-scaled-heads": ("Sink-scaled heads", "A learned per-head sink joins the softmax and the head outputs are scaled by the mass the real keys kept; the pattern's rows still sum to one."),
@@ -143,7 +143,7 @@ QUIRKS: dict[str, tuple[str, str]] = {
     # vision-language checkpoint's page adds its tower's and its wrapper's slugs from the rest.
     "vision": ("Vision-language", "Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model."),
     "cls-token": ("CLS token", "The vision encoder's stream carries a class token beside the patches (CLIP's first, Llama 4's last), so the patch axis is one longer than the patch grid."),
-    "packed-tower": ("Packed vision encoder", "Every image's patches run in one row, [1, all patches, vision_hidden]; the processor's grid sizes split it."),
+    "packed-tower": ("Packed vision encoder", "Every image's patches run in one row, [1, all patches, vision_hidden_size]; the processor's grid sizes split it."),
     "variable-resolution": ("Variable resolution", "The vision encoder takes images of any resolution, so vision.image_size raises Unavailable; each image's grid is in the processor's output."),
     "padded-patches": ("Padded patches", "Each image's patches are padded to a fixed row count; the padded rows run through the vision encoder, masked as keys where it attends, so they are rows of its values."),
     "tiled-images": ("Tiled images", "The processor cuts an image into crops or tiles, each a row of the vision encoder's batch."),
@@ -159,7 +159,7 @@ VISION_QUIRKS = ("cls-token", "packed-tower", "variable-resolution", "padded-pat
 #: The task a vision-language checkpoint loads with, and the config model_types transformers maps to it.
 IMAGE_TASK = "image-text-to-text"
 IMAGE_TEXT_TO_TEXT = MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING_NAMES
-TOWER_SIZE_NAMES = ("num_layers", "hidden_size", "num_heads", "head_dim", "intermediate_size", "patch_size", "image_size")
+TOWER_SIZE_NAMES = ("num_layers", "vision_hidden_size", "num_heads", "head_dim", "intermediate_size", "patch_size", "image_size")
 #: Sizes only some vision encoders' envoys define (the Qwen ViT's `QwenVision`), shown after the others where the class has them.
 TOWER_OWN_SIZE_NAMES = ("spatial_merge_size", "window_size")
 #: What the strip's embed node adds on a vision-language checkpoint.
@@ -920,7 +920,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                                            f"`{post['name']}` and the collapse `{reads}` reads.")
             nodes[f"collapse.{key}"] = node(
                 "collapse", f"{base}.{reads}.input",
-                f"`{hc}`'s collapse of the streams, a weighted sum over the stream axis, `[batch, seq, hidden]`: what "
+                f"`{hc}`'s collapse of the streams, a weighted sum over the stream axis, `[batch, seq, hidden_size]`: what "
                 f"`{reads}` reads. No standard value of its own.")
             nodes[f"post.{key}"] = value_node(post, "stream weights")
             nodes[f"post.{key}"]["extra"] = f"Each stream receives `{spec['contribution']}` scaled by its entry here."
@@ -954,7 +954,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                                      "The residual stream entering the block, a tensor on every family." if stream == "residual stream"
                                      else f"The {stream} entering the block.",
                                      layout="Residual" if stream == "residual stream" else entering.get("layout"),
-                                     dims="batch seq hidden" if stream == "residual stream" else entering.get("dims"))
+                                     dims=Residual.dim_str if stream == "residual stream" else entering.get("dims"))
     nodes["stream.output"] = value_node(layer_output, stream)
     drawn_shapes = []
     for s, shape in enumerate(shapes):
@@ -1057,7 +1057,7 @@ def between_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any],
         nodes[f"between.next.{value}"] = node(
             stream, "model.layers[i+1].input",
             f"The stream entering the next block: `layer_output` with `{value}` added at the positions `{mask}` marks.",
-            layout="Residual", dims="batch seq hidden")
+            layout="Residual", dims=Residual.dim_str)
         out.append({"value": value, "mask": mask, "label": spec["label"], "blocks": blocks, "identity": identity})
     return out
 
@@ -1130,7 +1130,7 @@ def strip_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
         nodes["strip.readout"] = node(
             "stream readout", readout["expr"],
             f"`{readout['class']}`, a native module under its own name: it collapses the last block's streams into the "
-            "one `[batch, seq, hidden]` stream the final norm reads.")
+            "one `[batch, seq, hidden_size]` stream the final norm reads.")
     for key, note in strip.items():
         if f"strip.{key}" in nodes:
             nodes[f"strip.{key}"]["extra"] = note

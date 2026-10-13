@@ -2,7 +2,7 @@
 
 vLLM has no OLMo 2 of its own: it runs transformers' modules, so the tree
 and the block are transformers' (see `nnterp.components.vllm.transformers_backend`),
-with Llama's names, the stream ``[1, tokens, hidden]`` and the engine's
+with Llama's names, the stream ``[1, tokens, hidden_size]`` and the engine's
 attention layer mounted as the attention's ``attn`` child. The block is
 post-norm, ``x + post_attention_layernorm(attn(x))`` and then ``+
 post_feedforward_layernorm(mlp(x))``, so the contributions point at the
@@ -33,7 +33,7 @@ class Attention(Attention):
     @Flat(
         "../post_attention_layernorm.output",
         batch=True,
-        description="What the attention adds to the residual stream: the post-attention norm's output, [1, tokens, hidden]",
+        description="What the attention adds to the residual stream: the post-attention norm's output, [1, tokens, hidden_size]",
     )
     def attention_output(self, value) -> Residual:
         return value
@@ -45,7 +45,7 @@ class Mlp(Mlp):
     @Flat(
         "../post_feedforward_layernorm.output",
         batch=True,
-        description="What the MLP adds to the residual stream: the post-feedforward norm's output, [1, tokens, hidden]",
+        description="What the MLP adds to the residual stream: the post-feedforward norm's output, [1, tokens, hidden_size]",
     )
     def mlp_output(self, value) -> Residual:
         return value

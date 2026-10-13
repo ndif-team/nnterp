@@ -31,12 +31,12 @@ model = StandardizedTransformer("meta-llama/Llama-3.1-8B", attn_implementation="
 attn = model.layers[10].self_attn
 
 with model.trace("The Eiffel Tower is in the city of"):
-    q = attn.attention_queries.save()          # [batch, heads, seq, head_dim]      after RoPE
-    k = attn.attention_keys.save()             # [batch, kv_heads, seq, head_dim]   before repeat_kv
-    v = attn.attention_values.save()           # [batch, kv_heads, seq, head_dim]
-    scores = attn.attention_scores.save()      # [batch, heads, query, key]         masked and scaled
-    pattern = attn.attention_probabilities.save()   # [batch, heads, query, key]    what the values are mixed with
-    heads = attn.attention_head_outputs.save() # [batch, seq, heads, head_dim]      before concat and o_proj
+    q = attn.attention_queries.save()          # [batch, num_heads, seq, head_dim]      after RoPE
+    k = attn.attention_keys.save()             # [batch, num_kv_heads, seq, head_dim]   before repeat_kv
+    v = attn.attention_values.save()           # [batch, num_kv_heads, seq, head_dim]
+    scores = attn.attention_scores.save()      # [batch, num_heads, query, key]         masked and scaled
+    pattern = attn.attention_probabilities.save()   # [batch, num_heads, query, key]    what the values are mixed with
+    heads = attn.attention_head_outputs.save() # [batch, seq, num_heads, head_dim]      before concat and o_proj
     attn.attention_head_outputs[:, :, 7] = 0   # ablate head 7 of block 10
     logits = model.logits.save()
 ```
@@ -50,12 +50,12 @@ sum to one and are lower-triangular.
 
 | value | what it is | layout |
 | --- | --- | --- |
-| `attention_queries` | the queries entering the attention interface, after the query projection and, where the family has one, after the rotary embedding | `Queries`: `batch heads seq qk_head_dim` |
-| `attention_keys` | the keys entering the interface, after RoPE and before `repeat_kv`, so the head axis is `num_kv_heads` wide under grouped-query attention | `Keys`: `batch kv_heads seq qk_head_dim` |
-| `attention_values` | the values entering the interface, before `repeat_kv` | `Values`: `batch kv_heads seq head_dim` |
-| `attention_scores` | the scaled, masked scores that enter the softmax | `Pattern`: `batch heads query key` |
-| `attention_probabilities` | the pattern the values are mixed with: the dropout's output after the softmax, in the model dtype, an attention sink's column already dropped | `Pattern`: `batch heads query key` |
-| `attention_head_outputs` | what the interface returns, each head's mix of the values, before the reshape to `[batch, seq, hidden]` and the output projection | `HeadOutputs`: `batch seq heads head_dim` |
+| `attention_queries` | the queries entering the attention interface, after the query projection and, where the family has one, after the rotary embedding | `Queries`: `batch num_heads seq qk_head_dim` |
+| `attention_keys` | the keys entering the interface, after RoPE and before `repeat_kv`, so the head axis is `num_kv_heads` wide under grouped-query attention | `Keys`: `batch num_kv_heads seq qk_head_dim` |
+| `attention_values` | the values entering the interface, before `repeat_kv` | `Values`: `batch num_kv_heads seq head_dim` |
+| `attention_scores` | the scaled, masked scores that enter the softmax | `Pattern`: `batch num_heads query key` |
+| `attention_probabilities` | the pattern the values are mixed with: the dropout's output after the softmax, in the model dtype, an attention sink's column already dropped | `Pattern`: `batch num_heads query key` |
+| `attention_head_outputs` | what the interface returns, each head's mix of the values, before the reshape to `[batch, seq, hidden_size]` and the output projection | `HeadOutputs`: `batch seq num_heads head_dim` |
 
 On a Llama-style attention `attention_head_outputs.flatten(-2)` is `o_proj.input`, the
 concatenated head outputs, and `self_attn.o_proj.input` is readable under any
@@ -68,7 +68,7 @@ under latent attention and on MiMo-V2-Flash). The root's `model.num_heads`, ...
 are the config's and equal every block's except on Gemma-4, MiMo-V2-Flash and Laguna,
 whose blocks differ. Every value's layout is on the descriptor, one of the named
 aliases in `nnterp.components`: `Attention.attention_keys.layout is Keys`, and
-`Attention.attention_keys.dims` is `("batch", "kv_heads", "seq", "qk_head_dim")`.
+`Attention.attention_keys.dims` is `("batch", "num_kv_heads", "seq", "qk_head_dim")`.
 The sequence axis is 2 on the queries, keys and values, the layout transformers
 hands its interface, and 1 on the head outputs.
 
@@ -118,7 +118,7 @@ with model.trace(prompt):
     v = attn.attention_values.save()                       # untouched
 ```
 
-A written pattern must be `[batch, heads, query, key]` in the model dtype; a
+A written pattern must be `[batch, num_heads, query, key]` in the model dtype; a
 written argument must match the shape the interface expects for it. The
 model, not nnterp, reports a mismatch, from inside the forward.
 
@@ -262,7 +262,7 @@ Its rotary embedding multiplies by a float32 buffer, so on a half-precision mode
 queries (and its keys, when no cache casts them back) are served in float32. XGLM scales
 the queries by `1/sqrt(head_dim)` as it projects them, so `attention_queries` is already
 scaled and the scores are `q @ k^T` plus the mask; each of its six values is a view of the
-`[batch * heads, ...]` tensor the forward holds, so an in-place edit lands and an
+`[batch * num_heads, ...]` tensor the forward holds, so an in-place edit lands and an
 assignment is reshaped back. GPT-NeoX-Japanese folds the scale into a `baddbmm` and adds
 the mask after it.
 
@@ -275,7 +275,7 @@ before the sink column joins them, the same shape as the pattern. A plain
 `softmax(scores)` does not reproduce the pattern there; the sink does:
 
 ```python
-sinks = attn._module.sinks.to(scores.dtype)                          # [heads]
+sinks = attn._module.sinks.to(scores.dtype)                          # [num_heads]
 column = sinks.view(1, -1, 1, 1).expand(scores.shape[0], -1, scores.shape[2], 1)
 combined = torch.cat([scores, column], dim=-1)
 combined = combined - combined.max(dim=-1, keepdim=True).values
@@ -371,7 +371,7 @@ patches]`, no causal mask), with the per-tower caveats in [vision.md](vision.md#
 The values are per forward call. On a decode step the queries, the scores,
 the pattern and the head outputs have one query position, and the keys and
 values (and the pattern's key axis) are as long as the cache:
-`attention_probabilities` is `[batch, heads, 1, prompt + step]`. See
+`attention_probabilities` is `[batch, num_heads, 1, prompt + step]`. See
 [generation.md](generation.md).
 
 ## Gotchas

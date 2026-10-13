@@ -9,7 +9,8 @@ import pytest
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnterp import Unavailable
+from nnterp import Unavailable, axis_size
+from nnterp.components import HEADS as HEADS_AXIS
 from nnterp.families import laguna
 
 REPO = "hf-tiny-v2/tiny-random-LagunaForCausalLM"
@@ -86,6 +87,11 @@ class TestLagunaPerLayerHeads(FamilySuite):
         assert [layer.self_attn.num_heads for layer in model.layers] == HEADS
         assert model.num_heads == model.config.num_attention_heads == HEADS[0]
         assert all(layer.self_attn.num_kv_heads == model.num_kv_heads for layer in model.layers)
+
+    def test_axis_size_reads_each_blocks_heads(self, model):
+        """``num_heads`` on a block's attention values resolves to that block's count, not the root's."""
+        assert [axis_size(layer.self_attn, HEADS_AXIS) for layer in model.layers] == HEADS
+        assert axis_size(model.layers[-1], HEADS_AXIS) == model.num_heads == HEADS[0]  # no attention above: the root's
 
     def test_each_blocks_interior_has_its_heads(self, model):
         for layer, heads in zip(model.layers, HEADS):

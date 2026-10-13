@@ -31,9 +31,9 @@ class StandardizedVLLM(Standardized, VLLM):
     What that changes for the values:
 
     * A request is one sequence, so every value's batch axis is 1:
-      ``layer_output`` is ``[1, tokens, hidden]``, the whole prompt on the
+      ``layer_output`` is ``[1, tokens, hidden_size]``, the whole prompt on the
       prefill and one token on each decode step (``tracer.iter``).
-    * ``logits`` is this step's, ``[1, 1, vocab]``: the engine computes the
+    * ``logits`` is this step's, ``[1, 1, vocab_size]``: the engine computes the
       last position only. ``logits[:, -1]`` and ``next_token_probs`` read the
       same on both engines.
     * Values are private copies, so a saved one stays what it was read as.
@@ -97,9 +97,9 @@ class StandardizedVLLM(Standardized, VLLM):
 
     # -- whole-model values (inside a trace) ---------------------------------
 
-    @EProperty("logits", description="This step's logits, [1, 1, vocab]: the last position, before sampling")
+    @EProperty("logits", description="This step's logits, [1, 1, vocab_size]: the last position, before sampling")
     def logits(self, value: torch.Tensor) -> Logits:
-        """The logits of this request's current step, ``[1, 1, vocab]``.
+        """The logits of this request's current step, ``[1, 1, vocab_size]``.
 
         The engine computes logits for the last position only: the prompt's
         on the prefill, the newest token's on each decode step. Softcapping
@@ -112,9 +112,9 @@ class StandardizedVLLM(Standardized, VLLM):
     def logits(self, value: torch.Tensor) -> torch.Tensor:
         return value.squeeze(1)
 
-    @EProperty("logits", description="The next-token distribution, [1, vocab]; derived, read-only")
+    @EProperty("logits", description="The next-token distribution, [1, vocab_size]; derived, read-only")
     def next_token_probs(self, value: torch.Tensor) -> NextTokenProbs:
-        """The next-token distribution of this step, ``[1, vocab]``: the softmax of `logits`. Read-only."""
+        """The next-token distribution of this step, ``[1, vocab_size]``: the softmax of `logits`. Read-only."""
         return value.softmax(-1)
 
     @next_token_probs.postprocess
@@ -124,9 +124,9 @@ class StandardizedVLLM(Standardized, VLLM):
             "assign model.logits instead"
         )
 
-    @Flat("embed_tokens.output", batch=on_transformers_backend, description="The token embeddings entering the first block, [1, tokens, hidden]")
+    @Flat("embed_tokens.output", batch=on_transformers_backend, description="The token embeddings entering the first block, [1, tokens, hidden_size]")
     def token_embeddings(self, value: torch.Tensor) -> Residual:
-        """The embedding module's output, ``[1, tokens, hidden]``; what a family scales or adds positions to comes after."""
+        """The embedding module's output, ``[1, tokens, hidden_size]``; what a family scales or adds positions to comes after."""
         return value
 
     # -- the input (inside a trace) ----------------------------------------------

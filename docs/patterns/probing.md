@@ -1,6 +1,6 @@
 ---
 title: Probing
-one_liner: "`get_token_activations(model, prompts, layers, idx=-1)` gives `[layers, prompts, hidden]` at one position of every prompt under left padding; fit a closed-form linear probe per layer in torch and read the accuracy curve."
+one_liner: "`get_token_activations(model, prompts, layers, idx=-1)` gives `[layers, prompts, hidden_size]` at one position of every prompt under left padding; fit a closed-form linear probe per layer in torch and read the accuracy curve."
 tags: [patterns, probing, activations, residual-stream]
 related: [docs/usage/activations.md, docs/usage/prompt-utils.md, docs/patterns/steering.md, docs/patterns/logit-lens.md, docs/patterns/ablation.md]
 sources: [nnterp/nnsight_utils.py, nnterp/standardized.py, nnterp/components/layer.py]
@@ -43,7 +43,7 @@ texts = [t.format(w) for w in positive for t in templates] + [t.format(w) for w 
 labels = torch.tensor([1.0] * (len(positive) * len(templates)) + [0.0] * (len(negative) * len(templates)))
 
 with torch.no_grad():
-    acts = get_token_activations(model, texts, idx=-1)          # [layers, prompts, hidden], on the CPU
+    acts = get_token_activations(model, texts, idx=-1)          # [layers, prompts, hidden_size], on the CPU
 
 assert acts.shape == (model.num_layers, len(texts), model.hidden_size)
 ```
@@ -65,7 +65,7 @@ train, test = order[:split], order[split:]
 
 
 def fit_probe(x, y, ridge=1e-2):
-    """Ridge regression of the {-1, +1} label on [n, hidden]; returns a predict(x) -> bool tensor."""
+    """Ridge regression of the {-1, +1} label on [n, hidden_size]; returns a predict(x) -> bool tensor."""
     mean, std = x.mean(0), x.std(0) + 1e-6
     design = lambda z: torch.cat([(z - mean) / std, torch.ones(len(z), 1)], dim=1)
     z = design(x)
@@ -194,7 +194,7 @@ behavioral dataset; see [prompt-utils](../usage/prompt-utils.md).
   model by default, so this only fires after `tokenizer_kwargs={"padding_side": "right"}`
   or a tokenizer you set yourself.
 - Fit on training rows only, including the standardization statistics.
-- Keep the ridge (or weight decay) on and report it: with `hidden` far above the
+- Keep the ridge (or weight decay) on and report it: with `hidden_size` far above the
   number of examples, an unregularized probe fits anything.
 - Accuracy is not comparable across models of different `hidden_size` unless probe
   capacity is held fixed; report the curve, the example count and the layer-0 value.

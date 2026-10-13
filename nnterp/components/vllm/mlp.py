@@ -12,6 +12,6 @@ from .flat import Flat
 class Mlp(standard.Mlp):
     """A vLLM feed-forward module: its contribution is its output."""
 
-    @Flat("output", description="What the MLP adds to the residual stream, [1, tokens, hidden]")
+    @Flat("output", description="What the MLP adds to the residual stream, [1, tokens, hidden_size]")
     def mlp_output(self, value: torch.Tensor) -> Residual:
         return value

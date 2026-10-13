@@ -36,17 +36,17 @@ WRAPPERS = {
 ## The merger folds four patches into one image token
 
 `model.projector` is `model.visual.merger`, the vision encoder's last module: `norm` (a LayerNorm over
-`vision_hidden`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
-`4 * vision_hidden` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. An image of
+`vision_hidden_size`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
+`4 * vision_hidden_size` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. An image of
 `t * h * w` patches (its `image_grid_thw` row) is `t * h * w / 4` image tokens, and
-`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden]`. A patch is 16
+`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`. A patch is 16
 pixels, so an image token covers 32 × 32. On 4B a 448 × 448 image and a 320 × 256 one are 1104
 patches in one row and 276 image tokens; the merger maps 4 × 1024 = 4096 to 2560.
 
 ```python
 with model.trace(prompt, images=[red, wide]):
     mask = model.vision.image_token_mask.save()
-    fed = model.projector.input.save()          # [patches, vision_hidden]
+    fed = model.projector.input.save()          # [patches, vision_hidden_size]
     features = model.vision.image_features.save()
     first = model.layers[0].input.save()
 
@@ -65,7 +65,7 @@ grid, to the patch embedding before block 0, so `vision.layers[0].input` is not
 `vision_config.deepstack_visual_indexes` names three vision blocks: 5, 11 and 17 of 24 on 2B and 4B,
 8, 16 and 24 of 27 on 8B and 32B. After each, its own merger, `vision.deepstack_merger_list[k]`, reads
 that block's output and folds it to image tokens as the main merger does, with its LayerNorm after
-the 2 × 2 concatenation (over `4 * vision_hidden`) instead of before it. The mergers keep their
+the 2 × 2 concatenation (over `4 * vision_hidden_size`) instead of before it. The mergers keep their
 native path; their outputs reach the text model as `model.layers[k].deepstack_output`, added at the
 image positions after text block `k`:
 

@@ -82,7 +82,7 @@ A family whose blocks are of two kinds: Qwen3-Next, Qwen3.5 (text), Qwen3.5-MoE 
 
 ## Image features, image token mask
 
-The two values of a vision tower that say where the image enters the text model: `vision.image_token_mask` is `input_ids == image_token_id` (`[batch, seq]`, read off the model's inputs, so first in a trace), and `vision.image_features` is the tensor the wrapper scatters into the token embeddings at those positions (`[image_tokens, hidden]`, read at the scatter, assignable). `layers[0].input[vision.image_token_mask] == vision.image_features` on every wrapper. See [../usage/vision.md](../usage/vision.md#where-the-image-meets-the-text-model).
+The two values of a vision tower that say where the image enters the text model: `vision.image_token_mask` is `input_ids == image_token_id` (`[batch, seq]`, read off the model's inputs, so first in a trace), and `vision.image_features` is the tensor the wrapper scatters into the token embeddings at those positions (`[image_tokens, hidden_size]`, read at the scatter, assignable). `layers[0].input[vision.image_token_mask] == vision.image_features` on every wrapper. See [../usage/vision.md](../usage/vision.md#where-the-image-meets-the-text-model).
 
 ## Interface (`attention_interface_1`)
 
@@ -90,11 +90,11 @@ transformers' shared attention call, `attention_interface(module, query, key, va
 
 ## KV heads, grouped-query attention
 
-The number of key/value heads, `num_kv_heads`, fewer than `num_heads` under grouped-query attention and 1 under multi-query. `attention_keys` and `attention_values` are read before `repeat_kv`, so their head axis is `kv_heads` wide, except where the family expands them first (DeepSeek, Falcon's 40B layout). See [../usage/layouts.md](../usage/layouts.md).
+The number of key/value heads, `num_kv_heads`, fewer than `num_heads` under grouped-query attention and 1 under multi-query. `attention_keys` and `attention_values` are read before `repeat_kv`, so their head axis is `num_kv_heads` wide, except where the family expands them first (DeepSeek, Falcon's 40B layout). See [../usage/layouts.md](../usage/layouts.md).
 
 ## Layout, dims
 
-The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-five named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the thirty-two envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`) and `linear_attn.decays` on Kimi-Linear (`ChannelGates`). See [../usage/layouts.md](../usage/layouts.md).
+The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-five named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]`, axes `batch seq hidden_size`, in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the thirty-two envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple; a model-fact axis is named as its size, so `axis_size(envoy, axis)` reads it. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`) and `linear_attn.decays` on Kimi-Linear (`ChannelGates`). See [../usage/layouts.md](../usage/layouts.md).
 
 ## MLA (multi-head latent attention)
 
@@ -114,7 +114,7 @@ One call or assignment inside a module's forward as nnsight's `.source` names it
 
 ## Packed tower
 
-A vision tower that runs every image of the invoke as one sequence of patches (the Qwen ViT, Pixtral): its `Patches` values are `[1, all patches, vision_hidden]`, with the images axis 1, and the processor's per-image grid (`image_grid_thw`, `image_sizes`) says where one image's patches end. See [../usage/vision.md](../usage/vision.md#the-qwen-vit).
+A vision tower that runs every image of the invoke as one sequence of patches (the Qwen ViT, Pixtral): its `Patches` values are `[1, all patches, vision_hidden_size]`, with the images axis 1, and the processor's per-image grid (`image_grid_thw`, `image_sizes`) says where one image's patches end. See [../usage/vision.md](../usage/vision.md#the-qwen-vit).
 
 ## Parallel block
 
@@ -146,7 +146,7 @@ nnsight's `rename=` constructor argument, a dict of native path to alias. A key 
 
 ## Residual stream
 
-The tensor a block passes to the next, `[batch, seq, hidden]`: `layers[i].input` entering, `layer_output` leaving, each sublayer adding its contribution in between. See [../usage/residual-stream.md](../usage/residual-stream.md).
+The tensor a block passes to the next, `[batch, seq, hidden_size]`: `layers[i].input` entering, `layer_output` leaving, each sublayer adding its contribution in between. See [../usage/residual-stream.md](../usage/residual-stream.md).
 
 ## `route_kernels`, `route_delta_rule`
 
@@ -202,7 +202,7 @@ The random-weights checkpoint each family's test pins (`hf-internal-testing/tiny
 
 ## Tower, `Vision`
 
-The vision side of an image-text-to-text wrapper under its standard names: `model.vision` (a `Vision` envoy), `vision.layers[i]` (`VisionLayer`, with `VisionAttention` and `VisionMlp`), `vision.patch_embed`, `vision.norm`, the tower's sizes, `patch_embeddings` and `tower_output` (`Patches`, `[images, patches, vision_hidden]`), and the two image values. Named by the text model's family, since the family is one per `model_type` and the wrapper's `text_config.model_type` picks it. See [../usage/vision.md](../usage/vision.md#the-names).
+The vision side of an image-text-to-text wrapper under its standard names: `model.vision` (a `Vision` envoy), `vision.layers[i]` (`VisionLayer`, with `VisionAttention` and `VisionMlp`), `vision.patch_embed`, `vision.norm`, the tower's sizes, `patch_embeddings` and `tower_output` (`Patches`, `[images, patches, vision_hidden_size]`), and the two image values. Named by the text model's family, since the family is one per `model_type` and the wrapper's `text_config.model_type` picks it. See [../usage/vision.md](../usage/vision.md#the-names).
 
 ## Tuple block, `returns_tuple`
 

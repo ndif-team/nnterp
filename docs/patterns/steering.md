@@ -35,7 +35,7 @@ LAYER = model.num_layers // 2
 
 with model.trace() as tracer:
     with tracer.invoke("I love this so much"):
-        positive = model.layers[LAYER].layer_output[:, -1].save()   # [1, hidden]
+        positive = model.layers[LAYER].layer_output[:, -1].save()   # [1, hidden_size]
     with tracer.invoke("I hate this so much"):
         negative = model.layers[LAYER].layer_output[:, -1].save()
 
@@ -180,7 +180,7 @@ only its component and is the form refusal-direction work uses.
 - `layers` must be ascending in one `steer` call, and a later trace line must not
   reach back before it: reads and writes follow the forward.
 - The vector's device and dtype are handled (`vector.to(out)`), its shape is not:
-  it must be `[hidden]` or broadcast to the selected slice.
+  it must be `[hidden_size]` or broadcast to the selected slice.
 - A name bound inside a trace or a generate body does not survive it; `vector` is
   computed from saved tensors outside, as above.
 - On a hybrid (Qwen3.5), `layer_output` exists on every block, so steering a

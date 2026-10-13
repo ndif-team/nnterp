@@ -49,7 +49,7 @@ class Layer(Layer):
 class Attention(Attention):
     """Granite's attention: what reaches the residual stream is its output times ``residual_multiplier``."""
 
-    @Flat("output", factor=residual_multiplier, description="What the attention adds to the residual stream: its output times residual_multiplier, [1, tokens, hidden]")
+    @Flat("output", factor=residual_multiplier, description="What the attention adds to the residual stream: its output times residual_multiplier, [1, tokens, hidden_size]")
     def attention_output(self, value) -> Residual:
         return value
 
@@ -57,7 +57,7 @@ class Attention(Attention):
 class Mlp(Mlp):
     """Granite's MLP: what reaches the residual stream is its output times ``residual_multiplier``."""
 
-    @Flat("output", factor=residual_multiplier, description="What the MLP adds to the residual stream: its output times residual_multiplier, [1, tokens, hidden]")
+    @Flat("output", factor=residual_multiplier, description="What the MLP adds to the residual stream: its output times residual_multiplier, [1, tokens, hidden_size]")
     def mlp_output(self, value) -> Residual:
         return value
 

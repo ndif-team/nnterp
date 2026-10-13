@@ -11,7 +11,7 @@ suite_boundary = vllm_suite.boundary
 
 
 def fc2_output(layer):
-    """What the block's feed-forward path adds: ``fc2``'s output (vLLM's returns ``(output, bias)``), ``[1, tokens, hidden]``."""
+    """What the block's feed-forward path adds: ``fc2``'s output (vLLM's returns ``(output, bias)``), ``[1, tokens, hidden_size]``."""
     output = layer.fc2.output
     output = output[0] if isinstance(output, tuple) else output
     return output.reshape(1, -1, output.shape[-1]).clone()

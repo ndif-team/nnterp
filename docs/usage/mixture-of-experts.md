@@ -21,7 +21,7 @@ Nearly every mixture in transformers computes the same thing:
 
 ```
 logits, w, idx = router(x)          # w, idx: [tokens, top_k]; tokens = batch * seq
-routed = experts(x, idx, w)         # [tokens, hidden]
+routed = experts(x, idx, w)         # [tokens, hidden_size]
 out    = routed (+ shared(x))
 ```
 
@@ -41,11 +41,11 @@ moe = model.layers[1].mlp
 moe.num_experts, moe.top_k, moe.SCORING     # (4, 2, 'softmax')
 
 with model.trace("The Eiffel Tower is in the city of"):
-    logits = moe.router_logits.save()       # [batch, seq, experts]      before the softmax
+    logits = moe.router_logits.save()       # [batch, seq, num_experts]      before the softmax
     w = moe.expert_weights.save()           # [batch, seq, top_k]        what scales each slot
     idx = moe.expert_indices.save()         # [batch, seq, top_k]        int64, the chosen experts
-    slots = moe.expert_outputs.save()       # [batch, seq, top_k, hidden]
-    routed = moe.routed_output.save()       # [batch, seq, hidden]       == slots.sum(2)
+    slots = moe.expert_outputs.save()       # [batch, seq, top_k, hidden_size]
+    routed = moe.routed_output.save()       # [batch, seq, hidden_size]       == slots.sum(2)
     out = moe.mlp_output.save()             # what the block adds; == routed here (no shared expert)
 ```
 
@@ -56,10 +56,10 @@ dtype's rounding, and `routed_output + shared_expert_output` is the mixture's ou
 
 | value | what it is | layout | where it is read |
 | --- | --- | --- | --- |
-| `router_logits` | the router's logits, before the scoring and any selection bias | `RouterLogits`: `batch seq experts` | the op in the router's forward that produces them (`F_linear_0`, or the router's projection module) |
+| `router_logits` | the router's logits, before the scoring and any selection bias | `RouterLogits`: `batch seq num_experts` | the op in the router's forward that produces them (`F_linear_0`, or the router's projection module) |
 | `expert_weights` | the weight each routing slot's expert output is scaled by, after the router's normalization and scaling | `ExpertWeights`: `batch seq top_k` | the experts module's third argument |
 | `expert_indices` | the expert each slot sends the token to | `ExpertIndices`: `batch seq top_k`, int64 | the experts module's second argument |
-| `expert_outputs` | each slot's expert output times its weight, before the slots are summed | `ExpertOutputs`: `batch seq top_k hidden` | `weighted_out.view(tokens, top_k, hidden)` in transformers' `grouped_mm` / `batched_mm` experts forward |
+| `expert_outputs` | each slot's expert output times its weight, before the slots are summed | `ExpertOutputs`: `batch seq top_k hidden_size` | `weighted_out.view(tokens, top_k, hidden)` in transformers' `grouped_mm` / `batched_mm` experts forward |
 | `routed_output` | the routed experts' sum, without the shared expert | `Residual` | the experts module's output |
 | `shared_expert_output` | the shared expert's contribution, where the mixture has one | `Residual` | the shared expert's output (`shared_experts`; aliased from `shared_expert` / `shared_mlp`) |
 

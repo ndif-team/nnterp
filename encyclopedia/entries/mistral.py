@@ -39,13 +39,13 @@ WRAPPERS = {
 ## The projector merges each 2 × 2 block of patches
 
 `model.multi_modal_projector` (the `projector`) reads the last block's stream with its leading 1
-dropped: `model.projector.input` is `vision.tower_output[0]`, `[patches, vision_hidden]`
+dropped: `model.projector.input` is `vision.tower_output[0]`, `[patches, vision_hidden_size]`
 (`vision_feature_layer` is `-1`). It norms each patch (`norm`, an RMSNorm), then `patch_merger`
 cuts each image's grid into 2 × 2 blocks (`spatial_merge_size`), concatenates each block's four
-patches into one `4 * vision_hidden` vector and maps it back to `vision_hidden` with
+patches into one `4 * vision_hidden_size` vector and maps it back to `vision_hidden_size` with
 `merging_layer`, a linear without bias; `linear_1`, GELU and `linear_2` take it to the text model's
 width. So an image of `rows × columns` patches is `(rows // 2) * (columns // 2)` image tokens, and
-`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden]`.
+`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`.
 
 ```python
 with model.trace(prompt, images=[square, wide]):
@@ -91,7 +91,7 @@ side to at most 1540 pixels (`longest_edge`).
 Pixtral vision encoder. The projector is a two-layer MLP (`linear_1`, GELU, `linear_2`), one image
 token per patch, and `vision.image_features` is `model.projector.output` flattened over the
 images. The config sets `vision_feature_layer` to `-1` and `vision_feature_select_strategy` to
-`"full"`, so `model.projector.input` is `vision.tower_output`, `[1, patches, vision_hidden]`,
+`"full"`, so `model.projector.input` is `vision.tower_output`, `[1, patches, vision_hidden_size]`,
 every image's patches packed. `llava-hf/bakLlava-v1-hf` is the same wrapper class on CLIP,
 reading block -2.
 
@@ -155,7 +155,7 @@ without the CLS token (`vision_feature_layer` is `-2` on `llava-v1.6-mistral-7b-
 projector's output to the image's aspect ratio and appends `image_newline` after each row of
 patches, so `vision.image_features` has another row count than `model.projector.output`. On the
 pinned tiny checkpoint a 64 × 64 image is three rows of 576 patches, the projector returns
-`[3, 576, hidden]`, and `vision.image_features` is 1176 rows, 24 of them `image_newline`. Edit
+`[3, 576, hidden_size]`, and `vision.image_features` is 1176 rows, 24 of them `image_newline`. Edit
 `vision.image_features` for what the text model receives.
 """,
     },

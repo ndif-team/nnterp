@@ -142,10 +142,10 @@ nnterp 1.x spelling is `model.<row>[i]` (read) / `model.<row>[i] = v` (write); w
 | `GetModuleOutput = Callable[[TransformersModel, int], TraceTensor]` (`:16`) | `GetActivations = Callable[[StandardizedTransformer, int], Tensor]` (`:17`) | renamed | |
 | `get_embed_tokens :19`, `get_layers :26`, `get_num_layers :35`, `get_layer :46`, `get_layer_input :58`, `get_layer_output :70`, `get_attention :83`, `get_attention_output :95`, `get_mlp :111`, `get_mlp_output :118`, `get_logits :127`, `get_unembed_norm :138`, `get_unembed :151`, `project_on_vocab :162`, `get_next_token_probs :175`, `set_layer_output :186` | none; `layer_output(model, layer)` (`:20-22`) is the only accessor function | missing | These accepted a raw `TransformersModel`; nnterp's helpers are typed on `StandardizedTransformer` only. |
 | `ModuleAccessor` (`:203-256`) | none | missing | |
-| `get_token_activations(nn_model, prompts=None, layers=None, get_activations=None, remote=False, idx=None, tracer=None)` (`:260-316`) → `[layers, prompts, hidden]` CPU | `get_token_activations(model, prompts=None, layers=None, get_activations=None, remote=False, idx=None, tracer=None)` (`:33-75`) → same shape | same | In-tracer branch: nnterp 1.x `.to(device of layer 0 output)` (`:313-315`); nnterp leaves the value where it is (`:73-74`). Padding-side checks identical (`:25-30`). |
+| `get_token_activations(nn_model, prompts=None, layers=None, get_activations=None, remote=False, idx=None, tracer=None)` (`:260-316`) → `[layers, prompts, hidden_size]` CPU | `get_token_activations(model, prompts=None, layers=None, get_activations=None, remote=False, idx=None, tracer=None)` (`:33-75`) → same shape | same | In-tracer branch: nnterp 1.x `.to(device of layer 0 output)` (`:313-315`); nnterp leaves the value where it is (`:73-74`). Padding-side checks identical (`:25-30`). |
 | `collect_last_token_activations_session(nn_model, prompts, batch_size, layers, get_activations, remote, idx)` (`:320-378`) | same signature (`:78-101`) | same | |
 | `collect_token_activations_batched(nn_model, prompts, batch_size, layers, get_activations, remote, idx, tqdm=None, use_session=True)` (`:381-431`) | same signature (`:104-128`) | same | |
-| `compute_next_token_probs(nn_model, prompt, remote=False)` (`:434-449`) → `[prompts, vocab]` CPU | same (`:131-135`, via `model.next_token_probs`) | same | |
+| `compute_next_token_probs(nn_model, prompt, remote=False)` (`:434-449`) → `[prompts, vocab_size]` CPU | same (`:131-135`, via `model.next_token_probs`) | same | |
 
 ### 1h. `prompt_utils.py`
 
@@ -156,9 +156,9 @@ nnterp 1.x spelling is `model.<row>[i]` (read) / `model.<row>[i] = v` (write); w
 | `Prompt(prompt, target_tokens, target_strings=None)` (`:97-110`) | same dataclass (`:72-84`) | same | |
 | `Prompt.from_strings(prompt, target_strings, tokenizer)` (`:112-129`) | `Prompt.from_strings(prompt, target_strings, model_or_tokenizer)` (`:86-97`) | same | Third parameter renamed; positional use unchanged. |
 | `Prompt.has_no_collisions(ignore_targets=None) -> bool` (`:131-142`) | same (`:99-103`) | same | |
-| `Prompt.get_target_probs(probs, layer=None) -> dict[str, Tensor]` (`:144-153`), `probs` `[batch, layers, vocab]` | same (`:105-110`) | same | |
+| `Prompt.get_target_probs(probs, layer=None) -> dict[str, Tensor]` (`:144-153`), `probs` `[batch, layers, vocab_size]` | same (`:105-110`) | same | |
 | `Prompt.run(nn_model, get_probs)` (`:155-161`) | `run(model, get_probs)` (`:112-115`) | same | |
-| `next_token_probs_unsqueeze(nn_model, prompt, remote=False, **_)` → `[batch, 1, vocab]` (`:164-168`) | same (`:118-120`) | same | |
+| `next_token_probs_unsqueeze(nn_model, prompt, remote=False, **_)` → `[batch, 1, vocab_size]` (`:164-168`) | same (`:118-120`) | same | |
 | `run_prompts(nn_model, prompts, batch_size=32, get_probs_func=None, func_kwargs=None, remote=False, tqdm=tqdm)` → `{target: [prompts, layers]}` (`:171-224`) | same, but `tqdm=None` default (`:123-156`) | changed | Progress bar off by default in nnterp. |
 
 ### 1i. `rename_utils.py` (public names) and `internals.py`
@@ -208,12 +208,12 @@ nnterp 1.x spelling is `model.<row>[i]` (read) / `model.<row>[i] = v` (write); w
 
 | nnterp 1.x | nnterp | status | note |
 |---|---|---|---|
-| `logit_lens(nn_model, prompts, remote=False, return_inv_logits=False)` → `[prompts, layers, vocab]` (`interventions.py:29-67`) | none; recipe in `docs/patterns/logit-lens.md` | missing | `contributing.md:190-193` open. |
+| `logit_lens(nn_model, prompts, remote=False, return_inv_logits=False)` → `[prompts, layers, vocab_size]` (`interventions.py:29-67`) | none; recipe in `docs/patterns/logit-lens.md` | missing | `contributing.md:190-193` open. |
 | `TargetPrompt(prompt, index_to_patch)` (`:71-73`) | none | missing | |
 | `repeat_prompt(words, rel, sep, placeholder, index_to_patch)` (`:76-99`) | none | missing | |
 | `it_repeat_prompt(tokenizer, words, rel, sep, placeholder, complete_prompt, add_user_instr, use_system_prompt)` (`:102-165`) | none | missing | |
 | `TargetPromptBatch` + `from_target_prompts/from_target_prompt/from_prompts/auto` (`:169-230`) | none | missing | |
-| `patchscope_lens(nn_model, source_prompts, target_patch_prompts, layers, latents, remote)` → `[prompts, layers, vocab]` (`:234-300`) | none; recipe in `docs/patterns/activation-patching.md` | missing | |
+| `patchscope_lens(nn_model, source_prompts, target_patch_prompts, layers, latents, remote)` → `[prompts, layers, vocab_size]` (`:234-300`) | none; recipe in `docs/patterns/activation-patching.md` | missing | |
 | `patchscope_generate(nn_model, prompts, target_patch_prompt, max_length, layers, remote, max_batch_size)` → `{layer: tokens}` (`:304-355`) | none | missing | |
 | `patch_object_attn_lens(nn_model, source_prompts, target_prompts, attn_idx_patch, num_patches)` (`:358-405`) | none | missing | |
 | `steer` — not in `interventions.__all__` (`:17-25`); it is the model method | `model.steer` | same | |

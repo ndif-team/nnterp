@@ -189,7 +189,7 @@ class TestNemotronHOmniVision(VisionSuite):
             queries = model.vision.layers[0].self_attn.attention_queries.save()
             out = model.vision.layers[0].layer_output.save()
         prefix = config.num_cls_tokens + config.num_registers
-        assert out.shape == (1, prefix + self.patches_of(model, [IMAGE]), model.vision.hidden_size)
+        assert out.shape == (1, prefix + self.patches_of(model, [IMAGE]), model.vision.vision_hidden_size)
         assert queries.shape == (1, model.vision.num_heads, out.shape[1], model.vision.head_dim)
 
     def test_the_text_names_bind_through_language_model(self, model):

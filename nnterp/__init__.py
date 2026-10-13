@@ -40,7 +40,7 @@ except ImportError:  # a source tree that was never installed
 
 from .components import (
     Attention, DerivedEProperty, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard,
-    StateSpace, Unavailable, Vision, chunk_per_token, route_delta_rule, route_kernels, unavailable,
+    StateSpace, Unavailable, Vision, axis_size, chunk_per_token, route_delta_rule, route_kernels, unavailable,
 )
 from .families import UnsupportedFamily
 from .standardized import Standardized, StandardizedTransformer
@@ -49,7 +49,7 @@ from .standardized_vllm import StandardizedVLLM
 __all__ = [
     "Attention", "DerivedEProperty", "EProperty", "Layer", "LinearAttention", "Mlp", "Moe", "RecurrentMixer", "SelectiveScan",
     "Standard", "Standardized", "StandardizedTransformer", "StandardizedVLLM", "StateSpace", "Unavailable", "UnsupportedFamily", "Vision",
-    "chunk_per_token",
+    "axis_size", "chunk_per_token",
     "route_delta_rule", "route_kernels",
     "unavailable",
 ]

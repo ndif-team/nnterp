@@ -160,7 +160,7 @@ class EProperty(eproperty):
 
     @property
     def dims(self) -> tuple[str, ...] | None:
-        """The axis names of `layout`: ``("batch", "seq", "hidden")``."""
+        """The axis names of `layout`: ``("batch", "seq", "hidden_size")``."""
         layout = self.layout
         return tuple(layout.dim_str.split()) if layout is not None else None
 

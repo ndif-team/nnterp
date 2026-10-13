@@ -191,7 +191,7 @@ class RadioAttention(VisionAttention):
 
     @EProperty("../layer_scale1.output", description=VisionAttention.attention_output.description, unavailable=no_tower_run)
     def attention_output(self, value: torch.Tensor) -> Patches:
-        """What the attention adds to the tower's stream, ``[1, tokens, vision_hidden]``: its output times ``layer_scale1``."""
+        """What the attention adds to the tower's stream, ``[1, tokens, vision_hidden_size]``: its output times ``layer_scale1``."""
         return value
 
     @attention_output.postprocess
@@ -200,17 +200,17 @@ class RadioAttention(VisionAttention):
 
     @EProperty("source.transpose_0.output", description=Attention.attention_queries.description, unavailable=no_tower_run)
     def attention_queries(self, value: torch.Tensor) -> Queries:
-        """Every image's queries, ``[1, heads, tokens, head_dim]``, before any per-image split; assign or edit in place."""
+        """Every image's queries, ``[1, num_heads, tokens, head_dim]``, before any per-image split; assign or edit in place."""
         return value
 
     @EProperty("source.transpose_1.output", description=Attention.attention_keys.description, unavailable=no_tower_run)
     def attention_keys(self, value: torch.Tensor) -> Keys:
-        """Every image's keys, ``[1, heads, tokens, head_dim]``, before any per-image split; assign or edit in place."""
+        """Every image's keys, ``[1, num_heads, tokens, head_dim]``, before any per-image split; assign or edit in place."""
         return value
 
     @EProperty("source.transpose_2.output", description=Attention.attention_values.description, unavailable=no_tower_run)
     def attention_values(self, value: torch.Tensor) -> Values:
-        """Every image's values, ``[1, heads, tokens, head_dim]``, before any per-image split; assign or edit in place."""
+        """Every image's values, ``[1, num_heads, tokens, head_dim]``, before any per-image split; assign or edit in place."""
         return value
 
 
@@ -219,7 +219,7 @@ class RadioMlp(VisionMlp):
 
     @EProperty("../layer_scale2.output", description=VisionMlp.mlp_output.description, unavailable=no_tower_run)
     def mlp_output(self, value: torch.Tensor) -> Patches:
-        """What the MLP adds to the tower's stream, ``[1, tokens, vision_hidden]``: its output times ``layer_scale2``."""
+        """What the MLP adds to the tower's stream, ``[1, tokens, vision_hidden_size]``: its output times ``layer_scale2``."""
         return value
 
     @mlp_output.postprocess

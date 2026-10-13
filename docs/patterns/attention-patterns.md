@@ -1,6 +1,6 @@
 ---
 title: Attention Patterns
-one_liner: "Read `attention_probabilities` as `[batch, heads, query, key]` on any family loaded eager, score heads for entropy, previous-token and first-token behavior, and edit the pattern in place."
+one_liner: "Read `attention_probabilities` as `[batch, num_heads, query, key]` on any family loaded eager, score heads for entropy, previous-token and first-token behavior, and edit the pattern in place."
 tags: [patterns, attention, heads, source]
 related: [docs/usage/availability.md, docs/usage/loading.md, docs/patterns/ablation.md, docs/patterns/contribution-decomposition.md, docs/patterns/logit-lens.md]
 sources: [nnterp/components/attention.py, nnterp/components/eproperty.py, nnterp/families/gpt_oss.py]
@@ -16,7 +16,7 @@ read on what a head does, and the first place to look for previous-token heads,
 induction heads and attention sinks.
 
 `model.layers[i].self_attn.attention_probabilities` is that matrix on every family
-that runs transformers' eager attention, `[batch, heads, query, key]`, read after the
+that runs transformers' eager attention, `[batch, num_heads, query, key]`, read after the
 softmax and the dropout: in the model's dtype, and with an attention sink's column
 already dropped. It reaches inside the forward through nnsight `.source`, so it needs
 `attn_implementation="eager"`. Those two facts are the whole per-family story; the
@@ -34,9 +34,9 @@ attention_blocks = [i for i, layer in enumerate(model.layers) if getattr(layer, 
 LAYER = attention_blocks[len(attention_blocks) // 2]      # num_layers // 2 can be a linear block on a hybrid
 
 with model.trace(prompt):
-    pattern = model.layers[LAYER].self_attn.attention_probabilities.save()   # [batch, heads, query, key]
+    pattern = model.layers[LAYER].self_attn.attention_probabilities.save()   # [batch, num_heads, query, key]
 
-heads = pattern[0]                                                # [heads, query, key]: one heatmap per head
+heads = pattern[0]                                                # [num_heads, query, key]: one heatmap per head
 tokens = [model.tokenizer.decode(t) for t in model.tokenizer(prompt).input_ids]   # axis labels, both axes
 
 assert pattern.shape[1] == model.num_heads
@@ -57,7 +57,7 @@ Reading it anyway raises `nnterp.Unavailable` with the same reason, at that line
 
 ## Per-head metrics
 
-All three are one line on the saved tensor, `[batch, heads]` each:
+All three are one line on the saved tensor, `[batch, num_heads]` each:
 
 ```python
 entropy = -(pattern * (pattern + 1e-12).log()).sum(-1).mean(-1)      # low: sharp heads
@@ -80,7 +80,7 @@ blocks have one *outside* the trace, as `attention_blocks` above does, then stac
 ```python
 with model.trace(prompt):
     patterns = torch.stack([model.layers[i].self_attn.attention_probabilities
-                            for i in attention_blocks]).save()      # [blocks, batch, heads, query, key]
+                            for i in attention_blocks]).save()      # [blocks, batch, num_heads, query, key]
 ```
 
 On a non-hybrid `attention_blocks` is every block; the same code runs. The

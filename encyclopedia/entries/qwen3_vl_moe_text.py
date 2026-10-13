@@ -34,17 +34,17 @@ WRAPPERS = {
 ## The merger folds four patches into one image token
 
 `model.projector` is `model.visual.merger`, the vision encoder's last module: `norm` (a LayerNorm over
-`vision_hidden`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
-`4 * vision_hidden` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. An image of
+`vision_hidden_size`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
+`4 * vision_hidden_size` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. An image of
 `t * h * w` patches (its `image_grid_thw` row) is `t * h * w / 4` image tokens, and
-`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden]`. A patch is 16
+`vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`. A patch is 16
 pixels, so an image token covers 32 × 32. The merger maps 4 × 1152 = 4608 to 2048 on 30B-A3B and to
 4096 on 235B-A22B.
 
 ```python
 with model.trace(prompt, images=[red, wide]):
     mask = model.vision.image_token_mask.save()
-    fed = model.projector.input.save()          # [patches, vision_hidden]
+    fed = model.projector.input.save()          # [patches, vision_hidden_size]
     features = model.vision.image_features.save()
     first = model.layers[0].input.save()
 
@@ -63,7 +63,7 @@ grid, to the patch embedding before block 0, so `vision.layers[0].input` is not
 `vision_config.deepstack_visual_indexes` names three vision blocks, 8, 16 and 24 of 27, on every
 checkpoint. After each, its own merger, `vision.deepstack_merger_list[k]`, reads that block's output and
 folds it to image tokens as the main merger does, with its LayerNorm after the 2 × 2 concatenation
-(over `4 * vision_hidden`) instead of before it. The mergers keep their native path; their outputs reach
+(over `4 * vision_hidden_size`) instead of before it. The mergers keep their native path; their outputs reach
 the text model as `model.layers[k].deepstack_output`, added at the image positions after text block `k`:
 
 ```python
@@ -207,7 +207,7 @@ torch.testing.assert_close(weights, top.values / top.values.sum(-1, keepdim=True
 
 The experts are one fused module, `experts`, each a SwiGLU `moe_intermediate_size` wide (768 on
 30B-A3B, 1536 on 235B-A22B); the config's `intermediate_size` (6144, 12288) is a dense width no block
-uses. `expert_outputs` is each routing slot's weighted output, `[batch, seq, 8, hidden]`, and sums to
+uses. `expert_outputs` is each routing slot's weighted output, `[batch, seq, 8, hidden_size]`, and sums to
 `routed_output`. Because the weights are renormalized, zeroing one expert's weight leaves the others'
 unchanged and the remaining slots sum to less than one:
 

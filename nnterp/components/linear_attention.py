@@ -11,15 +11,16 @@ from torch import Tensor
 
 from .eproperty import EProperty
 from .recurrent import RecurrentMixer, State, kernel, needs_torch_kernels
+from .standard import BATCH, KEY_DIM, MIXER_HEADS, SEQ, VALUE_DIM
 
 #: The layouts at the delta-rule call, tokens before heads: the queries and keys on the state's key side, the
 #: values and each head's read of the state on its value side, and one gate per token and head. The state itself
 #: (`State`, `States`) is the base's.
-LinearQK = Float[Tensor, "batch seq heads key_dim"]
-LinearV = Float[Tensor, "batch seq heads value_dim"]
-Gates = Float[Tensor, "batch seq heads"]
+LinearQK = Float[Tensor, f"{BATCH} {SEQ} {MIXER_HEADS} {KEY_DIM}"]
+LinearV = Float[Tensor, f"{BATCH} {SEQ} {MIXER_HEADS} {VALUE_DIM}"]
+Gates = Float[Tensor, f"{BATCH} {SEQ} {MIXER_HEADS}"]
 #: A gate per token, head and key channel: Kimi Delta Attention decays each key channel of the state on its own.
-ChannelGates = Float[Tensor, "batch seq heads key_dim"]
+ChannelGates = Float[Tensor, f"{BATCH} {SEQ} {MIXER_HEADS} {KEY_DIM}"]
 
 
 class LinearAttention(RecurrentMixer):

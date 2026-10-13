@@ -61,7 +61,7 @@ with model.trace(prompt):
     log_decay = mix.decays.save()           # [batch, seq, heads], float32, <= 0
     y = mix.attention_head_outputs.save()   # [batch, seq, heads, head_dim]
     state = mix.state_output.save()         # [batch, heads, state_dim, head_dim]: after the last token
-    out = mix.attention_output.save()       # [batch, seq, hidden]: what the mixer adds to the stream
+    out = mix.attention_output.save()       # [batch, seq, hidden_size]: what the mixer adds to the stream
 ```
 
 Decide which blocks hold a Mamba-2 mixer *outside* the trace, as above.
@@ -91,7 +91,7 @@ reasons in [The state after every token](#the-state-after-every-token).
 
 | value | SSD | what it is | layout |
 | --- | --- | --- | --- |
-| `attention_output` | | what the mixer adds to the residual stream | `Residual`: `batch seq hidden` |
+| `attention_output` | | what the mixer adds to the residual stream | `Residual`: `batch seq hidden_size` |
 | `attention_queries` | `C` | what reads the state, after the conv and the activation; one per group of heads | `SSDQueries`: `batch seq groups state_dim` |
 | `attention_keys` | `B` | where each token writes into the state; one per group of heads | `SSDKeys`: `batch seq groups state_dim` |
 | `attention_values` | `x` | what each token writes | `SSDValues`: `batch seq heads head_dim` |

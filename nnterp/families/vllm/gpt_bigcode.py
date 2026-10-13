@@ -2,7 +2,7 @@
 
 vLLM has no GPT-BigCode of its own: it runs transformers' modules, so the
 block is transformers' (see `nnterp.components.vllm.transformers_backend`),
-with the stream ``[1, tokens, hidden]`` and the engine's attention layer
+with the stream ``[1, tokens, hidden_size]`` and the engine's attention layer
 mounted as the attention's ``attn`` child. The tree is GPT-2's under
 ``model`` rather than ``transformer`` (the backend builds the bare
 ``GPTBigCodeModel``): ``model.{wte, wpe, h[i].{ln_1, attn, ln_2, mlp}, ln_f}``

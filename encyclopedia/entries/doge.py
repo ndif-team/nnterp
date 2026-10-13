@@ -141,13 +141,13 @@ import torch.nn.functional as F
 
 attn = model.layers[1].self_attn
 with model.trace(prompt):
-    values = attn.attention_values.save()          # [batch, kv_heads, seq, head_dim]
-    scores = attn.attention_scores.save()          # [batch, heads, query, key]
+    values = attn.attention_values.save()          # [batch, num_kv_heads, seq, head_dim]
+    scores = attn.attention_scores.save()          # [batch, num_heads, query, key]
 
 module = attn._module
-v = values.transpose(1, 2).flatten(2)              # [batch, seq, kv_heads * head_dim]
-dt = F.softplus(module.dt_proj(v))                 # [batch, seq, kv_heads]
-bias = torch.exp(module.A * dt).transpose(1, 2)    # [batch, kv_heads, key]
+v = values.transpose(1, 2).flatten(2)              # [batch, seq, num_kv_heads * head_dim]
+dt = F.softplus(module.dt_proj(v))                 # [batch, seq, num_kv_heads]
+bias = torch.exp(module.A * dt).transpose(1, 2)    # [batch, num_kv_heads, key]
 ```
 
 On Doge-260M `A` ranges from −0.29 to 0.29 and the bias from 0 to 8.4. Removing it from the scores

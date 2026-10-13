@@ -85,7 +85,7 @@ model = StandardizedTransformer("openai-community/gpt2", attn_implementation="ea
 vector = torch.randn(model.hidden_size)
 
 with model.trace("The Eiffel Tower is in"):
-    pattern = model.layers[3].self_attn.attention_probabilities.save()  # [batch, heads, query, key]
+    pattern = model.layers[3].self_attn.attention_probabilities.save()  # [batch, num_heads, query, key]
     lens = model.project_on_vocab(model.layers[6].layer_output).save()  # logit lens at block 6
     model.steer(8, vector, factor=3, token_positions=-1)                # add to block 8's output
     model.skip_layers(10, 11)                                           # blocks 10..11 do not run

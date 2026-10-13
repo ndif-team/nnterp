@@ -72,7 +72,11 @@ from .selective_scan import (
     ScanDecays, ScanQK, ScanState, ScanStates, ScanSteps, ScanValues, SelectiveScan, needs_kernel_source,
     needs_token_loop,
 )
-from .standard import Standard, blocks_support, first_tensor, rewrap
+from .standard import (
+    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, HIDDEN, IMAGE_TOKENS, IMAGES, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS,
+    PATCHES, QK_HEAD_DIM, QUERY, SEQ, STATE_DIM, STREAMS, TOP_K, VALUE_DIM, VISION_HIDDEN, VOCAB, Standard,
+    axis_size, blocks_support, first_tensor, rewrap,
+)
 from .tokens import TokenEProperty
 from .state_space import (
     SSDHeadOutputs, SSDKeys, SSDQueries, SSDValues, StateSpace, chunk_per_token, needs_per_token_chunks,
@@ -83,10 +87,12 @@ from .vision import (
 )
 
 __all__ = [
+    "BATCH", "CHANNELS", "EXPERTS", "GROUPS", "HEAD_DIM", "HEADS", "HIDDEN", "IMAGE_TOKENS", "IMAGES", "KEY", "KEY_DIM", "KV_HEADS",
+    "MIXER_HEADS", "PATCHES", "QK_HEAD_DIM", "QUERY", "SEQ", "STATE_DIM", "STREAMS", "TOP_K", "VALUE_DIM", "VISION_HIDDEN", "VOCAB",
     "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "ImageFeatures", "ImageTokenMask", "Keys", "Layer", "LinearAttention", "Patches",
     "LOGITS", "LinearQK", "LinearV", "Mlp", "Moe", "PER_SLOT", "Pattern", "Queries", "RecurrentMixer", "Residual", "RouterLogits", "ScanDecays", "ScanQK", "ScanState",
     "ScanStates", "ScanSteps", "ScanValues", "SelectiveScan", "State", "States", "StreamMixing", "StreamWeights", "Streams", "TokenEProperty",
-    "Values", "Vision", "VisionAttention", "VisionLayer", "VisionMlp", "blocks_support",
+    "Values", "Vision", "VisionAttention", "VisionLayer", "VisionMlp", "axis_size", "blocks_support",
     "ImageScatter", "PER_IMAGE", "PixtralVision", "QwenVision", "QwenVisionAttention",
     "NOT_ON_INTERFACE", "SSDHeadOutputs", "SSDKeys", "SSDQueries", "SSDValues", "Standard", "StateSpace", "Unavailable",
     "chunk_per_token", "first_tensor", "image_token_id", "interface_reason", "mixture_reason", "needs_eager",

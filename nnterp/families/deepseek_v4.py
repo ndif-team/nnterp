@@ -3,7 +3,7 @@
 ``model.{embed_tokens, layers[i].{attn_hc, input_layernorm, self_attn, ffn_hc,
 post_attention_layernorm, mlp}, hc_head, norm}`` and ``lm_head``.
 
-**The residual is ``hc_mult`` parallel streams**, ``[batch, seq, streams, hidden]``,
+**The residual is ``hc_mult`` parallel streams**, ``[batch, seq, streams, hidden_size]``,
 between every pair of blocks (the model copies the embedding into each stream
 before block 0). Each sublayer reads one collapse of the streams and writes back
 into all of them through a hyper-connection (``attn_hc`` before the attention,
@@ -18,9 +18,9 @@ matrix mixing the streams, consumed transposed. The block, per token::
 
 * **``layer_output`` is the block's own stream tensor**, under the `Streams`
   layout, and so is ``layers[i].input``; writes land natively, and
-  ``skip_layers`` and ``steer`` work unchanged (a ``[hidden]`` steering vector
+  ``skip_layers`` and ``steer`` work unchanged (a ``[hidden_size]`` steering vector
   broadcasts over the streams).
-* **The contributions are the sublayers' own outputs**, ``[batch, seq, hidden]``,
+* **The contributions are the sublayers' own outputs**, ``[batch, seq, hidden_size]``,
   unscaled: ``attention_output`` is ``self_attn.output[0]``, ``mlp_output`` the
   mixture's return (routed plus shared experts). The weights that put them into
   the streams are the block's ``attention_post``, ``attention_comb``,
@@ -131,7 +131,7 @@ class Attention(Attention):
 
     @EProperty("source.attn_output_0.output", description=Attention.attention_head_outputs.description)
     def attention_head_outputs(self, value) -> HeadOutputs:
-        """The interface's output with its rotary slice rotated back, ``[batch, seq, heads, head_dim]``: what the grouped output projection reads."""
+        """The interface's output with its rotary slice rotated back, ``[batch, seq, num_heads, head_dim]``: what the grouped output projection reads."""
         return value
 
 
@@ -152,10 +152,10 @@ ENVOYS = {DeepseekV4DecoderLayer: Layer, DeepseekV4Attention: Attention, Deepsee
 def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:
     """The logit lens as the model makes its logits: ``hc_head`` over the streams, the final norm, ``lm_head``.
 
-    A tensor with the stream axis, ``[batch, seq, streams, hidden]`` (rank 4)
-    or one position of it, ``[streams, hidden]`` (rank 2 with ``hc_mult``
+    A tensor with the stream axis, ``[batch, seq, streams, hidden_size]`` (rank 4)
+    or one position of it, ``[streams, hidden_size]`` (rank 2 with ``hc_mult``
     rows), is collapsed by the model's ``hc_head`` first; the result drops the
-    stream axis, ``[..., vocab]``. Any other tensor is a plain ``[..., hidden]``
+    stream axis, ``[..., vocab_size]``. Any other tensor is a plain ``[..., hidden_size]``
     stream (a sublayer's output, one stream ``layer_output[:, :, k]``) and goes
     through ``norm`` and ``lm_head`` alone.
     """

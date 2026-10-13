@@ -76,16 +76,16 @@ from jaxtyping import Bool, Float
 from torch import Tensor
 
 #: A tower's stream: the tower's own batch (images, crops, tiles; 1 on a packed tower) by its tokens.
-Patches = Float[Tensor, "images patches vision_hidden"]
+Patches = Float[Tensor, "images patches vision_hidden_size"]
 #: What the text model receives at the image positions, flat in scatter (row-major) order.
-ImageFeatures = Float[Tensor, "image_tokens hidden"]
+ImageFeatures = Float[Tensor, "image_tokens hidden_size"]
 #: Which positions of the text batch hold image tokens.
 ImageTokenMask = Bool[Tensor, "batch seq"]
 ```
 
 The tower's blocks are `Layer`, `Attention` and `Mlp` with the stream values re-annotated as
 `Patches` (`VisionLayer`, `VisionAttention`, `VisionMlp`). A tower that runs on
-`[patches, vision_hidden]` (the Qwen ViT) is served through the same classes: every stream
+`[patches, vision_hidden_size]` (the Qwen ViT) is served through the same classes: every stream
 value reads a 2-D native tensor with a leading images axis of 1 (`as_patches`, a view) and
 puts a write back in the module's shape (`as_native`), so there is no packed variant of the
 classes. `tower_output` has one definition, the last block's stream after the final norm
@@ -121,7 +121,7 @@ the tower, so each key is anchored at the model's root with a leading `/` and wa
   argument of `inputs_embeds.masked_scatter(image_mask, image_features)` in the wrapper
   model's forward. The key and the selection are functions of the host that read the
   scatter's host off the root (`scatter_host`, `scatter_call`). It returns that argument
-  flattened to `[image_tokens, hidden]`, a view, so in-place edits land; an assignment is
+  flattened to `[image_tokens, hidden_size]`, a view, so in-place edits land; an assignment is
   reshaped back to the argument's shape.
 
 What the tower reads outside itself (the wrapper's config, its processor, the scatter's
@@ -213,7 +213,7 @@ an alias for, as it lists the `Standard` children of a block.
 - **Pixtral's patch embedding.** The convolution runs on the batch padded to its largest
   image and each image is cropped to its own grid before the grids are concatenated, so the
   convolution's output is not the tower's stream. On `PixtralVision`, `patch_embeddings` is
-  the packed row entering `ln_pre`, `[1, all patches, vision_hidden]`; `patch_embed` still
+  the packed row entering `ln_pre`, `[1, all patches, vision_hidden_size]`; `patch_embed` still
   names the convolution.
 - **Qwen2.5-VL's window order.** The block values are served in the tower's own (window)
   order and documented as such; the order back needs the window index, which the tower
@@ -420,7 +420,7 @@ served after the embedder's own values; on LLaVA-NeXT (both families) and LLaVA-
 
 `QwenVisionSuite` (`tests/families/qwen_vision_suite.py`) is `VisionSuite` on the Qwen ViT,
 subclassed in the six families that host it: the stream values `[1, patches,
-vision_hidden]` equal to the native packed tensors, the interior whole around the
+vision_hidden_size]` equal to the native packed tensors, the interior whole around the
 per-image calls (above), the pattern `Unavailable` with `PER_IMAGE` under eager and sdpa,
 one image token per merge block, the merger's output in scatter order except on Qwen2.5-VL,
 and the Qwen sizes (`spatial_merge_size`, `window_size`). The text families' `FamilySuite`

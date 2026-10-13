@@ -87,7 +87,7 @@ attention interface, before `attn_sub_norm`: flattened over its heads it equals
 ```python
 attn = model.layers[1].self_attn
 with model.trace(prompt):
-    heads = attn.attention_head_outputs.save()   # [batch, seq, heads, head_dim]
+    heads = attn.attention_head_outputs.save()   # [batch, seq, num_heads, head_dim]
     normed = attn.attn_sub_norm.input.save()
 
 torch.equal(heads.flatten(-2), normed)   # True

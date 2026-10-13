@@ -9,7 +9,7 @@ step; otherwise every invoke is served the whole run's tokens. A
 rows, a view, so in-place edits land on the model's tensor and reach that
 invoke alone, and splices an assignment back into the whole flat tensor. A
 tensor already at the value's layout rank (DBRX's experts, which take and
-return ``[batch, seq, hidden]``) passes through both ways.
+return ``[batch, seq, hidden_size]``) passes through both ways.
 """
 
 from __future__ import annotations

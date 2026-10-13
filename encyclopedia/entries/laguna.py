@@ -141,7 +141,7 @@ interface output; `o_proj.input` is the gated one, and `attention_output` is `o_
 ```python
 attn = model.layers[1].self_attn
 with model.trace(prompt):
-    heads = attn.attention_head_outputs.save()  # [batch, seq, heads, head_dim], ungated
+    heads = attn.attention_head_outputs.save()  # [batch, seq, num_heads, head_dim], ungated
     g = attn.g_proj.output.save()               # [batch, seq, heads] when per-head
     gated = attn.o_proj.input.save()
 
@@ -176,7 +176,7 @@ with model.trace(prompt):
     logits = moe.router_logits.save()           # [batch, seq, num_experts], float32
     w = moe.expert_weights.save()               # [batch, seq, top_k]
     idx = moe.expert_indices.save()
-    each = moe.expert_outputs.save()            # [batch, seq, top_k, hidden]
+    each = moe.expert_outputs.save()            # [batch, seq, top_k, hidden_size]
     routed = moe.routed_output.save()
     out = moe.mlp_output.save()
 

@@ -218,7 +218,7 @@ with model.trace(prompt):
 
 Rotary turns the whole head in `rotate_half` pairs, with `rope_theta` 10000 on 7B and 500042 on
 11B. The pattern is the softmax's output (no dropout follows it), and the head outputs are the
-`pattern @ values` product, heads first in the forward and served `[batch, seq, heads, head_dim]`.
+`pattern @ values` product, heads first in the forward and served `[batch, seq, num_heads, head_dim]`.
 
 ## The interior needs an eager load
 

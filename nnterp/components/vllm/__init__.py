@@ -33,13 +33,12 @@ layer is mounted as the attention module's ``attn`` child.
 """
 
 from .attention import DECODE_STEP, Attention, on_decode_step
-from .flat import Flat, batched, unbatched
-from .layer import FusedLayer, Layer, argument, with_argument
+from .flat import Flat, batched, on_transformers_backend, unbatched
+from .layer import FusedLayer, Layer, argument, summed, with_argument
 from .mlp import Mlp
 from .project import project
-from .transformers_backend import on_transformers_backend
 
 __all__ = [
     "Attention", "DECODE_STEP", "Flat", "FusedLayer", "Layer", "Mlp", "argument", "batched", "on_decode_step", "on_transformers_backend",
-    "project", "unbatched", "with_argument",
+    "project", "summed", "unbatched", "with_argument",
 ]

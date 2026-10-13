@@ -73,6 +73,7 @@ def _vllm_ready_checkpoint(repo="hf-tiny-v2/tiny-random-MiMoV2FlashForCausalLM",
 class TestVLLMMimoV2Flash(VLLMFamilySuite):
     REPO = _vllm_ready_checkpoint()
     FAMILY = mimo_v2_flash
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS
 
     def test_pattern_matches_transformers(self, model, reference):

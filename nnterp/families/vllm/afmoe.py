@@ -19,7 +19,7 @@ class, so it is an `Mlp` too; its ``mlp_output`` is unavailable.
 from vllm.model_executor.models.afmoe import AfmoeAttention, AfmoeDecoderLayer, AfmoeMLP, AfmoeMoE
 
 from ...components import Residual
-from ...components.vllm import Attention, Flat, FusedLayer, Mlp
+from ...components.vllm import Attention, Flat, FusedLayer, Mlp, summed
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -36,6 +36,14 @@ def _not_a_block_mlp(envoy) -> str | None:
 
 class Layer(FusedLayer):
     """The decoder block: ``forward(positions, hidden_states, residual) -> (hidden_states, residual)``."""
+
+    #: A sandwich block: ``post_attention_layernorm`` follows the attention, so the stream between the sublayers and the MLP's
+    #: normed input are at ``pre_mlp_layernorm``, the MLP's pre-norm, which takes the stream in two halves.
+    layer_mid = summed("pre_mlp_layernorm.inputs", description="The residual stream after the attention add: hidden_states + residual, [1, tokens, hidden_size]")
+
+    @Flat("pre_mlp_layernorm.output", description="The normed stream entering the MLP, [1, tokens, hidden_size]")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

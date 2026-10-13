@@ -52,6 +52,7 @@ def _loader_finds_the_experts():
 class TestVLLMDbrx(VLLMFamilySuite):
     REPO = _rope_checkpoint()
     FAMILY = dbrx
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = {
         "embed_tokens": "transformer.wte",
         "layers": "transformer.blocks",

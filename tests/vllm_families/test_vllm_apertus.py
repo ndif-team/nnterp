@@ -30,6 +30,7 @@ def _meta_build_reads_scalars():
 class TestVLLMApertus(VLLMFamilySuite):
     REPO = "swiss-ai/Apertus-v1.1-0.5B"
     FAMILY = apertus
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
     NATIVE = {
         **LLAMA_ROWS,
         "layers.0.input_layernorm": "model.layers.0.attention_layernorm",

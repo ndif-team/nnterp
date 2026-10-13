@@ -129,6 +129,21 @@ class StandardizedVLLM(Standardized, VLLM):
         """The embedding module's output, ``[1, tokens, hidden_size]``; what a family scales or adds positions to comes after."""
         return value
 
+    @Flat("norm.output", batch=on_transformers_backend, description="The residual stream after the final norm, what the head reads, [1, tokens, hidden_size]")
+    def final_norm_output(self, value: torch.Tensor) -> Residual:
+        """The final norm's output, ``[1, tokens, hidden_size]``: every position of the step, of which the engine projects the last.
+
+        A family whose blocks hand the stream on in two halves calls the final
+        norm with both, and the norm returns ``(normed, residual)``: this is
+        the normed half. Assign to replace it; in-place edits reach the model.
+        """
+        return value
+
+    lm_head_output = unavailable(
+        "vLLM never calls lm_head: its logits processor projects with lm_head's weight and applies any softcap and "
+        "scale in the same call, on the last position only; read logits"
+    )
+
     # -- the input (inside a trace) ----------------------------------------------
 
     @EProperty("inputs", description="The token ids of this step, [1, tokens]; read-only")

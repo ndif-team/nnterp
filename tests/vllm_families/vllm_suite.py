@@ -9,6 +9,7 @@ sharing a card overrun their memory fractions.
 """
 
 import gc
+import re
 
 import nnsight
 import pytest
@@ -24,6 +25,11 @@ ROOT = {"logits", "token_embeddings", "next_token_probs", "input_ids", "input_si
 BOUNDARY = ("layer_input", "attention_output", "mlp_output", "layer_output")
 INTERIOR = ("attention_queries", "attention_keys", "attention_values", "attention_head_outputs")
 PATTERN = ("attention_scores", "attention_probabilities")
+#: The boundaries between the block values and the values inside the sublayers, by `support()` name.
+MODULE_VALUES = (
+    "attention_norm_output", "self_attn.attention_premix", "layer_mid", "mlp_norm_output", "mlp_input",
+    "mlp.mlp_activation", "mlp.mlp_neurons",
+)
 SIZES = ("num_layers", "hidden_size", "vocab_size", "num_heads", "num_kv_heads", "head_dim", "intermediate_size")
 
 LLAMA_ROWS = {
@@ -45,6 +51,17 @@ def boundary(layer, interior=()):
     values["mlp_output"] = layer.mlp.mlp_output.cpu()
     values["layer_output"] = layer.layer_output.cpu()
     return values
+
+
+def value_of(host, name):
+    """``host``'s value by its `support()` name: ``"layer_mid"``, ``"self_attn.attention_premix"``."""
+    module, _, value = name.rpartition(".")
+    return getattr(getattr(host, module) if module else host, value)
+
+
+def set_value(host, name, value):
+    module, _, attribute = name.rpartition(".")
+    setattr(getattr(host, module) if module else host, attribute, value)
 
 
 def shifted(scores, seen):
@@ -92,6 +109,15 @@ def transformers_values(repo, skip, load=None):
             read = nnsight.save({i: getattr(hf.layers[i].self_attn, name).cpu() for i in picked})
         for i in picked:
             layers[i][name] = read[i]
+    for name in MODULE_VALUES:  # one value a trace: where each sits in the forward differs between block structures
+        served = [i for i in picked if hf.support(layer=i).get(name, "absent") is None]
+        if served:
+            with hf.trace(torch.tensor([ids])):
+                read = nnsight.save({i: value_of(hf.layers[i], name).cpu() for i in served})
+            for i in served:
+                layers[i][name] = read[i]
+    with hf.trace(torch.tensor([ids])):
+        final_norm = hf.final_norm_output.cpu().save()
     scale = layers[middle]["layer_output"].norm(dim=-1).mean().item()
     with hf.trace(torch.tensor([ids])):
         hf.steer(middle, vector, factor=scale)
@@ -107,7 +133,7 @@ def transformers_values(repo, skip, load=None):
     positions = getattr(hf.config, "max_position_embeddings", None) or getattr(hf.config, "n_positions", None) or 512
     return {
         "ids": ids, "picked": picked, "middle": middle, "vector": vector, "scale": scale, "embeddings": embeddings,
-        "layers": layers, "logits": logits, "steered": steered, "headless": headless, "skipped": skipped,
+        "final_norm": final_norm, "layers": layers, "logits": logits, "steered": steered, "headless": headless, "skipped": skipped,
         "skip": skip or (middle, middle), "max_len": min(512, positions), "sizes": {name: getattr(hf, name) for name in SIZES},
     }
 
@@ -129,15 +155,16 @@ class VLLMFamilySuite:
     #: sharp softmax differently, which a checkpoint with very large queries and keys shows in its head outputs, and
     #: from there in every later block's queries, keys and values, more than in the residual stream they are small in.
     KERNEL_TOLERANCE = 5e-3
+    #: Agreement of a module value where it needs its own, by `support()` name. A norm divides the stream by its
+    #: spread, so a difference that is small against the stream's largest magnitude can be large against its output's.
+    MODULE_TOLERANCE: dict = {}
     #: The blocks `test_skip_layers` skips; the middle one when not said.
     SKIP = None
     #: The attention values vLLM's implementation of this family serves (the scores and the pattern included).
     SERVED = (*INTERIOR, *PATTERN)
-    #: The values this family lacks on vLLM, by `support()` name: the mask, and the module boundaries not mapped yet.
-    UNAVAILABLE = frozenset({
-        "attention_mask", "attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input",
-        "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons",
-    })
+    #: The values this family lacks on vLLM, by `support()` name: the mask, the head's own output (vLLM never calls
+    #: lm_head), and a gated MLP's activation, which vLLM fuses with the multiply by the up projection.
+    UNAVAILABLE = frozenset({"attention_mask", "lm_head_output", "mlp.mlp_activation"})
     #: Engine arguments this checkpoint needs.
     ENGINE: dict = {}
     #: Arguments the transformers reference needs to load this checkpoint (a VL wrapper's ``task``).
@@ -200,7 +227,7 @@ class VLLMFamilySuite:
         assert ROOT <= set(support)
         unavailable = {name for name, reason in support.items() if reason}
         assert unavailable == self.UNAVAILABLE
-        for name in ("layer_input", "layer_output", "self_attn.attention_output", "mlp.mlp_output", *(f"self_attn.{name}" for name in self.SERVED)):
+        for name in ("layer_input", "layer_output", "self_attn.attention_output", "mlp.mlp_output", "final_norm_output", *(f"self_attn.{name}" for name in self.SERVED)):
             assert support[name] is None, name
 
     def test_support_matches_what_reads(self, model):
@@ -211,7 +238,7 @@ class VLLMFamilySuite:
             if reason is None:
                 assert isinstance(getattr(type(host), value), EProperty)
             else:
-                with pytest.raises(Unavailable, match="vLLM"):
+                with pytest.raises(Unavailable, match=re.escape(str(reason))):
                     getattr(host, value)
         with pytest.raises(Unavailable, match="no mask"):
             model.attention_mask
@@ -228,6 +255,53 @@ class VLLMFamilySuite:
             for name in BOUNDARY:
                 assert values[name].shape == (1, tokens, hidden), (i, name)
                 close(values[name], reference["layers"][i][name], self.TOLERANCE, f"layers[{i}].{name}")
+
+    def test_module_boundaries_match_transformers(self, model, reference):
+        """The boundaries between the block values, the sublayers' interiors and the final norm's output are
+        transformers' values, one value a trace, saved as read; each with the batch axis of one."""
+        tokens, compared = len(reference["ids"]), 0
+        for name in MODULE_VALUES:
+            served = [i for i in reference["picked"] if model.support(layer=i).get(name, "absent") is None]
+            if not served:
+                continue
+            with self.run(model, reference):
+                got = nnsight.save({i: value_of(model.layers[i], name).cpu() for i in served})
+            # The premix is what the attention kernel returns: the kernels' difference and the class's own both apply.
+            tolerance = max(self.TOLERANCE, self.KERNEL_TOLERANCE) if name == "self_attn.attention_premix" else self.TOLERANCE
+            tolerance = self.MODULE_TOLERANCE.get(name, tolerance)
+            for i, value in got.items():
+                assert value.shape[:2] == (1, tokens), (i, name, value.shape)
+                want = reference["layers"][i].get(name)
+                if want is None:
+                    continue  # transformers does not serve it on this checkpoint
+                close(value, want.reshape(value.shape), tolerance, f"layers[{i}].{name}")  # OPT's transformers rows are flat
+                compared += 1
+        with self.run(model, reference):
+            norm = model.final_norm_output.cpu().save()
+        assert norm.shape == (1, tokens, model.hidden_size)
+        close(norm, reference["final_norm"], self.MODULE_TOLERANCE.get("final_norm_output", self.TOLERANCE), "final_norm_output")
+        assert compared, "no module boundary served on both engines"
+
+    @pytest.mark.parametrize("name", (*MODULE_VALUES, "final_norm_output"))
+    def test_module_boundary_writes_land(self, model, reference, name):
+        """An in-place edit and an assignment are the same write, and a read that edits nothing changes nothing."""
+        host = model if name == "final_norm_output" else model.layers[reference["middle"]]
+        reason = model.support().get(name) if host is model else model.support(layer=reference["middle"]).get(name, "absent")
+        if reason is not None:
+            pytest.skip(f"{name} is not served here: {reason}")
+        clean = self.clean(model, reference)
+        with self.run(model, reference):
+            value_of(host, name)
+            untouched = model.logits.cpu().save()
+        with self.run(model, reference):
+            value_of(host, name)[:] *= 0.5
+            in_place = model.logits.cpu().save()
+        with self.run(model, reference):
+            set_value(host, name, value_of(host, name) * 0.5)
+            assigned = model.logits.cpu().save()
+        assert torch.equal(untouched, clean)
+        assert not torch.allclose(clean, in_place)
+        close(assigned, in_place, self.TOLERANCE, name)
 
     def test_attention_interior_matches_transformers(self, model, reference):
         """The queries, keys, values and head outputs are transformers' eager ones, in its layouts, heads split out."""

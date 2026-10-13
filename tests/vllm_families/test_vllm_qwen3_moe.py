@@ -8,4 +8,5 @@ from nnterp.families.vllm import qwen3_moe
 class TestVLLMQwen3Moe(VLLMFamilySuite):
     REPO = "trl-internal-testing/tiny-Qwen3MoeForCausalLM"
     FAMILY = qwen3_moe
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS

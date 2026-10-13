@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
+from functools import partial
+
 import torch
 from nnsight.intervention.envoy import Envoy
 from nnsight.intervention.interleaver import Mediator
 
 from .. import attention as standard
 from ..attention import HeadOutputs, Keys, Pattern, Queries, Values
-from ..eproperty import DerivedEProperty, unavailable
+from ..eproperty import DerivedEProperty
 from ..layer import Residual
-from .flat import Flat
+from ..standard import absent
+from .flat import Flat, on_transformers_backend
 
 #: Why the scores and the pattern are not there on a decode step: they are recomputed from the step's own rows.
 DECODE_STEP = (
@@ -94,10 +97,6 @@ class Attention(standard.Attention):
     holds every key; a decode step raises `Unavailable` (`on_decode_step`).
     """
 
-    #: The output projection's flat rows are not served yet.
-    attention_premix = unavailable("not mapped on vLLM yet: the projection takes flat [tokens, width] rows")
-
-
     attention_scores = DerivedEProperty(
         scores,
         description="The scores entering the softmax, [1, num_heads, query, key], recomputed from the queries and keys; prefill only, read-only",
@@ -127,6 +126,14 @@ class Attention(standard.Attention):
     @Flat("attn.output", heads="last", description="The per-head outputs before the output projection, [1, tokens, num_heads, head_dim]")
     def attention_head_outputs(self, value: torch.Tensor) -> HeadOutputs:
         """Each head's output as the attention layer returns it, before the output projection mixes them."""
+        return value
+
+    @Flat(
+        "o_proj.input", batch=on_transformers_backend, heads="last", unavailable=partial(absent, name="o_proj", where="attention"),
+        description="What the output projection receives, [1, tokens, num_heads, head_dim]",
+    )
+    def attention_premix(self, value: torch.Tensor) -> HeadOutputs:
+        """The output projection's input split by head, after any gate the attention applies; the head outputs where there is none."""
         return value
 
     @Flat("output", description="What the attention adds to the residual stream, [1, tokens, hidden_size]")

@@ -8,6 +8,7 @@ from nnterp.families.vllm import gptj
 class TestVLLMGPTJ(VLLMFamilySuite):
     REPO = "EleutherAI/gpt-j-6b"
     FAMILY = gptj
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | {"layer_mid"}) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "transformer.wte",
         "layers": "transformer.h",

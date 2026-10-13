@@ -172,6 +172,10 @@ A routed mixture of experts has no single activation or down projection, so its 
 `mlp_activation` and `mlp_neurons` are unavailable (`routed experts; read per-expert via the
 Moe component`, [mixture-of-experts](mixture-of-experts.md)).
 
+`StandardizedVLLM` serves all of these but two, as private `[1, tokens, ...]` copies: a gated
+MLP's `mlp_activation` (vLLM computes `act(gate) * up` in one kernel) and `lm_head_output` (vLLM
+never calls `lm_head`) ([vllm](vllm.md#the-module-boundaries-and-the-sublayers-interiors)).
+
 `model.order(i)` places them: on Llama, `layer_input`, `attention_norm_output`, the
 attention interior, `attention_premix`, `attention_output`, `layer_mid`, `mlp_norm_output`,
 `mlp_input`, `mlp_activation`, `mlp_neurons`, `mlp_output`, `layer_output`.

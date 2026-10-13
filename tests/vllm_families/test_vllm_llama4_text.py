@@ -50,6 +50,7 @@ def _text_checkpoint(repo="yujiepan/llama-4-tiny-random"):
 class TestVLLMLlama4Text(VLLMFamilySuite):
     REPO = _text_checkpoint()
     FAMILY = llama4_text
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.feed_forward"}
     ENGINE = {"override_generation_config": {"attn_temperature_tuning": True}}  # as the config says, which transformers follows
 

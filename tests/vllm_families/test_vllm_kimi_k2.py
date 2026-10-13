@@ -12,7 +12,7 @@ from nnterp.families.vllm import deepseek_v3, kimi_k2
 
 UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | frozenset({
     f"self_attn.{value}" for value in ("attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_probabilities", "attention_head_outputs")
-})
+}) | {"mlp.mlp_neurons"}
 PREFIX = "language_model.model"
 
 

@@ -9,7 +9,8 @@ or in sequence as the config's ``use_parallel_residual`` says.
 
 from vllm.model_executor.models.gpt_neox import GPTNeoXAttention, GPTNeoXLayer, GPTNeoXMLP
 
-from ...components.vllm import Attention, Layer, Mlp
+from ...components import PARALLEL, Residual
+from ...components.vllm import Attention, Flat, Layer, Mlp
 
 RENAME = {
     "gpt_neox.embed_in": "embed_tokens",
@@ -17,6 +18,10 @@ RENAME = {
     "gpt_neox.final_layer_norm": "norm",
     "embed_out": "lm_head",
     "attention": "self_attn",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "dense": "o_proj",
+    "act": "act_fn",
+    "dense_4h_to_h": "down_proj",
 }
 
 
@@ -24,6 +29,17 @@ class Layer(Layer):
     """The block: called with the positions and the residual stream, and returns the stream."""
 
     STREAM = 1
+
+    # With ``use_parallel_residual`` (Pythia's default) the block is parallel: no stream between the sublayers,
+    # and the MLP reads its own norm of the block's input.
+
+    @Flat(
+        "post_attention_layernorm.input",
+        unavailable=lambda block: PARALLEL if block.root.config.use_parallel_residual else None,
+        description="The residual stream after the attention add, [1, tokens, hidden_size]",
+    )
+    def layer_mid(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

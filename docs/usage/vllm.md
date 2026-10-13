@@ -3,7 +3,7 @@ title: The vLLM engine
 one_liner: "`StandardizedVLLM` is nnsight's `VLLM` with nnterp's names and values: the same layouts as `StandardizedTransformer` (batch axis 1), private copies, vLLM's own defaults, and a family per vLLM implementation under `nnterp/families/vllm/`."
 tags: [usage, vllm, engine, StandardizedVLLM, layer_input, families]
 related: [docs/usage/loading.md, docs/usage/residual-stream.md, docs/usage/root-values.md, docs/usage/availability.md, docs/usage/generation.md, docs/extending/adding-a-family.md]
-sources: [nnterp/standardized_vllm.py, nnterp/components/vllm/__init__.py, nnterp/components/vllm/flat.py, nnterp/components/vllm/layer.py, nnterp/components/vllm/attention.py, nnterp/components/vllm/transformers_backend.py, nnterp/families/vllm/__init__.py, nnterp/families/vllm/llama.py, nnterp/families/vllm/gemma2.py, nnterp/families/vllm/gpt2.py, tests/vllm_families/vllm_suite.py]
+sources: [nnterp/standardized_vllm.py, nnterp/components/vllm/__init__.py, nnterp/components/vllm/flat.py, nnterp/components/vllm/layer.py, nnterp/components/vllm/attention.py, nnterp/components/vllm/mlp.py, nnterp/components/vllm/transformers_backend.py, nnterp/families/vllm/__init__.py, nnterp/families/vllm/llama.py, nnterp/families/vllm/gemma2.py, nnterp/families/vllm/gpt2.py, tests/vllm_families/vllm_suite.py]
 ---
 
 # The vLLM engine
@@ -65,7 +65,9 @@ starts its engine in a spawned process, which re-imports the main module.
   beside vLLM's native names.
 - **The boundary values and the identity**: `layer_input + attention_output + mlp_output ==
   layer_output` on every block; the suite holds each against the transformers engine's value
-  for the same prompt.
+  for the same prompt. The module boundaries between them (`attention_norm_output`, `layer_mid`,
+  `mlp_norm_output`, `mlp_input`), the sublayers' interiors (`attention_premix`, `mlp_neurons`)
+  and `final_norm_output` too ([below](#the-module-boundaries-and-the-sublayers-interiors)).
 - **The layouts**: `[batch, seq, hidden_size]` with a batch of 1, `logits[:, -1]` the last position.
 - **The methods**: `steer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens`,
   `support()`, and the sizes (`num_layers`, `hidden_size`, `num_heads`, ...).
@@ -221,15 +223,70 @@ except RuntimeError as error:
 A trace with no `tracer.iter` runs its block on the prefill, so the pattern is there whatever
 `max_tokens` is. `support()`, which runs outside any step, lists both as available.
 
+### The module boundaries and the sublayers' interiors
+
+The values between the block values are read where vLLM's modules take and return them, as on
+transformers: the norms' outputs, the MLP's input, the output projection's input (split by head)
+and the down projection's input. A fused block's norms take the stream in two halves,
+`norm(hidden_states, residual)`, and return `(normed, residual)`: `attention_norm_output` and
+`mlp_norm_output` are the normed half, and `layer_mid` is the sum of the halves the MLP's
+pre-norm is called with, computed for the read like `layer_input`, an edit going back on
+`hidden_states`:
+
+```python
+block = model.layers[12]
+with model.trace("The Eiffel Tower is in the city of", temperature=0.0, max_tokens=1):
+    before = block.layer_input.save()
+    normed = block.attention_norm_output.save()          # [1, tokens, hidden_size]: what the attention is called with
+    premix = block.self_attn.attention_premix.save()     # [1, tokens, num_heads, head_dim]: o_proj's input
+    added = block.self_attn.attention_output.save()
+    mid = block.layer_mid.save()                         # [1, tokens, hidden_size]: the stream between the sublayers
+    neurons = block.mlp.mlp_neurons.save()               # [1, tokens, intermediate_size]: down_proj's input
+    final = model.final_norm_output.save()               # [1, tokens, hidden_size]: every position
+
+print(tuple(premix.shape), tuple(neurons.shape), tuple(final.shape))
+# (1, 9, 9, 64) (1, 9, 1536) (1, 9, 576)
+torch.testing.assert_close(before + added, mid)
+```
+
+Two differ from the transformers engine:
+
+- **`mlp_activation` on a gated MLP.** vLLM fuses the gate and up projections into one
+  `gate_up_proj`, and its `act_fn` (`SiluAndMul`, `GeluAndMul`) computes `act(gate) * up` in one
+  kernel: what `act_fn` returns is already the neurons, and `act(gate)` alone is never a tensor.
+  `mlp_neurons` is served (it is `act_fn`'s output, read as `down_proj`'s input) and
+  `mlp_activation` is unavailable, with that reason. A plain MLP (GPT-2, GPT-J, Pythia, BLOOM,
+  Falcon, Phi-1.5, MPT, Nemotron, Arcee, Apertus, StarCoder2) serves both, the same tensor:
+  `down_proj`'s input is the activation's output there. It is read at `down_proj`, not at
+  `act_fn`, because vLLM builds an activation by name once and every block shares that one
+  module, so `layers[i].mlp.act_fn.output` cannot tell the blocks apart. A mixture of experts
+  serves neither: its experts are inside vLLM's fused MoE kernel.
+- **`lm_head_output`.** vLLM never calls `lm_head`: its logits processor projects with the head's
+  weight and applies any softcap and scale in the same call, for the last position only. Read
+  `logits`.
+
+The output projection, the activation and the down projection are `o_proj`, `act_fn` and
+`down_proj` under every family's `RENAME`, as on transformers (vLLM spells them `dense`,
+`out_proj`, `c_proj`; `act`, `gelu_impl`; `dense_4h_to_h`, `fc_out`, `fc2`, `c_proj`).
+Where a family's block is not the pre-norm one the values say so as on transformers: a parallel
+block (`gptj`, `phi`, `cohere`, `cohere2`, `falcon`, Pythia's `gpt_neox`) has no `layer_mid`,
+and its `mlp_norm_output` is the one norm both sublayers read; a post-norm block (`exaone4`,
+`olmo2`, `olmo3`, `flex_olmo`) has no pre-norm outputs, and its `layer_mid` is the MLP's input;
+on a sandwich block (`gemma2`, `gemma3_text`, `afmoe`) the MLP's pre-norm is
+`pre_feedforward_layernorm` (`pre_mlp_layernorm`). OPT's `layer_mid` and `mlp_norm_output` are
+`[1, tokens, hidden_size]` on this engine, where transformers serves the flat rows OPT holds
+there (`FlatResidual`).
+
 ### What is unavailable
 
 ```python
 support = model.support()
 print(sorted(name for name, reason in support.items() if reason))
-# ['attention_mask']
+# ['attention_mask', 'lm_head_output', 'mlp.mlp_activation']
 ```
 
-A request is one unpadded sequence, so there is no `attention_mask`. `input_ids` and `input_size` are read-only. `project_on_vocab`
+A request is one unpadded sequence, so there is no `attention_mask`; `lm_head_output` and a gated
+MLP's `mlp_activation` are [above](#the-module-boundaries-and-the-sublayers-interiors). `input_ids` and `input_size` are read-only. `project_on_vocab`
 and `get_topk_closest_tokens` call the engine's modules, so they work inside a trace only.
 Gradients, `.source` inside a kernel and `scan` are nnsight's limits on this engine.
 
@@ -338,7 +395,15 @@ One module, `nnterp/families/vllm/<model_type>.py`, with what a transformers fam
   says the block returns the stream with something beside it (`exaone4`, `cohere`).
 - `Attention` and `Mlp` when the module's output is what the block adds; otherwise point the
   value at the right place with `Flat`, the descriptor for a `[tokens, ...]` tensor
-  (`Flat("../post_attention_layernorm.output")` in `gemma2.py`).
+  (`Flat("../post_attention_layernorm.output")` in `gemma2.py`). An output that is a tuple is
+  served by its first element: a fused block's norm returns `(normed, residual)`.
+- The module boundaries are keyed on the aliased norms and `mlp`, the interiors on `o_proj`,
+  `act_fn` and `down_proj`: alias the family's spellings in `RENAME` (with nnsight's dotted alias
+  where one name is two modules, `"attn.c_proj": "attn.o_proj"` on GPT-2). A block built
+  otherwise redefines them as on transformers: `unavailable(PARALLEL)` and the shared norm's
+  output (`phi.py`), the post-norm reasons and `Flat("mlp.input")` for `layer_mid` (`olmo3.py`),
+  and on a fused sandwich block `summed("pre_feedforward_layernorm.inputs")`, the stream a norm
+  takes in two halves (`gemma2.py`).
 - `Attention`'s interior is the inputs and output of the module's `attn` child (vLLM's attention
   layer, called `self.attn(q, k, v)`), split into heads by that layer's `head_size`. A family
   whose attention names the child another way redefines the four values
@@ -390,9 +455,12 @@ assert model.family is family and model.layers[0].ffn is model.layers[0].mlp
 - **Bind the envoys you use outside the block in a sweep.** `model.layers[i]` or `model.logits`
   inside a block ships the root with every invoke (nnsight's vLLM guide, "per-invoke cost").
 - **`layers[i].input` is not the stream** on a fused family; it is the positions.
-- **Reads follow forward order** within a step, as everywhere: a block's `layer_input`, its
-  attention's queries, keys and values (and the scores and pattern, which are computed from
-  them), then its head outputs, the contributions, then its `layer_output`.
+- **Reads follow forward order** within a step, as everywhere: a block's `layer_input`,
+  `attention_norm_output`, its attention's queries, keys and values (and the scores and pattern,
+  which are computed from them), its head outputs and `attention_premix`, `attention_output`,
+  `layer_mid`, `mlp_norm_output` and `mlp_input`, `mlp_neurons`, `mlp_output`, then its
+  `layer_output`; `final_norm_output` after the last block. On a parallel block
+  `mlp_norm_output` is read before the attention.
 - **Leave prefix caching off for `model.edit()`.** nnsight builds the engine with
   `enable_prefix_caching=False`; with it on, an edit sees only the uncached tail of a repeated
   prefix (nnsight warns). A trace recomputes its own prompt either way.

@@ -16,7 +16,7 @@ import torch
 
 from vllm.model_executor.models.flex_olmo import FlexOlmoAttention, FlexOlmoDecoderLayer, FlexOlmoMoE
 
-from ...components import Residual
+from ...components import POST_NORM_ATTENTION, POST_NORM_MLP, Residual, unavailable
 from ...components.vllm import Attention, Flat, Layer, Mlp
 
 RENAME = {
@@ -31,6 +31,14 @@ class Layer(Layer):
 
     STREAM = 1
     returns_tuple = True
+
+    #: A post-norm block: the sublayers read the residual stream itself, so ``layer_mid`` is what the MLP is called with.
+    attention_norm_output = unavailable(POST_NORM_ATTENTION)
+    mlp_norm_output = unavailable(POST_NORM_MLP)
+
+    @Flat("mlp.input", description="The residual stream after the attention add, what the MLP is called with, [1, tokens, hidden_size]")
+    def layer_mid(self, value) -> Residual:
+        return value
 
     def skip_with(self, hidden: torch.Tensor) -> None:
         """Skip this block, handing ``hidden`` (``[1, tokens, hidden_size]``) on as its residual stream, with the ``None`` the block returns beside it."""

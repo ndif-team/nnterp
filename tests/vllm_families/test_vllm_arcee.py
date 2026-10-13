@@ -8,5 +8,6 @@ from nnterp.families.vllm import arcee
 class TestVLLMArcee(VLLMFamilySuite):
     REPO = "arcee-ai/AFM-4.5B"
     FAMILY = arcee
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
     NATIVE = LLAMA_ROWS
     MEMORY = 0.45

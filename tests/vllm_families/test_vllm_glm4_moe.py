@@ -8,4 +8,5 @@ from nnterp.families.vllm import glm4_moe
 class TestVLLMGlm4Moe(VLLMFamilySuite):
     REPO = "PrimeIntellect/glm4-moe-tiny"
     FAMILY = glm4_moe
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS

@@ -8,5 +8,6 @@ from nnterp.families.vllm import olmo3
 class TestVLLMOlmo3(VLLMFamilySuite):
     REPO = "allenai/Olmo-3-7B-Instruct"
     FAMILY = olmo3
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"attention_norm_output", "mlp_norm_output"}
     NATIVE = LLAMA_ROWS
     MEMORY = 0.55

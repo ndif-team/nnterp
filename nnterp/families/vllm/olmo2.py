@@ -12,7 +12,7 @@ over every head at once before splitting them.
 
 from transformers.models.olmo2.modeling_olmo2 import Olmo2Attention, Olmo2DecoderLayer, Olmo2MLP
 
-from ...components import Residual
+from ...components import POST_NORM_ATTENTION, POST_NORM_MLP, Residual, unavailable
 from ...components.vllm import Flat
 from ...components.vllm.transformers_backend import Attention, Layer, Mlp
 
@@ -24,7 +24,15 @@ RENAME = {
 
 
 class Layer(Layer):
-    """OLMo-2's decoder block: called with the stream and returning it, so the base holds."""
+    """OLMo-2's decoder block: called with the stream and returning it, post-norm."""
+
+    #: A post-norm block: the sublayers read the residual stream itself, so ``layer_mid`` is what the MLP is called with.
+    attention_norm_output = unavailable(POST_NORM_ATTENTION)
+    mlp_norm_output = unavailable(POST_NORM_MLP)
+
+    @Flat("mlp.input", batch=True, description="The residual stream after the attention add, what the MLP is called with, [1, tokens, hidden_size]")
+    def layer_mid(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

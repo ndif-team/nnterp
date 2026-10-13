@@ -84,6 +84,8 @@ Every row is an `EProperty` on the root, listed in `repr(model)` with its descri
 |---|---|---|---|
 | `model.logits` | `Logits` | yes: replaces `output.logits` | The logits the model returns, after any softcap (Gemma-2) or scale (Granite, Cohere) past the head; `model.lm_head.output` is the raw projection. |
 | `model.token_embeddings` | `Residual` | yes | The embedding module's output, `embed_tokens.output`; `layers[0].input` is what enters block 0, after any positional embeddings and embedding norms. An `EProperty` keyed `"embed_tokens.output"`. |
+| `model.final_norm_output` | `Residual` | yes; in-place edits reach the model | The final norm's output, `norm.output`: the stream `lm_head` projects. `no norm module on this model` where the family names none. |
+| `model.lm_head_output` | `Logits` | yes; in-place edits reach the model | `lm_head.output`: the head's own logits, before anything the model does past it. `logits` is the model's output: the same tensor on most families, the softcapped one on Gemma-2. `no lm_head module on this model` where the family names none. |
 | `model.next_token_probs` | `NextTokenProbs` | no (`AttributeError`: assign `logits`) | `logits[:, -1].softmax(-1)`; the last position is every row's last token only under left padding. |
 | `model.input_ids` | `Tokens` | yes: the model runs on the ids you set | The token ids the model was called with. |
 | `model.attention_mask` | `Tokens` | yes | The attention mask the model was called with; zeros are padding. |
@@ -144,6 +146,10 @@ The decoder block. `Layer.returns_tuple` (class attribute, default `False`) says
 | Value | Layout | Assignable | Description |
 |---|---|---|---|
 | `layer_input` | `Residual` | yes; in-place edits reach the model | The residual stream entering the block: `.input` on transformers, `hidden_states + residual` on a fused vLLM block. |
+| `attention_norm_output` | `Residual` | yes; in-place edits reach the model | `input_layernorm.output`: the normed stream the attention is called with on a pre-norm block. `no input_layernorm module on this block` where the block has none. |
+| `layer_mid` | `Residual` | yes; in-place edits reach the model | `post_attention_layernorm.input`: the stream between the sublayers, `layer_input + attention_output` on a pre-norm block. A family whose block is built otherwise points it elsewhere or marks it unavailable (a parallel block has no such stream). |
+| `mlp_norm_output` | `Residual` | yes; in-place edits reach the model | `post_attention_layernorm.output`: the normed stream entering the MLP on a pre-norm block; `mlp_input` where nothing sits between. |
+| `mlp_input` | `Residual` | yes; in-place edits reach the model | `mlp.input`: what the MLP is called with. `no mlp module on this block` where the block has none. |
 | `layer_output` | `Residual` | yes; in-place edits reach the model | The residual stream leaving the block, a tensor even when the block returns a tuple; assigning to a tuple block keeps the other elements. An `EProperty` over `.output`. |
 
 | Method | Signature | What |
@@ -372,11 +378,11 @@ The thirty-five `jaxtyping` types every standard value is annotated with, each d
 
 | Name | Axes | Defined in | Carried by |
 |---|---|---|---|
-| `Residual` | `batch seq hidden_size` | `components/layer.py` | `layer_output`, `attention_output`, `mlp_output`, `token_embeddings` |
+| `Residual` | `batch seq hidden_size` | `components/layer.py` | `layer_input`, `layer_output`, `attention_output`, `mlp_output`, `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`, `token_embeddings`, `final_norm_output` |
 | `Streams` | `batch seq streams hidden_size` | `components/layer.py` | `layer_output` on a hyper-connection family (DeepSeek-V4) |
 | `StreamWeights` | `batch seq streams` | `components/layer.py` | a hyper-connection family's `attention_post`, `mlp_post` |
 | `StreamMixing` | `batch seq streams streams` | `components/layer.py` | a hyper-connection family's `attention_comb`, `mlp_comb` |
-| `Logits` | `batch seq vocab_size` | `standardized.py` | `logits` |
+| `Logits` | `batch seq vocab_size` | `standardized.py` | `logits`, `lm_head_output` |
 | `NextTokenProbs` | `batch vocab_size` | `standardized.py` | `next_token_probs` |
 | `Tokens` | `batch seq` (`Int`) | `standardized.py` | `input_ids`, `attention_mask` |
 | `Queries` | `batch num_heads seq qk_head_dim` | `components/attention.py` | `attention_queries` |

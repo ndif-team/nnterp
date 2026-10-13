@@ -65,11 +65,11 @@ print(model.support(layer=5)["self_attn.attention_probabilities"])
 
 | area | values and methods | docs |
 | --- | --- | --- |
-| residual stream | `layer_output`, `attention_output`, `mlp_output`, `self_attn.input`, `mlp.input` | [residual-stream](docs/usage/residual-stream.md) |
+| residual stream | `layer_input`, `layer_output`, `attention_output`, `mlp_output`, and the module boundaries between them: `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input` | [residual-stream](docs/usage/residual-stream.md) |
 | attention interior | `attention_probabilities`, `attention_queries` / `keys` / `values`, `attention_scores`, `attention_head_outputs` (load with `attn_implementation="eager"`) | [attention-interior](docs/usage/attention-interior.md) |
 | mixture of experts | `router_logits`, `expert_weights`, `expert_indices`, `expert_outputs`, `routed_output`, `shared_expert_output` | [mixture-of-experts](docs/usage/mixture-of-experts.md) |
 | recurrent mixers and hybrids | `linear_attn` on gated DeltaNet, Mamba and Mamba-2 blocks: queries, keys, values, `decays`, `betas`, the recurrent state | [delta-net](docs/usage/delta-net.md), [selective-scan](docs/usage/selective-scan.md), [state-space](docs/usage/state-space.md) |
-| the whole model | `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, and the sizes (`num_layers`, `hidden_size`, `head_dim`, ...) | [root-values](docs/usage/root-values.md) |
+| the whole model | `logits`, `token_embeddings`, `final_norm_output`, `lm_head_output`, `next_token_probs`, `input_ids`, and the sizes (`num_layers`, `hidden_size`, `head_dim`, ...) | [root-values](docs/usage/root-values.md) |
 | vision-language models | `model.vision.layers[i]` (the tower's blocks, same values over the patches), `model.projector`, `vision.image_token_mask`, `vision.image_features` (what enters the text model at the image tokens); load with `task="image-text-to-text"` | [vision](docs/usage/vision.md) |
 | methods | `steer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens` | [methods](docs/usage/methods.md) |
 | the vLLM engine | `StandardizedVLLM`: the same names, values and layouts on nnsight's `VLLM`, batch axis 1 | [vllm](docs/usage/vllm.md) |

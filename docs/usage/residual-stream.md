@@ -1,7 +1,7 @@
 ---
 title: Residual stream and contributions
 one_liner: "`layer_output`, `attention_output` and `mlp_output` are tensors on every family, defined by `layers[i].input + attention_output + mlp_output == layer_output`."
-tags: [usage, residual-stream, layer_output, attention_output, mlp_output, contributions, hyper-connections, Streams]
+tags: [usage, residual-stream, layer_output, attention_output, mlp_output, contributions, module-boundaries, layer_mid, attention_norm_output, mlp_norm_output, mlp_input, hyper-connections, Streams]
 related: [docs/usage/vocabulary.md, docs/usage/methods.md, docs/usage/root-values.md, docs/usage/availability.md]
 sources: [nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/mlp.py, nnterp/components/standard.py, nnterp/components/eproperty.py, nnterp/families/gemma2.py, nnterp/families/gemma4_text.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/falcon.py]
 ---
@@ -121,6 +121,43 @@ with model.trace(prompt):
 
 `model.layers[i].input` is the residual stream entering the block, a tensor on every
 family (the block's first argument is `hidden_states` throughout the registered families).
+
+## The module boundaries
+
+Between `layer_input` and `layer_output` a pre-norm block has four more boundaries, each the
+input or output of one of its modules, and each a standard value on the block:
+
+| value | key | what it is on a pre-norm block |
+| --- | --- | --- |
+| `layers[i].attention_norm_output` | `input_layernorm.output` | the normed stream the attention is called with |
+| `layers[i].layer_mid` | `post_attention_layernorm.input` | the stream between the sublayers: `layer_input + attention_output` |
+| `layers[i].mlp_norm_output` | `post_attention_layernorm.output` | the normed stream entering the MLP |
+| `layers[i].mlp_input` | `mlp.input` | what the MLP is called with; `mlp_norm_output` where nothing sits between |
+
+After the last block the model has two more, on the root: `final_norm_output` (`norm.output`,
+the stream the head projects) and `lm_head_output` (`lm_head.output`, the head's logits before
+a softcap or scale; `logits` is the model's own output). All are `Residual` but
+`lm_head_output`, which is `Logits`; all take assignment and in-place edits.
+
+```python
+with model.trace(prompt):
+    block = model.layers[5]
+    normed = block.attention_norm_output.save()       # what the attention reads
+    mid = block.layer_mid.save()                      # after the attention add
+    block.mlp_input[:, -1] = 0                        # the MLP sees nothing at the last position
+    head = model.lm_head_output.save()
+```
+
+They are keyed on the aliased norms, so they describe the pre-norm block; the per-family
+suite checks `layer_mid == layer_input + attention_output` and the norm outputs against the
+sublayers' inputs wherever a family serves them. A block built otherwise has its family
+point a value at its own module or mark it unavailable with the reason: a parallel block
+(GPT-J, GPT-NeoX with `use_parallel_residual`) has no stream between the sublayers, a
+sandwich block (Gemma-2/3) norms the MLP's input in `pre_feedforward_layernorm`, a block
+without the module reports `no <module> module on this block` ([availability](availability.md)).
+`model.order(i)` places them: on Llama, `layer_input`, `attention_norm_output`, the
+attention interior, `attention_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`,
+`mlp_output`, `layer_output`.
 
 ## Where the families differ
 
@@ -354,6 +391,6 @@ token or exactly `hc_mult` tokens long.
 
 - [vocabulary](vocabulary.md): `self_attn.input`, `mlp.input`.
 - [methods](methods.md): `skip_layers`, `steer` over `layer_output`.
-- [root-values](root-values.md): `token_embeddings`, the stream before block 0.
+- [root-values](root-values.md): `token_embeddings`, the stream before block 0; `final_norm_output` and `lm_head_output`, the boundaries after the last.
 - [availability](availability.md): which blocks have which value.
 - nnsight docs/usage/access-and-modify.md: `.output`, in-place edits and assignment.

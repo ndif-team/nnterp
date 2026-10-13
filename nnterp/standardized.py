@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections import Counter
+from functools import partial
 from types import ModuleType
 import functools
 from typing import Any, Callable, Sequence
@@ -16,7 +17,7 @@ from torch import Tensor
 from . import families, order as forward_order
 from .families import default
 from .components import EProperty, Layer, Residual, Unavailable
-from .components.standard import BATCH, SEQ, VOCAB, blocks_support, standard_children, values
+from .components.standard import BATCH, SEQ, VOCAB, absent, blocks_support, standard_children, values
 from .components.vision import Vision
 
 #: The layouts of the root's values: the logits, the next-token distribution at the last position, and one
@@ -414,6 +415,21 @@ class StandardizedTransformer(Standardized, TransformersModel):
         Positional embeddings and embedding norms (GPT-2's ``wpe``, BLOOM's
         ``word_embeddings_layernorm``) are applied after this by the families
         that have them. Assign to replace it.
+        """
+        return value
+
+    @EProperty("norm.output", description="The residual stream after the final norm, what lm_head reads", unavailable=partial(absent, name="norm", where="model"))
+    def final_norm_output(self, value: torch.Tensor) -> Residual:
+        """The final norm's output, ``[batch, seq, hidden]``: the stream the head projects. Assign to replace it; in-place edits reach the model."""
+        return value
+
+    @EProperty("lm_head.output", description="The head's logits before anything the model does past lm_head (a softcap, a scale)", unavailable=partial(absent, name="lm_head", where="model"))
+    def lm_head_output(self, value: torch.Tensor) -> Logits:
+        """``lm_head``'s own output, ``[batch, seq, vocab]``.
+
+        `logits` is what the model returns; on most families the same tensor,
+        on Gemma-2 the softcapped one. Assign to replace it; in-place edits
+        reach the model.
         """
         return value
 

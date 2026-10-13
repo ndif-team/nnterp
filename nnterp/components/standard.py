@@ -74,6 +74,13 @@ def in_width(module: Any, *names: str) -> int | None:
     return None
 
 
+def absent(envoy: Envoy, name: str, where: str = "block") -> str | None:
+    """Why a value at the child module ``name`` is unavailable: the envoy has no such child or alias. ``None`` when it has."""
+    if name in envoy._aliases or any(child == name for child, _ in envoy._named_children()):
+        return None
+    return f"no {name} module on this {where}"
+
+
 def unsized(envoy: Envoy, name: str) -> NotImplementedError:
     """The error a size raises when the module spells it no way the base reads."""
     return NotImplementedError(

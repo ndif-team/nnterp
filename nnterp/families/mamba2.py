@@ -30,7 +30,7 @@ family's own.
 import torch
 from transformers.models.mamba2.modeling_mamba2 import Mamba2Block, Mamba2Mixer
 
-from ..components import Layer, StateSpace
+from ..components import STATE_SPACE, EProperty, Layer, Residual, StateSpace, unavailable
 
 RENAME = {
     "backbone.embeddings": "embed_tokens",
@@ -41,7 +41,16 @@ RENAME = {
 
 
 class Layer(Layer):
-    """Mamba-2's block, one norm and one mixer; returns a bare tensor, so the base holds."""
+    """Mamba-2's block, one norm and one mixer; returns a bare tensor.
+
+    ``attention_norm_output`` is the block's ``norm``, what the mixer is called with.
+    """
+
+    @EProperty("norm.output", description=Layer.attention_norm_output.description)
+    def attention_norm_output(self, value) -> Residual:
+        return value
+
+    layer_mid = mlp_norm_output = mlp_input = unavailable(STATE_SPACE)
 
 
 class StateSpace(StateSpace):

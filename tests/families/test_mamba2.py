@@ -20,7 +20,7 @@ class TestMamba2(StateSpaceChecks, FamilySuite):
         "lm_head": "lm_head",
     }
     EXPECTED_UNAVAILABLE = {
-        "attention_norm_output": "no input_layernorm module", "layer_mid": "no post_attention_layernorm module", "mlp_norm_output": "no post_attention_layernorm module", "mlp_input": "no mlp module",
+        **{name: "a state-space block" for name in ("layer_mid", "mlp_norm_output", "mlp_input")},
         "linear_attn.state": "one tensor per call",
         "linear_attn.states": "chunk_per_token",
         "linear_attn.set_state_after": "one cumulative step",

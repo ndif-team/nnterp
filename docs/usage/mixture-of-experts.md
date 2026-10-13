@@ -223,7 +223,9 @@ mixture blocks (DeepSeek-V3, GLM-4-MoE, Llama 4, Jamba, ...), a dense block repo
 `mlp.mlp_activation` and `mlp.mlp_neurons` ([residual-stream](residual-stream.md#the-module-boundaries))
 are unavailable on a block whose MLP is a mixture (`routed experts; read per-expert via the Moe
 component`): a routed MLP has no single activation or down projection. A dense block beside the
-mixtures serves them as any MLP does, and the per-expert view is `expert_outputs`.
+mixtures serves them as any MLP does, and so does a `Moe` that runs no mixture on this checkpoint
+(Gemma-4's MLP without `enable_moe_block`, GraniteMoE-Hybrid's shared expert without routed
+experts); the per-expert view is `expert_outputs`.
 
 ## Related
 

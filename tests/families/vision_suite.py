@@ -396,6 +396,32 @@ class VisionSuite:
             if i == 0:
                 assert torch.equal(text, text_native) and text.shape[-1] == model.hidden_size
 
+    def test_tower_module_boundaries(self, model, clean):
+        """On a tower block the norm outputs are what the sublayers are called with and ``layer_mid`` is ``layer_input +
+        attention_output``, each `Patches` the shape of the stream (a packed tower's leading 1 included); a write to each lands."""
+        if not model.vision.num_layers:
+            pytest.skip("this tower has no blocks")
+        layer = model.vision.layers[0]
+        read = {}
+        for name, raw in (
+            ("layer_input", None), ("attention_norm_output", layer.self_attn), ("layer_mid", None),
+            ("mlp_norm_output", layer.mlp), ("mlp_input", layer.mlp),
+        ):
+            with model.trace(image_prompt(model), images=[IMAGE]):
+                read[f"{name}.added"] = layer.self_attn.attention_output.save() if name == "layer_mid" else None
+                read[name] = getattr(layer, name).save()
+                read[f"{name}.raw"] = raw.input.save() if raw is not None else None
+        stream = read["layer_input"]
+        for name in ("attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input"):
+            assert isinstance(read[name], Patches) and read[name].shape == stream.shape, name
+            if read[f"{name}.raw"] is not None:
+                assert torch.equal(read[name], as_rows(read[f"{name}.raw"])), name
+            with model.trace(image_prompt(model), images=[IMAGE]):
+                getattr(layer, name)[:] = 0  # every token: a CLIP tower's features drop the CLS token and may end at this block
+                features = model.vision.image_features.save()
+            assert not torch.allclose(features, clean["features"]), name
+        torch.testing.assert_close(read["layer_mid"], stream + read["layer_mid.added"])
+
     def test_tower_pattern_sums_to_one_over_keys(self, model):
         if "self_attn.attention_probabilities" in self.EXPECTED_VISION_UNAVAILABLE:
             pytest.skip("this tower serves no pattern: test_support_lists_the_tower_values")

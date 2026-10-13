@@ -153,8 +153,14 @@ suite checks `layer_mid == layer_input + attention_output` and the norm outputs 
 sublayers' inputs wherever a family serves them. A block built otherwise has its family
 point a value at its own module or mark it unavailable with the reason: a parallel block
 (GPT-J, GPT-NeoX with `use_parallel_residual`) has no stream between the sublayers, a
-sandwich block (Gemma-2/3) norms the MLP's input in `pre_feedforward_layernorm`, a block
-without the module reports `no <module> module on this block` ([availability](availability.md)).
+sandwich block (Gemma-2/3/4, and Gemma-4's vision blocks) norms the MLP's input in
+`pre_feedforward_layernorm`, a post-norm block (OLMo-2) has no pre-norm outputs and its
+`layer_mid` is `mlp.input`. A state-space block (Mamba, Mamba-2) is a norm and one mixer:
+`attention_norm_output` is the norm's output, what the mixer reads, and the other three are
+unavailable (`a state-space block: one sublayer, the mixer, ...`). Nemotron-H's blocks each hold
+one sublayer: the norm's output is `attention_norm_output` on a mixer block and `mlp_norm_output`
+(and `mlp_input`) on an MLP block, and `layer_mid` is unavailable (`a one-sublayer block: ...`).
+A block without the module reports `no <module> module on this block` ([availability](availability.md)).
 Inside the sublayers, three more boundaries are standard values on the attention and the
 MLP, keyed on three standard child names the families alias in `RENAME` (`o_proj` for
 `c_proj` / `dense` / `out_proj` / `wo`, `act_fn` for `act` / `activation_fn` / `activation` /

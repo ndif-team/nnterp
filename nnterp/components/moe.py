@@ -30,9 +30,9 @@ from torch import Tensor
 
 from .tokens import TokenEProperty
 from .layer import Residual
-from .eproperty import unavailable
-from .mlp import Mlp
-from .standard import BATCH, EXPERTS, HIDDEN, SEQ, TOP_K, module_int, unsized
+from .eproperty import EProperty
+from .mlp import Mlp, Neurons
+from .standard import BATCH, EXPERTS, HIDDEN, SEQ, TOP_K, absent, module_int, unsized
 
 #: The router's logits, one column per expert (ZAYA adds a "skip" column).
 RouterLogits = Float[Tensor, f"{BATCH} {SEQ} {EXPERTS}"]
@@ -57,6 +57,17 @@ SHARED_NAMES = ("shared_experts", "shared_expert", "shared_mlp")
 def mixture_reason(envoy: Envoy) -> str | None:
     """Why this module runs no mixture of experts, or ``None``: the one place a family decides it (`Moe.no_mixture`)."""
     return envoy.no_mixture()
+
+
+#: Why a mixture's ``mlp_activation`` and ``mlp_neurons`` are unavailable.
+ROUTED = "routed experts; read per-expert via the Moe component"
+
+
+def routed(name: str):
+    """Why a dense-MLP value at the child ``name`` is unavailable on a `Moe`: `ROUTED` where it runs a mixture, else `absent`."""
+    def reason(envoy: Envoy) -> str | None:
+        return absent(envoy, name, "mlp") if envoy.no_mixture() else ROUTED
+    return reason
 
 
 def needs_grouped_experts(envoy: Envoy) -> str | None:
@@ -112,9 +123,15 @@ class Moe(Mlp):
     value's availability starts from.
     """
 
-    #: A routed MLP has no single activation or down projection.
-    mlp_activation = unavailable("routed experts; read per-expert via the Moe component")
-    mlp_neurons = unavailable("routed experts; read per-expert via the Moe component")
+    # A routed MLP has no single activation or down projection; a module that runs no mixture on this
+    # checkpoint (Gemma-4's dense MLP, GraniteMoE-Hybrid's shared expert alone) is a dense MLP.
+    @EProperty("act_fn.output", description=Mlp.mlp_activation.description, unavailable=routed("act_fn"))
+    def mlp_activation(self, value: torch.Tensor) -> Neurons:
+        return value
+
+    @EProperty("down_proj.input", description=Mlp.mlp_neurons.description, unavailable=routed("down_proj"))
+    def mlp_neurons(self, value: torch.Tensor) -> Neurons:
+        return value
 
 
     #: How the router turns logits into weights: ``"softmax"`` (over every expert, then top-k),

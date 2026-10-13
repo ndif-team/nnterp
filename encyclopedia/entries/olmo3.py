@@ -41,7 +41,7 @@ BLOCK = {
             "post_norm": "post_attention_layernorm",
             "post_norm_note": "On OLMo-3 this norm follows the attention and its output is attention_output. "
                               "On Llama the same name is the norm before the MLP; OLMo-3 has no norm before "
-                              "either sublayer.",
+                              "either sublayer, so layer_mid is what the MLP is called with.",
             "contribution": "attention_output",
             "interior": [
                 "attention_queries", "attention_keys", "attention_values",

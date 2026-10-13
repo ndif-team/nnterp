@@ -42,7 +42,8 @@ WRAPPERS = {
                         "label": "Attention",
                         "pre_norm": "input_layernorm",
                         "post_norm": "post_attention_layernorm",
-                        "post_norm_note": "This norm follows the attention, as on the text block: its output is attention_output.",
+                        "post_norm_note": "This norm follows the attention, as on the text block: its output is attention_output, "
+                                         "and layer_mid is read at pre_feedforward_layernorm's input.",
                         "contribution": "attention_output",
                         "interior": [
                             "attention_queries", "attention_keys", "attention_values",
@@ -197,7 +198,8 @@ BLOCK = {
                 "sliding_attention": "{sliding_window} window, head_dim {head_dim}",
                 "full_attention": "full causal, wide heads, ¼ rotary",
             },
-            "post_norm_note": "As on Gemma 2 and 3, this norm follows the attention. On Llama the same name is the norm before the MLP.",
+            "post_norm_note": "As on Gemma 2 and 3, this norm follows the attention. On Llama the same name is the norm before the MLP. "
+                              "layer_mid is the stream after its output is added, what the MLP's pre-norm reads.",
         },
         {
             "host": "mlp",

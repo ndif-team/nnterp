@@ -41,8 +41,8 @@ BLOCK = {
             "label": "Mamba-2",
             "pre_norm": "norm",
             "pre_norm_note": "The block's one RMSNorm keeps its native name, norm: the mixer has a gated norm of its own, "
-                             "linear_attn.norm, so nnterp gives the block's no input_layernorm alias. model.norm is the "
-                             "final norm_f.",
+                             "linear_attn.norm, so nnterp gives the block's no input_layernorm alias; its output is "
+                             "attention_norm_output all the same. model.norm is the final norm_f.",
             "contribution": "attention_output",
             "interior": [
                 "attention_queries", "attention_keys", "attention_values", "betas", "decays",

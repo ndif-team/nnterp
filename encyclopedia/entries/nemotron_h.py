@@ -184,8 +184,9 @@ QUIRKS = ["one-sublayer-blocks", "hybrid", "mamba2", "nope-blocks", "squared-rel
 #: The sublayers in forward order. Each block holds one of them, the ``mixer`` its entry in
 #: ``config.layer_types`` names, so each block draws one. The reference is dense (Mamba-2, attention,
 #: MLP blocks); the mixture of Nemotron 3's 30B, Super and Ultra checkpoints is described in the notes.
-NORM_NOTE = ("The block's one RMSNorm, model.layers[i].norm, before whichever sublayer the block holds; "
-             "the final norm is model.norm (native norm_f).")
+NORM_NOTE = ("The block's one RMSNorm, model.layers[i].norm, before whichever sublayer the block holds: its output "
+             "is attention_norm_output on a mixer or attention block, mlp_norm_output on an MLP block. The final norm "
+             "is model.norm (native norm_f).")
 
 BLOCK = {
     "topology": "sequential",

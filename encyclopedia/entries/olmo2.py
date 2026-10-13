@@ -64,7 +64,8 @@ BLOCK = {
             ],
             "detail": "{num_heads} heads, q_norm and k_norm",
             "post_norm_note": "On OLMo-2 this norm follows the attention. On Llama the same name is the norm "
-                              "before the MLP; OLMo-2 has no norm before either sublayer.",
+                              "before the MLP; OLMo-2 has no norm before either sublayer, so layer_mid is what "
+                              "the MLP is called with.",
         },
         {
             "host": "mlp",

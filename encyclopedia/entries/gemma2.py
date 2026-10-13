@@ -45,7 +45,8 @@ BLOCK = {
                 "sliding_attention": "sliding window of {sliding_window} tokens",
                 "full_attention": "full causal attention",
             },
-            "post_norm_note": "On Gemma-2 this norm follows the attention. On Llama the same name is the norm before the MLP.",
+            "post_norm_note": "On Gemma-2 this norm follows the attention. On Llama the same name is the norm before the MLP. "
+                              "layer_mid is the stream after its output is added, what the MLP's pre-norm reads.",
         },
         {
             "host": "mlp",

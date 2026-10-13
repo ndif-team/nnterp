@@ -33,7 +33,8 @@ from packaging.version import Version
 
 from transformers.models.doge.modeling_doge import DogeAttention, DogeCDMoE, DogeDecoderLayer, DogeMLP
 
-from ..components import Attention, Layer, Mlp, Moe
+from ..components import Attention, Layer, Mlp, Moe, unavailable
+from ..components.moe import ROUTED
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -67,6 +68,8 @@ class Moe(Moe, Mlp):
 
     def no_mixture(self) -> str:
         return CANNOT_RUN
+
+    mlp_activation = mlp_neurons = unavailable(ROUTED)  # it runs the mixture, whose values no_mixture refuses
 
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.

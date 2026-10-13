@@ -53,7 +53,7 @@
     return rows > 2 ? 58 + rows * 24 : BASE;
   }
   function shapesOf(s) {
-    return s.shapes || [{ subs: s.sublayers.map(function (_, k) { return k; }), plus: 'plus' }];
+    return s.shapes || [{ subs: s.sublayers.map(function (_, k) { return k; }), plus: 'plus', mids: s.mids }];
   }
 
   // What draw() is drawing into: the SVG, the schema, and the prefix its node ids take.
@@ -73,6 +73,7 @@
   // the role a node's colours come from: a sublayer's parts take the sublayer's, norms are norms,
   // the stream, the add, the root's strip nodes and the image's path are the stream
   function roleOf(id) {
+    if (nodes[id] && nodes[id].role) return nodes[id].role;
     var tower = id.indexOf(TOWER) === 0, s = tower ? (data.tower && data.tower.schema) : schema;
     var parts = (tower ? id.slice(TOWER.length) : id).split('.');
     if (['sub', 'contrib', 'interior', 'moe', 'post'].indexOf(parts[0]) !== -1) return (s && s.roles[parts[1]]) || 'mlp';
@@ -155,6 +156,10 @@
       el('rect', { x: SX - 18 - HB, y: seg[0], width: 36 + 2 * HB, height: Math.max(seg[1] - seg[0], 1), 'class': 'hit' }, g);
     });
     text(full, SX + 16 + HB, topY + 6, (P ? 'vision.' : '') + 'layers[i].input', 'label-role');
+    // a stream point the block serves as a value (layer_mid) carries its name
+    segments.forEach(function (seg) {
+      if (seg[2] && seg[2].indexOf('boundary.') === 0) text(full, SX + 16 + HB, (seg[0] + seg[1]) / 2 + 4, seg[2].slice(9), 'label-role');
+    });
     if (between.length) {
       text(full, SX + 16 + HB, betY[0] - 22, 'layer_output', 'label-role');
       text(full, SX + 16 + HB, botY - 2, 'layers[i+1].input', 'label-role');
@@ -175,6 +180,12 @@
     });
 
     // -- sublayers ------------------------------------------------------------------
+    // an edge into a sublayer; with an id, a hover node of its own (the value the sublayer is called with)
+    function edge(d, id) {
+      var g = id ? group(id, 'stream') : undefined;
+      el('path', { 'class': 'edge', d: d, 'marker-end': arrow }, g);
+      if (g) el('path', { 'class': 'hit', d: d, 'stroke-width': 14, fill: 'none', stroke: 'transparent' }, g);
+    }
     subs.forEach(function (sub, k) {
       var y = rowY[k], exitY = parallel ? rowY[0] : second[k] ? rowY[k - 1] : y, jY = joinY[k], key = keyOf(sub), role = s.roles[key] || 'mlp';
       var h = heightOf(sub);
@@ -189,9 +200,9 @@
         el('path', { 'class': 'hit', d: dcol, 'stroke-width': 14, fill: 'none', stroke: 'transparent' }, gcol);
       } else {
         // branch out of the stream
-        el('path', { 'class': 'edge', d: parallel || second[k]
+        edge(parallel || second[k]
           ? 'M' + SX + ',' + exitY + ' H' + 190 + ' V' + y + ' H' + (sub.pre_norm ? PRE.x : SUB.x)
-          : 'M' + SX + ',' + exitY + ' H' + (sub.pre_norm ? PRE.x : SUB.x), 'marker-end': arrow });
+          : 'M' + SX + ',' + exitY + ' H' + (sub.pre_norm ? PRE.x : SUB.x), sub.pre_norm ? null : sub.input_node);
         el('circle', { cx: SX, cy: exitY, r: 5, fill: 'var(--stream-deep)' });
       }
       if (sub.pre_norm) {
@@ -199,7 +210,7 @@
         el('rect', { x: PRE.x, y: y - PRE.h / 2, width: PRE.w, height: PRE.h, 'class': 'box box-norm' }, gp);
         text(gp, PRE.x + PRE.w / 2, y - 4, 'norm', 'label-dim', 'middle');
         text(gp, PRE.x + PRE.w / 2, y + 12, sub.pre_norm, 'label-sm', 'middle');
-        el('path', { 'class': 'edge', d: 'M' + (PRE.x + PRE.w) + ',' + y + ' H' + SUB.x, 'marker-end': arrow });
+        edge('M' + (PRE.x + PRE.w) + ',' + y + ' H' + SUB.x, sub.input_node);
       }
       var gs = group('sub.' + key, role);
       el('rect', { x: SUB.x, y: y - h / 2, width: SUB.w, height: h, 'class': 'box box-sub' }, gs);

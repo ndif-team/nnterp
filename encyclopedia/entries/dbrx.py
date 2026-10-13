@@ -123,7 +123,7 @@ attn = model.layers[1].self_attn
 with model.trace(prompt):
     qkv = attn.Wqkv.output.save()           # before the clamp
 with model.trace(prompt):
-    v = attn.attention_values.save()        # [batch, kv_heads, seq, head_dim]
+    v = attn.attention_values.save()        # [batch, num_kv_heads, seq, head_dim]
 
 H, KV, D = model.num_heads, model.num_kv_heads, model.head_dim
 clip = model.config.attn_config.clip_qkv
@@ -168,7 +168,7 @@ assert torch.equal(top.indices, idx)
 ```
 
 The experts are one module, `mlp.experts`, whose GLU weights `w1` (gate), `v1` (up) and `w2`
-(down) are stacked parameters on `experts.mlp`, `[num_experts × ffn_hidden_size, hidden]` each,
+(down) are stacked parameters on `experts.mlp`, `[num_experts × ffn_hidden_size, hidden_size]` each,
 with SiLU. It loops over the experts in its own forward, so no tensor holds a slot's output and
 `expert_outputs` is unavailable. `intermediate_size` is one expert's width,
 `ffn_config.ffn_hidden_size` (10752); the config has no dense width. `moe_jitter_eps` scales the

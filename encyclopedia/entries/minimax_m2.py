@@ -133,7 +133,7 @@ with model.trace(prompt):
     logits = moe.router_logits.save()           # [batch, seq, num_experts]
     w = moe.expert_weights.save()               # [batch, seq, top_k]
     idx = moe.expert_indices.save()
-    each = moe.expert_outputs.save()            # [batch, seq, top_k, hidden]
+    each = moe.expert_outputs.save()            # [batch, seq, top_k, hidden_size]
     out = moe.mlp_output.save()
 
 scores = logits.float().sigmoid()

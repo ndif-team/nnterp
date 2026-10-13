@@ -118,7 +118,7 @@ moe = model.layers[1].mlp
 with model.trace(prompt):
     x = model.layers[1].input.save()
     attn = model.layers[1].self_attn.attention_output.save()
-    slots = moe.expert_outputs.save()        # [batch, seq, 8, hidden], unscaled
+    slots = moe.expert_outputs.save()        # [batch, seq, 8, hidden_size], unscaled
     routed = moe.routed_output.save()
     mlp = moe.mlp_output.save()
     out = model.layers[1].layer_output.save()

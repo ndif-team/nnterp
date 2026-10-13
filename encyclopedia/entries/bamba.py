@@ -189,7 +189,7 @@ query heads over 8 key/value heads, so an edit to `attention_values[:, j]` reach
 attn = model.layers[9].self_attn
 with model.trace(prompt):
     q_raw = attn.source.self_q_proj_0.output.save()
-    q = attn.attention_queries.save()              # [batch, heads, seq, head_dim]
+    q = attn.attention_queries.save()              # [batch, num_heads, seq, head_dim]
 
 b, s, _ = q_raw.shape
 q_raw = q_raw.view(b, s, -1, model.head_dim).transpose(1, 2)

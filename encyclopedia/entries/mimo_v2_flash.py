@@ -133,7 +133,7 @@ attn = model.layers[0].self_attn
 with model.trace(prompt):
     proj = attn.v_proj.output.save()
 with model.trace(prompt):
-    v = attn.attention_values.save()            # [batch, kv_heads, seq, head_dim]
+    v = attn.attention_values.save()            # [batch, num_kv_heads, seq, head_dim]
 
 heads = proj.view(1, -1, attn.num_kv_heads, model.head_dim).transpose(1, 2)
 torch.testing.assert_close(heads * model.config.attention_value_scale, v)
@@ -166,7 +166,7 @@ combined = torch.cat([scores, column], dim=-1)
 combined = combined - combined.max(dim=-1, keepdim=True).values
 full = combined.softmax(-1)
 torch.testing.assert_close(full[..., :-1], pattern)
-sink_share = full[..., -1]                      # [batch, heads, query]
+sink_share = full[..., -1]                      # [batch, num_heads, query]
 ```
 
 The softmax runs in the scores' dtype. An edit to `attention_scores` on a sliding block is
@@ -194,7 +194,7 @@ with model.trace(prompt):
     logits = moe.router_logits.save()           # [batch, seq, num_experts], float32
     w = moe.expert_weights.save()               # [batch, seq, top_k]
     idx = moe.expert_indices.save()
-    each = moe.expert_outputs.save()            # [batch, seq, top_k, hidden]
+    each = moe.expert_outputs.save()            # [batch, seq, top_k, hidden_size]
     out = moe.mlp_output.save()
 
 chosen = logits.sigmoid().gather(-1, idx)

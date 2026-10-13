@@ -26,10 +26,10 @@ model = StandardizedTransformer("google/gemma-2-2b", dispatch=True)
 
 with model.trace("The Eiffel Tower is in"):
     ids = model.input_ids.save()               # [batch, seq]
-    emb = model.token_embeddings.save()        # [batch, seq, hidden]
+    emb = model.token_embeddings.save()        # [batch, seq, hidden_size]
     raw = model.lm_head.output.save()          # the raw projection
-    logits = model.logits.save()               # [batch, seq, vocab], after any softcap or scale past the head
-    probs = model.next_token_probs.save()      # [batch, vocab]
+    logits = model.logits.save()               # [batch, seq, vocab_size], after any softcap or scale past the head
+    probs = model.next_token_probs.save()      # [batch, vocab_size]
 
 model.num_layers, model.hidden_size, model.vocab_size, model.num_heads, model.num_kv_heads
 ```
@@ -40,7 +40,7 @@ the model's input), `token_embeddings` next, `lm_head.output`, `logits` and
 
 ## `logits`
 
-The `.logits` of the model's output, `[batch, seq, vocab]`. On a family that softcaps after
+The `.logits` of the model's output, `[batch, seq, vocab_size]`. On a family that softcaps after
 `lm_head` (Gemma-2, `config.final_logit_softcapping`) it differs from `lm_head.output`:
 
 ```python
@@ -65,7 +65,7 @@ with model.trace(prompt) as tracer:
 
 ## `token_embeddings`
 
-The embedding module's output, `[batch, seq, hidden]`: `model.embed_tokens.output` under
+The embedding module's output, `[batch, seq, hidden_size]`: `model.embed_tokens.output` under
 its standard name. It includes whatever the embedding module does itself (Gemma's
 `sqrt(hidden_size)` scale is inside every Gemma family's `...TextScaledWordEmbedding`, XGLM's inside its
 scaled embedding) and nothing the model applies afterwards: GPT-2's positional `wpe` is
@@ -82,7 +82,7 @@ with model.trace(prompt):
 
 ## `next_token_probs`
 
-`logits[:, -1].softmax(-1)`, `[batch, vocab]`, derived from the output. Read-only: there is
+`logits[:, -1].softmax(-1)`, `[batch, vocab_size]`, derived from the output. Read-only: there is
 no inverse, and assigning raises
 
 ```
@@ -136,9 +136,9 @@ The six print with the model. The `token_embeddings` description says "entering 
 block", which holds only where the model adds nothing after the embedding module (above):
 
 ```
-  (logits): The logits the model returns, after anything it does past lm_head (a softcap, a scale), [batch, seq, vocab]
-  (token_embeddings): The embedding module's output; layers[0].input is what enters the first block, [batch, seq, hidden]
-  (next_token_probs): The next-token distribution at the last position, [batch, vocab]; derived, read-only
+  (logits): The logits the model returns, after anything it does past lm_head (a softcap, a scale), [batch, seq, vocab_size]
+  (token_embeddings): The embedding module's output; layers[0].input is what enters the first block, [batch, seq, hidden_size]
+  (next_token_probs): The next-token distribution at the last position, [batch, vocab_size]; derived, read-only
   (input_ids): The token ids the model was called with, [batch, seq]
   (attention_mask): The attention mask the model was called with, [batch, seq]; zeros are padding
   (input_size): [batch, seq] of the current call; read-only

@@ -59,13 +59,13 @@ tiny Mistral and Mixtral checkpoints') gives `['▁', '▁Paris']` and Granite 3
 space (`"Paris"` is `['▁Paris']` there), or pick a target word that is one token.
 
 Then the linear DLA: `model.lm_head(x)` inside a trace runs the unembedding on any
-`[..., hidden]` tensor, stood down from the model's own call, so each term's logits
+`[..., hidden_size]` tensor, stood down from the model's own call, so each term's logits
 come from the same trace:
 
 ```python
 dla = {}
 with model.trace(prompt):
-    dla["base"] = model.lm_head(model.layers[0].input)[0, -1].save()             # [vocab]
+    dla["base"] = model.lm_head(model.layers[0].input)[0, -1].save()             # [vocab_size]
     for i, layer in enumerate(model.layers):
         dla["attn", i] = model.lm_head(layer.self_attn.attention_output)[0, -1].save()
         dla["mlp", i] = model.lm_head(layer.mlp.mlp_output)[0, -1].save()
@@ -170,7 +170,7 @@ it by `embedding_multiplier` before block 0. On Llama the two are equal.
 ## Per head
 
 `attention_head_outputs` is each head's output before concatenation and the output
-projection, `[batch, seq, heads, head_dim]`. The projection is linear, so head `h`'s
+projection, `[batch, seq, num_heads, head_dim]`. The projection is linear, so head `h`'s
 contribution is its slice times the projection weight's matching rows. The projection
 module keeps its native name (`o_proj` on Llama-style families, `c_proj` on GPT-2,
 `dense` on GPT-NeoX, `out_proj` on GPT-Neo, GPT-J and CodeGen) and its weight layout
@@ -189,19 +189,19 @@ for name in ("o_proj", "c_proj", "dense", "out_proj"):
         break
 
 with model.trace(prompt):
-    heads = attention.attention_head_outputs.save()          # [batch, seq, heads, head_dim]
-    contribution = attention.attention_output.save()         # [batch, seq, hidden]
+    heads = attention.attention_head_outputs.save()          # [batch, seq, num_heads, head_dim]
+    contribution = attention.attention_output.save()         # [batch, seq, hidden_size]
 
 W = projection._module.weight
-W_in_out = W.t() if isinstance(projection._module, torch.nn.Linear) else W     # [heads * head_dim, hidden]
+W_in_out = W.t() if isinstance(projection._module, torch.nn.Linear) else W     # [num_heads * head_dim, hidden_size]
 H, D = heads.shape[2], heads.shape[3]
-per_head = torch.einsum("bshd,hdo->bsho", heads, W_in_out.reshape(H, D, -1))    # [batch, seq, heads, hidden]
+per_head = torch.einsum("bshd,hdo->bsho", heads, W_in_out.reshape(H, D, -1))    # [batch, seq, num_heads, hidden_size]
 
 bias = projection._module.bias
 total = per_head.sum(2) + (bias if bias is not None else 0)
 torch.testing.assert_close(total, contribution, rtol=1e-4, atol=1e-3)          # the heads sum to the contribution
 
-head_dla = per_head[0, -1] @ model.lm_head._module.weight.t()                    # [heads, vocab], linear
+head_dla = per_head[0, -1] @ model.lm_head._module.weight.t()                    # [num_heads, vocab_size], linear
 print(head_dla[:, paris])
 ```
 
@@ -270,7 +270,7 @@ block reads: on E2B, `mlp_output += v / layer_scalar` misses `steer` by 0.15 in 
 ### Doge and ZAYA: per-channel gates on the stream
 
 Doge's block is `h = input_residual * input + attention_output`, `layer_output =
-post_attention_residual * h + mlp_output`, with `[hidden]` gates (`layers[i]._module.input_residual`,
+post_attention_residual * h + mlp_output`, with `[hidden_size]` gates (`layers[i]._module.input_residual`,
 `.post_attention_residual`). A term's weight in the final stream is the per-channel product of
 every gate after it: block `i`'s `attention_output` is multiplied by its own
 `post_attention_residual` and by both gates of every later block, its `mlp_output` by both gates
@@ -280,10 +280,10 @@ which enters the sum as one more term per merge ([residual-stream](../usage/resi
 
 ### DeepSeek-V4: parallel streams
 
-`layer_output` is `[batch, seq, streams, hidden]` and each sublayer's output is weighted into
+`layer_output` is `[batch, seq, streams, hidden_size]` and each sublayer's output is weighted into
 each stream and the streams mixed; the identity is the block's stream formula
 ([residual-stream](../usage/residual-stream.md#where-the-families-differ)). The plain
-`layers[i].input + attention_output + mlp_output` broadcasts `[batch, seq, hidden]` against
+`layers[i].input + attention_output + mlp_output` broadcasts `[batch, seq, hidden_size]` against
 the stream axis: it raises a shape error at most prompt lengths, and silently gives a wrong
 tensor when the prompt is one token or exactly `hc_mult` (4) tokens long.
 

@@ -108,7 +108,7 @@ combined = torch.cat([scores, column], dim=-1)
 combined = combined - combined.max(dim=-1, keepdim=True).values
 full = combined.softmax(-1)
 torch.testing.assert_close(full[..., :-1], pattern)
-sink_share = full[..., -1]                      # [batch, heads, query]
+sink_share = full[..., -1]                      # [batch, num_heads, query]
 ```
 
 The softmax runs in the scores' dtype, not in float32. A head's output is the values mixed by
@@ -159,7 +159,7 @@ with model.trace(prompt):
     logits = moe.router_logits.save()             # [batch, seq, num_experts]
     w = moe.expert_weights.save()                 # [batch, seq, top_k]
     idx = moe.expert_indices.save()
-    each = moe.expert_outputs.save()              # [batch, seq, top_k, hidden]
+    each = moe.expert_outputs.save()              # [batch, seq, top_k, hidden_size]
     routed = moe.routed_output.save()
 
 top = logits.topk(moe.top_k, dim=-1)
@@ -171,7 +171,7 @@ torch.testing.assert_close(each.sum(2), routed)
 ## The experts are clamped SwiGLUs with biases
 
 The experts hold their weights as stacked parameters, `experts.gate_up_proj`
-(`[num_experts, hidden, 2 × intermediate]`) and `experts.down_proj`, each with a bias. The
+(`[num_experts, hidden_size, 2 × intermediate]`) and `experts.down_proj`, each with a bias. The
 gate and up halves are interleaved, gate on the even columns and up on the odd ones. The gate is
 clamped above at 7 and the up half to [−7, 7] (`swiglu_limit`), and the activation is
 `(up + 1) · gate · sigmoid(1.702 · gate)` (`swiglu_alpha`). Since transformers 5.19 the experts read

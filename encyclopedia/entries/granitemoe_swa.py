@@ -131,7 +131,7 @@ with model.trace(prompt):
     logits = moe.router_logits.save()        # [batch, seq, 48]
     w = moe.expert_weights.save()            # [batch, seq, 4]
     idx = moe.expert_indices.save()
-    slots = moe.expert_outputs.save()        # [batch, seq, 4, hidden]
+    slots = moe.expert_outputs.save()        # [batch, seq, 4, hidden_size]
     routed = moe.routed_output.save()
 
 top, chosen = logits.topk(moe.top_k, dim=-1)

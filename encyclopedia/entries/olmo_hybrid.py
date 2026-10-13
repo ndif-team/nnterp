@@ -195,7 +195,7 @@ attn = model.layers[full[0]].self_attn
 with model.trace(prompt):
     qn = attn.q_norm.output.save()
 with model.trace(prompt):
-    q = attn.attention_queries.save()          # [batch, heads, seq, head_dim]
+    q = attn.attention_queries.save()          # [batch, num_heads, seq, head_dim]
 
 b, s, _ = qn.shape
 assert torch.equal(qn.view(b, s, -1, model.head_dim).transpose(1, 2), q)

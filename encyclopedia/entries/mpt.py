@@ -115,7 +115,7 @@ with model.trace(prompt):
     h = model.layers[1].input_layernorm.output.save()
     q = attn.attention_queries.save()
 
-fused = h @ attn.Wqkv.weight.T                                   # [batch, seq, 3 * hidden]
+fused = h @ attn.Wqkv.weight.T                                   # [batch, seq, 3 * hidden_size]
 q_part, k_part, v_part = fused.chunk(3, dim=-1)
 heads = q_part.view(*q_part.shape[:2], model.num_heads, model.head_dim).transpose(1, 2)
 torch.testing.assert_close(heads, q)
@@ -152,7 +152,7 @@ with model.trace(prompt):
     scores = attn.attention_scores.save()
 
 seq = q.shape[2]
-alibi = build_mpt_alibi_tensor(model.num_heads, seq)                  # [heads, 1, seq]
+alibi = build_mpt_alibi_tensor(model.num_heads, seq)                  # [num_heads, 1, seq]
 again = q.float() @ k.float().transpose(-1, -2) / model.head_dim ** 0.5 + alibi
 causal = torch.ones(seq, seq, dtype=torch.bool).tril()
 torch.testing.assert_close(again[..., causal], scores[..., causal])
@@ -165,7 +165,7 @@ transformers has one attention for MPT, its own arithmetic, so a load without
 scores are read where the softmax takes them, after an upcast, so `attention_scores` is float32
 whatever the model's dtype; the masked entries hold the model dtype's minimum (`-3.39e38` under
 bfloat16). The pattern is cast back to the values' dtype. The head outputs are the second
-`matmul`, heads first in the forward, served `[batch, seq, heads, head_dim]`.
+`matmul`, heads first in the forward, served `[batch, seq, num_heads, head_dim]`.
 
 ## What transformers' MptForCausalLM reads from the config
 

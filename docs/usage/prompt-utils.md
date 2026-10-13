@@ -80,17 +80,17 @@ when targets are words that can start alike.
 prompt.get_target_probs(probs, layer=None) -> dict[str, Tensor]
 ```
 
-`probs` is `[batch, layers, vocab]`; each target's mass is the sum over its
+`probs` is `[batch, layers, vocab_size]`; each target's mass is the sum over its
 ids, `[batch, layers]` on the CPU, or `[batch]` for one `layer`.
 
 ```python
 prompt.run(model, get_probs) -> dict[str, Tensor]
 ```
 
-`get_probs(model, prompt.prompt)` returns `[batch, layers, vocab]`; the result
+`get_probs(model, prompt.prompt)` returns `[batch, layers, vocab_size]`; the result
 is `get_target_probs` of it. The default `get_probs` is
 `next_token_probs_unsqueeze(model, prompt, remote=False)`:
-`compute_next_token_probs` with a layer axis of one, `[batch, 1, vocab]`.
+`compute_next_token_probs` with a layer axis of one, `[batch, 1, vocab_size]`.
 
 ## Many prompts: `run_prompts`
 
@@ -100,7 +100,7 @@ run_prompts(model, prompts, batch_size=32, get_probs_func=None, func_kwargs=None
 
 Runs the prompts' texts in batches of `batch_size`, one trace per batch, under
 `torch.no_grad()`. `get_probs_func(model, batch, remote=..., **func_kwargs)`
-returns `[batch, layers, vocab]`; the default is the next-token distribution
+returns `[batch, layers, vocab_size]`; the default is the next-token distribution
 with one layer. The result maps each target name to `[num_prompts, layers]` on
 the CPU. Every prompt must name the same targets (`ValueError` otherwise); an
 empty list returns `{}`. `tqdm` is a progress-bar factory to wrap the batch
@@ -113,7 +113,7 @@ lens at chosen blocks, through `model.project_on_vocab`:
 def lens_probs(model, batch, remote=False, layers=None):
     with model.trace(batch, remote=remote):
         rows = [model.project_on_vocab(model.layers[i].layer_output)[:, -1].softmax(-1) for i in layers]
-        out = torch.stack(rows, dim=1).cpu().save()          # [batch, len(layers), vocab]
+        out = torch.stack(rows, dim=1).cpu().save()          # [batch, len(layers), vocab_size]
     return out
 
 mass = run_prompts(model, prompts, batch_size=32, get_probs_func=lens_probs, func_kwargs={"layers": [4, 8]})

@@ -29,12 +29,12 @@ from torch import Tensor
 
 import nnterp
 from nnterp import StandardizedTransformer, DerivedEProperty, EProperty
-from nnterp.components import Pattern, interface_reason
+from nnterp.components import BATCH, HEADS, HIDDEN, QUERY, Pattern, interface_reason
 from nnterp.families import gpt2
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention   # after nnterp
 
 
-def attention_entropy(self) -> Float[Tensor, "batch heads query"]:
+def attention_entropy(self) -> Float[Tensor, f"{BATCH} {HEADS} {QUERY}"]:
     probs = self.attention_probabilities
     return -(probs * torch.log(probs.clamp_min(1e-12))).sum(-1)
 
@@ -64,16 +64,16 @@ print(attn.support())
 # {'attention_queries': None, ..., 'attention_softmax': None, 'attention_entropy': None}
 
 with model.trace("The Eiffel Tower is in"):
-    soft = attn.attention_softmax.save()      # [batch, heads, query, key]
-    ent = attn.attention_entropy.save()       # [batch, heads, query]
+    soft = attn.attention_softmax.save()      # [batch, num_heads, query, key]
+    ent = attn.attention_entropy.save()       # [batch, num_heads, query]
 ```
 
 The repr of `attn` lists both beside the standard ones:
 
 ```
-(attention_softmax) -> Pattern [batch heads query key]: The softmax output before the dropout
-(attention_entropy) -> Float[Tensor, 'batch heads query'] [batch heads query]: Per-row entropy of the pattern
-(attention_queries) -> Queries [batch heads seq qk_head_dim]: The queries entering attention
+(attention_softmax) -> Pattern [batch num_heads query key]: The softmax output before the dropout
+(attention_entropy) -> Float[Tensor, 'batch num_heads query'] [batch num_heads query]: Per-row entropy of the pattern
+(attention_queries) -> Queries [batch num_heads seq qk_head_dim]: The queries entering attention
 ...
 ```
 
@@ -147,8 +147,8 @@ from transformers.models.gpt2.modeling_gpt2 import GPT2MLP
 
 
 class Mlp(gpt2.Mlp):
-    @EProperty(key="output", description="The MLP output at the last position, [batch, hidden]")
-    def last_position(self, value) -> Float[Tensor, "batch hidden"]:
+    @EProperty(key="output", description="The MLP output at the last position, [batch, hidden_size]")
+    def last_position(self, value) -> Float[Tensor, f"{BATCH} {HIDDEN}"]:
         return value[:, -1]
 
 
@@ -173,10 +173,11 @@ thirty-five: thirty-two from `nnterp.components`, and the root's `Logits`, `Next
 `Tokens` from `nnterp.standardized`).
 Annotate with the name where one fits: `attention_softmax` above is `-> Pattern`, so
 `Attention.attention_softmax.layout is Pattern`, the same object the base's
-`attention_probabilities` carries, and `.dims` is `("batch", "heads", "query", "key")`.
-A shape none of the names cover takes an inline `Float[Tensor, "..."]` with the same axis
-names: `attention_entropy` is `Float[Tensor, "batch heads query"]`, so its `.dims` is
-`("batch", "heads", "query")`. `isinstance(tensor, value.layout)` checks rank and dtype
+`attention_probabilities` carries, and `.dims` is `("batch", "num_heads", "query", "key")`.
+A shape none of the names cover takes an inline `Float[Tensor, ...]` composed from the same
+axis names, the constants `nnterp.components` exports (`BATCH`, `SEQ`, `HIDDEN`, `HEADS`, ...;
+[../usage/layouts.md](../usage/layouts.md#axis-names-and-sizes)): `attention_entropy` is `Float[Tensor, f"{BATCH} {HEADS} {QUERY}"]`, so its `.dims` is
+`("batch", "num_heads", "query")`. `isinstance(tensor, value.layout)` checks rank and dtype
 either way. The family suite checks every value's tensor against its annotation and axis
 sizes, so a value that will ship carries one; a value without an annotation has
 `layout None` and is skipped there.

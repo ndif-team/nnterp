@@ -127,7 +127,7 @@ tower; CLIP's and SigLIP's are raster order, 24 x 24 patches here).
 
 ## Attention onto the image
 
-The text blocks' pattern is `[batch, heads, query, key]` over the whole sequence, so the
+The text blocks' pattern is `[batch, num_heads, query, key]` over the whole sequence, so the
 mass a head puts on the image is the pattern summed over the image key columns. Per block,
 from the last token:
 
@@ -137,7 +137,7 @@ with torch.no_grad(), model.trace(prompt, images=[red]):
     mask = model.vision.image_token_mask       # first in the trace: it comes off the inputs
     for i in range(model.num_layers):
         probabilities = model.layers[i].self_attn.attention_probabilities
-        masses.append(probabilities[0, :, -1, mask[0]].sum(-1).save())   # [heads]: the last token's mass on the image
+        masses.append(probabilities[0, :, -1, mask[0]].sum(-1).save())   # [num_heads]: the last token's mass on the image
 
 mean = torch.stack(masses).float().mean(-1)   # [layers]
 peak = torch.stack(masses).float().amax(-1)   # [layers]: the head that looks most

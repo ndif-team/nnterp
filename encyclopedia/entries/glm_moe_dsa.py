@@ -149,7 +149,7 @@ scores every key for every query and keeps the `index_topk` (2048) best. The att
 others to the dtype's minimum before the shared interface, under eager and under the default
 `sdpa` load alike, so the default load runs the same sparse computation; the interior values need
 `attn_implementation="eager"`. `attention_scores` carry that mask, so a dropped key reads like a
-future one; `attention_probabilities` is the dense `[batch, heads, query, key]` pattern, exactly
+future one; `attention_probabilities` is the dense `[batch, num_heads, query, key]` pattern, exactly
 zero outside each query's selection. While a prompt is no longer than 2048 tokens the selection
 lists every key, and the pattern is plain causal: on a 7-token prompt row *t* has *t* + 1 nonzero
 entries. The selection is `self_attn.output[2]`, `[batch, query, min(index_topk, seq)]` int32,

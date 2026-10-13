@@ -54,7 +54,7 @@ with model.trace(prompt):
     g = mix.decays.save()                   # [batch, seq, heads], float32, <= 0
     b = mix.betas.save()                    # [batch, seq, heads], in (0, 1)
     state = mix.state_output.save()         # [batch, heads, key_dim, value_dim]: after the last token
-    out = mix.attention_output.save()       # [batch, seq, hidden]: what the mixer adds to the stream
+    out = mix.attention_output.save()       # [batch, seq, hidden_size]: what the mixer adds to the stream
     pattern = model.layers[softmax[0]].self_attn.attention_probabilities.save()   # the attention block still has one
 ```
 
@@ -75,7 +75,7 @@ block', 7: ..., ...}`. `model.support(layer=i)` is flat for one block.
 
 | value | what it is | layout |
 | --- | --- | --- |
-| `attention_output` | what the mixer adds to the residual stream | `Residual`: `batch seq hidden` |
+| `attention_output` | what the mixer adds to the residual stream | `Residual`: `batch seq hidden_size` |
 | `attention_queries`, `attention_keys` | what the delta rule receives: after the short convolution, the activation and the repeat to the value heads, before the kernel's l2-norm (and, for the queries, its `1/sqrt(key_dim)` scale) | `LinearQK`: `batch seq heads key_dim` |
 | `attention_values` | the values the delta rule receives | `LinearV`: `batch seq heads value_dim` |
 | `decays` | the gate: the log of how much of the state each token keeps; float32, non-positive | `Gates`: `batch seq heads`; on Kimi-Linear `ChannelGates`: `batch seq heads key_dim`, one per key channel |

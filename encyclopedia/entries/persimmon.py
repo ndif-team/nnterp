@@ -84,14 +84,14 @@ exactly. Every norm is a `LayerNorm` with a weight and a bias, and every project
 ## Queries, keys and values are cut per head from one projection
 
 `self_attn.query_key_value` is one biased `nn.Linear` from the width to three times the width. Its
-output is laid out head by head, `[heads, 3, head_dim]` on the last axis: head `h`'s query, key and
+output is laid out head by head, `[num_heads, 3, head_dim]` on the last axis: head `h`'s query, key and
 value are three consecutive `head_dim` blocks, not three blocks of the whole width. The rows of the
 weight follow the same layout:
 
 ```python
 attn = model.layers[1].self_attn
 H, D = model.num_heads, model.head_dim
-W = attn.query_key_value.weight.view(H, 3, D, -1)    # [heads, q/k/v, head_dim, hidden]
+W = attn.query_key_value.weight.view(H, 3, D, -1)    # [num_heads, q/k/v, head_dim, hidden_size]
 b = attn.query_key_value.bias.view(H, 3, D)
 
 with model.trace(prompt):

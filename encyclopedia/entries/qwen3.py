@@ -70,16 +70,16 @@ NOTES = """
 ## Queries and keys are normed per head, before the rotary
 
 ```
-q = rope(q_norm(q_proj(x).view(..., heads, 128)))     # one gain, every head
-k = rope(k_norm(k_proj(x).view(..., kv_heads, 128)))
-v = v_proj(x).view(..., kv_heads, 128)                # no norm
+q = rope(q_norm(q_proj(x).view(..., num_heads, 128)))     # one gain, every head
+k = rope(k_norm(k_proj(x).view(..., num_kv_heads, 128)))
+v = v_proj(x).view(..., num_kv_heads, 128)                # no norm
 out = o_proj(softmax(q·kᵀ / √128) · v)
 ```
 
 `q_norm` and `k_norm` are RMSNorms over one head's 128 dimensions, applied to every head with the
 same gain vector. `attention_queries` and `attention_keys` are read at the attention interface,
 after both the norm and the rotary: on 0.6B they equal `rope(q_norm(...))` of `q_proj.output`
-exactly. `q_norm.output` is `[batch, seq, heads, 128]`, before the transpose and the rotary.
+exactly. `q_norm.output` is `[batch, seq, num_heads, 128]`, before the transpose and the rotary.
 Because each head is rescaled to a fixed RMS, the size of a query or key comes from the gains
 and the head's direction, not from the input's scale: on 0.6B the `k_norm` gains reach 96.5 on
 block 0 and the `q_norm` gains 11.8.
@@ -199,6 +199,6 @@ Qwen-Scope's residual-stream SAEs are trained on Qwen3-1.7B-Base
 (`Qwen/SAE-Res-Qwen3-1.7B-Base-W32K-L0_50` and `-L0_100`, 32768 features) and Qwen3-8B-Base
 (`Qwen/SAE-Res-Qwen3-8B-Base-W64K-L0_50` and `-L0_100`, 65536 features), one per block, TopK with
 `k` 50 or 100. Their hook point is `resid_post`, a forward hook on the decoder block's output, which
-is `model.layers[i].layer_output`. Each `layer<i>.sae.pt` holds `W_enc` `[d_sae, hidden]`,
-`b_enc`, `W_dec` `[hidden, d_sae]` and `b_dec` in float32.
+is `model.layers[i].layer_output`. Each `layer<i>.sae.pt` holds `W_enc` `[d_sae, hidden_size]`,
+`b_enc`, `W_dec` `[hidden_size, d_sae]` and `b_dec` in float32.
 """

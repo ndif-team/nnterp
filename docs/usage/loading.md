@@ -81,7 +81,7 @@ The default serves what a name guess makes safe. It knows the spellings the ship
 use (`transformer.h`, `gpt_neox.layers`, `model.decoder.final_layer_norm`, `attn`,
 `self_attention`, `feed_forward`, ...) and maps them onto Llama's names, and it checks its
 guess at load: the root needs `embed_tokens`, `layers`, `norm` and `lm_head`, block 0 must take
-and the blocks return a `[batch, seq, hidden]` stream, and the logits must start `[batch, seq]`,
+and the blocks return a `[batch, seq, hidden_size]` stream, and the logits must start `[batch, seq]`,
 on a shape-only scan (fake tensors; nothing loads). When the names fail it raises
 `UnsupportedFamily`, with a `rename=` read off the module tree when it can find one:
 
@@ -257,13 +257,13 @@ GPT2Block(
     (c_proj): Conv1D()
     (attn_dropout): Dropout(p=0.1, inplace=False)
     (resid_dropout): Dropout(p=0.1, inplace=False)
-    (attention_queries) -> Queries [batch heads seq qk_head_dim]: The queries entering attention
-    (attention_keys) -> Keys [batch kv_heads seq qk_head_dim]: The keys entering attention
-    (attention_values) -> Values [batch kv_heads seq head_dim]: The values entering attention
-    (attention_scores) -> Pattern [batch heads query key]: The attention scores entering the softmax, masked
-    (attention_output) -> Residual [batch seq hidden]: What the attention adds to the residual stream
-    (attention_probabilities) -> Pattern [batch heads query key]: The attention pattern the values are mixed with
-    (attention_head_outputs) -> HeadOutputs [batch seq heads head_dim]: The per-head outputs before the output projection
+    (attention_queries) -> Queries [batch num_heads seq qk_head_dim]: The queries entering attention
+    (attention_keys) -> Keys [batch num_kv_heads seq qk_head_dim]: The keys entering attention
+    (attention_values) -> Values [batch num_kv_heads seq head_dim]: The values entering attention
+    (attention_scores) -> Pattern [batch num_heads query key]: The attention scores entering the softmax, masked
+    (attention_output) -> Residual [batch seq hidden_size]: What the attention adds to the residual stream
+    (attention_probabilities) -> Pattern [batch num_heads query key]: The attention pattern the values are mixed with
+    (attention_head_outputs) -> HeadOutputs [batch seq num_heads head_dim]: The per-head outputs before the output projection
   )
   (post_attention_layernorm/ln_2): LayerNorm((768,), eps=1e-05, elementwise_affine=True, bias=True)
   (mlp): GPT2MLP(
@@ -271,9 +271,9 @@ GPT2Block(
     (c_proj): Conv1D()
     (act): NewGELUActivation()
     (dropout): Dropout(p=0.1, inplace=False)
-    (mlp_output) -> Residual [batch seq hidden]: What the MLP adds to the residual stream
+    (mlp_output) -> Residual [batch seq hidden_size]: What the MLP adds to the residual stream
   )
-  (layer_output) -> Residual [batch seq hidden]: The residual stream leaving the block, a tensor even when the block returns a tuple
+  (layer_output) -> Residual [batch seq hidden_size]: The residual stream leaving the block, a tensor even when the block returns a tuple
 )
 ```
 

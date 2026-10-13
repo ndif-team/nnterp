@@ -44,7 +44,7 @@ BLOCK = {
             "label": "Attention",
             "pre_norm": "input_layernorm",
             "pre_norm_note": "This norm reads attn_hc's collapse of the four streams (attn_hc.output[2], a weighted sum "
-                             "over the stream axis), not a stream: layers[i].input is [batch, seq, streams, hidden].",
+                             "over the stream axis), not a stream: layers[i].input is [batch, seq, streams, hidden_size].",
             "contribution": "attention_output",
             "interior": [
                 "attention_queries", "attention_keys", "attention_values",
@@ -73,7 +73,7 @@ BLOCK = {
     ],
     "identity": "mlp_combᵀ · (attention_combᵀ · layers[i].input + attention_post ⊗ self_attn.attention_output) "
                 "+ mlp_post ⊗ mlp.mlp_output == layer_output",
-    "identity_note": "layers[i].input and layer_output are [batch, seq, streams, hidden]. combᵀ · x mixes the streams "
+    "identity_note": "layers[i].input and layer_output are [batch, seq, streams, hidden_size]. combᵀ · x mixes the streams "
                      "(comb.transpose(-1, -2) @ x); post ⊗ y writes y into every stream (post[..., None] * y[..., None, :]). "
                      "Exact in float32 on every block of the tiny checkpoint; the stream mean is the additive part.",
     "streams": {
@@ -86,7 +86,7 @@ BLOCK = {
 
 STRIP = {
     "embed": "A plain lookup, copied into each of the hc_mult (4) streams: layers[0].input is token_embeddings "
-             "expanded to [batch, seq, streams, hidden]. The tokenizer prepends nothing.",
+             "expanded to [batch, seq, streams, hidden_size]. The tokenizer prepends nothing.",
     "layers": "Each block takes and returns the four streams. The checkpoints' multi-token-prediction blocks "
               "(num_nextn_predict_layers) are not built: layers holds num_hidden_layers blocks.",
     "readout": "hc_head weights each of the last layer_output's streams by its content and sums them; "
@@ -100,7 +100,7 @@ NOTES = """
 ## The block, in order
 
 ```
-post_a, comb_a, xa = attn_hc(x)                  # x: [batch, seq, 4, hidden]
+post_a, comb_a, xa = attn_hc(x)                  # x: [batch, seq, 4, hidden_size]
 h   = comb_aᵀ · x + post_a ⊗ self_attn(input_layernorm(xa))
 post_f, comb_f, xf = ffn_hc(h)
 out = comb_fᵀ · h + post_f ⊗ mlp(post_attention_layernorm(xf))
@@ -109,27 +109,27 @@ out = comb_fᵀ · h + post_f ⊗ mlp(post_attention_layernorm(xf))
 The residual is `hc_mult` (4) streams. Before each sublayer a hyper-connection (`attn_hc`,
 `ffn_hc`) reads all four and returns `(post, comb, collapsed)`: `collapsed` is the sum of the
 streams weighted by sigmoids of their content, and the sublayer's pre-norm reads it. The
-sublayer's `[batch, seq, hidden]` output goes into every stream, scaled per stream by `post`, and
+sublayer's `[batch, seq, hidden_size]` output goes into every stream, scaled per stream by `post`, and
 the streams themselves are mixed by `comb`, consumed transposed. Llama's norm names hold:
 `input_layernorm` before the attention, `post_attention_layernorm` before the mixture.
 
 ## `layer_output` is four streams
 
-`layer_output` and `layers[i].input` are `[batch, seq, streams, hidden]` (the `Streams`
-layout); `attention_output` and `mlp_output` stay `[batch, seq, hidden]`. Block 0 reads the
+`layer_output` and `layers[i].input` are `[batch, seq, streams, hidden_size]` (the `Streams`
+layout); `attention_output` and `mlp_output` stay `[batch, seq, hidden_size]`. Block 0 reads the
 embedding copied into each stream; after it the streams differ. Rank-3 code runs here and answers
-per stream: `resid[:, -1]` is the last position's four streams, `[batch, streams, hidden]`.
+per stream: `resid[:, -1]` is the last position's four streams, `[batch, streams, hidden_size]`.
 Index one stream, or take the stream mean, which is the additive part of the block:
 
 ```python
 with model.trace(prompt):
-    out = model.layers[1].layer_output.save()   # [1, seq, 4, hidden]
+    out = model.layers[1].layer_output.save()   # [1, seq, 4, hidden_size]
 
-last = out[:, -1, -1]          # the last position, the last stream: [1, hidden]
-mean = out[:, -1].mean(-2)     # the last position, the stream mean: [1, hidden]
+last = out[:, -1, -1]          # the last position, the last stream: [1, hidden_size]
+mean = out[:, -1].mean(-2)     # the last position, the stream mean: [1, hidden_size]
 ```
 
-A write to `layer_output` lands natively; `steer` adds a `[hidden]` vector to every stream, and
+A write to `layer_output` lands natively; `steer` adds a `[hidden_size]` vector to every stream, and
 `skip_layers` passes the streams through.
 
 ## The identity is the block's formula
@@ -171,8 +171,8 @@ needs the later blocks' `comb` and `post` too.
 
 The model reads the last block's streams out through `model.hc_head`, a learned,
 content-dependent weighted sum over the stream axis, then `norm` and `lm_head`. The family's
-`project_on_vocab` does the same on a `[batch, seq, streams, hidden]` tensor (or one position's
-`[streams, hidden]`), so the lens on the last block is `logits` exactly. A rank-3 tensor (a
+`project_on_vocab` does the same on a `[batch, seq, streams, hidden_size]` tensor (or one position's
+`[streams, hidden_size]`), so the lens on the last block is `logits` exactly. A rank-3 tensor (a
 contribution, one stream) goes through `norm` and `lm_head` alone, and one stream's lens is not
 `logits`.
 
@@ -260,7 +260,7 @@ one stream or their mean:
 e = idx[0, -1, 0].item()                       # an expert the last token uses
 with model.trace(prompt):
     moe.expert_weights = moe.expert_weights.masked_fill(moe.expert_indices == e, 0)
-    ablated = model.layers[4].layer_output.save()    # [1, seq, 4, hidden]
+    ablated = model.layers[4].layer_output.save()    # [1, seq, 4, hidden_size]
 
 ablated[:, -1, -1]          # the last stream at the last position
 ablated[:, -1].mean(-2)     # the stream mean at the last position

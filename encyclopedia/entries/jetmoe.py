@@ -85,8 +85,8 @@ torch.testing.assert_close(x + attn + mlp, out)
 ## The attention is a mixture of experts
 
 `self_attn.experts` holds 8 attention experts, each a query projection (`experts.input_linear`,
-`hidden → num_kv_heads × head_dim`) and an output projection (`experts.output_linear`, back to
-`hidden`); there is no `q_proj` or `o_proj`. Per token, `experts.router` takes the top 2 of 8
+`hidden_size → num_kv_heads × head_dim`) and an output projection (`experts.output_linear`, back to
+`hidden_size`); there is no `q_proj` or `o_proj`. Per token, `experts.router` takes the top 2 of 8
 logits and a softmax over those 2. Each chosen expert projects the token's queries for 16 heads,
 so a token has 2 × 16 = 32 query heads (`num_heads`), and slot `s` holds heads `16 s` to `16 s + 15`.
 Keys and values come from one shared `kv_proj`, 16 heads of 128, and are tiled (`repeat`, not
@@ -100,7 +100,7 @@ for the attention's routing; its logits are `experts.router.layer.output`, flat 
 ```python
 attn = model.layers[1].self_attn
 with model.trace(prompt):
-    logits = attn.experts.router.layer.output.save()   # [batch * seq, experts]
+    logits = attn.experts.router.layer.output.save()   # [batch * seq, num_experts]
 with model.trace(prompt):
     heads = attn.attention_head_outputs.save()         # [batch, seq, num_heads, head_dim]
     out = attn.attention_output.save()
@@ -111,7 +111,7 @@ gates, idx = top.values.softmax(-1), top.indices      # [batch * seq, k]
 experts = attn._module.experts
 W = experts.output_linear.weight[idx]                 # each slot's expert
 slots = heads.reshape(-1, k, kv * model.head_dim, 1)  # each slot's 16 heads
-terms = (W @ slots).squeeze(-1)                       # [batch * seq, k, hidden]
+terms = (W @ slots).squeeze(-1)                       # [batch * seq, k, hidden_size]
 manual = (gates[..., None] * terms).sum(1) + experts.bias
 torch.testing.assert_close(manual.view_as(out), out)
 ```

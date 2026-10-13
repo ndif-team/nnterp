@@ -40,7 +40,7 @@ target = ids[0]
 
 with model.trace() as tracer:
     with tracer.invoke(prompt):
-        clean = model.logits[:, -1].float().log_softmax(-1).save()     # [1, vocab], log-probabilities
+        clean = model.logits[:, -1].float().log_softmax(-1).save()     # [1, vocab_size], log-probabilities
     with tracer.invoke(prompt):
         model.layers[LAYER].mlp.mlp_output[:] = 0                      # this invoke's rows only
         ablated = model.logits[:, -1].float().log_softmax(-1).save()
@@ -82,7 +82,7 @@ stays closer to the model's usual state:
 reference = ["The capital of France is", "Paris is in", "Berlin lies in", "London hosts the"]
 
 with model.trace(reference):
-    mean_act = model.layers[LAYER].mlp.mlp_output[:, -1].mean(0).save()   # [hidden]
+    mean_act = model.layers[LAYER].mlp.mlp_output[:, -1].mean(0).save()   # [hidden_size]
 
 with model.trace(prompt):
     model.layers[LAYER].mlp.mlp_output[:, -1] = mean_act
@@ -107,7 +107,7 @@ Gotchas).
 ### One head
 
 The per-head outputs before the output projection are
-`attention_head_outputs`, `[batch, seq, heads, head_dim]`; zero one head's slice:
+`attention_head_outputs`, `[batch, seq, num_heads, head_dim]`; zero one head's slice:
 
 ```python
 HEAD = 3

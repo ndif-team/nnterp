@@ -178,7 +178,7 @@ its 256 query dimensions followed by its 256 gate dimensions, so the first half 
 before `o_proj`:
 
 ```
-q, gate = split per head(q_proj(x))             # [..., heads, 256] each
+q, gate = split per head(q_proj(x))             # [..., num_heads, 256] each
 q = rope(q_norm(q)); k = rope(k_norm(k_proj(x))); v = v_proj(x)
 out = o_proj(attention(q, k, v).flatten() * sigmoid(gate.flatten()))
 ```
@@ -305,6 +305,6 @@ and `-L0_100`, 32768 features), Qwen3.5-9B-Base (`Qwen/SAE-Res-Qwen3.5-9B-Base-W
 `-L0_100`, 65536) and the post-trained Qwen3.5-27B (`Qwen/SAE-Res-Qwen3.5-27B-W80K-L0_50` and
 `-L0_100`, 81920), one per block, TopK with `k` 50 or 100. Their hook point is `resid_post`, a
 forward hook on the decoder block's output, which is `model.layers[i].layer_output`, on DeltaNet
-and attention blocks alike. Each `layer<i>.sae.pt` holds `W_enc` `[d_sae, hidden]`, `b_enc`,
-`W_dec` `[hidden, d_sae]` and `b_dec` in float32.
+and attention blocks alike. Each `layer<i>.sae.pt` holds `W_enc` `[d_sae, hidden_size]`, `b_enc`,
+`W_dec` `[hidden_size, d_sae]` and `b_dec` in float32.
 """

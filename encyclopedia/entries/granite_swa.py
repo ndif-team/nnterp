@@ -95,7 +95,7 @@ with model.trace(prompt):
     v = attn.attention_values.save()
     scores = attn.attention_scores.save()
     probs = attn.attention_probabilities.save()
-    heads = attn.attention_head_outputs.save()     # [batch, seq, heads, head_dim]
+    heads = attn.attention_head_outputs.save()     # [batch, seq, num_heads, head_dim]
 
 share = torch.sigmoid(scores.logsumexp(-1) - attn._module.sinks.view(1, -1, 1))
 v = v.repeat_interleave(model.num_heads // model.num_kv_heads, dim=1)

@@ -90,11 +90,11 @@ transformers' shared attention call, `attention_interface(module, query, key, va
 
 ## KV heads, grouped-query attention
 
-The number of key/value heads, `num_kv_heads`, fewer than `num_heads` under grouped-query attention and 1 under multi-query. `attention_keys` and `attention_values` are read before `repeat_kv`, so their head axis is `kv_heads` wide, except where the family expands them first (DeepSeek, Falcon's 40B layout). See [../usage/layouts.md](../usage/layouts.md).
+The number of key/value heads, `num_kv_heads`, fewer than `num_heads` under grouped-query attention and 1 under multi-query. `attention_keys` and `attention_values` are read before `repeat_kv`, so their head axis is `num_kv_heads` wide, except where the family expands them first (DeepSeek, Falcon's 40B layout). See [../usage/layouts.md](../usage/layouts.md).
 
 ## Layout, dims
 
-The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-five named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, "batch seq hidden"]` in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the thirty-two envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`) and `linear_attn.decays` on Kimi-Linear (`ChannelGates`). See [../usage/layouts.md](../usage/layouts.md).
+The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-five named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]`, axes `batch seq hidden_size`, in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the thirty-two envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple; a model-fact axis is named as its size, so `axis_size(envoy, axis)` reads it. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`) and `linear_attn.decays` on Kimi-Linear (`ChannelGates`). See [../usage/layouts.md](../usage/layouts.md).
 
 ## MLA (multi-head latent attention)
 
@@ -146,7 +146,7 @@ nnsight's `rename=` constructor argument, a dict of native path to alias. A key 
 
 ## Residual stream
 
-The tensor a block passes to the next, `[batch, seq, hidden]`: `layers[i].input` entering, `layer_output` leaving, each sublayer adding its contribution in between. See [../usage/residual-stream.md](../usage/residual-stream.md).
+The tensor a block passes to the next, `[batch, seq, hidden_size]`: `layers[i].input` entering, `layer_output` leaving, each sublayer adding its contribution in between. See [../usage/residual-stream.md](../usage/residual-stream.md).
 
 ## `route_kernels`, `route_delta_rule`
 

@@ -186,8 +186,8 @@ for the values read inside the attention function (the ones marked `⚠`).
 
 `attention_queries` and `attention_keys` are the tensors the attention function receives:
 `rope(q_norm(q_proj(x)))` and `rope(k_norm(k_proj(x)))`, per head. The normed keys before the
-rotary are `self_attn.k_norm.output` (`[batch, kv_heads, seq, head_dim]`), the queries
-`q_norm.output` (`heads` wide); the norms' gain is `1 + weight`, as on every Gemma 3 norm.
+rotary are `self_attn.k_norm.output` (`[batch, num_kv_heads, seq, head_dim]`), the queries
+`q_norm.output` (`num_heads` wide); the norms' gain is `1 + weight`, as on every Gemma 3 norm.
 `attention_values` is `v_proj`'s output reshaped to heads.
 
 The query scale is `query_pre_attn_scalar ** -0.5`. That is `256 ** -0.5` on 270M, 1B, 4B and

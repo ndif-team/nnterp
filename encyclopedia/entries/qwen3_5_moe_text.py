@@ -179,7 +179,7 @@ top `num_experts_per_tok` probabilities are kept and always divided by their sum
 no `norm_topk_prob` switch), so each token's `expert_weights` sum to one. 35B-A3B and 122B-A10B
 route each token to 8 of 256 experts, 397B-A17B to 10 of 512. The experts are one fused module,
 `experts`, each a SwiGLU `moe_intermediate_size` wide (512 on 35B-A3B, 1024 on 122B-A10B and
-397B-A17B); `expert_outputs` is each slot's weighted output, `[batch, seq, top_k, hidden]`, and
+397B-A17B); `expert_outputs` is each slot's weighted output, `[batch, seq, top_k, hidden_size]`, and
 sums to `routed_output`:
 
 ```python

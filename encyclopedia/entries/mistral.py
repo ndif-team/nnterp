@@ -155,7 +155,7 @@ without the CLS token (`vision_feature_layer` is `-2` on `llava-v1.6-mistral-7b-
 projector's output to the image's aspect ratio and appends `image_newline` after each row of
 patches, so `vision.image_features` has another row count than `model.projector.output`. On the
 pinned tiny checkpoint a 64 × 64 image is three rows of 576 patches, the projector returns
-`[3, 576, hidden]`, and `vision.image_features` is 1176 rows, 24 of them `image_newline`. Edit
+`[3, 576, hidden_size]`, and `vision.image_features` is 1176 rows, 24 of them `image_newline`. Edit
 `vision.image_features` for what the text model receives.
 """,
     },

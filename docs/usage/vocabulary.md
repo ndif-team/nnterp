@@ -164,7 +164,7 @@ another and computes something else:
 
 On every recurrent mixer the sequence axis of `attention_queries`, `attention_keys` and
 `attention_values` is 1 (`[batch, seq, ...]`); on softmax attention (`self_attn`) it is 2
-(`[batch, heads, seq, head_dim]`), the layout transformers hands its attention interface.
+(`[batch, num_heads, seq, head_dim]`), the layout transformers hands its attention interface.
 An index such as `q[:, -1]` is the last token on `linear_attn` and the last head on
 `self_attn`.
 

@@ -1,9 +1,9 @@
 ---
 title: Layouts
 one_liner: "Every standard value has one axis layout on every family (two exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear), one of thirty-five named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
-tags: [usage, layouts, shapes, jaxtyping, dims, heads, kv_heads, Residual, Pattern, Streams, experts, top_k]
+tags: [usage, layouts, shapes, jaxtyping, dims, axis_size, num_heads, num_kv_heads, hidden_size, Residual, Pattern, Streams, num_experts, top_k]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/reference/families.md, docs/usage/availability.md, docs/extending/custom-values.md]
-sources: [nnterp/components/eproperty.py, nnterp/components/moe.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/components/__init__.py]
+sources: [nnterp/components/eproperty.py, nnterp/components/standard.py, nnterp/components/moe.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/components/__init__.py]
 ---
 
 # Layouts
@@ -13,14 +13,15 @@ sources: [nnterp/components/eproperty.py, nnterp/components/moe.py, nnterp/compo
 A value's shape is part of what it means. Each standard value is annotated with one of
 thirty-five named layouts, each defined in the file of the envoy that serves it (`Residual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Patches`, `ImageTokenMask`, `ImageFeatures` in `nnterp/components/vision.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
 re-exports the thirty-two envoy-level names, and the root's three come from `nnterp.standardized`.
-They are `jaxtyping` types such as `Residual = Float[Tensor, "batch seq hidden"]` and
-`Pattern = Float[Tensor, "batch heads query key"]`. `value.layout` returns that alias itself
+They are `jaxtyping` types composed from the axis names ([below](#axis-names-and-sizes)), such as
+`Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]` (`batch seq hidden_size`) and
+`Pattern = Float[Tensor, f"{BATCH} {HEADS} {QUERY} {KEY}"]` (`batch num_heads query key`). `value.layout` returns that alias itself
 and `value.dims` names its axes. Layouts differ between values, not between families:
-`attention_probabilities` is a `Pattern`, `[batch, heads, query, key]`, on GPT-2, Llama and
+`attention_probabilities` is a `Pattern`, `[batch, num_heads, query, key]`, on GPT-2, Llama and
 BLOOM alike, and the per-family suite checks every value's axes against the model's sizes.
 One layout per value on every family, except `layer_output` on the hyper-connection
 families (DeepSeek-V4), whose residual is several parallel streams: there it is `Streams`,
-`[batch, seq, streams, hidden]` ([below](#streams-on-deepseek-v4)), and `linear_attn.decays` on
+`[batch, seq, streams, hidden_size]` ([below](#streams-on-deepseek-v4)), and `linear_attn.decays` on
 Kimi-Linear, whose Kimi Delta Attention decays each key channel of the state on its own:
 there it is `ChannelGates`, `[batch, seq, heads, key_dim]`.
 
@@ -32,13 +33,13 @@ from nnterp import Attention, Layer, StandardizedTransformer
 from nnterp.components import Queries, Residual
 from nnterp.standardized import Logits
 
-Attention.attention_queries.dims        # ('batch', 'heads', 'seq', 'qk_head_dim')
-Attention.attention_queries.layout      # jaxtyping.Float[Tensor, 'batch heads seq qk_head_dim']
+Attention.attention_queries.dims        # ('batch', 'num_heads', 'seq', 'qk_head_dim')
+Attention.attention_queries.layout      # jaxtyping.Float[Tensor, 'batch num_heads seq qk_head_dim']
 Attention.attention_queries.layout is Queries   # True: the alias itself, not a copy of it
 Layer.layer_output.layout is Residual   # True
 StandardizedTransformer.logits.layout is Logits   # True
-Layer.layer_output.dims                 # ('batch', 'seq', 'hidden')
-StandardizedTransformer.logits.dims     # ('batch', 'seq', 'vocab')
+Layer.layer_output.dims                 # ('batch', 'seq', 'hidden_size')
+StandardizedTransformer.logits.dims     # ('batch', 'seq', 'vocab_size')
 
 model = StandardizedTransformer("meta-llama/Llama-3.1-8B", dispatch=True, attn_implementation="eager")
 
@@ -64,18 +65,18 @@ The thirty-five names, their axes, and the values that carry each:
 
 | layout | axes | values |
 | --- | --- | --- |
-| `Residual` | `batch seq hidden` | `layer_output`, `attention_output`, `mlp_output`, `token_embeddings` (and the plain `self_attn.input`, `mlp.input`) |
-| `Streams` | `batch seq streams hidden` | `layer_output` (and `layers[i].input`) on a hyper-connection family (DeepSeek-V4), in place of `Residual` |
+| `Residual` | `batch seq hidden_size` | `layer_output`, `attention_output`, `mlp_output`, `token_embeddings` (and the plain `self_attn.input`, `mlp.input`) |
+| `Streams` | `batch seq streams hidden_size` | `layer_output` (and `layers[i].input`) on a hyper-connection family (DeepSeek-V4), in place of `Residual` |
 | `StreamWeights` | `batch seq streams` | a hyper-connection family's `attention_post`, `mlp_post` |
 | `StreamMixing` | `batch seq streams streams` | a hyper-connection family's `attention_comb`, `mlp_comb` |
-| `Logits` | `batch seq vocab` | `logits` |
-| `NextTokenProbs` | `batch vocab` | `next_token_probs` |
+| `Logits` | `batch seq vocab_size` | `logits` |
+| `NextTokenProbs` | `batch vocab_size` | `next_token_probs` |
 | `Tokens` | `batch seq` (`Int`) | `input_ids`, `attention_mask` |
-| `Queries` | `batch heads seq qk_head_dim` | `attention_queries` |
-| `Keys` | `batch kv_heads seq qk_head_dim` | `attention_keys` |
-| `Values` | `batch kv_heads seq head_dim` | `attention_values` |
-| `Pattern` | `batch heads query key` | `attention_scores`, `attention_probabilities` |
-| `HeadOutputs` | `batch seq heads head_dim` | `attention_head_outputs` |
+| `Queries` | `batch num_heads seq qk_head_dim` | `attention_queries` |
+| `Keys` | `batch num_kv_heads seq qk_head_dim` | `attention_keys` |
+| `Values` | `batch num_kv_heads seq head_dim` | `attention_values` |
+| `Pattern` | `batch num_heads query key` | `attention_scores`, `attention_probabilities` |
+| `HeadOutputs` | `batch seq num_heads head_dim` | `attention_head_outputs` |
 | `LinearQK` | `batch seq heads key_dim` | `linear_attn.attention_queries`, `attention_keys` |
 | `LinearV` | `batch seq heads value_dim` | `linear_attn.attention_values`, `attention_head_outputs` |
 | `Gates` | `batch seq heads` | `linear_attn.decays`, `betas` |
@@ -91,28 +92,62 @@ The thirty-five names, their axes, and the values that carry each:
 | `SSDQueries` / `SSDKeys` | `batch seq groups state_dim` | a Mamba-2 `linear_attn.attention_queries` (`C`) / `attention_keys` (`B`) |
 | `SSDValues` | `batch seq heads head_dim` | a Mamba-2 `linear_attn.attention_values` (`x`) |
 | `SSDHeadOutputs` | `batch seq heads head_dim` | a Mamba-2 `linear_attn.attention_head_outputs` (`y`) |
-| `RouterLogits` | `batch seq experts` | a mixture's `router_logits` (`experts` is `num_experts + 1` on ZAYA: the skip class) |
+| `RouterLogits` | `batch seq num_experts` | a mixture's `router_logits` (the axis is `num_experts + 1` wide on ZAYA: the skip class) |
 | `ExpertWeights` | `batch seq top_k` | a mixture's `expert_weights` |
 | `ExpertIndices` | `batch seq top_k` (`Int`) | a mixture's `expert_indices` |
-| `ExpertOutputs` | `batch seq top_k hidden` | a mixture's `expert_outputs` |
+| `ExpertOutputs` | `batch seq top_k hidden_size` | a mixture's `expert_outputs` |
 | `Patches` | `images patches vision_hidden` | a vision tower's `vision.layers[i].layer_output`, `attention_output`, `mlp_output`, and `vision.patch_embeddings`, `vision.tower_output` ([vision.md](vision.md)); the tower's attention interior keeps `Pattern`, `Queries`, ..., its `batch` being the images |
 | `ImageTokenMask` | `batch seq` (`Bool`) | `vision.image_token_mask` |
 | `ImageFeatures` | `image_tokens hidden` | `vision.image_features` (flat over the batch's image tokens) |
 
-An axis name means the same thing on every layout: `batch` is axis 0 everywhere, `seq`
-the token axis, `heads` the query heads and `kv_heads` the key/value heads, `head_dim`
-the width of a head's values and outputs and `qk_head_dim` that of its queries and keys
-(the same number outside latent attention), `query` and `key` the two token axes of a
-pattern, `streams` the parallel copies of a hyper-connection residual (`hc_mult`), on a
-gated DeltaNet mixer `key_dim` / `value_dim` the state's two sides, and on a mixture of
-experts `experts` the router's classes and `top_k` the routing slots per token
-([mixture-of-experts](mixture-of-experts.md)). A mixture routes tensors flat over tokens,
-`[batch * seq, ...]`; its values are served in these layouts, one invoke's rows each. The
-comments above each alias in its defining file state the same.
+## Axis names and sizes
 
-`isinstance` checks rank and dtype only; the axis *names* are documentation plus what the
-suite asserts against `model.num_heads`, `model.num_kv_heads`, `model.head_dim`,
-`model.qk_head_dim`, `model.hidden_size` and `model.vocab_size` ([root-values](root-values.md)).
+An axis name means the same thing on every layout, and each is a plain string constant in
+`nnterp.components` that every layout is composed from (`Residual = Float[Tensor,
+f"{BATCH} {SEQ} {HIDDEN}"]`), so no layout spells an axis by hand. An axis that is a fact
+about the model is named exactly as the size attribute that holds it:
+
+| constant | axis | size, by `axis_size` |
+| --- | --- | --- |
+| `HIDDEN` | `hidden_size` | the root's `hidden_size` |
+| `VOCAB` | `vocab_size` | the root's `vocab_size` |
+| `HEADS` | `num_heads` | the block's `self_attn.num_heads` (the query heads) |
+| `KV_HEADS` | `num_kv_heads` | the block's `self_attn.num_kv_heads` (the key/value heads) |
+| `HEAD_DIM` | `head_dim` | the block's `self_attn.head_dim` (a head's values and outputs); a Mamba-2 mixer's own `head_dim` |
+| `QK_HEAD_DIM` | `qk_head_dim` | the block's `self_attn.qk_head_dim` (a head's queries and keys; `head_dim` outside latent attention) |
+| `EXPERTS` | `num_experts` | the mixture's `num_experts` (the router's classes) |
+| `TOP_K` | `top_k` | the mixture's `top_k` (the routing slots per token) |
+
+`axis_size(envoy, axis)` returns the size of `axis` for a value served on `envoy`: the
+attribute named `axis` on `envoy` when its class declares it, else on the first envoy above
+it that does, up to the root. So `num_heads` on an attention value is that block's own
+count (a block's sizes differ from the root's on Gemma-4, MiMo-V2-Flash and Laguna) and
+`hidden_size` on a layer value is the root's:
+
+```python
+from nnterp import StandardizedTransformer, axis_size
+
+model = StandardizedTransformer("openai-community/gpt2")
+attn = model.layers[0].self_attn
+axis_size(attn, "num_heads"), axis_size(attn, "head_dim")   # (12, 64)
+axis_size(model.layers[0], "hidden_size")     # 768
+axis_size(model, "vocab_size")                # 50257: logits' last axis
+axis_size(attn, "key")                        # ValueError: not a fact about the model
+```
+
+The other axes are not facts about the model, so `axis_size` refuses them and their size is
+the tensor's: `BATCH` (`batch`, axis 0 everywhere), `SEQ` (`seq`, the token axis), `QUERY` /
+`KEY` (`query`, `key`, the pattern's two token axes), `STREAMS` (`streams`, the parallel
+copies of a hyper-connection residual, `hc_mult`), a recurrent mixer's `MIXER_HEADS`
+(`heads`), `KEY_DIM` / `VALUE_DIM` (a gated DeltaNet state's two sides), `STATE_DIM`,
+`GROUPS` and `CHANNELS` (a Mamba state's), and the vision tower's `IMAGES`, `PATCHES`,
+`VISION_HIDDEN` and `IMAGE_TOKENS` / `TEXT_HIDDEN` (`hidden`: the text model's width at the
+scatter, served on `vision`, whose own `hidden_size` is the tower's). A mixture routes
+tensors flat over tokens, `[batch * seq, ...]`; its values are served in these layouts, one
+invoke's rows each ([mixture-of-experts](mixture-of-experts.md)).
+
+`isinstance` checks rank and dtype only; the per-family suite checks every axis that
+resolves against `axis_size` and the rest against the module's own sizes.
 
 ## Annotating with a name
 
@@ -126,7 +161,7 @@ from nnterp.families import gpt2
 
 
 class Attention(gpt2.Attention):
-    @EProperty("source.attention_interface_1.source.nn_functional_softmax_0.output", description="The softmax output before the dropout, [batch, heads, query, key]", unavailable=interface_reason)
+    @EProperty("source.attention_interface_1.source.nn_functional_softmax_0.output", description="The softmax output before the dropout, [batch, num_heads, query, key]", unavailable=interface_reason)
     def attention_softmax(self, value) -> Pattern:
         return value
 
@@ -137,8 +172,8 @@ Attention.attention_softmax.layout is Attention.attention_probabilities.layout  
 
 A family that redefines a standard value writes the base's name (`-> Keys`, `-> Residual`),
 never an inline string, which is what keeps a redefinition from drifting; a value of your
-own takes the name where one fits, and an inline `Float[Tensor, "..."]` with the same axis
-names where none does (a per-row entropy, `batch heads query`). See
+own takes the name where one fits, and an inline `Float[Tensor, ...]` composed from the same
+axis constants where none does (a per-row entropy, `f"{BATCH} {HEADS} {QUERY}"`). See
 [custom-values](../extending/custom-values.md) and
 [overriding-values](../extending/overriding-values.md).
 
@@ -146,16 +181,16 @@ names where none does (a per-row entropy, `batch heads query`). See
 
 Batch is axis 0 everywhere. The sequence axis is 1 on every value that has one, with one
 exception: softmax attention's `attention_queries`, `attention_keys` and
-`attention_values`, where it is 2, the `[batch, heads, seq, head_dim]` layout transformers
+`attention_values`, where it is 2, the `[batch, num_heads, seq, head_dim]` layout transformers
 hands its attention interface. `attention_head_outputs` is back to sequence-first,
-`[batch, seq, heads, head_dim]`, on every family (a family whose own arithmetic keeps heads
+`[batch, seq, num_heads, head_dim]`, on every family (a family whose own arithmetic keeps heads
 first serves a transposed view). `attention_scores` and `attention_probabilities` have two
 sequence axes, `query` then `key`.
 
 So "the last token" is `value[:, -1]` for a residual-stream value, `value[:, :, -1]` for the
 queries, keys and values, and `pattern[:, :, -1, :]` for the last query row of the pattern.
 
-## `kv_heads` under grouped-query attention
+## `num_kv_heads` under grouped-query attention
 
 Keys and values are read before `repeat_kv`, so their head axis is `num_kv_heads` wide, not
 `num_heads`:
@@ -171,8 +206,8 @@ with model.trace(prompt):
 k.shape, q.shape       # (1, 2, seq, 128), (1, 4, seq, 128)
 ```
 
-Two families expand the key/value heads before the interface, so `kv_heads` reads as
-`num_heads` there: Falcon's 40B layout (`num_kv_heads` 8 in the config, 128 heads on the
+Two families expand the key/value heads before the interface, so the `num_kv_heads` axis
+is `num_heads` wide there, whatever `axis_size` says: Falcon's 40B layout (`num_kv_heads` 8 in the config, 128 heads on the
 tensor) and DeepSeek's latent attention.
 
 ## `qk_head_dim` on DeepSeek
@@ -193,7 +228,7 @@ with model.trace(prompt):
 with model.trace(prompt):
     v = model.layers[0].self_attn.attention_values.save()        # (1, heads, seq, 128)
 with model.trace(prompt):
-    h = model.layers[0].self_attn.attention_head_outputs.save()  # (1, seq, heads, 128)
+    h = model.layers[0].self_attn.attention_head_outputs.save()  # (1, seq, num_heads, 128)
 ```
 
 The keys share the queries' width, so their last axis is `qk_head_dim` too; the two sizes
@@ -204,7 +239,7 @@ coincide on every family without latent attention.
 DeepSeek-V4 carries `hc_mult` parallel copies of the residual stream between blocks, and
 `layer_output` is the block's own tensor, so its layout is `Streams`, not `Residual`. The
 contributions stay `Residual`: each sublayer reads one weighted collapse of the streams and
-returns `[batch, seq, hidden]`, which the block writes into every stream with the weights
+returns `[batch, seq, hidden_size]`, which the block writes into every stream with the weights
 `attention_post` / `mlp_post` (`StreamWeights`) after mixing the streams with
 `attention_comb` / `mlp_comb` (`StreamMixing`):
 
@@ -220,13 +255,13 @@ with model.trace(prompt):
     attn = model.layers[0].self_attn.attention_output.save()
     post = model.layers[0].mlp_post.save()
     out = model.layers[0].layer_output.save()
-out.shape, attn.shape, post.shape    # (1, seq, hc_mult, hidden), (1, seq, hidden), (1, seq, hc_mult)
+out.shape, attn.shape, post.shape    # (1, seq, hc_mult, hidden_size), (1, seq, hidden_size), (1, seq, hc_mult)
 isinstance(out, Streams), isinstance(out, Residual)    # (True, False): rank 4
 ```
 
 On the pinned tiny checkpoint (`yujiepan/deepseek-v4-bf16-tiny-random`, loaded with
-`dtype=torch.float32`) `hc_mult` is 4 and `hidden` 8. The last token of a stream value is
-`out[:, -1]`, `[batch, streams, hidden]`; one stream is `out[:, :, k]`, `[batch, seq, hidden]`.
+`dtype=torch.float32`) `hc_mult` is 4 and `hidden_size` 8. The last token of a stream value is
+`out[:, -1]`, `[batch, streams, hidden_size]`; one stream is `out[:, :, k]`, `[batch, seq, hidden_size]`.
 Code written for `Residual` runs on a `Streams` value without an error and answers per
 stream, so check `value.layout` (or `out.dim()`) where a recipe must run across families.
 
@@ -263,11 +298,11 @@ On the tiny checkpoint the root says `num_heads=8`, `num_kv_heads=4`, and the mi
 ## Gotchas
 
 - **`isinstance(t, value.layout)` checks rank and dtype, not axis sizes.** Compare sizes
-  against the root's sizes yourself, or trust the suite.
+  against `axis_size(envoy, axis)` yourself, or trust the suite.
 - **Sequence is axis 2 on `attention_queries` / `attention_keys` / `attention_values`**, axis
   1 everywhere else.
-- **`kv_heads` is `num_kv_heads` except where the family expands first** (Falcon 40B layout,
-  DeepSeek), where it is `num_heads`.
+- **The `num_kv_heads` axis is `num_kv_heads` wide except where the family expands first** (Falcon 40B layout,
+  DeepSeek), where it is `num_heads` wide.
 - **A `.layout` is `None` for a value with no tensor annotation**; `dims` is then `None` too.
 - **`layer_output` is rank 4 on DeepSeek-V4** (`Streams`); read the layout off the family's
   class, `type(model.layers[0]).layer_output.layout`, not off the base `Layer`.
@@ -279,7 +314,7 @@ On the tiny checkpoint the root says `num_heads=8`, `num_kv_heads=4`, and the mi
 
 ## Related
 
-- [root-values](root-values.md): the sizes each axis is checked against.
-- [residual-stream](residual-stream.md): the `Residual` (`batch seq hidden`) values, and the `Streams` ones.
+- [root-values](root-values.md): the sizes `axis_size` reads.
+- [residual-stream](residual-stream.md): the `Residual` (`batch seq hidden_size`) values, and the `Streams` ones.
 - [availability](availability.md): a value has a layout whether or not this checkpoint has it.
 - [custom-values](../extending/custom-values.md): annotating a value of your own with a name.

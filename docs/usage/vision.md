@@ -113,7 +113,7 @@ without blocks too: `model.model.embed_audio`, native, and no `audio_tower`.
 | Llama 4's ViT | one per image tile | the patches, then the CLS token *last* (`patches + 1` rows); the tower drops it after `vision.norm` |
 | Gemma 4's ViT | one per image | the patches *padded* to `max_soft_tokens * pooling_kernel_size**2` rows (2520 by default). The padded rows (zero pixels at position `(-1, -1)`, `image_position_ids` in the processor's encoding) are masked as keys but run through every block, so they are rows of `layer_output`, with values; the pooler zeroes and strips them |
 | Gemma 4 unified's embedder | one per image | `patch_embeddings` and `tower_output` only, padded to `max_soft_tokens` rows (280) the same way |
-| RADIO | one, *packed*: every image's tokens, image after image | per image `num_cls_tokens + num_registers` prefix tokens, then its `image_grid_hw` patches in raster order; `patch_embeddings` is the patches alone, before the prefix and the position embedding. The attention makes one interface call for one image and one per image for several, so its queries, keys and values are served whole (`[1, heads, tokens, head_dim]`) and its scores, pattern and head outputs are `Unavailable` |
+| RADIO | one, *packed*: every image's tokens, image after image | per image `num_cls_tokens + num_registers` prefix tokens, then its `image_grid_hw` patches in raster order; `patch_embeddings` is the patches alone, before the prefix and the position embedding. The attention makes one interface call for one image and one per image for several, so its queries, keys and values are served whole (`[1, num_heads, tokens, head_dim]`) and its scores, pattern and head outputs are `Unavailable` |
 
 The tower's sizes are on `model.vision`: `num_layers`, `hidden_size`, `num_heads`,
 `head_dim`, `intermediate_size`, `patch_size`, `image_size`, read off the tower's own config
@@ -166,7 +166,7 @@ before the projection, `projector.input` itself.
 ## Image positions and text positions
 
 Every value of the text model is over the whole sequence, image tokens and text tokens
-alike: `layers[i].layer_output` is `[batch, seq, hidden]` with 576 of its 592 rows the image
+alike: `layers[i].layer_output` is `[batch, seq, hidden_size]` with 576 of its 592 rows the image
 on Llava 1.5, and the text blocks' pattern has the image tokens as ordinary key positions.
 `vision.image_token_mask` is what splits them:
 
@@ -179,7 +179,7 @@ with model.trace(prompt, images=[image]):
     logits = model.logits.save()
 
 out[mask].shape, out[~mask].shape         # (576, 4096), (16, 4096): the image rows, the text rows
-to_image = pattern[0, :, -1, mask[0]].sum(-1)   # [heads]: each head's mass from the last token onto the image
+to_image = pattern[0, :, -1, mask[0]].sum(-1)   # [num_heads]: each head's mass from the last token onto the image
 ```
 
 - Boolean indexing flattens the batch: `out[mask]` is `[image_tokens, hidden]` over every row

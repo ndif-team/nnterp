@@ -129,7 +129,7 @@ The router, `gate` aliased `router`, gives one logit per expert; the scoring is 
 largest probabilities are kept, and `norm_topk_prob` (true on every checkpoint) divides them by
 their sum, so each token's `expert_weights` sum to one. The experts are SwiGLUs 512 wide
 (`moe_intermediate_size`); `expert_outputs` is each slot's weighted output,
-`[batch, seq, 10, hidden]`, and sums to `routed_output`:
+`[batch, seq, 10, hidden_size]`, and sums to `routed_output`:
 
 ```python
 moe = model.layers[1].mlp

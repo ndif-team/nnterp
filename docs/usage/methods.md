@@ -22,7 +22,7 @@ trace; two work on saved tensors outside.
 | `steer(layers, vector, factor=1.0, token_positions=None, batch_index=None)` | inside a trace | adds `factor * vector` to `layer_output` in place |
 | `project_on_vocab(hidden)` | inside on a live value, or outside on a saved one | final norm, `lm_head`, then the model's own step after the head (softcap or scale) |
 | `get_topk_closest_tokens(hidden, k=5)` | either | `project_on_vocab` then softmax then top-k per position |
-| `probs_to_dict(probs, k=5)` | either | one `[vocab]` distribution to `{token: probability}` |
+| `probs_to_dict(probs, k=5)` | either | one `[vocab_size]` distribution to `{token: probability}` |
 
 ## Canonical pattern
 
@@ -32,7 +32,7 @@ from nnterp import StandardizedTransformer
 
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
 prompt = "The Eiffel Tower is in"
-direction = torch.randn(model.hidden_size)                         # any [hidden] vector; steering.md derives a real one
+direction = torch.randn(model.hidden_size)                         # any [hidden_size] vector; steering.md derives a real one
 
 with model.trace(prompt):
     model.skip_layers(4, 7)                                        # blocks 4..7 do not run
@@ -83,7 +83,7 @@ before the call instead, as above.
 ## `steer(layers, vector, factor=1.0, token_positions=None, batch_index=None)`
 
 Adds `factor * vector` to `layer_output` of each block in `layers`, in place, so it reaches
-the model. `vector` is `[hidden]` or anything broadcastable to the selected slice;
+the model. `vector` is `[hidden_size]` or anything broadcastable to the selected slice;
 `token_positions` (an int, a list, a slice) restricts the positions and `batch_index` the
 row; both default to all. Given a list, `layers` must be ascending: the adds happen in
 forward order.
@@ -135,38 +135,38 @@ Outside a trace it runs the norm and head modules as plain `nn.Module`s on a sav
 
 ## On a hyper-connection family (DeepSeek-V4)
 
-DeepSeek-V4's `layer_output` is `[batch, seq, streams, hidden]`, several parallel copies of
+DeepSeek-V4's `layer_output` is `[batch, seq, streams, hidden_size]`, several parallel copies of
 the stream ([residual-stream](residual-stream.md#where-the-families-differ)). The methods
 take it as it is:
 
 - **`skip_layers`** hands the block's own four-axis input on, so it needs nothing new; a
   `skip_with` tensor must have the stream axis too.
-- **`steer`** adds in place on `layer_output[rows, cols]`, `[..., streams, hidden]`: a
-  `[hidden]` vector broadcasts over the streams, adding `factor * vector` to every stream
-  (and so to their mean); a `[streams, hidden]` vector steers each stream by its own row.
+- **`steer`** adds in place on `layer_output[rows, cols]`, `[..., streams, hidden_size]`: a
+  `[hidden_size]` vector broadcasts over the streams, adding `factor * vector` to every stream
+  (and so to their mean); a `[streams, hidden_size]` vector steers each stream by its own row.
 - **`project_on_vocab`** is the family's: it collapses the streams with the model's own
   `hc_head` (a learned, content-dependent weighting), then `norm` and `lm_head`, which is
   how the model makes its logits, so on the last block it equals `logits` exactly. It
   reads the stream axis on a rank-4 tensor, or on a rank-2 tensor with `hc_mult` rows (one
   position, `resid[0, -1]`, which is what `get_topk_closest_tokens(resid[0, -1])` passes),
-  and returns `[..., vocab]` without it. Any other tensor is taken as a plain
-  `[..., hidden]` stream (a sublayer's output, one stream `resid[:, :, k]`) and goes
+  and returns `[..., vocab_size]` without it. Any other tensor is taken as a plain
+  `[..., hidden_size]` stream (a sublayer's output, one stream `resid[:, :, k]`) and goes
   through `norm` and `lm_head` alone.
 
 ```python
 model = StandardizedTransformer("deepseek-ai/DeepSeek-V4-Flash", dispatch=True)
 
 with model.trace(prompt):
-    resid = model.layers[-1].layer_output.save()          # [1, seq, hc_mult, hidden]
+    resid = model.layers[-1].layer_output.save()          # [1, seq, hc_mult, hidden_size]
     logits = model.logits.save()
 
 torch.equal(model.project_on_vocab(resid), logits)          # True
-model.get_topk_closest_tokens(resid[0, -1], k=3)            # one position, [hc_mult, hidden]: a list of one dict
+model.get_topk_closest_tokens(resid[0, -1], k=3)            # one position, [hc_mult, hidden_size]: a list of one dict
 per_stream = model.lm_head(model.norm(resid[:, :, 0]))       # one stream alone, not the model's readout
 ```
 
 Both rank-2 and rank-3 inputs are ambiguous by shape. Pass `resid[:, -1:]`, not `resid[0]`
-(`[seq, streams, hidden]`, read as a plain `[batch, seq, hidden]`), and a plain `[seq,
+(`[seq, streams, hidden_size]`, read as a plain `[batch, seq, hidden_size]`), and a plain `[seq,
 hidden]` slice with exactly `hc_mult` rows reads as streams: keep the batch axis on it.
 
 ## `get_topk_closest_tokens(hidden, k=5)` and `probs_to_dict(probs, k=5)`
@@ -184,7 +184,7 @@ the same text (partial UTF-8 byte tokens all decode to `'�'`), those entries a
 the tokenizer's raw vocabulary token (`tokenizer.convert_ids_to_tokens(id)`, such as `'Ġthe'`
 or a byte token) instead, each with its own probability.
 
-`probs_to_dict` does the last step alone on a `[vocab]` distribution:
+`probs_to_dict` does the last step alone on a `[vocab_size]` distribution:
 
 ```python
 with model.trace(prompt):

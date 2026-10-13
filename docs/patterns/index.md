@@ -26,7 +26,7 @@ model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_imp
 ## Look at activations
 
 - [logit-lens](logit-lens.md) — `project_on_vocab(layer.layer_output)` per block; where the answer emerges.
-- [attention-patterns](attention-patterns.md) — `attention_probabilities` as `[batch, heads, query, key]`; head metrics; editing the pattern.
+- [attention-patterns](attention-patterns.md) — `attention_probabilities` as `[batch, num_heads, query, key]`; head metrics; editing the pattern.
 - [contribution-decomposition](contribution-decomposition.md) — direct logit attribution over `attention_output` / `mlp_output`, and per head via `attention_head_outputs`.
 
 ## Modify activations

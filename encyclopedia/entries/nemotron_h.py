@@ -127,7 +127,7 @@ the logits unchanged and a write to its patch rows changes them.
 With several images the attention makes one call per image, so no single call holds the block's
 pattern: `attention_scores`, `attention_probabilities` and `attention_head_outputs` are
 `Unavailable`. `attention_queries`, `attention_keys` and `attention_values` are served whole,
-`[1, heads, tokens, head_dim]`; split them at `self_attn.inputs[1]["cu_seqlens"]` (absent for one
+`[1, num_heads, tokens, head_dim]`; split them at `self_attn.inputs[1]["cu_seqlens"]` (absent for one
 image) to compute one image's pattern.
 """,
         },

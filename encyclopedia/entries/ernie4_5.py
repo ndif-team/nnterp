@@ -99,7 +99,7 @@ attn = model.layers[1].self_attn
 with model.trace(prompt):
     proj = attn.q_proj.output.save()
 with model.trace(prompt):
-    q = attn.attention_queries.save()          # [batch, heads, seq, head_dim]
+    q = attn.attention_queries.save()          # [batch, num_heads, seq, head_dim]
 
 p = proj.view(1, -1, model.num_heads, model.head_dim)
 torch.testing.assert_close(q[0, :, 0], p[0, 0])

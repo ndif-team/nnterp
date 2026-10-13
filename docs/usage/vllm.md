@@ -44,12 +44,12 @@ model = StandardizedVLLM("HuggingFaceTB/SmolLM2-135M-Instruct", dispatch=True,
 
 layer = model.layers[12]
 with model.trace("The Eiffel Tower is in the city of", temperature=0.0, max_tokens=1):
-    stream_in = layer.layer_input.save()                  # [1, tokens, hidden]
-    attention = layer.self_attn.attention_output.save()   # [1, tokens, hidden]
-    mlp = layer.mlp.mlp_output.save()                     # [1, tokens, hidden]
-    stream = layer.layer_output.save()                    # [1, tokens, hidden]
-    logits = model.logits.save()                          # [1, 1, vocab]: the last position
-    probs = model.next_token_probs.save()                 # [1, vocab]
+    stream_in = layer.layer_input.save()                  # [1, tokens, hidden_size]
+    attention = layer.self_attn.attention_output.save()   # [1, tokens, hidden_size]
+    mlp = layer.mlp.mlp_output.save()                     # [1, tokens, hidden_size]
+    stream = layer.layer_output.save()                    # [1, tokens, hidden_size]
+    logits = model.logits.save()                          # [1, 1, vocab_size]: the last position
+    probs = model.next_token_probs.save()                 # [1, vocab_size]
 
 print(tuple(stream.shape), tuple(logits.shape), model.tokenizer.decode(logits[0, -1].argmax()))
 # (1, 9, 576) (1, 1, 49152)  Paris
@@ -66,7 +66,7 @@ starts its engine in a spawned process, which re-imports the main module.
 - **The boundary values and the identity**: `layer_input + attention_output + mlp_output ==
   layer_output` on every block; the suite holds each against the transformers engine's value
   for the same prompt.
-- **The layouts**: `[batch, seq, hidden]` with a batch of 1, `logits[:, -1]` the last position.
+- **The layouts**: `[batch, seq, hidden_size]` with a batch of 1, `logits[:, -1]` the last position.
 - **The methods**: `steer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens`,
   `support()`, and the sizes (`num_layers`, `hidden_size`, `num_heads`, ...).
 - **Reads, in-place edits and assignment** all reach the model.
@@ -86,14 +86,14 @@ assert not torch.equal(edited, logits)
 
 ### One sequence per request
 
-vLLM serves a request's own rows, `[tokens, hidden]`; nnterp restores the batch axis, which is
+vLLM serves a request's own rows, `[tokens, hidden_size]`; nnterp restores the batch axis, which is
 always 1. Several prompts are several invokes, and a name saved in each comes back as a list:
 
 ```python
 with model.trace(temperature=0.0, max_tokens=1) as tracer:
     for prompt in ["The capital of France is", "Two plus two is"]:
         with tracer.invoke(prompt):
-            last = layer.layer_output[:, -1].save()        # [1, hidden], once per invoke
+            last = layer.layer_output[:, -1].save()        # [1, hidden_size], once per invoke
 
 print(len(last), tuple(last[0].shape))
 # 2 (1, 576)
@@ -137,7 +137,7 @@ vLLM's Llama-style blocks fuse each residual add into the following norm: the bl
 
 ### `logits` is one position
 
-The engine computes logits for the last position only: `model.logits` is `[1, 1, vocab]`, the
+The engine computes logits for the last position only: `model.logits` is `[1, 1, vocab_size]`, the
 prompt's last token on the prefill and the newest token on each decode step.
 `model.samples` (nnsight's) is the token drawn from it.
 
@@ -166,10 +166,10 @@ nnterp's layouts, heads split out, and are writable like any other value:
 ```python
 attention = model.layers[12].self_attn
 with model.trace("The Eiffel Tower is in the city of", temperature=0.0, max_tokens=1):
-    queries = attention.attention_queries.save()         # [1, heads, tokens, head_dim]
-    keys = attention.attention_keys.save()               # [1, kv_heads, tokens, head_dim]
-    values = attention.attention_values.save()           # [1, kv_heads, tokens, head_dim]
-    attention.attention_head_outputs[:, :, 0] = 0        # [1, tokens, heads, head_dim]: ablate head 0
+    queries = attention.attention_queries.save()         # [1, num_heads, tokens, head_dim]
+    keys = attention.attention_keys.save()               # [1, num_kv_heads, tokens, head_dim]
+    values = attention.attention_values.save()           # [1, num_kv_heads, tokens, head_dim]
+    attention.attention_head_outputs[:, :, 0] = 0        # [1, tokens, num_heads, head_dim]: ablate head 0
     ablated = model.logits.save()
 
 print(tuple(queries.shape), tuple(keys.shape), tuple(values.shape))
@@ -191,8 +191,8 @@ sliding window, in transformers' layout:
 
 ```python
 with model.trace("The Eiffel Tower is in the city of", temperature=0.0, max_tokens=1):
-    scores = attention.attention_scores.save()             # [1, heads, query, key]; -inf where a key is not seen
-    pattern = attention.attention_probabilities.save()     # [1, heads, query, key]
+    scores = attention.attention_scores.save()             # [1, num_heads, query, key]; -inf where a key is not seen
+    pattern = attention.attention_probabilities.save()     # [1, num_heads, query, key]
 
 print(tuple(pattern.shape), pattern[0, :, -1].sum(-1).mean().item())
 # (1, 9, 9, 9) 1.0

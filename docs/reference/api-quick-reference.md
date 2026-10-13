@@ -32,7 +32,7 @@ with model.trace("The Eiffel Tower is in"):
     logits = model.logits.save()
 
 torch.testing.assert_close(x + attn + mlp, resid)    # the contribution identity, on every family
-print(pattern.shape)                                 # [batch, heads, query, key]
+print(pattern.shape)                                 # [batch, num_heads, query, key]
 ```
 
 Reads within one trace follow the forward: the pattern is produced inside block 3's attention, so it is read before `attention_output`, which is read before `mlp_output`, which is read before `layer_output`.
@@ -98,8 +98,8 @@ Every row is an `EProperty` on the root, listed in `repr(model)` with its descri
 | `skip_layers` | `skip_layers(start: int, end: int, skip_with: Tensor \| None = None) -> None` | inside a trace, before block `start` runs | Blocks `start..end` inclusive do not run; block `start`'s input (or `skip_with`) becomes each one's `layer_output`, packed as the family's block returns it (`Layer.skip_with`). Negative indices count from the end. |
 | `steer` | `steer(layers: int \| list[int], vector: Tensor, factor: float = 1.0, token_positions: int \| list[int] \| slice \| None = None, batch_index: int \| None = None) -> None` | inside a trace, `layers` ascending | Adds `factor * vector` in place to `layer_output` of each block, at the given positions and row (default all). |
 | `project_on_vocab` | `project_on_vocab(hidden: Tensor) -> Tensor` | inside (on a live value) or outside (on a saved one) | The logit lens: `lm_head(norm(hidden))`, then what the model does to the head's output to make its logits: the text config's `final_logit_softcapping` if set (Gemma-2), else nothing; a family's `def project_on_vocab(model, hidden)` is bound in its place (Cohere's `* logit_scale`, Granite's `/ logits_scaling`). On the last block's `layer_output` it equals `logits`. |
-| `get_topk_closest_tokens` | `get_topk_closest_tokens(hidden: Tensor, k: int = 5) -> list[dict[str, float]]` | outside, on a saved `[..., hidden]` tensor | `project_on_vocab` then softmax; one `{token: probability}` per position, row-major over the leading axes. Takes a residual-stream tensor, not logits. |
-| `probs_to_dict` | `probs_to_dict(probs: Tensor, k: int = 5) -> dict[str, float]` | outside | The `k` most likely tokens of one `[vocab]` distribution. |
+| `get_topk_closest_tokens` | `get_topk_closest_tokens(hidden: Tensor, k: int = 5) -> list[dict[str, float]]` | outside, on a saved `[..., hidden_size]` tensor | `project_on_vocab` then softmax; one `{token: probability}` per position, row-major over the leading axes. Takes a residual-stream tensor, not logits. |
+| `probs_to_dict` | `probs_to_dict(probs: Tensor, k: int = 5) -> dict[str, float]` | outside | The `k` most likely tokens of one `[vocab_size]` distribution. |
 | `support` | `support(layer: int \| None = None) -> dict[str, Any]` | outside; nothing runs | Without `layer`: every root value and every block value, `None` when available on every block, else `{layer: reason}`. With `layer`: that block's values by dotted name (`"self_attn.attention_probabilities"`), `None` or the reason, including `"no <module> module on this block"`. The keys come from the tree: every `Standard` child of any block, under its standard name, so a value added through `envoys=` is listed as `self_attn.<name>`, a module some blocks lack (a hybrid's `self_attn`) is reported missing on those, and a module no block has (OPT's `mlp`) has no key. A `Standard` child of the root (the vision tower) adds its own `support()` rows under its standard name (`"vision.image_features"`); a tower no image reaches adds none. |
 | `order` | `order(layer: int \| None = None) -> dict[str, int]` | outside; one probe `scan` on first use | The forward order of the available values, name -> rank: with `layer`, that block's values by dotted name from 0; without, the root's, numbered across the whole forward. Equal ranks are one location (either read order is legal). Measured once and kept on the model: route kernels (`route_kernels`, `chunk_per_token`) before dispatch, a trace or `order`. `StandardizedTransformer` only. |
 | `rank` | `rank(name: str, layer: int \| None = None) -> tuple[int, int]` | outside; as `order` | `(-1, r)` for a root value before the blocks, `(layer, r)` for a block value, `(num_layers, r)` for a root value after; sorting reads by it sorts them into forward order. `Unavailable` for a value the checkpoint lacks, `KeyError` for no such value. |
@@ -372,18 +372,18 @@ The thirty-five `jaxtyping` types every standard value is annotated with, each d
 
 | Name | Axes | Defined in | Carried by |
 |---|---|---|---|
-| `Residual` | `batch seq hidden` | `components/layer.py` | `layer_output`, `attention_output`, `mlp_output`, `token_embeddings` |
-| `Streams` | `batch seq streams hidden` | `components/layer.py` | `layer_output` on a hyper-connection family (DeepSeek-V4) |
+| `Residual` | `batch seq hidden_size` | `components/layer.py` | `layer_output`, `attention_output`, `mlp_output`, `token_embeddings` |
+| `Streams` | `batch seq streams hidden_size` | `components/layer.py` | `layer_output` on a hyper-connection family (DeepSeek-V4) |
 | `StreamWeights` | `batch seq streams` | `components/layer.py` | a hyper-connection family's `attention_post`, `mlp_post` |
 | `StreamMixing` | `batch seq streams streams` | `components/layer.py` | a hyper-connection family's `attention_comb`, `mlp_comb` |
-| `Logits` | `batch seq vocab` | `standardized.py` | `logits` |
-| `NextTokenProbs` | `batch vocab` | `standardized.py` | `next_token_probs` |
+| `Logits` | `batch seq vocab_size` | `standardized.py` | `logits` |
+| `NextTokenProbs` | `batch vocab_size` | `standardized.py` | `next_token_probs` |
 | `Tokens` | `batch seq` (`Int`) | `standardized.py` | `input_ids`, `attention_mask` |
-| `Queries` | `batch heads seq qk_head_dim` | `components/attention.py` | `attention_queries` |
-| `Keys` | `batch kv_heads seq qk_head_dim` | `components/attention.py` | `attention_keys` |
-| `Values` | `batch kv_heads seq head_dim` | `components/attention.py` | `attention_values` |
-| `Pattern` | `batch heads query key` | `components/attention.py` | `attention_scores`, `attention_probabilities` |
-| `HeadOutputs` | `batch seq heads head_dim` | `components/attention.py` | `attention_head_outputs` |
+| `Queries` | `batch num_heads seq qk_head_dim` | `components/attention.py` | `attention_queries` |
+| `Keys` | `batch num_kv_heads seq qk_head_dim` | `components/attention.py` | `attention_keys` |
+| `Values` | `batch num_kv_heads seq head_dim` | `components/attention.py` | `attention_values` |
+| `Pattern` | `batch num_heads query key` | `components/attention.py` | `attention_scores`, `attention_probabilities` |
+| `HeadOutputs` | `batch seq num_heads head_dim` | `components/attention.py` | `attention_head_outputs` |
 | `LinearQK` | `batch seq heads key_dim` | `components/linear_attention.py` | `linear_attn.attention_queries`, `linear_attn.attention_keys` |
 | `SSDQueries` / `SSDKeys` | `batch seq groups state_dim` | `components/state_space.py` | a Mamba-2 `linear_attn.attention_queries` (`C`) / `attention_keys` (`B`) |
 | `SSDValues` / `SSDHeadOutputs` | `batch seq heads head_dim` | `components/state_space.py` | a Mamba-2 `linear_attn.attention_values` (`x`) / `attention_head_outputs` (`y`) |
@@ -398,15 +398,15 @@ The thirty-five `jaxtyping` types every standard value is annotated with, each d
 | `ScanDecays` | `batch seq channels state_dim` | `components/selective_scan.py` | a Mamba-1 `decays` |
 | `ScanState` | `batch channels state_dim` | `components/selective_scan.py` | a Mamba-1 `state_input`, `state_output`, `state` |
 | `ScanStates` | `batch seq channels state_dim` | `components/selective_scan.py` | a Mamba-1 `states` |
-| `RouterLogits` | `batch seq experts` | `components/moe.py` | `router_logits` |
+| `RouterLogits` | `batch seq num_experts` | `components/moe.py` | `router_logits` |
 | `ExpertWeights` | `batch seq top_k` | `components/moe.py` | `expert_weights` |
 | `ExpertIndices` | `batch seq top_k` (`Int`) | `components/moe.py` | `expert_indices` |
-| `ExpertOutputs` | `batch seq top_k hidden` | `components/moe.py` | `expert_outputs` |
+| `ExpertOutputs` | `batch seq top_k hidden_size` | `components/moe.py` | `expert_outputs` |
 | `Patches` | `images patches vision_hidden` | `components/vision.py` | a tower block's `layer_output`, `attention_output`, `mlp_output`; `vision.patch_embeddings`, `vision.tower_output` |
 | `ImageTokenMask` | `batch seq` (`Bool`) | `components/vision.py` | `vision.image_token_mask` |
 | `ImageFeatures` | `image_tokens hidden` | `components/vision.py` | `vision.image_features` |
 
-The axis names are the same on every layout (`batch` axis 0 everywhere, `seq` the token axis, `heads` the query heads, `kv_heads` the key/value heads, `head_dim` the width of values and head outputs, `qk_head_dim` that of queries and keys, `query`/`key` a pattern's two token axes, `key_dim`/`value_dim` a DeltaNet state's two sides, `channels`/`state_dim` a Mamba-1 state's, `groups` the `B`/`C` groups, `experts` a router's classes, `top_k` the routing slots); the comments above each alias state them, and [../usage/layouts.md](../usage/layouts.md) is the page.
+The axis names are plain string constants in `nnterp.components.standard` (exported by `nnterp.components`), and every alias is composed from them: the model facts are named as the size that holds them (`HIDDEN` = `hidden_size`, `VOCAB` = `vocab_size`, `HEADS` = `num_heads`, `KV_HEADS` = `num_kv_heads`, `HEAD_DIM` = `head_dim`, `QK_HEAD_DIM` = `qk_head_dim`, `EXPERTS` = `num_experts`, `TOP_K` = `top_k`), which `axis_size` resolves; the rest are not facts about the model (`BATCH`, `SEQ`, `QUERY`/`KEY` a pattern's two token axes, `STREAMS`, a recurrent mixer's `MIXER_HEADS` = `heads`, `KEY_DIM`/`VALUE_DIM` a DeltaNet state's two sides, `CHANNELS`/`STATE_DIM` a Mamba-1 state's, `GROUPS` the `B`/`C` groups, and the vision tower's `IMAGES`, `PATCHES`, `VISION_HIDDEN`, `IMAGE_TOKENS`, `TEXT_HIDDEN` = `hidden`). [../usage/layouts.md](../usage/layouts.md#axis-names-and-sizes) is the page.
 
 ### Availability predicates and constants
 
@@ -436,7 +436,8 @@ The axis names are the same on every layout (`batch` axis 0 everywhere, `seq` th
 | `route_kernels` | `route_kernels(family, kernel: str = "torch") -> None` | Bind a family's recurrent kernel names process-wide: `"torch"` to transformers' pure-torch kernels (on a mixer with a `STATE_OP`, the prompt's name to the token-by-token loop, the only kernel that materializes `state`, `states`, `state_after`, `set_state_after`: the decode kernel's function on a gated DeltaNet, so both names; the scan's own on Mamba-1, where each name keeps its own), `"default"` back to what the modeling module bound at import. `family` is `model.family`, `nnterp.families.<name>` or the modeling module. Call it before tracing a layer. |
 | `route_delta_rule` | `route_delta_rule(family, kernel: str = "recurrent") -> None` | `route_kernels` in the delta rule's words: `"recurrent"` is `"torch"`, `"chunked"` is `"default"`. |
 | `chunk_per_token` | `chunk_per_token(model, enabled: bool = True) -> None` | Set every `StateSpace` mixer's module `chunk_size` to 1, so the chunk scan's boundaries are the tokens and `states` / `state_after` read the state after each; `enabled=False` restores the chunk size each mixer was built with (`config.chunk_size`, or `mamba_chunk_size`). Per model, unlike `route_kernels`; slower on long prompts (the inter-chunk recurrence is quadratic in the number of chunks). `ValueError` on a model with no `StateSpace`. |
-| `seq_first` | `seq_first(value: Tensor) -> Tensor` | `value.transpose(1, 2)`: `[batch, heads, seq, d]` to `[batch, seq, heads, d]` as a view, and its own inverse. Used by families whose arithmetic keeps heads first. |
+| `seq_first` | `seq_first(value: Tensor) -> Tensor` | `value.transpose(1, 2)`: `[batch, num_heads, seq, d]` to `[batch, seq, num_heads, d]` as a view, and its own inverse. Used by families whose arithmetic keeps heads first. |
+| `axis_size` | `axis_size(envoy, axis: str) -> int` | The size of layout axis `axis` for a value served on `envoy`: the attribute named `axis` on `envoy` when its class declares it, else on the first envoy above it that does, up to the root (`num_heads` on an attention value is that block's, `hidden_size` the root's). `ValueError` for an axis no envoy holds (`batch`, `seq`, `query`, `key`, a mixer's `heads`): it is not a fact about the model. Defined in `nnterp.components.standard`; also `nnterp.axis_size`. |
 | `first_tensor` | `first_tensor(value) -> Tensor` | The first element of a tuple output, or the tensor itself. |
 | `rewrap` | `rewrap(envoy, value: Tensor) -> Any` | `value` back in the module's current output tuple, if any. |
 | `rows`, `splice` | `rows(value, rank) -> Any`, `splice(whole, value, rank) -> Any` | A tensor flat over tokens as this invoke's `[batch, seq, ...]` view; this invoke's rows written back into the whole flat tensor. What `TokenEProperty` reads and writes through. Defined in `nnterp.components.tokens`. |
@@ -452,9 +453,9 @@ Prompt helpers on the standard values.
 | `Prompt` | `@dataclass Prompt(prompt: str, target_tokens: dict[str, list[int]], target_strings: dict \| None = None)` | A prompt with named sets of target tokens. |
 | `Prompt.from_strings` | `Prompt.from_strings(prompt: str, target_strings: dict[str, str \| list[str]] \| list[str] \| str, model_or_tokenizer) -> Prompt` | Build from words; a string or list is one target named `"target"`. |
 | `Prompt.has_no_collisions` | `has_no_collisions(ignore_targets: str \| list[str] \| None = None) -> bool` | Whether no token id belongs to two targets. |
-| `Prompt.get_target_probs` | `get_target_probs(probs: Tensor, layer: int \| None = None) -> dict[str, Tensor]` | Each target's mass from `probs` of shape `[batch, layers, vocab]`. |
+| `Prompt.get_target_probs` | `get_target_probs(probs: Tensor, layer: int \| None = None) -> dict[str, Tensor]` | Each target's mass from `probs` of shape `[batch, layers, vocab_size]`. |
 | `Prompt.run` | `run(model, get_probs: Callable) -> dict[str, Tensor]` | `get_probs(model, prompt)` reduced to each target's mass. |
-| `next_token_probs_unsqueeze` | `next_token_probs_unsqueeze(model, prompt, remote: bool = False, **_) -> Tensor` | `compute_next_token_probs` with a layer axis of one, `[batch, 1, vocab]`; the default `get_probs_func`. |
+| `next_token_probs_unsqueeze` | `next_token_probs_unsqueeze(model, prompt, remote: bool = False, **_) -> Tensor` | `compute_next_token_probs` with a layer axis of one, `[batch, 1, vocab_size]`; the default `get_probs_func`. |
 | `run_prompts` | `run_prompts(model, prompts: list[Prompt], batch_size: int = 32, get_probs_func: Callable \| None = None, func_kwargs: dict \| None = None, remote: bool = False, tqdm=None) -> dict[str, Tensor]` | Each target's probability mass per prompt, `[num_prompts, layers]`; all prompts must name the same targets. |
 | `TokenizationError` | `Exception` subclass | A word could not be tokenized as a standalone first token. |
 
@@ -465,17 +466,17 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 | Name | Signature | What |
 |---|---|---|
 | `layer_output` | `layer_output(model, layer: int) -> Tensor` | `model.layers[layer].layer_output`. |
-| `get_token_activations` | `get_token_activations(model, prompts=None, layers=None, get_activations=None, remote=False, idx=None, tracer=None) -> Tensor` | `[num_layers, num_prompts, hidden]` at one position (`idx`, default `-1`) of every prompt; a negative index needs left padding, a positive one right padding. With `tracer`, reads inside the caller's open trace. |
+| `get_token_activations` | `get_token_activations(model, prompts=None, layers=None, get_activations=None, remote=False, idx=None, tracer=None) -> Tensor` | `[num_layers, num_prompts, hidden_size]` at one position (`idx`, default `-1`) of every prompt; a negative index needs left padding, a positive one right padding. With `tracer`, reads inside the caller's open trace. |
 | `collect_last_token_activations_session` | `collect_last_token_activations_session(model, prompts: list[str], batch_size: int, layers=None, get_activations=None, remote=False, idx=None) -> Tensor` | The same over batches inside one `model.session`, so a remote run is one request. |
 | `collect_token_activations_batched` | `collect_token_activations_batched(model, prompts: list[str], batch_size: int, layers=None, get_activations=None, remote=False, idx=None, tqdm=None, use_session: bool = True) -> Tensor` | The same over batches; a remote run goes through the session variant unless `use_session=False`. |
-| `compute_next_token_probs` | `compute_next_token_probs(model, prompt: str \| list[str], remote: bool = False) -> Tensor` | `model.next_token_probs` per prompt, `[num_prompts, vocab]` on the CPU. |
+| `compute_next_token_probs` | `compute_next_token_probs(model, prompt: str \| list[str], remote: bool = False) -> Tensor` | `model.next_token_probs` per prompt, `[num_prompts, vocab_size]` on the CPU. |
 
 ## Exceptions
 
 | Exception | Raised when |
 |---|---|
 | `nnterp.Unavailable` (`RuntimeError`) | A standard value this checkpoint does not have is read or written: `"<path>.<name> is not available: <reason>"`, at that line, before the model runs. `support()` gives the same reason without raising. `hasattr(envoy, name)` also raises it. |
-| `nnterp.UnsupportedFamily` (`ValueError`) | The checkpoint's `model_type` has no family and the default family cannot standardize it (no blocks, embedding, final norm or head under a name it knows, blocks that do not pass a `[batch, seq, hidden]` stream, or a shape scan that cannot run on fake tensors, the error named); the message suggests a `rename=` when the module tree gives one. |
+| `nnterp.UnsupportedFamily` (`ValueError`) | The checkpoint's `model_type` has no family and the default family cannot standardize it (no blocks, embedding, final norm or head under a name it knows, blocks that do not pass a `[batch, seq, hidden_size]` stream, or a shape scan that cannot run on fake tensors, the error named); the message suggests a `rename=` when the module tree gives one. |
 | `nnsight.intervention.source.SourceNotAvailable` | An `EProperty`'s path names an operation that is not under `.source` in this run: the forward took a path the family does not expect. |
 | `nnterp.prompt_utils.TokenizationError` | A word has no standalone first token under the tokenizer. |
 | `AttributeError` | Assigning a read-only value: `next_token_probs`, `input_size`, `states`, or any `DerivedEProperty`. |

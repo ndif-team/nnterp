@@ -49,7 +49,7 @@ BLOCK = {
             "contribution": "fc2.output",
             "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, {activation_function}",
             "host_note": ("No mlp module: final_layer_norm, fc1, activation_fn and fc2 sit on the block, and fc2.output, "
-                          "[batch, seq, hidden], is what the path adds."),
+                          "[batch, seq, hidden_size], is what the path adds."),
         },
     ],
     "identity": "layers[i].input + self_attn.attention_output + fc2.output == layer_output",
@@ -132,7 +132,7 @@ pinned checkpoint).
 XGLM has one attention implementation, so the interior values need no eager load and carry no `⚠`.
 The queries are scaled by `1/sqrt(head_dim)` as they are projected, so `attention_queries` is
 `q_proj`'s output times that scale and `attention_scores` is `attention_queries @
-attention_keys.transpose(-1, -2)` plus the mask. Every value is a view of the `[batch * heads, ...]`
+attention_keys.transpose(-1, -2)` plus the mask. Every value is a view of the `[batch * num_heads, ...]`
 tensor the forward holds, served heads first, so an in-place edit reaches the model. Every head has its
 own keys and values.
 

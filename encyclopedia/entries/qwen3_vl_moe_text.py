@@ -207,7 +207,7 @@ torch.testing.assert_close(weights, top.values / top.values.sum(-1, keepdim=True
 
 The experts are one fused module, `experts`, each a SwiGLU `moe_intermediate_size` wide (768 on
 30B-A3B, 1536 on 235B-A22B); the config's `intermediate_size` (6144, 12288) is a dense width no block
-uses. `expert_outputs` is each routing slot's weighted output, `[batch, seq, 8, hidden]`, and sums to
+uses. `expert_outputs` is each routing slot's weighted output, `[batch, seq, 8, hidden_size]`, and sums to
 `routed_output`. Because the weights are renormalized, zeroing one expert's weight leaves the others'
 unchanged and the remaining slots sum to less than one:
 

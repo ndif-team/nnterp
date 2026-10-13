@@ -31,10 +31,10 @@ CONFIG.set_default_api_key("YOUR_KEY")
 model = StandardizedTransformer("meta-llama/Llama-3.1-70B", attn_implementation="eager")   # meta device
 
 with model.trace("The Eiffel Tower is in the city of", remote=True):
-    resid = model.layers[40].layer_output[:, -1].save()                     # [batch, hidden]
-    pattern = model.layers[40].self_attn.attention_probabilities[0, :, -1].save()   # [heads, key]
+    resid = model.layers[40].layer_output[:, -1].save()                     # [batch, hidden_size]
+    pattern = model.layers[40].self_attn.attention_probabilities[0, :, -1].save()   # [num_heads, key]
     model.layers[41].mlp.mlp_output[:] = 0
-    probs = model.next_token_probs.save()                                   # [batch, vocab]
+    probs = model.next_token_probs.save()                                   # [batch, vocab_size]
 ```
 
 Save small things: every `.save()` is downloaded. Slice inside the block.

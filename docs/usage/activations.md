@@ -1,6 +1,6 @@
 ---
 title: Collecting Activations
-one_liner: Gather one token position's activation at chosen blocks over many prompts, `[num_layers, num_prompts, hidden]`, with `nnterp.nnsight_utils`.
+one_liner: Gather one token position's activation at chosen blocks over many prompts, `[num_layers, num_prompts, hidden_size]`, with `nnterp.nnsight_utils`.
 tags: [usage, activations, batching, residual-stream]
 related: [docs/usage/residual-stream.md, docs/usage/loading.md, docs/usage/prompt-utils.md, docs/usage/generation.md, docs/usage/remote.md]
 sources: [nnterp/nnsight_utils.py, nnterp/standardized.py, nnterp/components/layer.py]
@@ -26,7 +26,7 @@ from nnterp.nnsight_utils import get_token_activations
 model = StandardizedTransformer("openai-community/gpt2", tokenizer_kwargs={"padding_side": "left"})
 
 acts = get_token_activations(model, ["The Eiffel Tower is in", "Hello"], layers=[4, 8])
-acts.shape     # torch.Size([2, 2, 768]): [num_layers, num_prompts, hidden], on the CPU
+acts.shape     # torch.Size([2, 2, 768]): [num_layers, num_prompts, hidden_size], on the CPU
 ```
 
 `acts[i, j]` is `model.layers[layers[i]].layer_output[j, -1]`: the residual
@@ -57,7 +57,7 @@ with model.trace(prompts) as tracer:
     acts = get_token_activations(model, layers=[4, 8], tracer=tracer).save()
 ```
 
-Returns `[num_layers, num_prompts, hidden]` on the CPU (the trace stops after
+Returns `[num_layers, num_prompts, hidden_size]` on the CPU (the trace stops after
 the last requested block, so blocks past it do not run).
 
 ## Over many prompts
@@ -67,7 +67,7 @@ collect_token_activations_batched(model, prompts, batch_size, layers=None, get_a
 ```
 
 `get_token_activations` over `prompts` in batches of `batch_size`, concatenated
-along the prompt axis: `[num_layers, num_prompts, hidden]` on the CPU. `tqdm`
+along the prompt axis: `[num_layers, num_prompts, hidden_size]` on the CPU. `tqdm`
 is a progress-bar factory to wrap the batch loop with, or `None`. With
 `remote=True` and `use_session` on, it goes through
 `collect_last_token_activations_session` instead, so one request carries every
@@ -85,7 +85,7 @@ Same result and shape.
 compute_next_token_probs(model, prompt, remote=False) -> Tensor
 ```
 
-`model.next_token_probs` for a string or list of prompts, `[num_prompts, vocab]`
+`model.next_token_probs` for a string or list of prompts, `[num_prompts, vocab_size]`
 on the CPU. Under left padding the row is each prompt's own last token.
 
 ## Gotchas

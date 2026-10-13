@@ -92,7 +92,7 @@ the ones that matter most here:
   *source-located value*, *interface*, *hybrid*.
 - **Descriptions on eproperties are capitalized sentences** without a
   trailing period, naming the layout: `"The attention pattern the values are
-  mixed with, [batch, heads, query, key]"`. They are what `repr(model)` and
+  mixed with, [batch, num_heads, query, key]"`. They are what `repr(model)` and
   `support()` show.
 - **One family per module, named after `model_type`**
   (`gemma3_text.py` covers `gemma3_text`); the file name is its type, declared nowhere else.

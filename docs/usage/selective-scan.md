@@ -59,7 +59,7 @@ with model.trace(prompt):
     b = mix.betas.save()                      # [batch, seq, channels]: the step size dt, > 0
     y = mix.attention_head_outputs.save()     # [batch, seq, channels]: C.h + D x, before the gate
     state = mix.state_output.save()           # [batch, channels, state_dim]: after the last token
-    out = mix.attention_output.save()         # [batch, seq, hidden]: what the mixer adds to the stream
+    out = mix.attention_output.save()         # [batch, seq, hidden_size]: what the mixer adds to the stream
 ```
 
 A Mamba block's only contribution is the mixer's:
@@ -110,7 +110,7 @@ assign them, or edit in place under `torch.no_grad()`.
 
 | value | what it is | layout |
 | --- | --- | --- |
-| `attention_output` | what the mixer adds to the residual stream | `Residual`: `batch seq hidden` |
+| `attention_output` | what the mixer adds to the residual stream | `Residual`: `batch seq hidden_size` |
 | `attention_queries` | `C`, what each token reads the state with; one group, shared by every channel | `ScanQK`: `batch seq groups state_dim` |
 | `attention_keys` | `B`, what each token writes into the state along | `ScanQK`: `batch seq groups state_dim` |
 | `attention_values` | `x`, the input each channel writes, after the conv and the activation | `ScanValues`: `batch seq channels` |

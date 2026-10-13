@@ -133,7 +133,7 @@ fused = torch.nn.functional.linear(h, attn.query_key_value.weight, attn.query_ke
 per_head = fused.view(*fused.shape[:2], model.num_heads, 3, model.head_dim)
 torch.testing.assert_close(per_head[..., 0, :].transpose(1, 2), q)
 W = attn.query_key_value.weight.view(model.num_heads, 3, model.head_dim, -1)
-W_q = W[:, 0]                                  # [heads, head_dim, hidden]
+W_q = W[:, 0]                                  # [num_heads, head_dim, hidden_size]
 ```
 
 ## ALiBi biases replace rotary
@@ -170,7 +170,7 @@ transformers has one attention for BLOOM, its own arithmetic, so a load without
 `attn_implementation` runs it and all six interior values are served: `support()` reports none
 missing. The scores are read where the softmax takes them; the softmax runs in float32 and the
 pattern is cast back to the model's dtype. The head outputs are the `bmm` of the pattern and the
-values, `[batch * heads, seq, head_dim]` in the forward, served `[batch, seq, heads, head_dim]`.
+values, `[batch * num_heads, seq, head_dim]` in the forward, served `[batch, seq, num_heads, head_dim]`.
 `bigscience/bloom-560m` stores float16 weights, and a load without `dtype` is float16.
 
 ## A LayerNorm sits between the embedding and block 0

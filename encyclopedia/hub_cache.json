@@ -1,0 +1,2858 @@
+{
+ "orgs": {
+  "abeja": {
+   "name": "ABEJA, Inc.",
+   "avatar": "orgs/abeja.png"
+  },
+  "adept": {
+   "name": "Adept AI Labs",
+   "avatar": "orgs/adept.png"
+  },
+  "ai21labs": {
+   "name": "AI21",
+   "avatar": "orgs/ai21labs.png"
+  },
+  "allenai": {
+   "name": "Ai2",
+   "avatar": "orgs/allenai.png"
+  },
+  "arcee-ai": {
+   "name": "Arcee AI",
+   "avatar": "orgs/arcee-ai.png"
+  },
+  "baidu": {
+   "name": "BAIDU",
+   "avatar": "orgs/baidu.png"
+  },
+  "bigcode": {
+   "name": "BigCode",
+   "avatar": "orgs/bigcode.png"
+  },
+  "bigscience": {
+   "name": "BigScience Workshop",
+   "avatar": "orgs/bigscience.png"
+  },
+  "ByteDance-Seed": {
+   "name": "ByteDance Seed",
+   "avatar": "orgs/ByteDance-Seed.png"
+  },
+  "CohereLabs": {
+   "name": "Cohere Labs",
+   "avatar": "orgs/CohereLabs.png"
+  },
+  "databricks": {
+   "name": "Databricks",
+   "avatar": "orgs/databricks.png"
+  },
+  "deepseek-ai": {
+   "name": "DeepSeek",
+   "avatar": "orgs/deepseek-ai.png"
+  },
+  "EleutherAI": {
+   "name": "EleutherAI",
+   "avatar": "orgs/EleutherAI.png"
+  },
+  "facebook": {
+   "name": "AI at Meta",
+   "avatar": "orgs/facebook.png"
+  },
+  "google": {
+   "name": "Google",
+   "avatar": "orgs/google.png"
+  },
+  "HuggingFaceTB": {
+   "name": "Hugging Face Smol Models Research",
+   "avatar": "orgs/HuggingFaceTB.png"
+  },
+  "ibm-ai-platform": {
+   "name": "ibm-ai-platform",
+   "avatar": "orgs/ibm-ai-platform.png"
+  },
+  "ibm-granite": {
+   "name": "IBM Granite",
+   "avatar": "orgs/ibm-granite.png"
+  },
+  "ibm-research": {
+   "name": "IBM Research",
+   "avatar": "orgs/ibm-research.png"
+  },
+  "jetmoe": {
+   "name": "JetMoE",
+   "avatar": "orgs/jetmoe.png"
+  },
+  "kyutai": {
+   "name": "Kyutai",
+   "avatar": "orgs/kyutai.png"
+  },
+  "LGAI-EXAONE": {
+   "name": "LG AI Research",
+   "avatar": "orgs/LGAI-EXAONE.png"
+  },
+  "meta-llama": {
+   "name": "Meta Llama",
+   "avatar": "orgs/meta-llama.png"
+  },
+  "microsoft": {
+   "name": "Microsoft",
+   "avatar": "orgs/microsoft.png"
+  },
+  "MiniMaxAI": {
+   "name": "MiniMax",
+   "avatar": "orgs/MiniMaxAI.png"
+  },
+  "mistralai": {
+   "name": "Mistral AI_",
+   "avatar": "orgs/mistralai.png"
+  },
+  "moonshotai": {
+   "name": "Moonshot AI",
+   "avatar": "orgs/moonshotai.png"
+  },
+  "mosaicml": {
+   "name": "Mosaic ML, Inc.",
+   "avatar": "orgs/mosaicml.png"
+  },
+  "naver-hyperclovax": {
+   "name": "HyperCLOVA X",
+   "avatar": "orgs/naver-hyperclovax.png"
+  },
+  "nvidia": {
+   "name": "NVIDIA",
+   "avatar": "orgs/nvidia.png"
+  },
+  "openai": {
+   "name": "OpenAI",
+   "avatar": "orgs/openai.png"
+  },
+  "openai-community": {
+   "name": "OpenAI community",
+   "avatar": "orgs/openai-community.png"
+  },
+  "poolside": {
+   "name": "Poolside",
+   "avatar": "orgs/poolside.png"
+  },
+  "Qwen": {
+   "name": "Qwen",
+   "avatar": "orgs/Qwen.png"
+  },
+  "rednote-hilab": {
+   "name": "Rednote HiLab",
+   "avatar": "orgs/rednote-hilab.png"
+  },
+  "Salesforce": {
+   "name": "Salesforce AI Research",
+   "avatar": "orgs/Salesforce.png"
+  },
+  "SmallDoge": {
+   "name": "Doge Face",
+   "avatar": "orgs/SmallDoge.png"
+  },
+  "stabilityai": {
+   "name": "Stability AI",
+   "avatar": "orgs/stabilityai.png"
+  },
+  "state-spaces": {
+   "name": "State Space Models",
+   "avatar": "orgs/state-spaces.png"
+  },
+  "swiss-ai": {
+   "name": "Swiss AI Initiative",
+   "avatar": "orgs/swiss-ai.png"
+  },
+  "tencent": {
+   "name": "Tencent",
+   "avatar": "orgs/tencent.png"
+  },
+  "tiiuae": {
+   "name": "Technology Innovation Institute",
+   "avatar": "orgs/tiiuae.png"
+  },
+  "upstage": {
+   "name": "upstage",
+   "avatar": "orgs/upstage.png"
+  },
+  "XiaomiMiMo": {
+   "name": "Xiaomi MiMo",
+   "avatar": "orgs/XiaomiMiMo.png"
+  },
+  "zai-org": {
+   "name": "Z.ai",
+   "avatar": "orgs/zai-org.png"
+  },
+  "Zyphra": {
+   "name": "Zyphra",
+   "avatar": "orgs/Zyphra.png"
+  }
+ },
+ "repos": {
+  "abeja/gpt-neox-japanese-2.7b": {
+   "params": null,
+   "created": "2022-08-29"
+  },
+  "adept/persimmon-8b-base": {
+   "params": null,
+   "created": "2023-09-07"
+  },
+  "adept/persimmon-8b-chat": {
+   "params": null,
+   "created": "2023-09-07"
+  },
+  "ai21labs/AI21-Jamba-Reasoning-3B": {
+   "params": 3197109632,
+   "created": "2025-10-05"
+  },
+  "ai21labs/AI21-Jamba2-3B": {
+   "params": 3029337472,
+   "created": "2026-01-06"
+  },
+  "ai21labs/AI21-Jamba2-Mini": {
+   "params": 51570323328,
+   "created": "2026-01-06"
+  },
+  "ai21labs/Jamba-v0.1": {
+   "params": 51570323328,
+   "created": "2024-03-28"
+  },
+  "Alchan/mpt-7b-chat": {
+   "params": 6649286656,
+   "created": "2024-03-29"
+  },
+  "allenai/Flex-code-2x7B-1T": {
+   "params": 11627401216,
+   "created": "2025-06-11"
+  },
+  "allenai/Flex-creative-2x7B-1T": {
+   "params": 11627401216,
+   "created": "2025-06-11"
+  },
+  "allenai/Flex-math-2x7B-1T": {
+   "params": 11627401216,
+   "created": "2025-06-11"
+  },
+  "allenai/Flex-news-2x7B-1T": {
+   "params": 11627401216,
+   "created": "2025-06-11"
+  },
+  "allenai/Flex-pes2o-2x7B-1T": {
+   "params": 11627401216,
+   "created": "2025-06-11"
+  },
+  "allenai/Flex-reddit-2x7B-1T": {
+   "params": 11627401216,
+   "created": "2025-06-11"
+  },
+  "allenai/FlexOlmo-7x7B-1T": {
+   "params": 33270665216,
+   "created": "2025-06-11"
+  },
+  "allenai/FlexOlmo-7x7B-1T-RT": {
+   "params": 33270665216,
+   "created": "2025-06-21"
+  },
+  "allenai/OLMo-1B-0724-hf": {
+   "params": 1279787008,
+   "created": "2024-06-15"
+  },
+  "allenai/OLMo-1B-hf": {
+   "params": 1176764416,
+   "created": "2024-04-12"
+  },
+  "allenai/OLMo-2-0325-32B": {
+   "params": 32234279936,
+   "created": "2025-02-23"
+  },
+  "allenai/OLMo-2-0325-32B-DPO": {
+   "params": null,
+   "created": "2025-03-12"
+  },
+  "allenai/OLMo-2-0325-32B-Instruct": {
+   "params": 32234279936,
+   "created": "2025-03-12"
+  },
+  "allenai/OLMo-2-0325-32B-SFT": {
+   "params": null,
+   "created": "2025-03-12"
+  },
+  "allenai/OLMo-2-0425-1B": {
+   "params": 1484916736,
+   "created": "2025-04-17"
+  },
+  "allenai/OLMo-2-0425-1B-DPO": {
+   "params": null,
+   "created": "2025-04-28"
+  },
+  "allenai/OLMo-2-0425-1B-Instruct": {
+   "params": 1484916736,
+   "created": "2025-04-29"
+  },
+  "allenai/OLMo-2-0425-1B-SFT": {
+   "params": null,
+   "created": "2025-04-24"
+  },
+  "allenai/OLMo-2-1124-13B": {
+   "params": 13716198400,
+   "created": "2024-11-19"
+  },
+  "allenai/OLMo-2-1124-13B-DPO": {
+   "params": 13716198400,
+   "created": "2024-12-18"
+  },
+  "allenai/OLMo-2-1124-13B-Instruct": {
+   "params": 13716198400,
+   "created": "2024-12-18"
+  },
+  "allenai/OLMo-2-1124-13B-SFT": {
+   "params": null,
+   "created": "2024-12-18"
+  },
+  "allenai/OLMo-2-1124-7B": {
+   "params": 7298617344,
+   "created": "2024-10-29"
+  },
+  "allenai/OLMo-2-1124-7B-DPO": {
+   "params": null,
+   "created": "2024-12-18"
+  },
+  "allenai/OLMo-2-1124-7B-Instruct": {
+   "params": 7298617344,
+   "created": "2024-12-18"
+  },
+  "allenai/OLMo-2-1124-7B-SFT": {
+   "params": null,
+   "created": "2024-12-18"
+  },
+  "allenai/Olmo-3-1025-7B": {
+   "params": 7298011136,
+   "created": "2025-09-12"
+  },
+  "allenai/Olmo-3-1125-32B": {
+   "params": 32233522176,
+   "created": "2025-11-04"
+  },
+  "allenai/Olmo-3-32B-Think": {
+   "params": 32233522176,
+   "created": "2025-11-19"
+  },
+  "allenai/Olmo-3-7B-Instruct": {
+   "params": 7298011136,
+   "created": "2025-11-19"
+  },
+  "allenai/Olmo-3-7B-Instruct-SFT": {
+   "params": 7298011136,
+   "created": "2025-11-17"
+  },
+  "allenai/Olmo-3-7B-RL-Zero-Math": {
+   "params": 7298011136,
+   "created": "2025-11-17"
+  },
+  "allenai/Olmo-3-7B-Think": {
+   "params": 7298011136,
+   "created": "2025-11-18"
+  },
+  "allenai/Olmo-3-7B-Think-SFT": {
+   "params": 7298011136,
+   "created": "2025-10-14"
+  },
+  "allenai/Olmo-3.1-32B-Instruct": {
+   "params": 32233522176,
+   "created": "2025-12-10"
+  },
+  "allenai/Olmo-3.1-32B-Think": {
+   "params": 32233522176,
+   "created": "2025-12-10"
+  },
+  "allenai/OLMo-7B-0424-hf": {
+   "params": 6888095744,
+   "created": "2024-04-17"
+  },
+  "allenai/OLMo-7B-0424-SFT-hf": {
+   "params": 6888095744,
+   "created": "2024-07-08"
+  },
+  "allenai/OLMo-7B-0724-hf": {
+   "params": 6888095744,
+   "created": "2024-07-12"
+  },
+  "allenai/OLMo-7B-0724-Instruct-hf": {
+   "params": 6888095744,
+   "created": "2024-07-09"
+  },
+  "allenai/OLMo-7B-0724-SFT-hf": {
+   "params": 6888095744,
+   "created": "2024-07-08"
+  },
+  "allenai/OLMo-7B-hf": {
+   "params": 6888095744,
+   "created": "2024-04-12"
+  },
+  "allenai/OLMo-7B-Instruct-hf": {
+   "params": 6888095744,
+   "created": "2024-06-04"
+  },
+  "allenai/OLMo-7B-SFT-hf": {
+   "params": 6888095744,
+   "created": "2024-06-04"
+  },
+  "allenai/OLMo-7B-Twin-2T-hf": {
+   "params": 6888095744,
+   "created": "2024-04-12"
+  },
+  "allenai/Olmo-Hybrid-7B": {
+   "params": 7430870688,
+   "created": "2026-01-28"
+  },
+  "allenai/Olmo-Hybrid-Instruct-DPO-7B": {
+   "params": 7430870688,
+   "created": "2026-02-20"
+  },
+  "allenai/Olmo-Hybrid-Instruct-SFT-7B": {
+   "params": 7430870688,
+   "created": "2026-02-19"
+  },
+  "allenai/Olmo-Hybrid-Think-SFT-7B": {
+   "params": 7430870688,
+   "created": "2026-02-28"
+  },
+  "allenai/OLMoE-1B-7B-0125": {
+   "params": 6919161856,
+   "created": "2025-01-21"
+  },
+  "allenai/OLMoE-1B-7B-0125-DPO": {
+   "params": 6919161856,
+   "created": "2025-01-27"
+  },
+  "allenai/OLMoE-1B-7B-0125-Instruct": {
+   "params": 6919161856,
+   "created": "2025-01-27"
+  },
+  "allenai/OLMoE-1B-7B-0125-SFT": {
+   "params": null,
+   "created": "2025-01-27"
+  },
+  "allenai/OLMoE-1B-7B-0924": {
+   "params": 6919161856,
+   "created": "2024-07-20"
+  },
+  "allenai/OLMoE-1B-7B-0924-Instruct": {
+   "params": 6919161856,
+   "created": "2024-08-13"
+  },
+  "allenai/OLMoE-1B-7B-0924-SFT": {
+   "params": 6919161856,
+   "created": "2024-08-13"
+  },
+  "alpindale/dbrx-instruct": {
+   "params": 131596523520,
+   "created": "2024-03-27"
+  },
+  "anas-awadalla/mpt-7b": {
+   "params": null,
+   "created": "2023-06-15"
+  },
+  "AntonV/mamba2-1.3b-hf": {
+   "params": 1343757312,
+   "created": "2024-10-16"
+  },
+  "AntonV/mamba2-130m-hf": {
+   "params": 128989632,
+   "created": "2024-09-16"
+  },
+  "AntonV/mamba2-2.7b-hf": {
+   "params": 2702599680,
+   "created": "2024-10-16"
+  },
+  "AntonV/mamba2-370m-hf": {
+   "params": 368346624,
+   "created": "2024-10-16"
+  },
+  "AntonV/mamba2-780m-hf": {
+   "params": 780161280,
+   "created": "2024-10-16"
+  },
+  "arcee-ai/AFM-4.5B": {
+   "params": 4619189760,
+   "created": "2025-07-29"
+  },
+  "arcee-ai/AFM-4.5B-Base": {
+   "params": 4619184640,
+   "created": "2025-07-29"
+  },
+  "arcee-ai/AFM-4.5B-Base-Pre-Anneal": {
+   "params": 4620474880,
+   "created": "2025-05-27"
+  },
+  "arcee-ai/AFM-4.5B-Preview": {
+   "params": 4619491840,
+   "created": "2025-06-19"
+  },
+  "arcee-ai/Trinity-Large-Base": {
+   "params": 398635286016,
+   "created": "2026-01-27"
+  },
+  "arcee-ai/Trinity-Large-Preview": {
+   "params": 398635286016,
+   "created": "2026-01-27"
+  },
+  "arcee-ai/Trinity-Large-Thinking": {
+   "params": 398635286016,
+   "created": "2026-04-01"
+  },
+  "arcee-ai/Trinity-Large-TrueBase": {
+   "params": 398635286016,
+   "created": "2026-01-27"
+  },
+  "arcee-ai/Trinity-Mini": {
+   "params": 26123974400,
+   "created": "2025-12-01"
+  },
+  "arcee-ai/Trinity-Mini-Base": {
+   "params": 26123974400,
+   "created": "2025-12-01"
+  },
+  "arcee-ai/Trinity-Mini-Base-Pre-Anneal": {
+   "params": 26123974400,
+   "created": "2025-12-11"
+  },
+  "arcee-ai/Trinity-Nano-Base": {
+   "params": 6120003328,
+   "created": "2025-12-01"
+  },
+  "arcee-ai/Trinity-Nano-Base-Pre-Anneal": {
+   "params": 6120003328,
+   "created": "2025-12-11"
+  },
+  "arcee-ai/Trinity-Nano-Preview": {
+   "params": 6120003328,
+   "created": "2025-12-01"
+  },
+  "baidu/ERNIE-4.5-0.3B-Base-PT": {
+   "params": 360748032,
+   "created": "2025-06-28"
+  },
+  "baidu/ERNIE-4.5-0.3B-PT": {
+   "params": 360748032,
+   "created": "2025-06-28"
+  },
+  "baidu/ERNIE-4.5-21B-A3B-Base-PT": {
+   "params": 21825437888,
+   "created": "2025-06-28"
+  },
+  "baidu/ERNIE-4.5-21B-A3B-PT": {
+   "params": 21948655808,
+   "created": "2025-06-28"
+  },
+  "baidu/ERNIE-4.5-21B-A3B-Thinking": {
+   "params": 21825437888,
+   "created": "2025-09-08"
+  },
+  "baidu/ERNIE-4.5-300B-A47B-Base-PT": {
+   "params": 299484163264,
+   "created": "2025-06-28"
+  },
+  "baidu/ERNIE-4.5-300B-A47B-PT": {
+   "params": 300474051776,
+   "created": "2025-06-28"
+  },
+  "bigcode/gpt_bigcode-santacoder": {
+   "params": 1124886528,
+   "created": "2023-04-06"
+  },
+  "bigcode/octocoder": {
+   "params": 15517456384,
+   "created": "2023-07-23"
+  },
+  "bigcode/starcoder2-15b": {
+   "params": 15957889024,
+   "created": "2024-02-20"
+  },
+  "bigcode/starcoder2-15b-instruct-v0.1": {
+   "params": 15957889024,
+   "created": "2024-04-23"
+  },
+  "bigcode/starcoder2-3b": {
+   "params": 3030371328,
+   "created": "2023-11-29"
+  },
+  "bigcode/starcoder2-7b": {
+   "params": 7173923840,
+   "created": "2024-02-20"
+  },
+  "bigcode/tiny_starcoder_py": {
+   "params": 164144128,
+   "created": "2023-05-15"
+  },
+  "bigscience/bloom": {
+   "params": 176247271424,
+   "created": "2022-05-19"
+  },
+  "bigscience/bloom-1b1": {
+   "params": 1065314304,
+   "created": "2022-05-19"
+  },
+  "bigscience/bloom-1b7": {
+   "params": 1722408960,
+   "created": "2022-05-19"
+  },
+  "bigscience/bloom-3b": {
+   "params": 3002557440,
+   "created": "2022-05-19"
+  },
+  "bigscience/bloom-560m": {
+   "params": 559214592,
+   "created": "2022-05-19"
+  },
+  "bigscience/bloom-7b1": {
+   "params": 7069016064,
+   "created": "2022-05-19"
+  },
+  "bigscience/bloomz": {
+   "params": 176247271424,
+   "created": "2022-09-17"
+  },
+  "bigscience/bloomz-1b1": {
+   "params": 1065314304,
+   "created": "2022-10-08"
+  },
+  "bigscience/bloomz-1b7": {
+   "params": 1722408960,
+   "created": "2022-10-08"
+  },
+  "bigscience/bloomz-3b": {
+   "params": 3002557440,
+   "created": "2022-10-08"
+  },
+  "bigscience/bloomz-560m": {
+   "params": 559214592,
+   "created": "2022-10-08"
+  },
+  "bigscience/bloomz-7b1": {
+   "params": 7069016064,
+   "created": "2022-09-27"
+  },
+  "bigscience/bloomz-7b1-mt": {
+   "params": 7069016064,
+   "created": "2022-09-28"
+  },
+  "bigscience/bloomz-mt": {
+   "params": 176247271424,
+   "created": "2022-10-03"
+  },
+  "ByteDance-Seed/Seed-OSS-36B-Base": {
+   "params": 36151104512,
+   "created": "2025-08-20"
+  },
+  "ByteDance-Seed/Seed-OSS-36B-Base-woSyn": {
+   "params": 36151104512,
+   "created": "2025-08-20"
+  },
+  "ByteDance-Seed/Seed-OSS-36B-Instruct": {
+   "params": 36151104512,
+   "created": "2025-08-20"
+  },
+  "deepseek-ai/DeepSeek-Coder-V2-Base": {
+   "params": 235741434880,
+   "created": "2024-06-14"
+  },
+  "deepseek-ai/DeepSeek-Coder-V2-Instruct": {
+   "params": 235741434880,
+   "created": "2024-06-14"
+  },
+  "deepseek-ai/DeepSeek-Coder-V2-Instruct-0724": {
+   "params": 235741434880,
+   "created": "2024-09-05"
+  },
+  "deepseek-ai/DeepSeek-Coder-V2-Lite-Base": {
+   "params": 15706484224,
+   "created": "2024-06-14"
+  },
+  "deepseek-ai/DeepSeek-Coder-V2-Lite-Instruct": {
+   "params": 15706484224,
+   "created": "2024-06-14"
+  },
+  "deepseek-ai/DeepSeek-R1": {
+   "params": 684489845504,
+   "created": "2025-01-20"
+  },
+  "deepseek-ai/DeepSeek-R1-0528": {
+   "params": 684531386000,
+   "created": "2025-05-28"
+  },
+  "deepseek-ai/DeepSeek-R1-0528-Qwen3-8B": {
+   "params": 8190735360,
+   "created": "2025-05-29"
+  },
+  "deepseek-ai/DeepSeek-R1-Distill-Qwen-1.5B": {
+   "params": 1777088000,
+   "created": "2025-01-20"
+  },
+  "deepseek-ai/DeepSeek-R1-Distill-Qwen-14B": {
+   "params": 14770033664,
+   "created": "2025-01-20"
+  },
+  "deepseek-ai/DeepSeek-R1-Distill-Qwen-32B": {
+   "params": 32763876352,
+   "created": "2025-01-20"
+  },
+  "deepseek-ai/DeepSeek-R1-Distill-Qwen-7B": {
+   "params": 7615616512,
+   "created": "2025-01-20"
+  },
+  "deepseek-ai/DeepSeek-R1-Zero": {
+   "params": 684531386000,
+   "created": "2025-01-20"
+  },
+  "deepseek-ai/DeepSeek-V2": {
+   "params": 235741434880,
+   "created": "2024-04-22"
+  },
+  "deepseek-ai/DeepSeek-V2-Chat": {
+   "params": 235741434880,
+   "created": "2024-04-28"
+  },
+  "deepseek-ai/DeepSeek-V2-Chat-0628": {
+   "params": 235741434880,
+   "created": "2024-07-18"
+  },
+  "deepseek-ai/DeepSeek-V2-Lite": {
+   "params": 15706484224,
+   "created": "2024-05-15"
+  },
+  "deepseek-ai/DeepSeek-V2-Lite-Chat": {
+   "params": 15706484224,
+   "created": "2024-05-15"
+  },
+  "deepseek-ai/DeepSeek-V2.5": {
+   "params": 235741434880,
+   "created": "2024-09-05"
+  },
+  "deepseek-ai/DeepSeek-V2.5-1210": {
+   "params": 235741434880,
+   "created": "2024-12-10"
+  },
+  "deepseek-ai/DeepSeek-V3": {
+   "params": 684531386000,
+   "created": "2024-12-25"
+  },
+  "deepseek-ai/DeepSeek-V3-0324": {
+   "params": 684531386000,
+   "created": "2025-03-24"
+  },
+  "deepseek-ai/DeepSeek-V3-Base": {
+   "params": 684531386000,
+   "created": "2024-12-25"
+  },
+  "deepseek-ai/DeepSeek-V3.1": {
+   "params": 684531386000,
+   "created": "2025-08-21"
+  },
+  "deepseek-ai/DeepSeek-V3.1-Base": {
+   "params": 684531386000,
+   "created": "2025-08-19"
+  },
+  "deepseek-ai/DeepSeek-V3.1-Terminus": {
+   "params": 684531386000,
+   "created": "2025-09-22"
+  },
+  "deepseek-ai/DeepSeek-V3.2": {
+   "params": 685355329792,
+   "created": "2025-12-01"
+  },
+  "deepseek-ai/DeepSeek-V3.2-Exp": {
+   "params": 685396921376,
+   "created": "2025-09-29"
+  },
+  "deepseek-ai/DeepSeek-V3.2-Exp-Base": {
+   "params": 685396921376,
+   "created": "2025-09-29"
+  },
+  "deepseek-ai/DeepSeek-V3.2-Speciale": {
+   "params": 685396921376,
+   "created": "2025-11-28"
+  },
+  "deepseek-ai/DeepSeek-V4-Flash": {
+   "params": 290944616402,
+   "created": "2026-04-22"
+  },
+  "deepseek-ai/DeepSeek-V4-Flash-0731": {
+   "params": 304180418494,
+   "created": "2026-07-31"
+  },
+  "deepseek-ai/DeepSeek-V4-Flash-Base": {
+   "params": 292021347282,
+   "created": "2026-04-22"
+  },
+  "deepseek-ai/DeepSeek-V4-Flash-DSpark": {
+   "params": 165265454782,
+   "created": "2026-06-27"
+  },
+  "deepseek-ai/DeepSeek-V4-Flash-Vision-Exp": {
+   "params": 304646824126,
+   "created": "2026-08-31"
+  },
+  "deepseek-ai/DeepSeek-V4-Pro": {
+   "params": 1598839674782,
+   "created": "2026-04-22"
+  },
+  "deepseek-ai/DeepSeek-V4-Pro-0813": {
+   "params": 1650497936906,
+   "created": "2026-08-13"
+  },
+  "deepseek-ai/DeepSeek-V4-Pro-Base": {
+   "params": 1600790440862,
+   "created": "2026-04-22"
+  },
+  "deepseek-ai/DeepSeek-V4-Pro-DSpark": {
+   "params": 1650497936906,
+   "created": "2026-06-27"
+  },
+  "deepseek-community/deepseek-vl-1.3b-chat": {
+   "params": 1962640384,
+   "created": "2025-06-12"
+  },
+  "distilbert/distilgpt2": {
+   "params": 88204032,
+   "created": "2022-03-02"
+  },
+  "EleutherAI/gpt-j-6b": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "EleutherAI/gpt-neo-1.3B": {
+   "params": 1365907456,
+   "created": "2022-03-02"
+  },
+  "EleutherAI/gpt-neo-125m": {
+   "params": 150364416,
+   "created": "2022-03-02"
+  },
+  "EleutherAI/gpt-neo-2.7B": {
+   "params": 2718416384,
+   "created": "2022-03-02"
+  },
+  "EleutherAI/gpt-neox-20b": {
+   "params": 20739117584,
+   "created": "2022-04-07"
+  },
+  "EleutherAI/pythia-1.4b": {
+   "params": 1515311488,
+   "created": "2023-02-09"
+  },
+  "EleutherAI/pythia-1.4b-deduped": {
+   "params": 1414647808,
+   "created": "2023-02-09"
+  },
+  "EleutherAI/pythia-12b": {
+   "params": 11997067840,
+   "created": "2023-02-28"
+  },
+  "EleutherAI/pythia-12b-deduped": {
+   "params": null,
+   "created": "2023-02-27"
+  },
+  "EleutherAI/pythia-14m": {
+   "params": 14067712,
+   "created": "2026-02-24"
+  },
+  "EleutherAI/pythia-14m-deduped": {
+   "params": 39233560,
+   "created": "2023-07-19"
+  },
+  "EleutherAI/pythia-160m": {
+   "params": 212654688,
+   "created": "2023-02-08"
+  },
+  "EleutherAI/pythia-160m-deduped": {
+   "params": 212654688,
+   "created": "2023-02-08"
+  },
+  "EleutherAI/pythia-1b": {
+   "params": 1078891008,
+   "created": "2023-03-10"
+  },
+  "EleutherAI/pythia-1b-deduped": {
+   "params": 1078891008,
+   "created": "2023-02-14"
+  },
+  "EleutherAI/pythia-2.8b": {
+   "params": 2909427008,
+   "created": "2023-02-13"
+  },
+  "EleutherAI/pythia-2.8b-deduped": {
+   "params": 2909427008,
+   "created": "2023-02-10"
+  },
+  "EleutherAI/pythia-31m": {
+   "params": 30494720,
+   "created": "2026-02-24"
+  },
+  "EleutherAI/pythia-31m-deduped": {
+   "params": 55660568,
+   "created": "2023-07-19"
+  },
+  "EleutherAI/pythia-410m": {
+   "params": 505997504,
+   "created": "2023-02-13"
+  },
+  "EleutherAI/pythia-410m-deduped": {
+   "params": 505997504,
+   "created": "2023-02-13"
+  },
+  "EleutherAI/pythia-6.9b": {
+   "params": 6991520256,
+   "created": "2023-02-14"
+  },
+  "EleutherAI/pythia-6.9b-deduped": {
+   "params": null,
+   "created": "2023-02-25"
+  },
+  "EleutherAI/pythia-70m": {
+   "params": 95592496,
+   "created": "2023-02-13"
+  },
+  "EleutherAI/pythia-70m-deduped": {
+   "params": 95592496,
+   "created": "2023-02-13"
+  },
+  "eluzhnica/mpt-30b-peft-compatible": {
+   "params": null,
+   "created": "2023-06-26"
+  },
+  "facebook/opt-1.3b": {
+   "params": null,
+   "created": "2022-05-11"
+  },
+  "facebook/opt-125m": {
+   "params": null,
+   "created": "2022-05-11"
+  },
+  "facebook/opt-13b": {
+   "params": null,
+   "created": "2022-05-11"
+  },
+  "facebook/opt-2.7b": {
+   "params": null,
+   "created": "2022-05-11"
+  },
+  "facebook/opt-30b": {
+   "params": null,
+   "created": "2022-05-11"
+  },
+  "facebook/opt-350m": {
+   "params": null,
+   "created": "2022-05-11"
+  },
+  "facebook/opt-6.7b": {
+   "params": null,
+   "created": "2022-05-11"
+  },
+  "facebook/opt-66b": {
+   "params": null,
+   "created": "2022-06-23"
+  },
+  "facebook/xglm-1.7B": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "facebook/xglm-2.9B": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "facebook/xglm-4.5B": {
+   "params": 5076815872,
+   "created": "2022-03-02"
+  },
+  "facebook/xglm-564M": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "facebook/xglm-7.5B": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "gl198976/mpt-7b-instruct": {
+   "params": 6649286656,
+   "created": "2023-05-06"
+  },
+  "google/codegemma-2b": {
+   "params": 2506172416,
+   "created": "2024-03-21"
+  },
+  "google/codegemma-7b": {
+   "params": 8537680896,
+   "created": "2024-03-21"
+  },
+  "google/gemma-1.1-2b-it": {
+   "params": 2506172416,
+   "created": "2024-03-26"
+  },
+  "google/gemma-1.1-7b-it": {
+   "params": 8537680896,
+   "created": "2024-03-26"
+  },
+  "google/gemma-2-27b": {
+   "params": 27227128320,
+   "created": "2024-06-24"
+  },
+  "google/gemma-2-27b-it": {
+   "params": 27227128320,
+   "created": "2024-06-24"
+  },
+  "google/gemma-2-2b": {
+   "params": 2614341888,
+   "created": "2024-07-16"
+  },
+  "google/gemma-2-2b-it": {
+   "params": 2614341888,
+   "created": "2024-07-16"
+  },
+  "google/gemma-2-9b": {
+   "params": 9241705984,
+   "created": "2024-06-24"
+  },
+  "google/gemma-2-9b-it": {
+   "params": 9241705984,
+   "created": "2024-06-24"
+  },
+  "google/gemma-2b": {
+   "params": 2506172416,
+   "created": "2024-02-08"
+  },
+  "google/gemma-2b-it": {
+   "params": 2506172416,
+   "created": "2024-02-08"
+  },
+  "google/gemma-3-12b-it": {
+   "params": 12187325040,
+   "created": "2025-03-01"
+  },
+  "google/gemma-3-12b-pt": {
+   "params": 12187325040,
+   "created": "2025-03-01"
+  },
+  "google/gemma-3-1b-it": {
+   "params": 999885952,
+   "created": "2025-03-10"
+  },
+  "google/gemma-3-1b-pt": {
+   "params": 999885952,
+   "created": "2025-02-20"
+  },
+  "google/gemma-3-270m": {
+   "params": 268098176,
+   "created": "2025-08-05"
+  },
+  "google/gemma-3-270m-it": {
+   "params": 268098176,
+   "created": "2025-07-30"
+  },
+  "google/gemma-3-27b-it": {
+   "params": 27432406640,
+   "created": "2025-03-01"
+  },
+  "google/gemma-3-27b-pt": {
+   "params": 27432406640,
+   "created": "2025-03-01"
+  },
+  "google/gemma-3-4b-it": {
+   "params": 4300079472,
+   "created": "2025-02-20"
+  },
+  "google/gemma-3-4b-pt": {
+   "params": 4300079472,
+   "created": "2025-02-20"
+  },
+  "google/gemma-4-12B": {
+   "params": 11959730224,
+   "created": "2026-05-23"
+  },
+  "google/gemma-4-12B-it": {
+   "params": 11959730224,
+   "created": "2026-05-23"
+  },
+  "google/gemma-4-26B-A4B": {
+   "params": 26544131376,
+   "created": "2026-03-12"
+  },
+  "google/gemma-4-26B-A4B-it": {
+   "params": 25805936206,
+   "created": "2026-03-11"
+  },
+  "google/gemma-4-31B": {
+   "params": 32682372656,
+   "created": "2026-03-12"
+  },
+  "google/gemma-4-31B-it": {
+   "params": 31273088876,
+   "created": "2026-03-11"
+  },
+  "google/gemma-4-E2B": {
+   "params": 5123178051,
+   "created": "2026-03-02"
+  },
+  "google/gemma-4-E2B-it": {
+   "params": 5123178051,
+   "created": "2026-03-02"
+  },
+  "google/gemma-4-E4B": {
+   "params": 7996156490,
+   "created": "2026-03-02"
+  },
+  "google/gemma-4-E4B-it": {
+   "params": 7996156490,
+   "created": "2026-03-02"
+  },
+  "google/gemma-7b": {
+   "params": 8537680896,
+   "created": "2024-02-08"
+  },
+  "google/gemma-7b-it": {
+   "params": 8537680896,
+   "created": "2024-02-13"
+  },
+  "google/paligemma-3b-mix-224": {
+   "params": 2923466480,
+   "created": "2024-05-12"
+  },
+  "google/paligemma-3b-mix-448": {
+   "params": 2924351216,
+   "created": "2024-05-13"
+  },
+  "google/paligemma-3b-pt-224": {
+   "params": 2923466480,
+   "created": "2024-05-12"
+  },
+  "google/paligemma-3b-pt-448": {
+   "params": 2924351216,
+   "created": "2024-05-13"
+  },
+  "google/paligemma-3b-pt-896": {
+   "params": 2927890160,
+   "created": "2024-05-13"
+  },
+  "google/vaultgemma-1b": {
+   "params": 1038741120,
+   "created": "2025-09-05"
+  },
+  "HuggingFaceH4/starchat-alpha": {
+   "params": 15517480960,
+   "created": "2023-05-09"
+  },
+  "HuggingFaceM4/Idefics3-8B-Llama3": {
+   "params": 8462086384,
+   "created": "2024-08-05"
+  },
+  "HuggingFaceTB/SmolLM3-3B": {
+   "params": 3075098624,
+   "created": "2025-07-08"
+  },
+  "HuggingFaceTB/SmolLM3-3B-Base": {
+   "params": 3075098624,
+   "created": "2025-06-19"
+  },
+  "HuggingFaceTB/SmolVLM-Instruct": {
+   "params": 2246272880,
+   "created": "2024-11-18"
+  },
+  "HuggingFaceTB/SmolVLM2-2.2B-Instruct": {
+   "params": 2246784880,
+   "created": "2025-02-08"
+  },
+  "ibm-ai-platform/Bamba-9B-1.8T": {
+   "params": 9780235392,
+   "created": "2024-12-02"
+  },
+  "ibm-ai-platform/Bamba-9B-2T": {
+   "params": 9780235392,
+   "created": "2024-12-03"
+  },
+  "ibm-ai-platform/Bamba-9B-v1": {
+   "params": 9780235392,
+   "created": "2024-12-03"
+  },
+  "ibm-ai-platform/Bamba-9B-v2": {
+   "params": 9780235392,
+   "created": "2025-04-25"
+  },
+  "ibm-granite/granite-3.0-1b-a400m-base": {
+   "params": 1384956928,
+   "created": "2024-10-03"
+  },
+  "ibm-granite/granite-3.0-1b-a400m-instruct": {
+   "params": 1334628352,
+   "created": "2024-10-03"
+  },
+  "ibm-granite/granite-3.0-2b-base": {
+   "params": 2533525504,
+   "created": "2024-10-02"
+  },
+  "ibm-granite/granite-3.0-2b-instruct": {
+   "params": 2634201088,
+   "created": "2024-10-02"
+  },
+  "ibm-granite/granite-3.0-3b-a800m-base": {
+   "params": 3374286336,
+   "created": "2024-10-03"
+  },
+  "ibm-granite/granite-3.0-3b-a800m-instruct": {
+   "params": 3374295552,
+   "created": "2024-10-03"
+  },
+  "ibm-granite/granite-3.0-8b-base": {
+   "params": 8170835968,
+   "created": "2024-10-02"
+  },
+  "ibm-granite/granite-3.0-8b-instruct": {
+   "params": 8170848256,
+   "created": "2024-10-02"
+  },
+  "ibm-granite/granite-3.1-1b-a400m-base": {
+   "params": 1334625280,
+   "created": "2024-12-06"
+  },
+  "ibm-granite/granite-3.1-1b-a400m-instruct": {
+   "params": 1334628352,
+   "created": "2024-12-06"
+  },
+  "ibm-granite/granite-3.1-2b-base": {
+   "params": 2533525504,
+   "created": "2024-12-06"
+  },
+  "ibm-granite/granite-3.1-2b-instruct": {
+   "params": 2533531648,
+   "created": "2024-12-06"
+  },
+  "ibm-granite/granite-3.1-3b-a800m-base": {
+   "params": 3298788864,
+   "created": "2024-12-06"
+  },
+  "ibm-granite/granite-3.1-3b-a800m-instruct": {
+   "params": 3298793472,
+   "created": "2024-12-06"
+  },
+  "ibm-granite/granite-3.1-8b-base": {
+   "params": 8170835968,
+   "created": "2024-12-06"
+  },
+  "ibm-granite/granite-3.1-8b-instruct": {
+   "params": 8170848256,
+   "created": "2024-12-06"
+  },
+  "ibm-granite/granite-3.2-2b-instruct": {
+   "params": 2533531648,
+   "created": "2025-02-17"
+  },
+  "ibm-granite/granite-3.2-8b-instruct": {
+   "params": 8170848256,
+   "created": "2025-02-17"
+  },
+  "ibm-granite/granite-3.3-2b-base": {
+   "params": 2533525504,
+   "created": "2025-04-09"
+  },
+  "ibm-granite/granite-3.3-2b-instruct": {
+   "params": 2533539840,
+   "created": "2025-04-09"
+  },
+  "ibm-granite/granite-3.3-8b-base": {
+   "params": 8170835968,
+   "created": "2025-04-09"
+  },
+  "ibm-granite/granite-3.3-8b-instruct": {
+   "params": 8170864640,
+   "created": "2025-04-09"
+  },
+  "ibm-granite/granite-4.0-1b": {
+   "params": 1631750144,
+   "created": "2025-10-07"
+  },
+  "ibm-granite/granite-4.0-1b-base": {
+   "params": 1631750144,
+   "created": "2025-10-07"
+  },
+  "ibm-granite/granite-4.0-350m": {
+   "params": 352379904,
+   "created": "2025-10-07"
+  },
+  "ibm-granite/granite-4.0-350m-base": {
+   "params": 352379904,
+   "created": "2025-10-07"
+  },
+  "ibm-granite/granite-4.0-h-1b": {
+   "params": 1461538368,
+   "created": "2025-10-07"
+  },
+  "ibm-granite/granite-4.0-h-1b-base": {
+   "params": 1461538368,
+   "created": "2025-10-07"
+  },
+  "ibm-granite/granite-4.0-h-350m": {
+   "params": 340332224,
+   "created": "2025-10-07"
+  },
+  "ibm-granite/granite-4.0-h-350m-base": {
+   "params": 340332224,
+   "created": "2025-10-07"
+  },
+  "ibm-granite/granite-4.0-h-micro": {
+   "params": 3191396096,
+   "created": "2025-09-16"
+  },
+  "ibm-granite/granite-4.0-h-micro-base": {
+   "params": 3191396096,
+   "created": "2025-09-16"
+  },
+  "ibm-granite/granite-4.0-h-small": {
+   "params": 32207337984,
+   "created": "2025-09-16"
+  },
+  "ibm-granite/granite-4.0-h-small-base": {
+   "params": 32207337984,
+   "created": "2025-09-16"
+  },
+  "ibm-granite/granite-4.0-h-tiny": {
+   "params": 6939037248,
+   "created": "2025-09-16"
+  },
+  "ibm-granite/granite-4.0-h-tiny-base": {
+   "params": 6939037248,
+   "created": "2025-09-16"
+  },
+  "ibm-granite/granite-4.0-micro": {
+   "params": 3402836480,
+   "created": "2025-09-16"
+  },
+  "ibm-granite/granite-4.0-micro-base": {
+   "params": 3402836480,
+   "created": "2025-09-16"
+  },
+  "ibm-granite/granite-4.0-tiny-base-preview": {
+   "params": 6673296960,
+   "created": "2025-04-30"
+  },
+  "ibm-granite/granite-4.0-tiny-preview": {
+   "params": 6671539776,
+   "created": "2025-04-30"
+  },
+  "ibm-granite/granite-4.1-30b": {
+   "params": 28865728512,
+   "created": "2026-04-06"
+  },
+  "ibm-granite/granite-4.1-30b-base": {
+   "params": 28865728512,
+   "created": "2026-04-06"
+  },
+  "ibm-granite/granite-4.1-3b": {
+   "params": 3402836480,
+   "created": "2026-04-06"
+  },
+  "ibm-granite/granite-4.1-3b-base": {
+   "params": 3402836480,
+   "created": "2026-04-06"
+  },
+  "ibm-granite/granite-4.1-8b": {
+   "params": 8791592960,
+   "created": "2026-04-06"
+  },
+  "ibm-granite/granite-4.1-8b-base": {
+   "params": 8380551168,
+   "created": "2026-04-06"
+  },
+  "ibm-granite/granite-4.2-30b": {
+   "params": 29276770304,
+   "created": "2026-08-07"
+  },
+  "ibm-granite/granite-4.2-3b": {
+   "params": 3659737600,
+   "created": "2026-08-07"
+  },
+  "ibm-granite/granite-4.2-8b": {
+   "params": 8791592960,
+   "created": "2026-08-07"
+  },
+  "ibm-granite/granite-guardian-3.2-3b-a800m": {
+   "params": 3298793472,
+   "created": "2025-02-03"
+  },
+  "ibm-granite/granite-swash-2b": {
+   "params": 2144463840,
+   "created": "2026-07-01"
+  },
+  "ibm-granite/granite-swash-3b-a600m": {
+   "params": 3020382000,
+   "created": "2026-07-01"
+  },
+  "ibm-research/granite-4.0-h-3b-ar": {
+   "params": 3396916992,
+   "created": "2026-06-16"
+  },
+  "ibm-research/moe-7b-1b-active-shared-experts": {
+   "params": 6372584448,
+   "created": "2025-02-11"
+  },
+  "ibm-research/PowerMoE-3b": {
+   "params": 3374286336,
+   "created": "2024-08-14"
+  },
+  "jetmoe/jetmoe-8b": {
+   "params": 8522237952,
+   "created": "2024-03-25"
+  },
+  "jetmoe/jetmoe-8b-sft": {
+   "params": 8522237952,
+   "created": "2024-03-30"
+  },
+  "kyutai/helium-1-preview-2b": {
+   "params": 2172643840,
+   "created": "2025-01-13"
+  },
+  "LGAI-EXAONE/EXAONE-4.0-1.2B": {
+   "params": 1279391488,
+   "created": "2025-07-11"
+  },
+  "LGAI-EXAONE/EXAONE-4.0-32B": {
+   "params": 32003216384,
+   "created": "2025-07-11"
+  },
+  "LGAI-EXAONE/EXAONE-4.0.1-32B": {
+   "params": 32003216384,
+   "created": "2025-07-29"
+  },
+  "llava-hf/bakLlava-v1-hf": {
+   "params": 7566743552,
+   "created": "2023-12-05"
+  },
+  "llava-hf/llava-1.5-13b-hf": {
+   "params": 13351494656,
+   "created": "2023-12-05"
+  },
+  "llava-hf/llava-1.5-7b-hf": {
+   "params": 7063427072,
+   "created": "2023-12-05"
+  },
+  "llava-hf/llava-interleave-qwen-0.5b-hf": {
+   "params": 864031264,
+   "created": "2024-07-10"
+  },
+  "llava-hf/llava-onevision-qwen2-0.5b-ov-hf": {
+   "params": 893675552,
+   "created": "2024-08-13"
+  },
+  "llava-hf/llava-onevision-qwen2-7b-ov-hf": {
+   "params": 8030807584,
+   "created": "2024-08-13"
+  },
+  "llava-hf/llava-v1.6-mistral-7b-hf": {
+   "params": 7566747648,
+   "created": "2024-02-20"
+  },
+  "llava-hf/llava-v1.6-vicuna-7b-hf": {
+   "params": 7063431168,
+   "created": "2024-03-17"
+  },
+  "llava-hf/vip-llava-7b-hf": {
+   "params": 7080214528,
+   "created": "2023-12-10"
+  },
+  "meta-llama/Llama-2-13b-hf": {
+   "params": 13015866880,
+   "created": "2023-07-13"
+  },
+  "meta-llama/Llama-2-70b-hf": {
+   "params": 68976653312,
+   "created": "2023-07-11"
+  },
+  "meta-llama/Llama-2-7b-hf": {
+   "params": 6738417664,
+   "created": "2023-07-13"
+  },
+  "meta-llama/Llama-3.1-405B": {
+   "params": 405853388800,
+   "created": "2024-07-16"
+  },
+  "meta-llama/Llama-3.1-70B": {
+   "params": 70553706496,
+   "created": "2024-07-14"
+  },
+  "meta-llama/Llama-3.1-8B": {
+   "params": 8030261248,
+   "created": "2024-07-14"
+  },
+  "meta-llama/Llama-3.1-8B-Instruct": {
+   "params": 8030261248,
+   "created": "2024-07-18"
+  },
+  "meta-llama/Llama-3.2-1B": {
+   "params": 1235814400,
+   "created": "2024-09-18"
+  },
+  "meta-llama/Llama-3.2-1B-Instruct": {
+   "params": 1235814400,
+   "created": "2024-09-18"
+  },
+  "meta-llama/Llama-3.2-3B": {
+   "params": 3212749824,
+   "created": "2024-09-18"
+  },
+  "meta-llama/Llama-3.2-3B-Instruct": {
+   "params": 3212749824,
+   "created": "2024-09-18"
+  },
+  "meta-llama/Llama-3.3-70B-Instruct": {
+   "params": 70553706496,
+   "created": "2024-11-26"
+  },
+  "meta-llama/Llama-4-Maverick-17B-128E": {
+   "params": 401583781376,
+   "created": "2025-04-02"
+  },
+  "meta-llama/Llama-4-Maverick-17B-128E-Instruct": {
+   "params": 401583781376,
+   "created": "2025-04-01"
+  },
+  "meta-llama/Llama-4-Scout-17B-16E": {
+   "params": 108641793536,
+   "created": "2025-04-02"
+  },
+  "meta-llama/Llama-4-Scout-17B-16E-Instruct": {
+   "params": 108641793536,
+   "created": "2025-04-02"
+  },
+  "meta-llama/Meta-Llama-3-70B": {
+   "params": 70553706496,
+   "created": "2024-04-17"
+  },
+  "meta-llama/Meta-Llama-3-8B": {
+   "params": 8030261248,
+   "created": "2024-04-17"
+  },
+  "microsoft/bitnet-b1.58-2B-4T": {
+   "params": 849787090,
+   "created": "2025-04-15"
+  },
+  "microsoft/bitnet-b1.58-2B-4T-bf16": {
+   "params": 2412820480,
+   "created": "2025-04-15"
+  },
+  "microsoft/phi-1": {
+   "params": 1418270720,
+   "created": "2023-09-10"
+  },
+  "microsoft/phi-1_5": {
+   "params": 1418270720,
+   "created": "2023-09-10"
+  },
+  "microsoft/phi-2": {
+   "params": 2779683840,
+   "created": "2023-12-13"
+  },
+  "microsoft/Phi-3-medium-4k-instruct": {
+   "params": 13960238080,
+   "created": "2024-05-07"
+  },
+  "microsoft/Phi-3-mini-128k-instruct": {
+   "params": 3821079552,
+   "created": "2024-04-22"
+  },
+  "microsoft/Phi-3-mini-4k-instruct": {
+   "params": 3821079552,
+   "created": "2024-04-22"
+  },
+  "microsoft/Phi-3.5-mini-instruct": {
+   "params": 3821079552,
+   "created": "2024-08-16"
+  },
+  "microsoft/Phi-3.5-MoE-instruct": {
+   "params": 41873153344,
+   "created": "2024-08-17"
+  },
+  "microsoft/phi-4": {
+   "params": 14659507200,
+   "created": "2024-12-11"
+  },
+  "microsoft/Phi-4-mini-instruct": {
+   "params": 3836021760,
+   "created": "2025-02-19"
+  },
+  "microsoft/Phi-4-mini-reasoning": {
+   "params": 3836021760,
+   "created": "2025-04-29"
+  },
+  "microsoft/Phi-4-reasoning": {
+   "params": 14659507200,
+   "created": "2025-04-09"
+  },
+  "microsoft/Phi-4-reasoning-plus": {
+   "params": 14659507200,
+   "created": "2025-04-17"
+  },
+  "microsoft/Phi-mini-MoE-instruct": {
+   "params": 7647632704,
+   "created": "2025-06-23"
+  },
+  "microsoft/Phi-tiny-MoE-instruct": {
+   "params": 3755220288,
+   "created": "2025-06-23"
+  },
+  "MiniMaxAI/MiniMax-M2": {
+   "params": 228689764864,
+   "created": "2025-10-22"
+  },
+  "MiniMaxAI/MiniMax-M2.1": {
+   "params": 228689764864,
+   "created": "2025-12-20"
+  },
+  "MiniMaxAI/MiniMax-M2.5": {
+   "params": 228703644928,
+   "created": "2026-02-12"
+  },
+  "MiniMaxAI/MiniMax-M2.7": {
+   "params": 228689764864,
+   "created": "2026-04-09"
+  },
+  "mistral-community/pixtral-12b": {
+   "params": 12682739712,
+   "created": "2024-09-13"
+  },
+  "mistralai/Mamba-Codestral-7B-v0.1": {
+   "params": 7285403648,
+   "created": "2024-07-16"
+  },
+  "mistralai/Ministral-3-14B-Base-2512": {
+   "params": 13945031680,
+   "created": "2025-10-31"
+  },
+  "mistralai/Ministral-3-14B-Instruct-2512": {
+   "params": 13945032240,
+   "created": "2025-10-31"
+  },
+  "mistralai/Ministral-3-3B-Base-2512": {
+   "params": 4251743232,
+   "created": "2025-10-31"
+  },
+  "mistralai/Ministral-3-3B-Instruct-2512": {
+   "params": 3849090048,
+   "created": "2025-10-31"
+  },
+  "mistralai/Ministral-3-8B-Base-2512": {
+   "params": 8918026240,
+   "created": "2025-10-31"
+  },
+  "mistralai/Ministral-3-8B-Instruct-2512": {
+   "params": 8918026716,
+   "created": "2025-10-31"
+  },
+  "mistralai/Ministral-3-8B-Reasoning-2512": {
+   "params": 8918026240,
+   "created": "2025-10-31"
+  },
+  "mistralai/Ministral-8B-Instruct-2410": {
+   "params": 8019808256,
+   "created": "2024-10-15"
+  },
+  "mistralai/Mistral-7B-Instruct-v0.3": {
+   "params": 7248023552,
+   "created": "2024-05-22"
+  },
+  "mistralai/Mistral-7B-v0.1": {
+   "params": 7241732096,
+   "created": "2023-09-20"
+  },
+  "mistralai/Mistral-7B-v0.3": {
+   "params": 7248023552,
+   "created": "2024-05-22"
+  },
+  "mistralai/Mistral-Nemo-Base-2407": {
+   "params": 12247782400,
+   "created": "2024-07-18"
+  },
+  "mistralai/Mistral-Small-3.1-24B-Instruct-2503": {
+   "params": 24011361280,
+   "created": "2025-03-11"
+  },
+  "mistralai/Mistral-Small-3.2-24B-Instruct-2506": {
+   "params": 24011361280,
+   "created": "2025-06-19"
+  },
+  "mistralai/Mixtral-8x22B-Instruct-v0.1": {
+   "params": 140630071296,
+   "created": "2024-04-16"
+  },
+  "mistralai/Mixtral-8x22B-v0.1": {
+   "params": 140620634112,
+   "created": "2024-04-16"
+  },
+  "mistralai/Mixtral-8x7B-Instruct-v0.1": {
+   "params": 46702792704,
+   "created": "2023-12-10"
+  },
+  "mistralai/Mixtral-8x7B-v0.1": {
+   "params": 46702792704,
+   "created": "2023-12-01"
+  },
+  "mlx-community/c4ai-command-r7b-12-2024-bf16": {
+   "params": 8028033024,
+   "created": "2024-12-14"
+  },
+  "moonshotai/Kimi-K2-Base": {
+   "params": 1026470731056,
+   "created": "2025-07-03"
+  },
+  "moonshotai/Kimi-K2-Instruct": {
+   "params": 1026408235864,
+   "created": "2025-07-11"
+  },
+  "moonshotai/Kimi-K2-Instruct-0905": {
+   "params": 1026470735448,
+   "created": "2025-09-03"
+  },
+  "moonshotai/Kimi-K2-Thinking": {
+   "params": 1026408240256,
+   "created": "2025-11-04"
+  },
+  "moonshotai/Kimi-K2.5": {
+   "params": 1026879376368,
+   "created": "2026-01-01"
+  },
+  "moonshotai/Kimi-K2.6": {
+   "params": 1026879376368,
+   "created": "2026-04-14"
+  },
+  "moonshotai/Kimi-K2.7-Code": {
+   "params": 1026879376368,
+   "created": "2026-06-11"
+  },
+  "moonshotai/Kimi-Linear-48B-A3B-Base": {
+   "params": 49122681728,
+   "created": "2025-10-30"
+  },
+  "moonshotai/Kimi-Linear-48B-A3B-Instruct": {
+   "params": 49122681728,
+   "created": "2025-10-30"
+  },
+  "moonshotai/Moonlight-16B-A3B": {
+   "params": 15960111936,
+   "created": "2025-02-22"
+  },
+  "moonshotai/Moonlight-16B-A3B-Instruct": {
+   "params": 15960111936,
+   "created": "2025-02-22"
+  },
+  "naver-hyperclovax/HyperCLOVAX-SEED-Think-14B": {
+   "params": 14748112896,
+   "created": "2025-07-21"
+  },
+  "nomic-ai/gpt4all-j": {
+   "params": 6168323296,
+   "created": "2023-04-11"
+  },
+  "nvidia/Minitron-4B-Base": {
+   "params": null,
+   "created": "2024-07-19"
+  },
+  "nvidia/Minitron-8B-Base": {
+   "params": null,
+   "created": "2024-07-19"
+  },
+  "nvidia/Nemotron-4-Mini-Hindi-4B-Base": {
+   "params": null,
+   "created": "2024-10-22"
+  },
+  "nvidia/Nemotron-4-Mini-Hindi-4B-Instruct": {
+   "params": 4190509056,
+   "created": "2024-10-22"
+  },
+  "nvidia/Nemotron-H-47B-Base-8K": {
+   "params": 46791554816,
+   "created": "2025-04-08"
+  },
+  "nvidia/Nemotron-H-47B-Reasoning-128K": {
+   "params": 46791554816,
+   "created": "2025-05-22"
+  },
+  "nvidia/Nemotron-H-4B-Base-8K": {
+   "params": 4489223040,
+   "created": "2025-03-20"
+  },
+  "nvidia/Nemotron-H-4B-Instruct-128K": {
+   "params": 4489223040,
+   "created": "2025-04-15"
+  },
+  "nvidia/Nemotron-H-56B-Base-8K": {
+   "params": 56324350464,
+   "created": "2025-04-08"
+  },
+  "nvidia/Nemotron-H-8B-Base-8K": {
+   "params": 8100852736,
+   "created": "2025-03-19"
+  },
+  "nvidia/Nemotron-H-8B-Reasoning-128K": {
+   "params": 8100852736,
+   "created": "2025-06-05"
+  },
+  "nvidia/Nemotron-Mini-4B-Instruct": {
+   "params": null,
+   "created": "2024-09-10"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-Base-BF16": {
+   "params": 31577937344,
+   "created": "2025-12-03"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Nano-30B-A3B-BF16": {
+   "params": 31577937344,
+   "created": "2025-12-04"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16": {
+   "params": 3973556832,
+   "created": "2026-03-07"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-Base-BF16": {
+   "params": 123611012096,
+   "created": "2026-03-10"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Super-120B-A12B-BF16": {
+   "params": 123611012096,
+   "created": "2026-03-10"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-Base-BF16": {
+   "params": 560524578816,
+   "created": "2026-06-03"
+  },
+  "nvidia/NVIDIA-Nemotron-3-Ultra-550B-A55B-BF16": {
+   "params": 560524578816,
+   "created": "2026-06-03"
+  },
+  "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-Base-BF16": {
+   "params": 31577937344,
+   "created": "2026-08-05"
+  },
+  "nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-BF16": {
+   "params": 31577937344,
+   "created": "2026-08-01"
+  },
+  "nvidia/NVIDIA-Nemotron-Nano-12B-v2": {
+   "params": 12310001152,
+   "created": "2025-08-21"
+  },
+  "nvidia/NVIDIA-Nemotron-Nano-12B-v2-Base": {
+   "params": 12310001152,
+   "created": "2025-08-14"
+  },
+  "nvidia/NVIDIA-Nemotron-Nano-9B-v2": {
+   "params": 8888227328,
+   "created": "2025-08-12"
+  },
+  "nvidia/NVIDIA-Nemotron-Nano-9B-v2-Base": {
+   "params": 8888227328,
+   "created": "2025-08-14"
+  },
+  "openai-community/gpt2": {
+   "params": 137022720,
+   "created": "2022-03-02"
+  },
+  "openai-community/gpt2-large": {
+   "params": 811778816,
+   "created": "2022-03-02"
+  },
+  "openai-community/gpt2-medium": {
+   "params": 379988992,
+   "created": "2022-03-02"
+  },
+  "openai-community/gpt2-xl": {
+   "params": 1607942848,
+   "created": "2022-03-02"
+  },
+  "openai/gpt-oss-120b": {
+   "params": 116829156672,
+   "created": "2025-08-04"
+  },
+  "openai/gpt-oss-20b": {
+   "params": 20914757184,
+   "created": "2025-08-04"
+  },
+  "poolside/Laguna-M.1": {
+   "params": 225795725568,
+   "created": "2026-06-15"
+  },
+  "poolside/Laguna-M.1-base": {
+   "params": 225795725568,
+   "created": "2026-06-05"
+  },
+  "poolside/Laguna-S-2.1": {
+   "params": 117561977600,
+   "created": "2026-07-13"
+  },
+  "poolside/Laguna-XS-2.1": {
+   "params": 33442617088,
+   "created": "2026-06-20"
+  },
+  "poolside/Laguna-XS.2": {
+   "params": 33442617088,
+   "created": "2026-04-23"
+  },
+  "PygmalionAI/pygmalion-6b": {
+   "params": null,
+   "created": "2023-01-07"
+  },
+  "Qwen/Qwen1.5-0.5B": {
+   "params": 619570176,
+   "created": "2024-01-22"
+  },
+  "Qwen/Qwen1.5-MoE-A2.7B": {
+   "params": 14315784192,
+   "created": "2024-02-29"
+  },
+  "Qwen/Qwen1.5-MoE-A2.7B-Chat": {
+   "params": 14315784192,
+   "created": "2024-03-14"
+  },
+  "Qwen/Qwen2-0.5B": {
+   "params": 494032768,
+   "created": "2024-05-31"
+  },
+  "Qwen/Qwen2-0.5B-Instruct": {
+   "params": 494032768,
+   "created": "2024-06-03"
+  },
+  "Qwen/Qwen2-1.5B": {
+   "params": 1543714304,
+   "created": "2024-05-31"
+  },
+  "Qwen/Qwen2-57B-A14B": {
+   "params": 57408658944,
+   "created": "2024-05-22"
+  },
+  "Qwen/Qwen2-57B-A14B-Instruct": {
+   "params": 57408658944,
+   "created": "2024-06-04"
+  },
+  "Qwen/Qwen2-72B": {
+   "params": 72706203648,
+   "created": "2024-05-22"
+  },
+  "Qwen/Qwen2-7B": {
+   "params": 7615616512,
+   "created": "2024-06-04"
+  },
+  "Qwen/Qwen2-VL-2B": {
+   "params": 2208985600,
+   "created": "2024-09-05"
+  },
+  "Qwen/Qwen2-VL-2B-Instruct": {
+   "params": 2208985600,
+   "created": "2024-08-28"
+  },
+  "Qwen/Qwen2-VL-72B": {
+   "params": 73405560320,
+   "created": "2024-12-04"
+  },
+  "Qwen/Qwen2-VL-72B-Instruct": {
+   "params": 73405560320,
+   "created": "2024-09-17"
+  },
+  "Qwen/Qwen2-VL-7B": {
+   "params": 8291375616,
+   "created": "2024-09-05"
+  },
+  "Qwen/Qwen2-VL-7B-Instruct": {
+   "params": 8291375616,
+   "created": "2024-08-28"
+  },
+  "Qwen/Qwen2.5-0.5B": {
+   "params": 494032768,
+   "created": "2024-09-15"
+  },
+  "Qwen/Qwen2.5-0.5B-Instruct": {
+   "params": 494032768,
+   "created": "2024-09-16"
+  },
+  "Qwen/Qwen2.5-1.5B": {
+   "params": 1543714304,
+   "created": "2024-09-15"
+  },
+  "Qwen/Qwen2.5-1.5B-Instruct": {
+   "params": 1543714304,
+   "created": "2024-09-17"
+  },
+  "Qwen/Qwen2.5-14B": {
+   "params": 14770033664,
+   "created": "2024-09-15"
+  },
+  "Qwen/Qwen2.5-14B-Instruct": {
+   "params": 14770033664,
+   "created": "2024-09-16"
+  },
+  "Qwen/Qwen2.5-32B": {
+   "params": 32763876352,
+   "created": "2024-09-15"
+  },
+  "Qwen/Qwen2.5-32B-Instruct": {
+   "params": 32763876352,
+   "created": "2024-09-17"
+  },
+  "Qwen/Qwen2.5-3B": {
+   "params": 3085938688,
+   "created": "2024-09-15"
+  },
+  "Qwen/Qwen2.5-3B-Instruct": {
+   "params": 3085938688,
+   "created": "2024-09-17"
+  },
+  "Qwen/Qwen2.5-72B": {
+   "params": 72706203648,
+   "created": "2024-09-15"
+  },
+  "Qwen/Qwen2.5-72B-Instruct": {
+   "params": 72706203648,
+   "created": "2024-09-16"
+  },
+  "Qwen/Qwen2.5-7B": {
+   "params": 7615616512,
+   "created": "2024-09-15"
+  },
+  "Qwen/Qwen2.5-7B-Instruct": {
+   "params": 7615616512,
+   "created": "2024-09-16"
+  },
+  "Qwen/Qwen2.5-7B-Instruct-1M": {
+   "params": 7615616512,
+   "created": "2025-01-23"
+  },
+  "Qwen/Qwen2.5-Coder-1.5B": {
+   "params": 1543714304,
+   "created": "2024-09-18"
+  },
+  "Qwen/Qwen2.5-Coder-32B-Instruct": {
+   "params": 32763876352,
+   "created": "2024-11-06"
+  },
+  "Qwen/Qwen2.5-Coder-7B": {
+   "params": 7615616512,
+   "created": "2024-09-16"
+  },
+  "Qwen/Qwen2.5-Math-1.5B": {
+   "params": 1543714304,
+   "created": "2024-09-16"
+  },
+  "Qwen/Qwen2.5-Math-7B": {
+   "params": 7615616512,
+   "created": "2024-09-16"
+  },
+  "Qwen/Qwen2.5-VL-32B-Instruct": {
+   "params": 33452718336,
+   "created": "2025-03-21"
+  },
+  "Qwen/Qwen2.5-VL-3B-Instruct": {
+   "params": 3754622976,
+   "created": "2025-01-26"
+  },
+  "Qwen/Qwen2.5-VL-72B-Instruct": {
+   "params": 73410777344,
+   "created": "2025-01-27"
+  },
+  "Qwen/Qwen2.5-VL-7B-Instruct": {
+   "params": 8292166656,
+   "created": "2025-01-26"
+  },
+  "Qwen/Qwen3-0.6B": {
+   "params": 751632384,
+   "created": "2025-04-27"
+  },
+  "Qwen/Qwen3-0.6B-Base": {
+   "params": 596049920,
+   "created": "2025-04-28"
+  },
+  "Qwen/Qwen3-1.7B": {
+   "params": 2031739904,
+   "created": "2025-04-27"
+  },
+  "Qwen/Qwen3-1.7B-Base": {
+   "params": 1720574976,
+   "created": "2025-04-28"
+  },
+  "Qwen/Qwen3-14B": {
+   "params": 14768307200,
+   "created": "2025-04-27"
+  },
+  "Qwen/Qwen3-14B-Base": {
+   "params": 14768307200,
+   "created": "2025-04-28"
+  },
+  "Qwen/Qwen3-235B-A22B": {
+   "params": 235093634560,
+   "created": "2025-04-27"
+  },
+  "Qwen/Qwen3-235B-A22B-Instruct-2507": {
+   "params": 235093634560,
+   "created": "2025-07-21"
+  },
+  "Qwen/Qwen3-235B-A22B-Thinking-2507": {
+   "params": 235093634560,
+   "created": "2025-07-25"
+  },
+  "Qwen/Qwen3-30B-A3B": {
+   "params": 30532122624,
+   "created": "2025-04-27"
+  },
+  "Qwen/Qwen3-30B-A3B-Base": {
+   "params": 30532122624,
+   "created": "2025-04-28"
+  },
+  "Qwen/Qwen3-30B-A3B-Instruct-2507": {
+   "params": 30532122624,
+   "created": "2025-07-28"
+  },
+  "Qwen/Qwen3-30B-A3B-Thinking-2507": {
+   "params": 30532122624,
+   "created": "2025-07-29"
+  },
+  "Qwen/Qwen3-32B": {
+   "params": 32762123264,
+   "created": "2025-04-27"
+  },
+  "Qwen/Qwen3-4B": {
+   "params": 4022468096,
+   "created": "2025-04-27"
+  },
+  "Qwen/Qwen3-4B-Base": {
+   "params": 4022468096,
+   "created": "2025-04-28"
+  },
+  "Qwen/Qwen3-4B-Instruct-2507": {
+   "params": 4022468096,
+   "created": "2025-08-05"
+  },
+  "Qwen/Qwen3-4B-SafeRL": {
+   "params": 4411424256,
+   "created": "2025-09-30"
+  },
+  "Qwen/Qwen3-4B-Thinking-2507": {
+   "params": 4022468096,
+   "created": "2025-08-05"
+  },
+  "Qwen/Qwen3-8B": {
+   "params": 8190735360,
+   "created": "2025-04-27"
+  },
+  "Qwen/Qwen3-8B-Base": {
+   "params": 8190735360,
+   "created": "2025-04-28"
+  },
+  "Qwen/Qwen3-Coder-30B-A3B-Instruct": {
+   "params": 30532122624,
+   "created": "2025-07-31"
+  },
+  "Qwen/Qwen3-Coder-480B-A35B-Instruct": {
+   "params": 480154875392,
+   "created": "2025-07-22"
+  },
+  "Qwen/Qwen3-Coder-Next": {
+   "params": 79674391296,
+   "created": "2026-01-30"
+  },
+  "Qwen/Qwen3-Coder-Next-Base": {
+   "params": 79674391296,
+   "created": "2026-02-01"
+  },
+  "Qwen/Qwen3-Next-80B-A3B-Instruct": {
+   "params": 81324862720,
+   "created": "2025-09-09"
+  },
+  "Qwen/Qwen3-Next-80B-A3B-Thinking": {
+   "params": 81324862720,
+   "created": "2025-09-09"
+  },
+  "Qwen/Qwen3-Reranker-0.6B": {
+   "params": 595776512,
+   "created": "2025-05-29"
+  },
+  "Qwen/Qwen3-Reranker-4B": {
+   "params": 4021784576,
+   "created": "2025-06-03"
+  },
+  "Qwen/Qwen3-Reranker-8B": {
+   "params": 8188548096,
+   "created": "2025-05-29"
+  },
+  "Qwen/Qwen3-VL-235B-A22B-Instruct": {
+   "params": 235670022896,
+   "created": "2025-09-22"
+  },
+  "Qwen/Qwen3-VL-235B-A22B-Thinking": {
+   "params": 235670022896,
+   "created": "2025-09-22"
+  },
+  "Qwen/Qwen3-VL-2B-Instruct": {
+   "params": 2127532032,
+   "created": "2025-10-19"
+  },
+  "Qwen/Qwen3-VL-2B-Thinking": {
+   "params": 2127532032,
+   "created": "2025-10-19"
+  },
+  "Qwen/Qwen3-VL-30B-A3B-Instruct": {
+   "params": 31070754032,
+   "created": "2025-09-30"
+  },
+  "Qwen/Qwen3-VL-30B-A3B-Thinking": {
+   "params": 31070754032,
+   "created": "2025-09-30"
+  },
+  "Qwen/Qwen3-VL-32B-Instruct": {
+   "params": 33357390064,
+   "created": "2025-10-19"
+  },
+  "Qwen/Qwen3-VL-32B-Thinking": {
+   "params": 33357390064,
+   "created": "2025-10-19"
+  },
+  "Qwen/Qwen3-VL-4B-Instruct": {
+   "params": 4437815808,
+   "created": "2025-10-11"
+  },
+  "Qwen/Qwen3-VL-4B-Thinking": {
+   "params": 4437815808,
+   "created": "2025-10-11"
+  },
+  "Qwen/Qwen3-VL-8B-Instruct": {
+   "params": 8767123696,
+   "created": "2025-10-11"
+  },
+  "Qwen/Qwen3-VL-8B-Thinking": {
+   "params": 8767123696,
+   "created": "2025-10-11"
+  },
+  "Qwen/Qwen3.5-0.8B": {
+   "params": 873438784,
+   "created": "2026-02-28"
+  },
+  "Qwen/Qwen3.5-0.8B-Base": {
+   "params": 873438784,
+   "created": "2026-02-28"
+  },
+  "Qwen/Qwen3.5-122B-A10B": {
+   "params": 125086497008,
+   "created": "2026-02-24"
+  },
+  "Qwen/Qwen3.5-27B": {
+   "params": 27781427952,
+   "created": "2026-02-24"
+  },
+  "Qwen/Qwen3.5-2B": {
+   "params": 2274069824,
+   "created": "2026-02-28"
+  },
+  "Qwen/Qwen3.5-2B-Base": {
+   "params": 2274069824,
+   "created": "2026-02-28"
+  },
+  "Qwen/Qwen3.5-35B-A3B": {
+   "params": 35951822704,
+   "created": "2026-02-24"
+  },
+  "Qwen/Qwen3.5-35B-A3B-Base": {
+   "params": 35951822704,
+   "created": "2026-02-24"
+  },
+  "Qwen/Qwen3.5-397B-A17B": {
+   "params": 403397928944,
+   "created": "2026-02-16"
+  },
+  "Qwen/Qwen3.5-4B": {
+   "params": 4659865088,
+   "created": "2026-02-27"
+  },
+  "Qwen/Qwen3.5-4B-Base": {
+   "params": 4659865088,
+   "created": "2026-02-27"
+  },
+  "Qwen/Qwen3.5-9B": {
+   "params": 9653104368,
+   "created": "2026-02-27"
+  },
+  "Qwen/Qwen3.5-9B-Base": {
+   "params": 9653104368,
+   "created": "2026-02-26"
+  },
+  "Qwen/Qwen3.6-27B": {
+   "params": 27781427952,
+   "created": "2026-04-21"
+  },
+  "Qwen/Qwen3.6-35B-A3B": {
+   "params": 35951822704,
+   "created": "2026-04-15"
+  },
+  "Qwen/Qwen3Guard-Gen-0.6B": {
+   "params": 751632384,
+   "created": "2025-09-23"
+  },
+  "Qwen/Qwen3Guard-Gen-4B": {
+   "params": 4411424256,
+   "created": "2025-09-23"
+  },
+  "Qwen/Qwen3Guard-Gen-8B": {
+   "params": 8190735360,
+   "created": "2025-09-23"
+  },
+  "Qwen/QwQ-32B": {
+   "params": 32763876352,
+   "created": "2025-03-05"
+  },
+  "rednote-hilab/dots.llm1.base": {
+   "params": 1543714304,
+   "created": "2026-10-06"
+  },
+  "rednote-hilab/dots.llm1.inst": {
+   "params": 142774381696,
+   "created": "2025-05-14"
+  },
+  "roneneldan/TinyStories-1Layer-21M": {
+   "params": null,
+   "created": "2023-05-12"
+  },
+  "roneneldan/TinyStories-1M": {
+   "params": null,
+   "created": "2023-05-12"
+  },
+  "roneneldan/TinyStories-28M": {
+   "params": null,
+   "created": "2023-05-12"
+  },
+  "roneneldan/TinyStories-2Layers-33M": {
+   "params": null,
+   "created": "2023-05-12"
+  },
+  "roneneldan/TinyStories-33M": {
+   "params": null,
+   "created": "2023-05-12"
+  },
+  "roneneldan/TinyStories-3M": {
+   "params": null,
+   "created": "2023-05-12"
+  },
+  "roneneldan/TinyStories-8M": {
+   "params": null,
+   "created": "2023-05-12"
+  },
+  "roneneldan/TinyStories-Instruct-33M": {
+   "params": null,
+   "created": "2023-05-12"
+  },
+  "Salesforce/codegen-16B-mono": {
+   "params": null,
+   "created": "2022-04-13"
+  },
+  "Salesforce/codegen-16B-multi": {
+   "params": null,
+   "created": "2022-04-13"
+  },
+  "Salesforce/codegen-16B-nl": {
+   "params": null,
+   "created": "2022-04-13"
+  },
+  "Salesforce/codegen-2B-mono": {
+   "params": null,
+   "created": "2022-04-11"
+  },
+  "Salesforce/codegen-2B-multi": {
+   "params": null,
+   "created": "2022-04-11"
+  },
+  "Salesforce/codegen-2B-nl": {
+   "params": null,
+   "created": "2022-04-11"
+  },
+  "Salesforce/codegen-350M-mono": {
+   "params": null,
+   "created": "2022-04-11"
+  },
+  "Salesforce/codegen-350M-multi": {
+   "params": null,
+   "created": "2022-04-11"
+  },
+  "Salesforce/codegen-350M-nl": {
+   "params": null,
+   "created": "2022-04-11"
+  },
+  "Salesforce/codegen-6B-mono": {
+   "params": null,
+   "created": "2022-04-13"
+  },
+  "Salesforce/codegen-6B-multi": {
+   "params": null,
+   "created": "2022-04-13"
+  },
+  "Salesforce/codegen-6B-nl": {
+   "params": null,
+   "created": "2022-04-13"
+  },
+  "SmallDoge/Doge-180M-MoE": {
+   "params": 184201760,
+   "created": "2025-07-13"
+  },
+  "SmallDoge/Doge-20M": {
+   "params": 13118728,
+   "created": "2024-12-27"
+  },
+  "SmallDoge/Doge-260M": {
+   "params": 268478280,
+   "created": "2025-10-09"
+  },
+  "SmallDoge/Doge-40M": {
+   "params": 40709384,
+   "created": "2025-08-12"
+  },
+  "SmallDoge/Doge-40M-MoE": {
+   "params": 45034760,
+   "created": "2025-07-10"
+  },
+  "stabilityai/stablelm-2-12b": {
+   "params": 12143185920,
+   "created": "2024-03-21"
+  },
+  "stabilityai/stablelm-2-1_6b": {
+   "params": 1644515328,
+   "created": "2024-01-18"
+  },
+  "stabilityai/stablelm-2-zephyr-1_6b": {
+   "params": 1644515328,
+   "created": "2024-01-19"
+  },
+  "stabilityai/stablelm-3b-4e1t": {
+   "params": 2795443200,
+   "created": "2023-09-29"
+  },
+  "stabilityai/stablelm-zephyr-3b": {
+   "params": 2795443200,
+   "created": "2023-11-21"
+  },
+  "stanford-crfm/alias-gpt2-small-x21": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "stanford-crfm/arwen-gpt2-medium-x21": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "stanford-crfm/battlestar-gpt2-small-x49": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "stanford-crfm/beren-gpt2-medium-x49": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "stanford-crfm/caprica-gpt2-small-x81": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "stanford-crfm/celebrimbor-gpt2-medium-x81": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "stanford-crfm/darkmatter-gpt2-small-x343": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "stanford-crfm/durin-gpt2-medium-x343": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "stanford-crfm/eowyn-gpt2-medium-x777": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "stanford-crfm/expanse-gpt2-small-x777": {
+   "params": null,
+   "created": "2022-03-02"
+  },
+  "state-spaces/mamba-1.4b-hf": {
+   "params": 1372178432,
+   "created": "2024-03-05"
+  },
+  "state-spaces/mamba-130m-hf": {
+   "params": 129135360,
+   "created": "2024-03-06"
+  },
+  "state-spaces/mamba-2.8b-hf": {
+   "params": 2768345600,
+   "created": "2024-03-05"
+  },
+  "state-spaces/mamba-370m-hf": {
+   "params": 371516416,
+   "created": "2024-03-06"
+  },
+  "state-spaces/mamba-790m-hf": {
+   "params": 793204224,
+   "created": "2024-03-06"
+  },
+  "swiss-ai/Apertus-70B-2509": {
+   "params": 70599864480,
+   "created": "2025-09-02"
+  },
+  "swiss-ai/Apertus-70B-Instruct-2509": {
+   "params": 70599864480,
+   "created": "2025-09-01"
+  },
+  "swiss-ai/Apertus-8B-2509": {
+   "params": 8053338176,
+   "created": "2025-09-02"
+  },
+  "swiss-ai/Apertus-8B-Instruct-2509": {
+   "params": 8053338176,
+   "created": "2025-08-13"
+  },
+  "swiss-ai/Apertus-v1.1-0.5B": {
+   "params": 438349352,
+   "created": "2026-03-30"
+  },
+  "swiss-ai/Apertus-v1.1-0.5B-Instruct": {
+   "params": 572567080,
+   "created": "2026-05-01"
+  },
+  "swiss-ai/Apertus-v1.1-1.5B": {
+   "params": 1510019104,
+   "created": "2026-02-18"
+  },
+  "swiss-ai/Apertus-v1.1-1.5B-Instruct": {
+   "params": 1510019104,
+   "created": "2026-05-03"
+  },
+  "swiss-ai/Apertus-v1.1-4B": {
+   "params": 3825361968,
+   "created": "2026-04-12"
+  },
+  "swiss-ai/Apertus-v1.1-4B-Instruct": {
+   "params": 3825361968,
+   "created": "2026-05-01"
+  },
+  "team-lucid/mptk-1b": {
+   "params": 1311344640,
+   "created": "2023-09-03"
+  },
+  "tencent/Hunyuan-0.5B-Instruct": {
+   "params": 539010048,
+   "created": "2025-07-30"
+  },
+  "tencent/Hunyuan-0.5B-Pretrain": {
+   "params": 539010048,
+   "created": "2025-07-28"
+  },
+  "tencent/Hunyuan-1.8B-Instruct": {
+   "params": 1791080448,
+   "created": "2025-07-30"
+  },
+  "tencent/Hunyuan-1.8B-Pretrain": {
+   "params": 1791080448,
+   "created": "2025-07-28"
+  },
+  "tencent/Hunyuan-4B-Instruct": {
+   "params": 4221757440,
+   "created": "2025-07-30"
+  },
+  "tencent/Hunyuan-4B-Pretrain": {
+   "params": 4221757440,
+   "created": "2025-07-28"
+  },
+  "tencent/Hunyuan-7B-Instruct": {
+   "params": 7504568320,
+   "created": "2025-07-30"
+  },
+  "tencent/Hunyuan-7B-Instruct-0124": {
+   "params": null,
+   "created": "2025-01-24"
+  },
+  "tencent/Hunyuan-A13B-Instruct": {
+   "params": 80393183232,
+   "created": "2025-06-25"
+  },
+  "tencent/Hunyuan-MT-7B": {
+   "params": 8030269440,
+   "created": "2025-08-28"
+  },
+  "tencent/Hunyuan-MT-Chimera-7B": {
+   "params": 8030269440,
+   "created": "2025-08-28"
+  },
+  "tencent/Youtu-LLM-2B": {
+   "params": 1961560064,
+   "created": "2025-12-31"
+  },
+  "tencent/Youtu-LLM-2B-Base": {
+   "params": 1961560064,
+   "created": "2025-12-31"
+  },
+  "tiiuae/falcon-11B": {
+   "params": 11102822400,
+   "created": "2024-05-09"
+  },
+  "tiiuae/falcon-40b": {
+   "params": 41835970560,
+   "created": "2023-05-24"
+  },
+  "tiiuae/falcon-40b-instruct": {
+   "params": null,
+   "created": "2023-05-25"
+  },
+  "tiiuae/falcon-7b": {
+   "params": 7217189760,
+   "created": "2023-04-24"
+  },
+  "tiiuae/falcon-7b-instruct": {
+   "params": 7217189760,
+   "created": "2023-04-25"
+  },
+  "tiiuae/Falcon-H1-0.5B-Base": {
+   "params": 521411104,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-0.5B-Instruct": {
+   "params": 521411104,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-1.5B-Base": {
+   "params": 1554859392,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-1.5B-Deep-Base": {
+   "params": 1554872208,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-1.5B-Deep-Instruct": {
+   "params": 1554874768,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-1.5B-Instruct": {
+   "params": 1554863488,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-34B-Base": {
+   "params": 33642516224,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-34B-Instruct": {
+   "params": 33642516224,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-3B-Base": {
+   "params": 3149387264,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-3B-Instruct": {
+   "params": 3149392384,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-7B-Base": {
+   "params": 7585648736,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-7B-Instruct": {
+   "params": 7585654880,
+   "created": "2025-05-01"
+  },
+  "tiiuae/Falcon-H1-Tiny-90M-Base": {
+   "params": 91131072,
+   "created": "2026-01-12"
+  },
+  "tiiuae/Falcon-H1-Tiny-90M-Instruct": {
+   "params": 91131072,
+   "created": "2026-01-12"
+  },
+  "tiiuae/Falcon-H1R-7B": {
+   "params": 7585648736,
+   "created": "2025-10-29"
+  },
+  "tiiuae/falcon-mamba-7b": {
+   "params": 7272665088,
+   "created": "2024-07-17"
+  },
+  "tiiuae/falcon-mamba-7b-instruct": {
+   "params": 7272665088,
+   "created": "2024-07-30"
+  },
+  "tiiuae/falcon-mamba-7b-pre-decay": {
+   "params": 7272665088,
+   "created": "2024-10-07"
+  },
+  "tiiuae/falcon-rw-1b": {
+   "params": null,
+   "created": "2023-04-26"
+  },
+  "tiiuae/falcon-rw-7b": {
+   "params": 7782359040,
+   "created": "2023-04-26"
+  },
+  "tiiuae/Falcon3-Mamba-7B-Base": {
+   "params": 7272665088,
+   "created": "2024-12-11"
+  },
+  "tiiuae/Falcon3-Mamba-7B-Instruct": {
+   "params": 7272665088,
+   "created": "2024-12-13"
+  },
+  "togethercomputer/GPT-JT-6B-v1": {
+   "params": null,
+   "created": "2022-11-24"
+  },
+  "Undi95/dbrx-base": {
+   "params": 131596523520,
+   "created": "2024-03-28"
+  },
+  "unsloth/aya-vision-8b": {
+   "params": 8631842032,
+   "created": "2025-03-14"
+  },
+  "unsloth/c4ai-command-a-03-2025": {
+   "params": 111057580032,
+   "created": "2025-03-14"
+  },
+  "unsloth/c4ai-command-r-08-2024": {
+   "params": 32296476672,
+   "created": "2024-09-02"
+  },
+  "unsloth/c4ai-command-r-plus-08-2024": {
+   "params": 103810674688,
+   "created": "2024-09-02"
+  },
+  "upstage/Solar-Open-100B": {
+   "params": 102651793408,
+   "created": "2025-12-10"
+  },
+  "WizardLMTeam/WizardCoder-15B-V1.0": {
+   "params": null,
+   "created": "2023-06-14"
+  },
+  "XiaomiMiMo/MiMo-V2-Flash": {
+   "params": 309785318400,
+   "created": "2025-12-16"
+  },
+  "XiaomiMiMo/MiMo-V2-Flash-Base": {
+   "params": 309785318400,
+   "created": "2025-12-16"
+  },
+  "ybelkada/mpt-7b-bf16-sharded": {
+   "params": 6649286656,
+   "created": "2023-07-21"
+  },
+  "zai-org/GLM-4-32B-0414": {
+   "params": 32566081536,
+   "created": "2025-04-07"
+  },
+  "zai-org/GLM-4-32B-Base-0414": {
+   "params": 32566081536,
+   "created": "2025-04-07"
+  },
+  "zai-org/GLM-4-9B-0414": {
+   "params": 9400279040,
+   "created": "2025-04-07"
+  },
+  "zai-org/glm-4-9b-chat-1m-hf": {
+   "params": 9483857920,
+   "created": "2024-10-24"
+  },
+  "zai-org/glm-4-9b-chat-hf": {
+   "params": 9399951360,
+   "created": "2024-10-23"
+  },
+  "zai-org/glm-4-9b-hf": {
+   "params": 9399951360,
+   "created": "2025-01-16"
+  },
+  "zai-org/GLM-4.5": {
+   "params": 358337791296,
+   "created": "2025-07-20"
+  },
+  "zai-org/GLM-4.5-Air": {
+   "params": 110468824832,
+   "created": "2025-07-20"
+  },
+  "zai-org/GLM-4.5-Air-Base": {
+   "params": 110468824832,
+   "created": "2025-07-20"
+  },
+  "zai-org/GLM-4.5-Base": {
+   "params": 358337791296,
+   "created": "2025-07-20"
+  },
+  "zai-org/GLM-4.6": {
+   "params": 356785898816,
+   "created": "2025-09-29"
+  },
+  "zai-org/GLM-4.7": {
+   "params": 358337791296,
+   "created": "2025-12-22"
+  },
+  "zai-org/GLM-4.7-Flash": {
+   "params": 31221488576,
+   "created": "2026-01-19"
+  },
+  "zai-org/GLM-5": {
+   "params": 753864139008,
+   "created": "2026-02-11"
+  },
+  "zai-org/GLM-5-FP8": {
+   "params": 753910024032,
+   "created": "2026-02-11"
+  },
+  "zai-org/GLM-5.1": {
+   "params": 753864139008,
+   "created": "2026-04-03"
+  },
+  "zai-org/GLM-5.1-FP8": {
+   "params": 753910024032,
+   "created": "2026-04-03"
+  },
+  "zai-org/GLM-5.2": {
+   "params": 753329940480,
+   "created": "2026-06-16"
+  },
+  "zai-org/GLM-5.2-FP8": {
+   "params": 753329940480,
+   "created": "2026-06-16"
+  },
+  "zai-org/GLM-5.3": {
+   "params": 753329940480,
+   "created": "2026-08-25"
+  },
+  "zai-org/GLM-5.3-BF16": {
+   "params": 753329940480,
+   "created": "2026-08-25"
+  },
+  "zai-org/glm-edge-1.5b-chat": {
+   "params": 1593427968,
+   "created": "2024-11-20"
+  },
+  "zai-org/glm-edge-4b-chat": {
+   "params": 4327984128,
+   "created": "2024-11-20"
+  },
+  "zai-org/GLM-Z1-32B-0414": {
+   "params": 32566081536,
+   "created": "2025-04-08"
+  },
+  "zai-org/GLM-Z1-9B-0414": {
+   "params": 9400279040,
+   "created": "2025-04-08"
+  },
+  "zai-org/GLM-Z1-Rumination-32B-0414": {
+   "params": 33141749760,
+   "created": "2025-04-13"
+  },
+  "Zyphra/ZAYA1-74B-preview": {
+   "params": 74793953144,
+   "created": "2026-05-05"
+  },
+  "Zyphra/ZAYA1-8B": {
+   "params": 8840488784,
+   "created": "2026-05-04"
+  },
+  "Zyphra/ZAYA1-8B-FP8-Experts": {
+   "params": 8840488784,
+   "created": "2026-07-02"
+  },
+  "Zyphra/ZAYA1-8B-MXFP4-Experts": {
+   "params": 8840488784,
+   "created": "2026-07-02"
+  }
+ }
+}

@@ -292,7 +292,7 @@ class FamilySuite:
             if name.removeprefix("mlp.") in MOE:
                 continue  # test_moe_support_is_what_this_family_expects
             if name in MLP_INTERIOR and name not in self.EXPECTED_UNAVAILABLE:
-                routed = {i for i, layer in enumerate(model.layers) if isinstance(getattr(layer, "mlp", None), Moe)}
+                routed = {i for i, layer in enumerate(model.layers) if isinstance(getattr(layer, "mlp", None), Moe) and not layer.mlp.no_mixture()}
                 no_mlp = {i for i, layer in enumerate(model.layers) if getattr(layer, "mlp", None) is None}
                 if routed:
                     assert isinstance(reason, dict) and set(reason) == routed | no_mlp, (name, reason)
@@ -432,13 +432,13 @@ class FamilySuite:
             with model.trace(PROMPT):
                 read["mlp_norm"] = layer.mlp_norm_output.save()
                 read["mlp_raw"] = layer.mlp.input.save()
-        if "attn_norm" in read and self.ATTENTION_NORM == "input_layernorm":
+        if "attn_norm" in read and self.ATTENTION_NORM:
             assert torch.equal(read["attn_norm"], read["attn_in"])
         if "mid" in read and read["added"] and self.MID_IDENTITY:  # the block sums in its own dtype
             eps = torch.finfo(read["mid"].dtype).eps
             total = read["x"].float() + sum(part.float() for part in read["added"])
             torch.testing.assert_close(read["mid"].float().reshape(total.shape), total, rtol=8 * eps, atol=8 * eps)  # OPT flattens it
-        if "mlp_norm" in read and self.MLP_NORM == "post_attention_layernorm":
+        if "mlp_norm" in read and self.MLP_NORM:
             assert torch.equal(read["mlp_norm"], read["mlp_raw"])
         if "mlp_in" in read:
             assert torch.equal(read["mlp_in"], read["mlp_raw"])

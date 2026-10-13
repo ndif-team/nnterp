@@ -33,7 +33,8 @@ BLOCK = {
             "kind": "mixer",
             "label": "Selective scan",
             "pre_norm": "input_layernorm",
-            "pre_norm_note": "The block's module is named norm; nnterp calls it input_layernorm. model.norm is the final norm_f.",
+            "pre_norm_note": "The block's module is named norm; nnterp calls it input_layernorm, and its output is "
+                             "attention_norm_output. model.norm is the final norm_f.",
             "contribution": "attention_output",
             "interior": [
                 "state_input", "attention_values", "betas", "decays", "attention_keys", "attention_queries",

@@ -62,6 +62,9 @@ RENAME = {
     "model.norm": "norm",
     "mamba": "linear_attn",
     "shared_mlp": "mlp",
+    # The shared expert's interior: the activation and the down projection under their standard names.
+    "activation": "act_fn",
+    "output_linear": "down_proj",
 }
 
 #: The block's ``moe_hidden_states + self.shared_mlp(hidden_states)``: both experts' sum, before the multiplier.

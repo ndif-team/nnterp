@@ -34,7 +34,8 @@ from nnsight.intervention.envoy import Envoy
 from nnsight.intervention.source import SourceNotAvailable
 
 from . import UnsupportedFamily
-from ..components import INTERFACE, NOT_ON_INTERFACE, Attention, Layer, Mlp, Standard, Unavailable, first_tensor, unavailable
+from ..components import INTERFACE, NOT_ON_INTERFACE, Attention, EProperty, Layer, Mlp, Neurons, Standard, Unavailable, first_tensor, unavailable
+from ..components.standard import absent
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -86,6 +87,11 @@ CONTRIBUTION = (
     "the default family cannot tell what this sublayer adds to the stream; "
     "add a family module (docs/extending/adding-a-family.md)"
 )
+#: Why a mixture's activation and neurons are not served.
+MIXTURE = (
+    "a mixture of experts (the module has experts, a router or a gate): no single activation or down projection; "
+    "add a family module (docs/extending/adding-a-family.md)"
+)
 #: Why the logit lens is not served.
 LENS = (
     "the default family cannot tell what follows lm_head; "
@@ -102,14 +108,19 @@ class Layer(Layer):
     element; `check` records which on ``returns_tuple``, so `skip_with` packs
     the stream the way the block does. A block with no module the default
     recognizes as its attention or MLP lists that module's values as
-    unavailable, so `support` shows what was not found. ``layer_mid`` is not
-    served: whether the block has a stream between its sublayers is a fact
-    about the block the default cannot tell.
+    unavailable, so `support` shows what was not found. ``layer_mid`` and
+    ``mlp_norm_output`` are not served: whether the block has a stream
+    between its sublayers, and whether ``post_attention_layernorm`` is the
+    MLP's pre-norm, are facts about the block the default cannot tell.
     """
 
     layer_mid = unavailable(
         "the default family cannot tell whether the block has a stream between its sublayers (a parallel block has none); "
         "add a family module (docs/extending/adding-a-family.md)"
+    )
+    mlp_norm_output = unavailable(
+        "the default family cannot tell whether post_attention_layernorm feeds the MLP (a sandwich or post-norm block "
+        "norms the attention's output there); read mlp_input, or add a family module (docs/extending/adding-a-family.md)"
     )
 
     def support(self) -> dict[str, str | None]:
@@ -141,10 +152,27 @@ class Attention(Attention):
     attention_output = unavailable(CONTRIBUTION)
 
 
+def _mixture(module: torch.nn.Module) -> bool:
+    """Whether a feed-forward module is a mixture of experts: it has ``experts``, a ``router`` or a ``gate``."""
+    return any(hasattr(module, name) for name in ("experts", "router", "gate"))
+
+
+def _routed(envoy: Envoy) -> str | None:
+    return MIXTURE if _mixture(envoy._module) else None
+
+
 class Mlp(Mlp):
-    """A feed-forward module as the default finds it: its sizes only; ``mlp_output`` is not served (`CONTRIBUTION`)."""
+    """A feed-forward module as the default finds it: its sizes and, on a dense one, its interior; ``mlp_output`` is not served (`CONTRIBUTION`)."""
 
     mlp_output = unavailable(CONTRIBUTION)
+
+    @EProperty("act_fn.output", description=Mlp.mlp_activation.description, unavailable=lambda mlp: _routed(mlp) or absent(mlp, "act_fn", "mlp"))
+    def mlp_activation(self, value: torch.Tensor) -> Neurons:
+        return value
+
+    @EProperty("down_proj.input", description=Mlp.mlp_neurons.description, unavailable=lambda mlp: _routed(mlp) or absent(mlp, "down_proj", "mlp"))
+    def mlp_neurons(self, value: torch.Tensor) -> Neurons:
+        return value
 
 
 #: Keyed on the standard names (nnsight matches a string key on alias paths too; ``*`` is any one component).
@@ -286,7 +314,7 @@ def intermediate_size(model: "StandardizedTransformer") -> int:
     module width is one expert's, so the config answers there.
     """
     mlp = _first(model, "mlp")
-    if mlp is not None and not any(hasattr(mlp._module, name) for name in ("experts", "router", "gate")):
+    if mlp is not None and not _mixture(mlp._module):
         try:
             return mlp.intermediate_size
         except NotImplementedError:

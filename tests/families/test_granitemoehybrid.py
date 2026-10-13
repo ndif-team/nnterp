@@ -96,6 +96,7 @@ class TestGraniteMoeHybridDense(HybridSuite):
     """``num_local_experts`` 0, as Granite-4.0-H-Micro: the shared expert is the whole feed-forward."""
 
     REPO = test_granite._scaled_checkpoint(REPO, num_local_experts=0)
+    NEURONS_FROM_ACTIVATION = False  # input_linear holds the gate and up halves: the neurons are act(gate) * up
 
     def test_no_routed_experts(self, model):
         assert all(layer._module.block_sparse_moe is None for layer in model.layers)

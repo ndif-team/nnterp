@@ -26,7 +26,7 @@ from typing import TYPE_CHECKING
 import torch
 from transformers.models.mamba.modeling_mamba import MambaBlock, MambaMixer
 
-from ..components import Layer, SelectiveScan
+from ..components import STATE_SPACE, Layer, SelectiveScan, unavailable
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -41,7 +41,9 @@ RENAME = {
 
 
 class Layer(Layer):
-    """Mamba's block; returns a bare tensor, so the base holds."""
+    """Mamba's block; returns a bare tensor. ``attention_norm_output`` is the block's norm, what the mixer is called with."""
+
+    layer_mid = mlp_norm_output = mlp_input = unavailable(STATE_SPACE)
 
 
 class SelectiveScan(SelectiveScan):

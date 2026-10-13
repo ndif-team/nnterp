@@ -57,7 +57,7 @@ from .attention import (
 from .eproperty import (
     DerivedEProperty, EProperty, Unavailable, unavailable,
 )
-from .layer import PARALLEL, POST_NORM_ATTENTION, POST_NORM_MLP, FlatResidual, Layer, Residual, StreamMixing, Streams, StreamWeights
+from .layer import ONE_SUBLAYER, PARALLEL, POST_NORM_ATTENTION, POST_NORM_MLP, STATE_SPACE, FlatResidual, Layer, Residual, StreamMixing, Streams, StreamWeights
 from .linear_attention import ChannelGates, Gates, LinearAttention, LinearQK, LinearV
 from .mlp import Mlp, Neurons
 from .moe import (

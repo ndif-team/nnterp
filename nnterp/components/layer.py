@@ -37,6 +37,8 @@ StreamMixing = Float[Tensor, f"{BATCH} {SEQ} {STREAMS} {STREAMS}"]
 PARALLEL = "a parallel block: the attention and the MLP read the same input, so there is no stream between them"
 POST_NORM_ATTENTION = "a post-norm block: the attention reads the residual stream itself, layer_input"
 POST_NORM_MLP = "a post-norm block: the MLP reads the residual stream itself, layer_mid"
+STATE_SPACE = "a state-space block: one sublayer, the mixer, so there is no stream between sublayers and no MLP"
+ONE_SUBLAYER = "a one-sublayer block: its norm feeds its one sublayer, so there is no stream between sublayers"
 
 
 class Layer(Standard):

@@ -54,7 +54,7 @@ class TestNemotronH(StateSpaceChecks, FamilySuite):
     }
     MLP_WIDTH_KEY = "moe_intermediate_size"
     EXPECTED_UNAVAILABLE = {
-        "attention_norm_output": "no input_layernorm module", "layer_mid": "no post_attention_layernorm module", "mlp_norm_output": "no post_attention_layernorm module", "mlp_input": "",
+        "attention_norm_output": "an MLP block", "layer_mid": "a one-sublayer block", "mlp_norm_output": "no mlp module", "mlp_input": "no mlp module",
         **{name: "no self_attn module" for name in VALUES if name.startswith("self_attn.")},
         **{f"linear_attn.{name}": "no linear_attn module" for name in LINEAR if name not in ("state", "states")},
         "linear_attn.state": "",   # missing off the Mamba-2 blocks, and unavailable on them
@@ -89,6 +89,28 @@ class TestNemotronH(StateSpaceChecks, FamilySuite):
                 parts[i] = (layer.input.save(), getattr(host, value).save(), layer.layer_output.save())
         for i, (x, added, out) in parts.items():
             torch.testing.assert_close(x + added, out, msg=f"layer {i}")
+
+    def test_the_norm_feeds_the_one_sublayer(self, model):
+        """The block's ``norm`` output is what its one sublayer is called with: ``attention_norm_output`` on a mixer
+        block, ``mlp_norm_output`` (and ``mlp_input``) on an MLP block; a write to it lands."""
+        with model.trace(PROMPT):
+            clean = model.logits.save()
+        for i, (layer, kind) in enumerate(zip(model.layers, model.config.layers_block_type)):
+            name = KINDS[kind]
+            value = "mlp_norm_output" if name == "mlp" else "attention_norm_output"
+            with model.trace(PROMPT):
+                normed = getattr(layer, value).save()
+                raw = layer.norm.output.save()
+                entering = getattr(layer, name).input.save()
+            assert torch.equal(normed, raw) and torch.equal(normed, entering), (i, kind)
+            if name == "mlp":
+                with model.trace(PROMPT):
+                    mlp_in = layer.mlp_input.save()
+                assert torch.equal(mlp_in, normed), i
+            with model.trace(PROMPT):
+                getattr(layer, value)[:] = 0
+                edited = model.logits.save()
+            assert not torch.equal(edited, clean), (i, kind)
 
     def test_aliases_survive_dispatch(self):
         """The block binds its aliases from the mixer's class at build and again when real weights arrive."""

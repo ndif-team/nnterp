@@ -284,6 +284,19 @@ class Vision(Vision):
         return output
 
 
+class VisionLayer(VisionLayer):
+    """Gemma-4's ViT block, a sandwich like the text block's: ``layer_mid`` and ``mlp_norm_output`` read
+    ``pre_feedforward_layernorm``, the MLP's pre-norm, since ``post_attention_layernorm`` follows the attention."""
+
+    @EProperty("pre_feedforward_layernorm.input", description=VisionLayer.layer_mid.description, unavailable=no_tower_run)
+    def layer_mid(self, value) -> Patches:
+        return value
+
+    @EProperty("pre_feedforward_layernorm.output", description=VisionLayer.mlp_norm_output.description, unavailable=no_tower_run)
+    def mlp_norm_output(self, value) -> Patches:
+        return value
+
+
 class VisionAttention(VisionAttention):
     """Gemma-4's ViT attention: what reaches the tower's stream is the post-attention norm's output.
 

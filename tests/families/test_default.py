@@ -47,6 +47,7 @@ def dedicated_suite(name):
 NOT_SERVED = {
     "self_attn.attention_output": "cannot tell what this sublayer adds", "mlp.mlp_output": "cannot tell what this sublayer adds",
     "layer_mid": "cannot tell whether the block has a stream between its sublayers",
+    "mlp_norm_output": "cannot tell whether post_attention_layernorm feeds the MLP",
 }
 
 
@@ -132,8 +133,8 @@ def forced(name, **overrides):
 TestDefaultOnGPT2 = forced("gpt2")
 TestDefaultOnLlama = forced("llama")
 TestDefaultOnGPTNeoX = forced("gpt_neox")
-TestDefaultOnPhi = forced("phi", EXPECTED_UNAVAILABLE={"mlp_norm_output": "no post_attention_layernorm module"})
-TestDefaultOnOPT = forced("opt", EXPECTED_UNAVAILABLE={"mlp.mlp_output": "no mlp module found", "mlp.mlp_activation": "no mlp module found", "mlp.mlp_neurons": "no mlp module found", "mlp_norm_output": "no post_attention_layernorm module", "mlp_input": "no mlp module"})
+TestDefaultOnPhi = forced("phi")
+TestDefaultOnOPT = forced("opt", EXPECTED_UNAVAILABLE={"mlp.mlp_output": "no mlp module found", "mlp.mlp_activation": "no mlp module found", "mlp.mlp_neurons": "no mlp module found", "mlp_input": "no mlp module"})
 
 
 NANOCHAT = "hf-tiny-v2/tiny-random-NanoChatForCausalLM"
@@ -150,7 +151,7 @@ def test_unknown_model_type_loads_with_the_default(nanochat):
     assert nanochat.family is default
     assert type(nanochat.layers[0]) is default.Layer and type(nanochat.layers[0].self_attn) is default.Attention
     support = nanochat.support()
-    assert {name for name, reason in support.items() if reason is not None} == {"self_attn.attention_output", "mlp.mlp_output", "layer_mid"}
+    assert {name for name, reason in support.items() if reason is not None} == {"self_attn.attention_output", "mlp.mlp_output", "layer_mid", "mlp_norm_output"}
     assert (nanochat.num_layers, nanochat.num_heads, nanochat.head_dim, nanochat.intermediate_size) == (2, 2, 16, 32)
 
 
@@ -220,8 +221,10 @@ def comparable():
 
 VALUES = (
     ("", "layer_output"), ("self_attn", "attention_output"), ("mlp", "mlp_output"),
+    ("", "attention_norm_output"), ("", "layer_mid"), ("", "mlp_norm_output"), ("", "mlp_input"),
     ("self_attn", "attention_queries"), ("self_attn", "attention_keys"), ("self_attn", "attention_values"),
     ("self_attn", "attention_scores"), ("self_attn", "attention_probabilities"), ("self_attn", "attention_head_outputs"),
+    ("self_attn", "attention_premix"), ("mlp", "mlp_activation"), ("mlp", "mlp_neurons"),
 )
 
 
@@ -259,6 +262,9 @@ NO_OP = {
     "granite_swa": {"attention_scores", "attention_probabilities"},
     "granitemoe_swa": {"attention_scores", "attention_probabilities"},
 }
+#: Shipped families whose ``mlp`` stands for the block's mixture where the module is a dense MLP (Gemma-4 hosts the block's
+#: router and experts on it): the family refuses the dense interior the default reads.
+HOSTS_A_MIXTURE = {"gemma4_text": {"mlp_activation", "mlp_neurons"}}
 
 
 @pytest.mark.parametrize("name", comparable())
@@ -281,12 +287,16 @@ def test_default_reads_what_the_family_reads(name):
             key = f"{host}.{value}" if host else value
             if ours.get(key, "absent") is not None:
                 continue
+            if value in HOSTS_A_MIXTURE.get(name, ()):
+                continue
             if value in NO_OP.get(name, ()):
                 with pytest.raises(SourceNotAvailable, match="has no operation 'nn_functional_"):
                     read(model, i, host, value)
                 continue
             other = counterpart(dedicated, model, i, host)
             their_key = f"{other}.{value}" if other else value
+            if their_key not in theirs:
+                continue  # a value the family's module does not have (Kimi-Linear's KDA mixer has no attention_premix)
             assert theirs.get(their_key) is None, f"layer {i}: the default serves {key}, which {name} reports unavailable: {theirs.get(their_key)}"
             expected, actual = read(dedicated, i, other, value), read(model, i, host, value)
             assert torch.equal(actual, expected), f"layer {i}: {key}"

@@ -15,7 +15,7 @@ class TestMamba(SelectiveScanSuite, FamilySuite):
     REPO = "hf-internal-testing/tiny-random-MambaForCausalLM"
     DECODE_MASK_COVERS_CACHE = False  # a decode step is fed the new token's mask only
     FAMILY = mamba
-    EXPECTED_UNAVAILABLE = {"layer_mid": "no post_attention_layernorm module", "mlp_norm_output": "no post_attention_layernorm module", "mlp_input": "no mlp module"}
+    EXPECTED_UNAVAILABLE = {name: "a state-space block" for name in ("layer_mid", "mlp_norm_output", "mlp_input")}
     NATIVE = NATIVE
     REAL = ("state-spaces/mamba-130m-hf", 24, 768, 1536)
 

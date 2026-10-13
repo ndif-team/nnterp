@@ -36,7 +36,8 @@ BLOCK = {
             "label": "Attention",
             "pre_norm": "input_layernorm",
             "pre_norm_note": "One module, ln_1, drawn on both branches: the attention and the MLP read the same "
-                             "output tensor, so an in-place edit of self_attn.input reaches the MLP too.",
+                             "output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output "
+                             "and mlp_norm_output are that one tensor, and the block has no layer_mid.",
             "contribution": "attention_output",
             "interior": [
                 "attention_queries", "attention_keys", "attention_values",
@@ -50,7 +51,8 @@ BLOCK = {
             "label": "MLP",
             "pre_norm": "input_layernorm",
             "pre_norm_note": "One module, ln_1, drawn on both branches: the attention and the MLP read the same "
-                             "output tensor, so an in-place edit of self_attn.input reaches the MLP too.",
+                             "output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output "
+                             "and mlp_norm_output are that one tensor, and the block has no layer_mid.",
             "contribution": "mlp_output",
             "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, {activation_function}",
         },

@@ -46,7 +46,8 @@ BLOCK = {
                 "full_attention": "full causal; NoPE on 32B",
             },
             "post_norm_note": "On EXAONE 4.0 this norm follows the attention. On Llama the same name is the norm "
-                              "before the MLP; EXAONE 4.0 has no norm before either sublayer.",
+                              "before the MLP; EXAONE 4.0 has no norm before either sublayer, so layer_mid is what "
+                              "the MLP is called with.",
         },
         {
             "host": "mlp",

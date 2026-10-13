@@ -101,8 +101,9 @@ tensors is refused too, naming the error: grouped expert matmuls (`experts_imple
 What loads serves:
 
 - `layer_output` (the block's output, or a tuple's first element, as the scan finds), the
-  module boundaries its aliases reach (`attention_norm_output`, `mlp_norm_output`, `mlp_input`,
-  each unavailable where the guess found no such module), the root values (`logits`,
+  module boundaries its aliases reach (`attention_norm_output` and `mlp_input`, each unavailable
+  where the guess found no such module; `attention_premix`, and `mlp_activation` and `mlp_neurons`
+  on an MLP that is not a mixture), the root values (`logits`,
   `token_embeddings`, `final_norm_output`, `lm_head_output`, `input_ids`, `attention_mask`,
   `input_size`, `next_token_probs`) and the sizes; `skip_layers` and `steer`, which work on the stream.
 - The attention interior (`attention_queries/keys/values/scores/probabilities/head_outputs`),
@@ -114,7 +115,10 @@ What loads serves:
 
 It does not serve `attention_output` and `mlp_output` ("the default family cannot tell what
 this sublayer adds to the stream"), nor `layer_mid` ("the default family cannot tell whether the
-block has a stream between its sublayers"), nor `project_on_vocab` and `get_topk_closest_tokens` ("the
+block has a stream between its sublayers"), nor `mlp_norm_output` ("the default family cannot tell
+whether post_attention_layernorm feeds the MLP": a sandwich or post-norm block norms the
+attention's output under that name; `mlp_input` is what the MLP reads), nor the interior of a
+mixture of experts (an MLP with `experts`, a `router` or a `gate`), nor `project_on_vocab` and `get_topk_closest_tokens` ("the
 default family cannot tell what follows lm_head"): a post-norm (Gemma-2), a residual taken
 inside the sublayer (BLOOM), a scale (Granite) or a softcap past the head is code a name does
 not show. A block's `self_attn.*` or `mlp.*` is unavailable when it has no module under a name

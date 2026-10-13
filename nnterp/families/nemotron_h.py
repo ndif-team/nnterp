@@ -61,11 +61,13 @@ from transformers.models.nemotron_h.modeling_nemotron_h import (
 from transformers.models.radio import modeling_radio
 
 from ..components import (
-    Attention, EProperty, ExpertOutputs, Keys, Layer, Mlp, Moe, Patches, Queries, Residual, StateSpace, TokenEProperty,
-    Values, Vision, VisionAttention, VisionLayer, VisionMlp, needs_grouped_experts,
+    ONE_SUBLAYER, Attention, EProperty, ExpertOutputs, Keys, Layer, Mlp, Moe, Patches, Queries, Residual, StateSpace, TokenEProperty,
+    Values, Vision, VisionAttention, VisionLayer, VisionMlp, needs_grouped_experts, unavailable,
 )
+from ..components.standard import absent
 from ..components.vision import no_tower_run, variable_resolution
 
+#: The standard name of a block's ``mixer``, by the mixer's class.
 MIXER_NAMES = {
     NemotronHMamba2Mixer: "linear_attn",
     NemotronHAttention: "self_attn",
@@ -99,11 +101,29 @@ RENAME = {
 #: ``inputs_embeds.masked_scatter(image_mask, image_embeds)``, the first of its three).
 ROOT_SCATTER = "inputs_embeds_masked_scatter_0"
 
-#: The standard name of a block's ``mixer``, by the mixer's class.
+def _mlp_block(block) -> str | None:
+    if absent(block, "mlp") is None:
+        return "an MLP block: its norm feeds the MLP, so the normed stream is mlp_norm_output"
+    return None
 
 
 class Layer(Layer):
-    """Nemotron-H's block: ``norm`` then one ``mixer``, named by what the mixer is; returns a bare tensor."""
+    """Nemotron-H's block: ``norm`` then one ``mixer``, named by what the mixer is; returns a bare tensor.
+
+    The block's ``norm`` output is what its one sublayer is called with:
+    ``attention_norm_output`` on an attention or Mamba-2 block,
+    ``mlp_norm_output`` (and ``mlp_input``, the same tensor) on an MLP block.
+    """
+
+    @EProperty("norm.output", description=Layer.attention_norm_output.description, unavailable=_mlp_block)
+    def attention_norm_output(self, value) -> Residual:
+        return value
+
+    layer_mid = unavailable(ONE_SUBLAYER)
+
+    @EProperty("norm.output", description=Layer.mlp_norm_output.description, unavailable=lambda block: absent(block, "mlp"))
+    def mlp_norm_output(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

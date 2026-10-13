@@ -33,7 +33,7 @@ BLOCK = {
             "pre_norm": "input_layernorm",
             "pre_norm_note": "One module, drawn on both rows: input_layernorm's output is what the attention and the "
                              "MLP both read, so self_attn.input equals mlp.input. The block has no "
-                             "post_attention_layernorm.",
+                             "post_attention_layernorm: mlp_norm_output is input_layernorm's output and there is no layer_mid.",
             "contribution": "attention_output",
             "interior": [
                 "attention_queries", "attention_keys", "attention_values",
@@ -48,7 +48,7 @@ BLOCK = {
             "pre_norm": "input_layernorm",
             "pre_norm_note": "One module, drawn on both rows: input_layernorm's output is what the attention and the "
                              "MLP both read, so self_attn.input equals mlp.input. The block has no "
-                             "post_attention_layernorm.",
+                             "post_attention_layernorm: mlp_norm_output is input_layernorm's output and there is no layer_mid.",
             "contribution": "mlp_output",
             "detail": "fc1 {hidden_size} → {intermediate_size}, {hidden_act}, fc2 → {hidden_size}",
         },

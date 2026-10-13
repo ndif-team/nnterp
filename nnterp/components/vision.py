@@ -40,7 +40,7 @@ from torch import Tensor
 from .attention import Attention, HeadOutputs, Keys, Queries, Values
 from .eproperty import EProperty, Unavailable
 from .layer import Layer
-from .mlp import Mlp
+from .mlp import Mlp, Neurons
 from .standard import BATCH, HIDDEN, IMAGES, IMAGE_TOKENS, PATCHES, SEQ, VISION_HIDDEN, Standard, absent, blocks_support, first_tensor, rewrap
 
 #: A vision tower's stream: the tower's own batch (one row per image or crop) by its tokens (the patches,
@@ -173,10 +173,10 @@ class ImageScatter(Standard):
     scatter_argument: int | str = 1
 
 
-def tower_absent(name: str):
-    """`no_tower_run`, then `absent`: why a tower block's boundary at the child ``name`` is unavailable."""
+def tower_absent(name: str, where: str = "block"):
+    """`no_tower_run`, then `absent`: why a tower value at the child ``name`` is unavailable."""
     def reason(envoy: Envoy) -> str | None:
-        return no_tower_run(envoy) or absent(envoy, name)
+        return no_tower_run(envoy) or absent(envoy, name, where)
     return reason
 
 
@@ -257,6 +257,15 @@ class VisionAttention(Attention):
     def attention_output(self, value: torch.Tensor) -> Any:
         return rewrap(self, as_native(first_tensor(self.output), value))
 
+    @EProperty("o_proj.input", description="Every head's output side by side, as the output projection takes it", unavailable=tower_absent("o_proj", "attention"))
+    def attention_premix(self, value: torch.Tensor) -> HeadOutputs:
+        """What the output projection receives, split by head as a view, ``[images, patches, num_heads, head_dim]``."""
+        return as_patches(value).view(*as_patches(value).shape[:-1], self.num_heads, self.head_dim)
+
+    @attention_premix.postprocess
+    def attention_premix(self, value: torch.Tensor) -> torch.Tensor:
+        return as_native(self.o_proj.input, value.reshape(*value.shape[:-2], -1))
+
 
 class VisionMlp(Mlp):
     """A vision tower block's MLP: what it adds to the tower's stream is `Patches`."""
@@ -269,6 +278,16 @@ class VisionMlp(Mlp):
     @mlp_output.postprocess
     def mlp_output(self, value: torch.Tensor) -> Any:
         return rewrap(self, as_native(first_tensor(self.output), value))
+
+    @EProperty("act_fn.output", description="The activation function's output", unavailable=tower_absent("act_fn", "mlp"))
+    def mlp_activation(self, value: torch.Tensor) -> Neurons:
+        """The activation's output over the patches, in the tower's own row layout."""
+        return value
+
+    @EProperty("down_proj.input", description="What the down projection receives", unavailable=tower_absent("down_proj", "mlp"))
+    def mlp_neurons(self, value: torch.Tensor) -> Neurons:
+        """What the down projection sums over the patches, in the tower's own row layout."""
+        return value
 
 
 class Vision(Standard):

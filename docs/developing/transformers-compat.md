@@ -12,12 +12,14 @@ sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py,
 
 This is the one page in `docs/` that talks about versions. nnterp is
 developed on **transformers 5.17.0** and **nnsight 0.8.0** (the `dev`
-branch, at the envoy-parent merge, nnsight #759, `b2bc0fd7`), with torch 2.13 and
+branch, at the dotted-rename-alias merge, nnsight #768, `d565f5f8`), with torch 2.13 and
 jaxtyping 0.3.11, and runs on **transformers 5.19.0** as well: the suite passes on
 both (a test that needs a 5.18 class skips on 5.17), and every snippet in `docs/` that runs on CPU with a tiny checkpoint returns
 identical values on both wherever they do not depend on unseeded randomness; `pyproject.toml` requires `nnsight>=0.8`, `transformers`
 and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
-(below); no nnsight release has them yet, so the pin cannot say it, and a
+(below) and whose `rename` takes a dotted alias (nnsight #768: `{"attn.c_proj":
+"attn.o_proj"}` binds on the attention, which GPT-2's two `c_proj` need); no nnsight
+release has them yet, so the pin cannot say it, and a
 `dev` at or after `b2bc0fd7` is what nnterp runs on. The names a family binds to (`RENAME`, `ENVOYS`) are
 transformers' module names and classes, which move rarely. The **operation
 names** inside a forward that every `source.` path pins are what a

@@ -97,6 +97,9 @@ RENAME = {
     "multi_modal_projector": "projector",
     "patch_embedding": "patch_embed",
     "layernorm_post": "norm",
+    # The sublayers' interiors: the activation and the down projection under their standard names.
+    "activation_fn": "act_fn",
+    "fc2": "down_proj",
 }
 
 #: The wrapper's own forward scatters the image features (``Llama4ForConditionalGeneration`` has no inner

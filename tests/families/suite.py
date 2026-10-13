@@ -32,7 +32,10 @@ VALUES = {
     "self_attn.attention_output", "self_attn.attention_probabilities", "mlp.mlp_output",
     "self_attn.attention_queries", "self_attn.attention_keys", "self_attn.attention_values",
     "self_attn.attention_scores", "self_attn.attention_head_outputs",
+    "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons",
 }
+#: The MLP's interior, unavailable on a block whose MLP is a routed mixture.
+MLP_INTERIOR = ("mlp.mlp_activation", "mlp.mlp_neurons")
 #: A mixture of experts' values, on `Moe` (`nnterp.components.moe`).
 MOE = ("router_logits", "expert_weights", "expert_indices", "expert_outputs", "routed_output", "shared_expert_output")
 INTERIOR = ("attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_head_outputs")
@@ -174,6 +177,10 @@ class FamilySuite:
     DECODE_MASK_COVERS_CACHE = True
     #: ``layer_mid == layer_input + the mixers' contributions``: false where a gate scales what the block adds (Doge, ZAYA).
     MID_IDENTITY = True
+    #: ``attention_premix`` is ``attention_head_outputs``: false where a gate or a norm sits between the heads and the output projection.
+    PREMIX_IS_HEAD_OUTPUTS = True
+    #: ``mlp_neurons`` is ``mlp_activation * up_proj.output`` on a gated MLP, ``mlp_activation`` on a plain one.
+    NEURONS_FROM_ACTIVATION = True
 
     @pytest.fixture(scope="class")
     def model(self, request):
@@ -213,7 +220,7 @@ class FamilySuite:
         if recurrent_mixer(model.family) is not None:
             values |= {f"linear_attn.{name}" for name in LINEAR}
         if not self.any_mlp(model):  # a module no block has is not listed (OPT, Mamba-2)
-            values.discard("mlp.mlp_output")
+            values -= {name for name in VALUES if name.startswith("mlp.")}
         if any(isinstance(getattr(layer, "mlp", None), Moe) for layer in model.layers):
             values |= {f"mlp.{name}" for name in MOE}
         if "vision" in model._aliases and isinstance(model.vision, Vision) and model.vision.no_images() is None:  # a multimodal wrapper loaded with its processor
@@ -284,6 +291,13 @@ class FamilySuite:
         for name, reason in model.support().items():
             if name.removeprefix("mlp.") in MOE:
                 continue  # test_moe_support_is_what_this_family_expects
+            if name in MLP_INTERIOR and name not in self.EXPECTED_UNAVAILABLE:
+                routed = {i for i, layer in enumerate(model.layers) if isinstance(getattr(layer, "mlp", None), Moe)}
+                no_mlp = {i for i, layer in enumerate(model.layers) if getattr(layer, "mlp", None) is None}
+                if routed:
+                    assert isinstance(reason, dict) and set(reason) == routed | no_mlp, (name, reason)
+                    assert all("routed experts" in r for i, r in reason.items() if i in routed), (name, reason)
+                    continue
             if name in self.EXPECTED_UNAVAILABLE:
                 assert isinstance(reason, dict) and reason, name
                 assert all(self.EXPECTED_UNAVAILABLE[name] in r for r in reason.values()), name
@@ -447,6 +461,50 @@ class FamilySuite:
             model.lm_head_output[:, -1] = 0
             edited = model.logits.save()
         assert not torch.equal(edited, read["logits"])
+
+    def test_sublayer_interiors(self, model):
+        """``attention_premix`` is what the output projection receives, split by head; ``mlp_activation`` the activation
+        module's output and ``mlp_neurons`` what the down projection receives, ``act(gate) * up`` on a gated MLP, the
+        activation itself on a plain one; and a write to each lands in the logits."""
+        layer = model.layers[0]
+        support = model.support(layer=0)
+        attn = mixer(layer) if support.get("self_attn.attention_premix", "absent") is None else None
+        mlp = layer.mlp if support.get("mlp.mlp_activation", "absent") is None else None
+        if attn is None and mlp is None:
+            pytest.skip("no sublayer interior on block 0")
+        read = {}
+        with model.trace(PROMPT):
+            if attn is not None:
+                if support["self_attn.attention_head_outputs"] is None:
+                    read["heads"] = attn.attention_head_outputs.save()
+                read["premix"] = attn.attention_premix.save()
+            if mlp is not None:
+                read["act"] = mlp.mlp_activation.save()
+                read["neurons"] = mlp.mlp_neurons.save()
+            read["logits"] = model.logits.save()
+        if attn is not None:
+            assert read["premix"].shape == (*read["premix"].shape[:-2], attn.num_heads, attn.head_dim)
+            if "heads" in read and self.PREMIX_IS_HEAD_OUTPUTS:
+                assert torch.equal(read["premix"], read["heads"])
+        if mlp is not None:
+            assert read["act"].shape[-1] == read["neurons"].shape[-1] == mlp.intermediate_size
+            children = dict(mlp._module.named_children())
+            gated = next((name for name in ("gate_proj", "w1") if name in children), None)
+            up = next((name for name in ("up_proj", "w3") if name in children), None)
+            if self.NEURONS_FROM_ACTIVATION:
+                if gated and up:
+                    with model.trace(PROMPT):
+                        up_out = getattr(mlp, up).output.save()
+                    torch.testing.assert_close(read["neurons"], read["act"] * up_out)
+                elif "gate_up_proj" not in children:  # a plain MLP; a fused gate_up_proj gives no up to multiply by
+                    assert torch.equal(read["neurons"], read["act"])
+        for host, name in ((attn, "attention_premix"), (mlp, "mlp_activation"), (mlp, "mlp_neurons")):
+            if host is None:
+                continue
+            with model.trace(PROMPT):
+                getattr(host, name)[:] = 0
+                edited = model.logits.save()
+            assert not torch.equal(edited, read["logits"]), name
 
     def test_renamed_model_equals_raw_model(self, model, raw_model):
         with model.trace(PROMPT):

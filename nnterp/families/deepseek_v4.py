@@ -127,10 +127,16 @@ class Layer(Layer):
 class Attention(Attention):
     """DeepSeek-V4's attention: the shared interface with a sink column, and head outputs rotated back after it.
 
+    The output projection is low-rank (``o_a_proj`` compresses the heads before ``o_b_proj``), so no module
+    receives every head's output side by side and ``attention_premix`` is unavailable.
+
     The scores are the masked scores bound just before the sink column is
     concatenated (GPT-OSS's binding); the pattern is the base's. The keys and
     values are one tensor object.
     """
+
+    attention_premix = unavailable("a low-rank output projection: o_a_proj compresses the heads before o_b_proj, so nothing receives them side by side")
+
 
     #: The pattern's rows sum to less than one: the sink takes the rest.
     SINK = True

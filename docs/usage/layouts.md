@@ -1,6 +1,6 @@
 ---
 title: Layouts
-one_liner: "Every standard value has one axis layout on every family (three exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear, `layer_mid` and `mlp_norm_output` are `FlatResidual` on OPT), one of thirty-six named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
+one_liner: "Every standard value has one axis layout on every family (three exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear, `layer_mid` and `mlp_norm_output` are `FlatResidual` on OPT), one of thirty-seven named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
 tags: [usage, layouts, shapes, jaxtyping, dims, axis_size, num_heads, num_kv_heads, hidden_size, Residual, Pattern, Streams, num_experts, top_k]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/reference/families.md, docs/usage/availability.md, docs/extending/custom-values.md]
 sources: [nnterp/components/eproperty.py, nnterp/components/standard.py, nnterp/components/moe.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/components/__init__.py]
@@ -11,7 +11,7 @@ sources: [nnterp/components/eproperty.py, nnterp/components/standard.py, nnterp/
 ## What this is for
 
 A value's shape is part of what it means. Each standard value is annotated with one of
-thirty-six named layouts, each defined in the file of the envoy that serves it (`Residual`, `FlatResidual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Patches`, `ImageTokenMask`, `ImageFeatures` in `nnterp/components/vision.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
+thirty-seven named layouts, each defined in the file of the envoy that serves it (`Residual`, `FlatResidual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `Neurons` in `nnterp/components/mlp.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Patches`, `ImageTokenMask`, `ImageFeatures` in `nnterp/components/vision.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
 re-exports the thirty-two envoy-level names, and the root's three come from `nnterp.standardized`.
 They are `jaxtyping` types composed from the axis names ([below](#axis-names-and-sizes)), such as
 `Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]` (`batch seq hidden_size`) and
@@ -61,7 +61,7 @@ from the base.
 
 ## The layouts
 
-The thirty-six names, their axes, and the values that carry each:
+The thirty-seven names, their axes, and the values that carry each:
 
 | layout | axes | values |
 | --- | --- | --- |
@@ -77,7 +77,8 @@ The thirty-six names, their axes, and the values that carry each:
 | `Keys` | `batch num_kv_heads seq qk_head_dim` | `attention_keys` |
 | `Values` | `batch num_kv_heads seq head_dim` | `attention_values` |
 | `Pattern` | `batch num_heads query key` | `attention_scores`, `attention_probabilities` |
-| `HeadOutputs` | `batch seq num_heads head_dim` | `attention_head_outputs` |
+| `HeadOutputs` | `batch seq num_heads head_dim` | `attention_head_outputs`, `attention_premix` |
+| `Neurons` | `batch seq intermediate_size` | `mlp_activation`, `mlp_neurons` |
 | `LinearQK` | `batch seq heads key_dim` | `linear_attn.attention_queries`, `attention_keys` |
 | `LinearV` | `batch seq heads value_dim` | `linear_attn.attention_values`, `attention_head_outputs` |
 | `Gates` | `batch seq heads` | `linear_attn.decays`, `betas` |

@@ -8,7 +8,7 @@ from nnsight.intervention.interleaver import Mediator
 
 from .. import attention as standard
 from ..attention import HeadOutputs, Keys, Pattern, Queries, Values
-from ..eproperty import DerivedEProperty
+from ..eproperty import DerivedEProperty, unavailable
 from ..layer import Residual
 from .flat import Flat
 
@@ -93,6 +93,10 @@ class Attention(standard.Attention):
     to change what it wrote) and there on the prefill only, where a step
     holds every key; a decode step raises `Unavailable` (`on_decode_step`).
     """
+
+    #: The output projection's flat rows are not served yet.
+    attention_premix = unavailable("not mapped on vLLM yet: the projection takes flat [tokens, width] rows")
+
 
     attention_scores = DerivedEProperty(
         scores,

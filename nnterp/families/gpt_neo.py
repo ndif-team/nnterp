@@ -33,6 +33,10 @@ RENAME = {
     "ln_1": "input_layernorm",
     "attn.attention": "self_attn",
     "ln_2": "post_attention_layernorm",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "act": "act_fn",
+    "c_proj": "down_proj",
+    "out_proj": "o_proj",
 }
 
 

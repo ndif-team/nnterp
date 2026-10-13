@@ -1,7 +1,7 @@
 ---
 title: Residual stream and contributions
 one_liner: "`layer_output`, `attention_output` and `mlp_output` are tensors on every family, defined by `layers[i].input + attention_output + mlp_output == layer_output`."
-tags: [usage, residual-stream, layer_output, attention_output, mlp_output, contributions, module-boundaries, layer_mid, attention_norm_output, mlp_norm_output, mlp_input, hyper-connections, Streams]
+tags: [usage, residual-stream, layer_output, attention_output, mlp_output, contributions, module-boundaries, layer_mid, attention_norm_output, mlp_norm_output, mlp_input, attention_premix, mlp_activation, mlp_neurons, hyper-connections, Streams]
 related: [docs/usage/vocabulary.md, docs/usage/methods.md, docs/usage/root-values.md, docs/usage/availability.md]
 sources: [nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/mlp.py, nnterp/components/standard.py, nnterp/components/eproperty.py, nnterp/families/gemma2.py, nnterp/families/gemma4_text.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/falcon.py]
 ---
@@ -155,9 +155,26 @@ point a value at its own module or mark it unavailable with the reason: a parall
 (GPT-J, GPT-NeoX with `use_parallel_residual`) has no stream between the sublayers, a
 sandwich block (Gemma-2/3) norms the MLP's input in `pre_feedforward_layernorm`, a block
 without the module reports `no <module> module on this block` ([availability](availability.md)).
+Inside the sublayers, three more boundaries are standard values on the attention and the
+MLP, keyed on three standard child names the families alias in `RENAME` (`o_proj` for
+`c_proj` / `dense` / `out_proj` / `wo`, `act_fn` for `act` / `activation_fn` / `activation` /
+`gelu_impl`, `down_proj` for `c_proj` / `dense_4h_to_h` / `fc2` / `linear_fc2` / `fc_out` / `w2` /
+`output_linear`), so `layers[i].self_attn.o_proj`, `layers[i].mlp.act_fn` and
+`layers[i].mlp.down_proj` are the modules on every family:
+
+| value | key | what it is |
+| --- | --- | --- |
+| `self_attn.attention_premix` | `o_proj.input` | every head's output side by side, `[batch, seq, num_heads, head_dim]`, after any gate; served under any `attn_implementation` ([attention-interior](attention-interior.md#attention_premix-the-heads-at-the-output-projection)) |
+| `mlp.mlp_activation` | `act_fn.output` | `act(gate_proj(x))` on a gated MLP, `act(up_proj(x))` on a plain one, `[batch, seq, intermediate_size]` |
+| `mlp.mlp_neurons` | `down_proj.input` | what the down projection sums: `act(gate) * up` on a gated MLP, the activation itself on a plain one (GPT-2), the same place and a different tensor |
+
+A routed mixture of experts has no single activation or down projection, so its block's
+`mlp_activation` and `mlp_neurons` are unavailable (`routed experts; read per-expert via the
+Moe component`, [mixture-of-experts](mixture-of-experts.md)).
+
 `model.order(i)` places them: on Llama, `layer_input`, `attention_norm_output`, the
-attention interior, `attention_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`,
-`mlp_output`, `layer_output`.
+attention interior, `attention_premix`, `attention_output`, `layer_mid`, `mlp_norm_output`,
+`mlp_input`, `mlp_activation`, `mlp_neurons`, `mlp_output`, `layer_output`.
 
 ## Where the families differ
 

@@ -66,7 +66,7 @@ class DefaultSuite(FamilySuite):
 
     def expected_values(self, model):
         """A module the default found on no block is listed as unavailable, not left out (OPT's ``mlp``)."""
-        return super().expected_values(model) | {"mlp.mlp_output"}
+        return super().expected_values(model) | {"mlp.mlp_output", "mlp.mlp_activation", "mlp.mlp_neurons"}
 
     def test_every_value_reads_a_tensor_on_every_layer(self, model):
         read = {}
@@ -133,7 +133,7 @@ TestDefaultOnGPT2 = forced("gpt2")
 TestDefaultOnLlama = forced("llama")
 TestDefaultOnGPTNeoX = forced("gpt_neox")
 TestDefaultOnPhi = forced("phi", EXPECTED_UNAVAILABLE={"mlp_norm_output": "no post_attention_layernorm module"})
-TestDefaultOnOPT = forced("opt", EXPECTED_UNAVAILABLE={"mlp.mlp_output": "no mlp module found", "mlp_norm_output": "no post_attention_layernorm module", "mlp_input": "no mlp module"})
+TestDefaultOnOPT = forced("opt", EXPECTED_UNAVAILABLE={"mlp.mlp_output": "no mlp module found", "mlp.mlp_activation": "no mlp module found", "mlp.mlp_neurons": "no mlp module found", "mlp_norm_output": "no post_attention_layernorm module", "mlp_input": "no mlp module"})
 
 
 NANOCHAT = "hf-tiny-v2/tiny-random-NanoChatForCausalLM"

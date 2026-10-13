@@ -32,6 +32,10 @@ RENAME = {
     "transformer.ln_f": "norm",
     "ln_1": "input_layernorm",
     "attn": "self_attn",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "out_proj": "o_proj",
+    "act": "act_fn",
+    "fc_out": "down_proj",
 }
 
 

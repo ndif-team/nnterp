@@ -37,6 +37,9 @@ RENAME = {
     "model.layers": "layers",
     "model.norm": "norm",
     "self_attention": "self_attn",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "activation": "act_fn",
+    "output_linear": "down_proj",
 }
 
 
@@ -45,7 +48,12 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """JetMoE's mixture of attention heads; the shared eager forward, a 3-tuple whose first element is the contribution, and the residual added in the block, so the base holds."""
+    """JetMoE's mixture of attention heads; the shared eager forward, a 3-tuple whose first element is the contribution, and the residual added in the block, so the base holds.
+
+    The output projection is per expert, inside ``experts``, so ``attention_premix`` is unavailable.
+    """
+
+    attention_premix = unavailable("a mixture of attention heads: the output projection is per expert, inside experts")
 
 
 class Mlp(Moe):

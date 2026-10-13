@@ -68,6 +68,10 @@ RENAME = {
     "encoder.layers": "layers",
     "layer_norm1": "input_layernorm",
     "layer_norm2": "post_attention_layernorm",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "out_proj": "o_proj",
+    "activation_fn": "act_fn",
+    "fc2": "down_proj",
 }
 
 

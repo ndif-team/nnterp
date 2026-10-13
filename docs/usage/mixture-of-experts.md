@@ -218,6 +218,13 @@ without it, edit in place under several invokes.
 mixture blocks (DeepSeek-V3, GLM-4-MoE, Llama 4, Jamba, ...), a dense block reports
 `"no <value> value on this block's mlp"`.
 
+## The MLP interior on a mixture
+
+`mlp.mlp_activation` and `mlp.mlp_neurons` ([residual-stream](residual-stream.md#the-module-boundaries))
+are unavailable on a block whose MLP is a mixture (`routed experts; read per-expert via the Moe
+component`): a routed MLP has no single activation or down projection. A dense block beside the
+mixtures serves them as any MLP does, and the per-expert view is `expert_outputs`.
+
 ## Related
 
 - [residual-stream](residual-stream.md) — `mlp_output` and the contribution identity.

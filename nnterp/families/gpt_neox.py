@@ -16,6 +16,10 @@ RENAME = {
     "gpt_neox.final_layer_norm": "norm",
     "attention": "self_attn",
     "embed_out": "lm_head",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "dense": "o_proj",
+    "act": "act_fn",
+    "dense_4h_to_h": "down_proj",
 }
 
 

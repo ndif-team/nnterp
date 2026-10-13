@@ -20,6 +20,7 @@ HEADS = "num_heads"
 KV_HEADS = "num_kv_heads"
 HEAD_DIM = "head_dim"
 QK_HEAD_DIM = "qk_head_dim"
+INTERMEDIATE = "intermediate_size"
 EXPERTS = "num_experts"
 TOP_K = "top_k"
 #: Not facts about the model: their size is the tensor's.

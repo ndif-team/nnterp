@@ -13,6 +13,8 @@ RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.norm": "norm",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "activation_fn": "act_fn",
 }
 
 

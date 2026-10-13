@@ -169,6 +169,7 @@ A softmax-attention module. The base class reads everything but `attention_outpu
 | `attention_scores` | `Pattern` | the input of `nn_functional_softmax_0` inside the interface: scaled and masked | yes; in place reaches the model | `interface_reason` |
 | `attention_probabilities` | `Pattern` | the output of `nn_functional_dropout_0` inside the interface: after the softmax, in the model dtype, a sink column dropped | yes; in place reaches the model | `interface_reason` |
 | `attention_head_outputs` | `HeadOutputs` | return 0 of `attention_interface_1`, before the output projection | yes; in place reaches the model | `interface_reason` |
+| `attention_premix` | `HeadOutputs` | `o_proj.input`, split by head as a view (`o_proj` is a standard child name: the family aliases `c_proj` / `dense` / `out_proj` / `wo` in `RENAME`) | yes; in place reaches the model; assignment flattens back | where the attention has an `o_proj`; served under any `attn_implementation` |
 
 Each layout is the alias `.layout` returns (`Attention.attention_keys.layout is Keys`), its axes in the [layouts table](#layouts) and in `.dims`. `qk_head_dim` differs from `head_dim` only under multi-head latent attention (DeepSeek: 192 against 128 on the pinned V3 checkpoint).
 
@@ -190,6 +191,8 @@ The four sizes are plain read-only properties, read off the module outside or in
 | Value | Layout | Base location | Assignable | Availability |
 |---|---|---|---|---|
 | `mlp_output` | `Residual` | the module's `.output`, first tensor (a mixture of experts returns router scores beside it) | yes; in place reaches the model (Falcon: through a transform, on a copy) | always where the block has an MLP module; OPT has none, so `support()` lists no `mlp.*` key |
+| `mlp_activation` | `Neurons` | `act_fn.output` (`act_fn` is a standard child name: the family aliases `act` / `activation_fn` / `activation` / `gelu_impl` in `RENAME`): `act(gate_proj(x))` on a gated MLP, `act(up_proj(x))` on a plain one | yes; in place reaches the model | where the MLP has an `act_fn`; `routed experts; read per-expert via the Moe component` on a mixture |
+| `mlp_neurons` | `Neurons` | `down_proj.input` (`down_proj` is a standard child name: the family aliases `c_proj` / `dense_4h_to_h` / `fc2` / `linear_fc2` / `fc_out` / `w2` / `output_linear` in `RENAME`): `act(gate) * up` on a gated MLP, the activation itself on a plain one | yes; in place reaches the model | as `mlp_activation` |
 
 `intermediate_size`, a plain read-only property, is this block's hidden width, one routed expert's on a mixture of experts: the module's `experts.intermediate_dim` / `expert_dim` / `intermediate_size` / `ffn_hidden_size`, else its own `intermediate_size` / `ffn_dim`, else the input width of `down_proj` / `c_proj` / `dense_4h_to_h` / `fc2` / `fc_out` / `w2`. JetMoE's `Mlp` overrides it (`hidden_size` on its module is the experts' width).
 
@@ -374,7 +377,7 @@ Every descriptor exposes `.layout` (the layout alias the defining function's ret
 
 ### Layouts
 
-The thirty-six `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the thirty-three envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
+The thirty-seven `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the thirty-four envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
 
 | Name | Axes | Defined in | Carried by |
 |---|---|---|---|
@@ -390,7 +393,8 @@ The thirty-six `jaxtyping` types every standard value is annotated with, each de
 | `Keys` | `batch num_kv_heads seq qk_head_dim` | `components/attention.py` | `attention_keys` |
 | `Values` | `batch num_kv_heads seq head_dim` | `components/attention.py` | `attention_values` |
 | `Pattern` | `batch num_heads query key` | `components/attention.py` | `attention_scores`, `attention_probabilities` |
-| `HeadOutputs` | `batch seq num_heads head_dim` | `components/attention.py` | `attention_head_outputs` |
+| `HeadOutputs` | `batch seq num_heads head_dim` | `components/attention.py` | `attention_head_outputs`, `attention_premix` |
+| `Neurons` | `batch seq intermediate_size` | `components/mlp.py` | `mlp_activation`, `mlp_neurons` |
 | `LinearQK` | `batch seq heads key_dim` | `components/linear_attention.py` | `linear_attn.attention_queries`, `linear_attn.attention_keys` |
 | `SSDQueries` / `SSDKeys` | `batch seq groups state_dim` | `components/state_space.py` | a Mamba-2 `linear_attn.attention_queries` (`C`) / `attention_keys` (`B`) |
 | `SSDValues` / `SSDHeadOutputs` | `batch seq heads head_dim` | `components/state_space.py` | a Mamba-2 `linear_attn.attention_values` (`x`) / `attention_head_outputs` (`y`) |

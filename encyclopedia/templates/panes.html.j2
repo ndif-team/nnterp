@@ -32,10 +32,10 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
   {% endif %}
   {% if "norm" in c.root_names %}
   <span class="strip-arrow">→</span>
-  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final norm</small></div>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>{{ c.strip_labels.norm }}</small></div>
   {% endif %}
   <span class="strip-arrow">→</span>
-  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>unembedding</small></div>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>{{ c.strip_labels.head }}</small></div>
   <span class="strip-arrow">→</span>
   <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>{{ c.logits_label }}</small></div>
 </div>

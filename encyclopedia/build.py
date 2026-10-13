@@ -53,7 +53,7 @@ from pygments.lexers import PythonLexer  # noqa: E402
 
 import nnterp  # noqa: E402  (import nnterp before any transformers.models module)
 from nnterp import StandardizedTransformer, Unavailable  # noqa: E402
-from nnterp.components import Moe, RecurrentMixer, Residual, Standard  # noqa: E402
+from nnterp.components import Layer, Moe, RecurrentMixer, Residual, Standard  # noqa: E402
 from nnterp.components.moe import SHARED_NAMES  # noqa: E402
 from nnterp.components.standard import values as class_values  # noqa: E402
 from nnterp.components.vision import Vision, scatter_host  # noqa: E402
@@ -222,9 +222,9 @@ def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
         match = VALUE_LINE.match(str(value))
         assert match, str(value)
         key, select = getattr(value, "key", None), getattr(value, "select", None)
-        if isinstance(host, Vision) and getattr(value, "locate", None) is not None:
+        if isinstance(host, (Vision, Layer)) and getattr(value, "locate", None) is not None:
             # a location the tower finds from itself (image_features: the scatter, wherever the family keys
-            # it), with the argument it selects there
+            # it), with the argument it selects there; a block's, from its config or its class (Falcon's 40B norms)
             key = value.locate(host)
             select = select(host) if callable(select) else select
         # `unavailable(reason)`: a value the family declares it does not have; its key falls back to its
@@ -239,6 +239,7 @@ def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
             "key": None if nowhere else key if isinstance(key, str) else ("computed" if key is not None else None),
             "select": select,
             "where": "nowhere: the family does not serve it" if nowhere else humanize_key(key, select),
+            "served": not nowhere,
         })
     return rows
 
@@ -330,6 +331,18 @@ def children_of(layer: Any) -> dict[str, str]:
     return found
 
 
+def keys_of(layer: Any) -> dict[str, str]:
+    """Where each of a block's values is read on this block: its key, or what its key function gives here (a family
+    whose blocks differ by config or class, OLMo-Hybrid's post-norm attention blocks)."""
+    return {name: value.path(layer) for name, value in layer.values().items()}
+
+
+def paths_of(layer: Any) -> dict[str, str]:
+    """A block's modules by every name a BLOCK or a value's key may give them, each with its native path: the
+    native children under their own names, and the block's aliases."""
+    return {**{name: name for name, _ in layer._module.named_children()}, **layer._aliases}
+
+
 def runs_mixture(child: Any) -> bool:
     """Whether a block's child runs a mixture of experts: a `Moe` whose family does not say otherwise
     (Gemma-4's MLP is a `Moe` on every checkpoint and runs a mixture only under ``enable_moe_block``)."""
@@ -357,12 +370,14 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
 
     # Each block's standard children, and whether each is a mixture; one block of each
     # combination of child classes stands for the rest, so a hybrid's ledgers list every host.
-    block_hosts, block_classes, block_children, block_scoring, shapes = [], [], [], [], {}
+    block_hosts, block_classes, block_children, block_paths, block_keys, block_scoring, shapes = [], [], [], [], [], [], {}
     for layer in eager.layers:
         found = StandardizedTransformer._standard_children(layer)
         block_hosts.append({alias: runs_mixture(child) for alias, child in found.items()})
         block_classes.append(type(layer._module).__name__)
         block_children.append(children_of(layer))
+        block_paths.append(paths_of(layer))
+        block_keys.append(keys_of(layer))
         # the mixture's scoring on this block, read off the instance: DeepSeek-V4's differs by block (hash, then sqrtsoftplus)
         block_scoring.append(next((child.SCORING for child in found.values() if runs_mixture(child)), None))
         shapes.setdefault(tuple((alias, type(child._module)) for alias, child in found.items()), (layer, found))
@@ -412,7 +427,10 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         for host in sorted(found, key=lambda h: -len(value_rows(h, expr))):
             for row in value_rows(host, expr):
                 row["module"] = type(host._module).__name__ if alias != "root" else type(eager._module).__name__
-                merged.setdefault(row["name"], row)
+                # a value one class serves and another marks unavailable (a dense MLP beside the mixtures, which have
+                # no single activation) is shown as served; its condition names the blocks without it
+                if row["name"] not in merged or row["served"] and not merged[row["name"]]["served"]:
+                    merged[row["name"]] = row
         prefix = "" if alias in ("root", "layer") else alias + "."
         for row in merged.values():
             row["condition"] = conditions.get(prefix + row["name"])
@@ -460,6 +478,12 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         "block_classes": block_classes,
         # each block's children by native name and alias: the norms a BLOCK names must be among them
         "block_children": block_children,
+        # each block's modules by native name and alias, with their native paths: a value's key is matched to the
+        # diagram's norms and hosts through them
+        "block_paths": block_paths,
+        "block_keys": block_keys,
+        # the blocks each value is unavailable on under an eager load, whatever the reason
+        "unserved": {name: set(range(num_layers)) if isinstance(why, str) else set(why) for name, why in support_eager.items() if why},
         "block_scoring": block_scoring,
         # the text model's config, which a per-checkpoint BLOCK is chosen by (`resolve_block`)
         "text_config": text_config,
@@ -592,6 +616,8 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
             "host_classes": {alias: [(type(child._module).__name__, False, len(child.values()))] for alias, child in children.items()},
             "block_hosts": [{alias: False for alias in StandardizedTransformer._standard_children(block)} for block in vision.layers],
             "block_children": [children_of(block) for block in vision.layers],
+            "block_paths": [paths_of(block) for block in vision.layers],
+            "block_keys": [keys_of(block) for block in vision.layers],
         },
     }
 
@@ -799,6 +825,23 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
     shape_of = [tuple(position[k] for k in shape) for shape in shape_of]
     specs, keys = [specs[k] for k in shown], [keys[k] for k in shown]
     nodes: dict[str, dict[str, Any]] = {}
+    paths, keyed = info.get("block_paths"), info.get("block_keys")
+    unserved = info.get("unserved", {})
+
+    def boundary(names: tuple[str, ...], at: str, blocks: list[int]) -> dict[str, Any] | None:
+        """The first of the block's values ``names`` read at ``at`` (a module's ``input`` or ``output``, the module by
+        native name or alias) on the first of ``blocks`` (the blocks drawing that place) that serves it; None if none is."""
+        def resolve(path: str, i: int) -> str:
+            module, _, attr = path.rpartition(".")
+            return f"{paths[i].get(module, module)}.{attr}"
+        for name in names:
+            row = by_host["layer"].get(name)
+            served = [i for i in blocks if i not in unserved.get(name, ())]
+            key = keyed[served[0]].get(name) if row and served and keyed else None
+            if isinstance(key, str) and resolve(key, served[0]) == resolve(at, served[0]):
+                # read where this block reads it, which a key function may put elsewhere than block 0's ledger row
+                return {**row, "where": humanize_key(key, row["select"])}
+        return None
     streams = stream_spec(owner, block_spec, specs, by_host, info)
     sublayers = []
     for k, spec in enumerate(specs):
@@ -850,7 +893,11 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             nodes[f"sub.{key}"] = node(
                 spec["label"], f"{base}.{host}",
                 f"{' / '.join(classes)} under its standard name. " + spec.get("detail", "").format_map(fmt), extra=extra)
-        for name in spec.get("interior", []):
+        # the sublayer's own module boundaries (the output projection's input, the MLP's activation and the down
+        # projection's input) follow the entry's chips wherever the host serves them
+        bounds = [] if native or kind == "moe" else [name for name in INTERIOR_BOUNDARIES
+                                                     if by_host[host].get(name, {}).get("served") and name not in spec.get("interior", [])]
+        for name in [*spec.get("interior", []), *bounds]:
             if kind == "moe" and name == "shared_expert_output" and (name not in by_host[host] or not moe.get("shared")):
                 # this checkpoint's mixture has no shared expert (ERNIE-4.5's 300B-A47B): no shared chip or panel
                 continue
@@ -896,12 +943,29 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         for where in ("pre_norm", "post_norm"):
             if spec.get(where) and "block" in spec:
                 sub[f"{where}_node"] = f"norm.{key}.{spec[where]}"
-        if spec.get("pre_norm"):
+        drawing = [i for i, shape in enumerate(shape_of) if k in shape]
+        reads = spec.get("reads", host)
+        # the norm's output, where the block serves it (attention_norm_output, mlp_norm_output): the norm's node is that
+        # value's, shared by every sublayer and shape that draws the value there
+        normed = spec.get("pre_norm") and boundary(
+            ("mlp_norm_output", "attention_norm_output") if kind in ("mlp", "moe") else ("attention_norm_output", "mlp_norm_output"),
+            f"{spec['pre_norm']}.output", drawing)
+        if normed:
+            sub["pre_norm_node"] = f"boundary.{normed['name']}"
+            nodes[sub["pre_norm_node"]] = {
+                **value_node(normed, "pre-norm"), "role": "norm",
+                "extra": " ".join(filter(None, [f"`{base}.{spec['pre_norm']}`, a native module under its own name.", spec.get("pre_norm_note")]))}
+        elif spec.get("pre_norm"):
             nodes[sub.get("pre_norm_node", f"norm.{spec['pre_norm']}")] = node(
                 "pre-norm", f"{base}.{spec['pre_norm']}",
-                f"A native module under its own name. Its output is what `{spec.get('reads', host)}` reads: "
-                f"`{base}.{spec.get('reads', host)}.input`.",
+                f"A native module under its own name. Its output is what `{reads}` reads: "
+                f"`{base}.{reads}.input`.",
                 extra=spec.get("pre_norm_note"))
+        # what the sublayer is called with, where the block serves it (mlp_input): the edge into the box
+        called = boundary(("mlp_input",), f"{reads}.input", drawing)
+        if called:
+            sub["input_node"] = f"boundary.{called['name']}"
+            nodes[sub["input_node"]] = value_node(called, "the sublayer's input")
         if spec.get("post_norm"):
             nodes[sub.get("post_norm_node", f"norm.{spec['post_norm']}")] = node(
                 "post-norm", f"{base}.{spec['post_norm']}",
@@ -973,7 +1037,14 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             if k and paired[k - 1]:
                 after = f"{subs[k - 1]['label'].lower()} and {after}"
             mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
-            if streams:
+            # the stream between the sublayers, where the block serves it (layer_mid): its segment is that value's
+            at = (f"{nxt['hc']}.input" if streams else f"{subs[k]['stream_norm']}.output" if subs[k].get("stream_norm")
+                  else f"{nxt['pre_norm']}.input" if nxt["pre_norm"] else f"{nxt['host']}.input")
+            mid_row = boundary(("layer_mid",), at, [i for i, drawn_shape in enumerate(shape_of) if drawn_shape == shape])
+            if mid_row:
+                mid = f"boundary.{mid_row['name']}"
+                nodes[mid] = value_node(mid_row, stream)
+            elif streams:
                 nodes[mid] = node(stream, f"{base}.{nxt['hc']}.input",
                                   f"The streams after the {after} add, as `{nxt['hc']}` receives them. No standard value of its own.",
                                   layout=entering.get("layout"), dims=entering.get("dims"))
@@ -1008,7 +1079,9 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         "layer_types": info["layer_types"],
         "nodes": nodes,
     }
-    if not single:
+    if single:
+        schema["mids"] = drawn_shapes[0]["mids"]
+    else:
         schema["shapes"] = drawn_shapes
         schema["shape_of"] = [shapes.index(shape) for shape in shape_of]
     between = between_schema(owner, block_spec, info, by_host, base, stream, nodes)
@@ -1092,6 +1165,9 @@ def stream_spec(owner: str, block_spec: dict[str, Any], specs: list[dict[str, An
     return {**spec, "count": count}
 
 
+#: The module boundaries inside a sublayer, drawn as chips after the entry's own wherever the host serves them.
+INTERIOR_BOUNDARIES = ("attention_premix", "mlp_activation", "mlp_neurons")
+
 INTERIOR_SHORT = {
     "attention_queries": "q", "attention_keys": "k", "attention_values": "v", "attention_scores": "scores",
     "attention_probabilities": "pattern", "attention_head_outputs": "heads",
@@ -1099,6 +1175,7 @@ INTERIOR_SHORT = {
     "state": "state", "states": "states",
     "router_logits": "logits", "expert_weights": "weights", "expert_indices": "indices",
     "expert_outputs": "per slot", "routed_output": "routed", "shared_expert_output": "shared",
+    "attention_premix": "premix", "mlp_activation": "act", "mlp_neurons": "neurons",
 }
 
 
@@ -1121,6 +1198,14 @@ def strip_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
         "strip.head": node("unembedding", "model.lm_head.output", "The raw projection onto the vocabulary."),
         "strip.logits": value_node(root["logits"], "logits"),
     }
+    # the root's module boundaries, where the family serves them: the norm's node and the head's show those values,
+    # captioned with their names
+    labels = {"norm": "final norm", "head": "unembedding"}
+    for key, name, eyebrow, module in (("norm", "final_norm_output", "final norm", "`model.norm`, the final norm under its standard name."),
+                                       ("head", "lm_head_output", "unembedding", "`model.lm_head`, the projection onto the vocabulary.")):
+        if root.get(name, {}).get("served"):
+            nodes[f"strip.{key}"] = {**value_node(root[name], eyebrow), "extra": module}
+            labels[key] = name
     if "norm" not in info["root_names"]:
         # no final norm on this checkpoint (OPT-350m): the strip has no norm node
         del nodes["strip.norm"]
@@ -1133,11 +1218,12 @@ def strip_schema(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
             "one `[batch, seq, hidden_size]` stream the final norm reads.")
     for key, note in strip.items():
         if f"strip.{key}" in nodes:
-            nodes[f"strip.{key}"]["extra"] = note
+            known = nodes[f"strip.{key}"].get("extra")
+            nodes[f"strip.{key}"]["extra"] = f"{known} {note}" if known else note
     if info.get("vision"):
         embed = nodes["strip.embed"]
         embed["extra"] = f"{embed['extra']} {IMAGE_SENTENCE}" if embed["extra"] else IMAGE_SENTENCE
-    return {"nodes": nodes, "notes": strip}
+    return {"nodes": nodes, "notes": strip, "labels": labels}
 
 
 def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -1432,22 +1518,27 @@ def read_checkpoint(entry: ModuleType, checkpoint: str, cache: dict[Any, dict[st
     return {"id": checkpoint, "info": {**cache[key], "reference": checkpoint}}
 
 
-def ledgers(info: dict[str, Any]) -> list[dict[str, Any]]:
-    """The API's ledgers, one per host: the text model's, then on a vision-language checkpoint the tower's."""
+def ledgers(info: dict[str, Any], nodes: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
+    """The API's ledgers, one per host: the text model's, then on a vision-language checkpoint the tower's. A row is
+    linked to the first node of the diagram, the strip or the image's path that shows its value."""
+    shown: dict[str, str] = {}
+    for key, value in nodes.items():
+        shown.setdefault(value["expr"], key)
     out = []
     for host, rows in info["values"].items():
         label = "model" if host == "root" else "model.layers[i]" if host == "layer" else f"model.layers[i].{host}"
         label = Markup(html.escape(label).replace(".", ".<wbr>"))  # a long host name breaks at its dots
         classes = " / ".join(info["module_classes"][host]) if host in info["module_classes"] else (rows[0]["module"] if rows else "")
-        nodes = {"token_embeddings": "strip.embed", "logits": "strip.logits"} if host == "root" else {}
-        out.append({"label": label, "role": HOST_ROLES.get(host, "mlp"), "classes": classes, "rows": rows, "nodes": nodes})
+        out.append({"label": label, "role": HOST_ROLES.get(host, "mlp"), "classes": classes, "rows": rows,
+                    "nodes": {row["name"]: shown.get(row["expr"], "") for row in rows}})
     v = info.get("vision")
     if v:
         for host, rows in v["values"].items():
             label = "model.vision" if host == "vision" else "model.vision.layers[i]" if host == "layer" else f"model.vision.layers[i].{host}"
             label = Markup(html.escape(label).replace(".", ".<wbr>"))
             role = "stream" if host in ("vision", "layer") else HOST_ROLES.get(host, "mlp")
-            out.append({"label": label, "role": role, "classes": rows[0]["module"] if rows else "", "rows": rows, "nodes": {},
+            out.append({"label": label, "role": role, "classes": rows[0]["module"] if rows else "", "rows": rows,
+                        "nodes": {row["name"]: shown.get(row["expr"], "") for row in rows},
                         "tower": v["tower"]["title"] if host == "vision" else None})
     return out
 
@@ -1469,8 +1560,8 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
     data: dict[str, Any] = {"schema": block, "nodes": nodes, "identity_html": str(highlight_python(block["identity"], roles)), "tower": None,
                             "architecture": info["architecture"], "url": f"https://huggingface.co/{info['reference']}"}
     shown = list(family_quirks)
-    model: dict[str, Any] = {**info, "block": block, "roles": roles, "ledgers": ledgers(info),
-                             "conditional": any(row["condition"] for row in info["support"]),
+    model: dict[str, Any] = {**info, "block": block, "roles": roles,
+                             "conditional": any(row["condition"] for row in info["support"]), "strip_labels": strip["labels"],
                              "repr_html": highlight_repr(info["repr"], roles), "logits_label": logits_label(family_quirks)}
     v = info.get("vision")
     if v:
@@ -1503,6 +1594,7 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
             "notes": Markup(str(md(tower["notes"], roles=roles)).replace("<h2", "<h3").replace("</h2>", "</h3>")),
             "wrapper_notes": Markup(str(md(wrapper.get("notes", ""), roles=roles)).replace("<h2", "<h3").replace("</h2>", "</h3>")),
         }
+    model["ledgers"] = ledgers(info, nodes)
     model["quirks"] = shown
     model["family_quirks"] = family_quirks
     model["hub"] = hub.facts(info["reference"], info.get("meta_params"))

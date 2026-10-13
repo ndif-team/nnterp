@@ -55,7 +55,8 @@ rearrange them.
    Nothing else: no layer count, no vLLM or eager stamps.
    The selector is the page's list of checkpoints; the suite's pinned tiny checkpoints are not on the
    page.
-2. **The block** (`01`). The model-level strip (`embed_tokens → layers → norm → lm_head → logits`;
+2. **The block** (`01`). The model-level strip (`embed_tokens → layers → norm → lm_head → logits`, each module
+   captioned with the value it shows: `token_embeddings`, `final_norm_output`, `lm_head_output`;
    a checkpoint with no final norm, OPT-350m, has no `norm` node and its `STRIP["norm"]` is not shown;
    a block with several residual streams adds the stream count under `layers` and the module that collapses
    the streams, `hc_head` on DeepSeek-V4, between `layers` and `norm`),
@@ -65,7 +66,11 @@ rearrange them.
    types also differ within a shape, as on MiMo-V2-Flash, Laguna and Gemma 4; clicking a tick, or Enter or Space on it, selects
    that block as the slider does), and the block diagram: the residual stream as a
    vertical line, each sublayer as a row (pre-norm, the module with its interior values as chips,
-   post-norm) whose contribution returns to an `⊕` on the stream. A mixture of experts draws a panel
+   post-norm) whose contribution returns to an `⊕` on the stream. The block's module boundaries sit where
+   they are read, wherever the family serves them: a pre-norm's box is its output (`attention_norm_output`,
+   `mlp_norm_output`), the edge into the MLP's box is `mlp_input`, and the stream between two sublayers is
+   `layer_mid`, labelled on the line; a value the family reads elsewhere, or does not serve, takes no place
+   (a parallel block has no `layer_mid`). A mixture of experts draws a panel
    each for the router, the routed experts and the shared expert inside its box. On a family with
    several block shapes the diagram and the identity under it redraw for the slider's block. A block
    with several residual streams (hyper-connections, the `streams` field below) draws them as thin
@@ -97,7 +102,9 @@ rearrange them.
    larger than the body), tagged `· CLIP · CLIPVisionModel`; absent on a text checkpoint.
 3. **The API** (`02`). In this order:
    - *Values, by host*: one ledger per host (`model`, `model.layers[i]`, `model.layers[i].self_attn`,
-     ...) with every standard value's name, layout and dims, description and where it is read. A value
+     ...) with every standard value's name, layout and dims, description and where it is read. A row whose
+     value the diagram, the strip or the image's path shows is linked to it: hovering the row lights that part
+     and fills the card, as hovering the part does. A value
      the checkpoint has only under some load carries an amber `⚠` before its name; hovering it shows
      the condition in a popup.
    - *Printout*: `print(model)`, highlighted, without the native container (`model`, `transformer`,
@@ -219,11 +226,15 @@ The entry states facts about a family, and each one has a source. Before writing
        `mlp_output`);
      - `pre_norm`, `post_norm`: the native names of the norms before and after it on the block, each
        only if the block has one. In a parallel block whose one norm feeds both sublayers (GPT-J,
-       CodeGen), give both sublayers the same `pre_norm`: the diagram draws it in both rows under one
-       hover node; add a `pre_norm_note` saying both read the same tensor; `pre_norm_note` / `post_norm_note`: a sentence shown when that norm
+       CodeGen), give both sublayers the same `pre_norm`: the diagram draws it in both rows, each row's
+       box the value that row's sublayer reads (`attention_norm_output`, `mlp_norm_output`, one tensor);
+       add a `pre_norm_note` saying both read the same tensor; `pre_norm_note` / `post_norm_note`: a sentence shown when that norm
        is hovered, for a trap in its name or place;
      - `interior`: the standard values read inside the module, drawn as chips, in forward order
-       (three to a row; a box with more than six grows a row at a time). On a `"moe"` sublayer the
+       (three to a row; a box with more than six grows a row at a time). The sublayer's module boundaries,
+       `attention_premix` (`o_proj`'s input), `mlp_activation` (`act_fn`'s output) and `mlp_neurons`
+       (`down_proj`'s input), are not listed: the build adds their chips after the listed ones wherever the
+       host serves them, on every kind but a mixture. On a `"moe"` sublayer the
        chips are the mixture's values and each is drawn in its part's panel: `router_logits`,
        `expert_weights`, `expert_indices` in the router's, `expert_outputs`, `routed_output` in the
        routed experts', `shared_expert_output` in the shared expert's (list it where some
@@ -507,7 +518,8 @@ Add `#ckpt=<repo id>` to the URL to render it on another checkpoint, and render 
 - the diagram reads in the forward's order, every norm the block has is drawn, and each contribution
   edge leaves from the right place (after the post-norm when there is one);
 - hovering the sublayers, norms, chips, edges and `⊕` shows the right expression (the node texts are
-  in the page's `nodes-json`);
+  in the page's `checkpoints-json`), and every module boundary the family serves has its place: a ledger row
+  with no link is a value read somewhere the diagram does not draw, which is worth a look at the family;
 - the slider's variants match `config.layer_types`;
 - the values that carry a `⚠` are the ones that need a non-default load, and no value is missing
   from the ledgers;

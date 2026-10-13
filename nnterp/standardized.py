@@ -420,12 +420,12 @@ class StandardizedTransformer(Standardized, TransformersModel):
 
     @EProperty("norm.output", description="The residual stream after the final norm, what lm_head reads", unavailable=partial(absent, name="norm", where="model"))
     def final_norm_output(self, value: torch.Tensor) -> Residual:
-        """The final norm's output, ``[batch, seq, hidden]``: the stream the head projects. Assign to replace it; in-place edits reach the model."""
+        """The final norm's output, ``[batch, seq, hidden_size]``: the stream the head projects. Assign to replace it; in-place edits reach the model."""
         return value
 
     @EProperty("lm_head.output", description="The head's logits before anything the model does past lm_head (a softcap, a scale)", unavailable=partial(absent, name="lm_head", where="model"))
     def lm_head_output(self, value: torch.Tensor) -> Logits:
-        """``lm_head``'s own output, ``[batch, seq, vocab]``.
+        """``lm_head``'s own output, ``[batch, seq, vocab_size]``.
 
         `logits` is what the model returns; on most families the same tensor,
         on Gemma-2 the softcapped one. Assign to replace it; in-place edits

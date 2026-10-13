@@ -198,7 +198,7 @@ class VisionLayer(Layer):
 
     @EProperty("input_layernorm.output", description="The normed stream entering the attention", unavailable=tower_absent("input_layernorm"))
     def attention_norm_output(self, value: torch.Tensor) -> Patches:
-        """The attention's pre-norm output over the patches, ``[images, patches, vision_hidden]``: a view; assign or edit in place."""
+        """The attention's pre-norm output over the patches, ``[images, patches, vision_hidden_size]``: a view; assign or edit in place."""
         return as_patches(value)
 
     @attention_norm_output.postprocess
@@ -207,7 +207,7 @@ class VisionLayer(Layer):
 
     @EProperty("post_attention_layernorm.input", description="The tower's stream after the attention add", unavailable=tower_absent("post_attention_layernorm"))
     def layer_mid(self, value: torch.Tensor) -> Patches:
-        """The tower's stream between the two sublayers, ``[images, patches, vision_hidden]``: a view; assign or edit in place."""
+        """The tower's stream between the two sublayers, ``[images, patches, vision_hidden_size]``: a view; assign or edit in place."""
         return as_patches(value)
 
     @layer_mid.postprocess
@@ -216,7 +216,7 @@ class VisionLayer(Layer):
 
     @EProperty("post_attention_layernorm.output", description="The normed stream entering the MLP", unavailable=tower_absent("post_attention_layernorm"))
     def mlp_norm_output(self, value: torch.Tensor) -> Patches:
-        """The MLP's pre-norm output over the patches, ``[images, patches, vision_hidden]``: a view; assign or edit in place."""
+        """The MLP's pre-norm output over the patches, ``[images, patches, vision_hidden_size]``: a view; assign or edit in place."""
         return as_patches(value)
 
     @mlp_norm_output.postprocess
@@ -225,7 +225,7 @@ class VisionLayer(Layer):
 
     @EProperty("mlp.input", description="What the MLP is called with", unavailable=tower_absent("mlp"))
     def mlp_input(self, value: torch.Tensor) -> Patches:
-        """The MLP's first argument over the patches, ``[images, patches, vision_hidden]``: a view; assign or edit in place."""
+        """The MLP's first argument over the patches, ``[images, patches, vision_hidden_size]``: a view; assign or edit in place."""
         return as_patches(value)
 
     @mlp_input.postprocess

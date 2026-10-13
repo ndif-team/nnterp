@@ -113,8 +113,8 @@ prompts.
 ## `final_norm_output`, `lm_head_output`
 
 The two boundaries after the last block: `model.final_norm_output` is `norm.output`, the
-stream the head projects, `[batch, seq, hidden]`; `model.lm_head_output` is `lm_head.output`,
-the head's own logits, `[batch, seq, vocab]`. `logits` is the model's output: the same tensor
+stream the head projects, `[batch, seq, hidden_size]`; `model.lm_head_output` is `lm_head.output`,
+the head's own logits, `[batch, seq, vocab_size]`. `logits` is the model's output: the same tensor
 as `lm_head_output` on most families, the softcapped one on Gemma-2, so a metric on
 `lm_head_output` there is scored on numbers the model does not predict from. Both take
 assignment and in-place edits, and a family that names no `norm` or `lm_head` reports
@@ -122,8 +122,8 @@ assignment and in-place edits, and a family that names no `norm` or `lm_head` re
 
 ```python
 with model.trace(prompt):
-    normed = model.final_norm_output.save()          # [batch, seq, hidden]
-    head = model.lm_head_output.save()               # [batch, seq, vocab]
+    normed = model.final_norm_output.save()          # [batch, seq, hidden_size]
+    head = model.lm_head_output.save()               # [batch, seq, vocab_size]
     model.final_norm_output[:, -1] *= 2              # the head reads the edited stream
     logits = model.logits.save()
 ```

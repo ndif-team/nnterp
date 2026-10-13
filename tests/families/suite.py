@@ -16,7 +16,7 @@ from nnsight.intervention.envoy import Envoy
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.components import (
-    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, QUERY, SEQ, STATE_DIM, STREAMS,
+    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, QUERY, SEQ, TOKENS, STATE_DIM, STREAMS,
     VALUE_DIM, Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
     Vision, axis_size, first_tensor,
 )
@@ -674,7 +674,7 @@ class FamilySuite:
     def axis_sizes(self, model, host):
         """What each axis that is not a fact about the model must be on this model, off the input and the modules."""
         seq = len(model.tokenizer(PROMPT).input_ids)
-        sizes = {BATCH: 1, SEQ: seq, QUERY: seq, KEY: seq}
+        sizes = {BATCH: 1, SEQ: seq, QUERY: seq, KEY: seq, TOKENS: seq}  # one prompt: the flattened tokens are the sequence
         streams = getattr(model.config.get_text_config(), "hc_mult", None)
         if streams:  # a hyper-connection residual (DeepSeek-V4): the parallel copies of the stream
             sizes[STREAMS] = streams

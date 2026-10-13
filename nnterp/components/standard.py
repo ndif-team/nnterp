@@ -25,6 +25,8 @@ TOP_K = "top_k"
 #: Not facts about the model: their size is the tensor's.
 BATCH = "batch"
 SEQ = "seq"
+#: The batch and sequence axes flattened into one, as a block that reshapes around a sublayer holds the stream (OPT).
+TOKENS = "tokens"
 QUERY = "query"
 KEY = "key"
 #: A hyper-connection residual's parallel copies of the stream (DeepSeek-V4's ``hc_mult``); no envoy holds it.

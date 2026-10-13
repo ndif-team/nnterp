@@ -17,6 +17,7 @@ class TestFalcon(FamilySuite):
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     MLP_NORM = "input_layernorm"             # parallel (7B layout)
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
 
     def test_mlp_output_is_a_copy_the_block_does_not_touch(self, model):
         """The block adds the attention into the MLP's live tensor in place; the value is a copy."""
@@ -88,6 +89,7 @@ class TestFalconAlibi(FamilySuite):
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     MLP_NORM = "input_layernorm"
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
 
     def test_alibi_branch(self, model):
         assert model.layers[0].self_attn._module.config.alibi
@@ -107,6 +109,7 @@ class TestFalcon40B(FamilySuite):
     ATTENTION_NORM = "ln_attn"
     MLP_NORM = "ln_mlp"
     MLP_NORM_BEFORE_ATTENTION = True   # both norms are taken from the block input before either sublayer runs
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
 
     def test_new_decoder_architecture(self, model):
         assert model.config.new_decoder_architecture

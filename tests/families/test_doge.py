@@ -58,6 +58,7 @@ class TestDoge(FamilySuite):
     REPO = REPO
     FAMILY = doge
     NATIVE = LLAMA_ROWS
+    MID_IDENTITY = False                     # the residual gates scale what the block adds
 
     def test_gates_are_one_on_the_tiny_checkpoint(self, model):
         for layer in model.layers:
@@ -74,6 +75,7 @@ class TestDogeGated(FamilySuite):
     REPO = _gated_checkpoint()
     FAMILY = doge
     NATIVE = LLAMA_ROWS
+    MID_IDENTITY = False                     # the residual gates scale what the block adds
 
     def test_contribution_identity(self, model):
         """The suite's identity with the block's gates on the residual."""

@@ -44,7 +44,10 @@ def dedicated_suite(name):
 
 
 #: What the default reports for the values it does not serve.
-NOT_SERVED = {"self_attn.attention_output": "cannot tell what this sublayer adds", "mlp.mlp_output": "cannot tell what this sublayer adds"}
+NOT_SERVED = {
+    "self_attn.attention_output": "cannot tell what this sublayer adds", "mlp.mlp_output": "cannot tell what this sublayer adds",
+    "layer_mid": "cannot tell whether the block has a stream between its sublayers",
+}
 
 
 class DefaultSuite(FamilySuite):
@@ -129,8 +132,8 @@ def forced(name, **overrides):
 TestDefaultOnGPT2 = forced("gpt2")
 TestDefaultOnLlama = forced("llama")
 TestDefaultOnGPTNeoX = forced("gpt_neox")
-TestDefaultOnPhi = forced("phi")
-TestDefaultOnOPT = forced("opt", EXPECTED_UNAVAILABLE={"mlp.mlp_output": "no mlp module found"})
+TestDefaultOnPhi = forced("phi", EXPECTED_UNAVAILABLE={"mlp_norm_output": "no post_attention_layernorm module"})
+TestDefaultOnOPT = forced("opt", EXPECTED_UNAVAILABLE={"mlp.mlp_output": "no mlp module found", "mlp_norm_output": "no post_attention_layernorm module", "mlp_input": "no mlp module"})
 
 
 NANOCHAT = "hf-tiny-v2/tiny-random-NanoChatForCausalLM"
@@ -147,7 +150,7 @@ def test_unknown_model_type_loads_with_the_default(nanochat):
     assert nanochat.family is default
     assert type(nanochat.layers[0]) is default.Layer and type(nanochat.layers[0].self_attn) is default.Attention
     support = nanochat.support()
-    assert {name for name, reason in support.items() if reason is not None} == {"self_attn.attention_output", "mlp.mlp_output"}
+    assert {name for name, reason in support.items() if reason is not None} == {"self_attn.attention_output", "mlp.mlp_output", "layer_mid"}
     assert (nanochat.num_layers, nanochat.num_heads, nanochat.head_dim, nanochat.intermediate_size) == (2, 2, 16, 32)
 
 

@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING
 
 from transformers.models.codegen.modeling_codegen import CodeGenAttention, CodeGenBlock, CodeGenMLP
 
-from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Values, seq_first
+from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, seq_first, unavailable
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -36,7 +36,18 @@ RENAME = {
 
 
 class Layer(Layer):
-    """CodeGen's parallel block; returns ``(hidden_states, attn_weights)``, which the base unwraps."""
+    """CodeGen's parallel block; returns ``(hidden_states, attn_weights)``, which the base unwraps.
+
+    A parallel block: there is no stream between the sublayers, and the MLP reads the same normed input
+    as the attention.
+    """
+
+    layer_mid = unavailable(PARALLEL)
+
+    @EProperty("input_layernorm.output", description="The normed stream entering the MLP: the one norm feeds both sublayers")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
+
 
     returns_tuple = True
 

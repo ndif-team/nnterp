@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 import torch
 from transformers.models.xglm.modeling_xglm import XGLMAttention, XGLMDecoderLayer
 
-from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Values, seq_first
+from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, seq_first
 
 if TYPE_CHECKING:
     from nnsight import Envoy
@@ -56,7 +56,20 @@ def _flat(value: torch.Tensor) -> torch.Tensor:
 
 
 class Layer(Layer):
-    """XGLM's decoder block; returns a bare tensor, so the base holds."""
+    """XGLM's decoder block; returns a bare tensor, so the base holds.
+
+    The pre-MLP norm is the block's own ``final_layer_norm``, so ``layer_mid`` and ``mlp_norm_output``
+    read there; there is no ``mlp`` module, so ``mlp_input`` does not exist.
+    """
+
+    @EProperty("final_layer_norm.input", description="The residual stream after the attention add")
+    def layer_mid(self, value) -> Residual:
+        return value
+
+    @EProperty("final_layer_norm.output", description="The normed stream entering the feed-forward path")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
+
 
 
 class Attention(Attention):

@@ -87,8 +87,15 @@ class Layer(Layer):
     element; `check` records which on ``returns_tuple``, so `skip_with` packs
     the stream the way the block does. A block with no module the default
     recognizes as its attention or MLP lists that module's values as
-    unavailable, so `support` shows what was not found.
+    unavailable, so `support` shows what was not found. ``layer_mid`` is not
+    served: whether the block has a stream between its sublayers is a fact
+    about the block the default cannot tell.
     """
+
+    layer_mid = unavailable(
+        "the default family cannot tell whether the block has a stream between its sublayers (a parallel block has none); "
+        "add a family module (docs/extending/adding-a-family.md)"
+    )
 
     def support(self) -> dict[str, str | None]:
         rows = super().support()

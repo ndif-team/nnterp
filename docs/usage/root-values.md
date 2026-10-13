@@ -110,6 +110,24 @@ entries underflow to exact zeros (17,583 of 50,304 on Pythia-70m). For a precise
 `nnterp.nnsight_utils.compute_next_token_probs(model, prompts)` is this read over a list of
 prompts.
 
+## `final_norm_output`, `lm_head_output`
+
+The two boundaries after the last block: `model.final_norm_output` is `norm.output`, the
+stream the head projects, `[batch, seq, hidden_size]`; `model.lm_head_output` is `lm_head.output`,
+the head's own logits, `[batch, seq, vocab_size]`. `logits` is the model's output: the same tensor
+as `lm_head_output` on most families, the softcapped one on Gemma-2, so a metric on
+`lm_head_output` there is scored on numbers the model does not predict from. Both take
+assignment and in-place edits, and a family that names no `norm` or `lm_head` reports
+`no norm module on this model` / `no lm_head module on this model` in `support()`.
+
+```python
+with model.trace(prompt):
+    normed = model.final_norm_output.save()          # [batch, seq, hidden_size]
+    head = model.lm_head_output.save()               # [batch, seq, vocab_size]
+    model.final_norm_output[:, -1] *= 2              # the head reads the edited stream
+    logits = model.logits.save()
+```
+
 ## `input_ids`, `attention_mask`, `input_size`
 
 What the model was called with, `[batch, seq]` each; `input_size` is the ids' `torch.Size`.

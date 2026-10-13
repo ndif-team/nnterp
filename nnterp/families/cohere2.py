@@ -25,7 +25,7 @@ from transformers.models.cohere2.modeling_cohere2 import Cohere2Attention, Coher
 from transformers.models.cohere2_vision.modeling_cohere2_vision import Cohere2VisionModel
 from transformers.models.siglip.modeling_siglip import SiglipAttention, SiglipEncoderLayer, SiglipMLP, SiglipVisionModel
 
-from ..components import Attention, ImageScatter, Layer, Mlp, Vision, VisionAttention, VisionLayer, VisionMlp
+from ..components import Attention, EProperty, ImageScatter, Layer, Mlp, PARALLEL, Residual, Vision, VisionAttention, VisionLayer, VisionMlp, unavailable
 from .cohere import project_on_vocab  # noqa: F401  the same head: the same logit_scale
 
 RENAME = {
@@ -50,7 +50,18 @@ RENAME = {
 
 
 class Layer(Layer):
-    """Cohere-2's parallel block; returns a bare tensor, so the base holds."""
+    """Cohere-2's parallel block; returns a bare tensor, so the base holds.
+
+    A parallel block: there is no stream between the sublayers, and the MLP reads the same normed input
+    as the attention.
+    """
+
+    layer_mid = unavailable(PARALLEL)
+
+    @EProperty("input_layernorm.output", description="The normed stream entering the MLP: the one norm feeds both sublayers")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
+
 
 
 class Attention(Attention):

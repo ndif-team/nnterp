@@ -41,7 +41,7 @@ from .attention import Attention, HeadOutputs, Keys, Queries, Values
 from .eproperty import EProperty, Unavailable
 from .layer import Layer
 from .mlp import Mlp
-from .standard import BATCH, HIDDEN, IMAGES, IMAGE_TOKENS, PATCHES, SEQ, VISION_HIDDEN, Standard, blocks_support, first_tensor, rewrap
+from .standard import BATCH, HIDDEN, IMAGES, IMAGE_TOKENS, PATCHES, SEQ, VISION_HIDDEN, Standard, absent, blocks_support, first_tensor, rewrap
 
 #: A vision tower's stream: the tower's own batch (one row per image or crop) by its tokens (the patches,
 #: with CLIP's CLS token first), ``vision_hidden_size`` wide. The tower blocks' ``layer_output``,
@@ -173,6 +173,13 @@ class ImageScatter(Standard):
     scatter_argument: int | str = 1
 
 
+def tower_absent(name: str):
+    """`no_tower_run`, then `absent`: why a tower block's boundary at the child ``name`` is unavailable."""
+    def reason(envoy: Envoy) -> str | None:
+        return no_tower_run(envoy) or absent(envoy, name)
+    return reason
+
+
 class VisionLayer(Layer):
     """A vision tower's block: ``layer_input`` and ``layer_output`` are the tower's stream, `Patches`."""
 
@@ -188,6 +195,42 @@ class VisionLayer(Layer):
     @layer_input.postprocess
     def layer_input(self, value: torch.Tensor) -> torch.Tensor:
         return as_native(self.input, value)
+
+    @EProperty("input_layernorm.output", description="The normed stream entering the attention", unavailable=tower_absent("input_layernorm"))
+    def attention_norm_output(self, value: torch.Tensor) -> Patches:
+        """The attention's pre-norm output over the patches, ``[images, patches, vision_hidden_size]``: a view; assign or edit in place."""
+        return as_patches(value)
+
+    @attention_norm_output.postprocess
+    def attention_norm_output(self, value: torch.Tensor) -> torch.Tensor:
+        return as_native(self.input_layernorm.output, value)
+
+    @EProperty("post_attention_layernorm.input", description="The tower's stream after the attention add", unavailable=tower_absent("post_attention_layernorm"))
+    def layer_mid(self, value: torch.Tensor) -> Patches:
+        """The tower's stream between the two sublayers, ``[images, patches, vision_hidden_size]``: a view; assign or edit in place."""
+        return as_patches(value)
+
+    @layer_mid.postprocess
+    def layer_mid(self, value: torch.Tensor) -> torch.Tensor:
+        return as_native(self.post_attention_layernorm.input, value)
+
+    @EProperty("post_attention_layernorm.output", description="The normed stream entering the MLP", unavailable=tower_absent("post_attention_layernorm"))
+    def mlp_norm_output(self, value: torch.Tensor) -> Patches:
+        """The MLP's pre-norm output over the patches, ``[images, patches, vision_hidden_size]``: a view; assign or edit in place."""
+        return as_patches(value)
+
+    @mlp_norm_output.postprocess
+    def mlp_norm_output(self, value: torch.Tensor) -> torch.Tensor:
+        return as_native(self.post_attention_layernorm.output, value)
+
+    @EProperty("mlp.input", description="What the MLP is called with", unavailable=tower_absent("mlp"))
+    def mlp_input(self, value: torch.Tensor) -> Patches:
+        """The MLP's first argument over the patches, ``[images, patches, vision_hidden_size]``: a view; assign or edit in place."""
+        return as_patches(value)
+
+    @mlp_input.postprocess
+    def mlp_input(self, value: torch.Tensor) -> torch.Tensor:
+        return as_native(self.mlp.input, value)
 
     @EProperty(key="output", description="The tower's stream leaving the block", unavailable=no_tower_run)
     def layer_output(self, value: Any) -> Patches:

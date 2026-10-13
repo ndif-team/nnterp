@@ -23,8 +23,7 @@ from typing import TYPE_CHECKING
 from transformers.models.falcon.modeling_falcon import FalconAttention, FalconDecoderLayer, FalconMLP
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values,
-    first_tensor, needs_eager, rewrap, seq_first,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, first_tensor, needs_eager, rewrap, seq_first, unavailable,
 )
 
 if TYPE_CHECKING:
@@ -39,7 +38,28 @@ RENAME = {
 
 
 class Layer(Layer):
-    """Falcon's parallel block; returns a tuple, which the base unwraps."""
+    """Falcon's parallel block; returns a tuple, which the base unwraps.
+
+    A parallel block: there is no stream between the sublayers, and the MLP reads the same normed input
+    as the attention (the 40B layout norms the block input twice, ``ln_attn`` and ``ln_mlp``).
+    """
+
+    layer_mid = unavailable(PARALLEL)
+
+    @EProperty(
+        lambda block: "ln_attn.output" if block.root.config.new_decoder_architecture else "input_layernorm.output",
+        description="The normed stream entering the attention",
+    )
+    def attention_norm_output(self, value) -> Residual:
+        return value
+
+    @EProperty(
+        lambda block: "ln_mlp.output" if block.root.config.new_decoder_architecture else "input_layernorm.output",
+        description="The normed stream entering the MLP: the one norm feeds both sublayers, its own on the 40B layout",
+    )
+    def mlp_norm_output(self, value) -> Residual:
+        return value
+
 
     returns_tuple = True
 

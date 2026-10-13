@@ -84,6 +84,8 @@ Every row is an `EProperty` on the root, listed in `repr(model)` with its descri
 |---|---|---|---|
 | `model.logits` | `Logits` | yes: replaces `output.logits` | The logits the model returns, after any softcap (Gemma-2) or scale (Granite, Cohere) past the head; `model.lm_head.output` is the raw projection. |
 | `model.token_embeddings` | `Residual` | yes | The embedding module's output, `embed_tokens.output`; `layers[0].input` is what enters block 0, after any positional embeddings and embedding norms. An `EProperty` keyed `"embed_tokens.output"`. |
+| `model.final_norm_output` | `Residual` | yes; in-place edits reach the model | The final norm's output, `norm.output`: the stream `lm_head` projects. `no norm module on this model` where the family names none. |
+| `model.lm_head_output` | `Logits` | yes; in-place edits reach the model | `lm_head.output`: the head's own logits, before anything the model does past it. `logits` is the model's output: the same tensor on most families, the softcapped one on Gemma-2. `no lm_head module on this model` where the family names none. |
 | `model.next_token_probs` | `NextTokenProbs` | no (`AttributeError`: assign `logits`) | `logits[:, -1].softmax(-1)`; the last position is every row's last token only under left padding. |
 | `model.input_ids` | `Tokens` | yes: the model runs on the ids you set | The token ids the model was called with. |
 | `model.attention_mask` | `Tokens` | yes | The attention mask the model was called with; zeros are padding. |
@@ -144,6 +146,10 @@ The decoder block. `Layer.returns_tuple` (class attribute, default `False`) says
 | Value | Layout | Assignable | Description |
 |---|---|---|---|
 | `layer_input` | `Residual` | yes; in-place edits reach the model | The residual stream entering the block: `.input` on transformers, `hidden_states + residual` on a fused vLLM block. |
+| `attention_norm_output` | `Residual` | yes; in-place edits reach the model | `input_layernorm.output`: the normed stream the attention is called with on a pre-norm block. `no input_layernorm module on this block` where the block has none. |
+| `layer_mid` | `Residual` | yes; in-place edits reach the model | `post_attention_layernorm.input`: the stream between the sublayers, `layer_input + attention_output` on a pre-norm block. A family whose block is built otherwise points it elsewhere or marks it unavailable (a parallel block has no such stream). |
+| `mlp_norm_output` | `Residual` | yes; in-place edits reach the model | `post_attention_layernorm.output`: the normed stream entering the MLP on a pre-norm block; `mlp_input` where nothing sits between. |
+| `mlp_input` | `Residual` | yes; in-place edits reach the model | `mlp.input`: what the MLP is called with. `no mlp module on this block` where the block has none. |
 | `layer_output` | `Residual` | yes; in-place edits reach the model | The residual stream leaving the block, a tensor even when the block returns a tuple; assigning to a tuple block keeps the other elements. An `EProperty` over `.output`. |
 
 | Method | Signature | What |
@@ -346,7 +352,7 @@ The base of the hosts.
 | `lookup` | `lookup(model_type: str) -> ModuleType` | The family for `model_type`: a registered one, else `nnterp.families.<model_type>`, imported on first use. With neither, warns and returns `default`. |
 | `register` | `register(family: ModuleType, *model_types: str) -> ModuleType` | Add a family (any module or object with `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under `model_types`, or, with none given, the type its `__name__` ends in (`TypeError` for a nameless `SimpleNamespace`); consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
 | `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (98), alphabetical; not `default`. |
-| `default` | module | The best-effort family for a `model_type` with none: `RENAME` over the shipped spellings, `ENVOYS` keyed on the standard names, `check(model)` at load (run when the family is `default` itself; a copy calls it). Serves `layer_output`, the root values, the sizes and the interface interior; `attention_output`, `mlp_output` and `project_on_vocab` raise `Unavailable`. See [../usage/loading.md](../usage/loading.md#an-architecture-with-no-family). |
+| `default` | module | The best-effort family for a `model_type` with none: `RENAME` over the shipped spellings, `ENVOYS` keyed on the standard names, `check(model)` at load (run when the family is `default` itself; a copy calls it). Serves `layer_output`, the module boundaries its aliases reach, the root values, the sizes and the interface interior; `attention_output`, `mlp_output`, `layer_mid` and `project_on_vocab` raise `Unavailable`. See [../usage/loading.md](../usage/loading.md#an-architecture-with-no-family). |
 | `all_families` | `all_families() -> list[ModuleType]` | Every shipped family, imported. For tooling and tests. |
 | `REGISTRY` | `dict[str, ModuleType]` | `model_type -> family` for what `register` added. |
 | `UnsupportedFamily` | `ValueError` subclass | No family covers the checkpoint and the default cannot standardize it. |
@@ -368,15 +374,16 @@ Every descriptor exposes `.layout` (the layout alias the defining function's ret
 
 ### Layouts
 
-The thirty-five `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the thirty-two envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
+The thirty-six `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the thirty-three envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
 
 | Name | Axes | Defined in | Carried by |
 |---|---|---|---|
-| `Residual` | `batch seq hidden_size` | `components/layer.py` | `layer_output`, `attention_output`, `mlp_output`, `token_embeddings` |
+| `Residual` | `batch seq hidden_size` | `components/layer.py` | `layer_input`, `layer_output`, `attention_output`, `mlp_output`, `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`, `token_embeddings`, `final_norm_output` |
+| `FlatResidual` | `tokens hidden_size` | `components/layer.py` | OPT's `layer_mid` and `mlp_norm_output`: the stream as its block holds it around the feed-forward path, batch and sequence flattened |
 | `Streams` | `batch seq streams hidden_size` | `components/layer.py` | `layer_output` on a hyper-connection family (DeepSeek-V4) |
 | `StreamWeights` | `batch seq streams` | `components/layer.py` | a hyper-connection family's `attention_post`, `mlp_post` |
 | `StreamMixing` | `batch seq streams streams` | `components/layer.py` | a hyper-connection family's `attention_comb`, `mlp_comb` |
-| `Logits` | `batch seq vocab_size` | `standardized.py` | `logits` |
+| `Logits` | `batch seq vocab_size` | `standardized.py` | `logits`, `lm_head_output` |
 | `NextTokenProbs` | `batch vocab_size` | `standardized.py` | `next_token_probs` |
 | `Tokens` | `batch seq` (`Int`) | `standardized.py` | `input_ids`, `attention_mask` |
 | `Queries` | `batch num_heads seq qk_head_dim` | `components/attention.py` | `attention_queries` |

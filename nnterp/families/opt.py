@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 from transformers.models.opt.modeling_opt import OPTAttention, OPTDecoderLayer
 
-from ..components import Attention, Layer, Mlp
+from ..components import Attention, EProperty, FlatResidual, Layer, Mlp
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -36,7 +36,21 @@ RENAME = {
 
 
 class Layer(Layer):
-    """OPT's decoder block; returns a bare tensor, so the base holds."""
+    """OPT's decoder block; returns a bare tensor, so the base holds.
+
+    The pre-MLP norm is the block's own ``final_layer_norm``, so ``layer_mid`` and ``mlp_norm_output``
+    read there, flattened to ``[batch * seq, hidden]`` as the block holds the stream around its feed-forward
+    path (``view(-1, hidden)``, and back at the end); there is no ``mlp`` module, so ``mlp_input`` does not exist.
+    """
+
+    @EProperty("final_layer_norm.input", description="The residual stream after the attention add, flattened to [batch * seq, hidden]")
+    def layer_mid(self, value) -> FlatResidual:
+        return value
+
+    @EProperty("final_layer_norm.output", description="The normed stream entering the feed-forward path, flattened to [batch * seq, hidden]")
+    def mlp_norm_output(self, value) -> FlatResidual:
+        return value
+
 
 
 class Attention(Attention):

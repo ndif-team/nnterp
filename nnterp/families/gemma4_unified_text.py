@@ -57,7 +57,20 @@ RENAME = {
 
 
 class Layer(Layer):
-    """Gemma-4 unified's decoder block; returns a bare tensor (the sum times ``layer_scalar``), so the base holds."""
+    """Gemma-4 unified's decoder block; returns a bare tensor (the sum times ``layer_scalar``), so the base holds.
+
+    A sandwich block: ``post_attention_layernorm`` follows the attention, so ``layer_mid`` and
+    ``mlp_norm_output`` read ``pre_feedforward_layernorm``, the MLP's pre-norm.
+    """
+
+    @EProperty("pre_feedforward_layernorm.input", description="The residual stream after the attention add")
+    def layer_mid(self, value) -> Residual:
+        return value
+
+    @EProperty("pre_feedforward_layernorm.output", description="The normed stream entering the MLP")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
+
 
 
 class Attention(gemma4_text.Attention):

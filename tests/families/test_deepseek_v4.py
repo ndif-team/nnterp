@@ -43,6 +43,7 @@ class TestDeepseekV4(FamilySuite):
     LOAD_KWARGS = {"dtype": torch.float32}  # the norms are kept in float32; a bf16 forward fails on CPU inside transformers
     ATTENTION_SINK = True
     MLP_WIDTH_KEY = "moe_intermediate_size"
+    EXPECTED_UNAVAILABLE = {"attention_norm_output": "hyper-connection streams", "layer_mid": "hyper-connection streams", "mlp_norm_output": "hyper-connection streams", "mlp_input": "hyper-connection streams"}
 
     def expected_values(self, model):
         return super().expected_values(model) | set(WEIGHTS)

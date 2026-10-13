@@ -41,6 +41,7 @@ class TestOlmo3(FamilySuite):
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln1=None)
     ATTENTION_NORM = None
     MLP_NORM = None
+    EXPECTED_UNAVAILABLE = {"attention_norm_output": "a post-norm block", "mlp_norm_output": "a post-norm block"}
 
     def test_contributions_are_the_post_norms(self, model):
         with model.trace(PROMPT):

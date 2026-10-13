@@ -62,8 +62,7 @@ from transformers.models.deepseek_v4.modeling_deepseek_v4 import (
 )
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, INTERFACE, Layer, Moe, Pattern, StreamMixing, Streams, StreamWeights,
-    first_tensor, interface_reason, rewrap,
+    Attention, EProperty, HeadOutputs, INTERFACE, Layer, Moe, Pattern, StreamMixing, StreamWeights, Streams, first_tensor, interface_reason, rewrap, unavailable,
 )
 
 if TYPE_CHECKING:
@@ -77,13 +76,24 @@ RENAME = {
 }
 
 
+STREAMS_BOUNDARY = "hyper-connection streams: the sublayers read a mix of the streams, not the stream; the block's inner boundaries are not mapped for this family yet"
+
+
 class Layer(Layer):
     """DeepSeek-V4's decoder block; returns the bare stream tensor, so the base holds, under the `Streams` layout.
 
     Adds the hyper-connections' stream weights: ``attention_post`` /
     ``attention_comb`` (``attn_hc``) and ``mlp_post`` / ``mlp_comb``
     (``ffn_hc``), float32 whatever the model's dtype.
+
+    The inner boundaries are not mapped: each sublayer reads a mix of the streams.
     """
+
+    attention_norm_output = unavailable(STREAMS_BOUNDARY)
+    layer_mid = unavailable(STREAMS_BOUNDARY)
+    mlp_norm_output = unavailable(STREAMS_BOUNDARY)
+    mlp_input = unavailable(STREAMS_BOUNDARY)
+
 
     @EProperty(key="input", description="The residual streams entering the block")
     def layer_input(self, value) -> Streams:

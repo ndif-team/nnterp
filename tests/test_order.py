@@ -11,15 +11,19 @@ QWEN3_5 = "yujiepan/qwen3.5-tiny-random"
 #: Tiny Llama's block, in forward order: the queries, keys and values are the attention call's arguments, one location.
 LLAMA_BLOCK = {
     "layer_input": 0,
-    "self_attn.attention_queries": 1,
-    "self_attn.attention_keys": 1,
-    "self_attn.attention_values": 1,
-    "self_attn.attention_scores": 2,
-    "self_attn.attention_probabilities": 3,
-    "self_attn.attention_head_outputs": 4,
-    "self_attn.attention_output": 5,
-    "mlp.mlp_output": 6,
-    "layer_output": 7,
+    "attention_norm_output": 1,
+    "self_attn.attention_queries": 2,
+    "self_attn.attention_keys": 2,
+    "self_attn.attention_values": 2,
+    "self_attn.attention_scores": 3,
+    "self_attn.attention_probabilities": 4,
+    "self_attn.attention_head_outputs": 5,
+    "self_attn.attention_output": 6,
+    "layer_mid": 7,
+    "mlp_norm_output": 8,
+    "mlp_input": 9,
+    "mlp.mlp_output": 10,
+    "layer_output": 11,
 }
 
 
@@ -31,15 +35,17 @@ def llama():
 def test_llama_order(llama):
     assert llama.num_layers == 2
     assert llama.order() == {
-        "input_ids": 0, "attention_mask": 0, "input_size": 0, "token_embeddings": 1, "logits": 2, "next_token_probs": 2,
+        "input_ids": 0, "attention_mask": 0, "input_size": 0, "token_embeddings": 1,
+        "final_norm_output": 2, "lm_head_output": 3, "logits": 4, "next_token_probs": 4,
     }
     assert llama.order(0) == llama.order(1) == llama.order(-1) == LLAMA_BLOCK
     assert [llama.rank(name) for name in ("input_ids", "attention_mask", "input_size", "token_embeddings")] == [
         (-1, 0), (-1, 0), (-1, 0), (-1, 1),
     ]
-    assert llama.rank("logits") == llama.rank("next_token_probs") == (2, 2)
+    assert llama.rank("logits") == llama.rank("next_token_probs") == (2, 4)
+    assert llama.rank("final_norm_output") == (2, 2) and llama.rank("lm_head_output") == (2, 3)
     assert {name: llama.rank(name, 1) for name in LLAMA_BLOCK} == {name: (1, r) for name, r in LLAMA_BLOCK.items()}
-    assert llama.rank("layer_output", -1) == (1, 7)
+    assert llama.rank("layer_output", -1) == (1, 11)
 
 
 def test_ranks_sort_reads_into_forward_order(llama):
@@ -102,7 +108,7 @@ def test_a_forward_meta_tensors_cannot_run_is_probed_for_real():
     """Granite's forward branches on its data (``torch.equal``), so the scan fails and the probe traces instead."""
     model = StandardizedTransformer("hf-internal-testing/tiny-random-GraniteForCausalLM", attn_implementation="eager", dispatch=True)
     assert model.order(0) == LLAMA_BLOCK
-    assert model.rank("logits") == (model.num_layers, 2)
+    assert model.rank("logits") == (model.num_layers, 4)
 
 
 def test_routed_kernels_add_the_state():

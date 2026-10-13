@@ -67,6 +67,7 @@ class TestZaya(FamilySuite):
     REPO = _patched_checkpoint(merges=False)
     FAMILY = zaya
     NATIVE = LLAMA_ROWS
+    MID_IDENTITY = False                     # the stream gates scale what the block adds
     MLP_WIDTH_KEY = "moe_intermediate_size"   # every block is a mixture
     ROUTER_EXTRA_CLASSES = 1  # router_logits' last column is the skip class
 
@@ -80,6 +81,7 @@ class TestZayaMerged(FamilySuite):
     REPO = _patched_checkpoint(merges=True)
     FAMILY = zaya
     NATIVE = LLAMA_ROWS
+    MID_IDENTITY = False                     # the stream gates scale what the block adds
     MLP_WIDTH_KEY = "moe_intermediate_size"
     ROUTER_EXTRA_CLASSES = 1  # router_logits' last column is the skip class
 

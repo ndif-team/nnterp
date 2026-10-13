@@ -57,7 +57,7 @@ from .attention import (
 from .eproperty import (
     DerivedEProperty, EProperty, Unavailable, unavailable,
 )
-from .layer import Layer, Residual, StreamMixing, Streams, StreamWeights
+from .layer import PARALLEL, POST_NORM_ATTENTION, POST_NORM_MLP, FlatResidual, Layer, Residual, StreamMixing, Streams, StreamWeights
 from .linear_attention import ChannelGates, Gates, LinearAttention, LinearQK, LinearV
 from .mlp import Mlp
 from .moe import (
@@ -73,7 +73,7 @@ from .selective_scan import (
     needs_token_loop,
 )
 from .standard import (
-    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, HIDDEN, IMAGE_TOKENS, IMAGES, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS,
+    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, HIDDEN, IMAGE_TOKENS, IMAGES, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, TOKENS,
     PATCHES, QK_HEAD_DIM, QUERY, SEQ, STATE_DIM, STREAMS, TOP_K, VALUE_DIM, VISION_HIDDEN, VOCAB, Standard,
     axis_size, blocks_support, first_tensor, rewrap,
 )
@@ -87,7 +87,7 @@ from .vision import (
 )
 
 __all__ = [
-    "BATCH", "CHANNELS", "EXPERTS", "GROUPS", "HEAD_DIM", "HEADS", "HIDDEN", "IMAGE_TOKENS", "IMAGES", "KEY", "KEY_DIM", "KV_HEADS",
+    "BATCH", "CHANNELS", "EXPERTS", "GROUPS", "HEAD_DIM", "HEADS", "HIDDEN", "IMAGE_TOKENS", "IMAGES", "KEY", "KEY_DIM", "KV_HEADS", "TOKENS",
     "MIXER_HEADS", "PATCHES", "QK_HEAD_DIM", "QUERY", "SEQ", "STATE_DIM", "STREAMS", "TOP_K", "VALUE_DIM", "VISION_HIDDEN", "VOCAB",
     "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "ImageFeatures", "ImageTokenMask", "Keys", "Layer", "LinearAttention", "Patches",
     "LOGITS", "LinearQK", "LinearV", "Mlp", "Moe", "PER_SLOT", "Pattern", "Queries", "RecurrentMixer", "Residual", "RouterLogits", "ScanDecays", "ScanQK", "ScanState",

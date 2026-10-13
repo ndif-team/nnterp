@@ -41,7 +41,20 @@ def _not_a_block_mlp(envoy: "Envoy") -> str | None:
 
 
 class Layer(Layer):
-    """AFMoE's decoder block; returns a bare tensor, so the base holds."""
+    """AFMoE's decoder block; returns a bare tensor, so the base holds.
+
+    A sandwich block: ``post_attention_layernorm`` follows the attention, so ``layer_mid`` and
+    ``mlp_norm_output`` read ``pre_mlp_layernorm``, the MLP's pre-norm.
+    """
+
+    @EProperty("pre_mlp_layernorm.input", description="The residual stream after the attention add")
+    def layer_mid(self, value) -> Residual:
+        return value
+
+    @EProperty("pre_mlp_layernorm.output", description="The normed stream entering the MLP")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
+
 
 
 class Attention(Attention):

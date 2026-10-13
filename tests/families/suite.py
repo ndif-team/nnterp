@@ -16,7 +16,7 @@ from nnsight.intervention.envoy import Envoy
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.components import (
-    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, QUERY, SEQ, STATE_DIM, STREAMS,
+    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, QUERY, SEQ, TOKENS, STATE_DIM, STREAMS,
     VALUE_DIM, Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
     Vision, axis_size, first_tensor,
 )
@@ -27,7 +27,8 @@ PROMPT = "Hello world there"
 PROMPTS = ["The Eiffel Tower is in the city of", "Paris is the capital and largest city of"]
 
 VALUES = {
-    "logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", "layer_input", "layer_output",
+    "logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", "final_norm_output", "lm_head_output",
+    "layer_input", "attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input", "layer_output",
     "self_attn.attention_output", "self_attn.attention_probabilities", "mlp.mlp_output",
     "self_attn.attention_queries", "self_attn.attention_keys", "self_attn.attention_values",
     "self_attn.attention_scores", "self_attn.attention_head_outputs",
@@ -171,6 +172,8 @@ class FamilySuite:
     ROUTER_EXTRA_CLASSES = 0
     #: A decode step's attention mask covers the cache and the new token (a pure state-space model's covers the new token only).
     DECODE_MASK_COVERS_CACHE = True
+    #: ``layer_mid == layer_input + the mixers' contributions``: false where a gate scales what the block adds (Doge, ZAYA).
+    MID_IDENTITY = True
 
     @pytest.fixture(scope="class")
     def model(self, request):
@@ -275,7 +278,7 @@ class FamilySuite:
         assert set(support) == expected
         assert set(model.support(layer=0)) == {
             name for name in expected if not name.startswith("vision.")
-        } - {"logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size"}
+        } - {"logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", "final_norm_output", "lm_head_output"}
 
     def test_support_is_what_this_family_expects(self, model):
         for name, reason in model.support().items():
@@ -382,6 +385,68 @@ class FamilySuite:
         torch.testing.assert_close(attn_in, attn_norm if attn_norm is not None else block_in)
         if mlp_in is not None and mlp_norm is not None:
             torch.testing.assert_close(mlp_in, mlp_norm)
+
+    def test_module_boundaries(self, model):
+        """The boundaries between the block values, where the family serves them: each is the raw module boundary
+        it names, ``layer_mid`` is ``layer_input + attention_output``, the norm outputs are what the sublayers are
+        called with on a pre-norm block, and the root's two are the final norm's and the head's own outputs."""
+        layer = model.layers[0]
+        support = model.support(layer=0)
+        has_mlp = getattr(layer, "mlp", None) is not None
+        read = {}
+        with model.trace(PROMPT):  # in forward order
+            read["x"] = layer.layer_input.save()
+            if support["attention_norm_output"] is None:
+                read["attn_norm"] = layer.attention_norm_output.save()
+            if mixer(layer) is not None:
+                read["attn_in"] = mixer(layer).input.save()
+            if support["mlp_input"] is None:
+                read["mlp_in"] = layer.mlp_input.save()
+                read["mlp_raw"] = layer.mlp.input.save()
+            read["norm_out"] = model.final_norm_output.save()
+            read["norm_raw"] = model.norm.output.save()
+            read["head_out"] = model.lm_head_output.save()
+            read["head_raw"] = model.lm_head.output.save()
+            read["logits"] = model.logits.save()
+        mixers = [getattr(layer, name) for name in ("linear_attn", "self_attn") if support.get(f"{name}.attention_output", "absent") is None]
+        if support["layer_mid"] is None:  # its own trace: a contribution may be an operation before the attention's input
+            with model.trace(PROMPT):
+                read["x"] = layer.layer_input.save()
+                read["added"] = [host.attention_output.save() for host in mixers]
+                read["mid"] = layer.layer_mid.save()
+        if support["mlp_norm_output"] is None and has_mlp:  # its own trace: on a parallel block it is the attention's norm, read above
+            with model.trace(PROMPT):
+                read["mlp_norm"] = layer.mlp_norm_output.save()
+                read["mlp_raw"] = layer.mlp.input.save()
+        if "attn_norm" in read and self.ATTENTION_NORM == "input_layernorm":
+            assert torch.equal(read["attn_norm"], read["attn_in"])
+        if "mid" in read and read["added"] and self.MID_IDENTITY:  # the block sums in its own dtype
+            eps = torch.finfo(read["mid"].dtype).eps
+            total = read["x"].float() + sum(part.float() for part in read["added"])
+            torch.testing.assert_close(read["mid"].float().reshape(total.shape), total, rtol=8 * eps, atol=8 * eps)  # OPT flattens it
+        if "mlp_norm" in read and self.MLP_NORM == "post_attention_layernorm":
+            assert torch.equal(read["mlp_norm"], read["mlp_raw"])
+        if "mlp_in" in read:
+            assert torch.equal(read["mlp_in"], read["mlp_raw"])
+        else:
+            assert not has_mlp or support["mlp_input"], "a block with an MLP serves mlp_input"
+        assert torch.equal(read["norm_out"], read["norm_raw"]) and torch.equal(read["head_out"], read["head_raw"])
+        # Writes land where the value is served.
+        for name in ("attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input"):
+            if support[name] is not None:
+                continue
+            with model.trace(PROMPT):
+                getattr(layer, name)[:] = 0
+                edited = model.logits.save()
+            assert not torch.equal(edited, read["logits"]), name
+        with model.trace(PROMPT):
+            model.final_norm_output = model.final_norm_output * 0
+            edited = model.logits.save()
+        assert not torch.equal(edited, read["logits"])
+        with model.trace(PROMPT):
+            model.lm_head_output[:, -1] = 0
+            edited = model.logits.save()
+        assert not torch.equal(edited, read["logits"])
 
     def test_renamed_model_equals_raw_model(self, model, raw_model):
         with model.trace(PROMPT):
@@ -609,7 +674,7 @@ class FamilySuite:
     def axis_sizes(self, model, host):
         """What each axis that is not a fact about the model must be on this model, off the input and the modules."""
         seq = len(model.tokenizer(PROMPT).input_ids)
-        sizes = {BATCH: 1, SEQ: seq, QUERY: seq, KEY: seq}
+        sizes = {BATCH: 1, SEQ: seq, QUERY: seq, KEY: seq, TOKENS: seq}  # one prompt: the flattened tokens are the sequence
         streams = getattr(model.config.get_text_config(), "hc_mult", None)
         if streams:  # a hyper-connection residual (DeepSeek-V4): the parallel copies of the stream
             sizes[STREAMS] = streams

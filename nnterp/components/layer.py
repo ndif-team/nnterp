@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING, Any
 
 import torch
@@ -11,7 +12,7 @@ from jaxtyping import Float
 from torch import Tensor
 
 from .eproperty import EProperty
-from .standard import BATCH, HIDDEN, SEQ, STREAMS, Standard, first_tensor, rewrap
+from .standard import BATCH, HIDDEN, SEQ, STREAMS, TOKENS, Standard, absent, first_tensor, rewrap
 
 if TYPE_CHECKING:
     from .attention import Attention
@@ -20,6 +21,9 @@ if TYPE_CHECKING:
 
 #: The residual stream and everything added to it: ``layer_output``, the contributions, ``token_embeddings``, a sublayer's input.
 Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]
+#: The residual stream with its batch and sequence axes flattened, as a block that reshapes around a sublayer holds
+#: it (OPT's ``layer_mid`` and ``mlp_norm_output``).
+FlatResidual = Float[Tensor, f"{TOKENS} {HIDDEN}"]
 #: A hyper-connection residual (DeepSeek-V4): ``streams`` parallel copies of the stream, the block's own
 #: ``[batch, seq, streams, hidden_size]``. ``layer_output`` (and a block's input) on those families, in place of `Residual`.
 Streams = Float[Tensor, f"{BATCH} {SEQ} {STREAMS} {HIDDEN}"]
@@ -27,6 +31,12 @@ Streams = Float[Tensor, f"{BATCH} {SEQ} {STREAMS} {HIDDEN}"]
 StreamWeights = Float[Tensor, f"{BATCH} {SEQ} {STREAMS}"]
 #: A per-token ``streams x streams`` matrix mixing the streams: entry ``[j, k]`` is what stream ``j`` gives stream ``k``.
 StreamMixing = Float[Tensor, f"{BATCH} {SEQ} {STREAMS} {STREAMS}"]
+
+
+#: Reasons a family gives for a boundary its block does not have.
+PARALLEL = "a parallel block: the attention and the MLP read the same input, so there is no stream between them"
+POST_NORM_ATTENTION = "a post-norm block: the attention reads the residual stream itself, layer_input"
+POST_NORM_MLP = "a post-norm block: the MLP reads the residual stream itself, layer_mid"
 
 
 class Layer(Standard):
@@ -39,6 +49,14 @@ class Layer(Standard):
         mlp: The feed-forward, an `Mlp`; absent on OPT.
         input_layernorm, post_attention_layernorm: The block's norms under their aliased names,
             where the family has them (their meaning varies; see the README).
+
+    Between ``layer_input`` and ``layer_output`` the block has four more boundaries,
+    each the input or output of one of its modules: ``attention_norm_output``,
+    ``layer_mid``, ``mlp_norm_output`` and ``mlp_input``. They are defined on the
+    pre-norm block (``x + attn(norm1(x))``, then ``+ mlp(norm2(.))``) and keyed on
+    the aliased norms, so on a block built otherwise the family's subclass points
+    them at its own modules or marks them unavailable with the reason; a block
+    without the module reports ``no <module> module on this block``.
     """
 
     self_attn: Attention
@@ -74,6 +92,41 @@ class Layer(Standard):
         ``layer_input + attention_output + mlp_output == layer_output``.
         In-place edits and assignment reach the model.
         """
+        return value
+
+    @EProperty("input_layernorm.output", description="The normed stream entering the attention", unavailable=partial(absent, name="input_layernorm"))
+    def attention_norm_output(self, value: torch.Tensor) -> Residual:
+        """The attention's pre-norm output: what the attention is called with, ``[batch, seq, hidden_size]``.
+
+        ``input_layernorm.output`` on a pre-norm block. In-place edits and
+        assignment reach the model.
+        """
+        return value
+
+    @EProperty("post_attention_layernorm.input", description="The residual stream after the attention add", unavailable=partial(absent, name="post_attention_layernorm"))
+    def layer_mid(self, value: torch.Tensor) -> Residual:
+        """The residual stream between the two sublayers, ``[batch, seq, hidden_size]``.
+
+        What the MLP's pre-norm is called with: ``layer_input +
+        attention_output`` on a pre-norm block, where it is read as
+        ``post_attention_layernorm.input``. A parallel block has no such
+        stream, and marks this unavailable. In-place edits and assignment reach
+        the model.
+        """
+        return value
+
+    @EProperty("post_attention_layernorm.output", description="The normed stream entering the MLP", unavailable=partial(absent, name="post_attention_layernorm"))
+    def mlp_norm_output(self, value: torch.Tensor) -> Residual:
+        """The MLP's pre-norm output, ``[batch, seq, hidden_size]``: ``post_attention_layernorm.output`` on a pre-norm block.
+
+        The same tensor as `mlp_input` where nothing sits between the norm
+        and the MLP. In-place edits and assignment reach the model.
+        """
+        return value
+
+    @EProperty("mlp.input", description="What the MLP is called with", unavailable=partial(absent, name="mlp"))
+    def mlp_input(self, value: torch.Tensor) -> Residual:
+        """The MLP's first argument, ``[batch, seq, hidden_size]``. In-place edits and assignment reach the model."""
         return value
 
     @EProperty(key="output", description="The residual stream leaving the block, a tensor even when the block returns a tuple")

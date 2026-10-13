@@ -29,10 +29,10 @@ only what nnterp adds.
 - [docs/usage/loading.md](docs/usage/loading.md) — `StandardizedTransformer(repo_id, ...)`; `family=` gives one load its family instead of the lookup; pass `attn_implementation="eager"` for anything inside attention
 - [docs/usage/vocabulary.md](docs/usage/vocabulary.md) — `embed_tokens`, `layers[i].self_attn`, `layers[i].mlp`, `norm`, `lm_head`; native names keep working
 - [docs/reference/families.md](docs/reference/families.md) — the 98 families, their native names and quirks
-- [docs/usage/loading.md#an-architecture-with-no-family](docs/usage/loading.md#an-architecture-with-no-family) — a `model_type` with no family loads with the best-effort `default` family and a warning; it serves `layer_output`, the root values, the sizes and the interface interior, not `attention_output`/`mlp_output`/`project_on_vocab`; `UnsupportedFamily` when it cannot standardize
+- [docs/usage/loading.md#an-architecture-with-no-family](docs/usage/loading.md#an-architecture-with-no-family) — a `model_type` with no family loads with the best-effort `default` family and a warning; it serves `layer_output`, the module boundaries its aliases reach, the root values, the sizes and the interface interior, not `attention_output`/`mlp_output`/`layer_mid`/`project_on_vocab`; `UnsupportedFamily` when it cannot standardize
 
 ### "Read or edit the residual stream / a sublayer's contribution"
-- [docs/usage/residual-stream.md](docs/usage/residual-stream.md) — `layer_input`, `layer_output`, `attention_output`, `mlp_output`; `layer_input + attention_output + mlp_output == layer_output`
+- [docs/usage/residual-stream.md](docs/usage/residual-stream.md) — `layer_input`, `layer_output`, `attention_output`, `mlp_output`; `layer_input + attention_output + mlp_output == layer_output`; the module boundaries between them, `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`, and the root's `final_norm_output`, `lm_head_output`
 
 ### "Read or edit attention: the pattern, queries, keys, values, scores, heads"
 - [docs/usage/attention-interior.md](docs/usage/attention-interior.md) — `attention_probabilities`, `attention_queries/keys/values/scores/head_outputs`; needs eager; per-family caveats

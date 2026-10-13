@@ -25,6 +25,8 @@ TOP_K = "top_k"
 #: Not facts about the model: their size is the tensor's.
 BATCH = "batch"
 SEQ = "seq"
+#: The batch and sequence axes flattened into one, as a block that reshapes around a sublayer holds the stream (OPT).
+TOKENS = "tokens"
 QUERY = "query"
 KEY = "key"
 #: A hyper-connection residual's parallel copies of the stream (DeepSeek-V4's ``hc_mult``); no envoy holds it.
@@ -72,6 +74,13 @@ def in_width(module: Any, *names: str) -> int | None:
         if isinstance(width, int):
             return width
     return None
+
+
+def absent(envoy: Envoy, name: str, where: str = "block") -> str | None:
+    """Why a value at the child module ``name`` is unavailable: the envoy has no such child or alias. ``None`` when it has."""
+    if name in envoy._aliases or any(child == name for child, _ in envoy._named_children()):
+        return None
+    return f"no {name} module on this {where}"
 
 
 def unsized(envoy: Envoy, name: str) -> NotImplementedError:

@@ -43,15 +43,9 @@ from nnsight.intervention.envoy import Envoy
 from .. import layer as standard
 from ..layer import Residual
 from .attention import Attention as VLLMAttention
+from .layer import Layer as VLLMLayer
 from .flat import Flat
 from .mlp import Mlp as VLLMMlp
-
-
-def on_transformers_backend(envoy: Envoy) -> bool:
-    """Whether ``envoy``'s model runs on vLLM's transformers backend, where every activation carries the batch axis."""
-    from vllm.model_executor.models.transformers.base import Base
-
-    return isinstance(envoy.root._module, Base)
 
 
 def engine_attention(envoy: Envoy) -> torch.nn.Module | None:
@@ -80,6 +74,12 @@ class Layer(standard.Layer):
     @Flat("output", select=lambda envoy: 0 if envoy.returns_tuple else None, batch=True, description="The residual stream leaving the block, [1, tokens, hidden_size]")
     def layer_output(self, value: torch.Tensor) -> Residual:
         return value
+
+    #: The boundaries between them, read as on every vLLM block (with the batch axis this backend keeps).
+    attention_norm_output = VLLMLayer.attention_norm_output
+    layer_mid = VLLMLayer.layer_mid
+    mlp_norm_output = VLLMLayer.mlp_norm_output
+    mlp_input = VLLMLayer.mlp_input
 
 
 class Attention(VLLMAttention):

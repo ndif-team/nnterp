@@ -8,6 +8,7 @@ from nnterp.families.vllm import phi
 class TestVLLMPhi(VLLMFamilySuite):
     REPO = "microsoft/phi-1_5"
     FAMILY = phi
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | {"layer_mid"}) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "model.embed_tokens",
         "layers": "model.layers",

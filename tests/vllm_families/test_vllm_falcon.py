@@ -8,6 +8,7 @@ from nnterp.families.vllm import falcon
 class TestVLLMFalcon(VLLMFamilySuite):
     REPO = "tiiuae/falcon-7b"
     FAMILY = falcon
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | {"layer_mid"}) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "transformer.word_embeddings",
         "layers": "transformer.h",

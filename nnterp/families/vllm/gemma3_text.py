@@ -12,7 +12,7 @@ on transformers, so ``token_embeddings`` is the unscaled lookup and
 from vllm.model_executor.models.gemma3 import Gemma3Attention, Gemma3DecoderLayer, Gemma3MLP
 
 from ...components import Residual
-from ...components.vllm import Attention, Flat, FusedLayer, Mlp
+from ...components.vllm import Attention, Flat, FusedLayer, Mlp, summed
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -23,6 +23,14 @@ RENAME = {
 
 class Layer(FusedLayer):
     """Gemma-3's decoder block: ``forward(positions, hidden_states, residual) -> (hidden_states, residual)``."""
+
+    #: A sandwich block: ``post_attention_layernorm`` follows the attention, so the stream between the sublayers and the MLP's
+    #: normed input are at ``pre_feedforward_layernorm``, the MLP's pre-norm, which takes the stream in two halves.
+    layer_mid = summed("pre_feedforward_layernorm.inputs", description="The residual stream after the attention add: hidden_states + residual, [1, tokens, hidden_size]")
+
+    @Flat("pre_feedforward_layernorm.output", description="The normed stream entering the MLP, [1, tokens, hidden_size]")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

@@ -8,6 +8,7 @@ from nnterp.families.vllm import gpt2
 class TestVLLMGPT2(VLLMFamilySuite):
     REPO = "openai-community/gpt2"
     FAMILY = gpt2
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "transformer.wte",
         "layers": "transformer.h",

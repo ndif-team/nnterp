@@ -9,7 +9,7 @@ attention norms its queries and keys.
 
 from vllm.model_executor.models.olmo3 import Olmo3Attention, Olmo3DecoderLayer, Olmo3MLP
 
-from ...components import Residual
+from ...components import POST_NORM_ATTENTION, POST_NORM_MLP, Residual, unavailable
 from ...components.vllm import Attention, Flat, Layer, Mlp
 
 RENAME = {
@@ -23,6 +23,14 @@ class Layer(Layer):
     """The decoder block: called with the positions and the stream, post-norm, adding each sublayer's normed output itself."""
 
     STREAM = 1
+
+    #: A post-norm block: the sublayers read the residual stream itself, so ``layer_mid`` is what the MLP is called with.
+    attention_norm_output = unavailable(POST_NORM_ATTENTION)
+    mlp_norm_output = unavailable(POST_NORM_MLP)
+
+    @Flat("mlp.input", description="The residual stream after the attention add, what the MLP is called with, [1, tokens, hidden_size]")
+    def layer_mid(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

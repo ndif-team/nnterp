@@ -10,6 +10,7 @@ from nnterp.families.vllm import gpt_oss
 class TestVLLMGptOss(VLLMFamilySuite):
     REPO = "tengomucho/tiny-random-gpt-oss"
     FAMILY = gpt_oss
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = {
         "embed_tokens": "model.embedding",
         "layers": "model.layers",

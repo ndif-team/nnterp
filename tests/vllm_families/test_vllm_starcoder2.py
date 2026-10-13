@@ -8,5 +8,6 @@ from nnterp.families.vllm import starcoder2
 class TestVLLMStarcoder2(VLLMFamilySuite):
     REPO = "TechxGenus/starcoder2-3b-instruct"
     FAMILY = starcoder2
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
     NATIVE = LLAMA_ROWS
     MEMORY = 0.4

@@ -12,6 +12,13 @@ from nnsight.intervention.interleaver import Mediator
 from ..eproperty import EProperty
 
 
+def on_transformers_backend(envoy: Envoy) -> bool:
+    """Whether ``envoy``'s model runs on vLLM's transformers backend, where every activation carries the batch axis."""
+    from vllm.model_executor.models.transformers.base import Base
+
+    return isinstance(envoy.root._module, Base)
+
+
 def batched(rows: torch.Tensor, head_dim: int | None = None, heads_first: bool = False) -> torch.Tensor:
     """``[tokens, ...]`` as a private ``[1, tokens, ...]`` copy; with ``head_dim``, the last axis split into heads.
 
@@ -55,14 +62,19 @@ class Flat(EProperty):
     argument of a call). The decorated function receives the batched copy and
     returns the value; its annotation is the layout. In-place edits are handed
     back to the model when the block moves on, and an assignment is checked
-    against the rows this request has before it is swapped in.
+    against the rows this request has before it is swapped in. An output
+    that is a tuple serves its first element unless ``select`` says another:
+    a norm vLLM calls with the residual beside the stream returns
+    ``(normed, residual)``, and the same norm called alone returns the tensor.
 
     Args:
         heads: For a ``[tokens, num_heads * head_dim]`` tensor, where the head
             axis goes: ``"first"`` serves ``[1, num_heads, tokens, head_dim]``
             (the queries, keys and values), ``"last"`` ``[1, tokens, heads,
             head_dim]`` (the head outputs). The width of a head is the
-            ``head_size`` of the module the key names, vLLM's attention layer.
+            ``head_size`` of the module the key names, vLLM's attention layer,
+            or, for a module that has none (the output projection), the
+            host's ``head_dim``.
         batch: Whether the tensor already carries the batch axis, ``[1,
             tokens, ...]``, as it does inside the transformers model vLLM's
             transformers backend runs: its rows are then ``tensor[0]``, served
@@ -95,7 +107,18 @@ class Flat(EProperty):
             return {}
         *walk, _ = self.path(obj).split(".")
         layer = obj.get(".".join(walk)) if walk else obj
-        return {"head_dim": layer._module.head_size, "heads_first": self.heads == "first"}
+        head_dim = getattr(layer._module, "head_size", None) or obj.head_dim
+        return {"head_dim": head_dim, "heads_first": self.heads == "first"}
+
+    def _pick(self, attribute: str, value: Any, select: int | str | None) -> Any:
+        if select is None and attribute == "output" and isinstance(value, tuple):
+            select = 0
+        return super()._pick(attribute, value, select)
+
+    def _put(self, attribute: str, current: Any, element: Any, select: int | str | None) -> Any:
+        if select is None and attribute == "output" and isinstance(current, tuple):
+            select = 0
+        return super()._put(attribute, current, element, select)
 
     def __call__(self, preprocess: Callable) -> "Flat":
         @functools.wraps(preprocess)

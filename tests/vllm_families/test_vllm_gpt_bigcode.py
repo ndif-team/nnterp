@@ -8,6 +8,7 @@ from nnterp.families.vllm import gpt_bigcode
 class TestVLLMGPTBigCode(VLLMFamilySuite):
     REPO = "bigcode/tiny_starcoder_py"
     FAMILY = gpt_bigcode
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "model.wte",
         "layers": "model.h",

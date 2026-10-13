@@ -25,6 +25,10 @@ def head_bias(repo):
 class TestVLLMPhimoe(VLLMFamilySuite):
     REPO = "microsoft/Phi-tiny-MoE-instruct"   # Phi-3.5-MoE distilled to 3.8B: the architecture's smallest real checkpoint
     FAMILY = phimoe
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
+    # The last block's stream differs from transformers' by 1.9e-3 of its scale (6.5e1); its norms' outputs, a
+    # twentieth of that scale, by 4.4e-3 (attention) and 7.6e-3 (MLP) of theirs, and the final norm's by 5.4e-3.
+    MODULE_TOLERANCE = {"attention_norm_output": 1e-2, "mlp_norm_output": 1e-2, "mlp_input": 1e-2, "final_norm_output": 1e-2}
     NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.block_sparse_moe"}
     MEMORY = 0.4
 

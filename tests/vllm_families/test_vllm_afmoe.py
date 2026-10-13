@@ -10,6 +10,7 @@ from nnterp.families.vllm import afmoe
 class TestVLLMAfmoe(VLLMFamilySuite):
     REPO = "hf-tiny-v2/tiny-random-AfmoeForCausalLM"
     FAMILY = afmoe
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS
 
     def test_dense_then_mixture(self, model):

@@ -8,4 +8,5 @@ from nnterp.families.vllm import olmoe
 class TestVLLMOlmoe(VLLMFamilySuite):
     REPO = "hf-internal-testing/tiny-random-OlmoeForCausalLM"
     FAMILY = olmoe
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS

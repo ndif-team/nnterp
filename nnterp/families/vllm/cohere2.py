@@ -16,7 +16,8 @@ from typing import TYPE_CHECKING
 import torch
 from vllm.model_executor.models.commandr import CohereAttention, CohereDecoderLayer, CohereMLP
 
-from ...components.vllm import Attention, Layer, Mlp, project
+from ...components import PARALLEL, Residual, unavailable
+from ...components.vllm import Attention, Flat, Layer, Mlp, project
 
 if TYPE_CHECKING:
     from ...standardized_vllm import StandardizedVLLM
@@ -33,6 +34,13 @@ class Layer(Layer):
 
     STREAM = 1
     returns_tuple = True
+
+    #: A parallel block: no stream between the sublayers, and the one norm feeds both (called with the residual, it returns the normed half first).
+    layer_mid = unavailable(PARALLEL)
+
+    @Flat("input_layernorm.output", description="The normed stream entering the MLP: the one norm feeds both sublayers, [1, tokens, hidden_size]")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

@@ -8,6 +8,7 @@ from nnterp.families.vllm import bloom
 class TestVLLMBloom(VLLMFamilySuite):
     REPO = "bigscience/bloom-560m"
     FAMILY = bloom
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "transformer.word_embeddings",
         "layers": "transformer.h",

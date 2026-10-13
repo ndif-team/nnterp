@@ -8,5 +8,6 @@ from nnterp.families.vllm import cohere2
 class TestVLLMCohere2(VLLMFamilySuite):
     REPO = "israel/AfriGuard-tiny-aya-global-full"
     FAMILY = cohere2
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"layer_mid"}
     NATIVE = {name: path for name, path in LLAMA_ROWS.items() if name != "lm_head"}   # vLLM unembeds with embed_tokens
     MEMORY = 0.4

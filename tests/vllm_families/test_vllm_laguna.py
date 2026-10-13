@@ -50,6 +50,7 @@ def _wide_heads_checkpoint(repo="hf-tiny-v2/tiny-random-LagunaForCausalLM", head
 class TestVLLMLaguna(VLLMFamilySuite):
     REPO = _wide_heads_checkpoint()
     FAMILY = laguna
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS
 
     def test_dense_then_mixture(self, model):

@@ -12,7 +12,7 @@ keys, and rotates them only on the blocks the checkpoint's layer types say.
 
 from vllm.model_executor.models.exaone4 import Exaone4Attention, Exaone4DecoderLayer, Exaone4GatedMLP
 
-from ...components import Residual
+from ...components import POST_NORM_ATTENTION, POST_NORM_MLP, Residual, unavailable
 from ...components.vllm import Attention, Flat, Layer, Mlp
 
 RENAME = {
@@ -27,6 +27,14 @@ class Layer(Layer):
 
     STREAM = 1
     returns_tuple = True
+
+    #: A post-norm block: the sublayers read the residual stream itself, so ``layer_mid`` is what the MLP is called with.
+    attention_norm_output = unavailable(POST_NORM_ATTENTION)
+    mlp_norm_output = unavailable(POST_NORM_MLP)
+
+    @Flat("mlp.input", description="The residual stream after the attention add, what the MLP is called with, [1, tokens, hidden_size]")
+    def layer_mid(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

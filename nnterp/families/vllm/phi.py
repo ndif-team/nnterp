@@ -13,7 +13,8 @@ import torch
 
 from vllm.model_executor.models.phi import PhiAttention, PhiLayer, PhiMLP
 
-from ...components.vllm import Attention, Layer, Mlp, project
+from ...components import PARALLEL, Residual, unavailable
+from ...components.vllm import Attention, Flat, Layer, Mlp, project
 
 if TYPE_CHECKING:
     from ...standardized_vllm import StandardizedVLLM
@@ -22,6 +23,10 @@ RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.final_layernorm": "norm",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "dense": "o_proj",
+    "act": "act_fn",
+    "fc2": "down_proj",
 }
 
 
@@ -29,6 +34,13 @@ class Layer(Layer):
     """The block: called with the positions and the residual stream, and returns the stream."""
 
     STREAM = 1
+
+    #: A parallel block: no stream between the sublayers, and the one norm feeds both.
+    layer_mid = unavailable(PARALLEL)
+
+    @Flat("input_layernorm.output", description="The normed stream entering the MLP: the one norm feeds both sublayers, [1, tokens, hidden_size]")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

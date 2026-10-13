@@ -8,6 +8,7 @@ from nnterp.families.vllm import gpt_neox
 class TestVLLMGPTNeoX(VLLMFamilySuite):
     REPO = "EleutherAI/pythia-70m"
     FAMILY = gpt_neox
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | {"layer_mid"}) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "gpt_neox.embed_in",
         "layers": "gpt_neox.layers",

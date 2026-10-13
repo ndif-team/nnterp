@@ -8,4 +8,5 @@ from nnterp.families.vllm import minimax_m2
 class TestVLLMMinimaxM2(VLLMFamilySuite):
     REPO = "yujiepan/minimax-m2-tiny-random"
     FAMILY = minimax_m2
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.block_sparse_moe"}

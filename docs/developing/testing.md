@@ -290,8 +290,10 @@ Collected only where `vllm.model_executor` imports and a GPU is visible
 `transformers_values` runs the checkpoint through `StandardizedTransformer` in
 float32 (without gradients, so nothing saved keeps the weights on the card),
 and the class-scoped `model` fixture then builds a `StandardizedVLLM` in
-float32. The tests hold the engine's boundary values, embeddings and logits
-against the reference within `TOLERANCE` of each value's largest magnitude;
+float32. The tests hold the engine's boundary values, the module boundaries
+and sublayer interiors between them (one value a trace), the final norm's
+output, embeddings and logits against the reference within `TOLERANCE` of
+each value's largest magnitude;
 check the identity on every block, that a read changes no logit, that an
 in-place edit, a statement reading twice and an assignment are the same
 write, that a value of other rows is refused and the engine survives; and

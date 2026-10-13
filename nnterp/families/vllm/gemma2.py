@@ -21,7 +21,7 @@ import torch
 from vllm.model_executor.models.gemma2 import Gemma2Attention, Gemma2DecoderLayer, Gemma2MLP
 
 from ...components import Residual
-from ...components.vllm import Attention, Flat, FusedLayer, Mlp, project
+from ...components.vllm import Attention, Flat, FusedLayer, Mlp, project, summed
 
 if TYPE_CHECKING:
     from ...standardized_vllm import StandardizedVLLM
@@ -35,6 +35,14 @@ RENAME = {
 
 class Layer(FusedLayer):
     """Gemma-2's decoder block: ``forward(positions, hidden_states, residual) -> (hidden_states, residual)``."""
+
+    #: A sandwich block: ``post_attention_layernorm`` follows the attention, so the stream between the sublayers and the MLP's
+    #: normed input are at ``pre_feedforward_layernorm``, the MLP's pre-norm, which takes the stream in two halves.
+    layer_mid = summed("pre_feedforward_layernorm.inputs", description="The residual stream after the attention add: hidden_states + residual, [1, tokens, hidden_size]")
+
+    @Flat("pre_feedforward_layernorm.output", description="The normed stream entering the MLP, [1, tokens, hidden_size]")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

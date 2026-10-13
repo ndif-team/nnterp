@@ -8,6 +8,7 @@ from nnterp.families.vllm import mpt
 class TestVLLMMPT(VLLMFamilySuite):
     REPO = "anas-awadalla/mpt-7b"
     FAMILY = mpt
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "transformer.wte",
         "layers": "transformer.blocks",

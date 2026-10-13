@@ -26,7 +26,7 @@ import torch
 
 from vllm.model_executor.models.opt import OPTAttention, OPTDecoderLayer
 
-from ...components import Pattern, Queries
+from ...components import Pattern, Queries, Residual
 from ...components.eproperty import DerivedEProperty
 from ...components.vllm import Attention, Flat, Layer, Mlp, on_decode_step
 from ..opt import intermediate_size  # noqa: F401  the width of fc1/fc2 is ffn_dim, as on transformers
@@ -36,6 +36,8 @@ RENAME = {
     "model.decoder.layers": "layers",
     "model.decoder.final_layer_norm": "norm",
     "self_attn_layer_norm": "input_layernorm",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "out_proj": "o_proj",
 }
 
 
@@ -52,7 +54,21 @@ def scores(self: "Attention") -> Pattern:
 
 
 class Layer(Layer):
-    """OPT's block: ``forward(hidden_states) -> hidden_states``, so the base holds."""
+    """OPT's block: ``forward(hidden_states) -> hidden_states``.
+
+    The pre-MLP norm is the block's own ``final_layer_norm`` and the feed-forward is ``fc1``/``fc2`` on the block
+    itself, so ``layer_mid`` and ``mlp_norm_output`` read the norm and there is no ``mlp`` module. vLLM's rows are
+    the flattened stream transformers holds there (``FlatResidual``); they are served ``[1, tokens, hidden_size]``,
+    as every value on vLLM is.
+    """
+
+    @Flat("final_layer_norm.input", description="The residual stream after the attention add, [1, tokens, hidden_size]")
+    def layer_mid(self, value) -> Residual:
+        return value
+
+    @Flat("final_layer_norm.output", description="The normed stream entering the feed-forward path, [1, tokens, hidden_size]")
+    def mlp_norm_output(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

@@ -42,6 +42,7 @@ def _released_style_checkpoint(repo="hf-tiny-v2/tiny-random-HunYuanMoEV1ForCausa
 class TestVLLMHunyuanV1Moe(VLLMFamilySuite):
     REPO = _released_style_checkpoint()
     FAMILY = hunyuan_v1_moe
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS
 
     def test_the_block_passes_its_keys_and_values_through(self, model, reference):

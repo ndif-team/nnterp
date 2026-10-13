@@ -2,14 +2,17 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import Any
 
 import torch
+from nnsight.intervention.envoy import Envoy
 
 from .. import layer as standard
-from ..eproperty import EProperty, unavailable
+from ..eproperty import EProperty
 from ..layer import Residual
-from .flat import Flat, unbatched
+from ..standard import absent
+from .flat import Flat, on_transformers_backend, unbatched
 
 
 def argument(inputs: tuple, index: int, name: str) -> Any:
@@ -37,13 +40,6 @@ class Layer(standard.Layer):
     with the whole stream first, where a `FusedLayer` returns its two halves).
     """
 
-    #: The norms' and the MLP's flat rows are not served yet.
-    attention_norm_output = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
-    layer_mid = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
-    mlp_norm_output = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
-    mlp_input = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
-
-
     #: The index of the residual stream in the block's call.
     STREAM = 0
 
@@ -65,6 +61,54 @@ class Layer(standard.Layer):
     def layer_output(self, value: torch.Tensor) -> Residual:
         return value
 
+    # -- the boundaries between them: the aliased norms and the MLP, as on transformers --
+
+    @Flat("input_layernorm.output", batch=on_transformers_backend, unavailable=partial(absent, name="input_layernorm"), description="The normed stream entering the attention, [1, tokens, hidden_size]")
+    def attention_norm_output(self, value: torch.Tensor) -> Residual:
+        return value
+
+    @Flat("post_attention_layernorm.input", batch=on_transformers_backend, unavailable=partial(absent, name="post_attention_layernorm"), description="The residual stream after the attention add, [1, tokens, hidden_size]")
+    def layer_mid(self, value: torch.Tensor) -> Residual:
+        return value
+
+    @Flat("post_attention_layernorm.output", batch=on_transformers_backend, unavailable=partial(absent, name="post_attention_layernorm"), description="The normed stream entering the MLP, [1, tokens, hidden_size]")
+    def mlp_norm_output(self, value: torch.Tensor) -> Residual:
+        return value
+
+    @Flat("mlp.input", batch=on_transformers_backend, unavailable=partial(absent, name="mlp"), description="What the MLP is called with, [1, tokens, hidden_size]")
+    def mlp_input(self, value: torch.Tensor) -> Residual:
+        return value
+
+
+def summed(key: str, hidden: tuple = (0, "x"), residual: tuple = (1, "residual"), description: str | None = None) -> EProperty:
+    """The stream at a call that takes it in two halves, ``hidden + residual``, ``[1, tokens, hidden_size]``.
+
+    A fused block hands its stream to the next norm as ``norm(hidden_states,
+    residual)``, and the norm adds the two before it normalizes (in place):
+    the stream is their sum, computed for the read. ``key`` is the call's
+    ``inputs``, ``hidden`` and ``residual`` where the halves sit in it, as
+    ``(index, name)``. An edit goes back as a change to the hidden half, and
+    a read that edits nothing hands the difference back as exactly zero; a
+    call without the residual (a block's first norm) is its stream alone.
+    """
+
+    module = key.rsplit(".", 1)[0]
+
+    def halves(inputs: tuple) -> tuple:
+        return argument(inputs, *hidden), argument(inputs, *residual)
+
+    def edited(envoy: Envoy, inputs: tuple, view: torch.Tensor) -> tuple:
+        return with_argument(inputs, *hidden, FusedLayer._edited(*halves(inputs), view, f"{envoy.path}.{value.name}"))
+
+    def read(envoy: Envoy, inputs: tuple) -> Residual:
+        return FusedLayer._stream(*halves(inputs))
+
+    value = EProperty(key, description=description, unavailable=partial(absent, name=module))(read)
+    value.name = None  # named by the class attribute it is assigned to
+    value.postprocess(lambda envoy, view: edited(envoy, envoy.get(module).inputs, view))
+    value.transform(lambda envoy, view, raw: edited(envoy, raw, view))
+    return value
+
 
 class FusedLayer(standard.Layer):
     """A vLLM block with the residual add fused into the next norm (Llama, Qwen, Gemma, most families).
@@ -81,12 +125,12 @@ class FusedLayer(standard.Layer):
     exactly zero.
     """
 
-    #: The norms' and the MLP's flat rows are not served yet.
-    attention_norm_output = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
-    layer_mid = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
-    mlp_norm_output = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
-    mlp_input = unavailable("not mapped on vLLM yet: the block holds flat [tokens, hidden] rows here")
-
+    #: The boundaries between the block values: the norms' outputs (the normed half of the pair a norm returns),
+    #: the MLP's input, and the stream the MLP's pre-norm adds up.
+    attention_norm_output = Layer.attention_norm_output
+    mlp_norm_output = Layer.mlp_norm_output
+    mlp_input = Layer.mlp_input
+    layer_mid = summed("post_attention_layernorm.inputs", description="The residual stream after the attention add: hidden_states + residual, [1, tokens, hidden_size]")
 
     #: Where the two halves sit in the block's call: ``(index, name)``.
     HIDDEN = (1, "hidden_states")

@@ -18,6 +18,10 @@ class TestVLLMStableLm(VLLMFamilySuite):
     # block's layer_output by 6.6e-3 of their scales (logits 2.3e-3).
     TOLERANCE = 1e-2
     KERNEL_TOLERANCE = 1e-2
+    # Block 23's attention cancels a 2.3e3 activation of the stream: its kernel difference (7e-4 of the premix's
+    # scale) is 1.3 in a layer_mid whose largest value is 2.6e2, which the MLP's pre-norm scales up to 2.1e-2 of
+    # mlp_norm_output's scale. attention_norm_output agrees to 1.8e-4 there.
+    MODULE_TOLERANCE = {"mlp_norm_output": 3e-2, "mlp_input": 3e-2}
 
     def test_the_second_element_is_not_part_of_the_stream(self, model, reference):
         """The block's first element is the whole stream, which the next block takes alone; the second is stale."""

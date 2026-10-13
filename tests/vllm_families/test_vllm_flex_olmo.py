@@ -36,6 +36,7 @@ def _silu_checkpoint(repo="hf-tiny-v2/tiny-random-FlexOlmoForCausalLM"):
 class TestVLLMFlexOlmo(VLLMFamilySuite):
     REPO = _silu_checkpoint()
     FAMILY = flex_olmo
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"attention_norm_output", "mlp.mlp_neurons", "mlp_norm_output"}
     NATIVE = LLAMA_ROWS
 
     def test_skip_layers_hands_on_no_residual(self, model, reference):

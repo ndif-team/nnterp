@@ -8,4 +8,5 @@ from nnterp.families.vllm import ernie4_5_moe
 class TestVLLMErnie45Moe(VLLMFamilySuite):
     REPO = "yujiepan/ernie-4.5-moe-tiny-random"
     FAMILY = ernie4_5_moe
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS

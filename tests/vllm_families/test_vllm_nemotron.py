@@ -8,5 +8,6 @@ from nnterp.families.vllm import nemotron
 class TestVLLMNemotron(VLLMFamilySuite):
     REPO = "nvidia/Nemotron-Mini-4B-Instruct"
     FAMILY = nemotron
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
     NATIVE = LLAMA_ROWS
     MEMORY = 0.4

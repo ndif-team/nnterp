@@ -10,6 +10,7 @@ from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
 from nnterp import StandardizedTransformer
 from nnterp.components import Moe
+from nnterp import families
 from nnterp.families import deepseek_v3, kimi_k2
 
 
@@ -47,9 +48,11 @@ class TestKimiK2(FamilySuite):
     NATIVE = {key: f"model.language_model.{native.removeprefix('model.')}" if native.startswith("model.") else native for key, native in LLAMA_ROWS.items()}
     KV_HEADS_EXPANDED = True  # latent attention projects keys and values for every head
 
-    def test_the_text_model_type_is_kimi_k2(self, model):
-        assert model.config.model_type == "kimi_k25" and model.config.text_config.model_type == "kimi_k2"
+    def test_the_wrapper_names_the_family(self, model):
+        """The text config says ``kimi_k2`` before transformers 5.20 and ``deepseek_v3`` from it; the wrapper type decides."""
+        assert model.config.model_type == "kimi_k25" and model.config.text_config.model_type in ("kimi_k2", "deepseek_v3")
         assert type(model.config.text_config).__name__ == "DeepseekV3Config"
+        assert families.WRAPPERS["kimi_k25"] == "kimi_k2"
 
     def test_the_family_is_deepseek_v3s(self, model):
         assert kimi_k2.ENVOYS is deepseek_v3.ENVOYS and kimi_k2.RENAME is deepseek_v3.RENAME

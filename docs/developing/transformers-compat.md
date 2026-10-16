@@ -11,16 +11,19 @@ sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py,
 ## What this is for
 
 This is the one page in `docs/` that talks about versions. nnterp is
-developed on **transformers 5.17.0** and **nnsight 0.8.0** (the `dev`
-branch, at the dotted-rename-alias merge, nnsight #768, `d565f5f8`), with torch 2.13 and
-jaxtyping 0.3.11, and runs on **transformers 5.19.0** as well: the suite passes on
-both (a test that needs a 5.18 class skips on 5.17), and every snippet in `docs/` that runs on CPU with a tiny checkpoint returns
-identical values on both wherever they do not depend on unseeded randomness; `pyproject.toml` requires `nnsight>=0.8`, `transformers`
-and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
+developed on **transformers 5.17.0** and **nnsight 0.8.0** (the release; `dev` at
+`d565f5f8` is the same code), with torch 2.13 and
+jaxtyping 0.3.11, and runs on **transformers 5.19.0** and **5.20.1** as well: the suite passes on
+all three (a test that needs a 5.18 class skips on 5.17; on 5.20 the SmolVLM tower tests skip, because 5.20's
+`inputs_merger` reshapes the image features by `vision_config.patch_size` rather than by the features each image
+yields, which fails when the two differ, and Kimi K2.5's `text_config.model_type` became `deepseek_v3`, so
+`nnterp.families.WRAPPERS` names the `kimi_k2` family for the `kimi_k25` wrapper), and every snippet in `docs/` that runs on CPU with a tiny checkpoint returns
+identical values on both wherever they do not depend on unseeded randomness; `pyproject.toml` requires `nnsight>=0.8`,
+`transformers>=5.20` and `jaxtyping` (the floor is the current line, since every release renames something a
+family reads and 5.20 is the one the suite was last run on; older ones are not refused by the code, only by the pin). nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below) and whose `rename` takes a dotted alias (nnsight #768: `{"attn.c_proj":
-"attn.o_proj"}` binds on the attention, which GPT-2's two `c_proj` need); no nnsight
-release has them yet, so the pin cannot say it, and a
-`dev` at or after `b2bc0fd7` is what nnterp runs on. The names a family binds to (`RENAME`, `ENVOYS`) are
+"attn.o_proj"}` binds on the attention, which GPT-2's two `c_proj` need); nnsight 0.8.0
+has both, which is what `nnsight>=0.8` says. The names a family binds to (`RENAME`, `ENVOYS`) are
 transformers' module names and classes, which move rarely. The **operation
 names** inside a forward that every `source.` path pins are what a
 release renames, and this page lists them, says how the suite guards them,

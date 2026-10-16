@@ -67,6 +67,8 @@ RENAME = {
     "attn": "self_attn",
     "norm1": "input_layernorm",
     "norm2": "post_attention_layernorm",
+    # the tower attention's output projection, under the vision block's `attn` (the patch embedding has a `proj` too)
+    "attn.proj": "attn.o_proj",
 }
 
 

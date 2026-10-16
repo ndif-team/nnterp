@@ -46,6 +46,11 @@ class UnsupportedFamily(ValueError):
     """No toolkit standardizes the checkpoint: it has no family, and the best-effort `default` cannot standardize it."""
 
 
+#: Multimodal wrapper ``model_type`` -> the family of its text model, for a wrapper whose ``text_config`` does not
+#: name it: Kimi K2.5's text config says ``deepseek_v3`` from transformers 5.20 (``kimi_k2`` before).
+WRAPPERS = {"kimi_k25": "kimi_k2"}
+
+
 def _key(model_type: str, engine: str | None) -> str:
     """The registry key, which is also the module's name under this package: ``llama``, ``vllm.llama``."""
     return f"{engine}.{model_type}" if engine else model_type

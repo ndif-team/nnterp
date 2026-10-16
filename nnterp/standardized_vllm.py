@@ -80,7 +80,7 @@ class StandardizedVLLM(Standardized, VLLM):
 
         if family is None:
             config = self._read_config(repo_id, kwargs)
-            family = families.lookup(getattr(config, "text_config", config).model_type, engine="vllm")
+            family = families.lookup(families.WRAPPERS.get(config.model_type) or getattr(config, "text_config", config).model_type, engine="vllm")
         self.family = family
         super().__init__(
             repo_id,

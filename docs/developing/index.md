@@ -31,6 +31,7 @@ read.
 - [vision-design](vision-design.md) — the vision side of image-text-to-text checkpoints: the tower names, the image values on the tower, where `image_features` is read, where the code lives, what does not fit, what is left.
 - [testing](testing.md) — `HF_HUB_OFFLINE=1 pytest`, what `FamilySuite` asserts method by method, the root tests.
 - [transformers-compat](transformers-compat.md) — the versions nnterp is developed against, which operation names a release can move, the upgrade procedure.
+- [releasing](releasing.md) — a GitHub release publishes to PyPI through `publish.yml`; the tag is the version, Trusted Publishing signs the upload.
 - [gotchas](gotchas.md) — contributor traps, each as constraint and reason.
 - [contributing](contributing.md) — house style, workflow, open items.
 

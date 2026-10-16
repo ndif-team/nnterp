@@ -37,14 +37,13 @@ match the workflow, so the file is not renamed and the job keeps `environment: p
 environment exists in the repository's settings (Settings, Environments) and can require a
 reviewer, which makes every publish a click by a maintainer.
 
-## Before the first 2.0 release
+## The nnsight it needs
 
-`pip install nnterp` resolves `nnsight>=0.8`, which no nnsight release satisfies yet: PyPI has
-`0.8.0rc1`, a pre-release that `>=0.8` does not accept. A published nnterp 2.0 is installable
-only once nnsight 0.8.0 is on PyPI, and that release has to carry the `dev` commits nnterp
-reads (`Envoy.parent` and `root`, the dotted `rename` alias; [transformers-compat](transformers-compat.md)).
-Until then, tag pre-releases (`v2.0.0rc1`) so a `pip install nnterp` without `--pre` keeps
-giving 1.3.0, and say in the release notes which nnsight the pre-release needs.
+`pip install nnterp` resolves `nnsight>=0.8`. nnsight 0.8.0 is on PyPI (2026-10-16) and carries
+what nnterp reads (`Envoy.parent` and `root`, the dotted `rename` alias;
+[transformers-compat](transformers-compat.md)), so a published nnterp 2.0 installs as it is. A
+feature nnterp takes from nnsight's `dev` before the next nnsight release raises the lower bound
+in `pyproject.toml`, in the same change.
 
 ## Checklist
 

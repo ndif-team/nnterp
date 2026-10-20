@@ -17,7 +17,8 @@ jaxtyping 0.3.11, and runs on **transformers 5.19.0** and **5.20.1** as well: th
 all three (a test that needs a 5.18 class skips on 5.17; on 5.20 the SmolVLM tower tests skip, because 5.20's
 `inputs_merger` reshapes the image features by `vision_config.patch_size` rather than by the features each image
 yields, which fails when the two differ, and Kimi K2.5's `text_config.model_type` became `deepseek_v3`, so
-`nnterp.families.WRAPPERS` names the `kimi_k2` family for the `kimi_k25` wrapper), and every snippet in `docs/` that runs on CPU with a tiny checkpoint returns
+the wrapper resolves through a family module of its own, `kimi_k25.py`, which re-exports `kimi_k2`'s; `nnterp.families.resolve`
+tries a config's own type before its text model's), and every snippet in `docs/` that runs on CPU with a tiny checkpoint returns
 identical values on both wherever they do not depend on unseeded randomness; `pyproject.toml` requires `nnsight>=0.8`,
 `transformers>=5.20` and `jaxtyping` (the floor is the current line, since every release renames something a
 family reads and 5.20 is the one the suite was last run on; older ones are not refused by the code, only by the pin). nnterp needs an nnsight whose `Envoy` has `parent` and `root`

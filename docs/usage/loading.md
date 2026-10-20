@@ -61,10 +61,13 @@ family: `nnterp.families.<model_type>` is imported on first use (`gpt2.py` for `
 nnsight's `rename=` and `envoys=`. A multimodal config nests the language model's config
 as `text_config`, and that `model_type` is the one looked up under either task: the family
 is the text model's (`gemma3_text` for a Gemma 3 wrapper, `llama` for Llava 1.5), and it
-carries the wrapper's spellings and the vision tower's names beside the text model's.
+carries the wrapper's spellings and the vision tower's names beside the text model's. A
+wrapper with a family module of its own resolves to that one whatever its text config says
+(`kimi_k25.py`, Kimi K2's family under the wrapper's name, since transformers 5.20 labels its
+text config `deepseek_v3`); `nnterp.families.resolve(config)` is the rule.
 
 `model.family` is the module the checkpoint resolved to; `nnterp.families.known()` lists
-the shipped ones (98) without loading anything.
+the shipped ones (99, counting `kimi_k25`) without loading anything.
 
 ## An architecture with no family
 

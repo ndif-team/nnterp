@@ -11,7 +11,7 @@ from suite import FamilySuite, LLAMA_ROWS, PROMPT
 from nnterp import StandardizedTransformer
 from nnterp.components import Moe
 from nnterp import families
-from nnterp.families import deepseek_v3, kimi_k2
+from nnterp.families import deepseek_v3, kimi_k2, kimi_k25
 
 
 def _checkpoint(repo="hf-tiny-v2/tiny-random-Kimi_K25ForConditionalGeneration"):
@@ -44,15 +44,16 @@ def _checkpoint(repo="hf-tiny-v2/tiny-random-Kimi_K25ForConditionalGeneration"):
 
 class TestKimiK2(FamilySuite):
     REPO = _checkpoint()
-    FAMILY = kimi_k2
+    FAMILY = kimi_k25  # the wrapper checkpoint resolves to its own module, kimi_k2 re-exported
     NATIVE = {key: f"model.language_model.{native.removeprefix('model.')}" if native.startswith("model.") else native for key, native in LLAMA_ROWS.items()}
     KV_HEADS_EXPANDED = True  # latent attention projects keys and values for every head
 
     def test_the_wrapper_names_the_family(self, model):
-        """The text config says ``kimi_k2`` before transformers 5.20 and ``deepseek_v3`` from it; the wrapper type decides."""
+        """The text config says ``kimi_k2`` before transformers 5.20 and ``deepseek_v3`` from it; the wrapper's own family decides."""
         assert model.config.model_type == "kimi_k25" and model.config.text_config.model_type in ("kimi_k2", "deepseek_v3")
         assert type(model.config.text_config).__name__ == "DeepseekV3Config"
-        assert families.WRAPPERS["kimi_k25"] == "kimi_k2"
+        assert families.covers("kimi_k25") and families.resolve(model.config) is kimi_k25
+        assert kimi_k25.ENVOYS is kimi_k2.ENVOYS and kimi_k25.RENAME is kimi_k2.RENAME
 
     def test_the_family_is_deepseek_v3s(self, model):
         assert kimi_k2.ENVOYS is deepseek_v3.ENVOYS and kimi_k2.RENAME is deepseek_v3.RENAME

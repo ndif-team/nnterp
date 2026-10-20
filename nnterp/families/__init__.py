@@ -33,9 +33,11 @@ There is no default on another engine: a type it has no family for raises.
 from __future__ import annotations
 
 import importlib
+import importlib.util
 import pkgutil
 import warnings
 from types import ModuleType
+from typing import Any
 
 #: ``model_type`` (``"<engine>.<model_type>"`` for another engine's) -> a family passed to `register`,
 #: taking precedence over the module of that name.
@@ -46,14 +48,30 @@ class UnsupportedFamily(ValueError):
     """No toolkit standardizes the checkpoint: it has no family, and the best-effort `default` cannot standardize it."""
 
 
-#: Multimodal wrapper ``model_type`` -> the family of its text model, for a wrapper whose ``text_config`` does not
-#: name it: Kimi K2.5's text config says ``deepseek_v3`` from transformers 5.20 (``kimi_k2`` before).
-WRAPPERS = {"kimi_k25": "kimi_k2"}
-
-
 def _key(model_type: str, engine: str | None) -> str:
     """The registry key, which is also the module's name under this package: ``llama``, ``vllm.llama``."""
     return f"{engine}.{model_type}" if engine else model_type
+
+
+def covers(model_type: str, engine: str | None = None) -> bool:
+    """Whether a family covers ``model_type`` on ``engine``: one registered for it, or a module of that name here."""
+    key = _key(model_type, engine)
+    return key in REGISTRY or importlib.util.find_spec(f"{__name__}.{key}") is not None
+
+
+def resolve(config: Any, engine: str | None = None) -> ModuleType:
+    """The family for a config: its own ``model_type`` where a family covers it, else its text model's.
+
+    A multimodal wrapper usually resolves through its ``text_config`` (Llava to
+    ``llama``, Gemma 3 to ``gemma3_text``). A wrapper with a family of its own,
+    named after the wrapper, resolves to that family whatever its text config
+    says: Kimi K2.5's text config says ``deepseek_v3`` from transformers 5.20,
+    and `kimi_k25` covers it.
+    """
+    text = getattr(config, "text_config", config)
+    if text is not config and covers(config.model_type, engine):
+        return lookup(config.model_type, engine)
+    return lookup(text.model_type, engine)
 
 
 def known(engine: str | None = None) -> list[str]:

@@ -5,8 +5,8 @@ DeepSeek-V3's ``DeepseekV3ForCausalLM`` with Moonshot's tokenizer; their configs
 ``kimi_k2``. transformers builds them with its native DeepSeek-V3 classes: the
 multimodal ``kimi_k25`` checkpoints through ``Kimi_K25Config``, whose ``text_config``
 is a ``DeepseekV3Config`` (its ``model_type`` is the checkpoint's ``kimi_k2`` before
-transformers 5.20 and ``deepseek_v3`` from it, so `nnterp.families.WRAPPERS` names this
-family for the ``kimi_k25`` wrapper), and the
+transformers 5.20 and ``deepseek_v3`` from it, so the wrapper resolves through its own
+family module, ``kimi_k25.py``, which is this one), and the
 text-only K2 checkpoints from a ``DeepseekV3ForCausalLM`` loaded directly, since
 ``AutoConfig`` maps no ``kimi_k2``. The tree, the envoys and the sizes are
 DeepSeek-V3's (``deepseek_v3.py``); this module names them under ``kimi_k2``,

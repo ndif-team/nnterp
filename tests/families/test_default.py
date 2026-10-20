@@ -33,9 +33,13 @@ def load_default(repo, **kwargs):
         del families.REGISTRY[model_type]
 
 
+#: A family whose suite lives under another family's test module: the Kimi K2.5 wrapper's, in Kimi K2's.
+SUITE_MODULE = {"kimi_k25": "test_kimi_k2"}
+
+
 def dedicated_suite(name):
     """The shipped family's `FamilySuite` class: its checkpoint and its quirks."""
-    module = importlib.import_module(f"test_{name}")
+    module = importlib.import_module(SUITE_MODULE.get(name, f"test_{name}"))
     family = getattr(families, name)
     return next(
         cls for cls in vars(module).values()
@@ -213,6 +217,8 @@ def comparable():
     for name in families.known():
         if name == "gpt_neox_japanese":
             continue  # its container is named after the model_type; see test_unknown_container_is_refused_with_a_rename
+        if name == "kimi_k2":
+            continue  # its pinned checkpoint is the Kimi K2.5 wrapper, whose own family, kimi_k25, is compared instead
         mixer = recurrent_mixer(getattr(families, name))
         if mixer is None or not issubclass(mixer, (SelectiveScan, StateSpace)):
             names.append(name)

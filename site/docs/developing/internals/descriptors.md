@@ -51,11 +51,11 @@ with model.trace("The Eiffel Tower is in"):
 print(torch.equal(normed, ln2), torch.allclose(raw * attn._module.scaling + mask, scores), tuple(ent.shape))  # True True (1, 12, 7)
 ```
 
-The reads are in forward order: the interface's arguments, then an operation inside it, then its softmax, then the pattern, then the block's second norm. Passing the subclass through `envoys=` keyed on `GPT2Attention` replaces the family's entry, and every block's attention carries the five new names. [Custom values](../custom-values.md) is the user-facing version of this.
+The reads are in forward order: the interface's arguments, then an operation inside it, then its softmax, then the pattern, then the block's second norm. Passing the subclass through `envoys=` keyed on `GPT2Attention` replaces the family's entry, and every block's attention carries the five new names. [Custom values](../custom-values.md) is the user-facing version of this page.
 
 ## The key is a path
 
-A key is dotted segments ending in `output`, `input` or `inputs`, walked from the host, or from the model's root after a leading `/`. A function of the host is also a key: it runs at read time, inside the trace, and returns such a path, which is how a forward that branches names the call that fires (`RecurrentMixer.KERNEL`) and how Falcon picks an operation by `config.alibi`. `None` means the attribute's own name, which is what a bare `unavailable("...")` marker gets.
+A key is dotted segments ending in `output`, `input` or `inputs`, walked from the host, or from the model's root after a leading `/`. A function of the host is also a key: It runs at read time, inside the trace, and returns such a path, which is how a forward that branches names the call that fires (`RecurrentMixer.KERNEL`) and how Falcon picks an operation by `config.alibi`. `None` means the attribute's own name, which is what a bare `unavailable("...")` marker gets.
 
 | segment | meaning | example |
 |---|---|---|
@@ -111,7 +111,7 @@ A function key is evaluated once per access and its last segment passed down, ne
 
 A path that starts with `../` is not walked through envoys. `_resolve` drops as many trailing segments from the host's own path as there are `../`, appends the rest of the key, and returns the string, so the parent and the sibling are named natively: `"../ln_2.output"` on `model.transformer.h.0.attn` is `model.transformer.h.0.ln_2.output`, which is why the example above spells `ln_2` and not `post_attention_layernorm`. Nothing is drilled. A `source` segment above the host names an operation of the parent's own forward, served by its string because the family instrumented that forward at build. A second `source` on such a path would need the parent drilled at read time, and `_resolve` refuses it with a `ValueError`. A value that reads something far from its host by standard name anchors its key at `/` instead.
 
-Instrumenting at build is `Standard.sourced`, in `nnterp/components/standard.py`. A value inside a forward is served only when that forward was instrumented before the call began. Drilling at read time is enough when the read comes before the module runs, and too late when the worker is already parked inside it, as it is when a block's `mlp_output` is an operation of the block's forward read after the block's `attention_output` (Llama 4). The family sets `sourced = True` on the envoy that owns the forward, and `Standard.__init__` and `_update` then touch `self.source` at build and again when real weights replace meta ones, which reinstalls the plain forward. Nothing infers this from a path. `inside_forward()` says where a value is, not when its forward has to be instrumented.
+Instrumenting at build is `Standard.sourced`, in `nnterp/components/standard.py`. A value inside a forward is served only when that forward was instrumented before the call began. Drilling at read time is enough when the read comes before the module runs, and too late when the worker is already parked inside it, as it is when a block's `mlp_output` is an operation of the block's forward read after the block's `attention_output` (Llama 4). The family sets `sourced = True` on the envoy that owns the forward, and `Standard.__init__` and `_update` then touch `self.source` at build and again when real weights replace meta ones, which reinstalls the plain forward. Nothing infers `sourced` from a path. `inside_forward()` says where a value is, not when its forward has to be instrumented.
 
 ## `select` and writes
 

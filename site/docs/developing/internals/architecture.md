@@ -44,7 +44,7 @@ print(sorted(m for m in sys.modules if m.startswith("nnterp.families.")))  # ['n
 
 ## The two maps nnsight receives
 
-The constructor merges `rename={**family.RENAME, **rename}` and `envoys={**tp_envoys, **family.ENVOYS, **envoys}`, later keys winning, so a caller's entry replaces the family's on the same key. `_base_envoys` starts from nnsight's tensor-parallel envoys on a sharded load because `TransformersModel` only defaults to them: a map passed by nnterp would otherwise drop them. Both maps are nnsight features ([Module Access](https://nnsight.net/features/6_modules/)). nnterp relies on two facts about how nnsight applies them.
+The constructor merges `rename={**family.RENAME, **rename}` and `envoys={**tp_envoys, **family.ENVOYS, **envoys}`, later keys winning, so a caller's entry replaces the family's on the same key. `_base_envoys` starts from nnsight's tensor-parallel envoys on a sharded load because `TransformersModel` only defaults to them: A map passed by nnterp would otherwise drop them. Both maps are nnsight features ([Module Access](https://nnsight.net/features/6_modules/)).
 
 Every `rename` key is resolved from every envoy after that envoy's children exist, and an alias that resolves is bound as another attribute of the same envoy object and recorded in `_aliases`. A key that resolves nowhere is skipped. A multi-component key such as `"transformer.h"` resolves only from the root, which is what puts `layers` on `model` rather than on `model.transformer`, while a single name such as `"attn"` resolves in every block that has one. A dotted alias such as `"attn.c_proj": "attn.o_proj"` binds on the attention.
 
@@ -58,7 +58,7 @@ The envoy class is chosen per module at construction: nnsight tries the module t
 | `nnterp/components/` | what each value means and how it is read and written (`EProperty` paths, `select`, transforms); the availability predicates; the shared operation names such as `INTERFACE` | any one family's module names or classes |
 | `nnterp/standardized.py` | the root values and methods, the sizes, `support()`, the load path, the remote key | an operation name inside a forward; a family's config keys |
 
-Gemma-2's `attention_output` is the post-attention norm's output: the family keys it `"../post_attention_layernorm.output"` on its `Attention`, and the component only knows how to walk such a path. BLOOM's contribution is the first argument of its `dropout_add` call, so the family names `"source.dropout_add_0.input"`. A family on transformers' shared path, such as `nnterp/families/llama.py`, overrides nothing and is three container keys, three empty subclasses and the type keys.
+Gemma-2's `attention_output` is the post-attention norm's output: The family keys it `"../post_attention_layernorm.output"` on its `Attention`, and the component only knows how to walk such a path. BLOOM's contribution is the first argument of its `dropout_add` call, so the family names `"source.dropout_add_0.input"`. A family on transformers' shared path, such as `nnterp/families/llama.py`, overrides nothing and is three container keys, three empty subclasses and the type keys.
 
 ## The root
 

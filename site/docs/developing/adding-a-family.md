@@ -40,7 +40,7 @@ nnsight resolves each `RENAME` key relative to every envoy in the tree ([module 
 
 The three classes are defined even where nothing changes, because the suite asserts that the block envoys are exactly the family's `Layer`, `Attention` and `Mlp`, and each docstring records why the base holds. A block that returns `(hidden_states, ...)` rather than the tensor, as GPT-J's, BLOOM's, MPT's and Falcon's do, sets `returns_tuple = True` on its `Layer`. `layer_output` unwraps the tuple either way, and the flag is what `skip_layers` needs to hand back the right shape.
 
-## Checking it before it ships
+## Checking the module before it ships
 
 Until the file is in the package, pass the module to one load as `family=` ([Registering](registering.md)). SmolLM2 is a Llama checkpoint (`model_type` `llama`). Loaded eager, nothing on it is unavailable, and the contributions add up to the block's output:
 

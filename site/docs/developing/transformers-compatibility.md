@@ -1,6 +1,6 @@
 # transformers compatibility
 
-`pyproject.toml` requires `transformers>=5.17`, `nnsight>=0.8` and `jaxtyping`, and the pages on this site ran on transformers 5.17.0 and nnsight 0.8.0. The module names and classes a family binds to (`RENAME`, `ENVOYS`) rarely move between releases. The operation names inside a forward that every `source.` path pins are what a release renames, so this page lists them, says how the suite catches a move, and gives the procedure.
+`pyproject.toml` requires `transformers>=5.17`, `nnsight>=0.8` and `jaxtyping`, and the pages on this site ran on transformers 5.17.0 and nnsight 0.8.0. The module names and classes a family binds to (`RENAME`, `ENVOYS`) rarely move between releases. The operation names inside a forward that every `source.` path pins are what a release renames.
 
 ```python
 import nnterp
@@ -57,10 +57,10 @@ A `RENAME` key that resolves nowhere is skipped silently, so a renamed module is
 1. Upgrade in a scratch environment and run `HF_HUB_OFFLINE=1 python -m pytest -q`. Each `SourceNotAvailable` names the value, the operation it pinned and the operations that exist now.
 2. For each failing family, `print(model.layers[0].self_attn.source)` on the old and new versions, and inside a trace `print(attn.source.attention_interface_1.source)` for the interface, and diff the labeled listings. Decide whether the value moved (a renamed call, a binding added before it) or the family moved onto or off the shared interface.
 3. Update the operation string in the family module, or delete the override when the family now uses the shared interface. Keep the standard name's meaning fixed: the pattern is the tensor the values are mixed with, the scores are the softmax's input, the contribution is what is added to the stream.
-4. Re-run the family's file, then the whole suite. Families get no version conditionals: one module targets the version nnterp is developed on, and this procedure moves it.
-5. A checkpoint with a config that no longer parses is a test-data problem, not a family problem: patch the config the way `tests/families/test_olmo3.py` does, into a copy of the snapshot.
+4. Re-run the family's file, then the whole suite. Families get no version conditionals: One module targets the version nnterp is developed on, and this procedure moves it.
+5. A checkpoint with a config that no longer parses is a test-data problem, not a family problem: Patch the config the way `tests/families/test_olmo3.py` does, into a copy of the snapshot.
 
-Releases also move behavior no operation name pins. From 5.18 `generate` calls the model with no `attention_mask` when the batch has no padding, so `attention_mask` installs the all-ones mask it stands for into the call on read, and `generate` encodes a wrapper's images before the first forward, so under `generate` the tower's values come before `vision.image_token_mask`.
+Releases also move behavior no operation name pins. From 5.18 `generate` calls the model with no `attention_mask` when the batch has no padding, so `attention_mask` installs the all-ones mask it stands for into the call on read. `generate` also encodes a wrapper's images before the first forward, so under `generate` the tower's values come before `vision.image_token_mask`.
 
 ## What nnterp needs from nnsight
 

@@ -48,7 +48,7 @@ print(soft.shape, ent.shape)
 
 The softmax is an operation inside transformers' shared eager attention, and the path has a `source` segment for the call and another for the operation inside it ([Finding source ops](finding-source-ops.md)). `unavailable=interface_reason` is the predicate the base's interior values carry: Under the checkpoint's default `sdpa`, both values then report "read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'" in `support()` instead of failing at read time with `SourceNotAvailable`.
 
-A `DerivedEProperty` runs its function on the envoy at read time, inside the trace, and forward order applies to what it reads: `attention_entropy` reads the pattern, and a trace that reads it and then `attention_queries` is out of order. It is read-only, and assigning raises `AttributeError: attention_entropy is derived and read-only`.
+A `DerivedEProperty` runs its function on the envoy at read time, inside the trace, and forward order applies to what it reads: `attention_entropy` reads the pattern, and a trace that reads it and then `attention_queries` is out of order. A derived value is read-only, and assigning raises `AttributeError: attention_entropy is derived and read-only`.
 
 ## On the block or the MLP
 
@@ -90,7 +90,7 @@ print([name for name in model.support() if name in ("mid_stream", "mlp.last_posi
 
 ## The layout annotation
 
-The return annotation is the value's declared layout, read by `.layout` and `.dims` and shown in the repr. The standard layouts, such as `Residual`, `Pattern` and `Keys`, are exported by `nnterp.components`, and a shape none of them has takes an inline `Float[Tensor, ...]` composed from the same axis constants, such as `BATCH`, `HEADS`, `QUERY` and `HIDDEN`. `attention_softmax` above is annotated `-> Pattern`, and `Attention.attention_softmax.layout is Pattern`, the object the base's `attention_probabilities` carries. `Attention.attention_entropy.dims` is `('batch', 'num_heads', 'query')`. The family suite checks every value's tensor against its annotation, which a value that will ship therefore carries. Without an annotation `layout` is `None`, and the repr lists `(name): description`.
+The return annotation is the value's declared layout, read by `.layout` and `.dims` and shown in the repr. The standard layouts, such as `Residual`, `Pattern` and `Keys`, are exported by `nnterp.components`, and a shape none of them has takes an inline `Float[Tensor, ...]` composed from the same axis constants, such as `BATCH`, `HEADS`, `QUERY` and `HIDDEN`. `attention_softmax` above is annotated `-> Pattern`, and `Attention.attention_softmax.layout is Pattern`, the object the base's `attention_probabilities` carries. `Attention.attention_entropy.dims` is `('batch', 'num_heads', 'query')`. The family suite checks every value's tensor against its annotation, so a value that will ship carries one. Without an annotation `layout` is `None`, and the repr lists `(name): description`.
 
 ## Key on the module type
 

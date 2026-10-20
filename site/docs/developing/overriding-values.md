@@ -147,7 +147,7 @@ print(model.support()["self_attn.attention_scores"][0])
 # this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path
 ```
 
-A predicate must not raise `AttributeError`. The descriptor re-raises one as a `RuntimeError` naming the check, because a descriptor's `AttributeError` would otherwise surface as "no attribute" and hide the predicate's own bug.
+A predicate must not raise `AttributeError`. The descriptor re-raises one as a `RuntimeError` naming the check, because a descriptor's `AttributeError` would otherwise come back as "no attribute" and hide the predicate's own bug.
 
 ## A value that has to be a copy
 
@@ -169,4 +169,4 @@ class Mlp(Mlp):
         return value.clone()
 ```
 
-`postprocess` is the write side of a value keyed on `"output"`: The base's `layer_output` and `mlp_output` read `first_tensor(value)` and write `rewrap(self, value)`, so a module that returns a tuple reads as a tensor and an assignment puts the tensor back into its tuple. A value redefined on a path that serves a bare tensor, such as a sibling norm's output or an operation's, needs neither. nnsight's [eproperty](https://nnsight.net/documentation/intervention/eproperty/) reference has `postprocess` and `transform` in full. A root size the config spells its own way is not a descriptor override but a module-level function named after the size, as [Adding a family](adding-a-family.md) shows. A value that is new rather than relocated is [Custom values](custom-values.md).
+`postprocess` is the write side of a value keyed on `"output"`: The base's `layer_output` and `mlp_output` read `first_tensor(value)` and write `rewrap(self, value)`, so a module that returns a tuple reads as a tensor and an assignment puts the tensor back into its tuple. A value redefined on a path that serves a bare tensor, such as a sibling norm's output or an operation's, needs neither. nnsight's [eproperty](https://nnsight.net/documentation/intervention/eproperty/) reference has `postprocess` and `transform` in full. A root size the config spells its own way is not a descriptor override but a module-level function named after the size ([Adding a family](adding-a-family.md)), and a value that is new rather than relocated is [Custom values](custom-values.md).

@@ -57,7 +57,7 @@ A value is read, edited in place or assigned the way an nnsight `.output` is.
 
 ## Availability
 
-Not every checkpoint has every value. `model.support()` says, from the config alone, what this one has and, for anything missing, why. Reading a missing value inside a trace raises `nnterp.Unavailable` with the same reason, before the model runs:
+Not every checkpoint has every value. `model.support()` says, from the config and the module tree, what this one has and, for anything missing, why. Reading a missing value inside a trace raises `nnterp.Unavailable` with the same reason, before the model runs:
 
 ```python
 from nnterp import StandardizedTransformer

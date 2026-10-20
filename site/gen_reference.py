@@ -86,7 +86,7 @@ def main() -> None:
             out += nav(child, child_is_package, depth + 1)
         return out
 
-    block = "  - Documentation:\n    - documentation/index.md\n"
+    block = "  - Documentation:\n    - documentation/index.md\n    - API at a glance: reference/api-at-a-glance.md\n    - Glossary: reference/glossary.md\n"
     for child, child_is_package in children["nnterp"]:
         block += nav(child, child_is_package, 2)
 

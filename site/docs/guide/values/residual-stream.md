@@ -39,7 +39,7 @@ print(type(raw), type(out), torch.equal(raw[0], out))
 
 Assigning `layer_output` on such a block replaces the first element and leaves the others as they were, so the next block still receives a tuple. `attention_output` does the same where the attention module returns `(attn_output, attn_weights)`.
 
-A contribution is what the block adds to the stream, which is not always the module's return. On the sandwich-norm families, such as Gemma-2 and OLMo-2, `attention_output` is the post-attention norm's output and `self_attn.output[0]` is the tensor before that norm. On BLOOM and MPT the module adds the residual inside, and the contribution is the tensor entering that add. The identity is what to rely on, not `self_attn.output`.
+A contribution is what the block adds to the stream, which is not always the module's return. On the families with a norm after the attention module, such as Gemma-2 and OLMo-2, `attention_output` is that norm's output and `self_attn.output[0]` is the tensor before that norm. On BLOOM and MPT the module adds the residual inside, and the contribution is the tensor entering that add. The identity is what to rely on, not `self_attn.output`.
 
 ## Between the sublayers
 

@@ -2,7 +2,7 @@
 
 Direct logit attribution over the standard contributions.
 
-`layer_input + attention_output + mlp_output == layer_output` on every family, so direct logit attribution reads `attention_output` and `mlp_output` from each block, pushes each term through the final norm frozen at the real stream and the unembedding, and the terms sum to the model's logit. `attention_head_outputs` times the output projection's weight splits a block's attention term per head. The method is from Elhage et al. (2021), [A Mathematical Framework for Transformer Circuits](https://transformer-circuits.pub/2021/framework/index.html). The recipe here is written once against the standard values.
+`layer_input + attention_output + mlp_output == layer_output` on every family, so direct logit attribution reads `attention_output` and `mlp_output` from each block, pushes each term through the final norm frozen at the real stream and the unembedding, and the terms sum to the model's logit. `attention_head_outputs` times the output projection's weight splits a block's attention term per head. The method is from Elhage et al. (2021), [A Mathematical Framework for Transformer Circuits](https://transformer-circuits.pub/2021/framework/index.html).
 
 ```python
 import torch
@@ -90,10 +90,10 @@ print(round(sum(head_dla) + bias_dla, 3), round(dla["attn", LAYER], 3))
 # 1.006 1.006
 ```
 
-Block 9's +1.006 is two heads: head 8 (+0.872) and head 3 (+0.791), with the others near zero and the projection's bias making up the rest. Head 8 of block 9 is also the head that [Ablation](ablation.md) finds by removing it.
+Block 9's +1.006 is two heads: head 8 (+0.872) and head 3 (+0.791), with the other heads near zero and the projection's bias taking 0.39 back off. Head 8 of block 9 is also the head that [Ablation](ablation.md) finds by removing it.
 
 The per-head sum equals `attention_output` where the projection's output is what the block adds, as on GPT-2 and Llama. On a post-norm family (Gemma-2, Gemma-3, OLMo-2) a norm sits between the projection and the residual add, so the heads sum to `o_proj.output` and not to `attention_output`, and the split is of the pre-norm tensor. On Granite the contribution is the projection's output times `residual_multiplier`. Under grouped-query attention the head axis is still the query heads, so the slicing does not change.
 
 ## On another family
 
-The identity does the per-family work. `attention_output` and `mlp_output` are what each sublayer adds whether the block is sequential, parallel or post-normed, so the recipe runs unchanged there. Not every family is a plain sum. On Gemma-4 each block multiplies its sum by `layer_scalar`, so a term enters the final stream weighted by the product of the scalars of its block and every later block. Doge and ZAYA gate the stream per channel, and DeepSeek-V4 keeps parallel streams. Weight each term accordingly before the unembedding. The frozen norm then applies to the weighted terms unchanged.
+The identity does the per-family work. `attention_output` and `mlp_output` are what each sublayer adds whether the block is sequential, parallel or post-norm, so the recipe runs unchanged there. Not every family is a plain sum. On Gemma-4 each block multiplies its sum by `layer_scalar`, so a term enters the final stream weighted by the product of the scalars of its block and every later block. Doge and ZAYA gate the stream per channel, and DeepSeek-V4 keeps parallel streams. Weight each term accordingly before the unembedding. The frozen norm then applies to the weighted terms unchanged.

@@ -77,7 +77,7 @@ The loads are in float32 so that one dtype serves every checkpoint. Pythia's wei
 
 ## Reading the table
 
-Zero ablation at block 0 moves the distribution by 3 to 8 nats for the mixer and 4 to 16 nats for the MLP on every checkpoint that has one. The stream leaving block 0 is then unlike anything the later blocks were trained on, and these numbers measure the ablation more than the fact. The rows are not comparable to each other either, since vocabularies, depths and residual scales differ. Compare the shape of each checkpoint's curve (`mixer_kl` and `mlp_kl` hold it, one entry per block), or normalize per model. Pythia-70m does not predict `Paris`, and its row measures a different prediction; Mamba's row has no MLP column and no entropy, every block of it being one mixer.
+Zero ablation at block 0 or 1 moves the distribution by 3 to 8 nats for the mixer and 4 to 16 nats for the MLP on every checkpoint that has one. The stream leaving the first blocks is then unlike anything the later blocks were trained on, and these numbers measure the ablation more than the fact. The rows are not comparable to each other either, since vocabularies, depths and residual scales differ. Compare the shape of each checkpoint's curve (`mixer_kl` and `mlp_kl` hold it, one entry per block), or normalize per model. Pythia-70m does not predict `Paris`, and its row measures a different prediction. Mamba's row has no MLP column and no entropy, every block of it being one mixer.
 
 ## On another family
 

@@ -83,7 +83,7 @@ with torch.no_grad(), model.trace(prompt, images=[blue]):
 # blue run, red features           top='Red'    P(Red)=0.984 P(Blue)=0.000
 ```
 
-This is activation patching across images (nnsight.net's [Activation Patching](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/activation_patching/) tutorial has the method): the text model sees the red image under the blue image's run and answers for the red one, at the clean run's probability. The assignment needs the same number of image tokens in both runs, which every image gives on a fixed-resolution tower such as this SigLIP. On a variable-resolution tower, such as the Qwen ViT or Pixtral, use images of the same size. To patch part of the image, index the rows, which are the patches in raster order here.
+The assignment is activation patching across images, the method of nnsight.net's [Activation Patching](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/activation_patching/) tutorial: The text model sees the red image under the blue image's run and answers for the red one, at the clean run's probability. The assignment needs the same number of image tokens in both runs, which every image gives on a fixed-resolution tower such as this SigLIP. On a variable-resolution tower, such as the Qwen ViT or Pixtral, use images of the same size. To patch part of the image, index the rows, which are the patches in raster order here.
 
 ## Attention onto the image
 
@@ -126,4 +126,4 @@ Boolean indexing with the mask writes the image rows and leaves the text rows al
 
 ## On another family
 
-The three handles, `vision.image_features`, `vision.image_token_mask` and `vision.layers[i]`, mean the same on every wrapper nnterp names the tower of, and `attention_probabilities` is the same pattern on every text family, so the code changes only in the checkpoint, the prompt template and the target words. Zeroing `image_features` is not the whole image on Qwen3-VL, where the first three text blocks re-add it through `layers[k].deepstack_output`. Eager attention over a large tower holds every block's pattern for autograd, so keep the traces under `torch.no_grad()`.
+`vision.image_features`, `vision.image_token_mask` and `vision.layers[i]` mean the same on every wrapper where nnterp names the tower, and `attention_probabilities` is the same pattern on every text family, so the code changes only in the checkpoint, the prompt template and the target words. Zeroing `image_features` is not the whole image on Qwen3-VL, where the first three text blocks re-add it through `layers[k].deepstack_output`. Eager attention over a large tower holds every block's pattern for autograd, so keep the traces under `torch.no_grad()`.

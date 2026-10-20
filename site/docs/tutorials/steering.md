@@ -2,7 +2,7 @@
 
 Adding a direction to the residual stream.
 
-`model.steer(layer, vector, factor, token_positions=-1)` adds `factor * vector` in place to `layer_output` of one block, and the direction is a difference of `layer_output` between two prompts, so deriving and applying a steering vector are the same two snippets on every family. The method is activation addition (Turner et al., 2023, [Steering Language Models With Activation Engineering](https://arxiv.org/abs/2308.10248)). What the recipe adds is reading the factor against the stream's norm at the block you steer, since that norm differs by orders of magnitude between checkpoints.
+`model.steer(layer, vector, factor, token_positions=-1)` adds `factor * vector` in place to `layer_output` of one block, and the direction is a difference of `layer_output` between two prompts, so deriving and applying a steering vector are the same two snippets on every family. The method is activation addition (Turner et al., 2023, [Steering Language Models With Activation Engineering](https://arxiv.org/abs/2308.10248)). What the recipe adds is reading the factor against the stream's norm at the block you steer, since that norm differs several-fold between checkpoints and across a model's blocks.
 
 ```python
 import torch

@@ -1,6 +1,6 @@
 # Probing
 
-A probe asks whether a property is linearly decodable from the residual stream at each depth: collect `layer_output` at one position of every prompt in a labelled set, fit a linear classifier per layer, and read accuracy against the layer. `get_token_activations` does the collection against the standard values, so the recipe below runs unchanged on every family. The probe itself is a few lines of torch.
+A probe asks whether a property is linearly decodable from the residual stream at each depth: collect `layer_output` at one position of every prompt in a labeled set, fit a linear classifier per layer, and read accuracy against the layer. `get_token_activations` does the collection against the standard values, so the recipe below runs unchanged on every family. The probe itself is a few lines of torch.
 
 ## Collecting the activations
 
@@ -24,7 +24,7 @@ print(acts.shape)   # torch.Size([12, 80, 768])
 
 One batched forward gives `[layers, prompts, hidden_size]` on the CPU, the residual stream `model.layers[i].layer_output` at the last position of every prompt. The last position of a batch needs left padding, which nnsight sets at load for a causal model. The helper raises `ValueError` before running if the tokenizer pads right. `layers=` picks some blocks, `get_activations=lambda m, i: m.layers[i].mlp.mlp_output` reads another site, and `collect_token_activations_batched(model, texts, batch_size)` returns the same tensor for a set too large for one batch ([`nnsight_utils`](../documentation/nnsight_utils.md)).
 
-The adjective sits mid-sentence, several tokens before the position read, and the test words never appear in training. Split by word, not by prompt: with the words shared between the splits, the probe can read the adjective's identity instead of its sentiment.
+The adjective sits mid-sentence, several tokens before the position read, and the test words never appear in training. Split by word, not by prompt: With the words shared between the splits, the probe can read the adjective's identity instead of its sentiment.
 
 ## One probe per layer
 
@@ -62,7 +62,7 @@ The probe is closed-form ridge regression, standardized on the training rows onl
 
 ## Reading the curve
 
-Sentiment is readable at the sentence's last token from layer 3 on, for words the probe never saw. The position read is the final token (`we`, `my`, `the`, `crowd`), the same in both classes, so whatever the probe finds there was carried from the adjective three to five tokens back. Block 0's attention already moves enough of it for 0.78, and blocks 1 to 3 complete it. A shuffled-label control bounds the memorization. Refit with `labels[torch.randperm(80)]` and the same probe scores 0.50, 0.44 and 0.34 at layers 0, 6 and 11.
+Sentiment is readable at the sentence's last token from layer 3 on, for words the probe never saw. The position read is the final token (`we`, `my`, `the`, `crowd`), the same in both classes, so whatever the probe finds there was carried from the adjective three to five tokens back. Layer 0's attention already moves enough of it for 0.78, and layers 1 to 3 complete it. A shuffled-label control bounds the memorization. Refit with `labels[torch.randperm(80)]` and the same probe scores 0.50, 0.44 and 0.34 at layers 0, 6 and 11.
 
 A probe is correlational. To claim that the model uses the direction, add it to the stream with `model.steer` and check that the next-token distribution moves while a random direction of the same norm does not. [Steering](steering.md) has the factor band.
 

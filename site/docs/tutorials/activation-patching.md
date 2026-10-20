@@ -2,7 +2,7 @@
 
 Patching a value from a clean run into a corrupt one.
 
-`layer_output` is the residual stream leaving a block and `attention_output` and `mlp_output` are what its sublayers add, on every family, so a patch is one assignment at one of those values at a position, and the same line runs on a sequential, parallel or post-norm block. The method is nnsight's [activation patching tutorial](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/activation_patching/). This page runs it against the standard values on `Qwen/Qwen2.5-0.5B`, where the clean prompt gives P(Paris) 0.797 and the corrupt one 0.000 (GPT-2 gives 0.070 and 0.003, too little to read).
+`layer_output` is the residual stream leaving a block and `attention_output` and `mlp_output` are what its sublayers add, on every family, so a patch is one assignment at one of those values at a position, and the same line runs on a sequential, parallel or post-norm block. The method is nnsight's [activation patching tutorial](https://nnsight.net/tutorials/tutorials/causal_mediation_analysis/activation_patching/). The checkpoint is `Qwen/Qwen2.5-0.5B`, where the clean prompt gives P(Paris) 0.797 and the corrupt one 0.000 (GPT-2 gives 0.070 and 0.003, too little to read).
 
 ```python
 import torch
@@ -72,7 +72,7 @@ for pos in (2, -1):                                                 # the subjec
 # pos -1: 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.00 0.32 0.78 0.80 0.80
 ```
 
-Position 2 is `iff` in the clean prompt and `os` in the corrupt one, the first token where the two differ. A patch there restores most of the answer through block 7 (0.5 to 0.6) and fades to nothing by block 20. At the last position nothing happens until block 19, then 0.32 at block 20 and 0.78 from block 21 on. The fact leaves the subject's position in the early blocks and arrives at the last position in blocks 20 and 21. The two ends of a last-position sweep are fixed by construction, since patching the last block there reproduces the clean prediction, so that row says how far a patch reaches, and the position axis is what localizes.
+Position 2 is `iff` in the clean prompt and `os` in the corrupt one, the first token where the two differ. A patch there restores most of the answer through block 7 (0.5 to 0.6) and fades to nothing by block 20. At the last position nothing happens until block 19, then 0.32 at block 20 and 0.78 from block 21 on. The fact leaves the subject's position in the early blocks and arrives at the last position in blocks 20 and 21. The last entry of a last-position sweep is fixed by construction, since patching the last block there reproduces the clean prediction. That row says how far back a patch reaches, and the position axis is what localizes.
 
 ## Patching a contribution
 
@@ -95,7 +95,7 @@ print(f"attention_output {float(attn):.3f}   mlp_output {float(mlp):.3f}")
 # attention_output 0.151   mlp_output 0.018
 ```
 
-Block 21's attention brings 0.151 of the answer to the last position on its own and its MLP 0.018. The rest of the 0.778 was already in the stream from blocks 19 and 20. One head is a slice of `attention_head_outputs`, `[..., HEAD, :]`, patched the same way under `attn_implementation="eager"`.
+Block 21's attention brings 0.151 of the answer to the last position on its own and its MLP 0.018. The rest of the 0.778 was already in the stream from block 20, where the `layer_output` patch gives 0.32. One head is a slice of `attention_head_outputs`, `[..., HEAD, :]`, patched the same way under `attn_implementation="eager"`.
 
 ## On another family
 

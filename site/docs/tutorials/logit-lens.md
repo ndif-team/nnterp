@@ -46,6 +46,6 @@ The final `True` is the wiring check. At the last block the lens is the model's 
 
 ## On another family
 
-The recipe runs unchanged. `layer_output` is a tensor on every family, including the families with a tuple-returning block (BLOOM, MPT, Falcon), and on DeepSeek-V4, where it carries an extra stream axis, the family's `project_on_vocab` collapses the streams the way the model does. The lens reads module boundaries, so it does not need `attn_implementation="eager"`. The per-family work is all in `project_on_vocab`, the norm, the head and the step after it, so the recipe has nothing to swap.
+The recipe runs unchanged. `layer_output` is a tensor on every family, including the families with a tuple-returning block (BLOOM, MPT, Falcon), and on DeepSeek-V4, where it carries an extra stream axis, the family's `project_on_vocab` collapses the streams the way the model does. The lens reads module boundaries, so it does not need `attn_implementation="eager"`. The per-family work is all in `project_on_vocab`: the norm, the head and the step after it.
 
 [Contribution decomposition](contribution-decomposition.md) reads each sublayer's addition through the same head, in a form that sums.

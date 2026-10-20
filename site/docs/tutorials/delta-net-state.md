@@ -1,6 +1,6 @@
 # DeltaNet state
 
-A gated DeltaNet block keeps one `[key_dim, value_dim]` matrix per head in place of an attention pattern, and everything the block carries forward about the prompt is in that state. The recipe reads the state entering and leaving a block, patches it between two prompts on a decode step and inside a prompt, and tracks its norm token by token, on Qwen3.5-0.8B, a hybrid with three DeltaNet blocks in every four ([Gated DeltaNet](../guide/architectures/delta-net.md)). The recurrent view of such models is nnsight.net's [State-Space Models](https://nnsight.net/tutorials/tutorials/architectures/state_space_models/) tutorial.
+A gated DeltaNet block keeps one `[key_dim, value_dim]` matrix per head in place of an attention pattern, and that state, with a short convolution window, is all the block carries forward about the prompt. The recipe reads the state entering and leaving a block, patches it between two prompts on a decode step and inside a prompt, and tracks its norm token by token, on Qwen3.5-0.8B, a hybrid with three DeltaNet blocks in every four ([Gated DeltaNet](../guide/architectures/delta-net.md)). nnsight.net's [State-Space Models](https://nnsight.net/tutorials/tutorials/architectures/state_space_models/) tutorial covers the recurrent view of models that carry such a state.
 
 ## The state leaving a prompt
 
@@ -109,4 +109,4 @@ print(repr(model.tokenizer.decode(probs_patched[0].argmax())), f"{float(probs_pa
 
 ## On another family
 
-Qwen3-Next, Qwen3.5-MoE and OLMo-Hybrid serve the same values on their `linear_attn` blocks, and Kimi-Linear's mixer is the same component with a decay per key channel, so the recipe changes only in the checkpoint. The kernels have to be transformers' torch ones: with `flash-linear-attention` or `causal-conv1d` installed, the kernel has no Python source, every interior value reports unavailable in `support()`, and `attention_output` stays. Under `generate`, `states`, `state_after` and `set_state_after` count from the current call's own first token, and on a decode step they address that step's single token.
+Qwen3-Next, Qwen3.5-MoE and OLMo-Hybrid serve the same values on their `linear_attn` blocks, and Kimi-Linear's mixer is the same component with a decay per key channel, so the recipe changes only in the checkpoint. The kernels have to be transformers' torch ones: With `flash-linear-attention` or `causal-conv1d` installed, the kernel has no Python source, every interior value reports unavailable in `support()`, and `attention_output` stays. Under `generate`, `states`, `state_after` and `set_state_after` count from the current call's own first token, and on a decode step they address that step's single token.

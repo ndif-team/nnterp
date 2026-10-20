@@ -2,7 +2,7 @@
 
 Reading and scoring attention heads.
 
-`model.layers[i].self_attn.attention_probabilities` is the attention pattern after the softmax, `[batch, num_heads, query, key]`, on every family that runs transformers' eager attention. Load with `attn_implementation="eager"` and the per-head scores below are three lines on the saved tensor. nnsight's [attention tutorial](https://nnsight.net/tutorials/tutorials/attention/attention_heads/) explains the metrics and the head types. This page is the recipe written against the standard value.
+`model.layers[i].self_attn.attention_probabilities` is the attention pattern after the softmax, `[batch, num_heads, query, key]`, on every family that runs transformers' eager attention. Load with `attn_implementation="eager"` and the per-head scores below are three lines on the saved tensor. nnsight's [attention tutorial](https://nnsight.net/tutorials/tutorials/attention/attention_heads/) explains the metrics and the head types.
 
 ```python
 import torch

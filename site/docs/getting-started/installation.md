@@ -1,43 +1,25 @@
 # Installation
 
-## Requirements
-
-- Python 3.10 or higher
-- nnsight 0.8 or later and transformers 5.x, both installed automatically
-
-## Install from PyPI
+nnterp is a PyPI package for Python 3.10 or later. It depends on nnsight 0.8 and transformers 5.17 or later, which pip installs with it.
 
 ```bash
 pip install nnterp
 ```
 
-## Install from source
+## From source
 
 ```bash
 pip install git+https://github.com/ndif-team/nnterp.git
 ```
 
-Or clone and install in editable mode:
-
-```bash
-git clone https://github.com/ndif-team/nnterp.git
-cd nnterp
-pip install -e .
-```
+For a checkout you intend to edit, run `pip install -e .` from the clone.
 
 ## Extras
 
 ```bash
-pip install "nnterp[models]"   # tokenizers and processors some checkpoints need: sentencepiece, tiktoken, protobuf, pillow
+pip install "nnterp[models]"   # sentencepiece, tiktoken, protobuf, pillow: tokenizers and processors some checkpoints need
 pip install "nnterp[vllm]"     # vLLM, for StandardizedVLLM
 pip install "nnterp[test]"     # pytest and pytest-xdist, for the test suite
 ```
 
-## Verify
-
-```python
-import nnterp
-print(nnterp.__version__)
-```
-
-Next: the [Quick Start](quickstart.md).
+The [Quick Start](quickstart.md) loads GPT-2 and is the check that the install works.

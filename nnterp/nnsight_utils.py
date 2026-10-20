@@ -6,12 +6,15 @@ Written against the standard values: a layer's activation is ``model.layers[i].l
 
 from __future__ import annotations
 
-from typing import Callable
+from typing import TYPE_CHECKING, Callable
 
 import torch
 from torch.utils.data import DataLoader
 
 from .standardized import StandardizedTransformer
+
+if TYPE_CHECKING:
+    from nnsight.intervention.tracer import Tracer
 
 GetActivations = Callable[[StandardizedTransformer, int], torch.Tensor]
 
@@ -37,7 +40,7 @@ def get_token_activations(
     get_activations: GetActivations | None = None,
     remote: bool = False,
     idx: int | None = None,
-    tracer=None,
+    tracer: Tracer | None = None,
 ) -> torch.Tensor:
     """The activation at one token position of each prompt, at each layer.
 

@@ -77,8 +77,8 @@ print(torch.allclose(raw, x + attn))
 
 1.x code passed `enable_attention_probs=True`, which forced the eager attention and checked the pattern at load, and asked `model.attn_probs_available`. nnterp 2 forces nothing: pass `attn_implementation="eager"` yourself and ask `support()`, which answers from the config, before any trace. Reading the pattern on a model that runs `sdpa` raises `nnterp.Unavailable` at that line.
 
-!!! warning "The 1.x flags are accepted and ignored"
-    `enable_attention_probs=True`, `check_renaming=`, `allow_dispatch=` and the other 1.x keywords pass through to `TransformersModel` and have no effect, with no error and no warning. A load with `enable_attention_probs=True` runs `sdpa`, and the pattern is unavailable.
+!!! warning "The 1.x flags reach transformers, which rejects them"
+    `enable_attention_probs=True`, `check_renaming=`, `allow_dispatch=` and the other 1.x keywords pass through `TransformersModel` to the checkpoint's constructor, which raises `TypeError: GPT2LMHeadModel.__init__() got an unexpected keyword argument 'enable_attention_probs'`, inside a `ValueError` from the loader. With `dispatch=True` that happens at load. Without it the load reads only the config, `support()` reports `sdpa`, and the error comes at the first trace. Remove the keywords.
 
 ```python
 from nnterp import StandardizedTransformer

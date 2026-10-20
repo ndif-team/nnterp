@@ -142,7 +142,7 @@ Under `model.generate` the values are per forward call: on a decode step the que
 
 ```python
 with model.generate("The Eiffel Tower is in", max_new_tokens=2) as tracer:
-    with tracer.iter[1]:
+    for _ in tracer.iter[1:2]:
         pattern = attn.attention_probabilities.save()
 print(pattern.shape)
 # torch.Size([1, 12, 1, 8])

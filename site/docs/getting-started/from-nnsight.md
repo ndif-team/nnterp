@@ -34,9 +34,9 @@ print(attn.shape, mlp.shape, resid.shape, logits.shape)
 # torch.Size([1, 7, 768]) torch.Size([1, 7, 768]) torch.Size([1, 7, 768]) torch.Size([1, 7, 50257])
 ```
 
-The four tensors are the ones the nnsight trace saved (the next block checks one), and this body runs unchanged on `EleutherAI/pythia-70m-deduped`, where the attention is `gpt_neox.layers[5].attention`, and on `bigscience/bloom-560m`, where the block returns a tuple and `layer_output` is still the tensor.
+The four tensors are the ones that the nnsight trace saved (the next block checks one), and this body runs unchanged on `EleutherAI/pythia-70m-deduped`, where the attention is `gpt_neox.layers[5].attention`, and on `bigscience/bloom-560m`, where the block returns a tuple and `layer_output` is still the tensor.
 
-## Everything nnsight does, unchanged
+## What does not change
 
 `trace`, `generate`, `.save()`, `.input`, `.output`, invokes, `tracer.iter`, `.source`, `model.edit` and `remote=True` work as [nnsight's documentation](https://nnsight.net/features/1_getting/) describes them. The native names keep working on the same model, and a trace written for a `TransformersModel` runs on a `StandardizedTransformer` as it is:
 
@@ -62,11 +62,11 @@ print(torch.equal(native, standard), model.layers[5].self_attn is model.transfor
 
 ### Values
 
-`layer_output`, `attention_output`, `mlp_output`, `attention_probabilities`, `logits`, `token_embeddings` and `next_token_probs` name tensors, never tuples, and each means one thing on every family. `attention_output` is what the attention adds to the residual stream even where the module returns something else: the post-norm's output on Gemma-2, the tensor before the residual add on BLOOM. The [Residual stream](../guide/values/residual-stream.md) and [Attention](../guide/values/attention.md) pages define them.
+`layer_output`, `attention_output`, `mlp_output`, `attention_probabilities`, `logits`, `token_embeddings` and `next_token_probs` name tensors, never tuples, and each means one thing on every family. `attention_output` is what the attention adds to the residual stream even where the module returns something else. On Gemma-2 it is the post-norm's output, and on BLOOM the tensor before the residual add. The [Residual stream](../guide/values/residual-stream.md) and [Attention](../guide/values/attention.md) pages define them.
 
 ### `support()`
 
-Not every checkpoint has every value, and `model.support()` says which ones this checkpoint has, from the config, before any trace. Reading a missing value raises `nnterp.Unavailable` with the same reason:
+Not every checkpoint has every value, and `model.support()` says, from the config and before any trace, which values this checkpoint has and, for anything missing, why. Reading a missing value raises `nnterp.Unavailable` with the same reason:
 
 ```python
 from nnterp import StandardizedTransformer, Unavailable
@@ -85,6 +85,6 @@ except Unavailable as error:
 
 ### Methods
 
-`skip_layers`, `steer`, `project_on_vocab` and `get_topk_closest_tokens` are written against the values, so one call does the same thing on every family; the [Methods](../guide/methods.md) page has each.
+`skip_layers`, `steer`, `project_on_vocab` and `get_topk_closest_tokens` are written against the values, so one call does the same thing on every family. The [Methods](../guide/methods.md) page has each.
 
 The [Guide](../guide/index.md) has one page per name and value.

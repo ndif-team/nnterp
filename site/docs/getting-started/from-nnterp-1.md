@@ -35,7 +35,7 @@ nnterp 1.x reached a block's tensors through accessors on the model, `model.laye
 | `nnterp.display.plot_topk_tokens`, `prompts_to_df` | none | gone |
 | `RenamingError`, `get_rename_dict` | `nnterp.Unavailable`, `nnterp.UnsupportedFamily` | changed |
 
-## Accessors are on the blocks
+## `layers_output` and the other accessors
 
 1.x code read `model.layers_output[5]` and wrote `model.layers_output[5] = v`; nnterp 2 code reads and writes `model.layers[5].layer_output`. The module accessors `attentions[i]` and `mlps[i]` are the envoys `layers[i].self_attn` and `layers[i].mlp`, and `ln_final` is `norm`:
 
@@ -95,11 +95,11 @@ print(pattern.shape, pattern[0, 0].sum(-1))
 #        grad_fn=<SumBackward1>)
 ```
 
-`support()` returns `None` for a value every block has, else the reason, per block. Ask it instead of `hasattr`: `hasattr(envoy, "attention_probabilities")` raises `Unavailable` when the value is missing rather than returning `False`.
+`support()` returns `None` for a value that every block has, else the reason, per block. Ask it instead of `hasattr`: `hasattr(envoy, "attention_probabilities")` raises `Unavailable` when the value is missing rather than returning `False`.
 
-## Nothing runs at construction
+## The constructor
 
-1.x ran a renaming check and a dummy forward at load and raised `RenamingError` when a module was not where it expected. nnterp 2 reads the config's `model_type`, picks the family and builds the tree; a shipped family is used as it is, a `model_type` with no family loads under a best-effort default with a warning, and `UnsupportedFamily` is raised only when that default cannot name the modules either. A wrong assumption fails at the first trace instead, as `Unavailable` or nnsight's `SourceNotAvailable`, so run `model.support()` and one trace of the values you need before a long experiment. `remote=True` belongs on `trace()`, where nnsight puts it, and the constructor no longer sets `device_map="auto"` for you.
+1.x ran a renaming check and a dummy forward at load and raised `RenamingError` when a module was not where it expected. nnterp 2 reads the config's `model_type`, picks the family and builds the tree. A shipped family is used as it is. A `model_type` with no family loads under a best-effort default with a warning, and `UnsupportedFamily` is raised only when that default cannot name the modules either. A wrong assumption fails at the first trace instead, as `Unavailable` or nnsight's `SourceNotAvailable`, so run `model.support()` and one trace of the values that you need before a long experiment. `remote=True` belongs on `trace()`, where nnsight puts it, and the constructor no longer sets `device_map="auto"` for you.
 
 ## `steer` and `skip_layers`
 
@@ -146,4 +146,4 @@ print(torch.equal(lens, logits), torch.equal(raw, logits), (raw - logits).abs().
 
 ## Helpers and errors
 
-`nnterp.nnsight_utils` keeps `get_token_activations`, the two `collect_*` functions and `compute_next_token_probs` with their 1.x signatures; the `get_layer_output` style accessors are gone, and `model.layers[i].layer_output` is what they wrapped. `nnterp.prompt_utils` is unchanged except that `run_prompts` shows no progress bar unless you pass `tqdm=`. `nnterp.interventions` and `nnterp.display` have no counterpart: `logit_lens` is a loop over `model.project_on_vocab(layer.layer_output)`, which the [Logit lens](../tutorials/logit-lens.md) tutorial writes out. `RenamingError` is replaced by `nnterp.Unavailable` (a value this checkpoint lacks, with the reason) and `nnterp.UnsupportedFamily` (a `model_type` nothing can standardize).
+`nnterp.nnsight_utils` keeps `get_token_activations`, the two `collect_*` functions and `compute_next_token_probs` with their 1.x signatures. The `get_layer_output` style accessors are gone, and `model.layers[i].layer_output` is what they wrapped. `nnterp.prompt_utils` is unchanged except that `run_prompts` shows no progress bar unless you pass `tqdm=`. `nnterp.interventions` and `nnterp.display` have no counterpart: `logit_lens` is a loop over `model.project_on_vocab(layer.layer_output)`, which the [Logit lens](../tutorials/logit-lens.md) tutorial writes out. `RenamingError` is replaced by `nnterp.Unavailable` (a value that this checkpoint lacks, with the reason) and `nnterp.UnsupportedFamily` (a `model_type` that nothing can standardize).

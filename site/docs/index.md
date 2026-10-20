@@ -198,15 +198,15 @@ hide:
 ## What nnterp adds
 
 `StandardizedTransformer` is an nnsight `TransformersModel`, so `trace`, `generate`, `.save()`,
-`tracer.iter` and `remote=True` work as they do in nnsight. What changes is the names you write
-and the values you read.
+`tracer.iter` and `remote=True` work as they do in nnsight. What changes is the names that you write
+and the values that you read.
 
-**One vocabulary.** Every family answers to Llama's names: `model.embed_tokens`,
+Every family answers to Llama's names: `model.embed_tokens`,
 `model.layers[i]`, `model.layers[i].self_attn`, `model.layers[i].mlp`, `model.norm`,
-`model.lm_head`. They are aliases, so GPT-2's `model.transformer.h[5]` and `model.layers[5]` are
+`model.lm_head`. Because they are aliases, GPT-2's `model.transformer.h[5]` and `model.layers[5]` are
 the same envoy and the native names keep working.
 
-**Standard values.** A name says which module; a value says which tensor, and it means the same
+A name says which module; a value says which tensor, and it means the same
 thing on every family. `layer_output` is the residual stream leaving a block whether the block
 returns a tensor or a tuple. `attention_output` and `mlp_output` are what each sublayer adds to
 the stream, so on every family
@@ -215,7 +215,7 @@ the stream, so on every family
 layers[i].input + attention_output + mlp_output == layers[i].layer_output
 ```
 
-**Ask before you trace.** Not every checkpoint has every value. `model.support()` says what this
+Not every checkpoint has every value. Before you trace, `model.support()` says what this
 one has and, for anything missing, why.
 
 ```bash

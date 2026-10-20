@@ -21,7 +21,7 @@ The constructor reads the checkpoint's `model_type`, picks the matching family, 
 
 ## The names
 
-`model.embed_tokens`, `model.layers[i]`, `model.layers[i].self_attn`, `model.layers[i].mlp`, `model.norm` and `model.lm_head` exist on every family. They are nnsight aliases, so the native names keep working and both reach the same envoy:
+`model.embed_tokens`, `model.layers[i]`, `model.layers[i].self_attn`, `model.layers[i].mlp`, `model.norm` and `model.lm_head` exist on every family. Because they are nnsight aliases, the native names keep working and both reach the same envoy:
 
 ```python
 from nnterp import StandardizedTransformer
@@ -55,7 +55,7 @@ print(torch.allclose(x + a + m, out, atol=1e-4))
 
 A value is read, edited in place or assigned the way an nnsight `.output` is.
 
-## Ask before you trace
+## Availability
 
 Not every checkpoint has every value. `model.support()` says, from the config alone, what this one has and, for anything missing, why. Reading a missing value inside a trace raises `nnterp.Unavailable` with the same reason, before the model runs:
 
@@ -84,7 +84,7 @@ print(pattern.shape)
 
 ## Methods
 
-The operations an experiment repeats are methods on the model, written against the values, so they run on every family:
+The operations that an experiment repeats are methods on the model, written against the values, so they run on every family:
 
 ```python
 import torch

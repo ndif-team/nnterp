@@ -12,7 +12,7 @@ pip install nnterp
 pip install git+https://github.com/ndif-team/nnterp.git
 ```
 
-For a checkout you intend to edit, run `pip install -e .` from the clone.
+For a checkout that you intend to edit, run `pip install -e .` from the clone.
 
 ## Extras
 

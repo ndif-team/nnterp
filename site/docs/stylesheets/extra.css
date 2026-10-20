@@ -1,0 +1,215 @@
+/* ===== Palette =====
+   Material's `primary: custom` / `accent: custom` leave these to us. Muted on purpose:
+   a slate teal for the primary, a sage accent, near-neutral backgrounds. */
+
+/* Light mode */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color: #4b6a72;
+  --md-primary-fg-color--light: #6e8a91;
+  --md-primary-fg-color--dark: #35505a;
+  --md-accent-fg-color: #5f7d66;
+  --md-accent-fg-color--transparent: rgba(95, 125, 102, 0.1);
+  --md-default-bg-color: #f6f7f7;
+  --md-default-bg-color--light: #f6f7f7;
+  --md-default-bg-color--lighter: #ffffff;
+  --md-default-bg-color--lightest: #ffffff;
+  --md-typeset-a-color: #3f6169;
+}
+
+[data-md-color-scheme="default"] .md-header,
+[data-md-color-scheme="default"] .md-tabs {
+  background-color: #e6eaea;
+  color: #1a1a1a;
+}
+
+/* Light mode: header text and icons dark */
+[data-md-color-scheme="default"] .md-header__button,
+[data-md-color-scheme="default"] .md-header__topic,
+[data-md-color-scheme="default"] .md-header__title,
+[data-md-color-scheme="default"] .md-header__source,
+[data-md-color-scheme="default"] .md-tabs__link,
+[data-md-color-scheme="default"] .md-tabs__link--active,
+[data-md-color-scheme="default"] .header-nav a {
+  color: #1a1a1a;
+}
+
+[data-md-color-scheme="default"] .md-header .md-header__button.md-icon,
+[data-md-color-scheme="default"] .md-header .md-search__icon,
+[data-md-color-scheme="default"] .md-header .md-source__icon,
+[data-md-color-scheme="default"] .md-header .md-source__icon svg,
+[data-md-color-scheme="default"] .md-header .md-source,
+[data-md-color-scheme="default"] .md-header .md-source__repository,
+[data-md-color-scheme="default"] .md-header .md-source__fact {
+  color: #000000 !important;
+  fill: #000000 !important;
+  opacity: 1 !important;
+}
+
+/* Light mode footer */
+[data-md-color-scheme="default"] .md-footer {
+  background-color: #e6eaea !important;
+  color: #1a1a1a !important;
+}
+
+[data-md-color-scheme="default"] .md-footer-meta {
+  background-color: #dde2e2 !important;
+  color: #1a1a1a !important;
+}
+
+[data-md-color-scheme="default"] .md-footer *,
+[data-md-color-scheme="default"] .md-footer a,
+[data-md-color-scheme="default"] .md-copyright,
+[data-md-color-scheme="default"] .md-copyright *,
+[data-md-color-scheme="default"] .md-social__link,
+[data-md-color-scheme="default"] .md-social__link svg {
+  color: #1a1a1a !important;
+  fill: #1a1a1a !important;
+}
+
+/* Dark mode */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color: #8fb0b4;
+  --md-primary-fg-color--light: #a9c3c6;
+  --md-primary-fg-color--dark: #6e8f93;
+  --md-accent-fg-color: #9db8a3;
+  --md-accent-fg-color--transparent: rgba(157, 184, 163, 0.1);
+  --md-default-bg-color: #121414;
+  --md-default-bg-color--light: #121414;
+  --md-default-bg-color--lighter: #1a1e1e;
+  --md-default-bg-color--lightest: #242929;
+  --md-typeset-a-color: #9cbcc0;
+}
+
+[data-md-color-scheme="slate"] .md-header,
+[data-md-color-scheme="slate"] .md-tabs {
+  background-color: #1a1e1e;
+}
+
+[data-md-color-scheme="slate"] .md-header .md-header__button.md-icon,
+[data-md-color-scheme="slate"] .md-header .md-search__icon,
+[data-md-color-scheme="slate"] .md-header .md-source__icon,
+[data-md-color-scheme="slate"] .md-header .md-source__icon svg,
+[data-md-color-scheme="slate"] .md-header .md-source,
+[data-md-color-scheme="slate"] .md-header .md-source__repository,
+[data-md-color-scheme="slate"] .md-header .md-source__fact {
+  color: #ffffff !important;
+  fill: #ffffff !important;
+  opacity: 1 !important;
+}
+
+/* Footer sits above the fixed home-page background */
+.md-footer {
+  position: relative;
+  z-index: 1;
+}
+
+/* ===== Single-row navbar =====
+   No logo: the site name is the wordmark, and the section links sit beside it in the
+   header (extra.js injects them). Material's own tabs bar is hidden. */
+
+.md-header__button.md-logo {
+  display: none !important;
+}
+
+/* Material positions the title text absolutely, so the container must not grow and the
+   wordmark must flow normally to give it a width. */
+.md-header__title {
+  margin-left: 0.6rem;
+  flex-grow: 0;
+}
+
+.md-header__topic:first-child {
+  position: static;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+}
+
+/* Keep the wordmark fixed: Material swaps in the page title on scroll */
+.md-header__title--active .md-header__topic:first-child {
+  transform: none;
+  opacity: 1;
+  pointer-events: initial;
+  z-index: 0;
+}
+
+.md-header__topic + .md-header__topic {
+  display: none;
+}
+
+.md-tabs {
+  display: none !important;
+}
+
+.md-header .md-header__inner {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.md-header .md-header__inner > * {
+  flex-shrink: 0;
+}
+
+.header-nav {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-right: auto;
+  padding-left: 0.75rem;
+}
+
+.header-nav a {
+  padding: 0.5rem 0.4rem;
+  font-size: 0.8rem;
+  font-weight: 500;
+  text-decoration: none;
+  color: currentColor;
+  opacity: 0.75;
+  transition: opacity 0.2s;
+  white-space: nowrap;
+}
+
+.header-nav a:hover,
+.header-nav a.active {
+  opacity: 1;
+}
+
+/* Mobile: Material's drawer handles navigation */
+@media (max-width: 960px) {
+  .header-nav {
+    display: none;
+  }
+}
+
+.md-header__source {
+  margin-left: 0 !important;
+}
+
+.md-header__button.md-icon {
+  color: currentColor;
+  opacity: 0.7;
+  transition: opacity 0.25s;
+}
+
+.md-header__button.md-icon:hover {
+  opacity: 1;
+}
+
+.md-search {
+  margin-left: auto;
+}
+
+.md-search__input {
+  background: var(--md-default-bg-color);
+  font-size: 0.8rem;
+}
+
+[data-md-color-scheme="default"] .md-search__input::placeholder {
+  color: #1a1a1a !important;
+  opacity: 0.85;
+}
+
+[data-md-color-scheme="slate"] .md-search__input::placeholder {
+  color: #ffffff !important;
+  opacity: 0.85;
+}

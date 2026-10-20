@@ -23,3 +23,6 @@ nnterp/_version.py
 
 # the encyclopedia is built into this folder
 encyclopedia/site/
+
+# the documentation site is built into this folder
+site/build/

@@ -1,0 +1,16 @@
+# nnterp
+
+> nnterp gives every transformer family the same module names and the same standard values, on top of nnsight. StandardizedTransformer is an nnsight TransformersModel whose envoy tree answers to Llama's names (embed_tokens, layers[i].self_attn, layers[i].mlp, norm, lm_head) on every family, with values (layer_output, attention_output, mlp_output, attention_probabilities, logits, ...) that mean the same thing everywhere. StandardizedVLLM is the same over nnsight's vLLM engine.
+
+- Documentation: https://ndif-team.github.io/nnterp/
+- GitHub: https://github.com/ndif-team/nnterp
+- PyPI: https://pypi.org/project/nnterp/
+- nnsight, which nnterp builds on: https://nnsight.net
+- Paper (nnterp 1.x): https://arxiv.org/abs/2511.14465
+
+## Pages
+
+- Getting Started: https://ndif-team.github.io/nnterp/getting-started/
+- Installation: https://ndif-team.github.io/nnterp/getting-started/installation/
+- Quick Start: https://ndif-team.github.io/nnterp/getting-started/quickstart/
+- API reference, one page per module: https://ndif-team.github.io/nnterp/documentation/

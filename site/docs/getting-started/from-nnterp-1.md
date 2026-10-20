@@ -9,7 +9,7 @@ nnterp 1.x reached a block's tensors through accessors on the model, `model.laye
 | `model.layers_input[i]` | `model.layers[i].input` | renamed |
 | `model.layers_output[i]` | `model.layers[i].layer_output` | renamed |
 | `model.attentions[i]`, `model.attentions_input[i]` | `model.layers[i].self_attn`, `model.layers[i].self_attn.input` | renamed |
-| `model.attentions_output[i]` | `model.layers[i].self_attn.attention_output` | changed: the contribution, not the module's output |
+| `model.attentions_output[i]` | `model.layers[i].self_attn.attention_output` | changed: the contribution, not the module's output; the same tensor on GPT-2 and Llama, different only where the family norms the module's output (Gemma-2) or adds the residual inside it (BLOOM) |
 | `model.mlps[i]`, `model.mlps_input[i]` | `model.layers[i].mlp`, `model.layers[i].mlp.input` | renamed |
 | `model.mlps_output[i]` | `model.layers[i].mlp.mlp_output` | changed: the contribution, not the module's output |
 | `model.attention_probabilities[i]` | `model.layers[i].self_attn.attention_probabilities` | renamed |
@@ -73,6 +73,10 @@ print(torch.allclose(raw, x + attn))
 # True
 ```
 
+## Read order
+
+nnterp 2 reads values in the model's forward order within a trace and raises `OutOfOrderError` otherwise. 1.x code that read block 5 before block 3 in one trace has to be reordered ([Attention: read order](../guide/values/attention.md#read-order)).
+
 ## The attention pattern
 
 1.x code passed `enable_attention_probs=True`, which forced the eager attention and checked the pattern at load, and asked `model.attn_probs_available`. nnterp 2 forces nothing: pass `attn_implementation="eager"` yourself and ask `support()`, which answers from the config, before any trace. Reading the pattern on a model that runs `sdpa` raises `nnterp.Unavailable` at that line.
@@ -99,7 +103,7 @@ print(pattern.shape, pattern[0, 0].sum(-1))
 
 ## The constructor
 
-1.x ran a renaming check and a dummy forward at load and raised `RenamingError` when a module was not where it expected. nnterp 2 reads the config's `model_type`, picks the family and builds the tree. A shipped family is used as it is. A `model_type` with no family loads under a best-effort default with a warning, and `UnsupportedFamily` is raised only when that default cannot name the modules either. A wrong assumption fails at the first trace instead, as `Unavailable` or nnsight's `SourceNotAvailable`, so run `model.support()` and one trace of the values that you need before a long experiment. `remote=True` belongs on `trace()`, where nnsight puts it, and the constructor no longer sets `device_map="auto"` for you.
+1.x ran a renaming check and a dummy forward at load and raised `RenamingError` when a module was not where it expected. nnterp 2 reads the config's `model_type`, picks the family and builds the tree. A shipped family is used as it is. A `model_type` with no family loads under a best-effort default with a warning, and `UnsupportedFamily` is raised only when that default cannot name the modules either. A wrong assumption fails at the first trace instead, as `Unavailable` or nnsight's `SourceNotAvailable`, so run `model.support()` and one trace of the values that you need before a long experiment. `remote=True` belongs on `trace()`, where nnsight puts it, and the constructor no longer sets `device_map="auto"` for you. To keep a model on the CPU pass `device="cpu"`, since `device_map="cpu"` does not ([Loading](../guide/loading.md#device-versus-device_map)).
 
 ## `steer` and `skip_layers`
 

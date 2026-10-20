@@ -20,7 +20,7 @@ direction = positive - negative
 direction = direction / direction.norm()                             # unit norm: factors compare across directions
 
 prompt = "I went to the bakery and"
-with model.trace(prompt):
+with torch.no_grad(), model.trace(prompt):
     scale = model.layers[LAYER].layer_output[0, -1].norm().save()    # the stream's norm where you steer
 print(float(scale))
 factor = 0.25 * float(scale)                                         # a fraction of it; sweep the fraction

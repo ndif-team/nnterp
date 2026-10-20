@@ -54,6 +54,7 @@ No `dispatch=True` here: `support()` reads the config and the tree, which a meta
 | `read inside the eager attention forward, but this model runs 'sdpa'` | the attention interior | loaded with any `attn_implementation` but `"eager"` |
 | `this checkpoint sets reorder_and_upcast_attn` | the GPT-2 interior | a GPT-2 config with that flag, which takes GPT-2's own attention path |
 | `no self_attn module on this block`, `no linear_attn module on this block` | every value of that module | a hybrid's blocks: some other block has the module and this one does not |
+| `a parallel block: the attention and the MLP read the same input, so there is no stream between them` | `layer_mid` | a parallel block (Cohere, GPT-NeoX with `use_parallel_residual`): the [contribution identity](residual-stream.md#between-the-sublayers) still holds, and only `layer_mid` has no tensor |
 | `no act_fn module on this mlp`, `no down_proj module on this mlp` | `mlp_activation`, `mlp_neurons` | the family aliases no module to that name, such as an activation applied as a function |
 | `routed experts; read per-expert via the Moe component` | `mlp_activation`, `mlp_neurons` | the block's MLP is a mixture of experts ([Mixture of experts](../architectures/mixture-of-experts.md)) |
 | `the state after each token is materialized only by the token-by-token kernel` | `linear_attn.state`, `linear_attn.states` | a gated DeltaNet mixer before `nnterp.route_kernels(model.family, "torch")` ([Gated DeltaNet](../architectures/delta-net.md)) |

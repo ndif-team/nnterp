@@ -8,7 +8,7 @@ Removing one routed expert asks whether a prediction depends on it: zero `expert
 import torch
 from nnterp import StandardizedTransformer
 
-model = StandardizedTransformer("ibm-granite/granite-3.0-1b-a400m-base", dispatch=True, device="cuda", dtype=torch.float32)
+model = StandardizedTransformer("ibm-granite/granite-3.0-1b-a400m-base", device="cuda", dtype=torch.float32)
 prompt = "Big Ben is in the city of"
 ids = model.tokenizer(" London", add_special_tokens=False).input_ids
 assert len(ids) == 1, model.tokenizer.convert_ids_to_tokens(ids)       # one token, or the target is not the word

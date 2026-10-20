@@ -116,7 +116,7 @@ print(torch.allclose(mixed, heads, atol=1e-5))
 
 ## Read order
 
-The table lists the six in forward order, and all of them come before `attention_output`. `model.order(i)` gives the order for block `i`, with equal ranks for values read at one location:
+The table lists the six in forward order, and all of them come before `attention_output`. Several blocks' values in one trace are fine in ascending block order; the rule is forward order across the whole model, not only within a block. `model.order(i)` gives the order for block `i`, with equal ranks for values read at one location:
 
 ```python
 print(qwen.order(5))

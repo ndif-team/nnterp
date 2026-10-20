@@ -155,6 +155,9 @@ Falcon's parallel block adds the attention output into the MLP's output tensor i
 
 ```python
 # nnterp/families/falcon.py
+from nnterp.components import EProperty, Mlp, Residual, first_tensor, rewrap
+
+
 class Mlp(Mlp):
     @EProperty(key="output", description="What the MLP adds to the residual stream (a copy, since the block adds the attention into the live tensor in place)")
     def mlp_output(self, value) -> Residual:
@@ -169,4 +172,6 @@ class Mlp(Mlp):
         return value.clone()
 ```
 
-`postprocess` is the write side of a value keyed on `"output"`: The base's `layer_output` and `mlp_output` read `first_tensor(value)` and write `rewrap(self, value)`, so a module that returns a tuple reads as a tensor and an assignment puts the tensor back into its tuple. A value redefined on a path that serves a bare tensor, such as a sibling norm's output or an operation's, needs neither. nnsight's [eproperty](https://nnsight.net/documentation/intervention/eproperty/) reference has `postprocess` and `transform` in full. A root size the config spells its own way is not a descriptor override but a module-level function named after the size ([Adding a family](adding-a-family.md)), and a value that is new rather than relocated is [Custom values](custom-values.md).
+The three hooks answer three different events. The decorated function is the getter, and what it returns is what a read serves. `postprocess` runs on an assigned value, and what it returns is what is written to the location. `transform` runs on the served view after an in-place edit, and what it returns is what the model receives when the block moves on.
+
+`postprocess` is the write side of a value keyed on `"output"`: The base's `layer_output` and `mlp_output` read `first_tensor(value)` and write `rewrap(self, value)`, both from `nnterp.components`, where `first_tensor` is the tensor of a module output, its first element when the output is a tuple, and `rewrap` puts a tensor back into that tuple, so a module that returns a tuple reads as a tensor and an assignment puts the tensor back into its tuple. A value redefined on a path that serves a bare tensor, such as a sibling norm's output or an operation's, needs neither. nnsight's [eproperty](https://nnsight.net/documentation/intervention/eproperty/) reference has `postprocess` and `transform` in full. A root size the config spells its own way is not a descriptor override but a module-level function named after the size ([Adding a family](adding-a-family.md)), and a value that is new rather than relocated is [Custom values](custom-values.md).

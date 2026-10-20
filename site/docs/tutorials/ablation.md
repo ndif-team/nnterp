@@ -15,7 +15,7 @@ LAYER, HEAD = 9, 8
 block = model.layers[LAYER]
 
 runs = {}                                                   # bound outside the trace
-with model.trace() as tracer:
+with torch.no_grad(), model.trace() as tracer:
     with tracer.invoke(prompt):
         runs["clean"] = model.next_token_probs[0, paris].save()
     with tracer.invoke(prompt):
@@ -28,7 +28,7 @@ with model.trace() as tracer:
         block.self_attn.attention_head_outputs[..., HEAD, :] = 0
         runs[f"head {HEAD}"] = model.next_token_probs[0, paris].save()
 
-with model.trace(prompt):                                   # a skip covers every row, so it gets its own trace
+with torch.no_grad(), model.trace(prompt):                  # a skip covers every row, so it gets its own trace
     model.skip_layers(LAYER, LAYER + 1)
     runs["blocks 9-10"] = model.next_token_probs[0, paris].save()
 
@@ -49,10 +49,10 @@ Replacing a contribution with its mean over a reference set, instead of zero, ke
 
 ```python
 reference = ["The capital of France is", "Berlin lies in", "London is the capital of", "Tokyo is in"]
-with model.trace(reference):
+with torch.no_grad(), model.trace(reference):
     mean = model.layers[LAYER].mlp.mlp_output[:, -1].mean(0).save()     # [hidden_size]
 
-with model.trace(prompt):
+with torch.no_grad(), model.trace(prompt):
     model.layers[LAYER].mlp.mlp_output[:, -1] = mean
     p = model.next_token_probs[0, paris].save()
 print(f"mean-ablated P(Paris) {float(p):.3f}")
@@ -67,7 +67,7 @@ One invoke per head, in one forward:
 
 ```python
 rows = []
-with model.trace() as tracer:
+with torch.no_grad(), model.trace() as tracer:
     for head in range(model.num_heads):
         with tracer.invoke(prompt):
             model.layers[LAYER].self_attn.attention_head_outputs[..., head, :] = 0

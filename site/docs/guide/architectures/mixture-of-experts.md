@@ -1,6 +1,6 @@
 # Mixture of experts
 
-On a mixture-of-experts checkpoint `layers[i].mlp` is a `Moe`, an `Mlp` that also serves the routing and the experts: `router_logits`, `expert_weights`, `expert_indices`, `expert_outputs`, `routed_output` and `shared_expert_output`. `mlp_output` stays what the block adds to the residual stream, as on every MLP. The smallest public checkpoint with a mixture that nnterp can read is ibm-granite/granite-3.0-1b-a400m-base, 32 experts and 8 slots per token. The names are the same on all 39 MoE families.
+On a mixture-of-experts checkpoint `layers[i].mlp` is a `Moe`, an `Mlp` that also serves the routing and the experts: `router_logits`, `expert_weights`, `expert_indices`, `expert_outputs`, `routed_output` and `shared_expert_output`. `mlp_output` stays what the block adds to the residual stream, as on every MLP. The smallest public checkpoint with a mixture that nnterp can read is ibm-granite/granite-3.0-1b-a400m-base, 32 experts and 8 slots per token, where a slot is one of a token's `top_k` routing choices. The names are the same on all 39 MoE families.
 
 ```python
 import torch
@@ -37,7 +37,7 @@ print(torch.allclose(slots.sum(2), routed, atol=1e-5))
 | `routed_output` | `[batch, seq, hidden_size]` | the routed experts' sum, without the shared expert |
 | `shared_expert_output` | `[batch, seq, hidden_size]` | the shared expert's contribution, where the mixture has one |
 
-A slot is one of a token's `top_k` routing choices. The weights and indices are read as the experts module receives them, so a write there is what the experts compute with. `moe.num_experts` and `moe.top_k` are read off the module. On Granite the block multiplies each sublayer's output by `residual_multiplier`, 0.22 here, and `mlp_output` is `routed_output * 0.22`. The experts' values are unscaled on every family. Signatures are on the [`moe` page](../../documentation/components/moe.md) of the Documentation tab.
+The weights and indices are read as the experts module receives them, so a write there is what the experts compute with. `moe.num_experts` and `moe.top_k` are read off the module. On Granite the block multiplies each sublayer's output by `residual_multiplier`, 0.22 here, and `mlp_output` is `routed_output * 0.22`. The experts' values are unscaled on every family. Signatures are on the [`moe` page](../../documentation/components/moe.md) of the Documentation tab.
 
 ## Ablating and rerouting
 
@@ -69,7 +69,7 @@ print(torch.equal(rerouted_weights, weights), chosen[0, -1, :2].tolist())
 # True [5, 2]
 ```
 
-Zeroing a weight removes exactly that slot's term from `routed_output`. A rerouted slot computes `weight * expert_3(x)` with the weight the router gave the expert it replaced, and nothing is renormalized. A write to `router_logits` lands before the scoring, and the weights and indices follow it. The two forced experts share the weight, 0.5 each under Granite's top-k softmax.
+Zeroing a weight removes exactly that slot's term from `routed_output`. Assign `expert_weights` in a single-prompt trace and write in place (`[:] =`) when the trace has several invokes: each invoke is served its own rows of the model's flat routing tensor as a view, so an in-place write lands on those rows, and an assignment is spliced back into the flat tensor. A rerouted slot computes `weight * expert_3(x)` with the weight the router gave the expert it replaced, and nothing is renormalized. A write to `router_logits` lands before the scoring, and the weights and indices follow it. The two forced experts share the weight, 0.5 each under Granite's top-k softmax.
 
 !!! warning "Take the baseline from the same run"
     An edit to one block's routing changes the stream. Later blocks can then send the token to other experts, and the rest of the forward rounds differently, which is why the clean run above is in float32, where the unedited part rounds the same way. Under two or more invokes the batch is padded and rounds differently from the single prompt (`base` below is not `clean`). Edit the routing in place there and take the baseline from an unedited invoke of the same batch:

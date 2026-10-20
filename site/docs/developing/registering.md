@@ -21,7 +21,7 @@ print(families.lookup("gpt2") is gpt2)
 # True
 ```
 
-`vars(gpt2)` copies everything the shipped module defines, and the variant carries GPT-2's `intermediate_size` function along with its classes. A namespace built from `RENAME` and `ENVOYS` alone also loads and answers `support()` with every block value, because `support()` walks the envoy tree the `ENVOYS` build and reads no class off the family. The root's sizes and `project_on_vocab`, though, look for a function of their name on `model.family` before falling back to their own rule, and with that namespace `model.intermediate_size` falls back to `config.intermediate_size`, which GPT-2's config does not have, and raises `AttributeError`. A variant of a family that defines a size function, such as GPT-2, Falcon, BLOOM or DeepSeek-V2, passes it on, which the spread above does.
+`vars(gpt2)` copies everything the shipped module defines, and the variant carries GPT-2's `intermediate_size` function along with its classes. A list as a `RENAME` value gives one native module several aliases, here `mlp` and `ffn` for GPT-2's `mlp`. A namespace built from `RENAME` and `ENVOYS` alone also loads and answers `support()` with every block value, because `support()` walks the envoy tree the `ENVOYS` build and reads no class off the family. The root's sizes and `project_on_vocab`, though, look for a function of their name on `model.family` before falling back to their own rule, and with that namespace `model.intermediate_size` falls back to `config.intermediate_size`, which GPT-2's config does not have, and raises `AttributeError`. A variant of a family that defines a size function, such as GPT-2, Falcon, BLOOM or DeepSeek-V2, passes it on, which the spread above does.
 
 ## One load
 

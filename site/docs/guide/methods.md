@@ -83,7 +83,7 @@ print(model.get_topk_closest_tokens(mid[0, -1], k=3))
 
 The step after the head is where families differ, and it is why a hand-rolled `lm_head(norm(hidden))` is not always the model's prediction. The plain case is the softcap when the text config sets `final_logit_softcapping`: on `google/gemma-2-2b` (cap 30.0) `project_on_vocab(last)` equals `logits`, and `lm_head(norm(last))` differs from them by up to 50.75 on this prompt. A family where the model does something else after the head defines its own `project_on_vocab`: Cohere multiplies by `logit_scale`, Granite divides by `logits_scaling`, and DeepSeek-V4 first collapses its parallel streams the way the model does.
 
-A logit lens over every block is a loop inside one trace ([Logit lens](../tutorials/logit-lens.md) is the full recipe). A list bound in the block needs `nnsight.save`:
+A logit lens over every block is a loop inside one trace ([Logit lens](../tutorials/logit-lens.md) is the full recipe). A list bound in the block needs `nnsight.save`; binding it before the trace, as the Logit lens tutorial does, is the equivalent idiom:
 
 ```python
 import nnsight

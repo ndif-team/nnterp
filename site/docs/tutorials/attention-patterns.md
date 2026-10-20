@@ -2,7 +2,7 @@
 
 Reading and scoring attention heads.
 
-`model.layers[i].self_attn.attention_probabilities` is the attention pattern after the softmax, `[batch, num_heads, query, key]`, on every family that runs transformers' eager attention. Load with `attn_implementation="eager"` and the per-head scores below are three lines on the saved tensor. nnsight's [attention tutorial](https://nnsight.net/tutorials/tutorials/attention/attention_heads/) explains the metrics and the head types.
+`model.layers[i].self_attn.attention_probabilities` is the attention pattern after the softmax, `[batch, num_heads, query, key]`, on every family that runs transformers' eager attention. Load with `attn_implementation="eager"` and the per-head scores below are three lines on the saved tensor. The pattern is served in the model's dtype, and small Pythia and GPT-NeoX checkpoints load in float16, where on the CPU the row sums miss the tolerance below and the entropy is NaN, so pass `dtype=torch.float32` there. nnsight's [attention tutorial](https://nnsight.net/tutorials/tutorials/attention/attention_heads/) explains the metrics and the head types.
 
 ```python
 import torch
@@ -15,7 +15,7 @@ LAYER = 4
 with model.trace(prompt):
     pattern = model.layers[LAYER].self_attn.attention_probabilities.save()   # [batch, num_heads, query, key]
 
-print(pattern.shape, torch.equal(pattern.tril(), pattern), torch.allclose(pattern.sum(-1), torch.ones(pattern.shape[:-1]), atol=1e-4))
+print(pattern.shape, torch.equal(pattern.tril(), pattern), torch.allclose(pattern.sum(-1).float(), torch.ones(pattern.shape[:-1]), atol=1e-4))
 
 entropy = -(pattern * (pattern + 1e-12).log()).sum(-1).mean(-1)[0]      # [num_heads]: low means sharp
 previous = pattern.diagonal(offset=-1, dim1=-2, dim2=-1).mean(-1)[0]     # mass on key i-1

@@ -38,6 +38,8 @@ print(torch.equal(lens[-1], logits))
 
 GPT-2 decodes ` the` for the first six blocks, a city from block 8 (` Rome`, then ` London`) and ` Paris` from block 10. The probability says more than the argmax: P(Paris) peaks at block 9, where ` London` is still the top token, and falls through the last two blocks to the 0.070 the model outputs. The loop reads the blocks in forward order and `logits` after them, which is the order one trace requires.
 
+On many newer checkpoints the early blocks decode to unrelated tokens and the answer appears only in the last few blocks; `Qwen/Qwen2.5-0.5B` puts ` Paris` on top from block 21 of 24 and nothing recognizable before it. That is not a wiring fault, and the wiring check is what decides.
+
 The final `True` is the wiring check. At the last block the lens is the model's own computation, so it must equal `model.logits` exactly. Run it first on a new checkpoint. A lens that differs there is reading through the wrong norm or head, and every earlier block is then on the wrong scale. Decoding `model.lm_head(hidden)` without the norm is not a cheaper lens. A norm is not affine, so the curve comes out confident and wrong rather than as an error.
 
 ## The step after the head

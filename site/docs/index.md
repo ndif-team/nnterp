@@ -86,11 +86,24 @@ hide:
     position: relative;
     z-index: 1;
     display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: 3rem;
+    max-width: 1100px;
+    padding: 2rem;
+  }
+
+  .nn-hero-texts {
+    display: flex;
     flex-direction: column;
     align-items: flex-start;
     gap: 1.25rem;
-    max-width: 900px;
-    padding: 2rem;
+  }
+
+  .nn-hero-logo img {
+    width: 240px;
+    max-width: 35vw;
+    height: auto;
   }
 
   .nn-hero-title h1 {
@@ -169,6 +182,15 @@ hide:
     .nn-hero {
       min-height: 80vh;
     }
+    .nn-hero-content {
+      flex-direction: column-reverse;
+      align-items: flex-start;
+      gap: 1.5rem;
+    }
+    .nn-hero-logo img {
+      width: 140px;
+      max-width: none;
+    }
   }
 </style>
 
@@ -176,6 +198,7 @@ hide:
 
 <div class="nn-hero">
   <div class="nn-hero-content">
+    <div class="nn-hero-texts">
     <div class="nn-hero-title">
       <h1>One vocabulary for every transformer</h1>
     </div>
@@ -190,6 +213,10 @@ hide:
       <a href="tutorials/" class="nn-btn-secondary">Tutorials</a>
       <a href="documentation/" class="nn-btn-secondary">Documentation</a>
       <a href="about/" class="nn-btn-secondary">About</a>
+    </div>
+    </div>
+    <div class="nn-hero-logo">
+      <img src="assets/logo.png" alt="nnterp">
     </div>
   </div>
 </div>

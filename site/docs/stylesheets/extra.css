@@ -104,17 +104,23 @@
 }
 
 /* ===== Single-row navbar =====
-   No logo: the site name is the wordmark, and the section links sit beside it in the
-   header (extra.js injects them). Material's own tabs bar is hidden. */
+   The logo and the site name are the wordmark, and the section links sit beside them in
+   the header (extra.js injects them). Material's own tabs bar is hidden. */
 
 .md-header__button.md-logo {
-  display: none !important;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.md-header__button.md-logo img {
+  height: 1.5rem;
+  width: auto;
 }
 
 /* Material positions the title text absolutely, so the container must not grow and the
    wordmark must flow normally to give it a width. */
 .md-header__title {
-  margin-left: 0.6rem;
+  margin-left: 0.3rem;
   flex-grow: 0;
 }
 

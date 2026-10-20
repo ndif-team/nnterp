@@ -63,7 +63,7 @@ On GPT-2 the two agree. The accessor form reads the right tensor on Gemma-2 and 
 
 ## Blocks without a module
 
-A hybrid (Qwen3-Next, Qwen3.5, OLMo-Hybrid) has `linear_attn` on most blocks and `self_attn` on a few, never both, and OPT has no `mlp` module at all. Decide which blocks have which outside the trace, with `getattr(layer, "self_attn", None)`; [Availability](values/availability.md) shows how `support()` reports them.
+A hybrid (Qwen3-Next, Qwen3.5, OLMo-Hybrid) has `linear_attn` on most blocks and `self_attn` on a few, never both, and OPT has no `mlp` module at all. Decide which blocks have which outside the trace, with `getattr(layer, "self_attn", None)`. [Availability](values/availability.md) shows how `support()` reports them.
 
 ## `print(model)`
 

@@ -115,7 +115,7 @@ print(usage.tolist())
 
 ## `expert_outputs` needs the grouped experts
 
-transformers runs the routed experts through one of several implementations, chosen at load like `attn_implementation`: `grouped_mm` (the default), `batched_mm`, `eager` (a Python loop over the experts) or a hub kernel. The per-slot outputs exist as one tensor only under the first two. Under the others `expert_outputs` is unavailable, and `support()` names the kwarg. The routing pair, `routed_output` and `mlp_output` are module boundaries and read the same under every implementation.
+transformers runs the routed experts through one of several implementations, chosen at load like `attn_implementation`: `grouped_mm` (the default), `batched_mm`, `eager` (a Python loop over the experts) or a hub kernel. The per-slot outputs exist as one tensor only under the first two. Under the others `expert_outputs` is unavailable, and `support()` names the kwarg. The routing pair, `routed_output`, and `mlp_output` are module boundaries and read the same under every implementation.
 
 ```python
 eager = StandardizedTransformer("ibm-granite/granite-3.0-1b-a400m-base", device="cuda", experts_implementation="eager")

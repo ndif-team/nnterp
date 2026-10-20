@@ -39,7 +39,7 @@ The axis names are the sizes on the attention envoy, `attn.num_heads`, `attn.num
 
 ## Eager attention
 
-A load without `attn_implementation` gets transformers' default, `sdpa` on most families, and the eager forward never runs. `model.support()` gives the reason per value, and reading one raises `nnterp.Unavailable` with the same reason before the model runs. `attention_output`, and `attention_premix` (`o_proj.input`, the heads as the output projection receives them), stay available under any implementation.
+A load without `attn_implementation` gets transformers' default, `sdpa` on most families, and the eager forward never runs. `model.support()` gives the reason per value, and reading one raises `nnterp.Unavailable` with the same reason before the model runs. `attention_output` and `attention_premix` (`o_proj.input`, the heads as the output projection receives them) stay available under any implementation.
 
 ```python
 default = StandardizedTransformer("openai-community/gpt2")

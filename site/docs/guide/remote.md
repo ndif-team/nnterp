@@ -1,6 +1,6 @@
 # Remote
 
-`remote=True` on a `StandardizedTransformer` trace is nnsight's remote trace ([nnsight: remote execution](https://nnsight.net/features/15_remote_execution/)) with nnterp's names and values in the block. The server runs a plain `TransformersModel` of the same checkpoint. Your block is re-run there against your envoy tree, which carries the family's aliases and envoy classes by reference, so nnterp must be installed on the server, at the same version as yours. It is never shipped by value.
+`remote=True` on a `StandardizedTransformer` trace is nnsight's remote trace ([nnsight: remote execution](https://nnsight.net/features/15_remote_execution/)) with nnterp's names and values in the block. The server runs a plain `TransformersModel` of the same checkpoint. Your block is re-run there against your envoy tree, which carries the family's aliases and envoy classes by reference, so nnterp must be installed on the server, at the same version as yours. nnterp is never shipped by value.
 
 ```python
 from nnterp import StandardizedTransformer
@@ -10,7 +10,7 @@ print(model.to_model_key())
 # nnsight.modeling.transformers.TransformersModel:{"repo_id": "openai-community/gpt2", "revision": null, "task": "text-generation"}
 ```
 
-The key a request carries names `TransformersModel`, because that is what a server deploys, so every checkpoint a server serves is reachable through a `StandardizedTransformer` without the server deploying anything nnterp-specific. The block itself is what you would run locally, and every `.save()` is downloaded, so slice inside it:
+The key that a request carries names `TransformersModel`, because that is what a server deploys, so every checkpoint a server serves is reachable through a `StandardizedTransformer` without the server deploying anything nnterp-specific. The block itself is what you would run locally, and every `.save()` is downloaded, so slice inside it:
 
 ```python
 # not run for this page: needs an NDIF key and a deployed model

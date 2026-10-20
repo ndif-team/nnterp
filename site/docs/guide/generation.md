@@ -1,6 +1,6 @@
 # Generation
 
-Under `model.generate(prompt, max_new_tokens=N)` the model runs one forward call for the prompt and one per new token, and every standard value is served once per call: `[batch, prompt_len, ...]` on the prompt call, `[batch, 1, ...]` on a decode step. `tracer.iter[...]` binds a stretch of the block to chosen steps, and `tracer.result` is the generated ids ([nnsight: multiple token generation](https://nnsight.net/features/4_multiple_token/)).
+Under `model.generate(prompt, max_new_tokens=N)` the model runs one forward call for the prompt and one per new token ([nnsight: multiple token generation](https://nnsight.net/features/4_multiple_token/)), and every standard value is served once per call: `[batch, prompt_len, ...]` on the prompt call, `[batch, 1, ...]` on a decode step.
 
 ```python
 from nnterp import StandardizedTransformer
@@ -67,7 +67,7 @@ Step 0's token stays `' Paris'`; the two after it change.
 Within one step's body the reads follow the forward, as in a trace: `input_ids` first, a block's interior values before its `attention_output`, that before the block's `layer_output`, and `logits` and `next_token_probs` last. What differs under `generate` is how a misplaced read fails.
 
 !!! warning "A shifted list, not an error"
-    In a plain trace, reading `attention_probabilities` after the same block's `attention_output` raises `OutOfOrderError`. Inside `tracer.iter` the read binds the value's next occurrence, which is the next step's, so the list comes back shifted by one step with no error. Only the read on the last step has no next occurrence; it cuts the loop short with nnsight's `was never reached` warning, which blames the loop bound, and the statements after the loop (here `tracer.result`) never run. A saved name that is missing, or a list that looks one step off, is a read-order error.
+    In a plain trace, reading `attention_probabilities` after the same block's `attention_output` raises `OutOfOrderError`. Inside `tracer.iter` the read binds the value's next occurrence, which is the next step's, so the list comes back shifted by one step with no error. Only the read on the last step has no next occurrence. It cuts the loop short with nnsight's `was never reached` warning, which blames the loop bound, and the statements after the loop (here `tracer.result`) never run. A saved name that is missing, or a list that looks one step off, is a read-order error.
 
 ```python
 outs, patterns = [], []

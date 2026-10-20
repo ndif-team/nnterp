@@ -51,7 +51,7 @@ print(on_cpu.device, mapped.device)
 
 ### `rename=` and `envoys=`
 
-Both merge over the family's, and a key you give wins. The key forms are nnsight's ([Module Access](https://nnsight.net/features/6_modules/)): a dotted key mounts where it resolves from, the root, and a single-component key binds on every envoy that has a child of that name.
+Both merge over the family's, and a key you give wins. The key forms are nnsight's ([Module Access](https://nnsight.net/features/6_modules/)): a dotted key resolves from the root and mounts there, and a single-component key binds on every envoy that has a child of that name.
 
 ```python
 model = StandardizedTransformer(
@@ -66,11 +66,11 @@ print(model.layers[0].self_attn is model.transformer.h[0].attn)
 # True
 ```
 
-`envoys=` maps a module type or a dotted path to an `Envoy` subclass. nnsight tries the type keys first, and the families key their envoys by type, so only a type key displaces a family's envoy: with `envoys={GPT2MLP: MyMlp}`, a subclass of `nnterp.families.gpt2.Mlp`, `type(model.layers[0].mlp) is MyMlp` on every block. A path key reaches a module that no type key in the merged map matches, by its native path or any alias spelling of it (`"norm"` reaches GPT-2's `ln_f`).
+`envoys=` maps a module type or a dotted path to an `Envoy` subclass. nnsight tries the type keys first, and the families key their envoys by type, so only a type key displaces a family's envoy. With `envoys={GPT2MLP: MyMlp}`, a subclass of `nnterp.families.gpt2.Mlp`, `type(model.layers[0].mlp) is MyMlp` on every block. A path key reaches a module that no type key in the merged map matches, by its native path or any alias spelling of it (`"norm"` reaches GPT-2's `ln_f`).
 
 ### `tokenizer_kwargs=`
 
-`tokenizer_kwargs=` sets attributes on the loaded tokenizer, for the two a batch of prompts usually needs.
+`tokenizer_kwargs=` sets attributes on the loaded tokenizer, for the two that a batch of prompts usually needs.
 
 ```python
 model = StandardizedTransformer(

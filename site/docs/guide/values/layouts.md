@@ -24,7 +24,7 @@ print(isinstance(q[0], Queries), isinstance(q.long(), Queries))
 # False False
 ```
 
-`isinstance(tensor, value.layout)` checks rank and dtype, not axis sizes: `q[0]` fails on rank and `q.long()` on dtype. Read the layout off the class (`Attention.attention_queries`) or off the instance's type (`type(model.layers[0].self_attn).attention_queries`); a family that redefines a value annotates it with the same name, so the layout cannot drift from the base.
+`isinstance(tensor, value.layout)` checks rank and dtype, not axis sizes: `q[0]` fails on rank and `q.long()` on dtype. Read the layout off the class (`Attention.attention_queries`) or off the instance's type (`type(model.layers[0].self_attn).attention_queries`). A family that redefines a value annotates it with the same name, so the layout cannot drift from the base.
 
 ## The names
 

@@ -108,4 +108,4 @@ A write at token `t` changes token `t`'s own output as well, since its query rea
 !!! warning "The state is not the whole memory"
     A short convolution (width 4) in front of the kernel mixes each token's queries, keys and values with the three tokens before it. `set_state_after(t, zeros)` is not "forget everything before `t`": tokens `t + 1` to `t + 3` still see tokens up to `t` through the convolution.
 
-[DeltaNet state](../../tutorials/delta-net-state.md) patches and tracks the state across prompts. [Mamba](mamba.md) and [Mamba-2](mamba-2.md) serve their mixers under the same names.
+[DeltaNet state](../../tutorials/delta-net-state.md) patches and tracks the state across prompts, and [Mamba](mamba.md) and [Mamba-2](mamba-2.md) serve their mixers under the same names.

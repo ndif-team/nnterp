@@ -25,7 +25,7 @@ Without the skip the model puts `' Paris'` first, at 0.070.
 
 ## skip_layers
 
-`skip_layers(start, end, skip_with=None)` hands the stream entering block `start` to block `end + 1`. Both indices are inclusive, and negative ones count from the end. `skip_with` replaces that stream with a tensor of your own, `[batch, seq, hidden_size]`. A skipped block's submodules never run, so nothing under its `self_attn` or `mlp` can be read ([nnsight: skip execution](https://nnsight.net/features/13_skip/)). On a family with tuple-returning blocks, such as GPT-J, BLOOM or Falcon, the stream is packed the way the block would have returned it.
+`skip_layers` hands the stream entering block `start` to block `end + 1`. Both indices are inclusive, and negative ones count from the end. `skip_with`, when given, replaces that stream with a tensor of your own, `[batch, seq, hidden_size]`. A skipped block's submodules never run, so nothing under its `self_attn` or `mlp` can be read ([nnsight: skip execution](https://nnsight.net/features/13_skip/)). On a family with tuple-returning blocks, such as GPT-J, BLOOM or Falcon, the stream is packed the way the block would have returned it.
 
 The call reads `layers[start].input` itself, so a read of that location after it is out of order:
 
@@ -43,7 +43,7 @@ Read `layers[start - 1].layer_output` before the call instead, as the first bloc
 
 ## steer
 
-`steer(layers, vector, factor=1.0, token_positions=None, batch_index=None)` adds `factor * vector` to `layer_output` of each block in `layers` (an int, or an ascending list), in place, so the add reaches the model. `vector` is `[hidden_size]` or anything broadcastable to the selected slice, and is cast to the stream's dtype and device. `token_positions` (an int, a list or a slice) and `batch_index` restrict the add; both default to everything.
+`steer` adds `factor * vector`, with `factor` 1.0 by default, to `layer_output` of each block in `layers` (an int, or an ascending list), in place, so the add reaches the model. `vector` is `[hidden_size]` or anything broadcastable to the selected slice, and is cast to the stream's dtype and device. `token_positions` (an int, a list or a slice) and `batch_index` restrict the add; both default to everything.
 
 ```python
 torch.manual_seed(0)
@@ -63,11 +63,11 @@ print(model.probs_to_dict(logits[0, -1].softmax(-1), k=3))
 # {' Chicago': 0.024904731661081314, ' New': 0.020505620166659355, ' Los': 0.019833678379654884}
 ```
 
-The add lands on the stream leaving a block, so to steer the stream entering block `i`, steer block `i - 1`. Scale the factor against the stream's norm at that block, which grows with depth and differs between models by orders of magnitude. Here the last position's stream at block 6 has norm 92.6 and the random direction 28.5, so `factor=3.0` is about the stream's own size. [Steering](../tutorials/steering.md) derives a direction worth adding.
+The add lands on the stream leaving a block. To steer the stream entering block `i`, steer block `i - 1`. Scale the factor against the stream's norm at that block, which grows with depth and differs between models by orders of magnitude. Here the last position's stream at block 6 has norm 92.6 and the random direction 28.5, which makes `factor=3.0` about the stream's own size. [Steering](../tutorials/steering.md) derives a direction worth adding.
 
 ## project_on_vocab
 
-`project_on_vocab(hidden)` returns logits for a residual-stream tensor: the final norm, `lm_head`, then whatever the model does to the head's output before it returns `logits`. Inside a trace it takes a live value, outside a saved one, and on the last block's `layer_output` it equals `logits` exactly.
+`project_on_vocab` returns logits for a residual-stream tensor: the final norm, `lm_head`, then whatever the model does to the head's output before it returns `logits`. Inside a trace it takes a live value, outside a saved one, and on the last block's `layer_output` it equals `logits` exactly.
 
 ```python
 with model.trace(prompt):
@@ -83,7 +83,7 @@ print(model.get_topk_closest_tokens(mid[0, -1], k=3))
 
 The step after the head is where families differ, and it is why a hand-rolled `lm_head(norm(hidden))` is not always the model's prediction. The plain case is the softcap when the text config sets `final_logit_softcapping`: on `google/gemma-2-2b` (cap 30.0) `project_on_vocab(last)` equals `logits`, and `lm_head(norm(last))` differs from them by up to 50.75 on this prompt. A family where the model does something else after the head defines its own `project_on_vocab`: Cohere multiplies by `logit_scale`, Granite divides by `logits_scaling`, and DeepSeek-V4 first collapses its parallel streams the way the model does.
 
-A logit lens over every block is a loop inside one trace ([Logit lens](../tutorials/logit-lens.md) is the full recipe). The list is bound in the block, so it needs `nnsight.save`:
+A logit lens over every block is a loop inside one trace ([Logit lens](../tutorials/logit-lens.md) is the full recipe). A list bound in the block needs `nnsight.save`:
 
 ```python
 import nnsight
@@ -97,7 +97,7 @@ print([next(iter(model.probs_to_dict(row.softmax(-1), k=1))) for row in lens])
 
 ## get_topk_closest_tokens and probs_to_dict
 
-`get_topk_closest_tokens(hidden, k=5)` is `project_on_vocab`, softmax, then the `k` most likely tokens for each row of `hidden.reshape(-1, hidden_size)`, one `{token: probability}` dict per position. `probs_to_dict(probs, k=5)` does the last step alone, on one `[vocab_size]` distribution.
+`get_topk_closest_tokens` is `project_on_vocab`, softmax, then the `k` most likely tokens (5 by default) for each row of `hidden.reshape(-1, hidden_size)`, one `{token: probability}` dict per position. `probs_to_dict` does the last step alone, on one `[vocab_size]` distribution, with the same `k`.
 
 ```python
 print(model.get_topk_closest_tokens(last[0], k=1)[:3])          # the first three positions

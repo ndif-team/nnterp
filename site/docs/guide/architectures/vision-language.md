@@ -29,7 +29,7 @@ print(torch.equal(first[mask], features))
 # True
 ```
 
-The processor's chat template puts the image placeholder in the prompt, and the processor expands it to one token per projected patch, 729 here. A tower block's values have the `Patches` layout, `[images, patches, vision_hidden_size]`, and its attention interior has the same names as a text block's ([Attention](../values/attention.md)). The tower's sizes are on `model.vision` (`num_layers` 26, `vision_hidden_size` 1152), apart from the text model's (`model.num_layers` 24, `model.hidden_size` 1024). `image_token_mask` is `[batch, seq]` bool. `image_features` is `[image_tokens, hidden_size]`, the tensor the wrapper writes into the token embeddings at the image tokens, in row-major order, so the equality above is exact and holds on every wrapper. It is where to ablate, patch or steer the image as the text model sees it.
+The processor's chat template puts the image placeholder in the prompt, and the processor expands it to one token per projected patch, 729 here. A tower block's values have the `Patches` layout, `[images, patches, vision_hidden_size]`, and its attention interior has the same names as a text block's ([Attention](../values/attention.md)). The tower's sizes are on `model.vision` (`num_layers` 26, `vision_hidden_size` 1152), separate from the text model's (`model.num_layers` 24, `model.hidden_size` 1024). `image_token_mask` is `[batch, seq]` bool. `image_features` is `[image_tokens, hidden_size]`, the tensor the wrapper writes into the token embeddings at the image tokens, in row-major order, so the equality above is exact and holds on every wrapper. It is where to ablate, patch or steer the image as the text model sees it.
 
 ```python
 with model.trace(prompt, images=[image]):

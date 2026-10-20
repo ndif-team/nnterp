@@ -28,7 +28,7 @@ except ValueError as error:
 # a positive token index needs right padding, and the tokenizer pads 'left'
 ```
 
-GPT-2's tokenizer pads right by default, which is why the load above passes `tokenizer_kwargs={"padding_side": "left"}`. The same rule covers every function here that batches prompts: `next_token_probs` is each row's last position, which is each prompt's own last token only under left padding.
+nnsight already sets a decoder-only model's tokenizer to pad on the left, and the load above only makes that explicit with `tokenizer_kwargs`. The same rule covers every function here that batches prompts: `next_token_probs` is each row's last position, which is each prompt's own last token only under left padding.
 
 ## Another value, many prompts
 

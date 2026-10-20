@@ -43,7 +43,7 @@ A contribution is what the block adds to the stream, which is not always the mod
 
 ## Between the sublayers
 
-Between `layer_input` and `layer_output` the block has four more module boundaries, and each sublayer two more inside it:
+Between `layer_input` and `layer_output` the block has four more module boundaries, and the sublayers three more values inside them:
 
 | value | where it is read | shape |
 | --- | --- | --- |

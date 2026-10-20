@@ -186,6 +186,8 @@ hide:
     </p>
     <div class="nn-hero-links">
       <a href="getting-started/" class="nn-btn-primary">Get Started</a>
+      <a href="guide/" class="nn-btn-secondary">Guide</a>
+      <a href="tutorials/" class="nn-btn-secondary">Tutorials</a>
       <a href="documentation/" class="nn-btn-secondary">Documentation</a>
       <a href="about/" class="nn-btn-secondary">About</a>
     </div>

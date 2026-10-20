@@ -103,7 +103,7 @@ print(round(s5.norm().item(), 2), round(states[:, 5].norm().item(), 2), round((e
 # 2.85 6.65 4.41
 ```
 
-A write at token `t` changes token `t`'s own output as well, since its query reads the state it has just written. Reads in one trace follow the forward: positions before a write are read before it, positions after it afterwards, and `states`, which reads every position, goes before any write. `states` is read-only. Under `generate` the prompt is one kernel call and each decode step another over one token, so the per-token view is an inner `tracer.iter` on step 0 and `state_output` on the later steps.
+A write at token `t` changes token `t`'s own output as well, since its query reads the state it has just written. Reads in one trace follow the forward: positions before a write are read before it, positions after it afterwards, and `states`, which reads every position, goes before any write. Among the state values the order is `state_input`, then `states`, then `state_output`; a read out of that order raises `OutOfOrderError` naming the kernel call, not the value. `states` is read-only. Under `generate` the prompt is one kernel call and each decode step another over one token, so the per-token view is an inner `tracer.iter` on step 0 and `state_output` on the later steps.
 
 !!! warning "The state is not the whole memory"
     A short convolution (width 4) in front of the kernel mixes each token's queries, keys and values with the three tokens before it. `set_state_after(t, zeros)` is not "forget everything before `t`": tokens `t + 1` to `t + 3` still see tokens up to `t` through the convolution.

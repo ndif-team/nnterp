@@ -2,6 +2,10 @@
 document.addEventListener("DOMContentLoaded", function () {
   var navItems = [
     { name: "Getting Started", href: "/getting-started/" },
+    { name: "Guide", href: "/guide/" },
+    { name: "Tutorials", href: "/tutorials/" },
+    { name: "vLLM", href: "/vllm/" },
+    { name: "Developing", href: "/developing/" },
     { name: "Documentation", href: "/documentation/" },
     { name: "About", href: "/about/" }
   ];

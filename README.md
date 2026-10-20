@@ -1,4 +1,14 @@
-# nnterp
+<p align="center">
+  <img src="./nnterp_logo.png" alt="nnterp" width="300">
+</p>
+
+<h3 align="center">
+One module vocabulary across transformer architectures, on top of nnsight
+</h3>
+
+<p align="center">
+<a href="https://ndif-team.github.io/nnterp/"><b>Documentation</b></a> | <a href="https://github.com/ndif-team/nnterp"><b>GitHub</b></a> | <a href="https://pypi.org/project/nnterp/"><b>PyPI</b></a> | <a href="https://discuss.ndif.us/"><b>Forum</b></a> | <a href="https://arxiv.org/abs/2511.14465"><b>Paper</b></a>
+</p>
 
 nnterp gives every transformer family the same module names and the same standard values,
 on top of [nnsight](https://github.com/ndif-team/nnsight). `StandardizedTransformer` is an

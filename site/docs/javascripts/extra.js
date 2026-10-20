@@ -10,11 +10,12 @@ document.addEventListener("DOMContentLoaded", function () {
   var title = document.querySelector(".md-header__title");
   if (!headerInner || !title) return;
 
-  // Links are resolved against the site root, which is not "/" on project Pages.
-  var base = document.querySelector('link[rel="canonical"]');
+  // Links are resolved against the site root, which is not "/" on project Pages. Material's
+  // (hidden) home link points there from every page.
+  var home = document.querySelector(".md-header__button.md-logo");
   var root = "/";
-  if (base) {
-    try { root = new URL(base.href).pathname.replace(/[^/]*\/?$/, ""); } catch (e) {}
+  if (home) {
+    try { root = new URL(home.href).pathname; } catch (e) {}
   }
   var current = window.location.pathname;
 

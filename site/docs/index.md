@@ -6,10 +6,10 @@ hide:
 ---
 
 <style>
-  /* Full-width home page */
+  /* Full-width home page; the header keeps its own max-width */
   .md-main__inner,
   .md-content,
-  .md-grid {
+  .md-main .md-grid {
     max-width: 100% !important;
     margin: 0 !important;
   }
@@ -157,10 +157,9 @@ hide:
     padding: 3rem 1.5rem 4rem;
   }
 
-  .nn-home-content > * {
+  .nn-home-inner {
     max-width: 44rem;
-    margin-left: auto;
-    margin-right: auto;
+    margin: 0 auto;
   }
 
   @media (max-width: 60em) {
@@ -194,6 +193,7 @@ hide:
 </div>
 
 <div id="content" class="nn-home-content md-typeset" markdown>
+<div class="nn-home-inner" markdown>
 
 ## What nnterp adds
 
@@ -239,4 +239,4 @@ print(attn.shape, resid.shape, logits.shape)
 Add `remote=True` to run the same block on a model hosted by [NDIF](https://ndif.us/).
 
 </div>
-
+</div>

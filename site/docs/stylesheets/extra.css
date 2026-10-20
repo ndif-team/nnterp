@@ -154,7 +154,6 @@
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  margin-right: auto;
   padding-left: 0.75rem;
 }
 
@@ -195,7 +194,8 @@
   opacity: 1;
 }
 
-.md-search {
+/* The palette toggle, search and repo link sit together at the right */
+.md-header__option {
   margin-left: auto;
 }
 

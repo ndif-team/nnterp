@@ -1451,7 +1451,7 @@ def quirks(entry: ModuleType, info: dict[str, Any] | None = None) -> list[dict[s
         if info is not None and spec["when"] is not None and not spec["when"](info["text_config"]):
             continue
         out.append(quirk(spec["slug"], entry.MODEL_TYPE))
-    if info is not None and (slug := head_quirk(info["sizes"])):
+    if info is not None and (slug := head_quirk(info.get("sizes", []))):
         out.append(quirk(slug, entry.MODEL_TYPE))
     return out
 

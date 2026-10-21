@@ -35,17 +35,30 @@ document.addEventListener("DOMContentLoaded", function () {
   });
   title.parentNode.insertBefore(headerNav, title.nextSibling);
 
-  // The nnsight logo beside the repository link, pointing at nnsight.net.
+  // After the repository link: the nnsight logo (nnsight.net) and the encyclopedia's
+  // mark (the encyclopedia, in a new tab).
   var source = document.querySelector(".md-header__source");
   if (source) {
+    var links = document.createElement("div");
+    links.className = "nn-header-links";
     var nnsight = document.createElement("a");
     nnsight.href = "https://nnsight.net";
     nnsight.title = "nnsight";
-    nnsight.className = "nn-nnsight-link";
-    var img = document.createElement("img");
-    img.src = root.replace(/\/$/, "") + "/assets/nnsight.svg";
-    img.alt = "nnsight";
-    nnsight.appendChild(img);
-    source.parentNode.insertBefore(nnsight, source);
+    var nnsightImg = document.createElement("img");
+    nnsightImg.src = root.replace(/\/$/, "") + "/assets/nnsight.svg";
+    nnsightImg.alt = "nnsight";
+    nnsight.appendChild(nnsightImg);
+    var enc = document.createElement("a");
+    enc.href = root.replace(/\/$/, "") + "/encyclopedia/";
+    enc.title = "The nnterp encyclopedia";
+    enc.target = "_blank";
+    enc.rel = "noopener";
+    var encImg = document.createElement("img");
+    encImg.src = root.replace(/\/$/, "") + "/assets/encyclopedia.svg";
+    encImg.alt = "encyclopedia";
+    enc.appendChild(encImg);
+    links.appendChild(nnsight);
+    links.appendChild(enc);
+    source.parentNode.insertBefore(links, source.nextSibling);
   }
 });

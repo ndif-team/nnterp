@@ -51,6 +51,18 @@ jobs:
       - name: Build documentation
         run: mkdocs build --strict -f site/mkdocs.yml
 
+      # The encyclopedia is built locally (it needs the Hub cache) and published on the
+      # orphan branch encyclopedia-site; the deploy serves it at /encyclopedia/.
+      - name: Add the encyclopedia to the site
+        run: |
+          if git fetch --depth=1 origin encyclopedia-site; then
+            mkdir -p site/build/encyclopedia
+            git archive FETCH_HEAD | tar -x -C site/build/encyclopedia
+            rm -f site/build/encyclopedia/README.md
+          else
+            echo "no encyclopedia-site branch yet; the site deploys without it"
+          fi
+
       - name: Setup Pages
         uses: actions/configure-pages@v5
 

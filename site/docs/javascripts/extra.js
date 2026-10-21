@@ -62,3 +62,18 @@ document.addEventListener("DOMContentLoaded", function () {
     source.parentNode.insertBefore(links, source.nextSibling);
   }
 });
+
+// "Copy page": fetch the page's Markdown and put it on the clipboard.
+document.addEventListener("click", function (event) {
+  var button = event.target.closest(".nn-copy-md");
+  if (!button) return;
+  fetch(button.getAttribute("data-markdown"))
+    .then(function (r) { return r.text(); })
+    .then(function (text) { return navigator.clipboard.writeText(text); })
+    .then(function () {
+      var label = button.textContent;
+      button.textContent = "Copied";
+      setTimeout(function () { button.textContent = label; }, 1500);
+    })
+    .catch(function () { button.textContent = "Copy failed"; });
+});

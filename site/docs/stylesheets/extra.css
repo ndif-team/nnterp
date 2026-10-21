@@ -235,3 +235,40 @@
   color: #ffffff !important;
   opacity: 0.85;
 }
+
+/* ===== Page actions: the page as Markdown ===== */
+.nn-page-actions {
+  float: right;
+  display: flex;
+  gap: 0.3rem;
+  margin: 0.2rem 0 0.4rem 0.8rem;
+}
+
+.nn-page-actions button,
+.nn-page-actions a {
+  font: inherit;
+  font-size: 0.62rem;
+  font-weight: 500;
+  line-height: 1;
+  padding: 0.35rem 0.55rem;
+  border-radius: 1rem;
+  border: 1px solid var(--md-default-fg-color--lighter);
+  background: var(--md-default-bg-color);
+  color: var(--md-default-fg-color--light);
+  cursor: pointer;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.nn-page-actions button:hover,
+.nn-page-actions a:hover {
+  color: var(--md-accent-fg-color);
+  border-color: var(--md-accent-fg-color);
+}
+
+@media (max-width: 44.9375em) {
+  .nn-page-actions {
+    float: none;
+    margin: 0 0 0.6rem;
+  }
+}

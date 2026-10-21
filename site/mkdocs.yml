@@ -13,6 +13,7 @@ repo_url: https://github.com/ndif-team/nnterp
 # Theme configuration
 theme:
   name: material
+  custom_dir: overrides
   palette:
     # Light mode
     - media: "(prefers-color-scheme: light)"
@@ -51,6 +52,10 @@ theme:
   icon:
     repo: fontawesome/brands/github
     annotation: material/plus-circle
+
+# Hooks
+hooks:
+  - hooks/markdown_pages.py
 
 # Plugins
 plugins:

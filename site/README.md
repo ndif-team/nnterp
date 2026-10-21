@@ -52,3 +52,11 @@ git add -A && git commit -m "encyclopedia: built site" && git push -f origin enc
 ```
 
 For the dev server, copy `encyclopedia/site/` to `site/docs/encyclopedia/` (gitignored).
+
+## Pages as Markdown
+
+`hooks/markdown_pages.py` writes each hand-written page's source Markdown beside its HTML
+(`guide/loading/` is also `guide/loading.md`) and `llms-full.txt` with every page in nav order;
+the home page and the generated reference are left out. `overrides/main.html` adds the
+"Copy page" and "View as Markdown" controls to those pages, and `docs/llms.txt` links the
+Markdown URLs.

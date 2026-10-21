@@ -20,8 +20,7 @@ yields, which fails when the two differ, and Kimi K2.5's `text_config.model_type
 the wrapper resolves through a family module of its own, `kimi_k25.py`, which re-exports `kimi_k2`'s; `nnterp.families.resolve`
 tries a config's own type before its text model's), and every snippet in `docs/` that runs on CPU with a tiny checkpoint returns
 identical values on both wherever they do not depend on unseeded randomness; `pyproject.toml` requires `nnsight>=0.8`,
-`transformers>=5.20` and `jaxtyping` (the floor is the current line, since every release renames something a
-family reads and 5.20 is the one the suite was last run on; older ones are not refused by the code, only by the pin). nnterp needs an nnsight whose `Envoy` has `parent` and `root`
+`transformers>=5.17` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below) and whose `rename` takes a dotted alias (nnsight #768: `{"attn.c_proj":
 "attn.o_proj"}` binds on the attention, which GPT-2's two `c_proj` need); nnsight 0.8.0
 has both, which is what `nnsight>=0.8` says. The names a family binds to (`RENAME`, `ENVOYS`) are

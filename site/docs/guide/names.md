@@ -87,4 +87,4 @@ print(model.layers[0].self_attn)
 # )
 ```
 
-A value is listed whether or not this checkpoint has it; `support()` is what says. The values themselves start with the [residual stream](values/residual-stream.md).
+A value is listed whether or not this checkpoint has it; `support()` is what says. The [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/) draws each family's block under these names, with the native name beside each. The values themselves start with the [residual stream](values/residual-stream.md).

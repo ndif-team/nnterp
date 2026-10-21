@@ -278,6 +278,8 @@ the stream, so on every family
 layers[i].input + attention_output + mlp_output == layers[i].layer_output
 ```
 
+Every supported family has a page in the [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/): its block drawn with nnterp's names, every value and where it is read, and what `support()` says for its checkpoints.
+
 Not every checkpoint has every value. Before you trace, `model.support()` says what this
 one has and, for anything missing, why.
 

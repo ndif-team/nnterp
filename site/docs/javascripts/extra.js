@@ -1,5 +1,14 @@
 // Single-row navbar: the top-level sections as links beside the wordmark.
 document.addEventListener("DOMContentLoaded", function () {
+  // The encyclopedia banner, above the header on the home page.
+  if (document.querySelector(".nn-hero")) {
+    var banner = document.createElement("div");
+    banner.className = "nn-announcement";
+    banner.innerHTML = 'Every family\u2019s block, drawn with nnterp\u2019s names: ' +
+      '<a href="encyclopedia/" target="_blank" rel="noopener"><u>the nnterp encyclopedia</u></a> \u2192';
+    document.body.insertBefore(banner, document.body.firstChild);
+  }
+
   var navItems = [
     { name: "Getting Started", href: "/getting-started/" },
     { name: "Guide", href: "/guide/" },

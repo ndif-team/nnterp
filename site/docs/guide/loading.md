@@ -106,7 +106,7 @@ print(support["mlp.mlp_output"][0])
 # the default family cannot tell what this sublayer adds to the stream; add a family module (docs/extending/adding-a-family.md)
 ```
 
-When the guess finds no embedding, blocks, final norm or head, the load raises `UnsupportedFamily` and suggests a `rename=` read off the module tree; passing it completes the default's names. [Adding a family](../developing/adding-a-family.md) is the standardization you can rely on.
+When the guess finds no embedding, blocks, final norm or head, the load raises `UnsupportedFamily` and suggests a `rename=` read off the module tree; passing it completes the default's names. [Adding a family](../developing/adding-a-family.md) is the standardization you can rely on, and the families that have it are the pages of the [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/).
 
 ```python
 from nnterp import UnsupportedFamily

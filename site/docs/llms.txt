@@ -6,6 +6,7 @@
 - GitHub: https://github.com/ndif-team/nnterp
 - PyPI: https://pypi.org/project/nnterp/
 - nnsight, which nnterp builds on: https://nnsight.net
+- The encyclopedia, one page per supported family (HTML): https://ndif-team.github.io/nnterp/encyclopedia/
 - Paper (nnterp 1.x): https://arxiv.org/abs/2511.14465
 
 Every page below is linked as Markdown; the same path without `.md` (for `index.md`, the directory) is the HTML. `llms-full.txt` beside this file is every page in one document: https://ndif-team.github.io/nnterp/llms-full.txt

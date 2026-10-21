@@ -272,3 +272,31 @@
     margin: 0 0 0.6rem;
   }
 }
+
+/* ===== Announcement banner (home page): the encyclopedia's five colours ===== */
+.nn-announcement {
+  background: linear-gradient(90deg, #e3928b, #c8a65d, #82bc83, #50bdc9, #af9ee4);
+  padding: 6px 20px;
+  text-align: center;
+  position: relative;
+  z-index: 2;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  color: #1f1f1f;
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.3px;
+  line-height: 1.4;
+}
+
+.nn-announcement a {
+  color: #1f1f1f !important;
+  text-decoration: none;
+  font-weight: 600;
+  display: inline-block;
+  transition: transform 0.2s ease, opacity 0.2s ease;
+}
+
+.nn-announcement a:hover {
+  transform: translateX(4px);
+  opacity: 0.85;
+}

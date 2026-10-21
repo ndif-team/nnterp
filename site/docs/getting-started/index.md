@@ -1,6 +1,6 @@
 # Getting Started
 
-nnterp gives every transformer family the same module names and the same standard values, on top of [nnsight](https://nnsight.net). This page installs it, runs a first trace, and sets that trace beside its nnsight form and its nnterp 1.x form.
+nnterp gives every transformer family the same module names and the same standard values, on top of [nnsight](https://nnsight.net). This page installs it, runs a first trace, and sets that trace beside its nnsight form and its nnterp 1.x form. For the model you are about to load, the [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/) has a page per supported family: the block drawn with nnterp's names and every value on it.
 
 ## Installation
 
@@ -85,7 +85,7 @@ A value is read, edited in place or assigned the way an nnsight `.output` is.
 
 ### Availability
 
-Not every checkpoint has every value. `model.support()` says, from the config and the module tree, what this one has and, for anything missing, why. Reading a missing value inside a trace raises `nnterp.Unavailable` with the same reason, before the model runs:
+Not every checkpoint has every value. `model.support()` says, from the config and the module tree, what this one has and, for anything missing, why. A family's [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/) page shows the same answer for each of its public checkpoints. Reading a missing value inside a trace raises `nnterp.Unavailable` with the same reason, before the model runs:
 
 ```python
 from nnterp import StandardizedTransformer

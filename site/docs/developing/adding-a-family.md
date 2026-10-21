@@ -1,6 +1,6 @@
 # Adding a family
 
-A family is one module under `nnterp/families/`, named after the checkpoint's `config.model_type`, with a `RENAME` dict from native names to standard names, three envoy subclasses, and an `ENVOYS` dict keying those on the family's module classes. Its test file is a `FamilySuite` subclass with a pinned tiny checkpoint. The file name is the whole registration: `nnterp.families.lookup` imports `nnterp.families.<model_type>` the first time a checkpoint of that type is loaded, and nothing else in nnterp changes.
+A family is one module under `nnterp/families/`, named after the checkpoint's `config.model_type`, with a `RENAME` dict from native names to standard names, three envoy subclasses, and an `ENVOYS` dict keying those on the family's module classes. Its test file is a `FamilySuite` subclass with a pinned tiny checkpoint. The file name is the whole registration: `nnterp.families.lookup` imports `nnterp.families.<model_type>` the first time a checkpoint of that type is loaded, and nothing else in nnterp changes. A shipped family also has a page in the [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/), an entry under `encyclopedia/entries/` written as `encyclopedia/README.md` describes.
 
 ## The module
 

@@ -1,6 +1,6 @@
 # Availability
 
-Not every checkpoint has every value. A model loaded with `sdpa` never builds an attention pattern, and OPT has no `mlp` module. `model.support()` says which values this checkpoint has before any trace, from the config and the module tree alone. `None` means available, and anything else is the reason, a string.
+Not every checkpoint has every value. A model loaded with `sdpa` never builds an attention pattern, and OPT has no `mlp` module. `model.support()` says which values this checkpoint has before any trace, from the config and the module tree alone. `None` means available, and anything else is the reason, a string. A family's page in the [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/) shows the same report for each of its public checkpoints, with the reason beside every value the checkpoint lacks.
 
 ```python
 from nnterp import StandardizedTransformer

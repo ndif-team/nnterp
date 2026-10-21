@@ -28,6 +28,8 @@ The terms this site uses, each in the one sense the pages give it, with the page
 
 **Eager attention**: transformers' `attn_implementation="eager"`, the Python attention forward the attention interior is read inside. The default is the checkpoint's, usually `sdpa`, and the interior is then unavailable ([Attention](../guide/values/attention.md#eager-attention)).
 
+**Encyclopedia**: one page per supported family, built from the family module: the block drawn with the standard names, every value and where it is read, the `support()` report per public checkpoint, and the family's quirks ([encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/)).
+
 **Envoy**: nnsight's proxy for one module, reached by attribute path, with `.input`, `.output` and `.source` ([nnsight.net](https://nnsight.net/features/6_modules/)). nnterp's `Layer`, `Attention`, `Mlp` and the other hosts are `Envoy` subclasses installed through `envoys=`.
 
 **EProperty**: the descriptor every value is: nnsight's `eproperty` with a key that is a path from the host (`"output"`, `"../ln_2.output"`, `"source.<op>.inputs"`) and an `unavailable=` reason ([Descriptors](../developing/internals/descriptors.md)).

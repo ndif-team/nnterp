@@ -2,7 +2,7 @@
 
 nnterp gives every transformer family the same module names and the same standard values, on top
 of [nnsight](https://nnsight.net). It is developed by the [NDIF](https://ndif.us/) team and
-maintained at [github.com/ndif-team/nnterp](https://github.com/ndif-team/nnterp).
+maintained at [github.com/ndif-team/nnterp](https://github.com/ndif-team/nnterp). The [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/) is one page per supported family, built from the family modules themselves.
 
 nnterp 1.x was written by Clément Dumas and described in
 [nnterp: A Standardized Interface for Mechanistic Interpretability of Transformers](https://arxiv.org/abs/2511.14465).

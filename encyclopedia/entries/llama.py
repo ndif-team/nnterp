@@ -103,8 +103,8 @@ The processor cuts an image into a base image and crops at a resolution from
 `image_grid_pinpoints`, each a row of the vision encoder's batch, and the projector reads block -2 without
 the CLS token as on Llava 1.5 (`vision_feature_layer` is `-2` on `llava-v1.6-vicuna-7b-hf`). The
 wrapper then unpads the projector's output to the image's aspect ratio and appends
-`image_newline` after each row of patches, so `vision.image_features` has another row count than
-`model.projector.output`. On the pinned tiny checkpoint the projector returns 8 rows (the base image
+`image_newline` after each row of patches, so `vision.image_features` has a different number of rows
+from `model.projector.output`. On the pinned tiny checkpoint the projector returns 8 patch rows (the base image
 and one crop, 4 patches each) and `vision.image_features` 10, 2 of them `image_newline`. Edit `vision.image_features` for what
 the text model receives.
 """,
@@ -167,7 +167,6 @@ connector reading `vision.tower_output`, and `vision.image_features` read at `in
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 241}
-VLLM = True
 QUIRKS: list[str] = []
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -206,7 +205,7 @@ STRIP = {
     "embed": "A plain lookup: no scale and no position embedding is added, so token_embeddings equals "
              "layers[0].input. Positions enter as a rotation of queries and keys inside each attention.",
     "norm": "RMSNorm whose gain is norm.weight as stored.",
-    "head": "Untied on 8B, 70B and Llama-2-7B; tied to embed_tokens on Llama-3.2-1B and 3B (tie_word_embeddings). "
+    "head": "Tied to embed_tokens on Llama-3.2-1B and 3B (tie_word_embeddings), untied on every other Meta checkpoint. "
             "Nothing follows it: logits equals lm_head.output, and project_on_vocab is lm_head(norm(hidden)).",
 }
 
@@ -242,21 +241,23 @@ torch.testing.assert_close(x + attn + mlp, out)
 So scaling a module's output scales its contribution: `model.layers[i].mlp.output[:] *= 0.5`
 and `model.layers[i].mlp.mlp_output[:] *= 0.5` give the same logits. The inputs are the norms'
 outputs: `self_attn.input` is `input_layernorm.output`, `mlp.input` is
-`post_attention_layernorm.output`. The stream between the two adds has no standard value; it is
-`model.layers[i].post_attention_layernorm.input`, which equals
+`post_attention_layernorm.output`, which nnterp serves as `attention_norm_output` and
+`mlp_norm_output`. The stream between the two adds is `model.layers[i].layer_mid`, read as
+`post_attention_layernorm.input`; it equals
 `model.layers[i].input + model.layers[i].self_attn.attention_output`.
 
 ## The default load runs the same attention as eager
 
 A default load runs `sdpa`, and the six attention interior values report unavailable;
 `attn_implementation="eager"` serves them. Llama has no score softcap, window or sink, so the two
-paths compute the same function: on Llama-3.2-1B in float32 their logits differ by at most
+paths compute the same function: on Llama-3.2-1B in float32 their logits differ by about
 `2e-5`, and in bfloat16 by up to `0.25` with the same top token at every position of a test prompt. The query
 scale is `head_dim ** -0.5` (`128 ** -0.5` on 8B, `64 ** -0.5` on 3.2-1B).
 
-## Grouped-query attention on the 3.x sizes
+## Grouped-query attention on Llama-3 and Llama-2-70B
 
-8B and 3.2-1B have 32 query heads over 8 key/value heads, 3.2-3B 24 over 8, 70B 64 over 8.
+8B and 3.2-1B have 32 query heads over 8 key/value heads, 3.2-3B 24 over 8, 70B (Llama-2 and
+Llama-3) 64 over 8, 405B 128 over 8.
 `attention_keys` and `attention_values` are read before `repeat_kv`, `[batch, 8, seq, head_dim]`,
 and query head `h` reads key/value head `h // 4` on 8B: an edit to key/value head `j` reaches
 query heads `4j` to `4j + 3`, a contiguous block. Llama-2-7B, Code Llama 7B and the pinned
@@ -276,9 +277,10 @@ with model.trace(prompt):
 the outputs of `q_proj` and `k_proj`. The two agree at position 0, where the rotation is the
 identity, and nowhere else. A key or query moved to another position keeps the rotation of the
 position it was read at. The cosines and sines are computed once per forward by the native
-`model.model.rotary_emb` and passed to every block; Llama-3.1, 3.2 and 3.3 use `rope_type`
-`llama3` (`rope_theta` 500000, rescaled frequencies), Llama-2 the plain rotary with
-`rope_theta` 10000. Both sides can be read in one trace:
+`model.model.rotary_emb` and passed to every block. Llama-3.1, 3.2 and 3.3 use `rope_type`
+`llama3` (`rope_theta` 500000, low frequencies rescaled by `factor`), Meta-Llama-3 the plain
+rotary with `rope_theta` 500000, and Llama-2 the plain rotary with `rope_theta` 10000. Both sides
+can be read in one trace:
 
 ```python
 attn = model.layers[5].self_attn
@@ -290,8 +292,8 @@ with model.trace(prompt):
 ## Position 0 is a sink with a very large norm
 
 On Llama-3.2-1B the residual stream at position 0 has a norm near 420 after blocks 1 and 5,
-against a mean of 2.4 and 4.5 at the other positions, and heads put on average 0.67 to 0.87 of their attention
-on it (blocks 0, 1, 5, 8 and 15, on a test prompt). The Llama-3 tokenizer prepends its beginning-of-text token
+against a mean of 2.4 and 4.5 at the other positions, and the heads of blocks 0, 1, 5, 8 and 15 put 0.6
+to 0.85 of their attention on it on average, by block and prompt. The Llama-3 tokenizer prepends its beginning-of-text token
 (id `128000`); without it the first real token takes the role (norm 865 after block 5). A mean over
 positions that includes position 0 is dominated by it: slice `[:, 1:]` before averaging
 activations for steering vectors, mean ablation or probes.
@@ -316,8 +318,8 @@ fragment `Par`. Decode the target ids on the checkpoint you run.
 `model.logits` is `model.lm_head.output`: no cap and no scale, so `project_on_vocab` is
 `lm_head(norm(hidden))` and a logit lens at the last block equals `logits`. The final norm's
 gain is `model.norm.weight` as stored. Llama-3.2-1B and 3B tie `lm_head` to `embed_tokens`
-(one parameter), so an edit to `embed_tokens.weight` is an edit to the unembedding; 8B, 70B and
-Llama-2-7B do not.
+(one parameter), so an edit to `embed_tokens.weight` is an edit to the unembedding; the other
+Meta checkpoints do not.
 
 ## What this family module covers
 
@@ -333,19 +335,19 @@ beginning-of-sequence token; Code Llama 7B has `rope_theta` 1000000. Llama 4 is 
 - **Llama Scope** (`OpenMOSS-Team/Llama-Scope`), on Llama-3.1-8B, every block. The `R` SAEs read
   the stream after the block, `model.layers[i].layer_output`; `A` reads
   `model.layers[i].self_attn.attention_output`; `M` reads `model.layers[i].mlp.mlp_output`. The
-  `TC` transcoders read the normed stream, `model.layers[i].mlp.input`, and predict `mlp_output`.
+  `TC` transcoders read the normed stream, `model.layers[i].mlp_input`, and predict `mlp_output`.
   Inputs are scaled to a norm of `sqrt(hidden_size)` before encoding.
 - **EleutherAI** `EleutherAI/sae-llama-3-8b-32x`, on Meta-Llama-3-8B: residual-stream SAEs whose
   hook points `layers.i` are the block outputs, `model.layers[i].layer_output`, and `embed_tokens`
   is `model.token_embeddings`.
 - **circuit-tracer** transcoders on Llama-3.2-1B, per-layer (`mntss/transcoder-Llama-3.2-1B`)
   and cross-layer (`mntss/clt-llama-3.2-1b-524k`). They read `hook_resid_mid`, the stream before
-  the MLP's norm, `model.layers[i].post_attention_layernorm.input`, and write `hook_mlp_out`,
+  the MLP's norm, `model.layers[i].layer_mid`, and write `hook_mlp_out`,
   `model.layers[i].mlp.mlp_output`:
 
 ```python
 with model.trace(prompt):
-    mid = model.layers[i].post_attention_layernorm.input.save()   # hook_resid_mid
-    out = model.layers[i].mlp.mlp_output.save()                    # hook_mlp_out
+    mid = model.layers[i].layer_mid.save()           # hook_resid_mid
+    out = model.layers[i].mlp.mlp_output.save()      # hook_mlp_out
 ```
 """

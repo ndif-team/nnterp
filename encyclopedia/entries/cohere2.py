@@ -31,7 +31,7 @@ _PIXEL_SHUFFLE = """
 ## The projector pixel-shuffles 2 × 2 patches into one token
 
 `downsample_factor` is 2: the projector lays a tile's patches out as their grid and stacks each
-2 × 2 neighbourhood into one vector four times as wide, so a tile's `(image_size // patch_size) ** 2`
+2 × 2 neighborhood into one vector four times as wide, so a tile's `(image_size // patch_size) ** 2`
 patches become a quarter as many image tokens. `linear_1` maps that vector to
 `alignment_intermediate_size`, its two halves are combined as a SwiGLU (`silu(gate) * x`), and
 `linear_2` maps the result to the text model's `hidden_size`. `model.projector.output` keeps the
@@ -123,7 +123,6 @@ Command A Vision's projector has no norm: the shuffled vector goes straight into
 
 #: Set by hues.py (lineage: Cohere).
 PALETTE = {"hue": 177}
-VLLM = True
 QUIRKS = ["parallel-blocks", "layernorm", "sliding-window", "nope-blocks", "interleaved-rotary", "scaled-logits"]
 
 #: What the visualization draws: one input_layernorm whose output both sublayers read (drawn once per branch,
@@ -169,7 +168,8 @@ BLOCK = {
 STRIP = {
     "embed": "A plain lookup with no scale and no position embedding, so token_embeddings equals layers[0].input "
              "on text. Positions enter only through the rotary of the sliding-window blocks.",
-    "norm": "Cohere2LayerNorm: subtracts the mean and multiplies by a weight, with no bias, computed in float32.",
+    "norm": "Cohere2LayerNorm: subtracts the mean, divides by the standard deviation and multiplies by a weight, "
+            "with no bias, computed in float32.",
     "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings).",
     "logits": "logits = lm_head.output × logit_scale (0.25 on Command R7B and Command A). project_on_vocab multiplies too.",
 }
@@ -203,12 +203,12 @@ with model.trace(prompt):
 assert torch.equal(x + attn + mlp, out)           # the block's own order
 ```
 
-## Three sliding blocks to one full block, and only the sliding ones turn
+## Three sliding blocks to one full block, and only the sliding blocks apply the rotary
 
-`config.layer_types` is `full_attention` on every fourth block (3, 7, ..., 31 on Command R7B's 32)
+`config.layer_types` is `full_attention` on every fourth block (3, 7, ..., 31 of Command R7B's 32 blocks)
 and `sliding_attention` elsewhere. A sliding block attends over a window of 4096 tokens; on a
-prompt no longer than the window both masks are the same causal mask. A block's kind is
-`model.layers[i].self_attn._module.sliding_window` (the window, or `None` on a full block).
+prompt no longer than the window both masks are the same causal mask. To tell the kinds apart outside a trace, read
+`model.layers[i].self_attn._module.sliding_window`: the window on a sliding block, `None` on a full one.
 
 Only the sliding blocks apply the rotary. A full block has no position encoding: its
 `attention_queries` and `attention_keys` are `q_proj`'s and `k_proj`'s outputs split into heads,
@@ -253,11 +253,11 @@ assert torch.equal(model.project_on_vocab(resid), logits)
 
 ## Aya Vision and Command A Vision wrap this text model
 
-`aya_vision` and `cohere2_vision` checkpoints load with `task="image-text-to-text"`; nnterp picks this
+`aya_vision` and `cohere2_vision` checkpoints load with `task="image-text-to-text"`. nnterp picks this
 family from `config.text_config` and binds `embed_tokens`, `layers` and `norm` under
 `model.language_model`, with `lm_head` at the root. The vision encoder is SigLIP at
 `model.vision_tower`. The image features replace the image tokens' embeddings after
 `embed_tokens`, so at those positions `token_embeddings` is the placeholder token's embedding and
-`layers[0].input` is the image; at text positions the two are equal. `embed_tokens` runs before
+`layers[0].input` holds the projected image features; at text positions the two are equal. `embed_tokens` runs before
 the vision encoder, so read `token_embeddings` before any `vision` value in a trace.
 """

@@ -97,7 +97,6 @@ text model receives.
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 282}
-VLLM = True
 QUIRKS = ["qkv-bias"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -149,9 +148,10 @@ out     = o_proj(softmax(q·kᵀ / √head_dim) · v)    # o_proj: no bias
 ```
 
 The biases are large. On 0.5B the query bias has a larger norm than the input-dependent part
-`W_q·x` (median over tokens) on all 24 blocks, and the key bias on 8 of them; block 0's are 235
-and 367 against 18 and 7. A query–key analysis from `W_q` and `W_k` alone leaves out the larger
-part of every block's query. Zeroing the attention's input does not silence it: the queries, keys and values fall
+`W_q·x` (median over tokens) on all 24 blocks, and the key bias is larger than `W_k·x` on 8 of
+them. On block 0 the two biases have norms 235 and 367, against about 20 and 7 for `W_q·x` and
+`W_k·x`. A query–key analysis from `W_q` and `W_k` alone leaves out the larger
+part of every block's query. Zeroing the attention's input does not silence the attention: the queries, keys and values fall
 back to their biases, and `attention_output` is `o_proj` of the value bias at every position.
 
 ```python
@@ -174,12 +174,12 @@ Of the Qwen1.5 checkpoints, which load in this family, 0.5B and 7B have no group
 
 ## The sliding-window keys do nothing
 
-Every checkpoint on this page has `sliding_window` and `max_window_layers` in its `config.json`,
-and every one sets `use_sliding_window: false`. `Qwen2Config` then sets `sliding_window` to `None` and every entry
+Most configs on this page carry `sliding_window` and `max_window_layers`, but every checkpoint has
+`use_sliding_window` false, set in its `config.json` or left at the default. `Qwen2Config` then sets `sliding_window` to `None` and every entry
 of `layer_types` to `full_attention`, so every block attends causally over the whole prompt and
 `model.layers[i].self_attn._module.sliding_window` is `None`. With no window and no softcap, the
 default `sdpa` load and the eager one compute the same model: on 0.5B in float32 their logits
-agree to 6e-5. `attn_implementation="eager"` is needed only for the six attention interior values.
+agree to 6e-5. `attn_implementation="eager"` is needed only to read the six attention interior values.
 
 ## Position 0 is the first token, and it becomes the sink
 
@@ -188,12 +188,12 @@ The tokenizers prepend nothing (`bos_token` is `None`; the config's `bos_token_i
 whatever that token is, the model turns it into an attention sink. On 0.5B, position 0's
 `layer_output` points the same way on every prompt from block 2 to block 20 (cosine 0.999),
 almost entirely along coordinate 62; from block 3 to block 20 its norm is 1400 to 1750, against
-under 65 at every other position, and block 21 dissolves it. From block 3 on, a query puts on
-average 0.55 to 0.95 of its attention on key 0.
+under 65 at every other position, and block 21 dissolves it. From block 3 to block 20, a query puts
+on average 0.45 to 0.96 of its attention on key 0.
 
-So from block 2 to block 20 the first word has no representation of its own: a probe, a patch
+From block 2 to block 20 the first word has no representation of its own: a probe, a patch
 or a logit lens at position 0 reads the sink. A mean over positions (for mean ablation, a steering vector,
-a normalisation) is dominated by position 0 unless it is dropped. Prepending `<|endoftext|>`
+a normalization) is dominated by position 0 unless it is dropped. Prepending `<|endoftext|>`
 moves the sink onto that token and leaves the first word its own position; on 0.5B the
 next-token prediction barely moves (`' Paris'` 0.797 without, 0.807 with).
 
@@ -204,21 +204,26 @@ with model.trace("<|endoftext|>The Eiffel Tower is in the city of"):
 resid[0].norm(dim=-1)        # position 0 about 1400, the others under 25
 ```
 
-With no BOS to skip, `tokenizer(" Paris").input_ids[0]` is the word's own token here, but the
-DeepSeek-R1-Distill-Qwen tokenizers do prepend a BOS (`<｜begin▁of▁sentence｜>`), where index 0
-is that. `get_first_tokens` tokenizes with `add_special_tokens=False` and is right on both:
-on Qwen2.5 it returns `'Paris'` and `' Paris'`.
+With no BOS to skip, `tokenizer(" Paris").input_ids[0]` is the word's own token. The
+DeepSeek-R1-Distill-Qwen tokenizers name a BOS (`<｜begin▁of▁sentence｜>`), which their chat
+template writes; a plain tokenizer call does not add it. `get_first_tokens` tokenizes with
+`add_special_tokens=False` and returns `'Paris'` and `' Paris'` on Qwen2.5 and on the distills.
 
 ## The chat template writes a system turn
 
 The base checkpoints ship the same ChatML template as the instruct ones (`<|im_start|>`,
-`<|im_end|>`). Given no system message, it writes one: `You are a helpful assistant.` on the
-Qwen2 and Qwen2.5 base models, Qwen2-Instruct and Qwen2.5-7B-Instruct-1M; `You are Qwen, created
-by Alibaba Cloud. You are a helpful assistant.` on Qwen2.5-Instruct and Qwen2.5-Coder; none on
-Qwen2.5-Math and QwQ-32B. A templated prompt can therefore open with a system turn you did not
-write, and its position 0 is `<|im_start|>`, which takes the sink. The instruct configs end
-generation on `<|im_end|>` (151645), the base configs on `<|endoftext|>` (151643). The
-DeepSeek-R1-Distill-Qwen tokenizers carry DeepSeek's own template instead.
+`<|im_end|>`). Given no system message, the template writes one, and its text depends on the checkpoint:
+
+- `You are a helpful assistant` (no full stop) on the Qwen2 base models and Qwen1.5;
+- `You are a helpful assistant.` on the Qwen2.5 base models, Qwen2-Instruct and Qwen2.5-7B-Instruct-1M;
+- `You are Qwen, created by Alibaba Cloud. You are a helpful assistant.` on Qwen2.5-Instruct and Qwen2.5-Coder;
+- `Please reason step by step, and put your final answer within \\boxed{}.` on Qwen2.5-Math.
+
+QwQ-32B's template writes no system turn and ends the generation prompt at `<think>\\n`. A
+templated prompt can therefore open with a system turn you did not write, and its position 0 is
+`<|im_start|>`, which takes the sink. The instruct configs end generation on `<|im_end|>`
+(151645), the base configs on `<|endoftext|>` (151643). The DeepSeek-R1-Distill-Qwen tokenizers
+carry DeepSeek's own template instead.
 
 ## The readout is the plain projection
 

@@ -15,9 +15,10 @@ CHECKPOINTS = ["google/vaultgemma-1b"]
 
 #: Set by hues.py (lineage: Gemma).
 PALETTE = {"hue": 168}
-VLLM = False
 QUIRKS = [
     "scaled-embeddings", "gain-norm",
+    # every block is full_attention on google/vaultgemma-1b; the pinned tiny checkpoint alternates
+    {"slug": "sliding-window", "when": lambda config: "sliding_attention" in (config.layer_types or [])},
     # null on google/vaultgemma-1b; set (30) on the pinned tiny checkpoint
     {"slug": "softcapped-logits", "when": lambda config: config.final_logit_softcapping is not None},
 ]
@@ -49,7 +50,7 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "pre_feedforward_layernorm",
-            "pre_norm_note": "The MLP's input norm. nnterp also answers to post_attention_layernorm here, the name Llama "
+            "pre_norm_note": "The MLP's input norm. nnterp also binds it as post_attention_layernorm, the name Llama "
                              "gives its pre-MLP norm; the block has no norm after the attention.",
             "contribution": "mlp_output",
             "detail": "GeGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_activation}",
@@ -103,7 +104,7 @@ Scaling a module's output scales its contribution: `mlp.output[:] *= 0.5` and
 
 ## The released checkpoint sets no softcap and no window
 
-The modeling code carries Gemma 2's machinery: a score softcap inside the eager attention
+The modeling code has Gemma 2's score and logit caps and its sliding blocks: a score softcap inside the eager attention
 (`attn_logit_softcapping`), a logit softcap after `lm_head` (`final_logit_softcapping`) and
 `config.layer_types` with sliding blocks. On `google/vaultgemma-1b` both caps are `null` and all 26
 blocks are `full_attention` (the config's `sliding_window` of 512 is read by no block), so

@@ -21,7 +21,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: HunYuan).
 PALETTE = {"hue": 26}
-VLLM = False
 QUIRKS = ["qk-norm"]
 
 #: Every real value in the notes was measured on Hunyuan-0.5B-Pretrain in float32 on a GPU unless the note
@@ -90,10 +89,10 @@ torch.testing.assert_close(x + attn + mlp, out)
 vector shared by every head, applied to each head's rotated query and key. `attention_queries` and
 `attention_keys` are read after them: `attention_queries` equals `query_layernorm.output` exactly. The
 norm removes the length a head's query or key had before it, so the dot products' scale comes from
-the two gains (their means are 1.15 to 1.41 across the 24 blocks of 0.5B). Tripling head 0's slice
-of `q_proj.output` at block 8 moves the logits by at most 7e-4; tripling head 0 at
-`attention_queries` sharpens its pattern, from 0.71 nats of entropy to 0.01. Scale or steer a
-head's query or key where no norm follows:
+the two gains (their means are 1.15 to 1.41 across the 24 blocks of 0.5B). On 0.5B, tripling head
+0's slice of `q_proj.output` at block 8 moves the logits by a few thousandths at most, while
+tripling head 0 at `attention_queries` sharpens its pattern from about 0.8 nats of entropy to
+about 0.02. Scale or steer a head's query or key where no norm follows:
 
 ```python
 attn = model.layers[1].self_attn
@@ -144,7 +143,7 @@ base = 1 / rotary.inv_freq[1] ** (model.head_dim / 2)    # 1.116e7 on 0.5B
 
 The tokenizer prepends nothing to a plain prompt, so the first real token takes the role of a
 sink. On 0.5B its residual norm is 78 after blocks 8 and 16, against 0.6 to 1.5 at the other
-positions, and at block 16 heads put 0.83 to 0.90 of their attention on it (two test prompts). The
+positions, and at block 16 every head puts 0.7 to 0.9 of its attention on it (test prompts). The
 chat templates start with the BOS token (`<｜hy_begin▁of▁sentence｜>` on 0.5B to 4B,
 `<|startoftext|>` on 7B), which then is position 0. Slice `[:, 1:]` before averaging activations for
 steering vectors, mean ablation or probes.

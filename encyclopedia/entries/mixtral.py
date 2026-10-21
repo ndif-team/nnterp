@@ -18,7 +18,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 263}
-VLLM = True
 QUIRKS = ["mixture-of-experts"]
 
 #: Every number in the notes comes from a checkpoint's config or tokenizer; the shapes, identities and
@@ -110,7 +109,8 @@ assert torch.equal(top.indices, idx)        # slot 0 the larger weight
 
 `moe.SCORING` is `"softmax"`. With two slots that sum to one, a token's weights are `p` and
 `1 - p`: the mixture's output is a convex combination of two experts' outputs. `router_jitter_noise`
-is 0 on every checkpoint, and the noise it would add runs only in training.
+is 0 on every checkpoint, and the noise, a random factor on the mixture's input, applies only in
+training.
 
 ## Ablating an expert
 
@@ -166,6 +166,17 @@ with model.trace(dict(batch)):
 
 8x22B-Instruct-v0.1 has 32768 tokens, the others 32000; its `[INST]` and `[/INST]` are single
 control tokens.
+
+## Target tokens differ by tokenizer
+
+`"Paris"` encodes to `▁Paris` on every checkpoint. `" Paris"` is `▁Paris` too on 8x7B-Instruct and
+both 8x22B tokenizers, but two tokens, `['▁', '▁Paris']`, on Mixtral-8x7B-v0.1 and the pinned tiny
+checkpoint. Check that the target is one token on the checkpoint you run:
+
+```python
+ids = model.tokenizer(" Paris", add_special_tokens=False).input_ids
+assert len(ids) == 1, model.tokenizer.convert_ids_to_tokens(ids)
+```
 
 ## The readout
 

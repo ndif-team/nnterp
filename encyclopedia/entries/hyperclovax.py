@@ -3,9 +3,9 @@
 MODEL_TYPE = "hyperclovax"
 TITLE = "HyperCLOVA X"
 SUBTITLE = (
-    "A sandwich block whose post-norms keep their native names, post_norm1 and post_norm2, with four config "
-    "scalars around it: the embeddings and each post-norm's output are multiplied before they reach the "
-    "stream, the scores are scaled by attention_multiplier, and the logits are multiplied by logits_scaling."
+    "Llama's block with a norm after each sublayer (post_norm1, post_norm2) where use_post_norm is set, and four "
+    "config multipliers: on the embeddings, on each sublayer's contribution, on the attention scores (in place of "
+    "head_dim ** -0.5) and on the logits."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -70,52 +70,69 @@ read at the scatter as in a trace.
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 273}
-VLLM = False
-QUIRKS = ["sandwich-norms", "scaled-residual-adds", "embedding-multiplier", "scaled-logits"]
+QUIRKS = [
+    # use_post_norm is true on Think-14B and false on Think-32B, whose post_norm1 and post_norm2 are nn.Identity
+    {"slug": "sandwich-norms", "when": lambda config: config.use_post_norm},
+    # every multiplier is 1.0 on Think-32B; residual_multiplier is 1.0 on Think-14B too
+    {"slug": "scaled-residual-adds", "when": lambda config: config.residual_multiplier != 1.0},
+    {"slug": "embedding-multiplier", "when": lambda config: config.embedding_multiplier != 1.0},
+    {"slug": "scaled-logits", "when": lambda config: config.logits_scaling != 1.0},
+]
 
 #: No checkpoint of this family is small enough to run here: the identities, read orders and the write
 #: round trip were checked on the pinned tiny checkpoint and on the suite's copy of it with
 #: residual_multiplier 0.22, logits_scaling 4 and embedding_multiplier 3, in float32 and bfloat16; the
 #: numbers for Think-14B come from its config.
 
-BLOCK = {
-    "topology": "sequential",
-    "sublayers": [
-        {
-            "host": "self_attn",
-            "kind": "attention",
-            "label": "Attention",
-            "pre_norm": "input_layernorm",
-            "post_norm": "post_norm1",
-            "contribution": "attention_output",
-            "interior": [
-                "attention_queries", "attention_keys", "attention_values",
-                "attention_scores", "attention_probabilities", "attention_head_outputs",
-            ],
-            "detail": "{num_heads}/{num_kv_heads} heads, scale {attention_multiplier}",
-            "post_norm_note": "The norm after the attention. attention_output is its output times residual_multiplier.",
-        },
-        {
-            "host": "mlp",
-            "kind": "mlp",
-            "label": "MLP",
-            "pre_norm": "post_attention_layernorm",
-            "post_norm": "post_norm2",
-            "contribution": "mlp_output",
-            "detail": "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}",
-            "pre_norm_note": "Named for its place on the stream, after the attention's add: it is the MLP's input norm. "
-                             "The norm after the attention is post_norm1.",
-            "post_norm_note": "The norm after the MLP. mlp_output is its output times residual_multiplier.",
-        },
+_ATTENTION = {
+    "host": "self_attn",
+    "kind": "attention",
+    "label": "Attention",
+    "pre_norm": "input_layernorm",
+    "contribution": "attention_output",
+    "interior": [
+        "attention_queries", "attention_keys", "attention_values",
+        "attention_scores", "attention_probabilities", "attention_head_outputs",
     ],
-    "identity_note": "The terms are already scaled: attention_output and mlp_output are the post-norms' outputs "
-                     "times residual_multiplier (1.0 on Think-14B), so the plain sum is exact, in float32 and bfloat16 alike.",
+    "detail": "{num_heads}/{num_kv_heads} heads, scale {attention_multiplier}",
+}
+_MLP = {
+    "host": "mlp",
+    "kind": "mlp",
+    "label": "MLP",
+    "pre_norm": "post_attention_layernorm",
+    "contribution": "mlp_output",
+    "detail": "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}",
+    "pre_norm_note": "Named for its place on the stream, after the attention's add: it is the MLP's input norm.",
 }
 
+#: With use_post_norm (Think-14B) each sublayer has a norm after it; without it (Think-32B) post_norm1 and
+#: post_norm2 are nn.Identity and the block is Llama's.
+BLOCK = [
+    (lambda config: config.use_post_norm, {
+        "topology": "sequential",
+        "sublayers": [
+            {**_ATTENTION, "post_norm": "post_norm1",
+             "post_norm_note": "The norm after the attention. attention_output is its output times residual_multiplier."},
+            {**_MLP, "post_norm": "post_norm2",
+             "pre_norm_note": _MLP["pre_norm_note"] + " The norm after the attention is post_norm1.",
+             "post_norm_note": "The norm after the MLP. mlp_output is its output times residual_multiplier."},
+        ],
+        "identity_note": "The terms are already scaled: attention_output and mlp_output are the post-norms' outputs "
+                         "times residual_multiplier, so the plain sum is exact, in float32 and bfloat16 alike.",
+    }),
+    (lambda config: True, {
+        "topology": "sequential",
+        "sublayers": [_ATTENTION, _MLP],
+        "identity_note": "attention_output and mlp_output are the sublayers' outputs times residual_multiplier, "
+                         "so the plain sum is exact.",
+    }),
+]
+
 STRIP = {
-    "embed": "token_embeddings is the lookup itself; the model multiplies it by embedding_multiplier "
-             "(10.0 on Think-14B) before block 0, so layers[0].input is token_embeddings · 10.",
-    "layers": "Each block adds its post-norms' outputs times residual_multiplier (1.0 on Think-14B).",
+    "embed": "token_embeddings is the plain lookup. The model multiplies it by embedding_multiplier "
+             "(10.0 on Think-14B) before block 0, so layers[0].input is token_embeddings · embedding_multiplier.",
+    "layers": "Each block adds its sublayers' contributions times residual_multiplier (1.0 on Think-14B).",
     "head": "lm_head has its own weight: tie_word_embeddings is false.",
     "logits": "logits = lm_head.output · logits_scaling (0.125 on Think-14B). project_on_vocab multiplies too.",
 }
@@ -130,11 +147,12 @@ out    = h + post_norm2(mlp(post_attention_layernorm(h))) * residual_multiplier
 logits = lm_head(norm(out)) * logits_scaling
 ```
 
-Four RMSNorms per block, two per sublayer, and the names are the trap: `post_attention_layernorm`
-is the MLP's *input* norm, as on Llama, and the norms after the sublayers are `post_norm1` (after
-the attention) and `post_norm2` (after the MLP). nnterp keeps the native names. On Think-14B the
-four scalars are `embedding_multiplier` 10, `residual_multiplier` 1, `attention_multiplier` 1/128
-and `logits_scaling` 0.125, each one number for the whole model.
+With `use_post_norm` (Think-14B) a block has four RMSNorms, two per sublayer, and the names are the
+trap: `post_attention_layernorm` is the MLP's *input* norm, as on Llama, and the norms after the
+sublayers are `post_norm1` (after the attention) and `post_norm2` (after the MLP). nnterp keeps the
+native names. Each multiplier is one number for the whole model. On Think-14B they are
+`embedding_multiplier` 10, `residual_multiplier` 1, `attention_multiplier` 1/128 and
+`logits_scaling` 0.125.
 
 ## The contributions are the post-norms' outputs, times residual_multiplier
 
@@ -155,7 +173,7 @@ torch.testing.assert_close(attn, post * model.config.residual_multiplier)
 torch.testing.assert_close(x + attn + mlp, out)
 ```
 
-**RMSNorm is scale-invariant, so scale the contribution, not the module.** `post_norm2(0.5 * y)`
+**With post-norms, scale the contribution, not the module.** RMSNorm is scale-invariant: `post_norm2(0.5 * y)`
 equals `post_norm2(y)` up to `eps`: halving `mlp.output` leaves the stream as it was, and zeroing
 it works only because the norm of zero is zero. Partial ablations and steering go through
 `mlp_output` / `attention_output`, which the block adds as they are:
@@ -190,10 +208,11 @@ with model.trace(prompt):
 
 A read changes nothing: the forward stays bit-identical.
 
-## The query scale is attention_multiplier, 1/head_dim
+## The query scale is attention_multiplier
 
 The attention multiplies `q · kᵀ` by `config.attention_multiplier` in place of `head_dim ** -0.5`.
-On Think-14B it is 1/128, `1 / head_dim`, a factor of 11.3 below `128 ** -0.5`. `attention_scores`
+On Think-14B it is 1/128, `1 / head_dim`, a factor of 11.3 below `128 ** -0.5`; on Think-32B it is
+`128 ** -0.5`. `attention_scores`
 are read after the scale and the causal mask, and `softmax(attention_scores)` reproduces
 `attention_probabilities`. Code that recomputes scores takes the multiplier from the config:
 
@@ -216,7 +235,7 @@ heads `6j` to `6j + 5`. The six interior values need `attn_implementation="eager
 
 ## Logits are the head's output times logits_scaling
 
-`model.logits` is `model.lm_head.output * logits_scaling`, exactly, 0.125 on Think-14B, and
+`model.logits` is `model.lm_head.output * logits_scaling` exactly (0.125 on Think-14B), and
 `project_on_vocab` multiplies too, so a logit lens at the last block equals `logits`. A softmax over
 `lm_head.output`, or over `lm_head(norm(hidden))` written by hand, is at temperature 1/8: sharper
 than the model's own distribution. Take probabilities and KLs from `logits` or
@@ -239,7 +258,7 @@ torch.testing.assert_close(model.project_on_vocab(resid), logits)
 The embedding module returns the plain lookup, and the model multiplies it by
 `embedding_multiplier` afterwards: `layers[0].input` is `token_embeddings * 10` on Think-14B.
 Embeddings passed as `inputs_embeds` are multiplied too. An edit to `token_embeddings` reaches
-block 0 times 10; to set what block 0 reads, edit `layers[0].input`.
+block 0 multiplied by `embedding_multiplier`; to set what block 0 reads, edit `layers[0].input`.
 
 ```python
 with model.trace(prompt):

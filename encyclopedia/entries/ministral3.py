@@ -35,8 +35,9 @@ WRAPPERS = {
 `model.multi_modal_projector` (the `projector`) reads the last block's stream with its leading 1
 dropped: `model.projector.input` is `vision.tower_output[0]`, `[patches, vision_hidden_size]`
 (`vision_feature_layer` is `-1`). It norms each patch (`norm`, an RMSNorm), then `patch_merger`
-cuts each image's grid into 2 × 2 blocks (`spatial_merge_size`), concatenates each block's four
-patches into one `4 * vision_hidden_size` vector and maps it back to `vision_hidden_size` with
+cuts each image's grid into 2 × 2 blocks (`spatial_merge_size`), flattens each block's four
+patches into one `4 * vision_hidden_size` vector (`unfold`, channel by channel) and maps it back to
+`vision_hidden_size` with
 `merging_layer`, a linear without bias; `linear_1`, GELU and `linear_2` take it to the text model's
 width. So an image of `rows × columns` patches is `(rows // 2) * (columns // 2)` image tokens, and
 `vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`.
@@ -68,7 +69,6 @@ processor resizes an image's longest side to at most 1540 pixels (`longest_edge`
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 269}
-VLLM = False
 QUIRKS: list[str] = []
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -141,7 +141,7 @@ After the rotary embedding the attention multiplies each query by
 every size. `attention_queries` is read at the attention function's arguments, after the scale. The
 factor is exactly 1 below position 16384, so on shorter prompts the queries are the rotated ones;
 it is about 1.069 from 16384 and about 1.22 from 131072. The rotated, unscaled queries are the
-output of the source's `apply_rotary_pos_emb_0`:
+output of the `apply_rotary_pos_emb` call in the attention's `.source`:
 
 ```python
 attn = model.layers[1].self_attn
@@ -152,11 +152,11 @@ with model.trace(prompt):
 
 On the pinned checkpoint rewritten with `beta` 0.1 and `original_max_position_embeddings` 4,
 `q` equals `rotated` times the factor at every position, and `rotated` exactly at positions 0 to 3.
-The keys are not scaled. The rotary itself is YaRN (`rope_type` `yarn`, `factor` 16) over a
-`max_position_embeddings` of 262144; its `attention_scaling` is 1.0 on 3B and 8B, so the cosines
-and sines are not rescaled.
+The keys are not scaled. The rotary itself is YaRN (`rope_type` `yarn`, `factor` 16, `rope_theta`
+1,000,000 on 3B and 8B and 1,000,000,000 on 14B) over a `max_position_embeddings` of 262144; its `attention_scaling` is 1.0 on every size (`mscale` and
+`mscale_all_dim` are both 1), so the cosines and sines are not rescaled.
 
-## Grouped-query attention, as wide as the heads make it
+## Grouped-query attention, 4096 wide on every size
 
 Every size has 32 query heads over 8 key/value heads of width 128: query head `h` reads key/value
 head `h // 4`, and `attention_keys` and `attention_values` are read before `repeat_kv`,

@@ -4,9 +4,9 @@ blocks, then a sigmoid-routed mixture with a shared expert."""
 MODEL_TYPE = "afmoe"
 TITLE = "Trinity Nano / Trinity Mini / Trinity Large"
 SUBTITLE = (
-    "A sandwich block whose attention gates its heads with a sigmoid and turns queries and keys by rotary only "
-    "on its sliding-window blocks, and whose MLP is dense on the first blocks and after them a mixture with a "
-    "shared expert, chosen by a sigmoid plus a selection bias."
+    "A sandwich block whose attention gates its heads with a sigmoid and applies rotary only on its "
+    "sliding-window blocks, and whose MLP is dense on the first blocks and a mixture with a shared expert after "
+    "them, its routed experts picked by sigmoid scores plus a selection bias."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -22,7 +22,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 230}
-VLLM = False
 QUIRKS = [
     "sandwich-norms", "embedding-multiplier", "qk-norm", "output-gate", "sliding-window", "nope-blocks",
     "mixture-of-experts", "dense-first-blocks",
@@ -54,7 +53,7 @@ BLOCK = {
                 "full_attention": "full causal, no rotary, gated",
             },
             "post_norm_note": "On AFMoE this norm follows the attention. On Llama the same name is the norm before the MLP. "
-                              "layer_mid is the stream after its output is added, what the MLP's pre-norm reads.",
+                              "layer_mid is the stream after this norm's output is added, which the MLP's pre-norm reads.",
         },
         {
             "host": "mlp",
@@ -78,14 +77,14 @@ BLOCK = {
                 "expert_outputs", "routed_output", "shared_expert_output",
             ],
             "detail": "{num_experts} experts × {moe_intermediate_size}, top {top_k}",
-            "post_norm_note": "It norms the shared and routed experts' sum: mlp_output is this norm's output, not routed_output + shared_expert_output.",
+            "post_norm_note": "post_mlp_layernorm norms the shared and routed experts' sum, so mlp_output is this norm's output, not routed_output + shared_expert_output.",
         },
     ],
 }
 
 STRIP = {
     "embed": "With mup_enabled (true on every checkpoint) the model multiplies the embedding by √hidden_size "
-             "before block 0, outside embed_tokens: token_embeddings is unscaled, layers[0].input is "
+             "before block 0, outside embed_tokens, so token_embeddings is unscaled and layers[0].input is "
              "token_embeddings · √hidden_size (32 on Nano). The tokenizer prepends <|begin_of_text|>.",
     "head": "lm_head has its own weight: tie_word_embeddings is false on every checkpoint. logits is lm_head.output.",
 }
@@ -117,24 +116,25 @@ torch.testing.assert_close(x + attn + mlp, out)
 
 `attention_output` is `post_attention_layernorm`'s output and `mlp_output` is
 `post_mlp_layernorm`'s; `self_attn.output[0]` and `mlp.output` are the tensors entering them.
-RMSNorm is scale-invariant up to `eps`, so scaling `mlp.output` leaves the stream as it was:
-scale or steer the contribution itself.
+RMSNorm is scale-invariant up to `eps`, so scaling `mlp.output` leaves the stream as it was.
+Scale or steer the contribution itself.
 
 ```python
 with model.trace(prompt):
     model.layers[1].mlp.mlp_output[:] *= 0.5     # halves what the block adds
 ```
 
-The same holds inside the mixture: `routed_output + shared_expert_output` is `mlp.output`, the
-tensor entering `post_mlp_layernorm`, so an edit to an expert reaches the stream after the norm
-has rescaled the token's whole MLP term.
+Inside the mixture, `routed_output + shared_expert_output` is `mlp.output`, the tensor entering
+`post_mlp_layernorm`, so an edit to one expert reaches the stream only after the norm has rescaled
+the token's whole MLP term.
 
 ## Attention: per-head q/k norms and a sigmoid gate on every head
 
-`q_norm` and `k_norm` are RMSNorms over each head's 128 dimensions, applied before the rotary;
-`attention_queries` and `attention_keys` are read after both. The attention projects a gate from
-its input (`gate_proj`, one value per head dimension) and multiplies the heads' outputs by its
-sigmoid before `o_proj`. `attention_head_outputs` are the heads' outputs before the gate:
+`q_norm` and `k_norm` are RMSNorms over each head's 128 dimensions, applied before the rotary.
+`attention_queries` and `attention_keys` are read after the norms and, on a sliding-window block,
+after the rotary. The attention also projects a gate from its input (`gate_proj`, one value per
+channel of every head) and multiplies the heads' outputs by the gate's sigmoid before `o_proj`.
+`attention_head_outputs` are the heads' outputs before the gate:
 
 ```python
 attn = model.layers[1].self_attn
@@ -155,8 +155,8 @@ over 8 on Large. The attention interior needs `attn_implementation="eager"`; the
 
 Every fourth block attends over the whole prefix (`global_attn_every_n_layers` 4: blocks 3, 7,
 11, ...); the others attend over the last `sliding_window` tokens (2048 on Nano and Mini, 4096 on
-Large). Only the sliding blocks turn queries and keys by rotary. On a full block nothing carries
-position into the attention but the causal mask, and `attention_queries` is `q_norm`'s output as it is:
+Large). Only the sliding blocks apply the rotary to queries and keys. On a full block only the causal mask
+orders the tokens, and `attention_queries` is `q_norm`'s output unchanged:
 
 ```python
 attn = model.layers[1].self_attn                  # a full block on the pinned tiny
@@ -171,11 +171,12 @@ torch.testing.assert_close(q, qn.transpose(1, 2))
 ## The router: sigmoid scores, a selection bias, weights summing to route_scale
 
 128 routed experts, 8 per token, on Nano and Mini; 256, 4 per token, on Large. `router_logits`
-are `router.gate`'s output, in float32, before the sigmoid and before the bias. The bias is the
-mixture's own buffer, `mlp.expert_bias`, added to the sigmoids only to choose the experts; there
-are no expert groups. `expert_weights` are the chosen experts' sigmoids without the bias,
-renormalized to sum to one and multiplied by `route_scale`, so they sum to 2.826 at every token
-on Nano and Mini and 2.448 on Large:
+are `router.gate`'s output, in the model's dtype: the router casts them to float32 after this
+point, then takes the sigmoid and adds the bias. The bias, `mlp.expert_bias`, is a frozen
+parameter of the mixture; it is added to the sigmoids only to choose the experts, and there are no
+expert groups. `expert_weights` are the chosen experts' sigmoids without the bias, renormalized to
+sum to one and multiplied by `route_scale`, so they sum to 2.826 at every token on Nano and Mini
+and 2.448 on Large:
 
 ```python
 moe = model.layers[1].mlp
@@ -184,7 +185,7 @@ with model.trace(prompt):
     w = moe.expert_weights.save()
     idx = moe.expert_indices.save()
 
-chosen = logits.sigmoid().gather(-1, idx)
+chosen = logits.float().sigmoid().gather(-1, idx)
 scale = model.config.route_scale
 torch.testing.assert_close(w, chosen / chosen.sum(-1, keepdim=True) * scale)
 ```
@@ -211,12 +212,12 @@ with model.trace(prompt):
 torch.testing.assert_close(routed + shared, total)
 ```
 
-The shared expert is an `Mlp` too, and its `mlp_output` is unavailable: the block adds the
-mixture's post-normed sum, at `layers[i].mlp`.
+nnterp serves the shared expert as an MLP too, but its `mlp_output` is unavailable: what the block
+adds is the mixture's post-normed sum, read at `layers[i].mlp.mlp_output`.
 
 ## Ablating an expert
 
-Zero the weight of every slot that chose it. The token's other weights keep their values, so its
+Zero the weight of every routing slot that chose the expert. The token's other weights keep their values, so its
 weights then sum to less than `route_scale`:
 
 ```python
@@ -226,5 +227,5 @@ with model.trace(prompt):
 ```
 
 `routed_output` changes on exactly the tokens that chose the expert. The dense first blocks have
-no router: `support()` reports every mixture value missing there.
+no router: `model.support()` reports every mixture value unavailable on them.
 """

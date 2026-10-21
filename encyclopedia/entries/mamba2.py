@@ -25,8 +25,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Mamba).
 PALETTE = {"hue": 2}
-VLLM = False
-QUIRKS = ["mamba2", "one-sublayer-blocks", "fp32-residual"]
+QUIRKS = ["mamba2", "one-sublayer-blocks"]
 
 #: Every real-value number below was run on mamba2-130m-hf, routed to the torch kernels, in float32 on an RTX A6000
 #: unless it says bfloat16.
@@ -40,9 +39,9 @@ BLOCK = {
             "kind": "mixer",
             "label": "Mamba-2",
             "pre_norm": "norm",
-            "pre_norm_note": "The block's one RMSNorm keeps its native name, norm: the mixer has a gated norm of its own, "
-                             "linear_attn.norm, so nnterp gives the block's no input_layernorm alias; its output is "
-                             "attention_norm_output all the same. model.norm is the final norm_f.",
+            "pre_norm_note": "The block's one RMSNorm keeps its native name, norm, with no input_layernorm alias, because "
+                             "the mixer has a gated norm of its own, linear_attn.norm. Its output is attention_norm_output. "
+                             "model.norm is the final norm_f.",
             "contribution": "attention_output",
             "interior": [
                 "attention_queries", "attention_keys", "attention_values", "betas", "decays",
@@ -75,7 +74,8 @@ mixer(h): z, xBC, dt = in_proj(h)
 The block's norm keeps its native name, `norm`, and `model.layers[i].norm` is the norm before
 the mixer; `model.layers[i].linear_attn.norm` is the mixer's own gated norm and `model.norm` the
 final `norm_f`. The convolution runs over `x`, `B` and `C` together. The gated norm multiplies `y` by `silu(z)` and then normalizes over the mixer's
-whole width (1536 on 130m), whatever `n_groups` is; `attention_head_outputs` is read before both.
+whole width (1536 on 130m), whatever `n_groups` is; `attention_head_outputs` is read before the gate
+and the norm.
 
 ## The contribution is the whole block
 
@@ -98,7 +98,8 @@ is 7.0 entering block 0 and 1316 entering block 23, and block 23 adds a vector o
 
 ## Loading: route the kernels
 
-With `mamba_ssm` installed transformers sends both scans to its Triton kernels. On a CPU every
+With `mamba_ssm` installed transformers sends the prompt's chunk scan and the decode step's update
+to its Triton kernels. On a CPU every
 trace then fails inside the chunk scan, even one that reads only `layer_output`
 (`ValueError: Pointer argument cannot be accessed from Triton (cpu tensor?)`, or
 `RuntimeError: invalid argument to exchangeDevice` with no GPU visible). On a GPU, unrouted,

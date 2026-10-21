@@ -3,8 +3,8 @@
 MODEL_TYPE = "persimmon"
 TITLE = "Persimmon"
 SUBTITLE = (
-    "Llama's sequential block with LayerNorms, queries, keys and values cut per head from one fused, biased "
-    "query_key_value, a LayerNorm on each query and key head, rotary on half of each head, and a squared-ReLU MLP."
+    "Llama's sequential block with LayerNorms; the attention cuts queries, keys and values per head from one "
+    "fused projection and norms each query and key head before the rotary."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -27,8 +27,7 @@ def load(checkpoint, **kwargs):
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 73}
-VLLM = False
-QUIRKS = ["fused-qkv", "qkv-bias", "qk-norm", "partial-rotary", "squared-relu", "layernorm"]
+QUIRKS = ["qkv-bias", "qk-norm", "partial-rotary", "squared-relu", "layernorm"]
 
 #: What the visualization draws: a Llama-shaped sequential block with LayerNorms.
 BLOCK = {
@@ -126,8 +125,8 @@ q_normed = attn.q_layernorm._module(q_raw.transpose(1, 2)).transpose(1, 2)
 torch.testing.assert_close(q_normed[..., rot:], q[..., rot:])
 ```
 
-An edit to `q_proj`'s share of `query_key_value.output` passes through the norm, so it is rescaled
-and re-centred per head before it reaches the scores; an edit to `attention_queries` is not.
+An edit to the query slices of `query_key_value.output` passes through the norm, so it is rescaled
+and re-centered per head before it reaches the scores. An edit to `attention_queries` is not.
 
 ## The MLP is squared ReLU with no gate
 

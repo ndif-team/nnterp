@@ -119,12 +119,15 @@ An image is as many image tokens as it has merged patches, at most 280. With
 a 1024 × 768 image 266 and a 96 × 48 image 253. Assign one image's features into another's run
 only when the two give the same count.
 
-## Image tokens attend to each other on the sliding blocks
+## Image tokens attend to each other
 
-12B's text config sets `use_bidirectional_attention` to `"vision"`: on a sliding block an image's
-tokens attend to every token of the same image, before and after them, within the window; the
-full blocks stay causal. The wrapper builds that mask from the processor's `mm_token_type_ids`,
-so pass the whole encoding (`model.trace(prompt, images=[image])` does).
+12B's text config sets `use_bidirectional_attention` to `"vision"`: an image's tokens attend to
+every token of the same image, before and after them, within the window on a sliding block. The
+wrapper builds that mask from the processor's `mm_token_type_ids`, so pass the whole encoding
+(`model.trace(prompt, images=[image])` does). Unlike Gemma 4's 26B-A4B and 31B, the full
+blocks get the same bidirectional image blocks as the sliding ones. The first step of `generate`
+builds the same masks as a trace (with the default dynamic cache), and the steps after it attend
+causally.
 
 ## The base checkpoint has no chat template
 
@@ -137,10 +140,11 @@ yourself, `f"{model.processor.image_token} What is this?"`. Audio enters through
 
 #: Set by hues.py (lineage: Gemma).
 PALETTE = {"hue": 165}
-VLLM = False
 QUIRKS = [
-    "sandwich-norms", "scaled-residual-adds", "qk-norm", "sliding-window", "proportional-rotary", "scaled-embeddings",
-    "softcapped-logits",
+    "sandwich-norms", "per-block-sizes", "scaled-residual-adds", "qk-norm", "sliding-window", "proportional-rotary",
+    "scaled-embeddings",
+    # 30 on 12B; null on the pinned tiny checkpoint
+    {"slug": "softcapped-logits", "when": lambda config: config.final_logit_softcapping is not None},
 ]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -162,11 +166,11 @@ BLOCK = {
             "detail": "{num_heads} query heads over {num_kv_heads} key/value heads; q, k and v normed per head, "
                       "scores not scaled",
             "variants": {
-                "sliding_attention": "{sliding_window} window, head_dim {head_dim}",
+                "sliding_attention": "{sliding_window}-token window, head_dim {head_dim}",
                 "full_attention": "full causal, wide heads, ¼ rotary",
             },
             "post_norm_note": "As on Gemma 2, 3 and 4, this norm follows the attention. On Llama the same name is the norm before the MLP. "
-                              "layer_mid is the stream after its output is added, what the MLP's pre-norm reads.",
+                              "layer_mid is the stream after this norm's output is added, which the MLP's pre-norm reads.",
         },
         {
             "host": "mlp",
@@ -251,7 +255,7 @@ all 16; a sliding block has 8, each serving two.
 
 ## Sliding and full blocks differ in width and rotary
 
-`config.layer_types` makes every sixth block full on 12B (5, 11, …, 47), the last block among
+`config.layer_types` makes every sixth block full on 12B (5, 11, ..., 47), the last block among
 them; the window is 1024 tokens. Full blocks have 512-wide heads and one key/value head; sliding
 blocks 256-wide heads and 8. The root's sizes are the sliding blocks'; each block's own are on its
 attention:

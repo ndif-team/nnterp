@@ -18,7 +18,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 235}
-VLLM = False
 QUIRKS = ["squared-relu"]
 
 #: Every checkpoint is 4.5B parameters, above the size a real run here allows, so no real weights were run:
@@ -92,10 +91,10 @@ torch.testing.assert_close(x + attn + mlp, out)
 ## A neuron is `relu(x)²`, exactly zero below zero
 
 `hidden_act` is `relu2` on every checkpoint, so `mlp.act_fn` is a `ReLUSquaredActivation` and a
-neuron's activation is `relu(up_proj(z))²`. It is exactly zero wherever the pre-activation is
-negative, so a neuron that is off on a token has no effect on it and receives no gradient: the
-derivative of `relu(x)²` is `2 · relu(x)`. Where it is on, it grows with the square of the
-pre-activation. `mlp.down_proj.input` holds the activations and `mlp.up_proj.output` the
+neuron's activation is `relu(up_proj(z))²`. The activation is exactly zero wherever the
+pre-activation is negative, so a neuron that is off on a token has no effect on that token and
+receives no gradient from it, since the derivative of `relu(x)²` is `2 · relu(x)`. Where the neuron
+is on, its activation grows with the square of the pre-activation. `mlp.down_proj.input` holds the activations and `mlp.up_proj.output` the
 pre-activations:
 
 ```python
@@ -118,16 +117,16 @@ heads `5j` to `5j + 4`. No projection has a bias (`attention_bias` and `mlp_bias
 
 The six attention interior values need `attn_implementation="eager"`. There is no softcap,
 window or sink, so the default `sdpa` load computes the same function. AFM-4.5B, Base and Preview
-stretch the rotary with YaRN, `factor` 20 over 4096 original positions, to 65536;
-transformers warns that `max_position_embeddings / original_max_position_embeddings` is 16 and uses
+stretch the rotary with YaRN, `factor` 20 over 4096 original positions, to 65536.
+Transformers warns at load that `max_position_embeddings / original_max_position_embeddings` is 16 and uses
 the explicit 20. AFM-4.5B-Base-Pre-Anneal has the plain rotary and 4096 positions. `rope_theta`
 is 10000 throughout.
 
 ## Tokenizer and templates
 
 Every tokenizer prepends `<|begin_of_text|>` (id 128000), and `" Paris"` is one token. The
-vocabularies differ: 128004 rows on Base, 128005 on AFM-4.5B, 128064 on Preview, 128256 on
-Pre-Anneal. AFM-4.5B's chat template is ChatML (`<|im_start|>`, `<|im_end|>`) and writes a default
+embedding matrices differ in size (`vocab_size`): 128004 rows on Base, 128005 on AFM-4.5B, 128064
+on Preview (whose tokenizer has 128005 ids), 128256 on Pre-Anneal. AFM-4.5B's chat template is ChatML (`<|im_start|>`, `<|im_end|>`) and writes a default
 system turn naming the model when the messages have none; its `eos_token` is `<|im_end|>`, Base's
 `<|end_of_text|>`.
 

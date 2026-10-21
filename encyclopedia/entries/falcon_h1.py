@@ -24,8 +24,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Falcon).
 PALETTE = {"hue": 14}
-VLLM = False
-QUIRKS = ["parallel-mixers", "mamba2", "scaled-residual-adds", "embedding-multiplier", "scaled-logits", "tuple-blocks"]
+QUIRKS = ["parallel-mixers", "mamba2", "scaled-residual-adds", "embedding-multiplier", "scaled-logits"]
 
 #: Every real-value number below was run on Falcon-H1-0.5B-Base, routed to the torch kernels, in float32 with
 #: attn_implementation="eager", on an RTX A6000, unless it says bfloat16.
@@ -130,7 +129,8 @@ attention's.
 
 ## Every multiplier, and where the values read it
 
-The configs carry µP multipliers; nnterp reads each value where the forward has applied them.
+The configs carry µP (maximal update parametrization) multipliers; nnterp reads each value where
+the forward has already applied them.
 
 - `ssm_out_multiplier`, `attention_out_multiplier`: inside each mixer's `attention_output`
   (0.236 and 0.9375 on 0.5B; 0.088 and 0.0375 on 34B).
@@ -141,17 +141,18 @@ The configs carry µP multipliers; nnterp reads each value where the forward has
 - `ssm_in_multiplier` and `ssm_multipliers`: the mixer scales its input, then each part of
   `in_proj`'s output (`z`, `x`, `B`, `C`, `dt`), before the convolution; `attention_queries`,
   `attention_keys`, `attention_values` and `betas` are read after them.
-- `mlp_multipliers`: the gate's pre-activation and `down_proj`'s output are scaled inside the
-  MLP, so `mlp_output` (the MLP's return) carries both, and `mlp.down_proj.output` does not.
+- `mlp_multipliers`: the MLP scales the gate's pre-activation by the first and `down_proj`'s
+  output by the second, so `mlp_output` (the MLP's return) carries both, while
+  `mlp.down_proj.output` is the product before the second.
 - `embedding_multiplier` and `lm_head_multiplier`: on the strip above.
 
 ## Loading
 
-The attention interior needs `attn_implementation="eager"`. The default load runs the same
-function: on 0.5B the eager and `sdpa` logits differ by at most 2.3e-5 in float32 and 0.5 in
+The attention interior needs `attn_implementation="eager"`. The default `sdpa` load computes the
+same attention: on 0.5B the eager and `sdpa` logits differ by at most 2.3e-5 in float32 and 0.5 in
 bfloat16, with the same top token at every position.
 
-With `mamba_ssm` installed transformers sends both Mamba-2 scans to its Triton kernels: every
+With `mamba_ssm` installed transformers sends the Mamba-2 chunk scan and decode update to its Triton kernels: every
 `linear_attn` value but `attention_output` reports the kernel in `support()`, and on a CPU no
 trace runs. Route before the first trace. The routed and the default kernels give logits within
 0.019 of each other in float32 (logits up to 46) and 0.5 in bfloat16 on 0.5B, with the same top
@@ -177,14 +178,15 @@ needs `nnterp.chunk_per_token(model)`: the scan keeps the state every `mamba_chu
 `linear_attn.norm` is an identity, `y` is gated by `silu(z)` and goes to `out_proj`, and on a
 decode step the gate is applied inside the update kernel, so a decode step's
 `attention_head_outputs` is gated where a prompt's is not. It is true on 1.5B, 1.5B-Deep, 3B,
-7B, 34B and H1R-7B: a gated RMSNorm follows the scan, and both are ungated.
+7B, 34B and H1R-7B: a gated RMSNorm follows the scan, and `attention_head_outputs` is ungated on a
+prompt and on a decode step alike.
 
 ## Position 0 carries a very large norm
 
 On 0.5B the stream at the first position has a norm of 570 to 920 after block 9, where the
 other positions' median is about 60; the gap closes in the last blocks (214 to 545 at position 0
-after block 27, about 250 elsewhere). Block 18's attention puts 0.64 to 0.85 of its mass on position 0, over heads
-and queries, on four test texts. The tokenizer prepends nothing, so position 0 is the prompt's own
+after block 27, about 250 elsewhere). Block 18's attention puts more than half of its mass on
+position 0, averaged over heads and queries (0.58 to 0.85 on five test texts). The tokenizer prepends nothing, so position 0 is the prompt's own
 first token. Leave it out before averaging activations for steering vectors or probes.
 
 ```python

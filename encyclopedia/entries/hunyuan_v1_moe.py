@@ -17,7 +17,6 @@ CHECKPOINTS = ["tencent/Hunyuan-A13B-Instruct", "tencent/Hunyuan-A13B-Pretrain"]
 
 #: Set by hues.py (lineage: HunYuan).
 PALETTE = {"hue": 29}
-VLLM = False
 QUIRKS = ["qk-norm", "mixture-of-experts"]
 
 #: No checkpoint of this family is small enough to run here (A13B has 80B parameters): the shapes, identities,

@@ -3,8 +3,8 @@
 MODEL_TYPE = "seed_oss"
 TITLE = "Seed-OSS"
 SUBTITLE = (
-    "Llama's block with a bias on the query, key and value projections and an attention twice as wide "
-    "as the stream: 80 query heads of 128 over 8 key/value heads, in a 5120-wide stream."
+    "Llama's block with a bias on the query, key and value projections, and query heads that together are "
+    "twice as wide as the stream."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -19,7 +19,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 256}
-VLLM = False
 QUIRKS = ["qkv-bias"]
 
 #: What the visualization draws: Llama's sequential block, one RMSNorm before each sublayer.
@@ -87,9 +86,9 @@ with model.trace(prompt):
 torch.equal(x + attn + mlp, out)   # True
 ```
 
-Under `model.train()` (fine-tuning an adapter through the model) the residual dropout is live. The
-contributions are then read after it, so `attention_output` differs from `o_proj.output`, and
-the identity still holds: on the pinned checkpoint with `residual_dropout=0.5`, about half of
+Under `model.train()` (fine-tuning an adapter through the model) the residual dropout is active.
+The contributions are read after it, so `attention_output` differs from `o_proj.output`, and the
+identity still holds: on the pinned checkpoint with `residual_dropout=0.5`, about half of
 `attention_output`'s entries are zero and `x + attn + mlp == out` stays exact.
 
 ## The attention is twice as wide as the stream
@@ -114,10 +113,10 @@ with model.trace(prompt):
 
 `q_proj`, `k_proj` and `v_proj` add a bias (`attention_bias`); `o_proj` does not
 (`attention_out_bias` is `false`), nor do the three MLP projections (`mlp_bias`). The bias is added
-before the rotary embedding, so it is rotated with the rest of the query and key: with the
-attention's input zeroed, `attention_keys` is the rotated `k_proj.bias`, equal to the bias at
-position 0 and turned at every other position (checked on the pinned checkpoint with its zero
-bias filled with ones).
+before the rotary embedding, so it is rotated with the rest of the query and key. With the
+attention's input zeroed, `attention_keys` is the rotated `k_proj.bias`: equal to the bias at
+position 0 and rotated at every other position (checked on the pinned checkpoint after setting its
+zero bias to ones).
 
 ```python
 with model.trace(prompt):
@@ -138,8 +137,8 @@ the same function. The query scale is `head_dim ** -0.5`. The rotary is the plai
 
 `model.logits` is `model.lm_head.output`, so `project_on_vocab` is `lm_head(norm(hidden))`, and
 `lm_head` has its own weight (`tie_word_embeddings` is `false`). The tokenizer prepends no BOS
-(`<seed:bos>`, id 0, is not added): position 0 is the text's first token. It has 155121 tokens
-against a `vocab_size` of 155136; the 15 ids past the tokenizer get logits but decode to nothing.
+(`<seed:bos>`, id 0, is not added): position 0 is the text's first token. The tokenizer has 155121
+tokens against a `vocab_size` of 155136, so the last 15 ids get logits but decode to nothing.
 
 ## Three checkpoints, one shape
 

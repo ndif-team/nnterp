@@ -62,7 +62,7 @@ class LinearAttention(LinearAttention):
 
 
 class Mlp(Mlp):
-    """Qwen3.5-MoE's mixture of experts or dense MLP; both return the hidden states, added in the block."""
+    """Qwen3.5-MoE's shared expert, a dense MLP inside every block's mixture; it returns the hidden states."""
 
 
 class Moe(Moe, Mlp):

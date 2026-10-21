@@ -20,7 +20,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GPT-2).
 PALETTE = {"hue": 41}
-VLLM = False
 QUIRKS = ["layernorm", "qkv-bias", "sliding-window"]
 
 #: What the visualization draws: Llama's sequential block, one LayerNorm before each sublayer.
@@ -93,7 +92,8 @@ torch.equal(x + attn + mlp, out)   # True
 ```
 
 With the biases, a zeroed sublayer input does not give a zero contribution: the attention falls
-back to its value and output biases and the MLP to `c_proj(gelu(c_fc.bias))` plus `c_proj.bias`.
+back to its value and output biases, and the MLP returns `c_proj(gelu(c_fc.bias))`, which includes
+`c_proj.bias`.
 To remove a sublayer's effect, ablate `attention_output` or `mlp_output` itself.
 
 ## Every block attends over a window of 4096
@@ -135,12 +135,12 @@ same function.
 
 `model.logits` is `model.lm_head.output`, and `project_on_vocab` is `lm_head(norm(hidden))`, the
 final LayerNorm's bias included. That bias adds the fixed vector `lm_head.weight @ norm.bias` to
-every lens readout; on 3B it is small, a standard deviation of 0.23 logits against 2.15 for a whole
-readout at block 14 on a code prompt. On 3B and 7B `lm_head` is tied to `embed_tokens`
+every lens readout. On 3B the vector is small: its standard deviation is 0.23 logits, against 2.15
+for a whole readout at block 14 on a code prompt. On 3B and 7B `lm_head` is tied to `embed_tokens`
 (`tie_word_embeddings` defaults to `true` and the files store no `lm_head` weight), so an edit to
 `embed_tokens.weight` is an edit to the unembedding; 15B sets it to `false`.
 
-The tokenizer has 49152 ids and prepends nothing: position 0 is the text's first token. It is a
-code tokenizer, and common English words split: `" Paris"` is two tokens, `" Par"` and `"is"`.
+The tokenizer has 49152 ids and prepends nothing: position 0 is the text's first token. The
+vocabulary is built for code, and common English words split: `" Paris"` is two tokens, `" Par"` and `"is"`.
 `<fim_prefix>`, `<fim_suffix>` and `<fim_middle>` are special tokens for fill-in-the-middle prompts.
 """

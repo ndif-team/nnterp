@@ -3,8 +3,8 @@
 MODEL_TYPE = "opt"
 TITLE = "OPT"
 SUBTITLE = (
-    "A LayerNorm block with no MLP module: fc1, the activation and fc2 sit on the block itself, so "
-    "fc2.output is the block's second term, and a learned position embedding, offset by 2, is added after embed_tokens."
+    "A LayerNorm block with a learned position embedding offset by 2 and no MLP module: fc1, the activation and "
+    "fc2 sit on the block itself, and fc2.output is what the MLP path adds to the stream."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -18,7 +18,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: OPT).
 PALETTE = {"hue": 78}
-VLLM = False
 QUIRKS = [
     "no-mlp", "position-embeddings", "layernorm", "qkv-bias",
     {"slug": "post-ln", "when": lambda config: not config.do_layer_norm_before},  # opt-350m
@@ -98,7 +97,7 @@ POST_NORM = {
     "identity": "final_layer_norm((self_attn_layer_norm(layers[i].input + self_attn.attention_output).flatten(0, 1) "
                 "+ fc2.output).view_as(layer_output)) == layer_output",
     "identity_note": "Each LayerNorm follows its add, so no sum of the terms is layer_output: the block's "
-                     "final_layer_norm output is. Exact on the pinned checkpoint with do_layer_norm_before false.",
+                     "final_layer_norm output is. Exact on opt-350m.",
 }
 
 #: What the visualization draws, by the checkpoint's config: opt-350m is the one post-norm size.
@@ -113,7 +112,7 @@ STRIP = {
              "model.decoder.embed_positions is added after it, so layers[0].input = token_embeddings + "
              "embed_positions.output. On opt-350m the lookup is 512 wide and project_in maps it to 1024 before the add.",
     "layers": "Each block runs the attention, then final_layer_norm, fc1, activation_fn and fc2, all on the block: "
-              "there is no mlp module, and layers[i].fc2.output is the block's second term.",
+              "there is no mlp module, and layers[i].fc2.output is what the MLP path adds to the stream.",
     "norm": "final_layer_norm is a LayerNorm with a bias; project_on_vocab applies it. opt-350m has none, "
             "so model.norm does not exist there.",
     "head": "lm_head has no bias and shares its weight with embed_tokens. Its output is logits, unchanged. "
@@ -138,11 +137,11 @@ a bias.
 ## The MLP is fc1 and fc2 on the block
 
 No block has an `mlp` module, so `mlp`, `mlp_output` and their kin do not exist on OPT and
-`support()` lists no `mlp.*` key. What the MLP path adds is `layers[i].fc2.output`, and
-`layers[i].fc1.input` is `final_layer_norm`'s output. The block flattens the stream before that path:
-`final_layer_norm.output`, `fc1`'s and `fc2`'s outputs and the neurons, `activation_fn.output`, are
-`[batch * seq, ...]`, row `b * seq + t` for prompt `b`, position `t`. Unflatten them to read or edit a
-position:
+`support()` lists no `mlp.*` key. What the MLP path adds is `layers[i].fc2.output`, and on every
+pre-norm size `layers[i].fc1.input` is `final_layer_norm`'s output. The block flattens the stream
+before that path, so `fc1.output`, `activation_fn.output` (the neurons) and `fc2.output`, and on a
+pre-norm size `final_layer_norm.output`, are `[batch * seq, ...]`, row `b * seq + t` for prompt `b`,
+position `t`. Unflatten them to read or edit a position:
 
 ```python
 with model.trace(prompts):
@@ -173,8 +172,7 @@ so `attention_queries` is `q_proj`'s output times that scale, and `attention_sco
 ## Learned positions, offset by 2
 
 `model.decoder.embed_positions` is an embedding of `max_position_embeddings + 2` rows (2050), and
-position `t` reads row `t + 2`. It is added to the token embeddings before
-block 0:
+position `t` reads row `t + 2`. Its output is added to the token embeddings before block 0:
 
 ```python
 with model.trace(prompt):
@@ -187,16 +185,16 @@ torch.equal(tokens + positions, x0)                         # True
 torch.equal(positions[0], W[2 : 2 + x0.shape[1]])           # True
 ```
 
-Positions follow the attention mask, so a left-padded prompt reads the same rows as the prompt alone, and its logits match (largest difference 6e-8 on the pinned
-checkpoint). A prompt longer than 2048 tokens runs past the table.
+Positions follow the attention mask, so a left-padded prompt reads the same rows as the prompt
+alone, and its logits match (largest difference 7e-8 on the pinned checkpoint). A prompt longer than 2048 tokens runs past the table.
 
 ## opt-350m is post-norm and projects the embedding
 
 Of the released sizes only `opt-350m` sets `do_layer_norm_before` to false. Each of its norms follows
 the add: the attention reads the raw stream, `self_attn_layer_norm` normalizes `input +
 attention_output`, and `layer_output` is the block's `final_layer_norm` output. The identity does not
-hold there: on `opt-350m`, `input + attention_output + fc2.output` misses `layer_output` by 10 to 19 in
-its largest coordinate, on a stream whose norm is 32. The decoder has no final norm, so `model.norm`
+hold there: on `opt-350m`, `input + attention_output + fc2.output` misses `layer_output` by 4 to 140 in
+its largest coordinate, depending on the block, on a stream whose norm is 32. The decoder has no final norm, so `model.norm`
 does not exist and `project_on_vocab` raises `AttributeError`. The embedding is 512 wide:
 `project_in` maps `token_embeddings` to the stream's 1024 before the positions are added, and
 `project_out` maps the stream back to 512 for the tied `lm_head`. The logit lens there is

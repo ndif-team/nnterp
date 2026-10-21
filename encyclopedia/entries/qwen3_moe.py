@@ -21,7 +21,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 298}
-VLLM = True
 QUIRKS = ["qk-norm", "mixture-of-experts"]
 
 #: Every number in the notes comes from a checkpoint's config or tokenizer; the shapes, identities and
@@ -73,8 +72,8 @@ h   = x + self_attn(input_layernorm(x))          # q_norm, k_norm per head, then
 out = h + mlp(post_attention_layernorm(h))       # 8 of 128 experts per token
 ```
 
-Qwen3's pre-norm block with Llama's names, and a mixture where Qwen3 has its MLP. Nothing norms
-a sublayer's output: `attention_output` is `o_proj`'s output and `mlp_output` the mixture's,
+Qwen3's pre-norm block with Llama's names, and a mixture where Qwen3 has its MLP. No norm follows
+either sublayer: `attention_output` is `o_proj`'s output and `mlp_output` the mixture's,
 which has no shared expert, so `mlp_output` is `routed_output`. The identity is the plain sum:
 
 ```python
@@ -140,7 +139,7 @@ changed = (ablated != clean).any(-1)                       # [batch, seq]
 assert torch.equal(changed, (idx == e).any(-1))            # only the tokens that chose e
 ```
 
-This holds on the pinned tiny checkpoint for every expert, in float32 and in bfloat16.
+The check holds on the pinned tiny checkpoint for every expert, in float32 and in bfloat16.
 
 ## expert_outputs needs the default experts implementation
 

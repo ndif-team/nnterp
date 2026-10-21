@@ -3,8 +3,8 @@
 MODEL_TYPE = "phi"
 TITLE = "Phi-1 / Phi-1.5 / Phi-2"
 SUBTITLE = (
-    "A parallel block: one LayerNorm feeds attention and MLP and the block adds both at once; the query, key, "
-    "value and output projections carry a bias, rotary turns 32 dimensions of each head, and lm_head has a bias."
+    "A parallel block, in which one LayerNorm feeds both the attention and the MLP and the block adds their outputs "
+    "at once, with a bias on every attention projection and on lm_head, and rotary on only 32 dimensions of each head."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -15,7 +15,6 @@ CHECKPOINTS = ["microsoft/phi-1", "microsoft/phi-1_5", "microsoft/phi-2"]
 
 #: Set by hues.py (lineage: Phi).
 PALETTE = {"hue": 137}
-VLLM = True
 QUIRKS = ["parallel-blocks", "partial-rotary", "qkv-bias", "layernorm"]
 
 #: Every real value in the notes was measured on microsoft/phi-2 (bfloat16 on CPU unless the note says float16,
@@ -111,13 +110,14 @@ The block returns a bare tensor, so `model.layers[i].output` is `layer_output`.
 `dense` is the attention's output projection, not a layer of the MLP. The MLP is `fc1`, the
 activation (`gelu_new` on all three checkpoints) and `fc2`, both with a bias. Keys and values have
 `num_heads` heads: phi-1 and phi-1.5 leave `num_key_value_heads` unset, which transformers fills
-with `num_attention_heads`, and phi-2 sets it to 32. `qk_layernorm` is false on all three, so
-nothing normalizes the queries and keys.
+with `num_attention_heads`, and phi-2 sets it to 32. The class has a `qk_layernorm` option, a
+LayerNorm over each query and key head before the rotary; it is false on all three checkpoints,
+so nothing normalizes the queries and keys.
 
 ## Rotary turns 32 dimensions of each head
 
-`partial_rotary_factor` is 0.5 on phi-1 and phi-1.5, 0.5 of 64-dimensional heads, and 0.4 on phi-2,
-0.4 of 80: 32 dimensions on every checkpoint. The rotation is `rotate_half` on those 32, pairing
+`partial_rotary_factor` is 0.5 of a 64-dimensional head on phi-1 and phi-1.5, and 0.4 of an
+80-dimensional head on phi-2: 32 dimensions on every checkpoint. The rotation is `rotate_half` on those 32, pairing
 dimension `i` with `i + 16`; the other dimensions of every query and key are the projection's
 output unchanged and carry no position. `attention_queries` and `attention_keys` are read after the
 rotary; for the queries before it, read the projection in the same trace:
@@ -157,10 +157,10 @@ set, the eager and `sdpa` loads compute the same attention: no softcap, sink or 
 
 ## Position 0 carries one very large entry
 
-The stream at the first position has a single dimension far larger than anything else: at block 16
-of phi-2 on the sample prompt, dimension 743 of position 0 is 792, and no entry at any other
-position exceeds 17. phi-1.5 shows the same at block 12, 684 at dimension 725 against 19
-elsewhere. The tokenizer adds no BOS, so position 0 is the prompt's own first token. A norm or a
+The stream at the first position has a single dimension far larger than anything else. At block 16
+of phi-2 on the sample prompt, dimension 743 of position 0 is about -790, and no entry at any other
+position exceeds 17 in magnitude. phi-1.5 shows the same at block 12: -684 at dimension 725,
+against at most 19 elsewhere. The tokenizer adds no BOS, so position 0 is the prompt's own first token. A norm or a
 mean of the stream taken over positions is dominated by it; leave position 0 out, or read it on its
 own.
 
@@ -175,10 +175,10 @@ bias_logits = model.lm_head.weight @ model.norm.bias + model.lm_head.bias
 ```
 
 On phi-2 its standard deviation is 0.33 logits, against 2.3 for a whole lens readout at block 16
-on the sample prompt (`lm_head.bias` alone: 0.04), and its top tokens are `\\n`, `-`, `.`, `,` and
-`\\n\\n`. `embed_tokens` and `lm_head` are separate matrices. The vocabulary is padded: 51200 rows
-against 50295 tokenizer tokens. The 905 extra rows are not zero; on the sample prompt their logits
-are at most -1.1 and their total probability 1.2e-6.
+on the sample prompt (`lm_head.bias` alone: 0.04), and its top tokens are `\\n`, `-`, `.`, `\\n\\n`
+and `,`. `embed_tokens` and `lm_head` are separate matrices. The vocabulary is padded: 51200 rows
+against 50295 tokenizer tokens. The 905 extra rows are not zero: at the sample prompt's last position
+their logits are below -1 and their total probability is about 1e-6.
 
 ## The tokenizer is CodeGen's
 

@@ -8,7 +8,7 @@ have no standard name; they stay reachable under their own.
 
 A checkpoint with ``reorder_and_upcast_attn`` set takes GPT-2's own
 ``_upcast_and_reordered_attn`` path instead of the shared eager forward, so
-``attention_probabilities`` is unavailable there.
+none of the attention's interior values is available there.
 """
 
 from typing import TYPE_CHECKING

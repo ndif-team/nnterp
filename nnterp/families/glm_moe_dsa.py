@@ -4,7 +4,7 @@ DeepSeek-V3.2's tree and block (``model.{embed_tokens, layers[i].{input_layernor
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual added
 in the block): multi-head latent attention with DeepSeek Sparse Attention, the
 indexer's top-k selection folded into the attention mask before the shared
-``attention_interface`` call under eager, so the interior is the base's and means what
+``attention_interface`` call under eager and sdpa, so the interior is the base's and means what
 it means on ``deepseek_v32``: ``attention_scores`` carry the sparse mask,
 ``attention_probabilities`` is the dense ``[batch, num_heads, query, key]`` pattern, zero
 outside each query's selected keys. While a prompt is no longer than ``index_topk``

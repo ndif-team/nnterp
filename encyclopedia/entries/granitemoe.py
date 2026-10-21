@@ -40,7 +40,6 @@ def load(checkpoint, **kwargs):
 
 #: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 211}
-VLLM = False
 QUIRKS = ["scaled-residual-adds", "mixture-of-experts", "embedding-multiplier", "scaled-logits"]
 
 #: Numbers in the notes come from the reference's weights (float32 on an RTX A6000) unless they name
@@ -308,7 +307,7 @@ tokens. Check that a target is one token before reading its probability.
 Every checkpoint whose config says `granitemoe`: Granite 3.0 and 3.1 at 1B-A400M and 3B-A800M,
 base and instruct, Granite Guardian 3.2 3B-A800M and PowerMoE-3B. `granitemoeshared` is the
 same block with a shared expert beside the mixture. `granitemoehybrid` is all of Granite 4.0:
-Mamba-2 and attention blocks (attention only on `granite-4.0-micro`) with a shared MLP and, on
-the mixture sizes, routed experts beside it. `granitemoe_swa` is the Swash mixture,
+Mamba-2 and attention blocks (attention only on the non-H 350M, 1B and Micro) with a shared MLP
+and, on the mixture sizes, routed experts beside it. `granitemoe_swa` is the Swash mixture,
 GraniteMoE's block with Granite SWA's attention.
 """

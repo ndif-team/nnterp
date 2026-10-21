@@ -3,15 +3,15 @@
 MODEL_TYPE = "llama4_text"
 TITLE = "Llama 4"
 SUBTITLE = (
-    "Llama's pre-norm block where the MLP is a mixture of experts with a shared expert (on every block of Scout, "
-    "every other block of Maverick) routed by a sigmoid over the top-1 logit, every fourth block attends without "
-    "rotary over the whole context with temperature-tuned queries, and the rest attend within chunks."
+    "Llama's pre-norm block with a mixture of experts and a shared expert as the MLP (every block on Scout, every "
+    "other block on Maverick), routed by a sigmoid of the top-1 logit; every fourth block attends over the whole "
+    "context without rotary, and the others attend within fixed chunks."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "meta-llama/Llama-4-Scout-17B-16E"
 #: The tiny checkpoint the test suite builds the page from. The suite rewrites its config into a local copy
-#: (``attn_temperature_tuning`` from the int 4 to ``true``, which transformers (5.17 to 5.19) validates as a bool), and the
+#: (``attn_temperature_tuning`` from the int 4 to ``true``, which transformers' config validation wants as a bool), and the
 #: page is built from that copy. It is a ``llama4`` wrapper with a four-block ``llama4_text`` model.
 PINNED = "yujiepan/llama-4-tiny-random"
 #: Every published checkpoint is a ``llama4`` wrapper (Llama4ForConditionalGeneration), a key of WRAPPERS, so the
@@ -161,9 +161,10 @@ encoding with `model.processor` and cast `pixel_values` to the model's dtype bef
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 244}
-VLLM = False
 QUIRKS = [
-    "qk-norm", "nope-blocks", "chunked-attention", "mixture-of-experts",
+    # Scout (use_qk_norm true); Maverick's rotary blocks have no qk_norm
+    {"slug": "qk-norm", "when": lambda config: config.use_qk_norm},
+    "nope-blocks", "chunked-attention", "mixture-of-experts",
     # Maverick (interleave_moe_layer_step 2); Scout's step is 1, a mixture on every block
     {"slug": "interleaved-moe", "when": lambda config: config.interleave_moe_layer_step > 1},
 ]
@@ -198,7 +199,7 @@ BLOCK = {
             "label": "MLP",
             "pre_norm": "post_attention_layernorm",
             "contribution": "mlp_output",
-            "detail": "SwiGLU, intermediate_size_mlp wide",
+            "detail": "SwiGLU: {hidden_size} → {intermediate_size_mlp} → {hidden_size}",
             "pre_norm_note": "The MLP's input norm, as on Llama.",
         },
         {
@@ -219,7 +220,7 @@ BLOCK = {
 #: Notes on the model-level strip, by node.
 STRIP = {
     "embed": "A plain lookup with no scale: on a prompt without an image, token_embeddings equals layers[0].input.",
-    "layers": "Every fourth block (3, 7, …, 47) is a NoPE block attending over the whole context; the others rotate "
+    "layers": "Every fourth block (3, 7, ..., 47) is a NoPE block attending over the whole context; the others rotate "
               "queries and keys and attend within chunks of 8192 tokens. Scout has a mixture of experts on every block, "
               "Maverick on the odd ones.",
     "norm": "Llama4TextRMSNorm, the gain norm.weight itself, eps 1e-5; project_on_vocab applies it.",
@@ -255,13 +256,13 @@ A mixture returns `(out, router_logits)` with `out` flattened to `[batch * seq, 
 block views it back into the residual's shape before the add. `mlp_output` is read at that view,
 `[batch, seq, hidden_size]` on every block, and an in-place edit of it lands on the mixture's own output
 tensor; `layers[i].mlp.output[0]` is the flat tensor. The view is an operation of the block's
-forward, read after the attention has returned, so the family's `Layer` is `sourced`: nnterp
-instruments the block's forward when the envoy is built.
+forward, read after the attention has returned, so nnterp builds the block's `.source` when it
+loads the model.
 
 ## Dense and mixture blocks interleave
 
 `interleave_moe_layer_step` places the mixtures (`config.moe_layers`): 1 on Scout, so all 48
-blocks are a `Moe`, and 2 on Maverick, so blocks 1, 3, …, 47 are a `Moe` and the even blocks a dense
+blocks are a `Moe`, and 2 on Maverick, so blocks 1, 3, ..., 47 are a `Moe` and the even blocks a dense
 `Mlp`. The widths are spelled the other way round from most families: the config's
 `intermediate_size` (8192) is each expert's and the shared expert's, and `intermediate_size_mlp`
 (16384) is the dense MLP's, which `model.intermediate_size` reports. On Scout no block uses that
@@ -273,10 +274,11 @@ width. On a dense block every mixture value is missing, with the reason saying s
 mixture also runs its shared expert on every token. The router keeps the largest logit, sets the
 others to `-inf` and takes a sigmoid (`SCORING` `"sigmoid"`), so a token's score is between 0 and 1
 for its expert and 0 for the rest. Each expert's *input* is multiplied by its score, every expert
-runs on every token, and the routed sum is added in place to the shared expert's output. So
-`router_logits` (the router's projection, `[batch, seq, num_experts]`), `expert_indices` (its top 1),
-`routed_output` (the sum over experts) and `shared_expert_output` (a copy, whose edits are carried
-back) are served, and `expert_weights` and `expert_outputs` are unavailable.
+runs on every token, and the routed sum is added in place to the shared expert's output. nnterp
+serves `router_logits` (the router's projection, `[batch, seq, num_experts]`), `expert_indices` (its
+top 1), `routed_output` (the sum over experts) and `shared_expert_output` (a copy, whose edits are
+carried back). `expert_weights` and `expert_outputs` are unavailable, because the mixture has no
+per-slot weight or per-slot output to read.
 
 ```python
 moe = model.layers[1].mlp
@@ -307,7 +309,7 @@ with model.trace(prompt):
 
 ## Every fourth block has no rotary and tunes its queries
 
-`no_rope_layers` (built from `no_rope_layer_interval` 4) makes blocks 3, 7, …, 47 NoPE blocks:
+`no_rope_layers` (built from `no_rope_layer_interval` 4) makes blocks 3, 7, ..., 47 NoPE blocks:
 no rotary embedding and no query/key norm, and full causal attention (`layer_types`
 `full_attention`). On them `attn_temperature_tuning` multiplies the queries by
 `1 + attn_scale · log(1 + floor((position + 1) / floor_scale))`, with `attn_scale` 0.1 and
@@ -315,23 +317,23 @@ no rotary embedding and no query/key norm, and full causal attention (`layer_typ
 by 0.069 at 8191. The other blocks (`chunked_attention`) rotate queries and keys and attend only
 within their chunk of `attention_chunk_size` 8192 tokens, so their pattern is zero across chunk
 boundaries. `attention_queries` and `attention_keys` are read after the rotary, the norm and the
-temperature: on a NoPE block of a prompt shorter than 8191 tokens, `attention_queries` is
+temperature: on a NoPE block of a prompt of at most 8191 tokens, `attention_queries` is
 `q_proj`'s output split into heads.
 
-## The query/key norm is an L2 norm, on Scout only
+## Scout norms each query and key head to RMS 1
 
 Where `use_qk_norm` is true, a rotary block divides each query and key head by its RMS after the
-rotary (`qk_norm`, a `Llama4TextL2Norm` with no weight), so every head of `attention_queries` and
-`attention_keys` has RMS 1. One module serves both, and NoPE blocks have none. Scout sets
-`use_qk_norm`; Maverick does not, and its blocks have no `qk_norm`. The scores are scaled by
+rotary (`qk_norm`, a `Llama4TextL2Norm`: an RMS norm with no weight, not a unit-length L2 norm), so
+every head of `attention_queries` and `attention_keys` has RMS 1. One module serves both, and NoPE
+blocks have none. Scout sets `use_qk_norm`; Maverick does not, and its blocks have no `qk_norm`. The scores are scaled by
 `1/√head_dim` on every block. Both have 40 query heads over 8 key/value heads of 128, so an edit
 to one head of `attention_keys` or `attention_values` reaches 5 query heads.
 
 ## Rotary and context
 
-Scout rotates with `rope_theta` 500,000 under llama3 scaling (`factor` 16 over an original 8192
-positions; `max_position_embeddings` 10,485,760); Maverick with the same base, unscaled
-(`max_position_embeddings` 1,048,576). NoPE blocks carry no position: only the causal mask orders
+Scout rotates with `rope_theta` 500,000 under `llama3` scaling (`factor` 16 over an original 8192
+positions); Maverick with the same base, unscaled. `max_position_embeddings` is 262,144 on both base
+checkpoints, 10,485,760 on Scout-Instruct and 1,048,576 on Maverick-Instruct. NoPE blocks carry no position: only the causal mask orders
 the tokens there.
 
 ## The readout

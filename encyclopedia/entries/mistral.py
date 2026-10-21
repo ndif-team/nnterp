@@ -41,8 +41,9 @@ WRAPPERS = {
 `model.multi_modal_projector` (the `projector`) reads the last block's stream with its leading 1
 dropped: `model.projector.input` is `vision.tower_output[0]`, `[patches, vision_hidden_size]`
 (`vision_feature_layer` is `-1`). It norms each patch (`norm`, an RMSNorm), then `patch_merger`
-cuts each image's grid into 2 × 2 blocks (`spatial_merge_size`), concatenates each block's four
-patches into one `4 * vision_hidden_size` vector and maps it back to `vision_hidden_size` with
+cuts each image's grid into 2 × 2 blocks (`spatial_merge_size`), flattens each block's four
+patches into one `4 * vision_hidden_size` vector (`unfold`, channel by channel) and maps it back to
+`vision_hidden_size` with
 `merging_layer`, a linear without bias; `linear_1`, GELU and `linear_2` take it to the text model's
 width. So an image of `rows × columns` patches is `(rows // 2) * (columns // 2)` image tokens, and
 `vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`.
@@ -153,7 +154,7 @@ The processor cuts an image into a base image and crops at a resolution from
 without the CLS token (`vision_feature_layer` is `-2` on `llava-v1.6-mistral-7b-hf`):
 `model.projector.input` is `vision.layers[-2].layer_output[:, 1:]`. The wrapper then unpads the
 projector's output to the image's aspect ratio and appends `image_newline` after each row of
-patches, so `vision.image_features` has another row count than `model.projector.output`. On the
+patches, so `vision.image_features` has a different number of rows from `model.projector.output`. On the
 pinned tiny checkpoint a 64 × 64 image is three rows of 576 patches, the projector returns
 `[3, 576, hidden_size]`, and `vision.image_features` is 1176 rows, 24 of them `image_newline`. Edit
 `vision.image_features` for what the text model receives.
@@ -163,8 +164,10 @@ pinned tiny checkpoint a 64 × 64 image is three rows of 576 patches, the projec
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 259}
-VLLM = True
-QUIRKS: list[str] = ["sliding-window"]
+QUIRKS = [
+    # Mistral-7B-v0.1 and BakLLaVA set sliding_window; v0.3, Nemo, Small and Pixtral-12B leave it null
+    {"slug": "sliding-window", "when": lambda config: config.sliding_window is not None},
+]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.
@@ -282,7 +285,7 @@ The module serves every checkpoint whose config resolves to `model_type` `mistra
 and instruct models v0.1 to v0.3, Mistral Nemo, Mistral Small 24B, and the text model of four
 vision-language wrappers (Mistral Small 3.1 and 3.2, Pixtral-12B, `llava-v1.6-mistral`,
 BakLLaVA). `mistralai/Ministral-8B-Instruct-2410`'s `config.json` says `mistral`, but
-`AutoConfig` reads a `mistral` config that has `layer_types` as `ministral`, so it is the
+`AutoConfig` loads a `mistral` config that has `layer_types` as a `ministral` config, so it is the
 `ministral` family. Mixtral is
 the `mixtral` family, and Ministral 3's text model `ministral3`.
 """

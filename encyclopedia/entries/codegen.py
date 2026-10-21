@@ -3,9 +3,8 @@
 MODEL_TYPE = "codegen"
 TITLE = "CodeGen"
 SUBTITLE = (
-    "GPT-J's parallel block: one LayerNorm feeds attention and MLP and the block adds both at once; "
-    "queries, values and keys come from one projection laid out as four groups of [q | v | k], rotary turns "
-    "the leading rotary_dim channels of each head in adjacent pairs, and lm_head has a bias."
+    "GPT-J's parallel block and adjacent-pair rotary, with the queries, values and keys cut from one "
+    "projection laid out as four groups of [q | v | k]."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -21,9 +20,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GPT-J).
 PALETTE = {"hue": 57}
-VLLM = False
-QUIRKS = ["parallel-blocks", "fused-qkv", "partial-rotary", "interleaved-rotary", "own-attention-arithmetic",
-          "layernorm", "tuple-blocks"]
+QUIRKS = ["parallel-blocks", "partial-rotary", "interleaved-rotary", "layernorm"]
 
 #: What the visualization draws: GPT-J's parallel block. One ln_1 feeds both sublayers; the
 #: schema draws a pre-norm per sublayer, so it appears twice, as one node.
@@ -35,9 +32,9 @@ BLOCK = {
             "kind": "attention",
             "label": "Attention",
             "pre_norm": "ln_1",
-            "pre_norm_note": "One module, drawn on both rows: ln_1's output is what the attention and the MLP "
-                             "both read, so self_attn.input equals mlp.input. The block has no second norm, so "
-                             "mlp_norm_output is ln_1's output and there is no layer_mid.",
+            "pre_norm_note": "ln_1 is one module, drawn on both rows. The attention and the MLP read its one "
+                             "output tensor, so self_attn.input is mlp.input. The block has no second norm, so "
+                             "mlp_norm_output is ln_1's output, and there is no layer_mid.",
             "contribution": "attention_output",
             "interior": [
                 "attention_queries", "attention_keys", "attention_values",
@@ -50,9 +47,9 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "ln_1",
-            "pre_norm_note": "One module, drawn on both rows: ln_1's output is what the attention and the MLP "
-                             "both read, so self_attn.input equals mlp.input. The block has no second norm, so "
-                             "mlp_norm_output is ln_1's output and there is no layer_mid.",
+            "pre_norm_note": "ln_1 is one module, drawn on both rows. The attention and the MLP read its one "
+                             "output tensor, so self_attn.input is mlp.input. The block has no second norm, so "
+                             "mlp_norm_output is ln_1's output, and there is no layer_mid.",
             "contribution": "mlp_output",
             "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, {activation_function}",
         },
@@ -91,7 +88,7 @@ with model.trace(prompt):
     mlp = model.layers[2].mlp.mlp_output.save()
     out = model.layers[2].layer_output.save()
 
-torch.testing.assert_close(x + attn + mlp, out)
+assert torch.equal(attn + mlp + x, out)               # the block's own order
 
 with model.trace(prompt):
     model.layers[2].self_attn.attention_output[:] = 0
@@ -109,9 +106,10 @@ The block's `attn_weights` are returned on every forward, not only under `output
 `self_attn.qkv_proj` is one `Linear` from `hidden_size` to `3 * hidden_size` without a bias
 (`out_proj` has none either; `fc_in` and `fc_out` have one). The forward cuts its output into
 `mp_num = 4` groups, a constant in the source, and splits each group as `[q | v | k]`: values in
-the middle, keys last. Group `c` holds heads `c * num_heads / 4` onward, four heads per group on
-350M. Neither a `[Q | K | V]` nor a `[Q | V | K]` split of the full width recovers a head. Keys and
-values have `num_heads` heads; there is no grouping of key/value heads.
+the middle, keys last. Group `c` holds heads `c * num_heads / 4` to `(c + 1) * num_heads / 4 - 1`,
+four heads per group on 350M. A split of the full width into three `hidden_size` blocks, in either
+order, gets only the first group's queries right. Keys and values have `num_heads` heads; there is
+no grouping of key/value heads.
 
 `attention_queries` and `attention_keys` are read after the rotary, `attention_values` as split.
 To get queries and keys before the rotary, regroup the projection's output in the same trace:
@@ -147,19 +145,21 @@ Llama and GPT-NeoX; pair `i` turns by `position · 10000^(-2i / rotary_dim)`. A 
 frequency analysis written for `rotate_half` pairs the wrong channels here. The channels past
 `rotary_dim` are the projection's output unchanged and carry no position.
 
-## The masked scores are the float32 minimum divided by the scale
+## The masked scores are the dtype's minimum divided by the scale
 
-`attn_implementation="sdpa"` fails at load; `_attn` is the only path. Because the mask is added
-before the division by `sqrt(head_dim)`, a masked entry of `attention_scores` is
-`finfo(float32).min / 8` on 350M (-4.25e37): finite, and not the float32 minimum a mask test may
-look for. `softmax(attention_scores)` equals `attention_probabilities` exactly on a float32 load.
+`attn_implementation="sdpa"` fails at load; `_attn` is the only path. The mask holds the minimum
+of the model's dtype, and it is added before the division by `sqrt(head_dim)`, so a masked entry of
+`attention_scores` is about that minimum divided by `sqrt(head_dim)`. On 350M (`head_dim` 64) that
+is about -8188 on the default float16 load and -4.25e37 on a float32 load: finite, and neither the
+float16 nor the float32 minimum a mask test may look for. `softmax(attention_scores)` cast to the
+model's dtype equals `attention_probabilities` exactly.
 
 ## The checkpoints are float16; the queries are not
 
 The configs set `torch_dtype: float16` (2B-nl: `float32`), and a load without `dtype` keeps it,
 on CPU too. The rotary multiplies by a float32 sin/cos buffer, so on that load `attention_queries`
-is float32 while `attention_keys` is float16 (the cache casts the keys back, and a trace runs
-with the cache on; under `use_cache=False` they stay float32). `attention_values` and
+is float32 while `attention_keys` is float16. The cache casts the keys back to the model's dtype,
+and a trace runs with the cache on; under `use_cache=False` the keys stay float32. `attention_values` and
 `attention_probabilities` are float16, `attention_scores` float32. `q @ k.transpose(-1, -2)` on
 the two raises; cast first:
 
@@ -174,8 +174,8 @@ recomputed = q @ k.float().transpose(-1, -2) / model.head_dim ** 0.5
 
 `recomputed` equals `scores` wherever the mask lets a key through.
 
-The load report lists `transformer.h.{0...19}.attn.causal_mask` as unexpected: the files store a
-mask buffer that transformers' class does not have; the mask is built per call.
+The load report lists each block's `attn.causal_mask` as unexpected: the files store a mask buffer
+that transformers' class does not have, and the mask is built per call.
 
 ## The head has a bias, and a constant logit vector
 
@@ -187,13 +187,14 @@ therefore adds the same vector at every block, whatever the input:
 bias_logits = model.lm_head.weight @ model.norm.bias + model.lm_head.bias
 ```
 
-On 350M-mono its standard deviation is 1.8 logits, against 3.9 for a whole lens readout at block 5
-on a sample prompt, most of it from `ln_f.bias` (`lm_head.bias` alone: 0.11), and its top tokens
-are `\\n`, `,`, `-`, `.`, `_`. Folding the norm into the unembedding keeps both biases as one term.
+On 350M-mono this vector has a standard deviation of 1.8 logits, against about 4 for a whole lens
+readout at block 5 on a sample prompt. Most of that spread comes from `ln_f.bias` (`lm_head.bias` alone:
+0.11), and its top tokens are `\\n`, `,`, `-`, `.`, `_`. Folding the norm into the unembedding keeps
+both biases as one term.
 `wte` and `lm_head` are separate matrices. The vocabulary is padded: 51200 rows against 50295
 tokenizer tokens on `-mono` (50257 on `-nl`). On 350M-mono the 905 extra rows are not zero
-(biases between -0.38 and -0.34); on the sample prompt their logits are at most -4.9 and their
-total probability 3e-10.
+(biases between -0.38 and -0.34); on a sample prompt their total probability at any position is
+below 4e-6.
 
 ## On -multi and -mono, runs of whitespace are single tokens
 
@@ -210,8 +211,8 @@ model.tokenizer.encode("    return x")   # [50284, 7783, 2124]: '    ', 'return'
 
 GPT-2 encodes the same text as three `' '` and `' return'` (1441). A logit-lens or patching target
 inside a block is the bare `return` (7783): after `"def add(a, b):\\n    "` 350M-mono puts 0.34 on
-it. After the newline that opens a function body the model predicts the indent itself, the
-four-space token, at 0.995 on a sample prompt.
+it. After the newline that opens a function body the model predicts the indent itself: after
+`"def add(a, b):\\n"` 350M-mono puts 0.80 on the four-space token.
 
 The tokenizer adds no BOS: position 0 is the prompt's first token. `<|endoftext|>` (50256) is its
 `bos_token`, `eos_token` and `unk_token`; the config's `bos_token_id` is 1, which is the token `"`.
@@ -243,7 +244,7 @@ sizes, from the configs:
 (`mp_num = 8`), not 4, so the class mixes columns of the queries, values and keys. On a 13-line
 Python sample codegen2-1B's loss is 8.93 as loaded and 0.34 after regrouping each
 `qkv_proj.weight` from 8 groups of `[q | v | k]` to 4. The 7B and 16B code uses 4 groups. With
-`trust_remote_code=True` the remote code fails to import on transformers 5.17 and 5.19 (it imports
-`transformers.onnx`). CodeGen2.5 (`Salesforce/codegen25-7b-mono`, ...) is a `LlamaForCausalLM`
+`trust_remote_code=True` the remote code fails to import: it imports `transformers.onnx`, which
+transformers 5.20 does not have. CodeGen2.5 (`Salesforce/codegen25-7b-mono`, ...) is a `LlamaForCausalLM`
 and loads as Llama.
 """

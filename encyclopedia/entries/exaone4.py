@@ -20,7 +20,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 182}
-VLLM = True
 QUIRKS = ["post-norms", "qk-norm", "sliding-window", "nope-blocks"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -118,13 +117,13 @@ with model.trace(prompt):
 torch.testing.assert_close(x + attn + mlp, out)
 ```
 
-**Scale the contribution, not the module, and do not count on the post-norm undoing a scale
-in the first blocks.** The modules' outputs are small at the bottom of 1.2B: the MLP's median
+Scale the contribution, not the module, and do not count on the post-norm undoing a scale
+in the first blocks. The modules' outputs are small at the bottom of 1.2B: the MLP's median
 RMS per token is 4e-4 at block 0 and 2e-3 at block 2, below `√eps` (3.2e-3, `eps` 1e-5), so
 there the post-norm is close to a fixed multiplier rather than a rescaling. Halving
 `mlp.output` at block 0 moves `layer_output` by 42% relative, as much as halving `mlp_output`
-does; at block 2 the two are 19% and 25%; from block 15 up halving `mlp.output` moves it by
-under 0.4% against 13 to 23% for `mlp_output`, and by 2e-5 at block 28. The attention is the
+does. At block 2 the two move it by 19% and 25%. From block 15 up, halving `mlp.output` moves it
+by under 0.4% (2e-5 at block 28) against 13 to 23% for `mlp_output`. The attention is the
 same in kind (10% against 45% at block 0, 0.1% against 17% at block 15). Only `mlp_output`
 and `attention_output` scale what the block adds at every depth:
 
@@ -137,8 +136,8 @@ with model.trace(prompt):
 ```
 
 The post-norms' gains set the size of each term in a decomposition. Across 1.2B's 30 blocks
-their means rise from 0.02 at block 0 to 0.36 on the attention side and lie between 0.12 and
-0.48 on the MLP side, largest in the last blocks.
+their means rise on the attention side from 0.02 at block 0 to between 0.3 and 0.36 in the last
+blocks, and lie between 0.12 and 0.48 on the MLP side, largest in the last blocks.
 
 ## Queries and keys are normed per head
 
@@ -165,7 +164,7 @@ one, so the two sizes differ:
   every block is full causal attention with the rotary (`llama3` scaling, factor 16,
   `rope_theta` 1e6).
 - **32B** (and 4.0.1-32B): `sliding_window` is 4096 and `layer_types` repeats three
-  `sliding_attention` blocks and one `full_attention` (`LLLG`): blocks 3, 7, …, 63 are full,
+  `sliding_attention` blocks and one `full_attention` (`LLLG`): blocks 3, 7, ..., 63 are full,
   16 of 64. The sliding blocks apply the rotary over a 4096-token window; the full blocks
   apply none (NoPE) and see the whole prefix.
 
@@ -179,8 +178,8 @@ with model.trace(prompt):
     queries = model.layers[1].self_attn.attention_queries.save()   # = normed on NoPE
 ```
 
-The block's kind is `model.layers[i].self_attn._module.is_sliding`, not `sliding_window`: every
-attention module stores the config's window, 4096 on 32B's full blocks too. On a prompt
+To tell the kinds apart, read `model.layers[i].self_attn._module.is_sliding`, not `sliding_window`:
+every attention module stores the config's window, 4096 on 32B's full blocks too. On a prompt
 shorter than 4096 tokens the sliding and full masks coincide, and on 32B the two kinds differ
 only in the rotary.
 
@@ -215,7 +214,8 @@ mode; there is no base checkpoint. The tokenizer prepends nothing (`add_bos_toke
 `[|endofturn|]` (id 361). The template writes `[|user|]\\n…[|endofturn|]\\n[|assistant|]\\n` and,
 with `add_generation_prompt`, an empty `<think>\\n\\n</think>\\n\\n` block; `enable_thinking=True`
 ends on an open `<think>\\n` instead. Every assistant turn already in the conversation is
-rendered with an empty think block, its reasoning dropped, unless `skip_think=False` is passed:
+rendered with an empty think block, its reasoning dropped. `skip_think=False` keeps the reasoning
+of the last message only, when that message is an assistant turn:
 
 ```python
 ids = model.tokenizer.apply_chat_template(
@@ -227,7 +227,9 @@ ids = model.tokenizer.apply_chat_template(
 ## Checkpoints and kin
 
 `EXAONE-4.0.1-32B` is a patch release of 32B with the same config. EXAONE 3.5 and EXAONE Deep
-are `model_type` `exaone`, a pre-norm block (`ln_1`, `ln_2`) loaded as remote code, with
-no query/key norms; EXAONE 4.5 (`exaone4_5`) and K-EXAONE (`exaone_moe`) each have a
-`model_type` of their own. None of them is this family.
+are `model_type` `exaone`, a pre-norm block (`ln_1`, `ln_2`) loaded as remote code, with no
+query/key norms, and K-EXAONE is `exaone_moe`: neither is this family. EXAONE 4.5 (`exaone4_5`)
+is a vision-language wrapper whose text model is this family's: loaded with
+`task="image-text-to-text"`, its text model takes this page's names, but its vision encoder and
+projector keep their native names only: there is no `model.vision`.
 """

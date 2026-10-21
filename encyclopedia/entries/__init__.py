@@ -12,7 +12,6 @@ An entry declares::
     PALETTE      {"hue": degrees} picks the base hue the five colours are generated from, or
                  {"colors": [five hex fills], "deeps": [five hex, optional]} gives them outright;
                  "paper" tints the page; the hue is hues.py's (run it after adding a family)
-    VLLM         whether the family also runs on StandardizedVLLM
     QUIRKS       slugs from build.QUIRKS, or {slug, when: predicate on the config} for a quirk
                  some checkpoints have
     BLOCK        the block schema the visualization draws (see gemma2.py; kimi_linear.py for blocks that differ;

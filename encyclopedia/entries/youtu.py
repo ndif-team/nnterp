@@ -16,7 +16,6 @@ CHECKPOINTS = ["tencent/Youtu-LLM-2B-Base", "tencent/Youtu-LLM-2B"]
 
 #: Set by hues.py (lineage: DeepSeek).
 PALETTE = {"hue": 334}
-VLLM = False
 QUIRKS = ["latent-attention", "interleaved-rotary"]
 
 #: Shapes, identities and the rotary order were run on the pinned tiny checkpoint (queries and keys 64 wide,
@@ -79,13 +78,14 @@ torch.testing.assert_close(x + attn + mlp, out)
 
 `attention_queries` and `attention_keys` are `qk_head_dim` wide (`qk_nope_head_dim +
 qk_rope_head_dim`, 128 + 64 = 192), `attention_values` and `attention_head_outputs` `head_dim`
-(`v_head_dim`, 128). The config's `head_dim` is set to `qk_rope_head_dim` (64), which no served
-value has. Queries go through a compressed rank (`q_lora_rank` 1536: `q_a_proj`, `q_a_layernorm`,
-`q_b_proj`; `self_attn.q_proj` is `None`). Keys and values are expanded from one latent per token
-(`kv_lora_rank` 512) for every head, so `attention_keys` has `num_heads` (16) heads, and the last
-64 dimensions of every head's key are one shared rotary key. The scores are scaled by
-`qk_head_dim ** -0.5` (`self_attn.scaling`, 0.0722). The attention interior needs
-`attn_implementation="eager"`.
+(`v_head_dim`, 128). transformers sets the config's `head_dim` to `qk_rope_head_dim` (64), which
+no served value has. Queries go through a compressed rank (`q_lora_rank` 1536: `q_a_proj`,
+`q_a_layernorm` and `q_b_proj`, with no `q_proj` module). The scores are scaled by
+`qk_head_dim ** -0.5` (`self_attn.scaling`, 0.0722): the checkpoints have no YaRN scaling.
+
+Keys and values are expanded from one latent per token (`kv_lora_rank` 512) for every head, so
+`attention_keys` has `num_heads` (16) heads, and the last 64 dimensions of every head's key are one
+shared rotary key. The attention interior needs `attn_implementation="eager"`.
 
 ```python
 attn = model.layers[1].self_attn

@@ -28,7 +28,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 205}
-VLLM = False
 QUIRKS = ["scaled-residual-adds", "embedding-multiplier", "scaled-logits"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -85,7 +84,7 @@ logits = lm_head(norm(out)) / logits_scaling
 ```
 
 The modules and their names are Llama's, `post_attention_layernorm` included (the MLP's input
-norm); the four scalars sit between them and are read from the config, so each one is a plain
+norm). The four scalars sit between the modules and are read from the config, so each is a plain
 number, the same on every block. On the released checkpoints:
 
 - 3.x 2B: `embedding_multiplier` 12, `residual_multiplier` 0.22, `attention_multiplier` 1/64, `logits_scaling` 8.
@@ -127,8 +126,9 @@ A write to `attention_output` or `mlp_output` reaches the model by dividing the 
 by `residual_multiplier` and handing it back as the module's output, and the block multiplies it
 again. Positions you did not edit go through that round trip too. On 2B in bfloat16, adding a
 unit-norm vector to `mlp_output` at the last position of block 1 moved the logits at every earlier
-position, which the edit cannot reach causally, by up to 0.19 (a KL of up to 0.002), while its own
-effect at the edited position was a KL of 8e-5. In float32 the stray change is 2e-5 in the logits.
+position by up to 0.19 (a KL of up to 0.002), although the edit cannot reach those positions
+causally. The edit's own effect at the edited position was a KL of 8e-5. In float32 the stray
+change is 2e-5 in the logits.
 Editing the module's output by the vector over the multiplier gives the same effect at the edited
 position, up to rounding, and leaves every other position bit-identical in either dtype:
 
@@ -237,6 +237,7 @@ target ids on the checkpoint you run.
 The module serves every checkpoint whose config says `model_type` `granite`: the dense Granite 3.0,
 3.1, 3.2 and 3.3 at 2B and 8B, and Granite 4.1 and 4.2 at 3B, 8B and 30B. Granite-7B and the
 Granite Code 3B and 8B are `llama`, Granite Code 20B and 34B `gpt_bigcode`. The mixtures of
-experts (3.x 1B-A400M, 3B-A800M) are `granitemoe`, all of Granite 4.0 including the dense micro,
-1B and 350M is `granitemoehybrid`, and the Swash models are `granite_swa` and `granitemoe_swa`.
+experts (3.x 1B-A400M, 3B-A800M) are `granitemoe`. All of Granite 4.0 is `granitemoehybrid`,
+including the attention-only Micro, 1B and 350M. The Swash models are `granite_swa` and
+`granitemoe_swa`.
 """

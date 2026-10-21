@@ -3,9 +3,8 @@
 MODEL_TYPE = "gpt_neox_japanese"
 TITLE = "GPT-NeoX-Japanese"
 SUBTITLE = (
-    "GPT-NeoX's module names on a sequential block that returns a tuple: the attention does its own "
-    "arithmetic on one fused per-head projection, and the last block's attention hands a separate bias "
-    "to the block, which attention_output includes."
+    "GPT-NeoX's module names on a sequential block, where the last block's attention returns a separate bias "
+    "that the block adds and attention_output includes."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -16,8 +15,7 @@ CHECKPOINTS = ["abeja/gpt-neox-japanese-2.7b"]
 
 #: Set by hues.py (lineage: GPT-NeoX).
 PALETTE = {"hue": 66}
-VLLM = False
-QUIRKS = ["tuple-blocks", "own-attention-arithmetic", "fused-qkv", "layernorm"]
+QUIRKS = ["layernorm"]
 
 #: What the visualization draws: a sequential block, input_layernorm before the attention and
 #: post_attention_layernorm before the MLP; no post-norms.
@@ -42,8 +40,8 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "post_attention_layernorm",
-            "pre_norm_note": "A LayerNorm with a bias of the stream after the attention has been added: GPT-NeoX's "
-                             "name, but this block is sequential, so the MLP reads the attention's contribution.",
+            "pre_norm_note": "A LayerNorm with a bias, of the stream after the attention's add. The name is GPT-NeoX's, "
+                             "but this block is sequential, so the MLP reads the attention's contribution.",
             "contribution": "mlp_output",
             "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}",
         },
@@ -57,8 +55,8 @@ STRIP = {
     "embed": "embed_in is a plain lookup with no scale and no position embedding (position enters through rotary in "
              "each attention), so token_embeddings equals layers[0].input.",
     "norm": "final_layer_norm is a LayerNorm with a bias; project_on_vocab applies it, bias included.",
-    "head": "embed_out is lm_head: no bias, and its weight is embed_in's, the same tensor. Its output is logits, "
-            "unchanged.",
+    "head": "lm_head is the native embed_out, with no bias, and its weight is embed_in's, the same tensor. "
+            "Nothing follows it: logits equals lm_head.output.",
 }
 
 NOTES = """

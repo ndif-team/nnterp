@@ -21,8 +21,11 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: ERNIE).
 PALETTE = {"hue": 189}
-VLLM = False
-QUIRKS = ["interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
+QUIRKS = [
+    "interleaved-rotary", "mixture-of-experts",
+    # moe_layer_start_index is 1 on every checkpoint, 0 on the pinned tiny checkpoint
+    {"slug": "dense-first-blocks", "when": lambda config: config.moe_layer_start_index > 0},
+]
 
 #: The smallest checkpoint has 21B parameters: nothing here ran on real weights. Every identity, shape, read
 #: order and snippet ran on the pinned tiny checkpoint, loaded with moe_layer_start_index 1 for the dense-block
@@ -71,8 +74,8 @@ BLOCK = {
 STRIP = {
     "embed": "A plain lookup: token_embeddings equals layers[0].input. The tokenizer prepends nothing; <s> (id 1) "
              "is its BOS.",
-    "layers": "The configs' multi-token-prediction block (num_nextn_predict_layers) is not built: layers holds "
-              "num_hidden_layers blocks.",
+    "layers": "Where a config sets num_nextn_predict_layers (the -PT chat models), transformers does not build "
+              "that multi-token-prediction block: layers holds num_hidden_layers blocks.",
     "head": "lm_head shares its weight with embed_tokens on 21B-A3B (tie_word_embeddings) and has its own on "
             "300B-A47B. logits is lm_head.output.",
 }
@@ -85,9 +88,10 @@ h   = x + self_attn(input_layernorm(x))
 out = h + mlp(post_attention_layernorm(h))    # dense first, a mixture after
 ```
 
-Llama's pre-norm block and Llama's names. A block has a mixture when its index is between
-`moe_layer_start_index` and `moe_layer_end_index` and a multiple of `moe_layer_interval` (1) in
-one-based counting; every other block has a dense MLP `intermediate_size` wide. On 21B-A3B block 0
+Llama's pre-norm block and Llama's names. Block `i` (counted from 0) has a mixture when
+`moe_layer_start_index <= i <= moe_layer_end_index` and `i + 1` is a multiple of
+`moe_layer_interval` (1 on every checkpoint here). Every other block has a dense MLP
+`intermediate_size` wide. On 21B-A3B block 0
 is dense and blocks 1 to 27 are mixtures; on 300B-A47B blocks 0 to 2 are dense and 3 to 53 mixtures.
 Nothing norms a sublayer's output, so the identity is the plain sum on both kinds:
 

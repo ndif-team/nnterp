@@ -3,10 +3,9 @@
 MODEL_TYPE = "phimoe"
 TITLE = "Phi-3.5-MoE"
 SUBTITLE = (
-    "Llama's tree with LayerNorms and biased projections, and a mixture of 16 experts on every block whose "
-    "router, sparsemixer, picks two experts one after the other and weights each by a softmax over the "
-    "logits near that slot's maximum: a weight is exactly 1 unless another logit is within 2% of it, and a "
-    "token's two weights sum to up to 2."
+    "Llama's tree with LayerNorms and biased projections, and on every block a mixture of 16 experts whose "
+    "router, sparsemixer, picks two experts in turn and gives each a weight of exactly 1 unless another logit "
+    "is within 2% of that expert's, so a token's two weights sum to up to 2."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -20,8 +19,15 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Phi).
 PALETTE = {"hue": 144}
-VLLM = False
-QUIRKS = ["mixture-of-experts", "qkv-bias", "layernorm", "sliding-window"]
+QUIRKS = [
+    "mixture-of-experts",
+    # Every public checkpoint sets attention_bias; the pinned tiny one does not.
+    {"slug": "qkv-bias", "when": lambda config: config.attention_bias},
+    "layernorm",
+    # Phi-3.5-MoE's window equals its context and never masks; the SlimMoE checkpoints' is 2047.
+    {"slug": "sliding-window",
+     "when": lambda config: config.sliding_window is not None and config.sliding_window < config.max_position_embeddings},
+]
 
 #: Every checkpoint is above 3B parameters, so nothing here ran on real weights: shapes, the routing arithmetic
 #: and the snippets are from the pinned tiny checkpoint (16 experts, top 2) and a copy of it with
@@ -74,8 +80,8 @@ h   = x + self_attn(input_layernorm(x))       # q, k, v, o projections with bias
 out = h + mlp(post_attention_layernorm(h))    # 2 of 16 experts per token
 ```
 
-Llama's names and Llama's order, with two differences inside: the three norms are `nn.LayerNorm`s
-with a weight and a bias (their `eps` comes from `rms_norm_eps`), and on every checkpoint
+Llama's names and Llama's order, with two differences inside: the block's two norms and the final norm are
+`nn.LayerNorm`s with a weight and a bias (their `eps` comes from `rms_norm_eps`), and on every public checkpoint
 `attention_bias` puts a bias on `q_proj`, `k_proj`, `v_proj` and `o_proj`. Nothing norms a
 sublayer's output, so `attention_output` is `o_proj`'s output and `mlp_output` is the mixture's.
 There is no shared expert: `routed_output` is `mlp_output`. The identity is the plain sum:
@@ -129,8 +135,10 @@ torch.testing.assert_close(torch.cat([w0, w1], -1), w)
 The weight a near-tie takes is dropped, not passed to the other expert. Written at `router_logits`,
 a last token whose logits are 1.0 on expert 2, 0.99 on expert 5 and 0.5 or less elsewhere routes to
 `[2, 5]` with weights `[0.5025, 1.0]`: slot 0 shares its softmax with expert 5, which slot 1 then
-takes at full weight. Under `model.train()` both slots sample their expert (Gumbel noise) and the
-weights change; trace in eval.
+takes at full weight. Under `model.train()` the routing is random. The mixture and then its router each multiply
+the input, in place, by uniform noise in `[0.99, 1.01]` (`input_jitter_noise`); each slot samples
+its expert with Gumbel noise; and a slot that samples an expert other than its largest logit has
+its weight cut to a third, three times in four. Trace in eval.
 
 ## Ablating an expert touches only the tokens routed to it
 
@@ -161,8 +169,9 @@ Phi-3.5-MoE sets `rope_scaling` type `longrope` over an `original_max_position_e
 every position and every length, so a rotated query's norm is 1.243 times the projection's. The
 transformers rotary for this class computes its frequencies from `short_factor` at every length;
 `long_factor` is not used, also past 4096 tokens. Rotary covers whole 128-dimensional heads. The
-`sliding_window` of 131072 equals the context and never masks; Phi-mini-MoE and Phi-tiny-MoE set
-2047 with a 4096-token context and no rotary scaling.
+`sliding_window` of 131072 equals the context and never masks. Phi-mini-MoE and Phi-tiny-MoE have no
+rotary scaling, a 4096-token context and a `sliding_window` of 2047, which masks every position
+more than 2046 tokens back.
 
 ## Load with eager for the attention interior only
 
@@ -183,7 +192,7 @@ bias_logits = model.lm_head.weight @ model.norm.bias + model.lm_head.bias
 
 `embed_tokens` and `lm_head` are separate matrices. The tokenizer is Phi-3's: 32011 tokens in 32064
 rows, `<s>` (id 1) as `bos_token` but not prepended, so position 0 is the prompt's first token.
-`' Paris'` splits as `['▁', 'Paris']`; encode `"Paris"` (id 3681) for one token.
+`' Paris'` splits as `['▁', '▁Paris']`; encode `"Paris"` (id 3681) for one token.
 
 ## The checkpoints
 
@@ -191,7 +200,7 @@ The sizes, from the configs, each with 16 experts and top 2 on every one of 32 b
 
 - Phi-3.5-MoE-instruct: 32 heads × 128 over 8, experts 6400 wide, a 131072-token context
 - Phi-mini-MoE-instruct: 32 heads × 128 over 8, experts 960 wide, a 4096-token context
-- Phi-tiny-MoE-instruct: 16 heads × 256 over 4, experts 448 wide, a 4096-token context
+- Phi-tiny-MoE-instruct: 16 heads × 128 over 4, experts 448 wide, a 4096-token context
 
 Phi-mini-MoE and Phi-tiny-MoE ship SlimMoE modeling code (`configuration_slimmoe`, `auto_map`) beside a
 `model_type` of `phimoe`; without `trust_remote_code` transformers builds its own

@@ -4,7 +4,7 @@ MODEL_TYPE = "falcon_mamba"
 TITLE = "Falcon-Mamba / Falcon3-Mamba"
 SUBTITLE = (
     "Mamba's block, one norm and a selective-scan mixer, with no attention and no MLP; inside the mixer, "
-    "weightless RMS norms sit on B, C and the step-size projection before the scan."
+    "weightless RMS norms sit on B, C and the low-rank step input before the scan."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -18,8 +18,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Mamba).
 PALETTE = {"hue": 5}
-VLLM = False
-QUIRKS = ["mamba1", "fp32-residual"]
+QUIRKS = ["mamba1"]
 
 #: Every checkpoint is 7B: shapes and identities below were checked on the pinned tiny checkpoint, sizes are read
 #: from the released configs and a meta build of falcon-mamba-7b; no real-weight number is given.
@@ -79,12 +78,13 @@ norms apply to those three outputs, and the scan reads what they return.
 
 - `attention_keys` and `attention_queries` are the normed `B` and `C`: each token's vector of
   `state_size` (16) entries has a root-mean-square of one.
-- `betas` is `softplus(dt_proj(rms(dt)) + dt_bias)`: the norm sits on the low-rank step
+- `betas` is `softplus(dt_proj(rms(dt)))`, `dt_proj`'s bias included: the norm sits on the low-rank step
   (`time_step_rank`, 256) before `dt_proj`, so `betas` itself carries no fixed scale, and
   `decays` is `betas * A` as on Mamba.
-- The un-normed `B` and `C` are `x_proj`'s output, columns `time_step_rank:` of it. Read it in a
-  trace of its own: in one trace with the kernel's values, `x_proj` runs after the point where
-  the values decide which kernel the call runs, and the trace fails with `OutOfOrderError`.
+- The un-normed `B` and `C` are in `x_proj`'s output, columns `time_step_rank:` of it. Read it in a
+  trace of its own. The kernel's values first look up which kernel the call runs, at the top of the
+  mixer's forward, before `x_proj` runs, and are then read at the kernel call, after it, so a trace
+  that reads `x_proj.output` and a kernel value fails with `OutOfOrderError` in either order.
 
 ```python
 mix = model.layers[1].linear_attn
@@ -170,6 +170,6 @@ and the logits to float32, as the model does, so at the last block's `layer_outp
 
 `falcon-mamba-7b` and its `-instruct` and `-pre-decay` checkpoints, and Falcon3-Mamba-7B
 `-Base` and `-Instruct`, all 64 blocks of width 4096. They tokenize with Falcon's 65024-token
-BPE and prepend nothing. `<|endoftext|>` (id 11) ends a sequence, and the tokenizer sets no
-padding token.
+BPE and prepend nothing. The tokenizer's end-of-text token is `<|endoftext|>` (id 11), and it sets no
+padding token; the `-pre-decay` and Falcon3-Mamba configs set `eos_token_id` to 0.
 """

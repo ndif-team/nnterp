@@ -20,7 +20,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: OLMo).
 PALETTE = {"hue": 107}
-VLLM = False
 QUIRKS = ["post-norms", "qk-norm", "mixture-of-experts"]
 
 #: Every checkpoint is 2x7B or 7x7B, so no real weights were run: shapes, identities and the routing edits
@@ -108,7 +107,7 @@ the routing decides is the mix of the experts' directions, not the size of the t
 ## Every expert runs on every token
 
 `num_experts_per_tok` equals `num_experts` on every released checkpoint: 7 of 7 on FlexOlmo-7x7B-1T
-and -RT, 2 of 2 on each Flex-…-2x7B-1T. The router takes a softmax over all logits in float32 and
+and -RT, 2 of 2 on each `Flex-<domain>-2x7B-1T`. The router takes a softmax over all logits in float32 and
 keeps the top `top_k`; `norm_topk_prob` is false, but with every expert kept the weights are the
 whole softmax and sum to one. `expert_indices` is then every expert, ordered by weight, slot 0 the
 largest; which slot an expert takes changes from token to token. The pinned tiny checkpoint keeps 2
@@ -131,7 +130,7 @@ assert torch.equal(top.indices, idx)
 Per the model cards, FlexOlmo-7x7B-1T combines a public-mix expert, trained on 1T tokens, with six
 experts branched from it and trained on 50B tokens each of news, math, code, academic text, creative
 writing and Reddit; FlexOlmo-7x7B-1T-RT has the same configuration. Each
-Flex-…-2x7B-1T pairs the public-mix expert with one domain expert. The configs do not say which index
+`Flex-<domain>-2x7B-1T` pairs the public-mix expert with one domain expert. The configs do not say which index
 holds which expert. Each expert is a SwiGLU MLP `intermediate_size` (11008) wide.
 
 ## Removing an expert: the weight or the logit
@@ -168,8 +167,7 @@ a single head at `attention_queries`. Every checkpoint has 32 key/value heads fo
 
 The attention interior needs `attn_implementation="eager"`; `expert_outputs` needs the default
 `experts_implementation`. There is no softcap, sink or window; the rotary is the plain one,
-`rope_theta` 500000. The weights are stored in float32 (`dtype` in the config): 133 GB for 7x7B,
-47 GB for each 2x7B.
+`rope_theta` 500000. The weights are stored in float32: 133 GB for 7x7B, 47 GB for each 2x7B.
 
 ## The readout and the tokenizer
 

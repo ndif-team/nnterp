@@ -19,7 +19,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Nemotron).
 PALETTE = {"hue": 223}
-VLLM = False
 QUIRKS = ["layernorm", "gain-norm", "partial-rotary", "squared-relu"]
 
 #: What the visualization draws: Llama's sequential block, a LayerNorm before each sublayer

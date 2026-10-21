@@ -3,9 +3,8 @@
 MODEL_TYPE = "bloom"
 TITLE = "BLOOM / BLOOMZ"
 SUBTITLE = (
-    "Each sublayer takes the residual as an argument and adds it inside the module, so the modules return "
-    "stream states and the contributions are the tensors before that add; ALiBi biases on the scores stand in "
-    "for rotary, and a LayerNorm sits between the embedding and block 0."
+    "Each sublayer adds the residual inside its own module, so the contributions are the tensors before that "
+    "add; a LayerNorm sits between the embedding and block 0."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -22,8 +21,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 46}
-VLLM = True
-QUIRKS = ["residual-inside-module", "tuple-blocks", "own-attention-arithmetic", "alibi", "fused-qkv", "qkv-bias", "layernorm"]
+QUIRKS = ["alibi", "qkv-bias", "layernorm"]
 
 #: What the visualization draws: a sequential block with two LayerNorm pre-norms; each module adds
 #: the residual itself, and its contribution is the tensor entering that add.
@@ -49,8 +47,8 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "post_attention_layernorm",
-            "pre_norm_note": "It normalizes self_attn.output[0], the stream after the attention's add, which the "
-                             "attention module returns. The MLP takes that stream too and adds it to its own output.",
+            "pre_norm_note": "A LayerNorm with a bias, of self_attn.output[0]: the attention module returns the stream "
+                             "after its add. The MLP also takes that stream and adds it to its own output.",
             "contribution": "mlp_output",
             "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, tanh GELU",
         },
@@ -77,7 +75,7 @@ out = mlp(post_attention_layernorm(h), residual=h)         # returns h + mlp_out
 ```
 
 The block hands each sublayer the stream as an argument, and the module ends in `dropout_add`,
-which adds it. So `self_attn.output[0]` is the stream after the attention's add, and
+which adds it. `self_attn.output[0]` is therefore the stream after the attention's add, and
 `mlp.output` is the block's output, equal to `layer_output`. `attention_output` and
 `mlp_output` are the first argument of each `dropout_add`: the attention's `dense` output and
 the MLP's `dense_4h_to_h` output, each with its bias. The sum is exact in every dtype.
@@ -143,9 +141,10 @@ The same token at two positions gives the same `attention_queries` and `attentio
 block 0. Position enters only through a bias on the scores: `attention_scores` is
 `q @ kᵀ / sqrt(head_dim)` plus `slope_h * j` for key position `j`, then the causal mask. The bias
 grows with the key's position and is the same on every query row, so after the softmax it acts
-as a penalty of `slope_h` per token of distance. With a power-of-two head count head `h` has the
+as a penalty of `slope_h` per token of distance. With a power-of-two head count, head `h` has the
 slope `2 ** (-8 * (h + 1) / heads)`: on 560m, with 16 heads, 0.71 for head 0 down to 0.0039 for
-head 15. An edit to the queries or keys leaves the bias as it was. On a float32 load the scores
+head 15. The 176B checkpoints have 112 heads: heads 0 to 63 take the same formula with 64 for
+`heads`, and head `64 + k` takes `2 ** (-(2k + 1) / 16)`, halfway between two of the first 64. An edit to the queries or keys leaves the bias as it was. On a float32 load the scores
 recompute to rounding:
 
 ```python
@@ -171,7 +170,8 @@ transformers has one attention for BLOOM, its own arithmetic, so a load without
 missing. The scores are read where the softmax takes them; the softmax runs in float32 and the
 pattern is cast back to the model's dtype. The head outputs are the `bmm` of the pattern and the
 values, `[batch * num_heads, seq, head_dim]` in the forward, served `[batch, seq, num_heads, head_dim]`.
-`bigscience/bloom-560m` stores float16 weights, and a load without `dtype` is float16.
+`bigscience/bloom-560m` stores float16 weights, but its config names no dtype, so a load without
+`dtype` is float32.
 
 ## A LayerNorm sits between the embedding and block 0
 

@@ -3,9 +3,9 @@
 MODEL_TYPE = "zaya"
 TITLE = "ZAYA1"
 SUBTITLE = (
-    "A pre-norm block in which a learned per-channel scale and shift is applied to both the sublayer's output "
-    "and the stream at every add, with queries and keys mixed by a causal convolution, and a mixture that "
-    "runs one expert per token, routed with a skip class and a router state carried from block to block."
+    "A pre-norm block that scales and shifts, per channel, both the sublayer's output and the stream at every add; "
+    "its queries and keys are mixed over tokens by a causal convolution, and its mixture runs one expert per token, "
+    "chosen beside a skip class by a router whose state carries from block to block."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -13,7 +13,7 @@ REFERENCE = "Zyphra/ZAYA1-8B"
 #: The tiny checkpoint the test suite builds the page from (the suite runs a copy with qk_norm.temp set to one).
 PINNED = "hf-tiny-v2/tiny-random-ZayaForCausalLM"
 #: The -base, -reasoning-base and -legacy checkpoints keep the original layout's config (`rope_scaling: false`),
-#: which transformers (5.17 to 5.19) does not parse; the page lists them greyed out with that reason.
+#: which transformers does not parse; the page lists them greyed out with that reason.
 CHECKPOINTS = [
     "Zyphra/ZAYA1-8B", "Zyphra/ZAYA1-8B-FP8-Experts", "Zyphra/ZAYA1-8B-MXFP4-Experts", "Zyphra/ZAYA1-74B-preview",
     "Zyphra/ZAYA1-base", "Zyphra/ZAYA1-reasoning-base", "Zyphra/ZAYA1-8B-legacy", "Zyphra/ZAYA1-74B-preview-legacy",
@@ -21,9 +21,8 @@ CHECKPOINTS = [
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 354}
-VLLM = False
 QUIRKS = [
-    "tuple-blocks", "scaled-residual-adds", "fp32-residual", "embedding-multiplier", "partial-rotary", "conv-qk",
+    "scaled-residual-adds", "embedding-multiplier", "partial-rotary", "conv-qk",
     "sliding-window", "mixture-of-experts", "unnormalized-routing",
 ]
 
@@ -141,10 +140,11 @@ dtype before they norm it.
 
 ## Queries and keys are convolved, normed to √`head_dim` and the keys scaled
 
-`qkv_proj` computes the queries and keys with `q_proj` and `k_proj`, mixes them over the current and
-two previous tokens with two causal convolutions (`cca_time0` and `cca_time1` are 2 on ZAYA1-8B), and adds back a residual of the projections. Half of
-each value head is the current token's (`v_proj_current`) and half the previous token's
-(`v_proj_delayed`). `qk_norm` then L2-normalizes every query and key head to length √`head_dim` and
+`qkv_proj` computes the queries and keys with `q_proj` and `k_proj` and mixes them over the current
+and two previous tokens with two causal convolutions (`cca_time0` and `cca_time1` are 2 on ZAYA1-8B).
+It then adds a residual: each query head gets the mean of its own projection and its key head's
+projection, and each key head gets the mean of those query residuals over the query heads it serves. Half of each value head is the
+current token's (`v_proj_current`) and half the previous token's (`v_proj_delayed`). `qk_norm` then L2-normalizes every query and key head to length √`head_dim` and
 multiplies the keys by `temp`, one per key/value head; rotary turns the first half of each head
 (`partial_rotary_factor` 0.5). `attention_queries` and `attention_keys` are read after all of it, at
 the attention interface. `temp` is 0.8 to 12.9 on ZAYA1-8B; on the pinned tiny checkpoint it is zero,
@@ -198,8 +198,11 @@ assert torch.equal((ablated != clean).any(-1), chose)
 
 There is no shared expert, so `routed_output` is the mixture's own output, before the merge.
 
-## The readout
+## The readout and the tokenizer
 
 `logits` is `lm_head.output`, with no cap or scale. The tokenizer is a `GemmaTokenizer` that
-prepends `<bos>` (id 2).
+prepends `<bos>` (id 2). On ZAYA1-8B it also appends `<|im_end|>` (id 106) to every text, so a plain
+prompt's last position is `<|im_end|>`, not the prompt's last word; ZAYA1-74B-preview's tokenizer
+appends nothing. To read the prediction after the prompt on ZAYA1-8B, tokenize with
+`add_special_tokens=False` and prepend `<bos>` yourself, or read position -2.
 """

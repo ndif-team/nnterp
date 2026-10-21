@@ -3,8 +3,8 @@
 MODEL_TYPE = "deepseek_v32"
 TITLE = "DeepSeek-V3.2"
 SUBTITLE = (
-    "Latent attention behind a lightning indexer that keeps each query's 2048 best keys, and a mixture with a "
-    "shared expert whose experts are chosen by a sigmoid plus a selection bias that the weights leave out."
+    "Latent attention over only the 2048 keys a lightning indexer scores best for each query, and a mixture with a "
+    "shared expert that chooses experts by sigmoid score plus a selection bias and weights them without the bias."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -19,8 +19,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: DeepSeek).
 PALETTE = {"hue": 328}
-VLLM = False
-QUIRKS = ["latent-attention", "sparse-attention", "mixture-of-experts", "dense-first-blocks"]
+QUIRKS = ["latent-attention", "sparse-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
 #: Shapes, identities, read orders, the rotary order, the selection and the routing were run on the pinned tiny
 #: checkpoint (block 0 dense, block 1 a mixture of 8 experts, top 2; queries, keys and values 128 wide;
@@ -102,11 +101,12 @@ transformers does not build it, so `model.layers` has 61 blocks.
 
 `attention_queries` and `attention_keys` are `qk_head_dim` wide (`qk_nope_head_dim +
 qk_rope_head_dim`, 128 + 64 = 192), `attention_values` and `attention_head_outputs` `head_dim`
-(`v_head_dim`, 128). The config's `head_dim` is `qk_rope_head_dim` (64), which no served value
-has. Queries go through a compressed rank (`q_lora_rank` 1536: `q_a_proj`, `q_a_layernorm`,
-`q_b_proj`; there is no `self_attn.q_proj`, which up to transformers 5.17 was an attribute set to `None`). Keys and values are expanded from one latent per token
-(`kv_lora_rank` 512) for every head, so `attention_keys` has `num_heads` (128) heads, and the last
-64 dimensions of every head's key are one shared rotary key.
+(`v_head_dim`, 128). transformers sets the config's `head_dim` to `qk_rope_head_dim`, the rotary
+width (64); no served value is that wide. Queries go through a compressed rank (`q_lora_rank`
+1536): `q_a_proj`, `q_a_layernorm`, then `q_b_proj`, with no `q_proj` module. Keys and values
+are expanded for every head from one latent per token (`kv_lora_rank` 512), so `attention_keys`
+has `num_heads` (128) heads. The last 64 dimensions of every head's key are one rotary key that
+all heads share.
 
 ```python
 attn = model.layers[1].self_attn
@@ -121,7 +121,7 @@ assert torch.equal(k[:, 0, :, -64:], k[:, 1, :, -64:])   # one rotary key
 ## The rotary part is served de-interleaved
 
 The attention rotates pair (2i, 2i + 1) of the projection into dimensions i and i + 32 of the
-rotary part (the forward calls the interleaved rotary whatever `rope_interleave` says).
+rotary part. The forward always does this; the config has no `rope_interleave` key to switch it.
 `attention_queries[..., -64:]` and `attention_keys[..., -64:]` are in that rotate-half order: at
 position 0, where rotary is the identity, the served rotary part is `q_b_proj`'s even dimensions
 followed by its odd ones.
@@ -143,19 +143,21 @@ and the attention multiplies the scores by `qk_head_dim ** -0.5` times 1.87
 (`self_attn.scaling`, 0.1352), not by `qk_head_dim ** -0.5` (0.0722) alone; recompute
 `attention_scores` from the queries and keys with `self_attn.scaling`.
 
-## Sparse attention is dense below 2048 tokens
+## Up to 2048 tokens the sparse attention is plain causal attention
 
-A lightning indexer (`self_attn.indexer`: 64 heads of 128, `index_n_heads` and `index_head_dim`)
-scores every key for every query and keeps the `index_topk` (2048) best. The attention masks the
-others to the dtype's minimum before the shared interface, under eager and under the default
-`sdpa` load alike, so the default load runs the same sparse computation; the interior values need
-`attn_implementation="eager"`. `attention_scores` carry that mask, so a dropped key reads like a
-future one; `attention_probabilities` is the dense `[batch, num_heads, query, key]` pattern, exactly
-zero outside each query's selection. While a prompt is no longer than 2048 tokens the selection
-lists every key, and the pattern is plain causal: on an 8-token prompt row *t* has *t* + 1 nonzero
-entries. The selection is `self_attn.indexer.output`, `[batch, query, min(index_topk, seq)]`
-int32; it has no standard name. The indexer ranks future keys last but does not drop them, so on a
-short prompt each row lists every position and the causal mask removes the future ones.
+A lightning indexer (`self_attn.indexer`: `index_n_heads` 64 heads of `index_head_dim` 128)
+scores every key for every query and keeps the `index_topk` (2048) best. The attention sets the
+other keys' mask entries to the dtype's minimum before it calls the attention function. It does
+this under eager and under the default `sdpa` load alike, so both loads run the same sparse
+computation; the interior values need `attn_implementation="eager"`. `attention_scores` carry
+that mask, so a dropped key reads like a future one. `attention_probabilities` is the dense
+`[batch, num_heads, query, key]` pattern, exactly zero outside each query's selection.
+
+The selection is `self_attn.indexer.output`, int32 key indices of shape
+`[batch, query, min(index_topk, seq)]`; it has no standard name. The indexer ranks future keys
+last but does not drop them. On a prompt of up to 2048 tokens each row therefore lists every
+position, the causal mask removes the future keys, and the pattern is plain causal: row *t* has
+*t* + 1 nonzero entries.
 
 ```python
 with model.trace(prompt):
@@ -182,7 +184,7 @@ sigmoids without the bias, renormalized to sum to one (`norm_topk_prob`) and mul
 the choice and the weights; a written bias moves only the choice.
 
 ```python
-moe = model.layers[1].mlp
+moe = model.layers[3].mlp
 with model.trace(prompt):
     logits = moe.router_logits.save()
     w = moe.expert_weights.save()

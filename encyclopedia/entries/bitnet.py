@@ -3,9 +3,9 @@
 MODEL_TYPE = "bitnet"
 TITLE = "BitNet b1.58"
 SUBTITLE = (
-    "Llama's tree whose projections run ternary weights on 8-bit inputs, with an RMSNorm inside each sublayer "
-    "before its output projection (attn_sub_norm, ffn_sub_norm), so the contributions are o_proj's and "
-    "down_proj's outputs after a norm; the MLP gates with a squared ReLU."
+    "Llama's tree whose projections run ternary weights on 8-bit inputs, whose sublayers each RMS-norm the "
+    "tensor entering their output projection (attn_sub_norm, ffn_sub_norm), and whose MLP gates with a "
+    "squared ReLU."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -16,7 +16,6 @@ CHECKPOINTS = ["microsoft/bitnet-b1.58-2B-4T", "microsoft/bitnet-b1.58-2B-4T-bf1
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 253}
-VLLM = False
 QUIRKS = ["quantized-linears", "sub-norms", "squared-relu"]
 
 #: Real values in the notes were measured on bitnet-b1.58-2B-4T-bf16 in bfloat16 on a GPU (its weights load as
@@ -110,16 +109,16 @@ with model.trace(prompt):
 ## The projections quantize their inputs and weights
 
 On a real load every projection in the block is an `AutoBitLinear`. Its forward rounds its input
-per token to 255 levels (`round(x · 127 / max|x|)`) and multiplies by ternary weights: on the
+per token to 255 levels (`round(x · 127 / max|x|)`) and multiplies it by ternary weights. On the
 bf16 checkpoint the weights are stored in bfloat16 and rounded to `{−1, 0, 1} · mean|W|` in every
-forward; on the packed checkpoint they are stored ternary, four to a byte, with a `weight_scale`.
-`q_proj.input` is the unrounded normed stream; on 2B-4T-bf16 `q_proj.output` equals
-`F.linear(ActQuant(input), WeightQuant(weight))` exactly, and differs from
+forward. On the packed checkpoint they are stored ternary, four to a byte, with a `weight_scale`.
+`q_proj.input` is the unrounded normed stream. On 2B-4T-bf16 `q_proj.output` equals the linear map
+of the rounded input by the ternarized weight exactly, and differs from
 `F.linear(input, weight)` by 2.4 times its own norm. An edit at a projection's input is rounded
 with the rest of the row, and a weight edit on the bf16 checkpoint is re-ternarized: adding
 `0.1 · mean|W|` to one `q_proj` weight at block 1 leaves the logits bit-identical. The page's
-printout comes from a meta build, where the projections are plain `Linear`: the swap happens when
-the weights load.
+printout comes from a meta build, where the projections are plain `Linear`: transformers replaces
+them with `AutoBitLinear` when the weights load.
 
 ## The stream is large, and the input norms' gains small
 

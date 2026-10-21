@@ -15,7 +15,6 @@ CHECKPOINTS = ["ibm-research/moe-7b-1b-active-shared-experts"]
 
 #: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 217}
-VLLM = False
 QUIRKS = ["scaled-residual-adds", "mixture-of-experts", "embedding-multiplier", "scaled-logits"]
 
 #: No public checkpoint of this family is small enough to run here (the one release is 7B), so the notes' shapes,

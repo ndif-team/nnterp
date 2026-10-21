@@ -3,8 +3,8 @@
 MODEL_TYPE = "nemotron_h"
 TITLE = "Nemotron-H / Nemotron Nano\u00a02 / Nemotron 3"
 SUBTITLE = (
-    "Every block is one RMSNorm and one sublayer, a Mamba-2 mixer on about half the blocks, attention without "
-    "rotary on a few, and a squared-ReLU MLP or, on Nemotron 3's mixture checkpoints, a mixture of experts on the rest."
+    "Every block is one RMSNorm and one sublayer: a Mamba-2 mixer on about half the blocks, attention without "
+    "rotary on a few, and on the rest a squared-ReLU MLP or, on Nemotron 3's mixture checkpoints, a mixture of experts."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -105,7 +105,7 @@ WRAPPERS = {
 
 ```
 h   = x + layer_scale1(self_attn(input_layernorm(x)))
-out = h + layer_scale2(mlp(post_attention_layernorm(h)))      # fc1, GELU, fc2
+out = h + layer_scale2(mlp(post_attention_layernorm(h)))      # fc1, hidden_act (GELU), fc2
 ```
 
 Both norms are LayerNorms (native `norm1`, `norm2`). `layer_scale1` and `layer_scale2` multiply
@@ -178,7 +178,6 @@ before the prompt's forward, so its values come before `vision.image_token_mask`
 
 #: Set by hues.py (lineage: Nemotron).
 PALETTE = {"hue": 226}
-VLLM = False
 QUIRKS = ["one-sublayer-blocks", "hybrid", "mamba2", "nope-blocks", "squared-relu", "mixture-of-experts"]
 
 #: The sublayers in forward order. Each block holds one of them, the ``mixer`` its entry in
@@ -256,11 +255,13 @@ NOTES = """
 out = x + mixer(norm(x))     # mixer: the Mamba-2 mixer, attention, the MLP or the mixture
 ```
 
-A block holds one sublayer, and `config.layer_types` (built from the checkpoint's
-`hybrid_override_pattern`, one character per block: `M`, `*`, `-`, `E`) says which:
-`linear_attention` for a Mamba-2 mixer, `full_attention` for attention, `mlp` for the MLP and
-`moe` for a mixture of experts. transformers calls all four `mixer`; nnterp names it
-`linear_attn`, `self_attn` or `mlp` by its class, and the other two names are `None` on that block.
+A block holds one sublayer, and `config.layer_types` says which: `linear_attention` for a
+Mamba-2 mixer, `full_attention` for attention, `mlp` for the MLP and `moe` for a mixture of
+experts. transformers builds the list from the checkpoint's `hybrid_override_pattern` (one
+character per block: `M`, `*`, `-`, `E`) where the config has one, and from its
+`layers_block_type` list otherwise. transformers names the sublayer `mixer` in all four cases.
+nnterp names it `linear_attn`, `self_attn` or `mlp` by its class, and the block has no attribute
+under the other two names.
 On Nano-4B the 42 blocks are 21 Mamba-2, 17 MLP and 4 attention blocks (12, 17, 24 and 32). Pick
 blocks outside the trace:
 
@@ -406,8 +407,9 @@ assert torch.equal(acts, torch.relu(pre) ** 2)
 
 ## The norms are RMSNorms with the stored gain
 
-Every norm is an RMSNorm that normalizes in float32, casts back, and multiplies by `weight`, not
-`1 + weight` (this family's norm is not Nemotron-4's `LayerNorm1P`). The stored gains are far
+Every norm is an RMSNorm that normalizes and multiplies by `weight` in float32, then casts back to
+the input's dtype. The gain is `weight`, not `1 + weight` (this family's norm is not Nemotron-4's
+`LayerNorm1P`). The stored gains are far
 from one: the block norms of Nano-4B average 0.13 (block 1) to 2.65 (block 37), with 170 negative
 entries among them, and the final norm averages 2.49, up to 8.4. Fold a norm into the next projection with `weight` as
 stored.

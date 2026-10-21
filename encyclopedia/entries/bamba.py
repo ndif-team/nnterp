@@ -20,8 +20,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 198}
-VLLM = False
-QUIRKS = ["hybrid", "mamba2", "tuple-blocks", "partial-rotary"]
+QUIRKS = ["hybrid", "mamba2", "partial-rotary"]
 
 #: Every checkpoint is 9B, so no real weights were run: the shapes and identities below are from the pinned
 #: tiny checkpoint (routed, float32, CPU), the sizes from the checkpoints' configs.
@@ -64,7 +63,8 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "post_attention_layernorm",
-            "pre_norm_note": "Native pre_ff_layernorm, the MLP's input norm, as Llama's post_attention_layernorm.",
+            "pre_norm_note": "The MLP's input norm, native name pre_ff_layernorm, served under Llama's name "
+                             "post_attention_layernorm.",
             "contribution": "mlp_output",
             "detail": "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}",
         },
@@ -213,7 +213,8 @@ Bamba-9B-2T is the end of the first pretraining stage (2T tokens) and Bamba-9B-1
 inside it; Bamba-9B-v1 (`Bamba-9B` on the Hub is the same repository) is the end of the second
 stage, and Bamba-9B-v2 is trained on 1T tokens more, as their model cards say. All four share one
 shape: 32 blocks of width 4096, an MLP of 14336, and the attention blocks at 9, 18 and 27.
-Bamba-9B-v2's `max_position_embeddings` is 262144, v1's 4096.
+`max_position_embeddings` is 4096 on v1 and 262144 on the others (1.8T and 2T leave it to the config
+class's default).
 GraniteMoE-Hybrid (Granite 4.0-H) is Bamba's block with Granite's multipliers, and is the
 `granitemoehybrid` family.
 """

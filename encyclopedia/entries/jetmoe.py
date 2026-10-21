@@ -4,8 +4,8 @@ and an output projection over shared keys and values) and the MLP a mixture of e
 MODEL_TYPE = "jetmoe"
 TITLE = "JetMoE"
 SUBTITLE = (
-    "Llama's pre-norm block in which the attention is a mixture too: per token a router picks 2 of 8 "
-    "attention experts, each with its own query and output projections over shared keys and values."
+    "Llama's pre-norm block in which both sublayers are mixtures of experts: besides the MLP's, a router picks "
+    "attention experts per token, each with its own query and output projections over shared keys and values."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -18,7 +18,6 @@ CHECKPOINTS = ["jetmoe/jetmoe-8b", "jetmoe/jetmoe-8b-sft"]
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 133}
-VLLM = False
 QUIRKS = ["attention-experts", "mixture-of-experts"]
 
 #: The real checkpoints are 8B parameters: nothing here ran on real weights. Every identity and shape in
@@ -38,7 +37,7 @@ BLOCK = {
                 "attention_queries", "attention_keys", "attention_values",
                 "attention_scores", "attention_probabilities", "attention_head_outputs",
             ],
-            "detail": "MoA: top {num_experts_per_tok} of {num_local_experts} × {num_kv_heads} heads",
+            "detail": "{num_experts_per_tok} of {num_local_experts} experts × {num_kv_heads} heads",
         },
         {
             "host": "mlp",
@@ -56,7 +55,7 @@ BLOCK = {
 
 STRIP = {
     "embed": "A plain lookup: token_embeddings equals layers[0].input. The tokenizer prepends <s> (id 1).",
-    "head": "On jetmoe-8b lm_head shares its weight with embed_tokens (tie_word_embeddings).",
+    "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings).",
 }
 
 NOTES = """
@@ -94,8 +93,8 @@ interleaved) to all 32 heads: head `h` is slot `h // 16` over key/value head `h 
 
 `attention_output` is the gated sum of the chosen experts' output projections, each over its
 slot's 16 head outputs, plus the mixture's bias `experts.bias`. nnterp serves no standard value
-for the attention's routing; its logits are `experts.router.layer.output`, flat over tokens
-(`[batch × seq, num_local_experts]`), and the third element of `self_attn.output`:
+for the attention's routing. Its logits are `experts.router.layer.output`, flat over tokens
+(`[batch × seq, num_local_experts]`); the third element of `self_attn.output` holds them in float32:
 
 ```python
 attn = model.layers[1].self_attn
@@ -116,9 +115,9 @@ manual = (gates[..., None] * terms).sum(1) + experts.bias
 torch.testing.assert_close(manual.view_as(out), out)
 ```
 
-`attention_keys` and `attention_values` have `num_heads` heads, two copies of the 16. The copies
-are separate tensors, so an edit to head `h` of `attention_keys` reaches slot `h // 16`'s queries
-only; edit key/value head `j` at heads `j` and `j + 16`, or edit `kv_proj.output`, to reach every
+`attention_keys` and `attention_values` have `num_heads` heads, two copies of the 16. Each copy is
+its own slice of the tensor, so an edit to head `h` of `attention_keys` reaches slot `h // 16`'s
+queries only; edit key/value head `j` at heads `j` and `j + 16`, or edit `kv_proj.output`, to reach every
 query that reads it. The expert behind a query head changes from token to token, so a query head
 index names a slot, not an expert.
 
@@ -190,6 +189,6 @@ assert torch.equal(changed, (idx == e).any(-1))            # only the tokens tha
 ## The readout and the tokenizer
 
 `logits` is `lm_head.output`, with no cap or scale, and `project_on_vocab` on the last block's
-`layer_output` equals `logits`. On jetmoe-8b `lm_head` and `embed_tokens` share one weight. The
+`layer_output` equals `logits`. `lm_head` and `embed_tokens` share one weight. The
 tokenizer prepends `<s>` (id 1), so `model.input_ids` starts with it.
 """

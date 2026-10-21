@@ -4,8 +4,8 @@ MODEL_TYPE = "olmoe"
 TITLE = "OLMoE"
 SUBTITLE = (
     "Llama's pre-norm block with queries and keys RMS-normed across all heads, and a mixture of 64 experts "
-    "on every block whose 8 weights per token are the softmax's own entries, not renormalized, so they sum "
-    "to less than one."
+    "on every block that weights a token's 8 experts by their softmax entries without renormalizing them, so "
+    "the 8 weights sum to less than one."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -20,7 +20,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: OLMo).
 PALETTE = {"hue": 104}
-VLLM = True
 QUIRKS = ["qk-norm", "mixture-of-experts", "unnormalized-routing"]
 
 #: Every real value in the notes was measured on OLMoE-1B-7B-0924 (bf16 as stored unless the note says
@@ -108,9 +107,9 @@ the optional clamp on queries, keys and values, is off (`null`) on all of them.
 
 The attention interior needs `attn_implementation="eager"`. The default `sdpa` load computes the same
 function: in float32 the two loads' logits differ by at most 2e-5 on 0924. There is no softcap,
-sink or window. 0924's weights are stored in bfloat16 (13.8 GB); 0125's base checkpoint is stored
-in float32 (`torch_dtype` in its config), so a default load of it takes about 28 GB, and 0924's
-`fp32` branch holds 0924 in float32.
+sink or window. 0924's weights are stored in bfloat16 (13.8 GB). 0125's base checkpoint is stored
+in float32 (`torch_dtype` in its config), so a default load of it takes about 28 GB. A float32
+copy of 0924 is on its `fp32` branch.
 
 ## The router's weights are the softmax's top 8, not renormalized
 
@@ -132,9 +131,9 @@ assert torch.equal(top.indices, idx)                     # slots in descending w
 ```
 
 On 3,072 tokens of English documentation and Python, a token's 8 weights sum to between 0.19 and
-0.97, with a median of 0.30 to 0.37 on blocks 0 to 8 rising to 0.55 on block 15, and the median
-routing entropy is 3.45 to 3.99 nats against 4.16 for a uniform router: on 14 of the 16 blocks
-the median token's 8 chosen experts hold less than half its softmax mass. Each expert's output is
+0.97. The median sum is 0.30 to 0.37 on blocks 0 to 8 and rises to 0.55 on block 15, so on 14 of
+the 16 blocks the median token's 8 chosen experts hold less than half its softmax mass. The median
+routing entropy is 3.45 to 3.99 nats, against 4.16 for a uniform router. Each expert's output is
 scaled by its own probability, so `mlp_output`'s size moves with how much mass the router puts on
 the 8 it chose. A logit written at `router_logits` changes both the choice and the weights: forcing 8 experts to
 +10 and the rest to −10 gives each about 1/8.
@@ -158,7 +157,7 @@ changed = (ablated != clean).any(-1)                       # [batch, seq]
 assert torch.equal(changed, (idx == e).any(-1))            # only the tokens that chose e
 ```
 
-This held at every expert of blocks 4, 8 and 12 on 0924 in float32, and at block 8 in bfloat16.
+The equality held at every expert of blocks 4, 8 and 12 on 0924 in float32, and at block 8 in bfloat16.
 On `"The Eiffel Tower is in the city of"` (p(` Paris`) = 0.87) the largest single-expert effect on
 log p(` Paris`) is 0.04, 0.06 and 0.07 nats at blocks 4, 8 and 12; zeroing block 8's whole
 `mlp_output` moves it by 0.02. Rerouting a slot by writing `expert_indices` keeps the old slot's
@@ -185,8 +184,8 @@ write the id, not the string, when you build a prompt by hand.
 
 `allenai/OLMoE-1B-7B-0924` keeps 244 pretraining checkpoints as Hub branches, from
 `step5000-tokens20B` to `step1220000-tokens5117B`; `main` is annealed from `step1200000-tokens5033B`.
-`allenai/OLMoE-1B-7B-0125` keeps three stage-2 runs, five checkpoints each, as
-`stage2-ingredient{1,2,3}-step…-tokens…B`. Each loads with `revision=`:
+`allenai/OLMoE-1B-7B-0125` keeps three stage-2 runs, five checkpoints each, as branches named
+`stage2-ingredient<run>-step<N>-tokens<M>B`. Each loads with `revision=`:
 
 ```python
 model = StandardizedTransformer("allenai/OLMoE-1B-7B-0924", revision="step10000-tokens41B")

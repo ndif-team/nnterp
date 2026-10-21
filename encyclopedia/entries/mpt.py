@@ -3,9 +3,8 @@
 MODEL_TYPE = "mpt"
 TITLE = "MPT"
 SUBTITLE = (
-    "The block adds the attention to the stream, but the MLP takes the residual and adds it inside the module, "
-    "so mlp_output is the tensor before that add; ALiBi biases on the scores stand in for rotary, queries, keys "
-    "and values are thirds of one Wqkv, and no layer has a bias."
+    "The block adds the attention to the stream, but the MLP adds the residual inside its own module, so "
+    "mlp_output is the tensor before that add; no projection or norm has a bias."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -28,8 +27,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 86}
-VLLM = True
-QUIRKS = ["residual-inside-module", "tuple-blocks", "own-attention-arithmetic", "alibi", "fused-qkv", "layernorm"]
+QUIRKS = ["alibi", "layernorm"]
 
 #: What the visualization draws: a sequential block with two bias-free LayerNorm pre-norms; the block adds the
 #: attention, the MLP module adds the residual itself.
@@ -66,8 +64,9 @@ BLOCK = {
 
 #: Notes on the model-level strip, by node.
 STRIP = {
-    "embed": "wte is a plain lookup: no scale and no position embedding (transformers' MptModel does not read "
-             "learned_pos_emb; position enters as ALiBi biases on the scores), so token_embeddings equals layers[0].input.",
+    "embed": "wte is a plain lookup with no scale, so token_embeddings equals layers[0].input. There is no position "
+             "embedding: transformers' MptModel ignores the config's learned_pos_emb, and position enters as ALiBi "
+             "biases on the scores.",
     "norm": "norm_f is a LayerNorm with no bias; project_on_vocab applies it.",
     "head": "lm_head is tied to wte and has no bias. Nothing follows it: logits equals lm_head.output.",
 }
@@ -122,7 +121,7 @@ torch.testing.assert_close(heads, q)
 ```
 
 The three are views of the outputs of one `chunk`, and torch refuses an in-place edit of them
-(`RuntimeError: Output 0 of Select is a view and is being modified inplace`). Assign instead:
+(`RuntimeError: Output 0 of Transpose is a view and is being modified inplace`). Assign instead:
 
 ```python
 attn = model.layers[1].self_attn

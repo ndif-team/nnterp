@@ -3,9 +3,8 @@
 MODEL_TYPE = "qwen2_moe"
 TITLE = "Qwen1.5-MoE / Qwen2-MoE"
 SUBTITLE = (
-    "Qwen2's attention, with a bias on the query, key and value projections, and a mixture of experts on "
-    "every block whose top-k softmax weights are not renormalized, beside a shared expert scaled by a "
-    "sigmoid gate of its own."
+    "Qwen2's attention, with biased q, k and v, and a mixture of experts on every block: the router's top-k "
+    "softmax weights are not renormalized, and a shared expert is added through a sigmoid gate of its own."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -19,7 +18,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 285}
-VLLM = True
 QUIRKS = ["qkv-bias", "mixture-of-experts", "unnormalized-routing"]
 
 #: Every number in the notes comes from a checkpoint's config or tokenizer; the shapes, identities, read
@@ -75,8 +73,8 @@ routed = experts(y, router(y))                   # 4 of 60 experts per token (1.
 out    = h + routed + sigmoid(shared_expert_gate(y)) * shared
 ```
 
-Qwen2's pre-norm block with Llama's names; the mixture's output is the routed sum plus the gated
-shared expert, and nothing norms a sublayer's output. The identity is the plain sum, and inside
+Qwen2's pre-norm block with Llama's names. The mixture's output is the routed sum plus the gated
+shared expert, and no norm follows either sublayer. The identity is the plain sum, and inside
 the mixture `routed_output + shared_expert_output` is `mlp_output`:
 
 ```python
@@ -171,7 +169,7 @@ changed = (ablated != clean).any(-1)                       # [batch, seq]
 assert torch.equal(changed, (idx == e).any(-1))            # only the tokens that chose e
 ```
 
-This holds on the pinned tiny checkpoint for every expert, in float32 and in bfloat16.
+The check holds on the pinned tiny checkpoint for every expert, in float32 and in bfloat16.
 `expert_outputs` is read inside transformers' `grouped_mm` (the default) and `batched_mm` experts
 forwards; under `experts_implementation="eager"` `support()` reports it missing and names the kwarg.
 

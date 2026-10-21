@@ -4,7 +4,7 @@ MODEL_TYPE = "qwen2_vl_text"
 TITLE = "Qwen2-VL"
 SUBTITLE = (
     "Qwen2's block, biased q, k and v, with multimodal rotary embeddings: three position streams (time, row, column) "
-    "folded into one cos/sin before block 0, so an image's tokens share positions by row and column."
+    "folded into one cos/sin before block 0, so an image token's position is its row and column in the image."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -69,7 +69,6 @@ prompt = model.processor.apply_chat_template(content)
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 288}
-VLLM = False
 QUIRKS = ["qkv-bias", "multimodal-rotary"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -138,10 +137,10 @@ torch.testing.assert_close(x + attn + mlp, out)
 ## Positions are three streams
 
 The wrapper passes the text model `position_ids` of `[3, batch, seq]`: a temporal, a height and a
-width position per token. On text the three are equal and count up. An image's tokens all take the temporal
-position the image starts at, and each takes its row and its column in the image's grid of merged
-tokens as the other two, offset by the same start. The text after an image resumes one past the
-image's largest position, so an image `h` tokens high and `w` wide advances the positions by
+width position per token. On text the three are equal and count up. Every token of an image
+takes the image's start position as its temporal position; its height and width positions are
+that start plus its row and its column in the image's grid of merged tokens. The text after an
+image resumes one past the image's largest position, so an image `h` tokens high and `w` wide advances the positions by
 `max(h, w)`, not by `h * w`: after an image, a token's position is less than its index.
 
 ```python
@@ -154,10 +153,10 @@ positions[:, 0, mask[0]]                            # the image tokens' three po
 ```
 
 `rotary_emb` folds the three into one `cos`/`sin` by `mrope_section`, `[16, 24, 24]` on every
-checkpoint: of each head's 64 rotary frequencies, the first 16 turn with the temporal position, the
-next 24 with the height, the last 24 with the width, so in a 128-wide head dimensions 0 to 15 and 64
-to 79 carry time, 16 to 39 and 80 to 103 the row, 40 to 63 and 104 to 127 the column. The attention
-applies that pair with `rotate_half` before the attention interface, so `attention_queries` and
+checkpoint. Of each head's 64 rotary frequencies, the first 16 turn with the temporal position, the
+next 24 with the height and the last 24 with the width. In a 128-wide head, dimensions 0 to 15 and
+64 to 79 therefore carry time, 16 to 39 and 80 to 103 the row, and 40 to 63 and 104 to 127 the
+column. The attention applies that pair with `rotate_half` before the attention interface, so `attention_queries` and
 `attention_keys` are the rotated queries and keys, and on a prompt with no image the rotation is the
 ordinary rotary one. `rope_theta` is 10⁶.
 
@@ -165,9 +164,9 @@ ordinary rotary one. `rope_theta` is 10⁶.
 
 2B has 12 query heads over 2 key/value heads, 7B 28 over 4, 72B 64 over 8; `head_dim` is 128 on
 all three. An edit to key/value head `j` on 2B reaches query heads `6j` to `6j + 5`. The score
-scale is `head_dim ** -0.5`; there is no window and no softcap. `attn_implementation="eager"` is
-needed for `attention_scores` and `attention_probabilities` on the text blocks; on the vision
-encoder's blocks those two are unavailable under every implementation.
+scale is `head_dim ** -0.5`; there is no window and no softcap. On the text blocks the six attention
+interior values need `attn_implementation="eager"`. On the vision encoder's blocks
+`attention_scores` and `attention_probabilities` are unavailable under every implementation.
 
 ## The image enters at the scatter
 

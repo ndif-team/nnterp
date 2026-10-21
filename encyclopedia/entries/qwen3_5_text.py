@@ -35,7 +35,7 @@ WRAPPERS = {
 
 `model.projector` is `model.visual.merger`, the vision encoder's last module: `norm` (a LayerNorm over
 `vision_hidden_size`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
-`4 * vision_hidden_size` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. So an image
+`4 * vision_hidden_size` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. An image
 of `t * h * w` patches (its `image_grid_thw` row) is `t * h * w / 4` image tokens, and
 `vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`. On 0.8B the
 merger maps 4 × 768 = 3072 to 1024; a patch is 16 pixels, so an image token covers 32 × 32 pixels.
@@ -63,7 +63,6 @@ on 0.8B, 24 of width 1024 on 2B and 4B, 27 of width 1152 on 9B and 27B.
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 310}
-VLLM = False
 QUIRKS = ["hybrid", "gated-query", "qk-norm", "partial-rotary", "gain-norm", "multimodal-rotary"]
 
 #: Real-value numbers below come from runs on Qwen3.5-0.8B (float32) and Qwen3.5-9B (bfloat16), with
@@ -113,8 +112,8 @@ BLOCK = {
 
 #: Notes on the model-level strip, by node.
 STRIP = {
-    "embed": "A plain lookup, unscaled: token_embeddings equals layers[0].input. No BOS is prepended, "
-             "so position 0 holds the text's first token.",
+    "embed": "A plain lookup, unscaled: token_embeddings equals layers[0].input on a text prompt. No BOS is "
+             "prepended, so position 0 holds the text's first token.",
     "norm": "The gain is 1 + weight: the stored weight averages 3.31 on 0.8B and 1.14 on 9B.",
     "head": "lm_head is embed_tokens' weight on 0.8B, 2B and 4B (tie_word_embeddings) and a matrix of its own "
             "on 9B and 27B. logits is lm_head.output, with no softcap or scale.",
@@ -134,7 +133,7 @@ on 0.8B and 2B, 24 and 8 on 4B and 9B, 48 and 16 on 27B. A block has `linear_att
 `self_attn`, never both; the last block is always an attention block. Pick blocks outside the trace:
 
 ```python
-types = model.config.layer_types
+types = model.config.get_text_config().layer_types
 delta = [i for i, t in enumerate(types) if t == "linear_attention"]
 full = [i for i, t in enumerate(types) if t == "full_attention"]    # 3, 7, ..., 23 on 0.8B
 ```
@@ -160,12 +159,12 @@ On an attention block the middle term is `model.layers[3].self_attn.attention_ou
 
 `attn_implementation="eager"` is needed only for the six attention interior values on the
 attention blocks; there is no softcap or window, and on 0.8B in float32 the default `sdpa` load
-gives the same logits as the eager one. The DeltaNet values are read at the delta-rule kernel
-call and need no eager load. They need transformers' pure-torch kernels, which is what runs when
-`flash-linear-attention` is not installed (transformers then warns that it falls back to them);
-with it installed, every `linear_attn` value but `attention_output` is unavailable until
-`nnterp.route_kernels(model.family, "torch")`. The same call is what makes `state` and `states`
-exist: it routes a prompt through the token-by-token kernel, which on 0.8B on CPU took about twice
+and the eager one give logits within 2e-5 of each other. The DeltaNet values are read at the
+call to the delta-rule kernel and need no eager load. They need transformers' pure-torch delta
+rule, which is what runs when `flash-linear-attention` is not installed (transformers then warns
+that it falls back to it). With it installed, every `linear_attn` value but `attention_output`
+is unavailable until `nnterp.route_kernels(model.family, "torch")`. The same call is what makes
+`state` and `states` exist: it routes a prompt through the token-by-token kernel, which on 0.8B on CPU took about twice
 as long on a 250-token prompt and moved the logits by 2e-5. `states` holds one float32 state per
 token, `num_v_heads × 128 × 128`: 1 MiB per token per block on 0.8B and 2B, 2 MiB on 4B and 9B,
 3 MiB on 27B.
@@ -209,9 +208,10 @@ torch.testing.assert_close(gated, (heads * gate.sigmoid()).flatten(2))
 `q_norm` and `k_norm` are RMSNorms over one head's 256 dimensions with gain `1 + weight`,
 applied before the rotary. The rotary turns only the first 64 dimensions of each query and key
 head (`partial_rotary_factor` 0.25, `rope_theta` 10⁷); the other 192 carry no position, and
-`attention_queries[..., 64:]` equals `q_norm.output[..., 64:]` exactly. The config's
-`mrope_section` splits the rotary frequencies between time, height and width for image and video
-tokens; on text the three positions coincide, and the rotation is the standard `rotate_half` one.
+`attention_queries[..., 64:]` equals `q_norm.output[..., 64:]` exactly. The rotary is M-RoPE:
+`mrope_section` `[11, 11, 10]` gives the 32 rotary frequencies to time, height and width,
+interleaved, which matters on image and video tokens. On text the three positions are equal, and
+the rotation is the standard `rotate_half` one.
 0.8B and 2B have 8 query heads over 2 key/value heads, 4B and 9B 16 over 4, 27B 24 over 4, so an
 edit to key/value head `j` on 0.8B reaches query heads `4j` to `4j + 3`. The score scale is
 `256 ** -0.5`.
@@ -228,9 +228,9 @@ out = out_proj(norm(y, gate=silu(in_proj_z(x))))  # gain: weight
 
 `attention_queries`, `attention_keys` and `attention_values` are the kernel's arguments: after
 the convolution and the SiLU, before the kernel's l2 norm and the queries' `1/sqrt(128)` scale
-(on 0.8B's block 0 the queries' norms run from 0.09 to 4.1). A recurrence written on them without that
-normalization leaves a 42% error in block 0's final state on 0.8B; with it, it matches
-`attention_head_outputs` to 2e-8. Each head's key and value are 128 wide. 0.8B and 2B have 16
+(on 0.8B's block 0 the queries' norms run from 0.09 to 4.1). A recurrence written on these
+values without the l2 norm and the scale leaves a 42% error in block 0's final state on 0.8B;
+with them, its output matches `attention_head_outputs` to 2e-8. Each head's key and value are 128 wide. 0.8B and 2B have 16
 key heads and 16 value heads; 4B and 9B 16 key heads over 32 value heads, 27B over 48. The
 queries and keys are repeated up to the value heads (`repeat_interleave`) before the kernel, so
 there they are served `num_v_heads` wide, with heads `2j` and `2j + 1` (on 4B and 9B) copies of
@@ -247,8 +247,8 @@ from 0.05 (a head that forgets within a few tokens) to above 0.999. `attention_h
 The tokenizer sets `bos_token` to `None` and prepends nothing; `<|endoftext|>` is 248044,
 `<|im_start|>` 248045, `<|im_end|>` 248046. Position 0 does not grow into an outlier in the
 stream: across the prompts tried, its `layer_output` norm is at most 6 times the median of the
-other positions on 0.8B (18.6 at most, on block 14) and at most 3.5 times on 9B. It is still a
-place attention goes: from query 8 on, the attention blocks put a mean 0.10 to 0.42 of their
+other positions on 0.8B (18.6 at most, on block 14) and at most 3.5 times on 9B. Position 0
+still draws attention: from query 8 on, the attention blocks put a mean 0.10 to 0.42 of their
 probability on key 0 on 0.8B and 0.13 to 0.61 on 9B, up to 0.80 for single heads. Block 6, a
 DeltaNet block, writes a vector at position 0 several times larger than at any other position
 (10.6 against at most 1.0 on 0.8B, 18 to 30 against at most 6.4 on 9B). Prepending

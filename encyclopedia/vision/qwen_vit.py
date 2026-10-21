@@ -41,9 +41,9 @@ BLOCK = {
     ],
 }
 
-ROWS = ("One row, packed: every image's patches in one row, `[1, patches, vision_hidden_size]`, the processor's "
-        "`image_grid_thw` splitting it per image; each image's patches in merge-block order (each 2 × 2 block the "
-        "merger folds is consecutive), and in window order inside the vision encoder on Qwen2.5-VL.")
+ROWS = ("One row, packed: every image's patches, `[1, patches, vision_hidden_size]`, split per image by the processor's "
+        "`image_grid_thw`. Each image's patches are in merge-block order (each 2 × 2 block the merger folds is "
+        "consecutive), and on Qwen2.5-VL in window order inside the vision encoder.")
 MASKING = ("The attention runs once per image, over that image's patches, so no patch attends to another image's; "
            "on Qwen2.5-VL's windowed blocks once per window.")
 POSITIONS = ("A 2D rotary embedding (row and column of the patch) turns the queries and keys inside each attention. "

@@ -77,8 +77,8 @@ with model.trace(prompt, images=[red]):
 torch.equal(added, tapped)                       # True
 ```
 
-So `vision.image_features` is not the only way the image reaches the text model. On
-`Qwen/Qwen3-VL-4B-Instruct`, asked the colour of a red square on white, zeroing
+`vision.image_features` is therefore not the only way the image reaches the text model. On
+`Qwen/Qwen3-VL-4B-Instruct`, asked the color of a red square on white, zeroing
 `vision.image_features` alone still answers "Red"; zeroing `deepstack_output` on blocks 0 to 2 as well
 answers "White".
 
@@ -93,18 +93,17 @@ with model.trace(prompt, images=[red]):
 ## Read the vision values in the forward's order
 
 The deepstack mergers run inside the vision encoder, each right after the block it taps, and the
-merger runs inside it too, before the encoder returns. So in one trace read a tapped block's
-`layer_output`, then `deepstack_merger_list[k]`, before any later vision block; `model.projector.input`
-and `.output` before `vision.tower_output`; then `vision.image_features`; then, per text block,
-`layer_output`, `deepstack_output`, and the next block's `input`. A read out of this order raises
-`OutOfOrderError`.
+merger runs inside it too, before the encoder returns. In one trace, read a tapped block's
+`layer_output`, then `deepstack_merger_list[k]`, before any later vision block. Read
+`model.projector.input` and `.output` before `vision.tower_output`, then `vision.image_features`.
+Then read, per text block, `layer_output`, `deepstack_output` and the next block's `input`. A read
+out of this order raises `OutOfOrderError`.
 """,
     },
 }
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 301}
-VLLM = False
 QUIRKS = ["qk-norm", "multimodal-rotary"]
 
 #: What the visualization draws. The DeepStack add after blocks 0-2 is the text model's, outside the block: `between`
@@ -133,7 +132,7 @@ BLOCK = {
             "detail": "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}",
         },
     ],
-    "identity_note": "The contribution identity nnterp's suite checks on this family. On an image prompt the text "
+    "identity_note": "The contribution identity that nnterp's test suite checks on this family. On an image prompt the text "
                      "model then adds layers[k].deepstack_output at the image positions after blocks 0, 1 and 2, "
                      "outside the block: layers[k+1].input[mask] == layers[k].layer_output[mask] + "
                      "layers[k].deepstack_output there, layers[k+1].input == layers[k].layer_output elsewhere.",
@@ -203,18 +202,19 @@ torch.equal(entering[~mask], out[~mask])         # True
 A patch from block 0's `layer_output` into block 1's `input` drops `deepstack_output`; a
 residual-stream SAE or probe at `layer_output` on blocks 0 to 2 sees the stream before the add. Ablating
 the image takes `vision.image_features` and all three `deepstack_output` (the Vision notes give the
-numbers). A text prompt makes no deepstack call, and `deepstack_output` is not reached.
+numbers). A text prompt makes no DeepStack call, and `deepstack_output` is not reached.
 
 ## Queries and keys: normed per head, then a multimodal rotary
 
 `q_norm` and `k_norm` are RMSNorms over one head's 128 dimensions, applied before the rotary;
 `attention_queries` and `attention_keys` are read at the attention interface, after both. The rotary
 is M-RoPE: each token has a time, a height and a width position, and `mrope_section` `[24, 20, 20]`
-assigns the 64 frequencies to the three, interleaved (`mrope_interleaved`). The model folds them into
-one `cos` and `sin` before block 0. On text tokens the three positions are equal and count up by one.
-An image's tokens share one time position and add their row and column in the merged grid to the
-position the image starts at, and the text after the image continues from the largest of them plus one, so a token's rotary position is
-smaller than its index in `input_ids` after an image. 2B has 16 query heads over 8 key/value heads,
+gives the 64 rotary frequencies to the three, interleaved. The text model folds the three into one
+`cos` and `sin` before block 0. On text tokens the three positions are equal and count up by one.
+An image's tokens all take the time position the image starts at; their height and width
+positions are that start plus their row and column in the merged grid. The text after the image
+continues from the largest of these plus one, so after an image a token's rotary position is
+smaller than its index in `input_ids`. 2B has 16 query heads over 8 key/value heads,
 4B and 8B 32 over 8, 32B 64 over 8; the score scale is `128 ** -0.5`.
 
 ## Loading
@@ -222,9 +222,9 @@ smaller than its index in `input_ids` after an image. 2B has 16 query heads over
 Every checkpoint is `Qwen3VLForConditionalGeneration` (`model_type` `qwen3_vl`), whose `text_config` is
 `qwen3_vl_text`. With `task="image-text-to-text"`, as this page builds them, the wrapper loads with its
 processor: the text model at `model.language_model`, the vision encoder at `model.visual` as
-`model.vision`. Transformers has no text-only class for it: a dispatched `task="text-generation"` load
-builds the same wrapper without a processor, where every vision value and `deepstack_output` raise
-`Unavailable`. `attn_implementation="eager"` is needed for the six attention interior values on the text blocks; the
+`model.vision`. Transformers has no text-only class for it. A `task="text-generation"` load with
+`dispatch=True` builds the same wrapper without a processor, and there every vision value and
+`deepstack_output` raise `Unavailable`. `attn_implementation="eager"` is needed for the six attention interior values on the text blocks; the
 vision encoder's pattern is `Unavailable` under every load.
 
 ## The prompt

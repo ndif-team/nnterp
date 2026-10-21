@@ -3,9 +3,8 @@
 MODEL_TYPE = "gpt_neox"
 TITLE = "GPT-NeoX"
 SUBTITLE = (
-    "Pythia's block is parallel: attention and MLP each read their own LayerNorm of the block input and "
-    "the block adds both at once, so a block's MLP never sees that block's attention; queries, keys and "
-    "values come from one fused projection, and rotary turns a quarter of each head."
+    "Pythia's block is parallel: attention and MLP each read their own LayerNorm of the block input, and the "
+    "block adds both at once, so a block's MLP never sees that block's attention."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -28,8 +27,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GPT-NeoX).
 PALETTE = {"hue": 63}
-VLLM = True
-QUIRKS = ["parallel-blocks", "fused-qkv", "partial-rotary"]
+QUIRKS = ["parallel-blocks", "partial-rotary"]
 
 #: What the visualization draws: Pythia's parallel block, two pre-norms of the block input,
 #: no post-norms; the two contributions join the stream in one add.

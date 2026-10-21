@@ -74,8 +74,8 @@ with model.trace(prompt, images=[red]):
 torch.equal(added, tapped)                       # True
 ```
 
-So `vision.image_features` is not the only way the image reaches the text model. On the dense
-`Qwen/Qwen3-VL-4B-Instruct`, which has the same DeepStack, asked the colour of a red square on white,
+`vision.image_features` is therefore not the only way the image reaches the text model. On the dense
+`Qwen/Qwen3-VL-4B-Instruct`, which has the same DeepStack, asked the color of a red square on white,
 zeroing `vision.image_features` alone still answers "Red"; zeroing `deepstack_output` on blocks 0 to 2
 as well answers "White".
 
@@ -90,18 +90,17 @@ with model.trace(prompt, images=[red]):
 ## Read the vision values in the forward's order
 
 The deepstack mergers run inside the vision encoder, each right after the block it taps, and the
-merger runs inside it too, before the encoder returns. So in one trace read a tapped block's
-`layer_output`, then `deepstack_merger_list[k]`, before any later vision block; `model.projector.input`
-and `.output` before `vision.tower_output`; then `vision.image_features`; then, per text block,
-`layer_output`, `deepstack_output`, and the next block's `input`. A read out of this order raises
-`OutOfOrderError`.
+merger runs inside it too, before the encoder returns. In one trace, read a tapped block's
+`layer_output`, then `deepstack_merger_list[k]`, before any later vision block. Read
+`model.projector.input` and `.output` before `vision.tower_output`, then `vision.image_features`.
+Then read, per text block, `layer_output`, `deepstack_output` and the next block's `input`. A read
+out of this order raises `OutOfOrderError`.
 """,
     },
 }
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 304}
-VLLM = False
 QUIRKS = ["qk-norm", "multimodal-rotary", "mixture-of-experts"]
 
 #: What the visualization draws. The DeepStack add after blocks 0-2 is the text model's, outside the block: `between`
@@ -134,7 +133,7 @@ BLOCK = {
             "detail": "{num_experts} experts × {moe_intermediate_size}, top {top_k}",
         },
     ],
-    "identity_note": "The contribution identity nnterp's suite checks on this family. On an image prompt the text "
+    "identity_note": "The contribution identity that nnterp's test suite checks on this family. On an image prompt the text "
                      "model then adds layers[k].deepstack_output at the image positions after blocks 0, 1 and 2, "
                      "outside the block: layers[k+1].input[mask] == layers[k].layer_output[mask] + "
                      "layers[k].deepstack_output there, layers[k+1].input == layers[k].layer_output elsewhere.",
@@ -192,28 +191,27 @@ The third line is DeepStack, done by the text model between the blocks, on an im
 
 `layers[i].mlp` is a mixture on every block (`decoder_sparse_step` 1, `mlp_only_layers` empty). The
 router, `gate` aliased `router`, gives one logit per expert; the scoring is a softmax, the 8 largest
-probabilities are kept, and `norm_topk_prob` divides them by their sum, so each token's
-`expert_weights` sum to one:
+probabilities are kept, and the router divides them by their sum, so each token's `expert_weights`
+sum to one. It always divides: the config's `norm_topk_prob` (true) is not read.
 
 ```python
+moe = model.layers[1].mlp
 with model.trace(prompt):
-    moe = model.layers[1].mlp
     logits = moe.router_logits.save()
     weights = moe.expert_weights.save()
 
-top = logits.softmax(-1).topk(model.layers[1].mlp.top_k, dim=-1)
+top = logits.softmax(-1).topk(moe.top_k, dim=-1)
 torch.testing.assert_close(weights, top.values / top.values.sum(-1, keepdim=True))
 ```
 
 The experts are one fused module, `experts`, each a SwiGLU `moe_intermediate_size` wide (768 on
 30B-A3B, 1536 on 235B-A22B); the config's `intermediate_size` (6144, 12288) is a dense width no block
 uses. `expert_outputs` is each routing slot's weighted output, `[batch, seq, 8, hidden_size]`, and sums to
-`routed_output`. Because the weights are renormalized, zeroing one expert's weight leaves the others'
-unchanged and the remaining slots sum to less than one:
+`routed_output`. The router divides before `expert_weights` is read, so zeroing one expert's weight
+leaves the other slots' weights unchanged, and they sum to less than one:
 
 ```python
 with model.trace(prompt):
-    moe = model.layers[1].mlp
     moe.expert_weights = moe.expert_weights.masked_fill(moe.expert_indices == e, 0)
     ablated = model.logits.save()
 ```
@@ -237,18 +235,19 @@ torch.equal(entering[~mask], out[~mask])         # True
 A patch from block 0's `layer_output` into block 1's `input` drops `deepstack_output`; a
 residual-stream SAE or probe at `layer_output` on blocks 0 to 2 sees the stream before the add.
 Ablating the image takes `vision.image_features` and all three `deepstack_output` (the Vision notes
-give the numbers). A text prompt makes no deepstack call, and `deepstack_output` is not reached.
+give the numbers). A text prompt makes no DeepStack call, and `deepstack_output` is not reached.
 
 ## Queries and keys: normed per head, then a multimodal rotary
 
 `q_norm` and `k_norm` are RMSNorms over one head's 128 dimensions, applied before the rotary;
 `attention_queries` and `attention_keys` are read at the attention interface, after both. The rotary
 is M-RoPE: each token has a time, a height and a width position, and `mrope_section` `[24, 20, 20]`
-assigns the 64 frequencies to the three, interleaved (`mrope_interleaved`). The model folds them into
-one `cos` and `sin` before block 0. On text tokens the three positions are equal and count up by one.
-An image's tokens share one time position and add their row and column in the merged grid to the
-position the image starts at, and the text after the image continues from the largest of them plus one,
-so a token's rotary position is smaller than its index in `input_ids` after an image. 30B-A3B has 32
+gives the 64 rotary frequencies to the three, interleaved. The text model folds the three into one
+`cos` and `sin` before block 0. On text tokens the three positions are equal and count up by one.
+An image's tokens all take the time position the image starts at; their height and width
+positions are that start plus their row and column in the merged grid. The text after the image
+continues from the largest of these plus one, so after an image a token's rotary position is
+smaller than its index in `input_ids`. 30B-A3B has 32
 query heads over 4 key/value heads, 235B-A22B 64 over 4; the score scale is `128 ** -0.5`.
 
 ## Loading
@@ -256,9 +255,9 @@ query heads over 4 key/value heads, 235B-A22B 64 over 4; the score scale is `128
 Every checkpoint is `Qwen3VLMoeForConditionalGeneration` (`model_type` `qwen3_vl_moe`), whose
 `text_config` is `qwen3_vl_moe_text`. With `task="image-text-to-text"`, as this page builds them, the
 wrapper loads with its processor: the text model at `model.language_model`, the vision encoder at
-`model.visual` as `model.vision`. Transformers has no text-only class for it: a dispatched
-`task="text-generation"` load builds the same wrapper without a processor, where every vision value and
-`deepstack_output` raise `Unavailable`. `attn_implementation="eager"` is needed for the six attention
+`model.visual` as `model.vision`. Transformers has no text-only class for it. A
+`task="text-generation"` load with `dispatch=True` builds the same wrapper without a processor, and
+there every vision value and `deepstack_output` raise `Unavailable`. `attn_implementation="eager"` is needed for the six attention
 interior values on the text blocks; the vision encoder's pattern is `Unavailable` under every load.
 `expert_outputs` needs `experts_implementation` `"grouped_mm"` (the default) or `"batched_mm"`.
 

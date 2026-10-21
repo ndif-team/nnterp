@@ -3,8 +3,9 @@
 MODEL_TYPE = "glm"
 TITLE = "GLM-4 / GLM-Edge"
 SUBTITLE = (
-    "Llama's block with a fused gate and up projection, biased queries, keys and values, and a rotary "
-    "embedding that turns adjacent pairs of dimensions, on the first half of each head only on GLM-4-9B."
+    "Llama's block with a fused gate and up projection and a rotary embedding that turns adjacent pairs of "
+    "dimensions; on GLM-4-9B the rotary covers only the first half of each head, and the queries, keys and "
+    "values carry a bias."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -18,8 +19,11 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GLM).
 PALETTE = {"hue": 116}
-VLLM = False
-QUIRKS = ["qkv-bias", "partial-rotary", "interleaved-rotary"]
+QUIRKS = [
+    {"slug": "qkv-bias", "when": lambda config: config.attention_bias},  # GLM-4-9B, not GLM-Edge
+    {"slug": "partial-rotary", "when": lambda config: config.rope_parameters.get("partial_rotary_factor", 1.0) < 1.0},  # GLM-4-9B
+    "interleaved-rotary",
+]
 
 #: Every claim in the notes was checked on the pinned tiny checkpoint (shapes, identities, the rotary
 #: recomputed exactly) or read off the listed checkpoints' configs and tokenizers; no real weights were run.
@@ -84,8 +88,9 @@ assert torch.equal(x + attn + mlp, out)
 ## Rotary turns adjacent pairs, on half of each head on GLM-4-9B
 
 The rotary embedding turns dimension `2i` with `2i + 1`, where Llama turns `i` with
-`i + rot / 2`: each frequency appears twice in a row in the cos/sin table, and `rotate_half`
-takes the even and odd dimensions. It covers the first `partial_rotary_factor × head_dim`
+`i + rot / 2` (`rot` being the number of rotated dimensions). Pair `i` turns at Llama's frequency
+`i`: GLM's `apply_rotary_pos_emb` repeats each frequency twice in a row, and its `rotate_half`
+pairs each even dimension with the odd one after it. The rotation covers the first `partial_rotary_factor × head_dim`
 dimensions of each query and key head and passes the rest through unchanged. On GLM-4-9B the
 factor is 0.5 (the config does not say it; `GlmConfig` sets it), so dimensions 0 to 63 of each
 128-wide head are turned and 64 to 127 carry no position. GLM-Edge's configs set 1.0: the whole
@@ -93,8 +98,8 @@ head turns. The base (`rope_theta`) is 10,000 on every checkpoint here.
 
 `attention_queries` and `attention_keys` are read after the rotary. Recomputing them from
 `q_proj.output` and `k_proj.output` with the pairs adjacent matches exactly; with Llama's
-pairing it does not. To compare with a `rotate_half` family or reuse rotary code written for
-one, reorder the turned part, evens then odds:
+pairing it does not. To compare with a family that rotates Llama's way, or to reuse rotary code
+written for one, reorder the turned part, evens then odds:
 
 ```python
 hd = model.head_dim
@@ -110,11 +115,11 @@ q_half = q[..., perm]          # rotate_half's order; q[..., rot:] carries no po
 ## Queries, keys and values carry a bias
 
 `attention_bias` is true on GLM-4-9B: `q_proj`, `k_proj` and `v_proj` add a bias, and `o_proj`
-has none. GLM-Edge sets it false. Where the bias is on, a zero input still gives keys, values
-and queries: zeroing `self_attn.input` makes every value head equal to its slice of
-`v_proj.bias`, so every head outputs that bias whatever its pattern, and `attention_output`
-is `o_proj` of the biases, not zero. A zero ablation of the attention is `attention_output`
-set to zero, not its input.
+has none. GLM-Edge sets it false. Where the bias is on, a zero input still gives queries, keys
+and values. Zeroing `self_attn.input` makes every value head equal to its slice of
+`v_proj.bias`; each query head then outputs its key/value head's slice whatever its pattern, and
+`attention_output` is `o_proj` applied to those slices, not zero. To zero-ablate the attention,
+set `attention_output` to zero, not its input.
 
 ```python
 with model.trace(prompt):

@@ -3,8 +3,8 @@
 MODEL_TYPE = "deepseek_v3"
 TITLE = "DeepSeek-V3 / DeepSeek-R1 / Moonlight"
 SUBTITLE = (
-    "Latent attention, whose queries and keys are wider than its values, and a mixture with a shared "
-    "expert whose experts are chosen by a sigmoid plus a selection bias that the weights leave out."
+    "Latent attention with queries and keys wider than the values, and a mixture with a shared expert, "
+    "whose router chooses experts by sigmoid scores plus a selection bias and weights them without it."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -20,8 +20,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: DeepSeek).
 PALETTE = {"hue": 325}
-VLLM = True
-QUIRKS = ["latent-attention", "mixture-of-experts", "dense-first-blocks"]
+QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
 #: Shapes, identities, read orders and the routing were run on the suite's copy of the pinned tiny checkpoint
 #: (block 0 dense, block 1 a mixture of 4 experts, top 2; queries and keys 192 wide, values 128), with a
@@ -69,7 +68,7 @@ BLOCK = {
 
 STRIP = {
     "embed": "A plain lookup: token_embeddings equals layers[0].input.",
-    "layers": "The checkpoints' multi-token-prediction block (num_nextn_predict_layers) is not built: layers holds num_hidden_layers blocks.",
+    "layers": "The DeepSeek checkpoints' multi-token-prediction block (num_nextn_predict_layers) is not built: layers holds num_hidden_layers blocks.",
     "head": "lm_head has its own weight (tie_word_embeddings is false); logits is lm_head.output.",
 }
 
@@ -81,10 +80,10 @@ h   = x + self_attn(input_layernorm(x))      # multi-head latent attention
 out = h + mlp(post_attention_layernorm(h))   # dense on blocks 0-2, a mixture after
 ```
 
-Llama's pre-norm block and Llama's names. `first_k_dense_replace` is 3 on the DeepSeek
-checkpoints (1 on Moonlight): blocks 0 to 2 have a dense MLP, the other 58 a mixture. The block
-adds each sublayer's output to the stream and returns a tensor, so the identity is the plain sum
-on a dense block and on a mixture block:
+Llama's pre-norm block and Llama's names. The first `first_k_dense_replace` blocks have a dense
+MLP and the rest a mixture: blocks 0 to 2 on the DeepSeek checkpoints, block 0 on Moonlight. The
+block adds each sublayer's output to the stream and returns a tensor, so the identity is the plain
+sum on a dense block and on a mixture block:
 
 ```python
 with model.trace(prompt):
@@ -97,19 +96,20 @@ torch.testing.assert_close(x + attn + mlp, out)
 ```
 
 The DeepSeek configs carry one multi-token-prediction block (`num_nextn_predict_layers` 1),
-stored after the last block; transformers does not build it, so `model.layers` has 61 blocks.
+stored after the last block. transformers does not build it, so `model.layers` has 61 blocks.
 
 ## Latent attention: queries and keys are wider than values
 
 `attention_queries` and `attention_keys` are `qk_head_dim` wide (`qk_nope_head_dim +
 qk_rope_head_dim`, 128 + 64 = 192), `attention_values` and `attention_head_outputs` `head_dim`
-(`v_head_dim`, 128). The config's own `head_dim` key is `qk_rope_head_dim`, which no served value
-has. Queries go through a compressed rank (`q_lora_rank` 1536: `q_a_proj`, `q_a_layernorm`,
-`q_b_proj`, and `self_attn.q_proj` is `None`) on every DeepSeek checkpoint; Moonlight has
-`q_lora_rank` null and one `q_proj`. Keys and values are expanded from one latent per token
-(`kv_lora_rank` 512) for every head, so `attention_keys` has `num_heads` (128) heads, and the
-last 64 dimensions of every head's key are one shared rotary key. The attention interior needs
-`attn_implementation="eager"`.
+(`v_head_dim`, 128). transformers sets the config's `head_dim` to `qk_rope_head_dim` (64), which
+no served value has. Every DeepSeek checkpoint compresses the queries (`q_lora_rank` 1536:
+`q_a_proj`, `q_a_layernorm` and `q_b_proj`, with no `q_proj` module). Moonlight has `q_lora_rank`
+null and one `q_proj`.
+
+Keys and values are expanded from one latent per token (`kv_lora_rank` 512) for every head, so
+`attention_keys` has `num_heads` (128) heads, and the last 64 dimensions of every head's key are
+one shared rotary key. The attention interior needs `attn_implementation="eager"`.
 
 ```python
 attn = model.layers[3].self_attn
@@ -123,9 +123,9 @@ assert torch.equal(k[:, 0, :, -64:], k[:, 1, :, -64:])   # one rotary key
 
 ## The rotary part is served de-interleaved
 
-The checkpoints store the rotary dimensions in interleaved pairs (`rope_interleave` is true), and
-the attention rotates pair (2i, 2i + 1) of the projection into dimensions i and i + 32 of the
-rotary part. `attention_queries[..., -64:]` and `attention_keys[..., -64:]` are in that
+The checkpoints store the rotary dimensions in interleaved pairs (`rope_interleave`, which
+defaults to true and no checkpoint changes), and the attention rotates pair (2i, 2i + 1) of the
+projection into dimensions i and i + 32 of the rotary part. `attention_queries[..., -64:]` and `attention_keys[..., -64:]` are in that
 rotate-half order, not the order of `q_b_proj`'s output: at position 0, where rotary is the
 identity, the served rotary part is the projection's even dimensions followed by its odd ones.
 
@@ -143,17 +143,18 @@ torch.testing.assert_close(q[0, 0, 0, -64:], torch.cat([rope[0::2], rope[1::2]])
 
 The DeepSeek checkpoints extend the context with YaRN (`rope_scaling` factor 40, `mscale_all_dim`
 1.0), and the attention multiplies the scores by `qk_head_dim ** -0.5` times 1.87
-(`self_attn.scaling`, 0.1352), not by `qk_head_dim ** -0.5` alone; recompute `attention_scores`
+(`self_attn.scaling`, 0.1352), not by `qk_head_dim ** -0.5` alone. Recompute `attention_scores`
 from the queries and keys with `self_attn.scaling`. Moonlight has no `rope_scaling`, and its scale
 is `qk_head_dim ** -0.5`.
 
 ## The mixture: sigmoid scores, a selection bias, renormalized weights
 
-256 routed experts, 8 per token, and one shared expert every token runs through (64, 6 and two
-on Moonlight). `router_logits` are the logits before the sigmoid, and before the selection bias
+256 routed experts, 8 per token, and one shared expert every token runs through (on Moonlight 64
+routed experts, 6 per token and two shared experts). `router_logits` are the logits before the sigmoid, and before the selection bias
 (`router.e_score_correction_bias`). The bias is added to the sigmoids only to choose: the experts
 sit in `n_group` 8 groups, each group scored by the sum of its two best biased scores, and a token
-takes its 8 experts from its best `topk_group` 4 groups. `expert_weights` are the chosen experts'
+takes its 8 experts from its best `topk_group` 4 groups. Moonlight has one group, so every
+expert is a candidate. `expert_weights` are the chosen experts'
 sigmoids without the bias, renormalized to sum to one (`norm_topk_prob`) and multiplied by
 `routed_scaling_factor`, so they sum to 2.5 at every token (2.446 on Moonlight). A written
 `router_logits` moves both the choice and the weights; a written bias moves only the choice.
@@ -174,7 +175,7 @@ torch.testing.assert_close(w, chosen / chosen.sum(-1, keepdim=True) * scale)
 torch.testing.assert_close(routed + shared, out)
 ```
 
-The shared expert runs after the routed ones. Ablating an expert is zeroing the weight of every
+The shared expert runs after the routed experts. Ablating an expert is zeroing the weight of every
 slot that chose it; the other slots keep their weights, so the token's weights then sum to less
 than 2.5:
 

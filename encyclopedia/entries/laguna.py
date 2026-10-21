@@ -4,8 +4,8 @@ mixture with a shared expert after a dense first block."""
 MODEL_TYPE = "laguna"
 TITLE = "Laguna XS / Laguna S / Laguna M"
 SUBTITLE = (
-    "Blocks with their own number of query heads, an attention whose head outputs are scaled by a softplus gate "
-    "before o_proj, and a shared expert beside a sigmoid-routed mixture whose routed sum is scaled."
+    "Llama's pre-norm block with a softplus gate on each head's output before o_proj, and after the first blocks "
+    "a sigmoid-routed mixture of experts beside a shared expert; on XS and S the blocks differ in query heads."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -21,10 +21,16 @@ CHECKPOINTS = [
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 194}
-VLLM = False
 QUIRKS = [
-    "per-block-sizes", "qk-norm", "output-gate", "sliding-window", "partial-rotary", "mixture-of-experts",
-    "dense-first-blocks",
+    # XS and S: 48 query heads on the full blocks, 64 or 72 on the sliding ones; M.1: 64 on every block
+    {"slug": "per-block-sizes", "when": lambda config: len(set(config.num_attention_heads_per_layer)) > 1},
+    "qk-norm", "output-gate",
+    # every block of M.1 is full_attention
+    {"slug": "sliding-window", "when": lambda config: "sliding_attention" in config.layer_types},
+    # partial_rotary_factor 0.5 on XS and S's full blocks; 1.0 (the whole head) on M.1
+    {"slug": "partial-rotary", "when": lambda config: any(
+        p.get("partial_rotary_factor", 1.0) < 1.0 for p in config.rope_parameters.values())},
+    "mixture-of-experts", "dense-first-blocks",
 ]
 
 #: The smallest checkpoint has 33B parameters: nothing here ran on real weights. Every identity, shape and snippet
@@ -86,11 +92,11 @@ NOTES = """
 
 ```
 h   = x + self_attn(input_layernorm(x))       # q/k norms, a softplus gate
-out = h + mlp(post_attention_layernorm(h))    # dense first, then shared + 8 of 256
+out = h + mlp(post_attention_layernorm(h))    # dense first, then shared + top_k of 256
 ```
 
 Llama's pre-norm block and Llama's names. `mlp_layer_types` makes the first block dense on XS and S
-and the first three on M.1; the rest are mixtures. The block adds each sublayer's output to the
+and the first three on M.1, and the rest mixtures. The block adds each sublayer's output to the
 stream and returns a tensor, so the identity is the plain sum on both block kinds:
 
 ```python
@@ -105,8 +111,8 @@ torch.testing.assert_close(x + attn + mlp, out)
 
 ## Each block has its own number of query heads
 
-`num_attention_heads_per_layer` sets each block's query heads: 48 on the full blocks and 64 on the
-sliding ones on XS-2.1 and XS.2, 48 and 72 on S-2.1, 64 on every block of M.1. Every block has 8
+`num_attention_heads_per_layer` sets each block's query heads. XS-2.1 and XS.2 have 48 on the full
+blocks and 64 on the sliding ones, S-2.1 has 48 and 72, and M.1 has 64 on every block. Every block has 8
 key/value heads of 128 dimensions. The root's `num_heads` is the config's `num_attention_heads`, the
 full blocks' count; each block's own is on its attention:
 
@@ -125,8 +131,8 @@ block and 8 (XS) or 9 (S) on a sliding one.
 
 On XS and S, `layer_types` makes every fourth block full (0, 4, 8, ...) and the others sliding, with
 a window of 512 positions; every block of M.1 is full. A full block's rotary is YaRN with base
-500,000 over the first half of each head (`partial_rotary_factor` 0.5; the whole head on M.1); a
-sliding block's is plain rotary with base 10,000 over the whole head. The YaRN factor is 32 on
+500,000, over the first half of each head (`partial_rotary_factor` 0.5) on XS and S and over the
+whole head on M.1. A sliding block's rotary is plain, with base 10,000, over the whole head. The YaRN factor is 32 on
 XS-2.1, 64 on XS.2 and M.1 and 128 on S-2.1. `q_norm` and `k_norm` are RMSNorms over each head
 (`head_dim` wide), applied before the rotary; `attention_queries` and `attention_keys` are read after
 both, so an edit to one head's slice of `q_proj.output` reaches that head only.
@@ -156,13 +162,15 @@ weight on each head.
 ## Load with eager for the attention interior
 
 The attention interior needs `attn_implementation="eager"`; the default load runs `sdpa`. There is no
-softcap or sink, and on the tiny checkpoint the two loads' logits differ by 1e-7 in float32.
+softcap or sink, so the two loads compute the same attention up to rounding (1e-7 in the logits on
+the tiny checkpoint, in float32).
 
 ## The mixture: a shared expert first, then sigmoid routing with a selection bias
 
 Each mixture runs its shared expert (`mlp.shared_experts`, `shared_expert_intermediate_size` wide)
-first, on the same input as the router. `router_logits` is the router's projection in float32 (before
-the tanh softcap `moe_router_logit_softcapping`, which is 0, off, on every checkpoint). The router adds
+first, on the same input as the router. `router_logits` is the router's projection in float32, read
+before the tanh cap that `moe_router_logit_softcapping` sets; that key is 0 (no cap) on every
+checkpoint. The router adds
 its selection bias, `mlp.router.e_score_correction_bias`, to the sigmoids to choose; `expert_weights`
 are the chosen experts' sigmoids without the bias, renormalized to sum to one. The experts' weighted
 sum is then multiplied by `moe_routed_scaling_factor` (2.5 on XS and S, 1.0 on M.1): that product is

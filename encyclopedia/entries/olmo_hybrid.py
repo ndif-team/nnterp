@@ -4,8 +4,8 @@ MODEL_TYPE = "olmo_hybrid"
 TITLE = "OLMo-Hybrid"
 SUBTITLE = (
     "Two block classes that norm in opposite places: three blocks in four are pre-norm, with a gated DeltaNet "
-    "mixer; the fourth is OLMo-3's post-norm block, where attention without rotary and the MLP read the raw "
-    "stream and their outputs are normed before it receives them."
+    "mixer, and every fourth is OLMo-3's post-norm block, whose attention (without rotary on most checkpoints) "
+    "and MLP read the raw stream and have their outputs normed before the stream receives them."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -20,8 +20,12 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: OLMo).
 PALETTE = {"hue": 110}
-VLLM = False
-QUIRKS = ["hybrid", "post-norms", "qk-norm", "nope-blocks"]
+QUIRKS = [
+    "hybrid", "post-norms", "qk-norm",
+    # A config with no rope_theta builds no rotary embedding (OlmoHybridModel.__init__); Think-SFT's null
+    # rope_parameters is filled with a theta of 10000, and so is the pinned tiny checkpoint's.
+    {"slug": "nope-blocks", "when": lambda config: not (config.rope_parameters or {}).get("rope_theta")},
+]
 
 #: Every checkpoint is 7B, so no real weights were run: shapes, identities and read places are from the
 #: pinned tiny checkpoint with the released config's rope_theta null and linear_allow_neg_eigval written in
@@ -145,10 +149,11 @@ since the norm follows; edit `attention_output`.
 ## Loading
 
 The attention interior needs `attn_implementation="eager"`. The DeltaNet values are read at
-transformers' pure-torch delta-rule kernels, which run when `flash-linear-attention` is not
-installed (it is not here); the per-token `state` and `states` need
-`nnterp.route_kernels(model.family, "torch")` before the first trace, which runs a prompt
-through the token-by-token kernel.
+transformers' pure-torch delta-rule kernels. Where `flash-linear-attention` is installed, the
+mixer calls its compiled kernel instead, and the values are unavailable until
+`nnterp.route_kernels(model.family, "torch")` binds the pure-torch ones. The per-token `state` and
+`states` need that call in any case, before the first trace: it runs a prompt through the
+token-by-token kernel, which keeps the state after every token.
 
 ```python
 import nnterp
@@ -187,8 +192,8 @@ applied before the heads are split, so one RMS covers every head and an edit to 
 slice of `q_proj.output` reaches the others; edit a single head at `attention_queries`. 30
 query heads over 30 key/value heads: there is no grouping. The released configs set
 `rope_theta` to null, and the model then builds no rotary embedding: `attention_queries` is
-`q_norm`'s output split into heads, unchanged, and order reaches the attention only through the
-causal mask and the DeltaNet blocks.
+`q_norm`'s output split into heads, unchanged. Token order reaches the attention only through the
+causal mask and through the DeltaNet blocks before it.
 
 ```python
 attn = model.layers[full[0]].self_attn
@@ -201,10 +206,10 @@ b, s, _ = qn.shape
 assert torch.equal(qn.view(b, s, -1, model.head_dim).transpose(1, 2), q)
 ```
 
-Olmo-Hybrid-Think-SFT-7B's config sets `rope_parameters` to null rather than a null
-`rope_theta`; transformers fills that with a theta of 10000, so loaded through transformers that
-checkpoint's attention blocks apply rotary embeddings (its `model.rotary_emb` is an
-`OlmoHybridRotaryEmbedding`, where the other three checkpoints' is `None`).
+Olmo-Hybrid-Think-SFT-7B is the exception. Its config sets `rope_parameters` itself to null, not
+`rope_theta`, and transformers fills a null `rope_parameters` with a theta of 10000. Loaded through
+transformers, that checkpoint's attention blocks therefore apply rotary embeddings: its
+`model.rotary_emb` is an `OlmoHybridRotaryEmbedding`, where the other checkpoints' is `None`.
 
 ## The readout, the embeddings and the tokenizer
 

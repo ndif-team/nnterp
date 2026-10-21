@@ -3,9 +3,9 @@
 MODEL_TYPE = "jamba"
 TITLE = "Jamba / Jamba 1.5–1.7 / Jamba2"
 SUBTITLE = (
-    "Llama's pre-norm block whose mixer is a Mamba-1 selective scan with RMS norms on its step, B and C on most "
-    "blocks and attention without rotary on one in eight or fourteen, and whose MLP is, on every other block "
-    "of the large checkpoints, a mixture of experts."
+    "Llama's pre-norm block with one of two mixers, a Mamba-1 selective scan with RMS norms on its step, B and C "
+    "on most blocks and attention without rotary on one block in eight or fourteen, and, on every other block "
+    "of the larger checkpoints, a mixture of experts in place of the MLP."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -24,7 +24,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Mamba).
 PALETTE = {"hue": 8}
-VLLM = False
 QUIRKS = ["hybrid", "mamba1", "nope-blocks", "mixture-of-experts", "unnormalized-routing"]
 
 #: No real weights were run: shapes and identities are from the pinned tiny checkpoint (routed, float32,
@@ -132,7 +131,7 @@ stream, so the identity is the plain sum on every shape, exact in float32:
 ```python
 with model.trace(prompt):
     x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()   # an attention block
+    attn = model.layers[1].self_attn.attention_output.save()   # attention on the tiny checkpoint; 4 on v0.1
     mlp = model.layers[1].mlp.mlp_output.save()
     out = model.layers[1].layer_output.save()
 
@@ -153,6 +152,7 @@ pure-torch scan, which is a token loop, so `state`, `states`, `state_after` and
 
 ```python
 import nnterp
+from nnterp import StandardizedTransformer
 
 nnterp.route_kernels(nnterp.families.jamba, "torch")       # before the first trace
 model = StandardizedTransformer("ai21labs/Jamba-v0.1", attn_implementation="eager")
@@ -211,7 +211,7 @@ edit to `attention_values[:, j]` reaches query heads `4j` to `4j + 3`; the 3B ch
 query heads over one key/value head.
 
 ```python
-attn = model.layers[1].self_attn
+attn = model.layers[1].self_attn                # attention on the tiny checkpoint; layers[4] on v0.1
 with model.trace(prompt):
     q_raw = attn.source.self_q_proj_0.output.save()
     q = attn.attention_queries.save()          # [batch, num_heads, seq, head_dim]
@@ -226,6 +226,7 @@ assert torch.equal(q_raw.view(b, s, -1, model.head_dim).transpose(1, 2), q)
 `logits` exactly. Nothing is added after `embed_tokens`, so `token_embeddings` equals
 `layers[0].input`. The 3B checkpoints tie `lm_head` to `embed_tokens`; v0.1 and Jamba2-Mini do
 not. The tokenizer has 65536 tokens and prepends `<|startoftext|>` (id 1), so position 0 is that
-token; on v0.1 `<|endoftext|>` (id 2) ends a text, and the Jamba2 configs name id 519 as
-`eos_token_id`. Jamba-v0.1 is a base model and ships no chat template.
+token. On v0.1 `<|endoftext|>` (id 2) ends a text; the Jamba2 and Reasoning-3B tokenizers end a turn
+with `<|im_end|>` (id 519), which their configs name as `eos_token_id`. Jamba-v0.1 is a base model and
+ships no chat template.
 """

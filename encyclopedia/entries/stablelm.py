@@ -21,7 +21,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GPT-NeoX).
 PALETTE = {"hue": 69}
-VLLM = False
 QUIRKS = [
     "layernorm", "partial-rotary",
     {"slug": "qkv-bias", "when": lambda config: config.use_qkv_bias},  # StableLM 2 1.6B and its zephyr
@@ -33,7 +32,7 @@ ATTENTION_INTERIOR = [
     "attention_queries", "attention_keys", "attention_values",
     "attention_scores", "attention_probabilities", "attention_head_outputs",
 ]
-MLP_DETAIL = "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}"
+MLP_DETAIL = "{hidden_size} → {intermediate_size} → {hidden_size}, gated {hidden_act}"
 
 #: StableLM-2-1.6B and StableLM-3B (use_parallel_residual false): input_layernorm before the attention,
 #: post_attention_layernorm before the MLP, each sublayer adding to the stream in turn.
@@ -129,10 +128,10 @@ before reusing a recipe across sizes. The pinned checkpoint has 12B's shape.
 
 ## The contributions are the modules' outputs
 
-`attention_output` is `self_attn.output[0]` and `mlp_output` is `mlp.output` (after the block's
-`dropout`, the identity in eval), and the identity holds in both shapes: exactly in float32 on the
-pinned parallel checkpoint, and on StableLM-2-1.6B in float32 (block 5), where the stream between
-the adds, `post_attention_layernorm.input`, equals `layers[i].input + attention_output`.
+`attention_output` is `self_attn.output[0]` and `mlp_output` is `mlp.output`; the block's `dropout`
+after the MLP is the identity in eval. The identity holds exactly in float32 on both shapes: on the
+pinned parallel checkpoint and on StableLM-2-1.6B (block 5). On the sequential block the stream
+between the adds, `post_attention_layernorm.input`, equals `layers[i].input + attention_output`.
 
 ```python
 with model.trace(prompt):
@@ -186,7 +185,7 @@ ablate `attention_output` itself.
 
 ## Grouped-query attention on 12B
 
-1.6B and the 3B models have one key/value head per query head (32 and 32). 12B has 32 query heads
+1.6B and the 3B models have 32 query heads and 32 key/value heads, one per query head. 12B has 32 query heads
 over 8 key/value heads, so an edit to key/value head `j` reaches query heads `4j` to `4j + 3`.
 
 ## Load with eager for the interior

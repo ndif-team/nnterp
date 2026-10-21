@@ -3,9 +3,9 @@
 MODEL_TYPE = "gpt_neo"
 TITLE = "GPT-Neo / TinyStories"
 SUBTITLE = (
-    "GPT-2's sequential block with a learned position embedding, whose attention sits one module down inside "
-    "an attn wrapper and does its own arithmetic: the scores are not scaled, and every other block masks "
-    "keys outside a local window."
+    "GPT-2's sequential block and learned position embedding; the attention sits one module down, inside an "
+    "attn wrapper, computes its own scores without scaling them, and on every other block masks keys outside "
+    "a local window."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -22,8 +22,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GPT-J).
 PALETTE = {"hue": 50}
-VLLM = False
-QUIRKS = ["tuple-blocks", "own-attention-arithmetic", "sliding-window", "position-embeddings", "layernorm"]
+QUIRKS = ["sliding-window", "position-embeddings", "layernorm"]
 
 #: What the visualization draws: GPT-2's sequential block, ln_1 before the attention, ln_2 before the MLP.
 BLOCK = {
@@ -78,7 +77,7 @@ out = h + mlp(ln_2(h))       # ln_2 = post_attention_layernorm
 `transformer.h[i].attn` is a `GPTNeoAttention` wrapper that calls `attn.attention`, a
 `GPTNeoSelfAttention`, and returns its output unchanged. `self_attn` names the inner module: the
 projections, the arithmetic and the six interior values are there, and `attention_output` is its
-first output, after `out_proj`. Inside one trace it comes before the wrapper's `attn.output`.
+first output, after `out_proj`. Inside one trace, read it before the wrapper's `attn.output`.
 The block returns `(hidden_states, attn_weights)` on every call, so `model.layers[i].output[1]`
 is the pattern and `layer_output` is the first element. Nothing sits between a sublayer and the
 stream, and `layers[i].input + attention_output + mlp_output == layer_output` is exact (difference
@@ -86,11 +85,11 @@ stream, and `layers[i].input + attention_output + mlp_output == layer_output` is
 
 ## Local and global blocks alternate
 
-`config.attention_layers` names each block `global` or `local`; every released checkpoint starts
-with `global` and alternates. A `local` block masks every key `window_size` or more tokens back
+`config.attention_layers` names each block `global` or `local`; every released checkpoint with more
+than one block starts with `global` and alternates. A `local` block masks every key `window_size` or more tokens back
 (256 on every released checkpoint), so a query attends to itself and the 255 tokens before it.
-The window is part of the causal mask the module holds, so the pattern is zero outside it and the
-scores there hold float32's minimum. A prompt of 256 tokens or fewer gives a `local` block the
+The window is built into the causal mask the module holds (its `bias` buffer), so outside the window
+the pattern is zero and the scores hold float32's minimum. A prompt of 256 tokens or fewer gives a `local` block the
 same mask as a `global` one.
 
 ```python
@@ -109,8 +108,8 @@ assert pattern[..., outside].abs().max() == 0
 ## The scores are not scaled
 
 The module's `_attn(query, key, value, mask)` computes `q @ kᵀ` in float32 with no
-`1 / sqrt(head_dim)`, applies the causal (and local) mask with `torch.where`, adds the padding mask,
-takes the softmax, casts it back to the values' dtype and multiplies the values. Its arguments are
+`1 / sqrt(head_dim)`, applies its own causal (and local) mask with `torch.where`, adds the model's
+attention mask (causal, with any padding), takes the softmax, casts it back to the values' dtype and multiplies the values. Its arguments are
 `attention_queries`, `attention_keys` and `attention_values` (`num_heads` each, no grouping), the
 softmax's input is `attention_scores` and its first return is `attention_head_outputs`.
 
@@ -127,16 +126,18 @@ assert torch.equal(again[..., causal], scores[..., causal])
 ```
 
 The scores are large: at block 6 of `gpt-neo-125m` their standard deviation over the unmasked
-entries is 10.8 and their largest entry 38 on a 47-token prompt. Above the diagonal the scores are
-`-inf`, not the dtype's minimum, so `attention_scores * 0` is NaN there; add to the scores, or
-keep the masked entries.
+entries is 10.8 and their largest entry 38 on a 47-token prompt. On a float32 or bfloat16 load the
+scores above the diagonal are `-inf`, not float32's minimum: the module's own mask writes float32's
+minimum there, and the model's attention mask, added next, holds the minimum of the model's dtype, so
+the sum overflows. `attention_scores * 0` is then NaN above the diagonal. On a float16 load the sum
+stays at float32's minimum. To edit the scores, add to them, or leave the masked entries as they are.
 
 ## Loading: eager is the default
 
 transformers has `eager` and `flash_attention_2` for GPT-Neo and no `sdpa`, so a load with no
-`attn_implementation` runs eager and serves all six interior values. They carry the eager check,
-and a `flash_attention_2` load reports them unavailable. The released configs name no dtype, so a
-load with no `dtype` is float32.
+`attn_implementation` runs eager and serves all six interior values. They are read inside the eager attention,
+so a `flash_attention_2` load reports them unavailable. The EleutherAI configs name no dtype and the
+TinyStories ones name float32, so a load with no `dtype` is float32.
 
 ## Position embeddings are added after embed_tokens
 
@@ -159,7 +160,7 @@ On `gpt-neo-125m`, on a 47-token prompt, the `global` blocks 6, 8 and 10 put 63%
 pattern (averaged over heads and the later queries) on key 0, and the `local` blocks between them
 23% to 35%. The stream at position 0 has a norm of about 9,100 to 9,500 from block 5's output
 to block 9's, against medians of about 1,500 at the other positions. The tokenizer is GPT-2's and
-adds no BOS, so the prompt's first token takes that role; leave position 0 out of norms and
+adds no BOS, so the prompt's first token becomes the sink; leave position 0 out of norms and
 activation statistics.
 
 ## The readout: LayerNorm with a bias, tied weights
@@ -180,6 +181,6 @@ bias_logits = model.lm_head.weight @ model.norm.bias
 `gpt-neo-125m` is 12 blocks × 768 (12 heads of 64), `gpt-neo-1.3B` 24 × 2048 and `gpt-neo-2.7B`
 32 × 2560 (16 and 20 heads of 128). Every one has `gelu_new`, an MLP four times the width
 (`intermediate_size` is `None`, which means `4 * hidden_size`) and GPT-2's 50257-token vocabulary.
-The TinyStories models have 1 to 8 blocks of 64 to 1024 wide, always 16 heads, so `head_dim` runs
+The TinyStories models have 1 to 8 blocks, 64 to 1024 wide, always 16 heads, so `head_dim` runs
 from 4 (`TinyStories-1M`) to 64; `TinyStories-1Layer-21M`'s one block is `global`.
 """

@@ -33,10 +33,10 @@ BLOCK = {
     ],
 }
 
-ROWS = ("One row, packed: every image's patches, image after image, `[1, patches, vision_hidden_size]`; image `j` has "
-        "`(height // patch_size) * (width // patch_size)` patches in raster order, its `image_sizes` entry from the "
-        "processor. `vision.patch_embeddings` is the packed row entering `ln_pre`; the convolution's own output, "
-        "`patch_embed.output`, is the padded grid.")
+ROWS = ("One row, packed: every image's patches, image after image, `[1, patches, vision_hidden_size]`. Image `j` has "
+        "`(height // patch_size) * (width // patch_size)` patches in raster order, `height` and `width` being its entry in "
+        "the processor's `image_sizes`. `vision.patch_embeddings` is the packed row entering `ln_pre`; the convolution's "
+        "own output, `patch_embed.output`, is the padded grid.")
 MASKING = ("Block-diagonal: a patch attends to every patch of its own image and to none of another's, so the pattern "
            "is zero between images.")
 POSITIONS = ("A 2D rotary embedding (the patch's row and column in its image) turns the queries and keys inside each "
@@ -75,8 +75,9 @@ image.
 
 ## The attention runs once over the row, under a block-diagonal mask
 
-Each block calls the attention function once on the whole row with a mask that is zero inside an
-image's square and the dtype's minimum between images. So the interior is whole: under
+Each block calls the attention function once on the whole row. The image boundaries go in as a mask
+that is zero inside an image's square and the dtype's minimum between images, or, under flash
+attention, as `cu_seqlens`. So the interior is whole: under
 `attn_implementation="eager"`, `attention_probabilities` is `[1, heads, patches, patches]`, each row
 summing to one over its own image's patches and exactly zero on the other images'.
 

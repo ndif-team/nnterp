@@ -43,7 +43,6 @@ def load(checkpoint, **kwargs):
 
 #: Set by hues.py (lineage: OLMo).
 PALETTE = {"hue": 98}
-VLLM = False
 QUIRKS = ["post-norms", "qk-norm"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -116,7 +115,7 @@ remove the scale from the queries and keys, the value and output projections are
 bias, and `post_attention_layernorm` removes the scale again: doubling what the attention reads
 changes `attention_output` by about 1e-5 relative on 1B. A steering vector added to the stream
 reaches the attention only by turning the stream's direction. The MLP has no such invariance:
-doubling what it reads changes `mlp_output` by 19 to 49% on 1B's blocks 2, 8 and 14.
+doubling what it reads changes `mlp_output` by about 20 to 50% on 1B's blocks 2, 8 and 14.
 
 ## The contributions are the post-norms' outputs
 
@@ -136,7 +135,7 @@ torch.testing.assert_close(x + attn + mlp, out)
 
 **RMSNorm is scale-invariant, so scale the contribution, not the module.** On 1B, halving
 `mlp.output` at block 8 moves `layer_output` by at most 4e-4, while halving `mlp_output` moves it
-by 1.2; halving `self_attn.output[0]` moves it by 1e-5. Zeroing the module output does work,
+by 1.2; halving `self_attn.output[0]` moves it by less than 1e-4. Zeroing the module output does work,
 because the norm of zero is zero. Partial ablation and steering of a sublayer's effect go through
 `mlp_output` / `attention_output`:
 
@@ -159,7 +158,7 @@ largest in the last blocks.
 and `num_kv_heads * head_dim`, applied before the heads are split and before the rotary embedding.
 `attention_queries` and `attention_keys` are read after both. Because one RMS is shared by every
 head, an edit to one head's slice of `q_proj.output` reaches the other heads: tripling head 0's
-slice at block 8 of 1B changes head 1's queries by 15%. Edit a single head at
+slice at block 8 of 1B changes head 1's queries by about 15%. Edit a single head at
 `attention_queries` or `attention_keys`, which no norm follows.
 
 ```python
@@ -192,8 +191,9 @@ unscaled lookup and equals `layers[0].input`.
 
 ## Intermediate checkpoints and kin
 
-Each base repository keeps its pretraining checkpoints as Hub branches, `stage1-step…-tokens…B`
-and `stage2-ingredient…-step…-tokens…B`, which load with `revision=`:
+Each base repository keeps its pretraining checkpoints as Hub branches,
+`stage1-step<N>-tokens<M>B` and `stage2-ingredient<k>-step<N>-tokens<M>B`, which load with
+`revision=`:
 
 ```python
 model = StandardizedTransformer(

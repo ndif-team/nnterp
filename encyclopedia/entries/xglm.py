@@ -3,8 +3,8 @@
 MODEL_TYPE = "xglm"
 TITLE = "XGLM"
 SUBTITLE = (
-    "OPT's pre-norm block with no MLP module, so fc2.output is the block's second term; the embedding is "
-    "scaled by sqrt(d_model), sinusoidal positions are added after it, and the attention is its own bmm arithmetic."
+    "OPT's pre-norm block with no MLP module, so the MLP path's term is fc2.output; the embedding is scaled by "
+    "sqrt(d_model), and sinusoidal positions are added after it."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -17,8 +17,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: OPT).
 PALETTE = {"hue": 81}
-VLLM = False
-QUIRKS = ["no-mlp", "scaled-embeddings", "position-embeddings", "own-attention-arithmetic", "layernorm", "qkv-bias"]
+QUIRKS = ["no-mlp", "scaled-embeddings", "position-embeddings", "layernorm", "qkv-bias"]
 
 #: What the visualization draws: the attention and its pre-norm, then the MLP path, which has no module:
 #: final_layer_norm, fc1, activation_fn and fc2 sit on the block, so the sublayer is hosted on the native fc2.
@@ -44,8 +43,8 @@ BLOCK = {
             "label": "MLP",
             "pre_norm": "final_layer_norm",
             "reads": "fc1",
-            "pre_norm_note": "The block's own final_layer_norm, a LayerNorm with a bias; the decoder's last norm is "
-                             "layer_norm, model.norm.",
+            "pre_norm_note": "A LayerNorm with a bias, the block's own final_layer_norm. The decoder's last norm is "
+                             "a different module, layer_norm (model.norm).",
             "contribution": "fc2.output",
             "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, {activation_function}",
             "host_note": ("No mlp module: final_layer_norm, fc1, activation_fn and fc2 sit on the block, and fc2.output, "
@@ -54,7 +53,7 @@ BLOCK = {
     ],
     "identity": "layers[i].input + self_attn.attention_output + fc2.output == layer_output",
     "identity_note": "fc2.output is the MLP path's term: the block has no mlp module, and fc1 and fc2 sit on the block. "
-                     "Exact; the suite checks it on this family.",
+                     "The sum is exact, and the test suite checks it.",
 }
 
 #: Notes on the model-level strip, by node.
@@ -65,7 +64,8 @@ STRIP = {
     "layers": "Each block runs the attention, then final_layer_norm, fc1, activation_fn and fc2, all on the block: "
               "there is no mlp module, and layers[i].fc2.output is the block's second term.",
     "norm": "layer_norm is a LayerNorm with a bias; project_on_vocab applies it.",
-    "head": "lm_head has no bias and shares its weight with embed_tokens. Its output is logits, unchanged.",
+    "head": "lm_head has no bias and shares its weight with embed_tokens. Nothing follows it: logits equals "
+            "lm_head.output.",
 }
 
 NOTES = """
@@ -131,8 +131,8 @@ pinned checkpoint).
 
 XGLM has one attention implementation, so the interior values need no eager load and carry no `⚠`.
 The queries are scaled by `1/sqrt(head_dim)` as they are projected, so `attention_queries` is
-`q_proj`'s output times that scale and `attention_scores` is `attention_queries @
-attention_keys.transpose(-1, -2)` plus the mask. Every value is a view of the `[batch * num_heads, ...]`
+`q_proj`'s output times that scale. `attention_scores` is `attention_queries @
+attention_keys.transpose(-1, -2)` plus the mask, clamped below at the dtype's minimum. Every value is a view of the `[batch * num_heads, ...]`
 tensor the forward holds, served heads first, so an in-place edit reaches the model. Every head has its
 own keys and values.
 
@@ -140,7 +140,7 @@ own keys and values.
 
 On `xglm-564M` block 0's two terms add a vector of norm about 860 to every position, almost the same
 at each one and largest in coordinates 35, 148 and 874: `layer_output` of block 0 has a median norm of
-858, and its mean over positions has a norm of 858, against 132 entering the block. The tokenizer
+858, and its mean over positions has a norm of 858, against 132 for `token_embeddings`. The tokenizer
 prepends `</s>` (id 2), and the stream at that position grows to a norm of 13,000 from block 8 to
 block 16, mostly in coordinates 660 and 524, while the median elsewhere is 900 to 1,100. From block 7
 to block 21, 59% to 82% of the attention pattern, averaged over heads and later queries, lands on key

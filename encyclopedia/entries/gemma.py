@@ -57,7 +57,7 @@ torch.equal(first[mask], features)                # True: the scatter
 ## One image token per patch
 
 The projector maps each patch to one token, so an image is `(image_size // patch_size) ** 2` image
-tokens: 256 on the 224 checkpoints (16 × 16 patches of 14 pixels), 1024 on the 448 ones and 4096 on
+tokens: 256 on the 224 checkpoints (16 × 16 patches of 14 pixels), 1024 on the 448 checkpoints and 4096 on
 `paligemma-3b-pt-896` (the config's `num_image_tokens`). The processor resizes every image to the
 checkpoint's `image_size`, so every image of a checkpoint gives the same count.
 
@@ -70,6 +70,15 @@ scatters `model.projector.output` into the output of `embed_tokens` as it is, so
 `layers[0].input[~mask] == token_embeddings[~mask]`. The wrapper numbers positions from 1
 (`position_ids` is `arange(seq) + 1`), so a text token sits one rotary step later than on a
 `GemmaForCausalLM`.
+
+## The prefix attends in both directions
+
+The processor marks the image and the prompt as the prefix (`token_type_ids` 0) and any suffix
+passed to it as 1. The wrapper's mask lets every prefix position attend to every other prefix
+position, later ones included; only suffix tokens are causal. A trace with an image and a prompt
+is therefore bidirectional over the whole sequence: on the pinned tiny checkpoint block 0's
+`attention_probabilities` carry weight above the diagonal. A text-only trace with the
+tokenizer's encoding passes no `token_type_ids` and is causal.
 
 ## A text-only trace takes the tokenizer's encoding
 
@@ -87,7 +96,6 @@ with model.trace(dict(model.tokenizer(text, return_tensors="pt"))):
 
 #: Set by hues.py (lineage: Gemma).
 PALETTE = {"hue": 153}
-VLLM = True
 QUIRKS = ["scaled-embeddings", "gain-norm"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -139,7 +147,7 @@ out = h + mlp(post_attention_layernorm(h))
 ```
 
 Two RMSNorms per block, each before its sublayer, none after: Llama's layout and Llama's names.
-`post_attention_layernorm` is the MLP's input norm. The Gemma 2 and Gemma 3 blocks add a norm after
+`post_attention_layernorm` is the MLP's input norm. The Gemma 2, 3 and 4 blocks add a norm after
 each sublayer and give this name to the norm after the attention, so a hook ported by name from
 those families lands on a different tensor here.
 
@@ -184,15 +192,16 @@ against a `hidden_size` of 3072, and the query scale is `head_dim ** -0.5`. Ther
 softcap, window or sink: the default `sdpa` load and `attn_implementation="eager"` run the same
 attention, and eager serves the interior values.
 
-## The activation follows the config
+## Every checkpoint runs the tanh GELU
 
-The MLP is `down_proj(act(gate_proj(x)) * up_proj(x))` with the config's `hidden_act`. Every
-checkpoint runs the tanh approximation of GELU (`gelu_pytorch_tanh`) since transformers 5.18. The
-`gemma-2b` and `gemma-7b` configs (and their `-it` and `codegemma-2b`) say `gelu`, a legacy value
-meant as the tanh approximation, and since 5.18 `GemmaConfig` rewrites it to `gelu_pytorch_tanh`
-when it loads (#49084), so `model.config.hidden_act` reads `gelu_pytorch_tanh`; up to 5.17 transformers
-ran those checkpoints with the exact erf GELU. Gemma 1.1, `codegemma-7b` and PaliGemma's text config
-give `gelu_pytorch_tanh` themselves.
+The MLP is `down_proj(act(gate_proj(x)) * up_proj(x))` with the config's `hidden_act`. The
+`gemma-2b` and `gemma-7b` configs (with their `-it` versions and `codegemma-2b`) say `gelu`, a
+legacy value meant as the tanh approximation of GELU. `GemmaConfig` rewrites it to
+`gelu_pytorch_tanh` when it loads, with a warning, so `model.config.hidden_act` reads
+`gelu_pytorch_tanh` and the MLP runs the tanh approximation, not the exact erf GELU. The other
+configs set no `hidden_act` and take `GemmaConfig`'s default, the same `gelu_pytorch_tanh`:
+Gemma 1.1 and `codegemma-7b` write it under `hidden_activation`, a key `GemmaConfig` does not
+read, and PaliGemma's text config names no activation.
 
 ## The readout
 
@@ -204,5 +213,5 @@ equals `logits`.
 
 Every checkpoint whose config says `model_type` `gemma`: Gemma 2B and 7B with their instruction-tuned
 `-it` and 1.1 releases, CodeGemma 2B and 7B, and the text model inside PaliGemma 1. PaliGemma 2
-wraps a Gemma 2 text model and is the `gemma2` family's.
+wraps a Gemma 2 text model (its `text_config.model_type` is `gemma2`), so it is not this family's.
 """

@@ -19,8 +19,13 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GLM).
 PALETTE = {"hue": 122}
-VLLM = False
-QUIRKS = ["mixture-of-experts", "dense-first-blocks", "qkv-bias", "qk-norm", "partial-rotary"]
+QUIRKS = [
+    "mixture-of-experts",
+    "dense-first-blocks",
+    "qkv-bias",
+    {"slug": "qk-norm", "when": lambda config: config.use_qk_norm},  # GLM-4.5, 4.6, 4.7; not Air
+    "partial-rotary",
+]
 
 #: Every claim in the notes was checked on the pinned tiny checkpoint (4 experts, top 2, block 0 dense),
 #: on a copy of its config with head_dim 8 for the rotary, or read off the listed checkpoints' configs and
@@ -168,8 +173,8 @@ head, 64 of 128 (`partial_rotary_factor` 0.5), pairing `i` with `i + 32` as Llam
 `rotate_half` does; dimensions 64 to 127 carry no position. The base (`rope_theta`) is 10⁶.
 `attention_queries` and `attention_keys` are read after the rotary; recomputing them from
 `q_proj.output` and `k_proj.output` with `rotate_half` pairing matches exactly, and the unturned
-half equals the projection (after `q_norm` where there is one). The GLM-4-9B families (`glm`, `glm4`) pair
-adjacent dimensions instead.
+half equals the projection (after `q_norm` where there is one). GLM-4-9B and GLM-4-0414 (`glm`,
+`glm4`) pair adjacent dimensions instead.
 
 ## Query and key norms on GLM-4.5, 4.6 and 4.7, not on Air
 

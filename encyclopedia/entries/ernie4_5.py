@@ -15,7 +15,6 @@ CHECKPOINTS = ["baidu/ERNIE-4.5-0.3B-Base-PT", "baidu/ERNIE-4.5-0.3B-PT"]
 
 #: Set by hues.py (lineage: ERNIE).
 PALETTE = {"hue": 186}
-VLLM = False
 QUIRKS = ["interleaved-rotary"]
 
 #: Shapes, identities and the rotary layout ran on the pinned tiny checkpoint and on ERNIE-4.5-0.3B-Base-PT in

@@ -4,8 +4,8 @@ MODEL_TYPE = "gptj"
 TITLE = "GPT-J"
 SUBTITLE = (
     "A parallel block with one LayerNorm: ln_1's output is the input of both the attention and the MLP, "
-    "and the block adds both to the stream at once; the attention does its own arithmetic, and rotary "
-    "turns the first quarter of each head in adjacent pairs."
+    "the block adds both to the stream at once, and rotary turns only the first rotary_dim dimensions "
+    "of each head, in adjacent pairs."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -21,8 +21,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GPT-J).
 PALETTE = {"hue": 54}
-VLLM = True
-QUIRKS = ["parallel-blocks", "tuple-blocks", "own-attention-arithmetic", "partial-rotary", "interleaved-rotary",
+QUIRKS = ["parallel-blocks", "partial-rotary", "interleaved-rotary",
           "layernorm"]
 
 #: What the visualization draws: one ln_1 whose output both sublayers read (drawn once per branch,
@@ -35,7 +34,7 @@ BLOCK = {
             "kind": "attention",
             "label": "Attention",
             "pre_norm": "input_layernorm",
-            "pre_norm_note": "One module, ln_1, drawn on both branches: the attention and the MLP read the same "
+            "pre_norm_note": "ln_1 is one module, drawn on both branches. The attention and the MLP read the same "
                              "output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output "
                              "and mlp_norm_output are that one tensor, and the block has no layer_mid.",
             "contribution": "attention_output",
@@ -50,7 +49,7 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "input_layernorm",
-            "pre_norm_note": "One module, ln_1, drawn on both branches: the attention and the MLP read the same "
+            "pre_norm_note": "ln_1 is one module, drawn on both branches. The attention and the MLP read the same "
                              "output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output "
                              "and mlp_norm_output are that one tensor, and the block has no layer_mid.",
             "contribution": "mlp_output",
@@ -62,8 +61,8 @@ BLOCK = {
 #: Notes on the model-level strip, by node.
 STRIP = {
     "embed": "wte is a plain lookup with no scale and no position embedding (position enters through rotary in "
-             "each attention), so token_embeddings equals layers[0].input. 50400 rows; the model card says only "
-             "the 50257 GPT-2 BPE ids are used.",
+             "each attention), so token_embeddings equals layers[0].input. The table has 50400 rows, and the model "
+             "card says only the 50257 GPT-2 BPE ids are used.",
     "norm": "ln_f is a LayerNorm with a bias; project_on_vocab applies it, bias included.",
     "head": "lm_head has its own weight, not tied to wte (tie_word_embeddings is false), and a bias. Nothing "
             "follows it: logits equals lm_head.output.",
@@ -79,7 +78,7 @@ out = self_attn(h) + mlp(h) + x
 
 `ln_1` is `input_layernorm` and the block's only norm: there is no `post_attention_layernorm`.
 Its one output tensor is passed to the attention and then to the MLP, so `self_attn.input` and
-`mlp.input` are not two equal tensors but the same one. The block returns
+`mlp.input` are one tensor object, not two equal copies. The block returns
 `(hidden_states, attn_weights)` on every call: `model.layers[i].output[1]` is the attention
 pattern, equal to `self_attn.attention_probabilities`, and `layer_output` is the first element.
 
@@ -127,8 +126,8 @@ assert torch.equal(attn + mlp + x, out)                 # the block's own order
 ## The attention is eager by default and computes its scores in float32
 
 transformers has no `sdpa` path for GPT-J: a load without `attn_implementation` runs the eager
-`GPTJAttention`, and all six interior values are served with no flag. They carry the eager check,
-so a `flash_attention_2` load reports them unavailable. The values are read around the module's
+`GPTJAttention`, and all six interior values are served with no flag. They are read inside the eager
+attention, so a `flash_attention_2` load reports them unavailable. The values are read around the module's
 `_attn(query, key, value, mask)` call: its arguments are `attention_queries`, `attention_keys`
 and `attention_values` (16 heads each on 6B, no grouping, in the model's dtype), and its first
 return is `attention_head_outputs`.
@@ -157,8 +156,9 @@ assert torch.equal(again[..., causal], scores[..., causal])
 `attention_keys` are read after the rotary; their dimensions 64 to 255 are the projection's
 output unchanged, and only the first 64 make a score depend on the distance between two tokens.
 Within those 64, GPT-J rotates adjacent pairs: dimensions `2i` and `2i + 1` turn together at
-frequency `10000 ** (-2i / 64)` (`rotate_every_two`). Llama and GPT-NeoX rotate dimension `i`
-with `i + 32` (`rotate_half`). Query dimension 1 on GPT-J is the partner of dimension 0, so a
+frequency `10000 ** (-2i / 64)` (`rotate_every_two`). Llama and GPT-NeoX pair dimension `i` with
+`i + d / 2` across a rotated span of width `d` (`rotate_half`). Query dimension 1 on GPT-J is the
+partner of dimension 0, so a
 comparison of queries or keys across families, or rotary code written for `rotate_half`, needs
 the rotated span reordered, evens then odds. Reordered, GPT-J's rotation is `rotate_half`'s with
 the same frequencies; recomputed in float32 the two agree exactly.

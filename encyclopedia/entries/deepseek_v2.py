@@ -3,8 +3,8 @@
 MODEL_TYPE = "deepseek_v2"
 TITLE = "DeepSeek-V2 / DeepSeek-Coder-V2"
 SUBTITLE = (
-    "Latent attention, whose queries and keys are wider than its values and share one rotary key across "
-    "heads, and a softmax-routed mixture with two shared experts on every block but the first."
+    "Latent attention with queries and keys wider than the values and one rotary key shared by every head, "
+    "and a softmax-routed mixture with two shared experts on every block but the first."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -22,7 +22,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: DeepSeek).
 PALETTE = {"hue": 322}
-VLLM = True
 QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
 #: Shapes, identities and read orders were run on the pinned tiny checkpoint and on a random model built
@@ -101,8 +100,9 @@ torch.testing.assert_close(x + attn + mlp, out)
 
 `attention_queries` and `attention_keys` are `[batch, num_heads, seq, qk_head_dim]`, with
 `qk_head_dim = qk_nope_head_dim + qk_rope_head_dim` (128 + 64 = 192); `attention_values` and
-`attention_head_outputs` are `head_dim` wide, which nnterp reads from `v_head_dim` (128). The
-config's own `head_dim` key is `qk_rope_head_dim`, the rotary width, which no served value has.
+`attention_head_outputs` are `head_dim` wide, which nnterp reads from `v_head_dim` (128).
+transformers sets the config's `head_dim` to `qk_rope_head_dim` (64), the rotary part's width,
+which no served value has.
 The attention interior needs `attn_implementation="eager"`.
 
 ```python
@@ -121,18 +121,25 @@ on every head to act like an edit to the shared part.
 ## Query compression differs between the sizes
 
 DeepSeek-V2, V2.5 and Coder-V2 (236B) compress the queries too (`q_lora_rank` 1536):
-`q_a_proj`, `q_a_layernorm`, `q_b_proj`, and `self_attn.q_proj` is `None`. V2-Lite and
+`q_a_proj`, `q_a_layernorm` and `q_b_proj`, with no `q_proj` module. V2-Lite and
 Coder-V2-Lite (16B) have `q_lora_rank` null: one `q_proj`, and no `q_a_proj`, `q_a_layernorm` or
 `q_b_proj`. `attention_queries` is read at the attention interface on both, the same width.
 
-## Rotary turns adjacent pairs, and the query scale carries YaRN's factor
+## Rotary turns adjacent pairs in place
 
 The rotary part is rotated as complex numbers over adjacent pairs of dimensions (2i, 2i + 1), in
-place, so the last 64 dimensions of `attention_queries` keep the order of the projection's output.
-Every released checkpoint extends the context with YaRN (`rope_scaling` factor 40,
-`mscale_all_dim` 0.707), and the attention multiplies the scores by `qk_head_dim ** -0.5` times
-1.59 (`self_attn.scaling`, 0.1147), not by `qk_head_dim ** -0.5` alone: recompute
-`attention_scores` from the queries and keys with that scale.
+place, so the last 64 dimensions of `attention_queries` and `attention_keys` keep the order of the
+projection's output.
+
+## The query scale carries YaRN's factor
+
+Every released checkpoint extends the context with YaRN (`rope_scaling` factor 40), and the
+attention multiplies the scores by `qk_head_dim ** -0.5` times a factor set by `mscale_all_dim`.
+Where `mscale_all_dim` is 0.707 (V2, V2-Chat and the Lite models) the factor is 1.59 and
+`self_attn.scaling` is 0.1147. Where it is 1.0 (V2-Chat-0628, V2.5, V2.5-1210 and the 236B
+Coder-V2 models) the factor is 1.87 and `self_attn.scaling` is 0.1352. Recompute
+`attention_scores` from the queries and keys with `self_attn.scaling`, not with
+`qk_head_dim ** -0.5`.
 
 ## The mixture: a softmax router whose weights are not renormalized
 
@@ -140,11 +147,11 @@ Every block after the first routes each token to `num_experts_per_tok` (6) of `n
 experts (64 on Lite, 160 on the 236B models) and runs it through `n_shared_experts` (2) shared
 experts, one MLP `2 × moe_intermediate_size` wide. `router_logits` are the logits before the
 softmax. `expert_weights` are the chosen experts' softmax probabilities times
-`routed_scaling_factor`, never renormalized over the chosen six: on the Lite models the factor is
-1.0 and a token's weights sum to less than one; on the 236B models it is 16.0. The 236B models
-route `group_limited_greedy`: the experts sit in `n_group` 8 groups, each group scored by its best
-expert, and a token chooses its six among the experts of its best `topk_group` 3 groups; the Lite
-models route `greedy`, over every expert.
+`routed_scaling_factor`, never renormalized over the chosen six. On the Lite models the factor is
+1.0, so a token's weights sum to less than one. On the 236B models it is 16.0. The 236B models
+route `group_limited_greedy` (`topk_method`): the experts sit in `n_group` 8 groups, each group
+scored by its best expert, and a token chooses its six among the experts of its best `topk_group`
+3 groups. The Lite models route `greedy`, over every expert.
 
 ```python
 moe = model.layers[1].mlp
@@ -157,12 +164,12 @@ with model.trace(prompt):
     out = moe.mlp_output.save()
 
 scale = model.config.routed_scaling_factor
-torch.testing.assert_close(w, logits.softmax(-1).gather(-1, idx) * scale)   # greedy routing
+torch.testing.assert_close(w, logits.softmax(-1).gather(-1, idx) * scale)   # greedy and group-limited
 torch.testing.assert_close(routed + shared, out)
 ```
 
-The shared experts run after the routed ones. Ablating an expert is zeroing the weight of every
-slot that chose it; the shared experts are untouched:
+The shared experts run after the routed experts. Ablating an expert is zeroing the weight of every
+slot that chose it. The shared experts are untouched:
 
 ```python
 with model.trace(prompt):

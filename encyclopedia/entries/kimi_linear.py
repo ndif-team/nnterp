@@ -15,7 +15,6 @@ CHECKPOINTS = ["moonshotai/Kimi-Linear-48B-A3B-Base", "moonshotai/Kimi-Linear-48
 
 #: Set by hues.py (lineage: DeepSeek).
 PALETTE = {"hue": 340}
-VLLM = False
 QUIRKS = ["hybrid", "latent-attention", "nope-blocks", "mixture-of-experts", "dense-first-blocks"]
 
 #: Every number on this page comes from the reference's config or a run on the pinned tiny checkpoint;
@@ -101,8 +100,8 @@ Llama's pre-norm block, with the mixer chosen per block by `config.layer_types`:
 checkpoints blocks 3, 7, 11, 15, 19, 23 and 26 are `full_attention` and the other 20 are
 `linear_attention`, so the last two attention blocks are three apart. The MLP is chosen by
 `config.mlp_layer_types` (`first_k_dense_replace` is 1): block 0 is `dense`, every later block
-`sparse`. transformers names both mixers `self_attn`; nnterp calls the KDA one `linear_attn` and
-leaves `self_attn` as `None` on its blocks. Pick blocks outside the trace:
+`sparse`. transformers names both mixers `self_attn`. nnterp calls the KDA one `linear_attn` and
+sets `self_attn` to `None` on KDA blocks. Pick blocks outside the trace:
 
 ```python
 kda = [i for i, t in enumerate(model.config.layer_types) if t == "linear_attention"]
@@ -129,22 +128,25 @@ On a `full_attention` block the middle term is `model.layers[i].self_attn.attent
 ## Loading
 
 `attn_implementation="eager"` makes the latent attention's interior readable on the
-`full_attention` blocks; the KDA values are read at the kernel call and need no eager load. The
-per-token `state` and `states` need `nnterp.route_kernels(model.family, "torch")` before the
-layer is first traced: a prompt runs `chunk_kimi_delta_attention`, which carries the state
-between 64-token chunks, and the route swaps in the token-by-token kernel. `expert_outputs` is
-read inside transformers' `grouped_mm` experts forward, the default.
+`full_attention` blocks. The KDA values are read at the kernel call and need no eager load, but
+they need transformers' pure-torch kernels: where `flash-linear-attention` is installed the
+kernels dispatch to it, and every KDA kernel value is unavailable until
+`nnterp.route_kernels(model.family, "torch")` routes them back. The per-token `state` and
+`states` need that route in any case, before the layer is first traced. A prompt runs
+`chunk_kimi_delta_attention`, which carries the state from one 64-token chunk to the next and
+never holds it per token; the route runs prompts through the token-by-token kernel instead.
+`expert_outputs` is read inside transformers' `grouped_mm` experts forward, the default.
 
 ## Kimi Delta Attention decays each key channel
 
 KDA is a gated DeltaNet whose forget gate gives a log decay per key channel: `decays` is
 `[batch, seq, heads, key_dim]`, float32 and non-positive, where the gated DeltaNet's is one per
-head. `betas` is `[batch, seq, heads]`, a sigmoid. `attention_queries` and `attention_keys` are
-served before the kernel's L2 norm and the queries before its `1/sqrt(key_dim)` scale, so a
-recurrence written on them normalizes first (`docs/usage/delta-net.md` has it). The state is
-`[batch, heads, key_dim, value_dim]`. A width-4 convolution (`linear_conv_kernel_dim`) runs
-over the projected queries, keys and values before the rule, so the mixer also carries the last
-tokens outside the state.
+head. `betas` is `[batch, seq, heads]`, the sigmoid of `b_proj`'s output. `attention_queries`
+and `attention_keys` are served before the kernel's L2 norm, and the queries before its
+`1/sqrt(key_dim)` scale, so a recurrence recomputed from them has to normalize and scale them
+first (`docs/usage/delta-net.md` gives one). The state is `[batch, heads, key_dim, value_dim]`.
+A width-4 convolution (`linear_conv_kernel_dim`) runs over the projected queries, keys and
+values before the delta rule, so the mixer also carries the last tokens outside the state.
 
 ## The latent attention has no rotary
 
@@ -152,15 +154,18 @@ The `full_attention` blocks are DeepSeek-V3's multi-head latent attention withou
 embeddings: queries and keys are `qk_head_dim` wide (`qk_nope_head_dim + qk_rope_head_dim`,
 192), values `head_dim` (`v_head_dim`, 128). Keys and values are projected for every head, so
 `attention_keys` has `num_heads` heads. The last `qk_rope_head_dim` dimensions of each key come
-from one projection per token, shared by every head, and carry no position here: only the
-causal mask orders the tokens, on these blocks as on the KDA ones. The config's own `head_dim`
-(72) is `hidden_size / num_attention_heads`; `model.head_dim` is `v_head_dim`.
+from one projection per token, shared by every head, and carry no position here: on these
+blocks only the causal mask tells positions apart, and the order the model sees comes from the
+KDA blocks' recurrence and convolution. The checkpoints' config sets `head_dim` to 72
+(`hidden_size / num_attention_heads`), a width no served value has. `model.head_dim` is
+`v_head_dim`.
 
 ## The mixture of experts
 
 256 routed experts, 8 per token, and one shared expert every token runs through.
-`router_logits` are the router's logits before the sigmoid. The router picks the top 8 by the
-sigmoid plus a selection bias (`e_score_correction_bias`), and `expert_weights` are the chosen
+`router_logits` are the router's float32 logits before the sigmoid. The router picks the top 8
+by the sigmoid plus a selection bias (`e_score_correction_bias`) over every expert (`n_group`
+and `topk_group` are 1, so no group is excluded), and `expert_weights` are the chosen
 sigmoids without the bias, renormalized and multiplied by `routed_scaling_factor` (2.446), so
 they sum to 2.446 at every token. `expert_outputs` summed over the slots is `routed_output`, and
 the mixture's output is `routed_output + shared_expert_output`:

@@ -15,7 +15,6 @@ CHECKPOINTS = ["ibm-granite/granite-swash-3b-a600m"]
 
 #: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 214}
-VLLM = False
 QUIRKS = ["scaled-residual-adds", "sliding-window", "sink-scaled-heads", "mixture-of-experts", "embedding-multiplier", "scaled-logits"]
 
 #: Numbers in the notes come from granite-swash-3b-a600m's weights in bfloat16 on an RTX A6000 unless they say

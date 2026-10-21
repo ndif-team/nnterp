@@ -16,10 +16,10 @@
 
 {% macro block_head(c) %}
 {% if c.block.shapes %}
-<p class="lead">One block of the stack. Hover any part for the nnterp name that reads it; click to pin.
-The slider picks a block, its tick's colour gives the shape, and the diagram redraws for it.</p>
+<p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+The slider picks a block, each tick's color gives its block's shape, and the diagram redraws for the block picked.</p>
 {% else %}
-<p class="lead">One block of the stack. Hover any part for the nnterp name that reads it; click to pin.
+<p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
 {% if c.layer_types and c.layer_types|unique|list|length > 1 %}The slider picks a block; this family's blocks differ by <span class="mono">{{ c.layer_types_key }}</span>.{% endif %}</p>
 {% endif %}
 <div class="strip">
@@ -46,7 +46,7 @@ The slider picks a block, its tick's colour gives the shape, and the diagram red
 {% set t = c.tower %}
 <details class="fold fold-titled tower-scope">
   <summary><h2 class="fold-heading">The <em>vision encoder</em></h2><span class="micro fold-tag">· {{ t.title }} · {{ t.module_class }}</span></summary>
-  <p class="lead">The image's path into the text model{% if t.num_layers %}, then one block of the vision encoder{% endif %}. Hover any part for the nnterp name that reads it; click to pin.</p>
+  <p class="lead">The image's path into the text model{% if t.num_layers %}, then one block of the vision encoder{% endif %}. Hover any part for its nnterp name; click to pin the card.</p>
   <div class="strip tower-strip">
     <div class="strip-node" data-node="v:path.image"><span class="mono role-stream">image</span><small>pixel_values</small></div>
     <span class="strip-arrow">→</span>

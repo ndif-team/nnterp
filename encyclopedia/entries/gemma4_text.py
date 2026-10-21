@@ -3,8 +3,8 @@
 MODEL_TYPE = "gemma4_text"
 TITLE = "Gemma 4"
 SUBTITLE = (
-    "A sandwich block whose sum is multiplied by a learned per-block scalar, with a third add from per-layer "
-    "embeddings, normed queries, keys and values, and keys and values the last blocks borrow from earlier ones."
+    "A sandwich block with normed queries, keys and values, whose sum a learned per-block scalar multiplies; "
+    "on E2B and E4B per-layer embeddings add a third term and the last blocks borrow keys and values from earlier ones."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -115,7 +115,7 @@ stream[~padded]                         # the 2304 patches
 After the last block the vision encoder's `pooler` zeroes the padded rows, averages each 3 × 3
 block of patches by position (`pooling_kernel_size`), multiplies by √`vision_hidden_size` and drops
 the padding: 2304 patches become 256 soft tokens, `[soft_tokens, vision_hidden_size]` flat over the
-images. That is `model.projector.input`. A write to `tower_output` at the padded rows changes
+images. These soft tokens are `model.projector.input`. A write to `tower_output` at the padded rows changes
 nothing downstream; at the patches it reaches the text model. On 26B-A4B and 31B
 (`standardize`) the pooled tokens are then shifted by `std_bias` and scaled by `std_scale`, inside
 the vision encoder.
@@ -152,6 +152,14 @@ at 11 GB. An image of another shape gets another grid in the same 2520 rows (a 9
 patches and 253 image tokens), so the count of image tokens depends on the image: assign one
 image's features into another's run only when the two give the same count.
 
+## On 26B-A4B and 31B an image's tokens attend to each other on the sliding blocks
+
+26B-A4B and 31B set `use_bidirectional_attention` to `"vision"`: on a sliding block an image's
+tokens attend to every token of the same image, before and after them, within the window; the
+full blocks stay causal. The wrapper builds that mask from the processor's `mm_token_type_ids`,
+so pass the whole encoding (`model.trace(prompt, images=[image])` does). E2B and E4B leave the
+setting unset and run causal masks throughout.
+
 ## The base checkpoints have no chat template
 
 `google/gemma-4-E2B` ships no chat template: put the processor's image token in the prompt
@@ -168,10 +176,15 @@ the same load.
 
 #: Set by hues.py (lineage: Gemma).
 PALETTE = {"hue": 162}
-VLLM = False
 QUIRKS = [
     "sandwich-norms", "per-block-sizes", "scaled-residual-adds", "qk-norm", "sliding-window", "proportional-rotary",
-    "borrowed-kv", "mixture-of-experts", "scaled-embeddings", "softcapped-logits",
+    # E2B and E4B (and the pinned tiny checkpoint) share keys and values; 26B-A4B and 31B set num_kv_shared_layers 0
+    {"slug": "borrowed-kv", "when": lambda config: (config.num_kv_shared_layers or 0) > 0},
+    # 26B-A4B (and the pinned tiny checkpoint) only
+    {"slug": "mixture-of-experts", "when": lambda config: bool(config.enable_moe_block)},
+    "scaled-embeddings",
+    # 30 on every released size; null on the pinned tiny checkpoint
+    {"slug": "softcapped-logits", "when": lambda config: config.final_logit_softcapping is not None},
 ]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -193,13 +206,13 @@ BLOCK = {
                 "attention_scores", "attention_probabilities", "attention_head_outputs",
             ],
             "detail": "{num_heads} query heads over {num_kv_heads} key/value head(s); q, k and v normed per head, "
-                      "scores not scaled; the last {num_kv_shared_layers} blocks borrow keys and values",
+                      "scores not scaled",
             "variants": {
-                "sliding_attention": "{sliding_window} window, head_dim {head_dim}",
+                "sliding_attention": "{sliding_window}-token window, head_dim {head_dim}",
                 "full_attention": "full causal, wide heads, ¼ rotary",
             },
             "post_norm_note": "As on Gemma 2 and 3, this norm follows the attention. On Llama the same name is the norm before the MLP. "
-                              "layer_mid is the stream after its output is added, what the MLP's pre-norm reads.",
+                              "layer_mid is the stream after this norm's output is added, which the MLP's pre-norm reads.",
         },
         {
             "host": "mlp",
@@ -221,7 +234,7 @@ BLOCK = {
             "detail": "dense MLP + {num_experts} experts, top {top_k}",
             "pre_norm_note": "On a mixture block this norm feeds the dense MLP only: the router reads the stream before it, "
                              "and the experts read pre_feedforward_layernorm_2's output of that stream.",
-            "post_norm_note": "On a mixture block this norm norms post_feedforward_layernorm_1(mlp.output) + "
+            "post_norm_note": "On a mixture block this norm takes the sum post_feedforward_layernorm_1(mlp.output) + "
                               "post_feedforward_layernorm_2(routed_output); mlp.output is shared_expert_output.",
         },
     ],
@@ -235,8 +248,8 @@ STRIP = {
     "embed": "embed_tokens multiplies its lookup by √hidden_size, cast to the weight's dtype (39.19 on E2B, 39.25 in bfloat16), "
              "so token_embeddings is the scaled tensor and equals layers[0].input. E2B and E4B also look each token up in "
              "embed_tokens_per_layer, which feeds per_layer_output.",
-    "layers": "Each block ends by multiplying its sum by layer_scalar (0.019 to 0.88 on E2B), so the stream shrinks "
-              "block by block and a block's terms reach the last stream multiplied by every scalar from there on.",
+    "layers": "Each block ends by multiplying its sum, the incoming stream included, by layer_scalar (0.019 to 0.88 on E2B), "
+              "so a block's terms reach the last stream multiplied by its own scalar and every later one.",
     "norm": "Gemma4RMSNorm multiplies by norm.weight itself, not 1 + weight; the final norm's weights average 14.2 on E2B (maximum 118.5).",
     "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings).",
     "logits": "final_logit_softcapping is 30 on every released size: logits is 30 · tanh(lm_head.output / 30), and project_on_vocab applies the cap.",
@@ -249,7 +262,7 @@ NOTES = """
 a   = input_layernorm(x)
 q   = rope(q_norm(q_proj(a)))         # per head
 k   = rope(k_norm(k_proj(a)))         # per head; borrowed on the last blocks
-v   = v_norm(v_proj(a))               # per head, no gain
+v   = v_norm(v_proj(a))               # per head, no gain; k_proj(a) on 26B-A4B's and 31B's full blocks
 h   = x + post_attention_layernorm(o_proj(attend(q, k, v)))      # no 1/√d
 h   = h + post_feedforward_layernorm(mlp(pre_feedforward_layernorm(h)))
 p   = per_layer_projection(gelu(per_layer_input_gate(h)) * per_layer_input)
@@ -257,8 +270,9 @@ h   = h + post_per_layer_input_norm(p)
 out = h * layer_scalar
 ```
 
-Four RMSNorms around the sublayers as on Gemma 2 and 3, a fifth after the per-layer branch, and
-three inside the attention. `post_attention_layernorm` follows the attention; the MLP's input
+Four RMSNorms around the sublayers as on Gemma 2 and 3, a fifth after the per-layer branch on E2B
+and E4B, and three inside the attention (only `q_norm` on a block that borrows keys and values).
+A mixture block on 26B-A4B adds three more around the experts. `post_attention_layernorm` follows the attention; the MLP's input
 norm is `pre_feedforward_layernorm`. The per-layer branch has no module of its own: its three
 modules are children of the block, and `per_layer_output` is a value of `layers[i]`.
 `layer_scalar` is a buffer, `layers[i]._module.layer_scalar`, applied in place.
@@ -361,7 +375,7 @@ queries before it. E2B has one key/value head for its 8 query heads, so an edit 
 
 ## Sliding and full blocks differ in width and rotary
 
-`config.layer_types` makes every fifth block full on E2B (4, 9, …, 34) and every sixth on E4B,
+`config.layer_types` makes every fifth block full on E2B (4, 9, ..., 34) and every sixth on E4B,
 26B-A4B and 31B; the last block is full on all four. The window is 512 tokens on E2B and E4B (a
 query attends to itself and the 511 before it) and 1024 on 26B-A4B and 31B. Full blocks have
 512-wide heads against the sliding blocks' 256, on every size; 26B-A4B and 31B also give them
@@ -377,6 +391,14 @@ model.layers[20].mlp.intermediate_size                    # 12288 on E2B; 6144 a
 Sliding blocks rotate all 256 dimensions with base 10,000. Full blocks use proportional rotary:
 only dimensions 0 to 63 and 256 to 319 of the 512 turn, at frequencies spaced over the whole head
 with base 1,000,000 (the slowest has a wavelength of 188 tokens); the other 384 carry no position.
+
+## 26B-A4B and 31B take the full blocks' values from the key projection
+
+26B-A4B and 31B set `attention_k_eq_v`: their full blocks have no `v_proj`, and their values are
+`v_norm(k_proj(a))`, the keys' projection before `k_norm` and the rotary. An edit to a full
+block's `k_proj` output moves its keys and its values at once; `attention_keys` and
+`attention_values` are served apart and edit apart. The sliding blocks, and every block on E2B
+and E4B, have their own `v_proj`.
 
 ## Blocks 15 to 34 attend with borrowed keys and values on E2B
 

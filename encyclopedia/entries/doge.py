@@ -8,7 +8,7 @@ SUBTITLE = (
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
-#: Doge-260M is the largest dense checkpoint whose weights load in transformers (5.17 to 5.19).
+#: Doge-260M is the largest dense checkpoint whose weights load in transformers.
 REFERENCE = "SmallDoge/Doge-260M"
 #: The tiny checkpoint the test suite builds the page from.
 PINNED = "hf-tiny-v2/tiny-random-DogeForCausalLM"
@@ -21,7 +21,7 @@ CHECKPOINTS = [
     "SmallDoge/Doge-20M-MoE", "SmallDoge/Doge-120M-MoE",
 ]
 
-#: Checkpoints whose safetensors (read from their headers on 2026-10-07) do not fit transformers' (5.17 to 5.19)
+#: Checkpoints whose safetensors (read from their headers on 2026-10-07) do not fit transformers'
 #: DogeForCausalLM: they hold the layout of the repositories' own remote code. Their configs build a model, but
 #: each block's ``A`` and ``dt_proj`` are twice ``num_key_value_heads`` wide where transformers builds
 #: ``num_key_value_heads``, and the attention has no ``q_norm`` or ``k_norm``, so ``from_pretrained`` raises on the
@@ -38,7 +38,6 @@ GREYED = {
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 21}
-VLLM = False
 QUIRKS = ["scaled-residual-adds", "qk-norm", "dynamic-mask"]
 
 #: Every real value in the notes was measured on Doge-260M in float32 on a GPU; the snippets also ran on the
@@ -73,7 +72,7 @@ BLOCK = {
     "identity": "post_attention_residual * (input_residual * layers[i].input + self_attn.attention_output) "
                 "+ mlp.mlp_output == layer_output",
     "identity_note": "input_residual and post_attention_residual are layers[i]._module's own [hidden_size] parameters, "
-                     "ones at initialisation. Exact in float32 on every Doge-260M block.",
+                     "ones at initialization. Exact in float32 on every Doge-260M block.",
 }
 
 STRIP = {
@@ -157,18 +156,16 @@ the mass on the first token, averaged over heads and queries, is 0.65 with the b
 
 ## Past `keep_window_size` keys, the bias drops keys
 
-When a row has more than `keep_window_size` keys (1024 on Doge-260M, 2048 on Doge-20M, 4096 on
-Doge-40M), the attention keeps the `keep_window_size` visible keys with the largest bias and masks
+When the prompt has more than `keep_window_size` keys (1024 on Doge-260M, 2048 on Doge-20M, 4096 on
+Doge-40M), each query keeps the `keep_window_size` keys it can see with the largest bias and masks
 the rest. The choice reads the bias alone, not the query's score. A dropped key has the dtype's minimum in `attention_scores` and zero in
 `attention_probabilities`. Below that length, every causal key is kept.
 
 ## Loading
 
-The attention interior needs `attn_implementation="eager"`; the default `sdpa` load adds the same
-bias. Before transformers 5.18 the `sdpa` load of an unpadded prompt was not causal: the block skipped
-the causal mask and handed `sdpa` the bias alone, so every position saw the later ones (on the pinned
-tiny checkpoint the logits moved by 0.35 against eager). Since 5.18 the mask is always built (#48821),
-and the two loads' logits agree to 2e-7. Doge-20M, Doge-40M and Doge-260M load in transformers. In the Instruct checkpoints and in
+The attention interior needs `attn_implementation="eager"`. The default `sdpa` load adds the same
+bias and the causal mask: on Doge-260M in float32 the two loads' logits agree to 1.2e-5. Doge-20M,
+Doge-40M and Doge-260M load in transformers. In the Instruct checkpoints and in
 Doge-60M, -160M and -320M, `A` and `dt_proj` are twice `num_key_value_heads` wide and the attention has
 no `q_norm` or `k_norm`, so transformers' `DogeForCausalLM` does not load them (they are greyed out in
 the selector). Doge-260M's tokenizer prepends `<|begin_of_text|>` (id 128000).
@@ -177,10 +174,10 @@ the selector). Doge-260M's tokenizer prepends `<|begin_of_text|>` (id 128000).
 
 On the `is_moe` checkpoints `mlp` is `DogeCDMoE`: a dense SwiGLU MLP of `intermediate_size` plus
 `num_experts` one-neuron experts (rows of `down_embed` and `up_embed`) that `router_gate` retrieves
-by product keys, `num_experts_per_tok` per token. It returns `(hidden_states, router_logits)`. Up to
-transformers 5.17 the block passed that tuple to dropout, so a forward of Doge-40M-MoE or Doge-180M-MoE
-raised a `TypeError`; since 5.18 the block takes the hidden states out of the tuple (#49179) and the
-mixture runs. nnterp still reports every mixture value unavailable.
+by product keys, `num_experts_per_tok` per token. It returns `(hidden_states, router_logits)`, and the
+block adds the hidden states. nnterp serves `mlp_output`, the dense MLP's output plus the routed
+experts', and reports every mixture value unavailable: the product-key routing has no router or experts
+module to read them at.
 
 ## The readout
 

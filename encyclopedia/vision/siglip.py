@@ -50,6 +50,6 @@ column `c` of the grid is index `r * (image_size // patch_size) + c` on every va
 ## The final norm is `vision.norm`
 
 `post_layernorm` norms every patch after the last block, so
-`vision.tower_output == vision.norm(vision.layers[-1].layer_output)`. Whether the projector reads
-`tower_output` or a block's `layer_output` before the norm is the wrapper's choice, in its notes.
+`vision.tower_output == vision.norm(vision.layers[-1].layer_output)`. Each wrapper's notes say whether its
+projector reads `tower_output` or a block's `layer_output` before the norm.
 """

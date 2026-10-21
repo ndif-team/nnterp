@@ -17,8 +17,11 @@ CHECKPOINTS = ["rednote-hilab/dots.llm1.base", "rednote-hilab/dots.llm1.inst"]
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 317}
-VLLM = False
-QUIRKS = ["qk-norm", "mixture-of-experts", "dense-first-blocks"]
+QUIRKS = [
+    "qk-norm", "mixture-of-experts",
+    # first_k_dense_replace is 1 on both checkpoints, 0 on the pinned tiny checkpoint
+    {"slug": "dense-first-blocks", "when": lambda config: config.first_k_dense_replace > 0},
+]
 
 #: Both checkpoints have 142B parameters: nothing here ran on real weights. Every identity, shape, read order and
 #: snippet ran on the pinned tiny checkpoint loaded with the real routing settings (first_k_dense_replace 1,

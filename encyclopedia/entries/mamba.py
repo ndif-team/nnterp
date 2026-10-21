@@ -3,8 +3,8 @@
 MODEL_TYPE = "mamba"
 TITLE = "Mamba"
 SUBTITLE = (
-    "No attention and no MLP: each block is one norm and a selective-scan mixer whose state is per channel, "
-    "and the mixer's values need its CUDA kernels routed to transformers' torch ones."
+    "No attention and no MLP: each block is one norm and a selective-scan mixer with a state per channel, and "
+    "reading inside the mixer needs mamba_ssm's CUDA kernels routed to transformers' torch functions."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -18,8 +18,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Mamba).
 PALETTE = {"hue": 359}
-VLLM = False
-QUIRKS = ["mamba1", "fp32-residual"]
+QUIRKS = ["mamba1"]
 
 #: Every real-value number below was run on mamba-130m-hf (and, where it says so, mamba-370m-hf),
 #: routed to the torch kernels, in float32, the checkpoints' dtype; the kernel comparison ran on an RTX A6000.
@@ -65,9 +64,9 @@ mixer(h): u, z = in_proj(h);  u = silu(conv1d(u))  # causal, width 4; u is atten
           return out_proj(y * silu(z))             # attention_output
 ```
 
-Two modules are called `norm` natively: the block's own, which nnterp also serves as
-`input_layernorm`, and the model's final `norm_f`, which is `model.norm`. So
-`model.layers[i].norm` still resolves, to the block's pre-norm, not to the final norm.
+The block's pre-norm is natively `norm`, and nnterp also serves it as `input_layernorm`; the
+model's final norm is natively `norm_f`, and nnterp serves it as `model.norm`. So
+`model.layers[i].norm` is the block's pre-norm, while `model.norm` is the final norm.
 
 ## The contribution is the whole block
 
@@ -95,9 +94,9 @@ With `mamba_ssm` installed transformers dispatches the scan and the decode step 
 kernels. On CPU every trace then fails inside the kernel, even one that reads only
 `layer_output` (`RuntimeError: Expected u.is_cuda() to be true`). On GPU, unrouted, `layer_output`,
 `attention_output` and `logits` read normally and every other `linear_attn` value raises
-`nnterp.Unavailable`. Route before the trace that reads the mixer's values; an earlier unrouted
-trace (one that read only `layer_output`, one that failed on CPU, one whose read was refused)
-does not pin the kernels:
+`nnterp.Unavailable`. Route before the trace that reads the mixer's values. Routing still takes
+effect after an unrouted trace (one that read only `layer_output`, one that failed on CPU, or one
+whose read was refused):
 
 ```python
 import nnterp
@@ -124,7 +123,7 @@ mode.
 Each channel of the mixer's width (1536 on 130m) keeps its own state of `state_size` (16)
 numbers. `attention_queries` and `attention_keys` are `C` and `B`, `[batch, seq, 1, 16]`: one
 vector per token, shared by every channel. `attention_values` is `x`, `[batch, seq, 1536]`, after
-the convolution and the `silu`. `betas` is the step size `softplus(dt + dt_bias)`, one per token
+the convolution and the `silu`. `betas` is the step size `softplus(dt_proj(dt))` (`dt_proj`'s bias included), one per token
 and channel; `decays` is `betas[..., None] * A`, `[batch, seq, 1536, 16]`, the log of how much of
 each state entry a token keeps. Both are read-only.
 
@@ -141,7 +140,6 @@ rebuild it exactly (float32, as loaded):
 
 ```python
 mix = model.layers[1].linear_attn
-D = mix._module.D
 with model.trace(prompt):
     x = mix.attention_values[0].save()            # [seq, channels]
     beta = mix.betas[0].save()                    # [seq, channels]
@@ -150,8 +148,9 @@ with model.trace(prompt):
     C = mix.attention_queries[0, :, 0].save()     # [seq, state_dim]
     y = mix.attention_head_outputs[0].save()      # [seq, channels]
 
+D = mix._module.D                                 # after the trace: the weights load on the first one
 cum = decay.cumsum(0)
-causal = torch.ones(len(x), len(x), dtype=torch.bool).tril()[..., None, None]
+causal = torch.ones(len(x), len(x), dtype=torch.bool, device=x.device).tril()[..., None, None]
 kept = (cum[:, None] - cum[None, :]).masked_fill(~causal, -torch.inf).exp()
 alpha = torch.einsum("tn,tscn,sn->tsc", C, kept, B) * beta     # [query t, key s, channel]
 torch.testing.assert_close(torch.einsum("tsc,sc->tc", alpha, x) + D * x, y)

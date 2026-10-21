@@ -3,9 +3,8 @@
 MODEL_TYPE = "solar_open"
 TITLE = "Solar Open"
 SUBTITLE = (
-    "Llama's pre-norm block with 64 query heads over 8 key/value heads, and on every block a mixture of 128 "
-    "experts, 8 per token from a sigmoid router whose correction bias steers the choice only, beside a shared "
-    "expert every token runs."
+    "Llama's pre-norm block with a mixture of experts on every block: a sigmoid router whose correction bias "
+    "affects only which experts are chosen, and a shared expert that runs on every token."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -17,7 +16,6 @@ CHECKPOINTS = ["upstage/Solar-Open-100B"]
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 278}
-VLLM = False
 QUIRKS = ["mixture-of-experts"]
 
 #: Every number in the notes is Solar-Open-100B's config or a value transformers computes from it; no real
@@ -120,8 +118,8 @@ the weights.
 reads the same normed input as the router, and its output is added after the routed experts', so
 read `shared_expert_output` after `routed_output` in one trace. An expert ablation leaves it alone:
 zeroing expert `e`'s weight where `expert_indices == e` changes `mlp_output` on exactly the tokens
-that chose `e`, and the remaining 7 weights are not renormalized, so those tokens' routed output
-shrinks.
+that chose `e`. The other 7 weights are not renormalized, so those tokens lose expert `e`'s term and
+keep the others' as they were.
 
 ```python
 moe, e = model.layers[1].mlp, 3
@@ -135,15 +133,16 @@ with model.trace(prompt):
 assert torch.equal((ablated != clean).any(-1), (idx == e).any(-1))
 ```
 
-## YaRN scales the queries and keys
+## Attention: YaRN rotary and grouped heads
 
 Rotary covers the whole head (`partial_rotary_factor` 1.0) with YaRN, `factor` 2.0 over
 `original_max_position_embeddings` 65536. YaRN multiplies the rotary cosines and sines by
 `0.1 * ln(2) + 1 = 1.0693`, so `attention_queries` and `attention_keys` are 1.0693 times the rotated
-projections, and the scores carry that factor twice (1.143), on top of `1 / sqrt(head_dim)`. Each of
-the 64 query heads is 128 wide, so `q_proj` maps the 4096-wide stream to 8192; 8 query heads share
-each key/value head, and an edit to one key or value head reaches all 8 of its query heads. The
-attention interior needs `attn_implementation="eager"`.
+projections, and the scores carry that factor twice (1.143), on top of `1 / sqrt(head_dim)`.
+
+64 query heads of 128 share 8 key/value heads, so `q_proj` maps the 4096-wide stream to 8192, and an
+edit to one key or value head reaches the 8 query heads that read it. The attention interior needs
+`attn_implementation="eager"`; the default load runs `sdpa`.
 
 ## The readout and the tokenizer
 

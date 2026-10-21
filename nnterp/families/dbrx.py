@@ -7,7 +7,7 @@ the FFN; the block adds the FFN's output to the state ``norm_attn_norm``
 returns. So the attention module's own output is its contribution (the add
 happens outside it, in ``norm_attn_norm``) and the base classes hold; the
 aliases reach through ``norm_attn_norm`` so the block reads like any other.
-The attention is on the shared interface since transformers 5.17. The FFN is
+The attention runs on the shared interface. The FFN is
 a mixture of experts (`Moe`) returning the hidden states. Its router's projection is
 a child ``nn.Linear``, ``router.layer``, whose output is the logits; the FFN's own
 ``route_tokens_to_experts`` takes a softmax top-k and p-normalizes the weights

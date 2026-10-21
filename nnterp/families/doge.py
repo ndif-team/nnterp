@@ -20,10 +20,9 @@ forward with q/k norms and a *dynamic mask*: ``dt_proj`` of the values, through
 ``attention_scores`` carry it. The MLP is a gated ``DogeMLP``, or the cross-domain
 mixture ``DogeCDMoE`` under ``is_moe``, which returns ``(hidden_states, router_logits)``.
 
-Doge-20M, -40M and -260M load and run. The ``is_moe`` checkpoints that load
-(Doge-40M-MoE) run from transformers 5.18, whose block takes the first element of
-``DogeCDMoE``'s tuple; before, the block passes the tuple to dropout
-(``TypeError``). Where it runs, ``mlp_output`` is the mixture's hidden states
+Doge-20M, -40M and -260M load and run. Of the ``is_moe`` checkpoints, Doge-40M-MoE
+loads and runs; it needs transformers 5.18 or later, whose block takes the first element
+of ``DogeCDMoE``'s tuple. Where it runs, ``mlp_output`` is the mixture's hidden states
 (dense MLP plus routed experts); the six mixture values stay unavailable, since
 the product-key routing has no router or experts module to read them at.
 """

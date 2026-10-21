@@ -22,7 +22,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 238}
-VLLM = False
 QUIRKS = ["qk-norm", "learned-activation"]
 
 #: Real values in the notes were measured on Apertus-v1.1-0.5B (the family's smallest checkpoint) on a GPU in
@@ -99,10 +98,12 @@ torch.testing.assert_close(x + attn + mlp, out)
 
 `up_proj` widens the normed stream to `intermediate_size` (21504 on 8B), `act_fn` applies xIELU,
 and `down_proj` narrows it back. xIELU is `alpha_p·x² + beta·x` for `x > 0` and
-`alpha_n·(expm1(min(x, eps)) − x) + beta·x` otherwise, with `beta` 0.5 and two learned scalars per
-block, `mlp.act_fn.alpha_p` and `alpha_n` (stored before a softplus). On v1.1-0.5B the effective
-`alpha_p` runs from 17.75 at block 1 down to 0.54 at block 12, and `alpha_n` lies between 0.85 and 6.28, so
-one pre-activation value means a different activation in each block. `act_fn` is a module, so
+`alpha_n·(expm1(min(x, eps)) − x) + beta·x` otherwise, with `beta` 0.5, `eps` −1e-6 and two scalars
+learned per block. The parameters `mlp.act_fn.alpha_p` and `mlp.act_fn.alpha_n` hold them before a
+transform: the effective `alpha_p` is `softplus(alpha_p)` and the effective `alpha_n` is
+`beta + softplus(alpha_n)`. On v1.1-0.5B the effective `alpha_p` is largest at block 1 (17.75) and
+smallest at block 12 (0.54), and `alpha_n` lies between 0.85 and 6.28, so one pre-activation value
+gives a different activation in each block. `act_fn` is a module, so
 `mlp.act_fn.input` is the pre-activation and `mlp.act_fn.output` the activation:
 
 ```python
@@ -116,8 +117,8 @@ with model.trace(prompt):
 
 The negative branch dips below zero and then grows again: as `x` falls, the output grows like
 `(alpha_n − beta)·|x|`. At block 8 of v1.1-0.5B its minimum is `−0.14`, near `x = −0.63`; it gives `−0.107` at `−1`, `1.78` at
-`−5` and `10.3` at `−20`. There 93% of the pre-activations are negative, and under 0.4% of the
-activations lie within `1e-3` of zero. A neuron is not sparse: a large negative pre-activation
+`−5` and `10.3` at `−20`. At that block 93% of the pre-activations are negative, and under 0.4% of the
+activations lie within `1e-3` of zero. The activations are therefore not sparse: a large negative pre-activation
 writes its `down_proj` column with a positive weight, as a large positive one does. Read
 `act_fn.output`, not the sign of `act_fn.input`, to tell whether a neuron fires.
 
@@ -131,10 +132,10 @@ k = rope(k_norm(k_proj(x).view(..., kv_heads, head_dim)))
 `q_norm` and `k_norm` are RMSNorms over one head's `head_dim`, one gain vector for every head,
 applied before the rotary. `attention_queries` and `attention_keys` are read after both; at position 0,
 where the rotation is the identity, they equal `q_norm.output` and `k_norm.output`. On v1.1-0.5B
-the gains reach 81.5 (`q_norm`) and 87.0 (`k_norm`) at block 0. An edit to one head's slice of
-`q_proj.output` is renormalized away: doubling head 3's slice at block 8 of v1.1-0.5B moves the
-logits by `8e-5`, while doubling head 3 of `attention_queries` moves them by 1.26 and tripling a
-key/value head's slice of `v_proj.output` (no norm) by 23.8.
+the gains reach 81.5 (`q_norm`) and 87.0 (`k_norm`) at block 0. Scaling one head's slice of
+`q_proj.output` is renormalized away. At block 8 of v1.1-0.5B, doubling head 3's slice moves the
+logits by `8e-5`, doubling head 3 of `attention_queries` moves them by 1.26, and tripling a
+key/value head's slice of `v_proj.output`, which no norm follows, moves them by 23.8.
 
 ```python
 attn = model.layers[1].self_attn
@@ -154,12 +155,12 @@ head_dim]`, and an edit to key/value head `j` reaches query heads `4j` to `4j + 
 The six attention interior values need `attn_implementation="eager"`. There is no softcap, window
 or sink, and on v1.1-0.5B in float32 the default `sdpa` load's logits differ from the eager
 load's by at most `5e-5`. The 2509 checkpoints use `rope_type` `llama3` (`rope_theta` 12,000,000,
-`factor` 8 over 8192 original positions, 65536 in all); the v1.1 checkpoints the plain rotary
+`factor` 8 over 8192 original positions, 65536 in all). The v1.1 checkpoints use the plain rotary
 (`rope_theta` 500,000, 4096 positions).
 
 ## Position 0 is `<s>`, and it is the sink
 
-The tokenizer prepends `<s>` (id 1). On v1.1-0.5B its `layer_output` at block 8 has a norm of
+The tokenizer prepends `<s>` (id 1). On v1.1-0.5B the `layer_output` at that position, block 8, has a norm of
 19,000 against 140 to 240 at the other positions of a test prompt. A mean over positions is
 dominated by it unless `[:, 1:]` is dropped first.
 

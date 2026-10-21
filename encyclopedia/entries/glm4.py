@@ -19,8 +19,12 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GLM).
 PALETTE = {"hue": 119}
-VLLM = False
-QUIRKS = ["sandwich-norms", "qkv-bias", "partial-rotary", "interleaved-rotary"]
+QUIRKS = [
+    "sandwich-norms",
+    {"slug": "qkv-bias", "when": lambda config: config.attention_bias},  # the 9B models, not the 32B ones
+    "partial-rotary",
+    "interleaved-rotary",
+]
 
 #: Every claim in the notes was checked on the pinned tiny checkpoint (shapes, identities, the rotary
 #: recomputed exactly) or read off the listed checkpoints' configs and tokenizers; no real weights were run.
@@ -108,13 +112,14 @@ Zeroing `mlp.output` does zero the contribution, since the norm of zero is zero.
 
 ## Rotary turns adjacent pairs, on half of each head
 
-The attention is GLM's: the rotary embedding turns dimension `2i` with `2i + 1` (each frequency
-twice in a row in the cos/sin table), where Llama turns `i` with `i + rot / 2`, and only the first
-`partial_rotary_factor × head_dim` dimensions of each query and key head, 64 of 128 on every
-checkpoint here (`partial_rotary_factor` 0.5); dimensions 64 to 127 carry no position. The base
-(`rope_theta`) is 10,000. `attention_queries` and `attention_keys` are read after the rotary;
-recomputing them from `q_proj.output` and `k_proj.output` with adjacent pairs matches exactly.
-To put the turned part in `rotate_half`'s order:
+The attention is GLM's. The rotary embedding turns dimension `2i` with `2i + 1`, where Llama
+turns `i` with `i + rot / 2` (`rot` being the number of rotated dimensions), and pair `i` turns at
+Llama's frequency `i`. It covers only the first `partial_rotary_factor × head_dim` dimensions of
+each query and key head: 64 of 128 on every checkpoint here (`partial_rotary_factor` 0.5), so
+dimensions 64 to 127 carry no position. The base (`rope_theta`) is 10,000. `attention_queries` and
+`attention_keys` are read after the rotary; recomputing them from `q_proj.output` and
+`k_proj.output` with adjacent pairs matches exactly. To put the turned part in Llama's order,
+evens then odds:
 
 ```python
 hd = model.head_dim
@@ -131,7 +136,9 @@ q_half = q[..., perm]
 
 `attention_bias` is true on GLM-4-9B-0414 and GLM-Z1-9B-0414: `q_proj`, `k_proj` and `v_proj`
 add a bias (`o_proj` has none), so a zero input to `self_attn` still gives each value head its
-slice of `v_proj.bias`. The 32B models set it false. The MLP is GLM's fused one:
+slice of `v_proj.bias`. The 32B models set it false.
+
+The MLP is GLM's fused one:
 `mlp.gate_up_proj.output` is the gate (first `intermediate_size` columns) then the up
 projection, and `mlp.output` is `down_proj(act(gate) * up)`.
 
@@ -149,7 +156,8 @@ computes the same function as an eager one, and the six attention interior value
 A raw prompt is the text's tokens alone, from position 0. The chat template starts with
 `[gMASK]<sop><|user|>`, and on GLM-Z1-9B-0414 `add_generation_prompt=True` ends the prompt
 at `<|assistant|>\\n<think>`, so the next token begins a reasoning trace rather than the answer.
-The 9B-0414 tokenizer's `eos_token` is `<|user|>`.
+GLM-4-9B-0414's tokenizer names `<|user|>` as its `eos_token`; GLM-Z1-9B-0414's names
+`<|endoftext|>`.
 
 ## What loads as this family
 

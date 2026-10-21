@@ -20,8 +20,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GPT-2).
 PALETTE = {"hue": 38}
-VLLM = False
-QUIRKS = ["position-embeddings", "layernorm", "fused-qkv"]
+QUIRKS = ["position-embeddings", "layernorm"]
 
 #: What the visualization draws: GPT-2's sequential block, ln_1 before the attention, ln_2 before the MLP.
 BLOCK = {
@@ -71,8 +70,8 @@ out = h + mlp(ln_2(h))       # ln_2 = post_attention_layernorm
 The block returns a bare tensor. `attention_output` is `self_attn.output[0]` (after `c_proj`) and
 `mlp_output` is `mlp.output` (after the MLP's `c_proj`); nothing sits between either and the stream,
 and `layers[i].input + attention_output + mlp_output == layer_output` is exact (bit-identical on the
-pinned checkpoint). The attention runs transformers' shared eager forward, where nnterp reads the
-six interior values.
+pinned checkpoint). Under an eager load the attention calls transformers' eager attention function,
+where nnterp reads the six interior values.
 
 ## One key head and one value head serve every query head
 
@@ -171,9 +170,8 @@ has no bias and its weight is `embed_tokens.weight`, the same tensor. `ln_f`'s b
 
 SantaCoder (`gpt_bigcode-santacoder`, 1.1B) is 24 blocks × 2048 with 16 query heads of 128 and
 `gelu_pytorch_tanh`. `tiny_starcoder_py` is 20 × 768 with 12 query heads of 64. StarCoder,
-StarCoderBase (with its 1B, 3B and 7B sizes) and StarCoderPlus are gated, so the page greys them
-without access; their fine-tunes OctoCoder, StarChat-alpha and WizardCoder-15B are open, and are
-40 × 6144 with 48 query heads of 128 and `gelu`. Every one has an MLP four times the width
+StarCoderBase (with its 1B, 3B and 7B sizes) and StarCoderPlus are gated. Their fine-tunes
+OctoCoder, StarChat-alpha and WizardCoder-15B are open, and are 40 × 6144 with 48 query heads of 128 and `gelu`. Every one has an MLP four times the width
 (`n_inner`) and one key/value head. `bigcode/santacoder` is SantaCoder's original repository, a
 `gpt2` config with remote code (`GPT2LMHeadCustomModel`), so it does not load as this family;
 `gpt_bigcode-santacoder` does.

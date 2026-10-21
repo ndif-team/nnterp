@@ -133,7 +133,7 @@ rearrange them.
    family's `RENAME` lines for the vision encoder are not singled out.
 
 The index lists every family in `nnterp.families.known()`: a card with the family's circles, title,
-subtitle and quirks for each entry (the quirks that hold on any of its checkpoints; an eye and the
+subtitle, quirks and vLLM support (whether `nnterp/families/vllm/<model_type>.py` exists) for each entry (the quirks that hold on any of its checkpoints; an eye and the
 vision encoders found, `CLIP · SigLIP`, and the `Vision-language` chip when any checkpoint has a vision encoder), a
 stub for each family not written yet, a search box (title, `model_type`, org, architecture, Hub ids,
 quirks, vision encoders, wrappers) and three filter rows, each a fold closed at first whose label opens it and
@@ -204,10 +204,7 @@ The entry states facts about a family, and each one has a source. Before writing
    cannot be read needs no entry here; the build greys it by itself.
    **`ORG`** (optional): the Hub org the index files the family under, where the reference's author is
    not it (an ungated copy: `cohere.py`'s reference is unsloth's copy of a CohereLabs model).
-4. **`VLLM`**: whether the family has a module under `nnterp/families/vllm/` on the `0.8-refactor-vllm`
-   branch (`git show origin/0.8-refactor-vllm:nnterp/families/vllm/<model_type>.py`); this branch has no
-   `StandardizedVLLM`, so the flag cannot be run here.
-5. **`BLOCK`**: what the diagram draws.
+4. **`BLOCK`**: what the diagram draws.
    - `topology`: `"sequential"` (each sublayer reads the stream after the one before it) or
      `"parallel"` (one read feeds every sublayer and the block sums them).
    - `sublayers`: in forward order, each a dict with
@@ -340,12 +337,12 @@ The entry states facts about a family, and each one has a source. Before writing
    The build checks every host, contribution and interior value against the family and fails on a
    name the family does not have, and every `pre_norm` and `post_norm` against the children of the
    blocks that draw it (native names and aliases).
-6. **`STRIP`**: sentences for the model-level strip, keyed `embed`, `layers`, `norm`, `head`,
+5. **`STRIP`**: sentences for the model-level strip, keyed `embed`, `layers`, `norm`, `head`,
    `logits`; each is shown when that node is hovered. Give one wherever the family does something
    there: a scaled embedding, tied weights, a softcap, a logit scale, a position embedding added after
    `embed_tokens`. A block with `streams` and a `readout` also takes `readout`, shown on that node. The `logits` node's own label (`softcapped`, `scaled`, `the output`) follows the
    quirk slugs, not the note.
-7. **`QUIRKS`**: slugs from `build.QUIRKS`, in the order a reader should meet them. If the family has
+6. **`QUIRKS`**: slugs from `build.QUIRKS`, in the order a reader should meet them. If the family has
    a property none covers, add a slug there with a label and one sentence, worded so it holds for
    every family that will carry it (check the list first: another entry may have added it). A family
    with nothing that departs from the plain block has `QUIRKS = []`. A slug holds on every checkpoint.
@@ -367,7 +364,7 @@ The entry states facts about a family, and each one has a source. Before writing
    `deepstack` (`layers[k].deepstack_output`), `unpadded-features` (`projector.output` is not
    `image_features`), `pooled-projector` (fewer image tokens than patches), `encoder-free` (no vision encoder
    blocks). The index keeps them off its first filter row.
-8. **`PALETTE`**: `{"hue": degrees}` is the base hue the five colours are generated from. The table
+7. **`PALETTE`**: `{"hue": degrees}` is the base hue the five colours are generated from. The table
    below is the layout: every entry's hue, computed by `hues.py` from one ordered list of lineages
    (each a band, its members a step apart, about 3°) and the families with no kin (each in a gap
    between two bands, a step and a half from both). Run `hues.py` to re-space after adding a family:
@@ -402,8 +399,8 @@ The entry states facts about a family, and each one has a source. Before writing
 | no kin (in the gaps) | `zaya` 354, `doge` 21, `bloom` 46, `persimmon` 73, `mpt` 86, `dbrx` 90, `jetmoe` 133, `gpt_oss` 148, `exaone4` 182, `laguna` 194, `afmoe` 230, `hyperclovax` 273, `solar_open` 278, `dots1` 317 |
 <!-- hues.py: end -->
 
-9. **`NOTES`**: markdown, the part only a person can write. See below.
-10. **`WRAPPERS`** (optional): the family's vision-language wrappers, keyed by the wrapper's
+8. **`NOTES`**: markdown, the part only a person can write. See below.
+9. **`WRAPPERS`** (optional): the family's vision-language wrappers, keyed by the wrapper's
     `config.model_type` (`"llava"`, `"idefics3"`, ...), each a dict of what a config does not say:
     - `title`: the wrapper's public name (`"Llava 1.5"`);
     - `pinned`: the tiny wrapper checkpoint the family's `VisionSuite` subclass runs on (its `REPO`);

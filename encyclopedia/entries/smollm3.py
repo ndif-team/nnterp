@@ -18,7 +18,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 247}
-VLLM = False
 QUIRKS = ["nope-blocks"]
 
 #: What the visualization draws: Llama's sequential block, one RMSNorm before each sublayer.
@@ -132,10 +131,11 @@ rotary with `rope_theta` 5000000; the query scale is `head_dim ** -0.5`.
 
 ## A sliding window the 3B checkpoints leave off
 
-The config can put a sliding window on some blocks (`use_sliding_window`, `sliding_window`,
-`layer_types`); both 3B checkpoints set `use_sliding_window` to `false` and `sliding_window` to
-`null`, so every block attends over the whole prefix. The pinned checkpoint turns it on, with a
-window of 128 on its block 1, which is why its slider shows a second kind of block.
+The config can put a sliding window on some blocks (`use_sliding_window`, `sliding_window`); when
+`layer_types` is not given, transformers marks the NoPE blocks `sliding_attention`. Both 3B
+checkpoints set `use_sliding_window` to `false` and `sliding_window` to `null`, so every block attends
+over the whole prefix. The pinned checkpoint turns it on, with a window of 128 on its block 1, its
+NoPE block, which is why its slider shows a second kind of block.
 
 ## Load with eager for the interior
 

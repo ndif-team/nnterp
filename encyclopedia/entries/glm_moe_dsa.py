@@ -3,7 +3,7 @@
 MODEL_TYPE = "glm_moe_dsa"
 TITLE = "GLM-5"
 SUBTITLE = (
-    "Latent attention behind an indexer that keeps each query's top keys, a selection the block returns "
+    "Latent attention over only the keys an indexer selects for each query, a selection each block returns "
     "beside the stream for the next block to reuse, and a sigmoid-routed mixture with a shared expert after three dense blocks."
 )
 
@@ -19,8 +19,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GLM).
 PALETTE = {"hue": 128}
-VLLM = False
-QUIRKS = ["latent-attention", "sparse-attention", "tuple-blocks", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
+QUIRKS = ["latent-attention", "sparse-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
 #: Shapes, identities, read orders, the rotary order, the selection and the routing were run on the pinned tiny
 #: checkpoint (block 0 a mixture of 8 experts, top 2, block 1 dense; queries, keys and values 128 wide;
@@ -78,15 +77,16 @@ NOTES = """
 ## The block, in order
 
 ```
-h, sel = x + self_attn(input_layernorm(x), sel)   # sparse latent attention; sel is the key selection
-out    = h + mlp(post_attention_layernorm(h))     # dense on blocks 0-2, a mixture after
+a, sel = self_attn(input_layernorm(x), sel)   # sparse latent attention; sel is the key selection
+h      = x + a
+out    = h + mlp(post_attention_layernorm(h))  # dense on blocks 0-2, a mixture after
 return out, sel
 ```
 
 Llama's pre-norm block and Llama's names. The block returns `(hidden_states, topk_indices)`, and
 the attention `(attn_output, attn_weights, topk_indices)`: the key selection travels to the next
-block beside the stream. `layer_output` and `attention_output` are the first elements, and the
-identity is the plain sum on a dense block and on a mixture block:
+block beside the stream. `layer_output` and `attention_output` are the first elements of these
+tuples, and the identity is the plain sum on a dense block and on a mixture block:
 
 ```python
 with model.trace(prompt):
@@ -107,12 +107,13 @@ mixture on the other 75. The configs carry one multi-token-prediction block
 
 `attention_queries` and `attention_keys` are `qk_head_dim` wide (`qk_nope_head_dim +
 qk_rope_head_dim`, 192 + 64 = 256), `attention_values` and `attention_head_outputs` `head_dim`
-(`v_head_dim`, also 256). The config's `head_dim` is set to `qk_rope_head_dim` (64), which no
-served value has. Queries go through a compressed rank (`q_lora_rank` 2048: `q_a_proj`,
-`q_a_layernorm`, `q_b_proj`; there is no `self_attn.q_proj`, which up to transformers 5.17 was an attribute set to `None`). Keys and values are expanded from one
-latent per token (`kv_lora_rank` 512) for every head, so `attention_keys` has `num_heads` (64)
-heads, and the last 64 dimensions of every head's key are one shared rotary key. The scores are
-scaled by `qk_head_dim ** -0.5` (`self_attn.scaling`, 0.0625).
+(`v_head_dim`, also 256). transformers sets the config's `head_dim` to `qk_rope_head_dim`, the
+rotary width (64), whatever the checkpoint's `config.json` says; no served value is that wide.
+Queries go through a compressed rank (`q_lora_rank` 2048): `q_a_proj`, `q_a_layernorm`, then
+`q_b_proj`, with no `q_proj` module. Keys and values are expanded for every head from one latent
+per token (`kv_lora_rank` 512), so `attention_keys` has `num_heads` (64) heads. The last 64
+dimensions of every head's key are one rotary key that all heads share. The scores are scaled by
+`qk_head_dim ** -0.5` (`self_attn.scaling`, 0.0625).
 
 ```python
 attn = model.layers[1].self_attn
@@ -127,8 +128,7 @@ assert torch.equal(k[:, 0, :, -64:], k[:, 1, :, -64:])   # one rotary key
 ## The rotary part is served de-interleaved
 
 The attention rotates pair (2i, 2i + 1) of the projection into dimensions i and i + 32 of the
-rotary part on every checkpoint (the forward calls the interleaved rotary whatever
-`rope_interleave` says). `attention_queries[..., -64:]` and `attention_keys[..., -64:]` are in
+rotary part on every checkpoint. The forward always does this, whatever `rope_interleave` says. `attention_queries[..., -64:]` and `attention_keys[..., -64:]` are in
 that rotate-half order: at position 0, where rotary is the identity, the served rotary part is
 `q_b_proj`'s even dimensions followed by its odd ones.
 
@@ -142,18 +142,20 @@ rope = proj.view(1, -1, model.num_heads, model.qk_head_dim)[0, 0, 0, -64:]
 torch.testing.assert_close(q[0, 0, 0, -64:], torch.cat([rope[0::2], rope[1::2]]))
 ```
 
-## Sparse attention is dense below 2048 tokens
+## Up to 2048 tokens the sparse attention is plain causal attention
 
-A lightning indexer (`self_attn.indexer`: 32 heads of 128, `index_n_heads` and `index_head_dim`)
-scores every key for every query and keeps the `index_topk` (2048) best. The attention masks the
-others to the dtype's minimum before the shared interface, under eager and under the default
-`sdpa` load alike, so the default load runs the same sparse computation; the interior values need
-`attn_implementation="eager"`. `attention_scores` carry that mask, so a dropped key reads like a
-future one; `attention_probabilities` is the dense `[batch, num_heads, query, key]` pattern, exactly
-zero outside each query's selection. While a prompt is no longer than 2048 tokens the selection
-lists every key, and the pattern is plain causal: on a 7-token prompt row *t* has *t* + 1 nonzero
-entries. The selection is `self_attn.output[2]`, `[batch, query, min(index_topk, seq)]` int32,
-on every block; it has no standard name.
+A lightning indexer (`self_attn.indexer`: `index_n_heads` 32 heads of `index_head_dim` 128)
+scores every key for every query and keeps the `index_topk` (2048) best. The attention sets the
+other keys' mask entries to the dtype's minimum before it calls the attention function. It does
+this under eager and under the default `sdpa` load alike, so both loads run the same sparse
+computation; the interior values need `attn_implementation="eager"`. `attention_scores` carry
+that mask, so a dropped key reads like a future one. `attention_probabilities` is the dense
+`[batch, num_heads, query, key]` pattern, exactly zero outside each query's selection.
+
+The selection is `self_attn.output[2]` on every block, int32 key indices of shape
+`[batch, query, min(index_topk, seq)]`; it has no standard name. On a prompt of up to 2048 tokens
+it lists every key, the causal mask removes the future ones, and the pattern is plain causal:
+row *t* has *t* + 1 nonzero entries.
 
 ```python
 with model.trace(prompt):
@@ -171,7 +173,7 @@ does not move with a gradient-based attribution.
 ## The selection is shared between blocks on GLM-5.2 and GLM-5.3
 
 `config.indexer_types` marks each block `"full"` (it has an `indexer` and selects its own keys)
-or `"shared"` (no `indexer`; it reuses the selection of the block before). Every block is full on
+or `"shared"` (no `indexer`; it reuses the selection the block before it returned). Every block is full on
 GLM-5 and GLM-5.1. On GLM-5.2 and GLM-5.3, 21 blocks are full (0, 1, 2, then every fourth from 6)
 and the 57 others shared: blocks 7 to 9 attend with block 6's selection.
 `skip_layers` hands the block after a skipped range no selection, which a shared block refuses

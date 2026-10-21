@@ -4,8 +4,8 @@ wider than values, and a sigmoid-routed mixture after a dense first block."""
 MODEL_TYPE = "mimo_v2_flash"
 TITLE = "MiMo-V2-Flash"
 SUBTITLE = (
-    "Sliding-window blocks with a learned sink in the softmax and twice the key/value heads of the full blocks, "
-    "queries and keys wider than values, and a mixture of 256 experts chosen by sigmoid scores plus a bias."
+    "Llama's pre-norm block with queries and keys wider than values, sliding-window blocks that have a learned "
+    "sink and twice the full blocks' key/value heads, and a mixture of experts chosen by sigmoid scores plus a bias."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -17,7 +17,6 @@ CHECKPOINTS = ["XiaomiMiMo/MiMo-V2-Flash", "XiaomiMiMo/MiMo-V2-Flash-Base"]
 
 #: Set by hues.py (lineage: MiniMax / MiMo).
 PALETTE = {"hue": 349}
-VLLM = False
 QUIRKS = [
     "attention-sink", "per-block-sizes", "sliding-window", "partial-rotary", "mixture-of-experts",
     "dense-first-blocks",
@@ -104,8 +103,9 @@ them, so `model.layers` has 48 blocks.
 
 ## Sliding blocks have twice the key/value heads
 
-`layer_types` makes blocks 0, 5, 11, 17, 23, 29, 35, 41 and 47 full and the other 39 sliding, with a
-window of 128 positions. Every block has 64 query heads, but a sliding block has 8 key/value heads,
+`layer_types` makes blocks 0, 5, 11, 17, 23, 29, 35, 41 and 47 full and the other 39 sliding. A
+sliding block's window is 129 positions (`sliding_window`): the query and the 128 before it, the
+checkpoints' `sliding_window_size` plus one. Every block has 64 query heads, but a sliding block has 8 key/value heads,
 twice `num_key_value_heads`, where a full block has 4. The root's `num_kv_heads` is the config's 4,
 the full blocks' count; each block's own is on its attention:
 
@@ -139,15 +139,15 @@ heads = proj.view(1, -1, attn.num_kv_heads, model.head_dim).transpose(1, 2)
 torch.testing.assert_close(heads * model.config.attention_value_scale, v)
 ```
 
-Rotary turns the first 64 of each query and key head's 192 dimensions (`partial_rotary_factor`
+Rotary rotates the first 64 of each query and key head's 192 dimensions (`partial_rotary_factor`
 0.334), with base 5,000,000 on the full blocks and 10,000 on the sliding ones; the other 128 carry
 no position.
 
 ## A sliding block's sink takes part of every row
 
 Each sliding block's attention holds `sinks`, one learned logit per query head (64); a full block's
-`sinks` is `None`. The sink joins the softmax as one extra key column that mixes no value, so a
-sliding block's pattern rows sum to less than one, and `1 - row sum` is the sink's share; a full
+`sinks` is `None`. The sink joins the softmax as one extra key column that weights no value, so a
+sliding block's pattern rows sum to less than one, and `1 - row sum` is the sink's share. A full
 block's rows sum to one. `attention_scores` is read at the masked scores, before the sink column joins
 and the row max is subtracted, so it has the pattern's shape and `softmax(attention_scores)` is not
 the pattern on a sliding block. Appending the column rebuilds it:
@@ -185,7 +185,7 @@ The router is DeepSeek-V3's with one group (`n_group` and `topk_group` 1), so it
 `router_logits` is the projection, computed in float32. The router adds its selection bias,
 `mlp.router.e_score_correction_bias`, to the sigmoids to choose; `expert_weights` are the chosen
 experts' sigmoids without the bias, renormalized to sum to one (`norm_topk_prob`) and multiplied by
-`routed_scaling_factor`, which the configs leave null and transformers sets to 1.0. There is no shared
+`routed_scaling_factor`, which the Hub configs leave null and transformers reads as 1.0. There is no shared
 expert, so `routed_output` is `mlp_output`.
 
 ```python
@@ -204,7 +204,7 @@ torch.testing.assert_close(each.sum(2), out)    # no shared expert
 ```
 
 A written `router_logits` moves both the choice and the weights; a written bias moves only the
-choice. Block 0 has a dense MLP: `support()` reports every mixture value missing there.
+choice. On block 0, whose MLP is dense, `support()` reports every mixture value missing.
 
 ## Ablating an expert touches only the tokens routed to it
 

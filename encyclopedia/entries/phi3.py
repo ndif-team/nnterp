@@ -3,9 +3,9 @@
 MODEL_TYPE = "phi3"
 TITLE = "Phi-3 / Phi-3.5 / Phi-4"
 SUBTITLE = (
-    "Llama's block with two fused projections: qkv_proj yields queries, keys and values as three slices, and "
-    "gate_up_proj the gate and the up projection as two halves; the 128k checkpoints rescale rotary by sequence "
-    "length, and the 4k ones attend over a 2047-token window."
+    "Llama's block with two fused projections, qkv_proj holding the queries, keys and values as three slices and "
+    "gate_up_proj holding the gate and up projections as two halves; the 128k checkpoints rescale the rotary by "
+    "sequence length, and the 4k ones attend over a 2047-token window."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -22,8 +22,13 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Phi).
 PALETTE = {"hue": 140}
-VLLM = True
-QUIRKS = ["fused-qkv", "sliding-window", "partial-rotary"]
+QUIRKS = [
+    # The 128k checkpoints' windows reach past their context and never mask; phi-4 sets none.
+    {"slug": "sliding-window",
+     "when": lambda config: config.sliding_window is not None and config.sliding_window < config.max_position_embeddings},
+    # Only Phi-4-mini sets a factor below 1.
+    {"slug": "partial-rotary", "when": lambda config: config.rope_parameters.get("partial_rotary_factor", 1.0) < 1.0},
+]
 
 #: No checkpoint of this family is 3B parameters or fewer, so nothing here ran on real weights: shapes, splits
 #: and identities are from the pinned tiny checkpoint, the rotary from transformers' rotary module built on each
@@ -60,8 +65,8 @@ BLOCK = {
 STRIP = {
     "embed": "A plain lookup: token_embeddings equals layers[0].input. No tokenizer of this family adds a BOS.",
     "norm": "An RMSNorm whose gain is norm.weight; project_on_vocab applies it.",
-    "head": "lm_head has no bias. Its weight is embed_tokens' on Phi-4-mini (tie_word_embeddings) and its own on "
-            "every other checkpoint. Nothing follows it: logits equals lm_head.output.",
+    "head": "lm_head has no bias. Its weight is embed_tokens' on Phi-4-mini-instruct and -reasoning "
+            "(tie_word_embeddings) and its own on every other checkpoint. Nothing follows it: logits equals lm_head.output.",
 }
 
 NOTES = """
@@ -132,15 +137,22 @@ Gate neuron `j` and up neuron `j` are columns `j` and `intermediate_size + j` of
 
 ## The 128k checkpoints rescale the rotary by sequence length
 
-Phi-3-mini-128k, Phi-3.5-mini and Phi-4-mini set `rope_scaling` type `longrope` (Phi-3-medium-128k
-spells it `su`, the same scheme): two lists of per-frequency factors, `short_factor` and
-`long_factor`, over an `original_max_position_embeddings` of 4096. The rotary multiplies every cos
-and sin by `sqrt(1 + ln(32) / ln(4096))`, 1.19, at every length, so a rotated query's norm is not
-the projection's. A sequence of up to 4096 tokens is rotated with `short_factor`; a longer one
-with `long_factor`, at every position. Position 5 of a 4097-token prompt is rotated differently
-from position 5 of a 4096-token prompt, so `attention_queries` and `attention_keys` at the same
-position move when the prompt crosses 4096 tokens. The 4k checkpoints and phi-4 have no scaling:
-plain rotary at `rope_theta` 10000 (phi-4: 250000).
+Phi-3-mini-128k, Phi-3.5-mini and Phi-4-mini set `rope_scaling` type `longrope`: two lists of
+per-frequency factors, `short_factor` and `long_factor`, over an `original_max_position_embeddings`
+of 4096. The rotary multiplies every cos and sin by `sqrt(1 + ln(32) / ln(4096))` = 1.19, where 32
+is 131072 / 4096, at every length, so the rotated dimensions of a query or key have 1.19 times the
+projection's norm. The rotary picks the factors once per forward pass, from the largest position in
+it: up to position 4095 it uses `short_factor`, past it `long_factor`, at every position of that
+pass. Position 5 of a 4097-token prompt is therefore rotated differently from position 5 of a
+4096-token prompt, so `attention_queries` and `attention_keys` at the same position move when the
+prompt crosses 4096 tokens.
+
+In generation, a step past position 4095 rotates its new query and key with `long_factor`, while the
+cached keys keep the `short_factor` rotation of the pass that computed them. The 4k checkpoints and
+phi-4 have no scaling: plain rotary at `rope_theta` 10000 (phi-4: 250000; Phi-4-reasoning and
+-plus: 500000). Phi-3-medium-128k spells the type `su`, and transformers cannot read its config: it
+raises a `KeyError` for a missing `original_max_position_embeddings`, so the page lists it greyed
+out.
 
 ## Rotary covers whole heads, except on Phi-4-mini
 
@@ -154,8 +166,8 @@ scale is `head_dim ** -0.5` on every checkpoint.
 Phi-3-mini-4k and Phi-3-medium-4k set `sliding_window` 2047, on every block: a query sees itself
 and the 2046 positions before it, and `attention_probabilities` are exactly zero further back. A
 prompt shorter than 2048 tokens is not affected. The 128k checkpoints set a window at or past
-their 131072 positions (262144 on mini and Phi-4-mini, 131072 on medium), which never masks
-anything, and phi-4 sets none. The window holds under the default `sdpa` load and under
+their 131072 positions (262144 on Phi-3-mini-128k, Phi-3.5-mini and Phi-4-mini, 131072 on
+Phi-3-medium-128k), which never masks anything, and phi-4 and its reasoning checkpoints set none. The window holds under the default `sdpa` load and under
 `attn_implementation="eager"`, which the attention interior needs.
 
 ## Grouped-query attention on medium, phi-4 and Phi-4-mini
@@ -169,7 +181,7 @@ served before `repeat_kv`, `num_kv_heads` wide, so an edit to key/value head `j`
 
 - Phi-3 and Phi-3.5: Llama's SentencePiece vocabulary, 32011 tokens with the chat tokens, in 32064
   embedding rows. `<s>` (id 1) is the `bos_token`, and the tokenizer does not prepend it. A word
-  after a space splits as `' Paris'` → `['▁', 'Paris']`; encode `"Paris"` (id 3681, `▁Paris`) to get one
+  after a space splits as `' Paris'` → `['▁', '▁Paris']`; encode `"Paris"` (id 3681, `▁Paris`) to get one
   token.
 - phi-4 and its reasoning checkpoints: 100352 tokens in 100352 rows, a GPT-style byte-level BPE.
 - Phi-4-mini: 200029 tokens in 200064 rows, also byte-level BPE.

@@ -3,9 +3,9 @@
 MODEL_TYPE = "qwen3"
 TITLE = "Qwen3"
 SUBTITLE = (
-    "Llama's block with an RMSNorm on each query and key head before the rotary embedding, so their "
-    "size comes from the norms' gains, not the input's scale; there is no BOS, and position 0 becomes "
-    "the attention sink."
+    "Llama's block with an RMSNorm on each query and key head before the rotary embedding, so a query's or "
+    "key's size comes from the norm's gain, not from the input's scale; there is no BOS, and position 0 "
+    "becomes the attention sink."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -27,7 +27,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 295}
-VLLM = True
 QUIRKS = ["qk-norm"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -87,10 +86,10 @@ block 0 and the `q_norm` gains 11.8.
 ## An edit to q_proj.output is renormalized
 
 A head's slice of `q_proj.output` or `k_proj.output` passes through its own norm before it is
-used, so the edit reaches that head only, and its size is lost. On 0.6B, doubling head 3's slice
-of `q_proj.output` moves the logits by under 1e-4, tripling a key/value head's slice of
-`k_proj.output` by about 1e-4, while tripling the same slice of `v_proj.output` (no norm) moves
-them by 5.8. Zeroing a slice gives a zero query, and that head attends uniformly over the prefix.
+used, so the edit reaches that head only, and the norm undoes its scale. On 0.6B, doubling head 3's
+slice of `q_proj.output` moves the logits by under 1e-4, and tripling a key/value head's slice of
+`k_proj.output` by about 1e-4. Tripling the same slice of `v_proj.output` (no norm) moves them by
+5 to 15, depending on the head. Zeroing a slice gives a zero query, and that head attends uniformly over the prefix.
 To change how sharply a head attends, edit `attention_queries` (or `attention_keys`), which come
 after the norm:
 
@@ -137,7 +136,7 @@ Qwen's tokenizers set `bos_token` to `None` and prepend nothing; the config's `b
 from block 2 to block 26, position 0's `layer_output` has a norm of 5600 to 6600 on every prompt,
 98 to 99% of it (squared) on coordinate 35, pointing the same way on every prompt (cosine
 1.000); up to block 15 every other position is under 80. The last block shrinks it to 1650 to
-1850. From block 3 on, queries put on average 0.58 to 0.91 of their attention on key 0. 8B (from
+1850. From block 3 on, queries put on average 0.63 to 0.93 of their attention on key 0. 8B (from
 block 6, coordinate 2276) and 4B-Thinking-2507 (from block 6, coordinate 4) do the same.
 
 A probe, a patch or a logit lens at position 0 reads the sink, and a mean over positions is
@@ -159,7 +158,7 @@ The template writes no system turn of its own, so a templated prompt starts with
 ends the prompt at `<|im_start|>assistant\\n`, and the next token is `<think>` (151667): on 0.6B with
 probability 1.000. A next-token metric at the end of that prompt measures the start of a
 reasoning trace, not the answer. `enable_thinking=False` appends an empty
-`<think>\\n\\n</think>\\n\\n`, after which 0.6B puts 0.873 on `'Paris'`:
+`<think>\\n\\n</think>\\n\\n`, after which the next token starts the answer:
 
 ```python
 text = model.tokenizer.apply_chat_template(
@@ -172,9 +171,12 @@ The answer at the start of the assistant's turn is `'Paris'`, with no leading sp
 `get_first_tokens("Paris", model)` returns both `'Paris'` and `' Paris'`. The template also strips
 the `<think>` part from assistant turns before the last user message.
 
-Qwen3-4B-Thinking-2507's template ignores `enable_thinking` and ends the prompt at `<think>\\n`;
-closing the block yourself does not skip the reasoning (its next token is still `'Hmm'`, 0.805). Qwen3-4B-Instruct-2507 has
-no thinking block, and puts 1.000 on `'Paris'` right after `<|im_start|>assistant\\n`.
+Qwen3-4B-Thinking-2507's template ignores `enable_thinking` and ends the prompt at `<think>\\n`.
+Closing the block yourself does not skip the reasoning: the next token still opens it (`'Hmm'`,
+`'Okay'`). Qwen3-4B-Instruct-2507 has no thinking block and answers right after
+`<|im_start|>assistant\\n`. Qwen3Guard-Gen and Qwen3-Reranker ship task templates of their own:
+Guard wraps the conversation in a safety-classification instruction, Reranker writes a system turn
+and a query/document prompt, and both close an empty thinking block.
 Generation stops on `<|im_end|>` (151645) or `<|endoftext|>` (151643).
 
 ## The readout is the plain projection

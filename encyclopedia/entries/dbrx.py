@@ -22,8 +22,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 90}
-VLLM = False
-QUIRKS = ["fused-qkv", "layernorm", "mixture-of-experts"]
+QUIRKS = ["layernorm", "mixture-of-experts"]
 
 #: The real checkpoints are 132B parameters: nothing here ran on real weights. Every identity and shape in
 #: the notes, and every snippet, ran on the pinned tiny checkpoint in float32 (2 blocks, 16 experts, top 4);
@@ -93,9 +92,9 @@ out  = h + ffn(a)           # 4 of 16 experts per token
 The native tree is `transformer.blocks[i].{norm_attn_norm.{norm_1, attn, norm_2}, ffn}`, and nnterp
 names them `input_layernorm`, `self_attn`, `post_attention_layernorm` and `mlp` on the block, so a
 recipe reads DBRX like Llama. `norm_attn_norm` norms, runs the attention, adds the residual, norms
-again, and returns both the stream after the attention and the FFN's input; the block adds the
-FFN's output to the first. The attention module's own output is its contribution, the block
-returns a tensor, and the identity is the plain sum:
+again, and returns two tensors: the stream after the attention and the FFN's input. The block adds
+the FFN's output to that stream. The attention module's own output is its contribution, because `norm_attn_norm` adds the
+residual after it, and the identity is the plain sum:
 
 ```python
 with model.trace(prompt):
@@ -132,8 +131,8 @@ torch.testing.assert_close(val.view(*val.shape[:2], KV, D).transpose(1, 2), v)
 ```
 
 An edit to a slice of `Wqkv.output` passes through the clamp, so a value written beyond ±8 arrives
-as ±8; edit `attention_queries`, `attention_keys` or `attention_values` to set a head's tensor as
-it is used. Query head `h` reads key/value head `h // 6`: an edit to one key/value head reaches 6
+as ±8. Edit `attention_queries`, `attention_keys` or `attention_values` instead: no clamp follows
+them. Query head `h` reads key/value head `h // 6`: an edit to one key/value head reaches 6
 query heads. The output projection is `out_proj`, and no projection has a bias.
 
 ## Load with eager for the attention interior only
@@ -171,8 +170,8 @@ The experts are one module, `mlp.experts`, whose GLU weights `w1` (gate), `v1` (
 (down) are stacked parameters on `experts.mlp`, `[num_experts × ffn_hidden_size, hidden_size]` each,
 with SiLU. It loops over the experts in its own forward, so no tensor holds a slot's output and
 `expert_outputs` is unavailable. `intermediate_size` is one expert's width,
-`ffn_config.ffn_hidden_size` (10752); the config has no dense width. `moe_jitter_eps` scales the
-router's input by noise in training only.
+`ffn_config.ffn_hidden_size` (10752); the config has no dense width. In training only,
+`moe_jitter_eps` multiplies the router's input by uniform noise in `[1 - eps, 1 + eps]`.
 
 ## Ablating an expert touches only the tokens routed to it
 

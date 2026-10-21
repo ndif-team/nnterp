@@ -34,7 +34,7 @@ WRAPPERS = {
 
 `model.projector` is `model.visual.merger`, the vision encoder's last module: `norm` (a LayerNorm over
 `vision_hidden_size`) on each patch, then each 2 × 2 block of consecutive patches concatenated into one
-`4 * vision_hidden_size` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. So an image
+`4 * vision_hidden_size` vector, `linear_fc1`, GELU and `linear_fc2` to the text model's width. An image
 of `t * h * w` patches (its `image_grid_thw` row) is `t * h * w / 4` image tokens, and
 `vision.image_features` is `model.projector.output` as it is, `[image_tokens, hidden_size]`. The merger maps
 4 × 1152 = 4608 to 2048 on 35B-A3B, to 3072 on 122B-A10B and to 4096 on 397B-A17B; a patch is 16
@@ -60,7 +60,7 @@ encoder is the same on every checkpoint: 27 blocks of width 1152, 16 heads, with
 
 ## Read the vision values in the forward's order
 
-The merger runs inside the vision encoder, before it returns. So in one trace read the last vision
+The merger runs inside the vision encoder, before it returns. In one trace, read the last vision
 block's `layer_output`, then `model.projector.input` and `.output`, then `vision.tower_output`, then
 `vision.image_features`, then the text blocks. A read out of this order raises `OutOfOrderError`.
 """,
@@ -69,7 +69,6 @@ block's `layer_output`, then `model.projector.input` and `.output`, then `vision
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 313}
-VLLM = False
 QUIRKS = ["hybrid", "gated-query", "mixture-of-experts", "qk-norm", "partial-rotary", "gain-norm", "multimodal-rotary"]
 
 #: No checkpoint of this family is under 3B parameters, so no real-weight run backs the notes: shapes, identities and
@@ -143,7 +142,8 @@ out = h + mlp(post_attention_layernorm(h))   # routed experts + gate * shared ex
 blocks 3, 7, 11, ...) and `linear_attention` on the others: 30 DeltaNet and 10 attention blocks
 on 35B-A3B, 36 and 12 on 122B-A10B, 45 and 15 on 397B-A17B. A block has `linear_attn` or
 `self_attn`, never both; the last block is an attention block. Every block's `mlp` is the
-mixture (`mlp_only_layers` is empty). Pick blocks outside the trace:
+mixture: the block builds one whatever the config's `mlp_only_layers` says. Pick blocks outside
+the trace:
 
 ```python
 types = model.config.get_text_config().layer_types
@@ -220,18 +220,19 @@ with model.trace(prompt):
 ## The shared expert runs before the router
 
 The mixture computes the shared expert first, then the router and the experts, and multiplies
-by the gate last. So in one trace `moe.shared_experts.output` comes before `router_logits`, while
+by the gate last. In one trace `moe.shared_experts.output` comes before `router_logits`, while
 `shared_expert_output` comes after `routed_output`; `router_logits` before
 `shared_experts.output` raises `OutOfOrderError`.
 
 ## Loading
 
 `attn_implementation="eager"` is needed only for the six attention interior values on the
-attention blocks; there is no softcap or window. The DeltaNet values are read at the delta-rule
-kernel call and need transformers' pure-torch kernels, which is what runs when
-`flash-linear-attention` is not installed; with it installed, every `linear_attn` value but
-`attention_output` is unavailable until `nnterp.route_kernels(model.family, "torch")`. The same
-call is what makes `state` and `states` exist, through the token-by-token kernel. `states` holds
+attention blocks; there is no softcap or window. The DeltaNet values are read at the call to
+the delta-rule kernel and need no eager load. They need transformers' pure-torch delta rule,
+which is what runs when `flash-linear-attention` is not installed. With it installed, every
+`linear_attn` value but `attention_output` is unavailable until
+`nnterp.route_kernels(model.family, "torch")`. The same call is what makes `state` and `states`
+exist: it routes a prompt through the token-by-token kernel. `states` holds
 one float32 state per token, `num_v_heads × 128 × 128`: 2 MiB per token per block on 35B-A3B,
 4 MiB on 122B-A10B and 397B-A17B. `expert_outputs` needs `experts_implementation` `"grouped_mm"`
 (the default) or `"batched_mm"`.
@@ -261,8 +262,9 @@ torch.testing.assert_close(gated, (heads * gate.sigmoid()).flatten(2))
 `q_norm` and `k_norm` are RMSNorms over one head's 256 dimensions with gain `1 + weight`,
 applied before the rotary. The rotary turns only the first 64 dimensions of each query and key
 head (`partial_rotary_factor` 0.25, `rope_theta` 10⁷); `attention_queries[..., 64:]` equals
-`q_norm.output[..., 64:]` exactly. `mrope_section` `[11, 11, 10]` splits those frequencies between
-time, height and width for image tokens; on text the three positions coincide. 35B-A3B has 16
+`q_norm.output[..., 64:]` exactly. The rotary is M-RoPE: `mrope_section` `[11, 11, 10]` gives the
+32 rotary frequencies to time, height and width, interleaved, which matters on image tokens; on
+text the three positions are equal. 35B-A3B has 16
 query heads over 2 key/value heads, 122B-A10B and 397B-A17B 32 over 2, so an edit to key/value
 head `j` reaches 8 query heads on 35B-A3B and 16 on the others. The score scale is `256 ** -0.5`.
 
@@ -291,8 +293,8 @@ before the gated norm and `out_proj`. The state after a prompt, `state_output`, 
 The tokenizer sets `bos_token` to `None` and prepends nothing; `<|endoftext|>` is 248044,
 `<|im_start|>` 248045, `<|im_end|>` 248046. With `add_generation_prompt=True` every
 checkpoint's template, the Base one included, ends the prompt at `<think>\\n` unless
-`enable_thinking=False` is passed, which closes an empty `<think>\\n\\n</think>\\n\\n`; pass the
-flag either way. The post-trained checkpoints' `generation_config.json` stops on `<|im_end|>` or
+`enable_thinking=False` is passed; then it ends at an empty `<think>\\n\\n</think>\\n\\n`.
+Pass the flag either way. The post-trained checkpoints' `generation_config.json` stops on `<|im_end|>` or
 `<|endoftext|>`; 35B-A3B-Base ships none, so `generate` stops only on `<|endoftext|>`.
 
 ## What loads as this family

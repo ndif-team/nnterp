@@ -16,7 +16,6 @@ CHECKPOINTS = ["mistralai/Ministral-8B-Instruct-2410"]
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 266}
-VLLM = False
 QUIRKS = ["sliding-window"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -122,7 +121,6 @@ assert len(ids) == 1
 
 `mistralai/Ministral-8B-Instruct-2410`'s `config.json` says `model_type` `mistral` and
 `MistralForCausalLM`, with `layer_types`; transformers' `AutoConfig` reads a `mistral` config that
-has `layer_types` as `ministral`, so it loads as `MinistralForCausalLM` and this family serves it.
-The tiny `ministral` checkpoints on the Hub ship only `tekken.json`, so the suite's pinned checkpoint
-is re-initialised with the tiny Mistral checkpoint's tokenizer and vocabulary.
+has `layer_types` as a `ministral` config, so it loads as `MinistralForCausalLM` and this family
+serves it.
 """

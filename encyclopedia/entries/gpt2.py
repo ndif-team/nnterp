@@ -25,8 +25,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GPT-2).
 PALETTE = {"hue": 35}
-VLLM = True
-QUIRKS = ["position-embeddings", "layernorm", "fused-qkv"]
+QUIRKS = ["position-embeddings", "layernorm"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.
@@ -107,10 +106,10 @@ difference 1.3e-4 on `gpt2`) and the same greedy generation.
 ## The first position is a sink with a huge norm
 
 On `gpt2` the stream at position 0 has a norm of 2,500 to 3,200 from block 2's output to block
-10's, whatever the token, against medians of about 60 to 250 at the other positions. It is also where
-attention goes: averaged over heads and later queries, 41% to 52% of the pattern lands on key 0 in
-blocks 1 and 2, and 57% to 91% in blocks 3 to 11. Leave position 0 out of norms you scale a steering
-vector by, of activation statistics and of SAE metrics.
+10's, whatever the token, against medians of about 60 to 250 at the other positions. Position 0 also
+takes most of the attention: averaged over heads and later queries, 41% to 52% of the pattern lands on key 0 in
+blocks 1 and 2, and 57% to 91% in blocks 3 to 11. Leave position 0 out of activation statistics, SAE
+metrics and the norms you scale a steering vector by.
 
 The tokenizer adds no BOS token, so without one the first word of the prompt becomes the sink.
 Writing `<|endoftext|>` (id 50256, the BOS and EOS token) at the start of the prompt gives the sink a
@@ -140,8 +139,9 @@ q_again = (h @ W_Q + b_Q).unflatten(-1, heads).transpose(1, 2)
 torch.testing.assert_close(q_again, q)
 ```
 
-The three are views of the split `c_attn` output, so torch refuses an in-place edit of
-`attention_queries`, `attention_keys` or `attention_values`. Edit a copy and assign it:
+The queries are a view of the split `c_attn` output, so with gradients on torch refuses an in-place
+edit of `attention_queries`; the keys and values take one. Edit a copy of the queries and assign it,
+or edit them under `torch.no_grad()`:
 
 ```python
 with model.trace(prompt):
@@ -156,16 +156,17 @@ Every head has its own keys and values (`num_kv_heads == num_heads`), and the sc
 ## Load with eager; two config flags change the attention
 
 The default load runs `sdpa`, which has no queries, pattern or head outputs to read;
-`attn_implementation="eager"` runs the shared eager forward where nnterp reads them.
+`attn_implementation="eager"` runs transformers' eager attention function, where nnterp reads them.
 `attention_output` and `mlp_output` are there under either load.
 
 The Stanford CRFM checkpoints (`stanford-crfm/*-gpt2-small-*` and `*-gpt2-medium-*`, five seeds
 each, with intermediate training checkpoints as revision tags such as `checkpoint-99000`) set
-`reorder_and_upcast_attn` and `scale_attn_by_inverse_layer_idx`. The second divides block `i`'s
-query scale by `i + 1`. The first takes GPT-2's own upcast path under eager, where nnterp reads
-nothing inside the attention. In float32 that path computes what the shared one does: on
-`alias-gpt2-small-x21` the logits of the two paths are bit-identical on CPU and agree within 1e-5 on
-GPU. So a float32 load with the flag off gives the interior back without changing the forward:
+`reorder_and_upcast_attn` and `scale_attn_by_inverse_layer_idx`. `scale_attn_by_inverse_layer_idx`
+divides block `i`'s score scale by `i + 1`, on every attention path. `reorder_and_upcast_attn` makes
+an eager load take GPT-2's own upcast path, where nnterp reads nothing inside the attention. In
+float32 that path computes what the eager attention function does, up to rounding: on
+`alias-gpt2-small-x21` the logits of the two paths agree within 2e-5. A float32 load with the flag
+off therefore serves the interior values and computes the same logits to within that rounding:
 
 ```python
 model = StandardizedTransformer(
@@ -175,7 +176,7 @@ model = StandardizedTransformer(
 ```
 
 `alias-gpt2-small-x21` loads in float16 by default, and there the paths differ, since the upcast one
-computes the scores in float32 (largest logit difference 0.023 on GPU).
+computes the scores in float32 (largest logit difference 0.025 on GPU).
 
 ## The readout: LayerNorm with a bias, tied weights
 
@@ -187,9 +188,9 @@ on `,`, ` the`, ` and`, `.` and newline, with a standard deviation of 0.9 across
 
 Folding the final norm into the unembedding takes the gain into `W_U` and the bias into a vocabulary
 bias. With the scale frozen at the run's value the readout is linear, which is what direct logit
-attribution needs: each contribution's term is its centred vector through the same map, and the terms
-of `layers[0].input` and of every `attention_output` and `mlp_output`, plus the bias's, sum to the
-logits (largest difference 1.3e-4 on `gpt2`, on logits of size near 100).
+attribution needs. Each contribution's term is that contribution, minus its mean, through the same
+map, and the terms of `layers[0].input` and of every `attention_output` and `mlp_output`, plus the
+bias's, sum to the logits (largest difference 1.3e-4 on `gpt2`, on logits of size near 100).
 
 ```python
 ln_f, W_U = model.norm._module, model.lm_head.weight
@@ -228,14 +229,14 @@ block 6, each pair equal to within 1e-4:
 - `blocks.i.attn.hook_pattern`: `self_attn.attention_probabilities`
 - `blocks.i.attn.hook_z`: `self_attn.attention_head_outputs`
 - `blocks.i.hook_attn_out`: `self_attn.attention_output`
-- `blocks.i.hook_resid_mid`: `model.layers[i].post_attention_layernorm.input`
-- `blocks.i.mlp.hook_post`: `model.layers[i].mlp.act.output`
+- `blocks.i.hook_resid_mid`: `model.layers[i].layer_mid`
+- `blocks.i.mlp.hook_post`: `model.layers[i].mlp.mlp_activation`
 - `blocks.i.hook_mlp_out`: `mlp.mlp_output`
 - `blocks.i.hook_resid_post`: `model.layers[i].layer_output`
 - `ln_final.hook_normalized`: `model.norm.output`
 
 `HookedTransformer.from_pretrained`, the default, rewrites the weights, and the hooks move with them.
-It centres every weight that writes to the stream, so each residual hook and `hook_attn_out` /
+It centers every weight that writes to the stream, so each residual hook and `hook_attn_out` /
 `hook_mlp_out` equals the nnterp value minus its mean over the hidden axis. It folds `ln_1`'s bias
 and the value bias out of the values, so `hook_v` and `hook_z` equal the nnterp values minus
 `ln_1.bias @ W_V + b_V`, per head. `ln_final.hook_normalized` drops `ln_f`'s gain and bias, and the
@@ -246,9 +247,9 @@ logits are nnterp's minus their mean over the vocabulary. The queries, keys, sco
 
 **`gpt2-small-res-jb`** (SAELens; Hub `jbloom/GPT2-Small-SAEs-Reformatted`) has 24576 latents on
 `blocks.i.hook_resid_pre` for every block, plus `blocks.11.hook_resid_post`. They were trained on
-TransformerLens' centred weights (SAELens loads them with `center_writing_weights`), so their input is
+TransformerLens' centered weights (SAELens loads them with `center_writing_weights`), so their input is
 `model.layers[i].input` minus its mean over the hidden axis. On a 59-token text (position 0 left out),
-block 8's SAE leaves 15% of the variance unexplained on the centred stream and 250% on the raw one.
+block 8's SAE leaves 15% of the variance unexplained on the centered stream and 250% on the raw one.
 
 ```python
 with model.trace(prompt):
@@ -259,7 +260,7 @@ sae_input = resid - resid.mean(-1, keepdim=True)      # gpt2-small-res-jb's inpu
 
 **OpenAI's v5 SAEs** (`openai/sparse_autoencoder`; also in SAELens as `gpt2-small-resid-post-v5-32k`
 and its kin) are TopK autoencoders with 32k and 128k latents at four places per block:
-`resid_delta_attn` (`attention_output`), `resid_post_attn` (`post_attention_layernorm.input`),
+`resid_delta_attn` (`attention_output`), `resid_post_attn` (`layer_mid`),
 `resid_delta_mlp` (`mlp_output`) and `resid_post_mlp` (`layer_output`). The repository's README
 extracts activations with `center_writing_weights=False`, and the autoencoder layer-normalizes its
 input itself, so the nnterp value goes in as it is: block 6's `resid_post_mlp` SAE reconstructs
@@ -267,7 +268,7 @@ input itself, so the nnterp value goes in as it is: block 6's `resid_post_mlp` S
 
 **OpenAI's neuron explanations** (`openai/automated-interpretability`) cover every MLP neuron of
 `gpt2-xl` (48 blocks × 6400) and, in a second set, of `gpt2`. A neuron's activation is
-`model.layers[i].mlp.act.output[..., n]`, after the `gelu_new`. The README says the published
+`model.layers[i].mlp.mlp_activation[..., n]`, the `gelu_new` output. The README says the published
 activations were computed with a different GELU and differ from the exact ones by a median of 0.009
 on `gpt2`.
 """

@@ -3,9 +3,9 @@
 MODEL_TYPE = "deepseek_v4"
 TITLE = "DeepSeek-V4"
 SUBTITLE = (
-    "Four parallel residual streams that each sublayer reads through a learned collapse and writes back through "
-    "per-stream weights and a stream-mixing matrix, around multi-query attention over a sliding window and "
-    "compressed keys, and a mixture on every block."
+    "Four parallel residual streams, which a learned matrix mixes around each sublayer while the sublayer reads one "
+    "weighted sum of them and writes into all four; multi-query attention over a sliding window plus compressed "
+    "keys; and a mixture of experts on every block."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -23,7 +23,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: DeepSeek).
 PALETTE = {"hue": 331}
-VLLM = False
 QUIRKS = [
     "hyper-connections", "attention-sink", "sliding-window", "sparse-attention", "interleaved-rotary",
     "mixture-of-experts", "hash-routing",
@@ -75,7 +74,7 @@ BLOCK = {
                 "+ mlp_post ⊗ mlp.mlp_output == layer_output",
     "identity_note": "layers[i].input and layer_output are [batch, seq, streams, hidden_size]. combᵀ · x mixes the streams "
                      "(comb.transpose(-1, -2) @ x); post ⊗ y writes y into every stream (post[..., None] * y[..., None, :]). "
-                     "Exact in float32 on every block of the tiny checkpoint; the stream mean is the additive part.",
+                     "Exact in float32 on every block of the tiny checkpoint. Averaged over the streams, the block is a sum (see the notes).",
     "streams": {
         "count_key": "hc_mult",
         "collapse": {"self_attn": "attention_comb", "mlp": "mlp_comb"},
@@ -91,8 +90,7 @@ STRIP = {
               "(num_nextn_predict_layers) are not built: layers holds num_hidden_layers blocks.",
     "readout": "hc_head weights each of the last layer_output's streams by its content and sums them; "
                "project_on_vocab applies it before norm.",
-    "norm": "norm reads hc_head's output, a learned, content-dependent weighted sum over the streams of the last "
-            "layer_output; project_on_vocab applies hc_head before it.",
+    "norm": "norm reads hc_head's output, one [batch, seq, hidden_size] tensor, not the streams.",
     "head": "lm_head has its own weight (tie_word_embeddings is false); logits is lm_head.output.",
 }
 
@@ -108,17 +106,18 @@ out = comb_fᵀ · h + post_f ⊗ mlp(post_attention_layernorm(xf))
 
 The residual is `hc_mult` (4) streams. Before each sublayer a hyper-connection (`attn_hc`,
 `ffn_hc`) reads all four and returns `(post, comb, collapsed)`: `collapsed` is the sum of the
-streams weighted by sigmoids of their content, and the sublayer's pre-norm reads it. The
-sublayer's `[batch, seq, hidden_size]` output goes into every stream, scaled per stream by `post`, and
-the streams themselves are mixed by `comb`, consumed transposed. Llama's norm names hold:
+streams, each weighted by a sigmoid computed from all four streams' content, and the sublayer's
+pre-norm reads it. The sublayer's `[batch, seq, hidden_size]` output goes into every stream,
+scaled per stream by `post`, and the streams themselves are mixed by `comb`, applied transposed:
+stream `k` of the result is `Σ_j comb[j, k] · x_j`. Llama's norm names hold:
 `input_layernorm` before the attention, `post_attention_layernorm` before the mixture.
 
 ## `layer_output` is four streams
 
 `layer_output` and `layers[i].input` are `[batch, seq, streams, hidden_size]` (the `Streams`
 layout); `attention_output` and `mlp_output` stay `[batch, seq, hidden_size]`. Block 0 reads the
-embedding copied into each stream; after it the streams differ. Rank-3 code runs here and answers
-per stream: `resid[:, -1]` is the last position's four streams, `[batch, streams, hidden_size]`.
+embedding copied into each stream; after it the streams differ. Code written for a rank-3 residual
+runs here without an error and gives one answer per stream: `resid[:, -1]` is the last position's four streams, `[batch, streams, hidden_size]`.
 Index one stream, or take the stream mean, which is the additive part of the block:
 
 ```python
@@ -154,9 +153,10 @@ h = comb_a.mT @ x + post_a[..., None] * attn[..., None, :]
 torch.testing.assert_close(comb_f.mT @ h + post_f[..., None] * mlp[..., None, :], out)
 ```
 
-`comb` is a Sinkhorn projection onto the doubly stochastic matrices: its columns sum to one, and
-its rows to one up to the projection's residual. The stream mean is therefore additive, each
-contribution weighted by its `post`'s mean, to about 2e-6 of the stream's largest value on the tiny checkpoint:
+`comb` is a Sinkhorn projection onto the doubly stochastic matrices: its columns sum to one, so
+each stream of the result is a weighted average of the streams. Its rows also sum to one, up to
+the projection's residual, so the stream mean is a sum in which each contribution is weighted by
+the mean of its `post`. On the tiny checkpoint it matches to about 2e-6 of the stream's largest value:
 
 ```python
 mean = x.mean(2) + post_a.mean(-1, keepdim=True) * attn + post_f.mean(-1, keepdim=True) * mlp
@@ -191,12 +191,12 @@ wide. The attention projects one `kv` per token and passes the same tensor as ke
 `attention_keys` and `attention_values` are one object: an in-place edit of either edits both,
 and an assignment gives one a tensor of its own. Queries are normed per head without a weight
 (`q_b_norm`) and the scores are scaled by `head_dim ** -0.5`. Rotary turns the last 64
-dimensions of each head (`partial_rotary_factor` 0.125) in adjacent pairs, so the values carry
-it too; the module turns the attention's output back before the grouped output projection
-(`o_a_proj` over `o_groups` 8, then `o_b_proj`), and `attention_head_outputs` is that rotated-back
-tensor. A learned per-head sink (`self_attn.sinks`) joins the softmax, so pattern rows sum to less
-than one. The family supports no attention implementation but eager, so the default load serves
-the interior values.
+dimensions of each head (`partial_rotary_factor` 0.125) in adjacent pairs. The values are the
+keys, so they carry the rotation too. The module rotates the attention's output back before the
+grouped output projection (`o_a_proj` over `o_groups` groups, 8 on Flash and 16 on Pro, then
+`o_b_proj`), and `attention_head_outputs` is that rotated-back tensor. A learned per-head sink
+(`self_attn.sinks`) joins the softmax, so pattern rows sum to less than one. transformers runs this
+family with eager attention only, so the default load already serves the interior values.
 
 ## Three attention blocks: a window, and compressed keys after it
 
@@ -206,26 +206,28 @@ tokens, of which a lightning indexer (`self_attn.compressor.indexer`) keeps each
 `index_topk` best (512 on Flash, 1024 on Pro); a `heavily_compressed_attention` block appends one
 entry per 128 tokens and keeps all of them. The entries follow the token keys, so the key axis of
 `attention_keys`, `attention_scores` and `attention_probabilities` is `seq + seq // rate` long
-there, and an entry is visible to a query once its window has closed. The indexer runs before the
+there, and a query sees an entry once it has reached the entry's last token. The indexer runs before the
 keys are joined, so its selection is read first. On a 13-token prompt the tiny checkpoint's block 2
 has 16 keys:
 
 ```python
 attn = model.layers[2].self_attn                 # compressed_sparse_attention
 with model.trace(prompt):
-    sel = attn.compressor.indexer.output.save()  # [1, 13, min(index_topk, 3)], -1 where none is closed
+    sel = attn.compressor.indexer.output.save()  # [1, 13, min(index_topk, 3)]; -1: window not closed
     k = attn.attention_keys.save()               # [1, 1, 13 + 13 // 4, 128]
 ```
 
 Flash has two `sliding_attention` blocks (0 and 1), then `compressed_sparse_attention` and
-`heavily_compressed_attention` alternating (21 and 20); Pro starts with two heavily compressed
-blocks and alternates after them (30 and 31). The selection has no standard name; within the
+`heavily_compressed_attention` alternating (21 compressed-sparse, 20 heavily compressed); Pro starts
+with two heavily compressed blocks and alternates after them (30 compressed-sparse, 31 heavily
+compressed). The selection has no standard name; within the
 compressed entries the pattern is zero outside it.
 
 ## The mixture: square-root-softplus scores, hashed on the first three blocks
 
 Every block's MLP is a mixture: 256 routed experts (384 on Pro), 6 per token, and one shared
-expert, with the gate and up projections clamped at `swiglu_limit` (10). `router_logits` are the
+expert. Every expert, the shared one included, clamps its gate projection to at most
+`swiglu_limit` (10) and its up projection to ±10. `router_logits` are the
 logits before the scoring, `sqrt(softplus(logits))` (`scoring_func` `sqrtsoftplus`). On a `moe`
 block the token takes the 6 best scores plus a selection bias (`router.e_score_correction_bias`),
 with no expert groups; on the `hash_moe` blocks (0 to 2) the experts are a fixed table of the

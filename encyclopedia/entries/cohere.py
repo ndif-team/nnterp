@@ -4,7 +4,7 @@ MODEL_TYPE = "cohere"
 TITLE = "Command R / Command R+"
 SUBTITLE = (
     "A parallel block whose one LayerNorm, without a bias, feeds both the attention and the MLP; rotary turns "
-    "adjacent pairs, Command R+ norms queries and keys per head, and the logits are the head's output times logit_scale."
+    "adjacent pairs of dimensions, Command R+ norms queries and keys per head, and the logits are the head's output times logit_scale."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -26,7 +26,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Cohere).
 PALETTE = {"hue": 174}
-VLLM = True
 QUIRKS = ["parallel-blocks", "layernorm", "interleaved-rotary", "qk-norm", "scaled-logits"]
 
 #: What the visualization draws: one input_layernorm whose output both sublayers read (drawn once per branch,
@@ -68,7 +67,8 @@ BLOCK = {
 STRIP = {
     "embed": "A plain lookup with no scale and no position embedding, so token_embeddings equals layers[0].input. "
              "Positions enter as a rotation of queries and keys inside each attention.",
-    "norm": "CohereLayerNorm: subtracts the mean and multiplies by a weight, with no bias, computed in float32.",
+    "norm": "CohereLayerNorm: subtracts the mean, divides by the standard deviation and multiplies by a weight, "
+            "with no bias, computed in float32.",
     "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings).",
     "logits": "logits = lm_head.output × logit_scale (0.0625 on Command R 08-2024). project_on_vocab multiplies too.",
 }
@@ -123,10 +123,11 @@ removes the all-ones direction.
 
 Cohere's rotary pairs dimension `2i` with `2i + 1` (its `rotate_half` takes the even and odd
 dimensions, and each frequency in the cos/sin table appears twice in a row), where Llama pairs `i` with
-`i + head_dim / 2`. It turns the whole head. `attention_queries` and `attention_keys` are read
-after the rotation; the rotation itself is computed in float32 and cast back. A comparison with a
+`i + head_dim / 2`. The rotation covers the whole head, in float32, cast back to the model's dtype.
+`attention_queries` and `attention_keys` are read after it. A comparison with a
 `rotate_half` family's queries, or rotary code written for one, needs the head reordered, evens then
-odds. The base (`rope_theta`) is 8,000,000 on Command R v01 and 4,000,000 on Command R 08-2024.
+odds. The base (`rope_theta`) is 8,000,000 on Command R v01, 4,000,000 on Command R 08-2024,
+75,000,000 on Command R+ and 8,000,000 on Command R+ 08-2024.
 
 ```python
 hd = model.head_dim
@@ -141,8 +142,8 @@ q_half = q[..., perm]          # in rotate_half's order
 ## Command R+ norms queries and keys per head
 
 Where `use_qk_norm` is true (Command R+ and Command R+ 08-2024), the attention has `q_norm` and
-`k_norm`, `CohereLayerNorm`s over each head's `head_dim` vector whose weight is
-`[num_heads, head_dim]`: every head has its own gain. They act on the projections before the rotary,
+`k_norm`, `CohereLayerNorm`s over each head's `head_dim` vector. Their weights are
+`[num_heads, head_dim]` and `[num_kv_heads, head_dim]`: every head has its own gain. They act on the projections before the rotary,
 on `[batch, seq, num_heads, head_dim]` tensors, and `attention_queries` and `attention_keys` are read
 after both. Command R and Command R 08-2024 have no `q_norm` or `k_norm`.
 
@@ -155,7 +156,7 @@ with model.trace(prompt):
 ## Attention
 
 Command R v01 has 64 query heads and 64 key/value heads (no grouping); Command R 08-2024 has 64
-and 8, and Command R+ 96 and 8, so an edit to a key or value head there reaches 8 or 12 query heads.
+and 8, and Command R+ 96 and 8, so on those two an edit to a key or value head reaches 8 or 12 query heads.
 `attention_keys` and `attention_values` are served before `repeat_kv`. The query scale is
 `head_dim ** -0.5` (128 on every size). The attention runs the shared attention interface, so the
 values read inside it (marked `⚠`) need `attn_implementation="eager"`.
@@ -163,7 +164,7 @@ values read inside it (marked `⚠`) need `attn_implementation="eager"`.
 ## The logits are the head's output times `logit_scale`
 
 `lm_head` is the embedding matrix (`tie_word_embeddings`), and the model multiplies its output by
-`config.logit_scale`: 0.0625 on Command R v01 and 08-2024, 0.8333 on Command R+ 08-2024. `logits`
+`config.logit_scale`: 0.0625 on Command R v01 and 08-2024, 0.8333 on both Command R+ releases. `logits`
 is the scaled tensor and `lm_head.output` the unscaled one. The family's `project_on_vocab` is the
 final norm, `lm_head` and the scale, so a logit lens on the last block equals `logits` exactly.
 A direct logit attribution through `lm_head` alone is off by that constant factor.

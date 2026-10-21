@@ -3,7 +3,7 @@
 MODEL_TYPE = "gemma3_text"
 TITLE = "Gemma 3"
 SUBTITLE = (
-    "Llama's tree with a sandwich block, so what reaches the residual stream is a post-norm's output; "
+    "Llama's module tree with a sandwich block, so what reaches the residual stream is a post-norm's output; "
     "queries and keys are normed per head before the rotary, and five sliding-window blocks precede each full one."
 )
 
@@ -78,7 +78,6 @@ with torch.no_grad(), model.trace(prompt, images=[image]):
 
 #: Set by hues.py (lineage: Gemma).
 PALETTE = {"hue": 159}
-VLLM = True
 QUIRKS = ["sandwich-norms", "qk-norm", "sliding-window", "scaled-embeddings", "gain-norm"]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
@@ -98,14 +97,14 @@ BLOCK = {
                 "attention_queries", "attention_keys", "attention_values",
                 "attention_scores", "attention_probabilities", "attention_head_outputs",
             ],
-            "detail": "query heads {num_heads}, key/value heads {num_kv_heads}, head_dim {head_dim}; "
+            "detail": "{num_heads} query heads over {num_kv_heads} key/value heads, head_dim {head_dim}; "
                       "q_norm and k_norm per head before the rotary; scores scaled by {query_pre_attn_scalar}^-1/2",
             "variants": {
                 "sliding_attention": "{sliding_window}-token window, local RoPE",
                 "full_attention": "full causal, global RoPE",
             },
             "post_norm_note": "On Gemma 3 this norm follows the attention. On Llama the same name is the norm before the MLP. "
-                              "layer_mid is the stream after its output is added, what the MLP's pre-norm reads.",
+                              "layer_mid is the stream after this norm's output is added, which the MLP's pre-norm reads.",
         },
         {
             "host": "mlp",
@@ -170,8 +169,8 @@ with model.trace(prompt):
     model.layers[5].mlp.output[:] *= 0.5       # nearly a no-op
 ```
 
-It is not exactly zero: bfloat16 rounds, and the norm's `eps` matters where the module's output
-is small (the first position on 1B, RMS 0.004 at block 5).
+The effect of halving `mlp.output` is not exactly zero: bfloat16 rounds, and the norm's `eps`
+matters where the module's output is small (the first position on 1B, RMS 0.004 at block 5).
 Ablations, steering and direct logit attribution of a sublayer go through `attention_output` and
 `mlp_output`.
 
@@ -252,8 +251,9 @@ text-generation task builds `Gemma3ForConditionalGeneration`, and nnterp picks t
 With an image, pass the processor's output to the trace (`model.trace(dict(inputs))`). The
 vision features replace the 256 image tokens' embeddings after `embed_tokens`, so at those
 positions `token_embeddings` is the placeholder token's embedding and `layers[0].input` is the
-image; at text positions the two are equal. With the processor's `token_type_ids`, image tokens
-attend to each other in both directions, in sliding and full blocks alike; text stays causal.
+image; at text positions the two are equal. With the processor's `token_type_ids`, the tokens of
+one image attend to each other in both directions, in sliding and full blocks alike. An image
+token still attends causally to earlier images and text, and text stays causal.
 
 ## Sparse autoencoders: Gemma Scope 2
 

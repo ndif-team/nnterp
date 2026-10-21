@@ -20,7 +20,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 307}
-VLLM = False
 QUIRKS = ["hybrid", "gated-query", "mixture-of-experts", "qk-norm", "partial-rotary", "gain-norm"]
 
 #: No checkpoint of this family is under 3B parameters, so no real-weight run backs the notes: shapes, identities and
@@ -169,21 +168,21 @@ with model.trace(prompt):
 ## The shared expert runs before the router
 
 The mixture computes the shared expert first, then the router and the experts, and multiplies
-by the gate last. So in one trace `moe.shared_experts.output` comes before `router_logits`, while
+by the gate last. In one trace `moe.shared_experts.output` comes before `router_logits`, while
 `shared_expert_output` comes after `routed_output`; `router_logits` before
 `shared_experts.output` raises `OutOfOrderError`.
 
 ## Loading
 
 `attn_implementation="eager"` is needed only for the six attention interior values on the
-attention blocks; there is no softcap or window. The DeltaNet values are read at the delta-rule
-kernel call and need transformers' pure-torch kernels, which is what runs when
-`flash-linear-attention` and `causal-conv1d` are not installed; with either installed, every
+attention blocks; there is no softcap or window. The DeltaNet values are read at the call to
+the delta-rule kernel and need no eager load. They need transformers' pure-torch delta rule,
+which is what runs when `flash-linear-attention` is not installed. With it installed, every
 `linear_attn` value but `attention_output` is unavailable until
 `nnterp.route_kernels(model.family, "torch")`. The same call is what makes `state` and `states`
-exist, through the token-by-token kernel; `states` holds one float32 state per token,
-32 × 128 × 128, 2 MiB per token per block. `expert_outputs` needs `experts_implementation`
-`"grouped_mm"` (the default) or `"batched_mm"`.
+exist: it routes a prompt through the token-by-token kernel. `states` holds one float32 state
+per token, 32 × 128 × 128, 2 MiB per token per block. `expert_outputs` needs
+`experts_implementation` `"grouped_mm"` (the default) or `"batched_mm"`.
 
 ## The attention block gates its heads' output
 
@@ -227,7 +226,7 @@ out = out_proj(norm(y, gate=silu(z)))                        # gain: weight
 `in_proj_qkvz` is laid out by key head: for each of the 16 key heads, its query (128), its key
 (128), then the values and output gates of the two value heads it serves (2 × 128 each), 768
 columns per key head. `in_proj_ba` is laid out the same way, the two value heads' `b` then their
-`a` per key head. So no slice of the raw outputs is the queries or the betas; the module's own
+`a` per key head. No slice of the raw outputs is therefore the queries or the betas; the module's own
 `fix_query_key_value_ordering` regroups them:
 
 ```python

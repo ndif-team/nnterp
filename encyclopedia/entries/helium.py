@@ -17,7 +17,6 @@ CHECKPOINTS = ["kyutai/helium-1-preview-2b"]
 
 #: Set by hues.py (lineage: Llama and its kin).
 PALETTE = {"hue": 250}
-VLLM = False
 QUIRKS = ["interleaved-rotary"]
 
 #: Real values in the notes were measured on helium-1-preview-2b on a GPU, in bfloat16 unless the note says
@@ -88,8 +87,9 @@ torch.testing.assert_close(x + attn + mlp, out)
 ## Rotary turns adjacent pairs
 
 Helium's rotary pairs dimension `2i` with `2i + 1`: its `rotate_half` takes the even and odd
-dimensions, and each frequency appears twice in a row in the cos/sin table. Llama pairs `i` with
-`i + head_dim / 2`. It turns the whole head, with `rope_theta` 100,000. `attention_queries` and
+dimensions, and `apply_rotary_pos_emb` repeats each frequency twice in a row (`repeat_interleave`)
+before rotating. Llama pairs `i` with `i + head_dim / 2`. The rotary turns the whole head, with
+`rope_theta` 100,000. `attention_queries` and
 `attention_keys` are read after the rotation; on the pinned checkpoint they equal the interleaved
 rotation of `q_proj.output` and `k_proj.output` exactly, and differ from the `rotate_half` one.
 Code written for a `rotate_half` family's queries needs the head reordered, evens then odds:

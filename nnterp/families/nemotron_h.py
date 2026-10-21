@@ -1,4 +1,4 @@
-"""Nemotron-H (``NemotronHForCausalLM``; Nemotron-H, Nemotron-Nano-2, Nemotron-3 Nano and Super).
+"""Nemotron-H (``NemotronHForCausalLM``; Nemotron-H, Nemotron-Nano-2, Nemotron-3 Nano, Super, Ultra and Lightning).
 
 Every block holds one norm and one sublayer, the ``mixer``, whose class the
 block's entry in ``config.layers_block_type`` picks::

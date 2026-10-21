@@ -164,9 +164,9 @@ def write(hues: dict[str, int]) -> None:
             text = COMMENT_ABOVE.sub("", text, count=1)
             text = PALETTE_LINE.sub(lambda m: f'{line}PALETTE = {{"hue": {hue}{m["rest"]}}}', text, count=1)
         else:
-            # an entry that hashed: PALETTE goes before VLLM, where the others have it
-            assert re.search(r"^VLLM = ", text, re.M), f"{name}: no VLLM line to put PALETTE before"
-            text = re.sub(r"^VLLM = ", f'{line}PALETTE = {{"hue": {hue}}}\nVLLM = ', text, count=1, flags=re.M)
+            # an entry that hashed: PALETTE goes before QUIRKS, where the others have it
+            assert re.search(r"^QUIRKS\b", text, re.M), f"{name}: no QUIRKS line to put PALETTE before"
+            text = re.sub(r"^QUIRKS\b", f'{line}PALETTE = {{"hue": {hue}}}\nQUIRKS', text, count=1, flags=re.M)
         path.write_text(text)
     readme = HERE / "README.md"
     text, n = TABLE.subn(lambda m: m[1] + table(hues) + "\n" + m[2], readme.read_text())

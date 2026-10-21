@@ -23,7 +23,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: OLMo).
 PALETTE = {"hue": 101}
-VLLM = True
 QUIRKS = ["post-norms", "qk-norm", "sliding-window"]
 
 #: Every checkpoint is 7B or 32B, so no real weights were run: shapes, identities, masks and read places are
@@ -130,12 +129,13 @@ kinds = [model.layers[i].self_attn._module.sliding_window for i in range(model.n
 ## The rotary differs by block kind
 
 The config keeps one rotary per kind in `rope_parameters`. Sliding blocks use the plain rotary,
-`rope_theta` 500000. Full blocks use YaRN, `factor` 8 over `original_max_position_embeddings` 8192,
-with `attention_factor` 1.2079 multiplying the cosines and sines. `attention_queries` and
-`attention_keys` are read after the rotary, so on a full block each query and key head is 1.2079
-times the norm of its slice of `q_norm` or `k_norm`'s output, and the scores are about 1.459 times
-what the same heads would give without the factor. Both kinds apply the same `head_dim ** -0.5`
-query scale. The same holds on 7B and 32B and on every post-trained checkpoint.
+`rope_theta` 500000. Full blocks use YaRN, `factor` 8 over `original_max_position_embeddings` 8192:
+the lowest rotary frequencies are divided by 8, the highest are kept, and `attention_factor` 1.2079
+multiplies the cosines and sines. `attention_queries` and `attention_keys` are read after the
+rotary, so on a full block each query and key head has 1.2079 times the norm it had leaving `q_norm`
+or `k_norm`, and the scores are 1.459 (1.2079²) times what the rotation without the factor would
+give. Both kinds apply the same `head_dim ** -0.5` query scale. Every checkpoint's config sets these
+rotary parameters.
 
 ## Queries and keys are normed across all heads
 
@@ -167,10 +167,11 @@ checkpoint. The base tokenizer prepends nothing, so `model.input_ids` is the pro
 
 ## Intermediate checkpoints
 
-The base repositories keep their training checkpoints as Hub branches: on Olmo-3-1025-7B, 1,421
-`stage1-step…` branches from `stage1-step0` to `stage1-step1413814`, 52 `stage2-step…` and 13
-`stage3-step…`; on Olmo-3-1125-32B, 655 `stage1-step…`, two `stage2-ingredient…` runs and
-`stage3-step…`. Each loads with `revision=`:
+The base repositories keep their training checkpoints as Hub branches named `stage1-step<N>`,
+`stage2-step<N>` and `stage3-step<N>`. Olmo-3-1025-7B has 1,421 stage-1 branches, from `stage1-step0`
+to `stage1-step1413814`, 52 stage-2 and 13 stage-3. Olmo-3-1125-32B has 655 stage-1 branches, two
+stage-2 runs (`stage2-ingredient1-step<N>`, `stage2-ingredient2-step<N>`) and their merge, and the
+stage-3 branches. Each loads with `revision=`:
 
 ```python
 model = StandardizedTransformer("allenai/Olmo-3-1025-7B", revision="stage1-step1000")

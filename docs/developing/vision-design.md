@@ -282,6 +282,7 @@ nnterp/
   families/
     gemma3_text.py   SigLIP's paths in RENAME; its module types and Gemma3Model: ImageScatter in ENVOYS
     gemma.py         the same for PaliGemma
+    gemma2.py        the same for PaliGemma 2
     qwen2.py         the same for llava-interleave and LLaVA-OneVision
     cohere2.py       the same for Aya Vision and Cohere2-Vision
     llama.py         CLIP (Llava, VipLlava, LLaVA-NeXT), SigLIP (DeepSeek-VL), Idefics 3's and SmolVLM's ViT
@@ -306,7 +307,7 @@ differs (a sandwich block, a scaled residual) gets a small subclass in its famil
 named as the base (`class VisionAttention(VisionAttention)`, as the text classes are), and
 the family keys that one; a subclass that several families need (`QwenVision`,
 `QwenVisionAttention`, `PixtralVision`) lives in `components/vision.py`, beside the base.
-A tower hosted by several families (SigLIP under Gemma 3, PaliGemma, LLaVA-OneVision, Aya
+A tower hosted by several families (SigLIP under Gemma 3, PaliGemma, PaliGemma 2, LLaVA-OneVision, Aya
 Vision) repeats its five or so `RENAME` lines and four `ENVOYS` entries in each family file.
 
 What `gemma3_text.py` carries for the tower:
@@ -344,7 +345,7 @@ builds, run on the tiny checkpoints:
 |---|---|---|
 | Gemma 3, Gemma 4, Gemma 4 unified | the wrapper (transformers maps the composite config to it under causal LM too), tokenizer only | the wrapper, with its processor |
 | Llama 4, Qwen3.5, Qwen3.5-MoE, Mllama | the text-only class (`Llama4ForCausalLM`, `Qwen3_5ForCausalLM`, `Qwen3_5MoeForCausalLM`, `MllamaForCausalLM`), weights read out of the wrapper checkpoint | the wrapper, with its processor |
-| Llava, Mistral 3, Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Kimi K2.5, PaliGemma, Idefics 3, DeepSeek-VL | refused on the lazy (meta) load: no causal-LM class for the config; `dispatch=True` falls back through the pipeline and loads the wrapper with a warning, tokenizer only | the wrapper, with its processor |
+| Llava, Mistral 3, Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Kimi K2.5, PaliGemma, PaliGemma 2, Idefics 3, DeepSeek-VL | refused on the lazy (meta) load: no causal-LM class for the config; `dispatch=True` falls back through the pipeline and loads the wrapper with a warning, tokenizer only | the wrapper, with its processor |
 
 So the text-only load is `task="text-generation"`, and nnterp has no option for it. With a
 processor loaded, `model.tokenizer` is the processor's tokenizer, so every text helper keeps
@@ -355,7 +356,7 @@ What a trace takes on a wrapper:
 - `model.trace(prompt, images=[image])`, with the image placeholder in the prompt (the
   processor's chat template puts it there).
 - `model.trace(encoding)` with an encoding built with `model.processor`.
-- `model.trace("text")`, text only: works on every wrapper tested except PaliGemma, whose
+- `model.trace("text")`, text only: works on every wrapper tested except PaliGemma and PaliGemma 2, whose
   processor demands an image (pass the tokenizer's encoding there).
 
 An invoke carrying `pixel_values` cannot share a trace with another invoke (nnsight refuses
@@ -435,8 +436,8 @@ Every `FamilySuite` test also runs on the wrappers loaded under `image-text-to-t
 as loaded with the processor. `WrapperSuite` checks the text names, `support()` and the text
 identity on a wrapper with no tiny checkpoint of its own, built from the family's tiny text
 config with random weights (Mistral 3 around Mistral, Aya Vision, EXAONE 4.5, LightOnOCR),
-and on PaliGemma; a wrapper built without a processor lists no `vision` rows, PaliGemma's
-lists its tower.
+and on PaliGemma and PaliGemma 2; a wrapper built without a processor lists no `vision` rows, PaliGemma's
+and PaliGemma 2's list their tower.
 
 The pinned checkpoints, all loadable offline once cached:
 
@@ -444,6 +445,7 @@ The pinned checkpoints, all loadable offline once cached:
 |---|---|---|
 | `gemma3_text` | `yujiepan/gemma-3-tiny-random` | `trl-internal-testing/tiny-Gemma3ForConditionalGeneration` (the wrapper test's) has a projector that outputs exact zeros, so no edit upstream of it shows |
 | `gemma` | `hf-tiny-v2/tiny-random-PaliGemmaForConditionalGeneration` | `trl-internal-testing/tiny-PaliGemmaForConditionalGeneration` (the text test's) projects to 2048 where its text model is 16 wide, so its image path fails in transformers' own forward |
+| `gemma2` | a tiny PaliGemma 2 the test builds once into the temp dir: `trl-internal-testing/tiny-Gemma2ForCausalLM`'s text config with PaliGemma's vocabulary, `hf-tiny-v2/tiny-random-PaliGemmaForConditionalGeneration`'s SigLIP config and processor (`image_seq_length` set to its 16 tokens), random weights | no tiny PaliGemma 2 is published; the 3B's own names are checked on meta |
 | `llama` | `trl-internal-testing/tiny-LlavaForConditionalGeneration` | real check: `llava-hf/llava-1.5-7b-hf` |
 | `llama` | `hf-tiny-v2/tiny-random-VipLlavaForConditionalGeneration`, `hf-tiny-v2/tiny-random-LlavaNextForConditionalGeneration`, `hf-tiny-v2/tiny-random-DeepseekVLForConditionalGeneration` | processors set to the model (`fix_processor`) |
 | `llama` | `trl-internal-testing/tiny-Idefics3ForConditionalGeneration`, `trl-internal-testing/tiny-SmolVLMForConditionalGeneration` | SmolVLM's processor needs `num2words` |
@@ -466,8 +468,8 @@ The pinned checkpoints, all loadable offline once cached:
 
 The wrappers' text stacks carry their wrapper spellings (`model.language_model.*`, Idefics 3's
 `model.text_model.*`) on `qwen3_5_text`, `qwen3_5_moe_text`, `llama`, `qwen2`, `mistral`,
-`ministral3`, `gemma`, `cohere2`, `exaone4`, `qwen3`, `hyperclovax`, `nemotron_h`. Every tower with a tiny checkpoint is
-named and served: SigLIP on `gemma3_text`, `gemma` (PaliGemma), `qwen2` (llava-interleave,
+`ministral3`, `gemma`, `gemma2`, `cohere2`, `exaone4`, `qwen3`, `hyperclovax`, `nemotron_h`. Every tower with a tiny checkpoint is
+named and served: SigLIP on `gemma3_text`, `gemma` (PaliGemma), `gemma2` (PaliGemma 2), `qwen2` (llava-interleave,
 LLaVA-OneVision), `cohere2` (Aya Vision, Cohere2-Vision) and `llama` (DeepSeek-VL, Idefics 3's
 and SmolVLM's ViT); CLIP on `llama` (Llava 1.5, VipLlava, LLaVA-NeXT) and `mistral` (LLaVA-NeXT,
 BakLLaVA); Pixtral on `mistral` and `ministral3`; the Qwen ViT on `qwen2_vl_text`,

@@ -18,7 +18,7 @@ What differs from Llama, inside the attention and the feed-forward:
   embedding, no qk-norm, full causal attention, and *attention temperature
   tuning* (``attn_temperature_tuning``) scales its queries by a factor that
   grows with the position. The other blocks apply the rotary embedding, then
-  an L2 qk-norm (``use_qk_norm``), and attend within chunks of
+  a weightless RMS qk-norm (``Llama4TextL2Norm``, ``use_qk_norm``), and attend within chunks of
   ``attention_chunk_size`` tokens (``config.layer_types``). The queries and
   keys served are what the interface receives, after all of that; a chunked
   block's pattern is zero across chunk boundaries.

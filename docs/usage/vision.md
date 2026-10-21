@@ -3,7 +3,7 @@ title: Vision-language models
 one_liner: "Load an image-text-to-text checkpoint with `task=\"image-text-to-text\"`, pass an image, and read the tower (`model.vision`, `vision.layers[i]`), the `projector`, and the tower's `vision.image_token_mask` and `vision.image_features`, where `layers[0].input[vision.image_token_mask] == vision.image_features`."
 tags: [usage, vision, multimodal, image-text-to-text, vision tower, projector, image_features, image_token_mask, image positions, generate, Patches, siglip, clip, pixtral, qwen-vl, llama4, gemma3, gemma4, encoder-free, packed tower, deepstack, m-rope, radio, hyperclovax, nemotron-h-omni, llava, llava-next, llava-onevision, paligemma, idefics3, smolvlm, aya-vision, mistral3]
 related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/root-values.md, docs/usage/availability.md, docs/usage/layouts.md, docs/usage/generation.md, docs/patterns/image-pathway.md, docs/developing/vision-design.md, docs/reference/families.md]
-sources: [nnterp/components/vision.py, nnterp/standardized.py, nnterp/families/gemma3_text.py, nnterp/families/gemma.py, nnterp/families/llama.py, nnterp/families/qwen2.py, nnterp/families/cohere2.py, nnterp/families/mistral.py, nnterp/families/ministral3.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/gemma4_unified_text.py, nnterp/families/qwen2_vl_text.py, nnterp/families/qwen2_5_vl_text.py, nnterp/families/qwen3_vl_text.py, nnterp/families/qwen3_vl_moe_text.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_5_moe_text.py, nnterp/families/hyperclovax.py, nnterp/families/nemotron_h.py, tests/families/vision_suite.py, tests/families/qwen_vision_suite.py]
+sources: [nnterp/components/vision.py, nnterp/standardized.py, nnterp/families/gemma3_text.py, nnterp/families/gemma.py, nnterp/families/gemma2.py, nnterp/families/llama.py, nnterp/families/qwen2.py, nnterp/families/cohere2.py, nnterp/families/mistral.py, nnterp/families/ministral3.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/gemma4_unified_text.py, nnterp/families/qwen2_vl_text.py, nnterp/families/qwen2_5_vl_text.py, nnterp/families/qwen3_vl_text.py, nnterp/families/qwen3_vl_moe_text.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_5_moe_text.py, nnterp/families/hyperclovax.py, nnterp/families/nemotron_h.py, tests/families/vision_suite.py, tests/families/qwen_vision_suite.py]
 ---
 
 # Vision-language models
@@ -71,7 +71,7 @@ native names they alias:
 
 | tower | `vision` | `patch_embed` | `layers[i]` | `self_attn`, `mlp` | `input_layernorm`, `post_attention_layernorm` | `norm` | `projector` |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| SigLIP (Gemma 3, PaliGemma, llava-interleave, LLaVA-OneVision, Aya Vision, Cohere2-Vision, DeepSeek-VL, Idefics 3, SmolVLM) | `model.model.vision_tower` (DeepSeek-VL, Idefics 3, SmolVLM: `model.model.vision_model`) | `embeddings.patch_embedding` | `encoder.layers[i]` | native | `layer_norm1`, `layer_norm2` | `post_layernorm` | `model.model.multi_modal_projector` (Gemma 3's pools 4096 patches to 256 tokens; Aya Vision's and Cohere2-Vision's pixel-shuffle); DeepSeek-VL: `model.model.aligner`; Idefics 3, SmolVLM: `model.model.connector` (pixel shuffle) |
+| SigLIP (Gemma 3, PaliGemma, PaliGemma 2, llava-interleave, LLaVA-OneVision, Aya Vision, Cohere2-Vision, DeepSeek-VL, Idefics 3, SmolVLM) | `model.model.vision_tower` (DeepSeek-VL, Idefics 3, SmolVLM: `model.model.vision_model`) | `embeddings.patch_embedding` | `encoder.layers[i]` | native | `layer_norm1`, `layer_norm2` | `post_layernorm` | `model.model.multi_modal_projector` (Gemma 3's pools 4096 patches to 256 tokens; Aya Vision's and Cohere2-Vision's pixel-shuffle); DeepSeek-VL: `model.model.aligner`; Idefics 3, SmolVLM: `model.model.connector` (pixel shuffle) |
 | CLIP (Llava 1.5, VipLlava, LLaVA-NeXT, BakLLaVA) | `model.model.vision_tower` | `embeddings.patch_embedding` | `encoder.layers[i]` | native | `layer_norm1`, `layer_norm2` | none: CLIP's `post_layernorm` norms only the pooled CLS token | `model.model.multi_modal_projector` |
 | Pixtral (Mistral 3, Pixtral-12B), a `PixtralVision` | `model.model.vision_tower` | `patch_conv` | `transformer.layers[i]` | `attention`, `feed_forward` | `attention_norm`, `ffn_norm` | none | `model.model.multi_modal_projector` (merges each 2x2 block of patches on Mistral 3) |
 | the Qwen ViT (Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3-VL-MoE, Qwen3.5, Qwen3.5-MoE), a `QwenVision` | `model.model.visual` | `patch_embed` | `blocks[i]` | `attn` (a `QwenVisionAttention`), `mlp` | `norm1`, `norm2` | none: the merger norms its own input | `visual.merger`, inside the tower (folds each 2x2 block of patches into one token) |
@@ -236,7 +236,7 @@ with model.generate(prompt, images=[image], max_new_tokens=3, do_sample=False) a
   processor's chat template puts it there).
 - `model.trace(encoding)` with an encoding built by `model.processor`.
 - `model.trace("text")`: a text-only trace of the wrapper works (the mask is all false,
-  `vision.image_features` is never reached), except on PaliGemma, whose processor demands an
+  `vision.image_features` is never reached), except on PaliGemma and PaliGemma 2, whose processor demands an
   image; pass `dict(model.tokenizer(text, return_tensors="pt"))` there.
 - One invoke per trace while it carries an image; several images go in one invoke, as lists.
   `trace(prompt, images=[...])` refuses a second image-carrying invoke. Chat-message
@@ -360,7 +360,8 @@ names bind but `image_features` is `Unavailable` and says so.
 | family | wrapper (`model_type`) | tower |
 | --- | --- | --- |
 | `gemma3_text` | Gemma 3 (`gemma3`) | SigLIP |
-| `gemma` | PaliGemma (`paligemma`; PaliGemma 2's `text_config` is `gemma2`, which binds no tower, so a PaliGemma 2 load has no `model.vision`) | SigLIP |
+| `gemma` | PaliGemma (`paligemma`) | SigLIP |
+| `gemma2` | PaliGemma 2 (`paligemma`, its `text_config` a `gemma2`) | SigLIP |
 | `qwen2` | llava-interleave (`llava`), LLaVA-OneVision (`llava_onevision`) | SigLIP |
 | `cohere2` | Aya Vision 8B (`aya_vision`), Cohere2-Vision (`cohere2_vision`) | SigLIP |
 | `llama` | Llava 1.5 (`llava`), VipLlava (`vipllava`), LLaVA-NeXT (`llava_next`) | CLIP |

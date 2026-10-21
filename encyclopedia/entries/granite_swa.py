@@ -4,8 +4,8 @@ MODEL_TYPE = "granite_swa"
 TITLE = "Granite Swash"
 SUBTITLE = (
     "Granite's block and multipliers with sliding-window attention on most blocks and a learned sink per head "
-    "that scales each head's output after the softmax, so the pattern's rows sum to one and the head outputs do not "
-    "carry all of it."
+    "that scales each head's output after the softmax: the pattern's rows sum to one, and each head writes only a "
+    "share of what its pattern mixes."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -16,7 +16,6 @@ CHECKPOINTS = ["ibm-granite/granite-swash-2b"]
 
 #: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 208}
-VLLM = False
 QUIRKS = ["scaled-residual-adds", "sliding-window", "sink-scaled-heads", "embedding-multiplier", "scaled-logits"]
 
 #: Numbers in the notes come from granite-swash-2b's weights in bfloat16 on an RTX A6000; the snippets also ran

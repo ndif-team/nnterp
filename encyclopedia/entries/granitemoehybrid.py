@@ -3,9 +3,9 @@
 MODEL_TYPE = "granitemoehybrid"
 TITLE = "Granite 4.0"
 SUBTITLE = (
-    "Granite's scaled block with a Mamba-2 mixer on most blocks and attention without rotary on a few (attention on "
-    "every block of the non-H models), and a feed-forward that is a shared MLP plus, on the mixture checkpoints, "
-    "routed experts, added as one scaled sum."
+    "Granite's scaled block with a Mamba-2 mixer on most blocks and attention without rotary on a few (rotary "
+    "attention on every block of the non-H models), and a feed-forward of a shared MLP plus, on the mixture "
+    "checkpoints, routed experts, added as one scaled sum."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -28,7 +28,6 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 201}
-VLLM = False
 QUIRKS = ["scaled-residual-adds", "hybrid", "mamba2", "nope-blocks", "mixture-of-experts", "embedding-multiplier",
           "scaled-logits"]
 
@@ -119,13 +118,14 @@ out    = h + (block_sparse_moe(n) + shared_mlp(n)) * residual_multiplier
 logits = lm_head(norm(out)) / logits_scaling
 ```
 
-Every block has the same class and holds one mixer, `mamba` (`linear_attn`) or `self_attn`, by
-`config.layer_types`. The H models (H-350M, H-1B, H-Micro, H-Tiny, H-Small) have 40 blocks with
+Every block has the same class and holds one mixer, chosen by `config.layer_types`: the Mamba-2
+mixer `mamba` (served as `linear_attn`) or `self_attn`. The H models (H-350M, H-1B, H-Micro, H-Tiny, H-Small) have 40 blocks with
 attention on blocks 5, 15, 25 and 35 (H-350M: 32 blocks, attention on 10, 13, 17 and 27) and a
 Mamba-2 mixer on the rest; the non-H 350M, 1B and Micro have attention on every block. The
-feed-forward is `shared_mlp`, which is `mlp`, plus `block_sparse_moe`, the routed experts, where
-`num_local_experts` is above 0: H-Tiny (64 experts, top 6), H-Small (72, top 10) and the Tiny
-previews (62, top 6). On the dense checkpoints `shared_mlp(n)` alone is the feed-forward. Pick
+feed-forward is the shared MLP, `shared_mlp` (served as `mlp`). Where `num_local_experts` is above
+0, the routed experts in `block_sparse_moe` run beside it: H-Tiny (64 experts, top 6), H-Small (72,
+top 10) and the Tiny previews (62, top 6). On the dense checkpoints `shared_mlp(n)` alone is the
+feed-forward. Pick
 blocks outside the trace:
 
 ```python

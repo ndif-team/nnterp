@@ -4,8 +4,8 @@ on every block chosen by sigmoid scores plus a selection bias."""
 MODEL_TYPE = "minimax_m2"
 TITLE = "MiniMax-M2 / MiniMax-M2.1 / MiniMax-M2.5 / MiniMax-M2.7"
 SUBTITLE = (
-    "Llama's pre-norm block with queries and keys RMS-normed across all heads, and a mixture of 256 experts on "
-    "every block whose 8 per token are chosen by sigmoid scores plus a bias and weighted by the sigmoids alone."
+    "Llama's pre-norm block with one RMSNorm over all query heads and one over all key heads, and a mixture of "
+    "experts on every block, chosen by sigmoid scores plus a bias and weighted by the sigmoids without it."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -16,10 +16,9 @@ CHECKPOINTS = ["MiniMaxAI/MiniMax-M2", "MiniMaxAI/MiniMax-M2.1", "MiniMaxAI/Mini
 
 #: Set by hues.py (lineage: MiniMax / MiMo).
 PALETTE = {"hue": 346}
-VLLM = False
 QUIRKS = [
     "qk-norm", "mixture-of-experts",
-    # rotary_dim 64 of 128, read as partial_rotary_factor 0.5 from transformers 5.18 on; earlier releases rotate the whole head
+    # the Hub configs' rotary_dim 64 of head_dim 128, which MiniMaxM2Config reads as partial_rotary_factor 0.5
     {"slug": "partial-rotary", "when": lambda config: (config.rope_parameters or {}).get("partial_rotary_factor", 1.0) < 1.0},
 ]
 
@@ -103,20 +102,18 @@ with model.trace(prompt):
 reaches 6 query heads. `head_dim` is the config's 128, so `num_heads * head_dim` (6144) is wider
 than the 3072-wide stream.
 
-## Rotary turns half of each head
+## Rotary rotates half of each head
 
-The Hub configs set `rotary_dim: 64` of each head's 128 dimensions. Since transformers 5.18
-`MiniMaxM2Config` reads it as `rope_parameters["partial_rotary_factor"]` 0.5 (#48486): the first 64
-dimensions of every query and key are rotated, as two halves of 32 (`rotate_half`), and dimensions 64
-to 127 of `attention_queries` and `attention_keys` are the normed projections unrotated, carrying no
-position. Up to 5.17 transformers ignored `rotary_dim` and rotated all 128 dimensions, which is not
-what the checkpoints were trained with.
+The Hub configs set `rotary_dim: 64` of each head's 128 dimensions, which `MiniMaxM2Config` reads as
+`rope_parameters["partial_rotary_factor"]` 0.5. The first 64 dimensions of every query and key are
+rotated, as two halves of 32 (`rotate_half`). Dimensions 64 to 127 of `attention_queries` and
+`attention_keys` are the normed projections unrotated, and carry no position.
 
 ## Load with eager for the attention interior
 
 The attention interior needs `attn_implementation="eager"`; the default load runs `sdpa`. There is no
-softcap, sink or window, and on the pinned tiny checkpoint the two loads' logits differ by 2e-7 in
-float32. The checkpoints' configs carry an FP8 `quantization_config` (128 × 128 weight blocks) that
+softcap, sink or window, so the two loads compute the same attention up to rounding (2e-7 in the
+logits on the pinned tiny checkpoint, in float32). The checkpoints' configs carry an FP8 `quantization_config` (128 × 128 weight blocks) that
 leaves the router, `e_score_correction_bias` and `lm_head` unquantized.
 
 ## The router: sigmoid scores, a selection bias, renormalized weights

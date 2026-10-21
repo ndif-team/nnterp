@@ -4,7 +4,7 @@ MODEL_TYPE = "olmo"
 TITLE = "OLMo / OLMo 0424 / OLMo 0724"
 SUBTITLE = (
     "Llama's pre-norm block with LayerNorm in place of RMSNorm, and every norm without weight or bias, so a "
-    "sublayer reads the stream standardized to mean 0 and variance 1; the 0424 and 0724 base checkpoints "
+    "sublayer reads the stream standardized to mean 0 and variance 1, and the 0424 and 0724 base checkpoints "
     "clamp queries, keys and values to ±8 inside the attention."
 )
 
@@ -22,8 +22,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: OLMo).
 PALETTE = {"hue": 95}
-VLLM = False
-QUIRKS = ["layernorm", "weightless-norms"]
+QUIRKS = ["layernorm"]
 
 #: Shapes, identities and read places are from the pinned tiny checkpoint (float32, CPU); the clip_qkv
 #: trap also from the tiny loaded with clip_qkv=0.05. Real numbers are from allenai/OLMo-1B-0724-hf in
@@ -96,9 +95,9 @@ with model.trace(prompt):
 torch.testing.assert_close(attn_in, F.layer_norm(x, x.shape[-1:], eps=1e-5))   # float32
 ```
 
-A shift along the all-ones direction never reaches a sublayer or the logits. On 1B-0724 in float32,
-adding 10 to every coordinate of `layers[8].input`, 27 times the stream's RMS there, moves the logits
-by at most 1.3e-4. The final norm has no gain either, so `project_on_vocab(h)` is
+Each norm subtracts the mean over the hidden axis, so a shift along the all-ones direction never
+reaches a sublayer or the logits. On 1B-0724 in float32, adding 10 to every coordinate of
+`layers[8].input`, more than 20 times the stream's RMS there, moves the logits by about 1e-4. The final norm has no gain either, so `project_on_vocab(h)` is
 `lm_head(layer_norm(h))`, and a direction's logit effect is read off `lm_head` alone.
 
 ## The contributions are the modules' outputs
@@ -125,10 +124,10 @@ Scaling a module's output scales its contribution. The inputs are the norms' out
 checkpoints, the 0424 and 0724 SFT and Instruct ones included. Where it is set, the attention clamps
 the outputs of `q_proj`, `k_proj` and `v_proj` to `[-8, 8]`, before the heads are split and before
 the rotary embedding. `attention_queries`, `attention_keys` and `attention_values` are read after the
-clamp; the rotary turns pairs of query and key dimensions, so those two can reach `8·√2`.
+clamp. The rotary mixes pairs of query and key dimensions, so queries and keys can reach `8·√2`.
 
-On 1B-0724 every block clamps some query or key entries: at most 0.11% of query entries and 0.32% of
-key entries per block, with raw values up to 13.6. The values reach the bound on block 1 only.
+On 1B-0724 every block clamps some query or key entries: up to about 0.1% of query entries and 0.3%
+of key entries per block, with raw values up to 13.6. Value entries reach the bound only on block 1.
 
 The clamp is in place on the projection's output tensor. A saved `q_proj.output` therefore holds the
 clamped values once the trace ends, and an edit written to `q_proj.output` is clamped after it:
@@ -163,7 +162,7 @@ tokens alone, and `<|endoftext|>` (id 50279) ends a text. The Instruct chat temp
 
 The base repositories keep their pretraining checkpoints as Hub branches: 351 on OLMo-1B-hf, from
 `step1000-tokens4B` to `step738020-tokens3094B`; 1,446 on OLMo-1B-0724-hf, from `step0-tokens0B` to
-`step1454000-tokens3048B`; about 820 each on OLMo-7B-0424-hf and OLMo-7B-0724-hf. Each loads with
+`step1454000-tokens3048B`; 832 on OLMo-7B-0424-hf and 819 on OLMo-7B-0724-hf. Each loads with
 `revision=`:
 
 ```python

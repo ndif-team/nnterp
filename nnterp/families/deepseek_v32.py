@@ -5,7 +5,7 @@ self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
 added in the block, a bare tensor returned. Multi-head latent attention as in V3, with
 DeepSeek Sparse Attention on top: each attention module carries an ``indexer`` (a
 lightning indexer with its own small projections) that scores every key for every
-query and keeps the ``index_topk`` best. Under eager the selection is folded into the
+query and keeps the ``index_topk`` best. Under eager and sdpa the selection is folded into the
 attention mask (every unselected key set to the dtype's minimum) before the shared
 ``attention_interface`` call, so the interior is the base's, read on the interface:
 

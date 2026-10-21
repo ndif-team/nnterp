@@ -3,8 +3,8 @@
 MODEL_TYPE = "glm4_moe_lite"
 TITLE = "GLM-4.7-Flash"
 SUBTITLE = (
-    "Latent attention, whose keys and values are expanded for every head from one latent per token, "
-    "and a mixture of 64 experts and a shared one, chosen by a sigmoid plus a selection bias, after a dense first block."
+    "Latent attention, whose keys and values are expanded for every head from one latent per token, and after "
+    "a dense first block a mixture: 4 of 64 experts chosen by a sigmoid plus a selection bias, beside one shared expert."
 )
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
@@ -16,7 +16,6 @@ CHECKPOINTS = ["zai-org/GLM-4.7-Flash"]
 
 #: Set by hues.py (lineage: GLM).
 PALETTE = {"hue": 125}
-VLLM = False
 QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
 #: Shapes, identities, read orders, the rotary order and the routing were run on the pinned tiny checkpoint
@@ -98,9 +97,10 @@ the last block; transformers does not build it, so `model.layers` has 47 blocks.
 ## Latent attention: every head's key comes from one latent
 
 `attention_queries` and `attention_keys` are `qk_head_dim` wide (`qk_nope_head_dim +
-qk_rope_head_dim`, 192 + 64 = 256), `attention_values` and `attention_head_outputs` `head_dim`
-(`v_head_dim`, also 256 on GLM-4.7-Flash). The config's `head_dim` is an alias of
-`qk_rope_head_dim`, which no served value has. Queries go through a compressed rank (`q_lora_rank`
+qk_rope_head_dim`, 192 + 64 = 256). `attention_values` and `attention_head_outputs` are
+`v_head_dim` wide, also 256 on GLM-4.7-Flash, and nnterp's `model.head_dim` is that width. The
+config's own `head_dim` is another name for `qk_rope_head_dim` (64), the width of no served value.
+Queries go through a compressed rank (`q_lora_rank`
 768: `q_a_proj`, `q_a_layernorm`, `q_b_proj`, and `self_attn.q_proj` is `None`). Keys and values
 are expanded from one latent per token (`kv_lora_rank` 512) for every head, so `attention_keys`
 has `num_heads` (20) heads, and the last 64 dimensions of every head's key are one shared rotary
@@ -116,8 +116,8 @@ with model.trace(prompt):
 assert torch.equal(k[:, 0, :, -64:], k[:, 1, :, -64:])   # one rotary key
 ```
 
-The scores are scaled by `qk_head_dim ** -0.5` (`self_attn.scaling`, 0.0625): the config has no
-`rope_scaling`.
+The scores are scaled by `qk_head_dim ** -0.5` (`self_attn.scaling`, 0.0625). A YaRN
+`rope_scaling` would multiply that scale by its mscale; the config sets none.
 
 ## The rotary part is served de-interleaved
 

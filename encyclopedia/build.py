@@ -84,72 +84,66 @@ NAME_ROLES = {
 #: Quirk slugs an entry may carry, with the label and one line the index and the page show.
 #: They follow the themes of docs/reference/families.md.
 QUIRKS: dict[str, tuple[str, str]] = {
-    "tuple-blocks": ("Tuple blocks", "The block returns (hidden_states, ...); layer_output is the first element."),
     "sandwich-norms": ("Sandwich norms", "Each sublayer is normed before and after; the stream receives the post-norm's output."),
-    "post-ln": ("Post-LN", "Each norm follows its sublayer's residual add, on the stream itself: the next sublayer reads the normed stream, layer_output is a norm's output, and input plus the contributions is not layer_output."),
-    "post-norms": ("Post-norms only", "Each sublayer is normed after, not before: it reads the raw stream, and the stream receives the post-norm's output."),
-    "residual-inside-module": ("Residual inside the module", "A sublayer adds the residual itself; the contribution is the tensor before the add."),
-    "scaled-residual-adds": ("Scaled residual adds", "A multiplier sits between a sublayer and the stream, or scales the whole block."),
-    "hyper-connections": ("Hyper-connections", "Several parallel residual streams; layer_output is [batch, seq, streams, hidden_size]."),
-    "own-attention-arithmetic": ("Own attention arithmetic", "No shared attention interface; the interior is mapped onto the family's own ops."),
-    "attention-sink": ("Attention sink", "A learned logit joins the softmax; pattern rows sum to less than one."),
-    "sink-scaled-heads": ("Sink-scaled heads", "A learned per-head sink joins the softmax and the head outputs are scaled by the mass the real keys kept; the pattern's rows still sum to one."),
-    "latent-attention": ("Latent attention", "Queries and keys are qk_head_dim wide, values head_dim wide."),
-    "sparse-attention": ("Sparse attention", "An indexer keeps the top keys per query; the pattern is sparse but served dense."),
-    "mixture-of-experts": ("Mixture of experts", "layers[i].mlp is a Moe: router logits, expert weights and indices, expert outputs."),
-    "attention-experts": ("Attention experts", "The attention is a mixture: per token a router picks experts, each with its own query and output projections over shared keys and values; attention_output is their gated sum."),
-    "borrowed-kv": ("Borrowed keys and values", "Later blocks attend with an earlier block's keys and values."),
-    "gated-query": ("Gated query", "q_proj produces the query and a gate side by side."),
-    "qkv-bias": ("Biased q, k, v", "The query, key and value projections add a bias, so each is W·x + b, not W·x."),
-    "qk-norm": ("Query/key norms", "Norms on the projected queries and keys inside the attention (q_norm and k_norm, query_layernorm and key_layernorm, or one qk_norm, as the family names them); attention_queries and attention_keys are read after them."),
+    "post-ln": ("Post-LN", "Each norm sits on the stream after its sublayer's residual add, so the next sublayer reads the normed stream and layer_output is a norm's output. The block's input plus its contributions is not layer_output."),
+    "post-norms": ("Post-norms only", "Every block, or some, norms each sublayer's output and not its input: the sublayer reads the raw stream, and the stream receives the post-norm's output."),
+    "scaled-residual-adds": ("Scaled residual adds", "A multiplier sits on the residual adds: on a sublayer's output before it joins the stream, on the stream itself, or on the block's whole output."),
+    "hyper-connections": ("Hyper-connections", "The residual is several parallel streams, mixed around each sublayer; layer_output is [batch, seq, streams, hidden_size]."),
+    "attention-sink": ("Attention sink", "On every block or some, a learned logit per head joins the softmax as an extra key, so the pattern's rows over the real keys sum to less than one."),
+    "sink-scaled-heads": ("Sink-scaled heads", "A learned sink per head joins the softmax, and each head's output is scaled by the share of probability the real keys kept; the pattern's rows still sum to one."),
+    "latent-attention": ("Latent attention", "Keys and values are projected up from a small latent shared by the heads; queries and keys are qk_head_dim wide, values head_dim wide."),
+    "sparse-attention": ("Sparse attention", "On every block or some, an indexer picks the top keys for each query; the pattern is served as a full query × key tensor, zero outside the picked keys."),
+    "mixture-of-experts": ("Mixture of experts", "On every block or some, the MLP is a mixture of experts: layers[i].mlp serves router_logits, expert_weights, expert_indices and expert_outputs, though some families leave one or more of them unavailable."),
+    "attention-experts": ("Attention experts", "The attention is a mixture: for each token a router picks experts, each with its own query and output projections over shared keys and values; attention_output is their gated sum."),
+    "borrowed-kv": ("Borrowed keys and values", "The last blocks attend with an earlier block's keys and values instead of their own."),
+    "gated-query": ("Gated query", "q_proj's output holds each head's query and an output gate side by side. The heads' outputs are multiplied by sigmoid(gate) before o_proj, after attention_head_outputs is read."),
+    "qkv-bias": ("Biased q, k, v", "The query, key and value projections carry a bias, so each is W·x + b."),
+    "qk-norm": ("Query/key norms", "On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms."),
     "output-gate": ("Output gate", "A gate projected from the attention's input multiplies the heads' outputs before o_proj; attention_head_outputs are read before the gate."),
-    "dynamic-mask": ("Dynamic mask", "A learned bias per key, computed from the values, is added to the attention scores beside the causal mask; attention_scores holds it."),
+    "dynamic-mask": ("Dynamic mask", "A learned bias per key, computed from its value, is added to the attention scores beside the causal mask; attention_scores includes it."),
     "conv-qk": ("Convolved queries and keys", "Queries and keys are mixed over the previous tokens by causal convolutions before the attention; attention_queries and attention_keys are read after them."),
     "per-block-sizes": ("Per-block sizes", "Blocks differ in their head count, head width or MLP width; read a block's own sizes on layers[i].self_attn and layers[i].mlp, not the root's."),
-    "parallel-blocks": ("Parallel block", "Attention and MLP both read the block input, through one norm or two; the block sums x + attn + mlp."),
-    "alibi": ("ALiBi", "No rotary: a per-head linear bias on key position is added to the attention scores, so queries and keys carry no position and attention_scores holds the bias. Every checkpoint of the family, or those whose config sets alibi (Falcon-RW)."),
-    "partial-rotary": ("Partial rotary", "Rotary embeddings turn only a leading fraction of each query and key head; the other dimensions carry no position."),
-    "proportional-rotary": ("Proportional rotary", "Some blocks turn only the first dimensions of each half of a query and key head, at frequencies spaced over the whole head; the other dimensions carry no position."),
-    "nope-blocks": ("Blocks without rotary", "Some blocks, or all, apply no rotary embedding (NoPE): there attention_queries and attention_keys carry no position, and only the causal mask orders the tokens."),
-    "interleaved-rotary": ("Interleaved rotary", "Rotary turns adjacent pairs of dimensions (2i, 2i + 1) rather than i with i + rot/2 (rotate_half), so query and key dimensions are ordered differently from a rotate_half family's."),
-    "hybrid": ("Hybrid", "Some blocks carry linear_attn (a recurrent mixer), others self_attn."),
+    "parallel-blocks": ("Parallel block", "Attention and MLP both read the block's input, through one shared norm or one each, and the block returns x + attn + mlp."),
+    "alibi": ("ALiBi", "No rotary: a per-head bias, linear in the key's position, is added to the attention scores, so queries and keys carry no position and attention_scores includes the bias."),
+    "partial-rotary": ("Partial rotary", "Rotary embeddings rotate only a leading fraction of each query and key head; the other dimensions carry no position."),
+    "proportional-rotary": ("Proportional rotary", "Some blocks rotate only the first dimensions of each half of a query and key head, at frequencies spaced as over the whole head; the other dimensions carry no position."),
+    "nope-blocks": ("Blocks without rotary", "Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart."),
+    "interleaved-rotary": ("Interleaved rotary", "Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head's dimensions pair up differently from a rotate_half family's. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first."),
+    "hybrid": ("Hybrid", "Some blocks mix tokens with a recurrent mixer (layers[i].linear_attn), others with attention (layers[i].self_attn)."),
     "parallel-mixers": ("Parallel mixers", "Attention and a recurrent mixer read the same normed input side by side and their outputs are summed before the MLP."),
-    "mamba1": ("Selective scan (Mamba-1)", "The mixer is a selective scan; C/B/x as queries/keys/values."),
-    "mamba2": ("State space (Mamba-2)", "The mixer is an SSD state-space block with a per-chunk state."),
-    "fp32-residual": ("Float32 residual", "The blocks add in float32 (residual_in_fp32), so layer_output is float32 whatever the load dtype."),
+    "mamba1": ("Selective scan (Mamba-1)", "The recurrent mixer is Mamba-1's selective scan; nnterp serves its C, B and x as attention_queries, attention_keys and attention_values."),
+    "mamba2": ("State space (Mamba-2)", "The recurrent mixer is Mamba-2's SSD state-space scan, run in chunks over a prompt; nnterp serves its C, B and x as attention_queries, attention_keys and attention_values."),
     "no-mlp": ("No MLP module", "No mlp module: the block has no MLP sublayer, or spells it as fc1/fc2 on the block, so layers[i].mlp does not exist."),
-    "softcapped-logits": ("Softcapped logits", "logits is tanh-capped after lm_head; project_on_vocab applies the cap."),
-    "scaled-logits": ("Scaled logits", "The head's output is multiplied or divided by a config scale."),
+    "softcapped-logits": ("Softcapped logits", "The model caps the logits with a tanh after lm_head (final_logit_softcapping), so logits is not lm_head's raw output; project_on_vocab applies the same cap."),
+    "scaled-logits": ("Scaled logits", "The model multiplies or divides lm_head's output by a scale from the config, so logits is not lm_head's raw output."),
     "chunked-attention": ("Chunked attention", "Some blocks attend within fixed-length chunks of the sequence rather than over a sliding window; config.layer_types says which."),
-    "multimodal-rotary": ("Multimodal rotary", "M-RoPE: three position streams, temporal, height and width, folded into one rotation before the blocks; text positions after an image resume from the image's largest position."),
+    "multimodal-rotary": ("Multimodal rotary", "M-RoPE: each token has three positions, temporal, height and width, which the rotary embedding combines into one rotation before the blocks. Text after an image resumes one past the image's largest position."),
     "interleaved-moe": ("Interleaved mixture", "Mixture-of-experts blocks alternate with dense blocks at a fixed step (interleave_moe_layer_step); where the step is above 1, the mixture's values exist on some blocks only."),
-    "sliding-window": ("Sliding window", "Some blocks, or every block, attend only over a window of the latest positions, its length a config key (sliding_window, window_size); where the config lists each block's type (layer_types, attention_layers), it says which."),
-    "scaled-embeddings": ("Scaled embeddings", "The embedding output is multiplied before block 0; token_embeddings is the scaled tensor."),
-    "embedding-multiplier": ("Embedding multiplier", "The model multiplies the embedding module's output before block 0; token_embeddings is the unscaled tensor, layers[0].input the scaled one."),
-    "gain-norm": ("1 + weight norm gain", "The norm multiplies by (1 + weight), so the gain is not norm.weight."),
-    "position-embeddings": ("Position embeddings", "A position embedding is added after embed_tokens; token_embeddings is not layers[0].input."),
-    "weightless-norms": ("Weightless norms", "The norms have no weight or bias (a parameter-free LayerNorm or RMSNorm), so self_attn.input is the normalised stream itself."),
-    "layernorm": ("LayerNorm", "Norms subtract the mean before scaling; a shift along the all-ones direction never reaches the next sublayer or the logits."),
+    "sliding-window": ("Sliding window", "Some blocks, or every block, attend only to a window of the latest positions. A config key sets its length (sliding_window, window_size), and where the config lists each block's type (layer_types, attention_layers), that list says which blocks."),
+    "scaled-embeddings": ("Scaled embeddings", "The embedding module multiplies its own output by the square root of the hidden size, so token_embeddings is the scaled tensor."),
+    "embedding-multiplier": ("Embedding multiplier", "The model scales the embedding module's output before block 0, so token_embeddings is the unscaled tensor and layers[0].input the scaled one."),
+    "gain-norm": ("1 + weight norm gain", "The norms before and after each sublayer, and the final norm, multiply by (1 + weight), so the gain is 1 + norm.weight, not norm.weight."),
+    "position-embeddings": ("Position embeddings", "A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input."),
+    "layernorm": ("LayerNorm", "Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see."),
     "learned-activation": ("Learned activation", "The MLP's activation has parameters learned per block (xIELU's alpha_p and alpha_n), so the same pre-activation maps to different values on different blocks."),
-    "sub-norms": ("Sub-norms", "A norm inside each sublayer, before its output projection, rescales the heads' outputs and the MLP's hidden activations together; scaling all of them changes nothing."),
+    "sub-norms": ("Sub-norms", "Each sublayer norms its hidden activations before its output projection (attn_sub_norm before o_proj, ffn_sub_norm before down_proj), so scaling all of the heads' outputs, or all of the MLP's activations, by one factor changes nothing downstream."),
     "quantized-linears": ("Quantized projections", "The projections quantize their inputs and weights inside the forward, so a projection's output is not weight @ input, and a small edit to either can round away."),
     "squared-relu": ("Squared ReLU", "The MLP's activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere."),
-    "fused-qkv": ("Fused QKV", "One projection yields queries, keys and values together, in the family's own layout; split its output by that layout before reading a head."),
-    "dense-first-blocks": ("Dense first blocks", "The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values are missing on the first blocks."),
+    "dense-first-blocks": ("Dense first blocks", "The first blocks have a dense MLP and the rest a mixture of experts, so the mixture's values exist only from the first mixture block on."),
     "hash-routing": ("Hash routing", "Some blocks pick a token's experts from a fixed table of its token id, not from router scores; there the mixture needs input_ids, and an edit to router_logits moves expert_weights but not expert_indices."),
-    "unnormalized-routing": ("Unnormalized routing", "The expert weights are the router's softmax entries for the chosen experts, not renormalized over them: a token's expert_weights sum to less than one."),
+    "unnormalized-routing": ("Unnormalized routing", "The expert weights are the router's softmax entries for the chosen experts, not renormalized over them (times any routed scaling factor): with no scaling factor, a token's expert_weights sum to less than one."),
     "one-sublayer-blocks": ("One sublayer per block", "Each block is one norm and one sublayer, so it adds one contribution to the stream."),
     # The vision side (docs/usage/vision.md). `vision` marks a family some of whose checkpoints carry a tower; a
     # vision-language checkpoint's page adds its tower's and its wrapper's slugs from the rest.
     "vision": ("Vision-language", "Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model."),
-    "cls-token": ("CLS token", "The vision encoder's stream carries a class token beside the patches (CLIP's first, Llama 4's last), so the patch axis is one longer than the patch grid."),
-    "packed-tower": ("Packed vision encoder", "Every image's patches run in one row, [1, all patches, vision_hidden_size]; the processor's grid sizes split it."),
+    "cls-token": ("CLS token", "The vision encoder's stream carries class tokens beside the patches (one first on CLIP, one last on Llama 4, several with register tokens before each image on RADIO), so its patch axis is longer than the patch grid."),
+    "packed-tower": ("Packed vision encoder", "Every image's tokens run in one row, [1, all tokens, vision_hidden_size]; the processor's per-image grid sizes split the row."),
     "variable-resolution": ("Variable resolution", "The vision encoder takes images of any resolution, so vision.image_size raises Unavailable; each image's grid is in the processor's output."),
-    "padded-patches": ("Padded patches", "Each image's patches are padded to a fixed row count; the padded rows run through the vision encoder, masked as keys where it attends, so they are rows of its values."),
+    "padded-patches": ("Padded patches", "Each image's patches are padded to a fixed row count. The padding rows run through the vision encoder, masked out as keys where it attends, so they are rows of its values."),
     "tiled-images": ("Tiled images", "The processor cuts an image into crops or tiles, each a row of the vision encoder's batch."),
-    "deepstack": ("DeepStack", "Vision encoder blocks feed the text model again after its first blocks: layers[k].deepstack_output is added at the image positions, outside the block."),
-    "unpadded-features": ("Unpadded features", "The wrapper unpads the projector's output and adds a newline token per row, so projector.output is not image_features."),
-    "pooled-projector": ("Pooled projector", "The projector pools or pixel-shuffles neighbouring patches into one token, so an image has fewer tokens than patches."),
+    "deepstack": ("DeepStack", "Features from some vision encoder blocks are added to the text stream again at the image positions, after each of the text model's first blocks: layers[k].deepstack_output, added outside the block."),
+    "unpadded-features": ("Unpadded features", "The wrapper removes the padding from the projector's output and appends a newline token to each row, so projector.output is not image_features."),
+    "pooled-projector": ("Pooled projector", "The projector merges each group of neighboring patches into one token, by pooling or by concatenating them (a pixel shuffle), so an image has fewer tokens than patches."),
     "encoder-free": ("Encoder-free", "No vision encoder blocks: raw patches go through one embedder into the text stream, so vision.num_layers is 0."),
 }
 
@@ -270,7 +264,7 @@ def humanize_key(key: Any, select: int | None) -> str:
         if name.startswith("kernel."):
             what = {"inputs": "the arguments of", "output": "the output of"}.get(name.split(".", 1)[1], name)
             return f"inside the forward: {what} the kernel this call runs (a prompt's chunked one or a decode step's recurrent one){element}"
-        return f"inside the forward, at the operation `{name}` finds on each call"
+        return f"inside the forward, at the operation that `{name}` finds on each call"
     if key == "output":
         return "the module's own output" + element
     if key in ("input", "inputs"):
@@ -981,7 +975,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             reads = spec.get("pre_norm") or host
             nodes[f"hc.{key}"] = value_node(comb, "stream mixing")
             nodes[f"hc.{key}"]["extra"] = (f"`{hc}` ({hc_class}) reads the streams and returns this mixing, "
-                                           f"`{post['name']}` and the collapse `{reads}` reads.")
+                                           f"`{post['name']}`, and the collapsed stream that `{reads}` reads.")
             nodes[f"collapse.{key}"] = node(
                 "collapse", f"{base}.{reads}.input",
                 f"`{hc}`'s collapse of the streams, a weighted sum over the stream axis, `[batch, seq, hidden_size]`: what "
@@ -1015,7 +1009,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                                      layout=entering.get("layout"), dims=entering.get("dims"))
     else:
         nodes["stream.input"] = node(stream, f"{base}.input",
-                                     "The residual stream entering the block, a tensor on every family." if stream == "residual stream"
+                                     "The residual stream entering the block, a plain tensor on every family." if stream == "residual stream"
                                      else f"The {stream} entering the block.",
                                      layout="Residual" if stream == "residual stream" else entering.get("layout"),
                                      dims=Residual.dim_str if stream == "residual stream" else entering.get("dims"))
@@ -1067,7 +1061,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         identity = block_spec.get("identity", f"{base.removeprefix('model.')}.input + {terms} == layer_output")
         plus = "plus" if single else f"plus.{s}"
         checked = "on this family" if stream == "residual stream" else "on every vision encoder block"
-        nodes[plus] = node("the add", identity, block_spec.get("identity_note", f"The contribution identity nnterp's suite checks {checked}."))
+        nodes[plus] = node("the add", identity, block_spec.get("identity_note", f"The contribution identity that nnterp's test suite checks {checked}."))
         drawn_shapes.append({"subs": list(shape), "mids": mids, "plus": plus, "identity": identity,
                              "label": " + ".join(sub["label"] for sub in subs)})
 
@@ -1183,7 +1177,7 @@ def blocks_sentence(info: dict[str, Any]) -> str:
     """The strip's ``layers`` hover: the blocks and their native classes, every class a checkpoint's blocks have."""
     classes = info.get("block_class_names") or [info["block_class"]]
     if len(classes) == 1:
-        return f"{info['num_layers']} blocks of {classes[0]}; the one drawn below is any of them."
+        return f"{info['num_layers']} blocks of {classes[0]}; the diagram below shows any one of them."
     return f"{info['num_layers']} blocks of {' and '.join(classes)}; the slider picks the one drawn below."
 
 
@@ -1232,7 +1226,7 @@ def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
     tower, wrapper = v["tower"], v["wrapper_fields"]
     root = {row["name"]: row for row in v["values"]["vision"]}
     nodes = {
-        "path.image": node("the image", "pixel_values", f"What the processor hands the vision encoder. {tower['rows']}"),
+        "path.image": node("the image", "pixel_values", f"What the processor passes to the vision encoder. {tower['rows']}"),
         "path.patch_embed": {**value_node(root["patch_embeddings"], "patch embedding"), "extra": tower["positions"]},
         "path.projector": node(
             "projector", "model.projector",
@@ -1249,7 +1243,7 @@ def tower_path_nodes(v: dict[str, Any]) -> dict[str, dict[str, Any]]:
         return nodes
     layer = {row["name"]: row for row in v["values"]["layer"]}
     nodes["path.layers"] = value_node(layer["layer_output"], "the vision encoder's blocks")
-    nodes["path.layers"]["extra"] = f"{v['num_layers']} blocks of {v['layer_class']}; the one drawn below is any of them."
+    nodes["path.layers"]["extra"] = f"{v['num_layers']} blocks of {v['layer_class']}; the diagram below shows any one of them."
     if v["has_norm"]:
         nodes["path.norm"] = {**value_node(root["tower_output"], "final norm"), "extra": f"`model.vision.norm`. {tower['norm']}"}
         if not v["norm_read"]:
@@ -1653,7 +1647,7 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
         "options": options,
         "option_groups": [(label, items) for label, items in groups if items],
         "checkpoints": [{"id": o["id"], "url": o["url"]} for o in options],
-        "vllm": getattr(entry, "VLLM", False),
+        "vllm": (HERE.parent / "nnterp" / "families" / "vllm" / f"{entry.MODEL_TYPE}.py").exists(),
         "quirks": quirk_union(entry, models) + ([quirk("vision", entry.MODEL_TYPE)] if towers_found else []),
         "notes": md(entry.NOTES, roles=roles),
         "docstring": md(info["docstring"], rst=True, roles=roles),

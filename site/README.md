@@ -41,14 +41,12 @@ python site/gen_reference.py
 ## The encyclopedia
 
 The encyclopedia (`encyclopedia/build.py`) is built locally, since it reads model configs from the
-Hub cache, and its output is published on the orphan branch `encyclopedia-site`, which the deploy
-workflow copies to `/encyclopedia/`. To update it:
+Hub cache, and its output is committed in `encyclopedia/site/`, which the deploy workflow copies to
+`/encyclopedia/`. To update it, rebuild and commit the output with the change:
 
 ```bash
 PYTHONPATH=. HF_HUB_OFFLINE=1 python encyclopedia/build.py
-git worktree add --detach /tmp/enc HEAD && cd /tmp/enc
-git checkout --orphan encyclopedia-site && git rm -rfq . && cp -r ../path/to/encyclopedia/site/. .
-git add -A && git commit -m "encyclopedia: built site" && git push -f origin encyclopedia-site
+git add encyclopedia/site
 ```
 
 For the dev server, copy `encyclopedia/site/` to `site/docs/encyclopedia/` (gitignored).

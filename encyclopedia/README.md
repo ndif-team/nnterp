@@ -2,7 +2,7 @@
 
 One web page per family: the block drawn and annotated with nnterp's names, every standard value
 and where it is read, the model's printout, the sizes, and notes on what to know before tracing
-that family. The pages are static HTML, built by `build.py` into `site/` (not committed).
+that family. The pages are static HTML, built by `build.py` into `site/`, which is committed: the site deploy serves it at `/encyclopedia/`, so rebuild it with every change to an entry or the generator.
 
 This file is the brief for adding a family. `entries/gemma2.py` is the reference entry; a new
 family is one new file beside it.

@@ -1,0 +1,541 @@
+<!doctype html>
+<html lang="en" style="--c1: #B89BDE; --c2: #9EB66E; --c3: #E090A3; --c4: #D79D66; --c5: #54BBD1; --c1-deep: #705491; --c2-deep: #576C25; --c3-deep: #91495D; --c4-deep: #8A551A; --c5-deep: #007082; --paper: #F1E6CB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Granite Swash MoE · nnterp encyclopedia</title>
+<meta name="description" content="Granite Swash&#39;s sliding-window attention with its sink in GraniteMoE&#39;s scaled block, where a shared expert runs beside the mixture of experts and mlp_output carries the mixture&#39;s term alone.">
+<link rel="icon" type="image/svg+xml" href="static/favicon.svg">
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%23B89BDE%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%239EB66E%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23E090A3%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23D79D66%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%2354BBD1%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Albert+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/encyclopedia.css">
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<header class="masthead frame">
+  <a class="micro-lg brand" href="index.html">nnterp · encyclopedia</a>
+  <span class="mono masthead-right">granitemoe_swa · nnterp.families.granitemoe_swa</span>
+</header>
+<section class="hero frame">
+  <div class="hero-text">
+    <p class="micro-lg eyebrow">family <span class="mono">granitemoe_swa</span></p>
+    <h1 class="disp-title"><span class="line">Granite Swash MoE</span></h1>
+    <p class="subtitle">Granite Swash&#39;s sliding-window attention with its sink in GraniteMoE&#39;s scaled block, where a shared expert runs beside the mixture of experts and mlp_output carries the mixture&#39;s term alone.</p>
+    <div class="pane" data-pane="chips" data-ckpts="ibm-granite/granite-swash-3b-a600m"><div class="chips">
+<a class="chip" href="#notes" title="A multiplier sits on the residual adds: on a sublayer&#39;s output before it joins the stream, on the stream itself, or on the block&#39;s whole output.">Scaled residual adds</a><a class="chip" href="#notes" title="Some blocks, or every block, attend only to a window of the latest positions. A config key sets its length (sliding_window, window_size), and where the config lists each block&#39;s type (layer_types, attention_layers), that list says which blocks.">Sliding window</a><a class="chip" href="#notes" title="A learned sink per head joins the softmax, and each head&#39;s output is scaled by the share of probability the real keys kept; the pattern&#39;s rows still sum to one.">Sink-scaled heads</a><a class="chip" href="#notes" title="On every block or some, the MLP is a mixture of experts: layers[i].mlp serves router_logits, expert_weights, expert_indices and expert_outputs, though some families leave one or more of them unavailable.">Mixture of experts</a><a class="chip" href="#notes" title="The model scales the embedding module&#39;s output before block 0, so token_embeddings is the unscaled tensor and layers[0].input the scaled one.">Embedding multiplier</a><a class="chip" href="#notes" title="The model multiplies or divides lm_head&#39;s output by a scale from the config, so logits is not lm_head&#39;s raw output.">Scaled logits</a></div></div>
+  </div>
+  <aside class="hero-side">
+    <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
+<div class="ckpt" id="ckpt" data-selector>
+  <span class="micro ckpt-label" id="ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="ckpt-list" aria-labelledby="ckpt-label ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="ckpt-name">granite-swash-3b-a600m</span><span class="ckpt-eye ckpt-eye-current" id="ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="ckpt-list" role="listbox" tabindex="-1" aria-labelledby="ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-1">
+      <p class="micro ckpt-group-label" id="ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="ckpt-option-ibm-granite--granite-swash-3b-a600m" data-ckpt="ibm-granite/granite-swash-3b-a600m" data-name="granite-swash-3b-a600m"
+           aria-selected="true" title="ibm-granite/granite-swash-3b-a600m">
+        <span class="mono">granite-swash-3b-a600m</span>      </div>
+    </div>
+  </div>
+        <div class="pane" data-pane="hub" data-ckpts="ibm-granite/granite-swash-3b-a600m"><p class="ckpt-facts mono"><span><b>3.02B</b> parameters</span><span>released <b>Jul 2026</b></span></p></div>
+      <a class="ckpt-hub" id="ckpt-hub" href="https://huggingface.co/ibm-granite/granite-swash-3b-a600m" title="ibm-granite/granite-swash-3b-a600m on the Hugging Face Hub" aria-label="ibm-granite/granite-swash-3b-a600m on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
+
+</div>
+  </aside>
+</section>
+
+<div class="stickybar" id="stickybar" aria-hidden="true">
+  <div class="frame stickybar-row">
+    <span class="stickybar-title">Granite Swash MoE</span>
+<div class="ckpt" id="bar-ckpt" data-selector>
+  <span class="micro ckpt-label" id="bar-ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="bar-ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="bar-ckpt-list" aria-labelledby="bar-ckpt-label bar-ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="bar-ckpt-name">granite-swash-3b-a600m</span><span class="ckpt-eye ckpt-eye-current" id="bar-ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="bar-ckpt-list" role="listbox" tabindex="-1" aria-labelledby="bar-ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="bar-ckpt-group-1">
+      <p class="micro ckpt-group-label" id="bar-ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-ibm-granite--granite-swash-3b-a600m" data-ckpt="ibm-granite/granite-swash-3b-a600m" data-name="granite-swash-3b-a600m"
+           aria-selected="true" title="ibm-granite/granite-swash-3b-a600m">
+        <span class="mono">granite-swash-3b-a600m</span>      </div>
+    </div>
+  </div>
+  
+</div>
+  </div>
+</div>
+
+<section class="frame section" id="block">
+  <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
+  <div class="pane" data-pane="block_head" data-ckpts="ibm-granite/granite-swash-3b-a600m"><p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.</p>
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× 28</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final_norm_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>lm_head_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>scaled</small></div>
+</div></div>
+
+  <div class="viz">
+    <div class="viz-panel">
+      <div class="slider-row">
+        <label class="micro" for="layer">block</label>
+        <input type="range" id="layer" min="0" max="27" value="0">
+        <span class="mono" id="layer-label">i = 0</span>
+        <span class="mono variant" id="layer-variant"></span>
+      </div>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+      <svg id="block-svg" role="img" aria-label="The decoder block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card" id="node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each box, edge and ⊕ names what nnterp calls it, where the value is read, and its layout.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity" id="identity"><span class="micro">identity</span> <code><span class="n role-stream">layers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">input</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span> <span class="o">+</span> <span class="n">shared_mlp</span><span class="o">.</span><span class="n">output</span> <span class="o">*</span> <span class="n">residual_multiplier</span> <span class="o">==</span> <span class="n role-stream">layer_output</span></code></p>
+  <div class="pane" data-pane="tower" data-ckpts="ibm-granite/granite-swash-3b-a600m"></div>
+</section>
+
+<section class="frame section" id="support">
+  <div class="topbar"><h2 class="disp-section">The <em>API</em></h2><span class="micro">02 · support()</span></div>
+  <h3 class="ttl-row">Values, by host</h3>
+  <div class="pane" data-pane="values" data-ckpts="ibm-granite/granite-swash-3b-a600m"><p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition.</p><div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model</span> <span class="mono dim">GraniteMoeSWAForCausalLM</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="strip.logits">
+    <span class="mono-md name role-stream">logits</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.embed">
+    <span class="mono-md name role-stream">token_embeddings</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The embedding module&#39;s output; layers[0].input is what enters the first block</span>
+    <span class="hide-sm body-md where"><p>the child module <code>embed_tokens</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.norm">
+    <span class="mono-md name role-stream">final_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the final norm, what lm_head reads</span>
+    <span class="hide-sm body-md where"><p>the child module <code>norm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.head">
+    <span class="mono-md name role-stream">lm_head_output</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The head&#39;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the child module <code>lm_head</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">next_token_probs</span>
+    <span class="hide-sm mono">NextTokenProbs <span class="dim">[batch vocab_size]</span></span>
+    <span class="body-md">The next-token distribution at the last position; derived, read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_ids</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The token ids the model was called with</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">attention_mask</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The attention mask the model was called with; zeros are padding</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_size</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">[batch, seq] of the current call; read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model.<wbr>layers[i]</span> <span class="mono dim">GraniteMoeSWADecoderLayer</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">layer_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream entering the block</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.attention_norm_output">
+    <span class="mono-md name role-stream">attention_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the attention</span>
+    <span class="hide-sm body-md where"><p>the child module <code>input_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.layer_mid">
+    <span class="mono-md name role-stream">layer_mid</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the attention add</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_norm_output">
+    <span class="mono-md name role-stream">mlp_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the MLP</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_input">
+    <span class="mono-md name role-stream">mlp_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP is called with</span>
+    <span class="hide-sm body-md where"><p>the child module <code>mlp</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="stream.output">
+    <span class="mono-md name role-stream">layer_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-attention">model.<wbr>layers[i].<wbr>self_attn</span> <span class="mono dim">GraniteMoeSWAAttention</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_queries">
+    <span class="mono-md name role-attention">attention_queries</span>
+    <span class="hide-sm mono">Queries <span class="dim">[batch num_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The queries entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 1</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_keys">
+    <span class="mono-md name role-attention">attention_keys</span>
+    <span class="hide-sm mono">Keys <span class="dim">[batch num_kv_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The keys entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 2</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_values">
+    <span class="mono-md name role-attention">attention_values</span>
+    <span class="hide-sm mono">Values <span class="dim">[batch num_kv_heads seq head_dim]</span></span>
+    <span class="body-md">The values entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 3</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_scores">
+    <span class="mono-md name role-attention">attention_scores</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention scores entering the softmax, masked</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the input of <code>F_softmax_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_premix">
+    <span class="mono-md name role-attention">attention_premix</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">Every head&#39;s output side by side, as the output projection takes it</span>
+    <span class="hide-sm body-md where"><p>the child module <code>o_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.self_attn">
+    <span class="mono-md name role-attention">attention_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the attention adds to the residual stream: its output times residual_multiplier</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_probabilities">
+    <span class="mono-md name role-attention">attention_probabilities</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention pattern the values are mixed with</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>F_dropout_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_head_outputs">
+    <span class="mono-md name role-attention">attention_head_outputs</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">The per-head outputs before the output projection</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>attention_interface_1</code>, element 0</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-mlp">model.<wbr>layers[i].<wbr>mlp</span> <span class="mono dim">GraniteMoeSWAMoE</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-mlp"><span class="warn" tabindex="0" data-tip="every block: routed experts; read per-expert via the Moe component">&#x26A0;&#xFE0E;</span>mlp_activation</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">The activation function&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the child module <code>act_fn</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-mlp"><span class="warn" tabindex="0" data-tip="every block: routed experts; read per-expert via the Moe component">&#x26A0;&#xFE0E;</span>mlp_neurons</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+    <span class="hide-sm body-md where"><p>the child module <code>down_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.mlp">
+    <span class="mono-md name role-mlp">mlp_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP adds to the residual stream: its output times residual_multiplier</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.router_logits">
+    <span class="mono-md name role-mlp">router_logits</span>
+    <span class="hide-sm mono">RouterLogits <span class="dim">[batch seq num_experts]</span></span>
+    <span class="body-md">The router&#39;s logits, one per expert, before the scoring</span>
+    <span class="hide-sm body-md where"><p>inside <code>router</code>'s forward: the output of <code>F_linear_0</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.expert_weights">
+    <span class="mono-md name role-mlp">expert_weights</span>
+    <span class="hide-sm mono">ExpertWeights <span class="dim">[batch seq top_k]</span></span>
+    <span class="body-md">The weight each selected expert&#39;s output is scaled by</span>
+    <span class="hide-sm body-md where"><p>the child module <code>experts</code>'s inputs, element 2</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.expert_indices">
+    <span class="mono-md name role-mlp">expert_indices</span>
+    <span class="hide-sm mono">ExpertIndices <span class="dim">[batch seq top_k]</span></span>
+    <span class="body-md">The expert each routing slot sends the token to</span>
+    <span class="hide-sm body-md where"><p>the child module <code>experts</code>'s inputs, element 1</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.expert_outputs">
+    <span class="mono-md name role-mlp">expert_outputs</span>
+    <span class="hide-sm mono">ExpertOutputs <span class="dim">[batch seq top_k hidden_size]</span></span>
+    <span class="body-md">Each routing slot&#39;s weighted expert output</span>
+    <span class="hide-sm body-md where"><p>inside <code>experts</code>'s forward: the output of <code>weighted_out_view_0</code> inside <code>experts_forward_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.routed_output">
+    <span class="mono-md name role-mlp">routed_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The routed experts&#39; combined output</span>
+    <span class="hide-sm body-md where"><p>the child module <code>experts</code>'s output</p></span>
+  </div>
+</div></div>
+
+  <h3 class="ttl-row">Printout</h3>
+  <div class="pane" data-pane="printout" data-ckpts="ibm-granite/granite-swash-3b-a600m"><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">ibm-granite/granite-swash-3b-a600m</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>GraniteMoeSWAForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=1280, out_features=100352, bias=False)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(100352, 1280, padding_idx=100256)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-27): 28 x GraniteMoeSWADecoderLayer(
+      <span class="rn role-attention">(self_attn)</span>: GraniteMoeSWAAttention(
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=1280, out_features=1280, bias=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=1280, out_features=256, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=1280, out_features=256, bias=False)</span>
+        <span class="rn">(o_proj)</span>: Linear<span class="rd">(in_features=1280, out_features=1280, bias=False)</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream: its output times residual_multiplier</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+      )
+      <span class="rn role-norm">(input_layernorm)</span>: GraniteMoeSWARMSNorm<span class="rd">((1280,), eps=1e-05)</span>
+      <span class="rn role-norm">(post_attention_layernorm)</span>: GraniteMoeSWARMSNorm<span class="rd">((1280,), eps=1e-05)</span>
+      <span class="rn role-mlp">(mlp/block_sparse_moe)</span>: GraniteMoeSWAMoE(
+        <span class="rn">(router)</span>: GraniteMoeSWATopKRouter<span class="rd">()</span>
+        <span class="rn">(experts)</span>: GraniteMoeSWAExperts(
+          <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+        )
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream: its output times residual_multiplier</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+        <span class="rn role-mlp">(router_logits)</span> -&gt; <span class="rl">RouterLogits</span> <span class="rd">[batch seq num_experts]</span>: <span class="rd">The router&#x27;s logits, one per expert, before the scoring</span>
+        <span class="rn role-mlp">(expert_weights)</span> -&gt; <span class="rl">ExpertWeights</span> <span class="rd">[batch seq top_k]</span>: <span class="rd">The weight each selected expert&#x27;s output is scaled by</span>
+        <span class="rn role-mlp">(expert_indices)</span> -&gt; <span class="rl">ExpertIndices</span> <span class="rd">[batch seq top_k]</span>: <span class="rd">The expert each routing slot sends the token to</span>
+        <span class="rn role-mlp">(expert_outputs)</span> -&gt; <span class="rl">ExpertOutputs</span> <span class="rd">[batch seq top_k hidden_size]</span>: <span class="rd">Each routing slot&#x27;s weighted expert output</span>
+        <span class="rn role-mlp">(routed_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The routed experts&#x27; combined output</span>
+        <span class="rn">(shared_expert_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The shared expert&#x27;s output</span>
+      )
+      <span class="rn">(shared_mlp)</span>: GraniteMoeSWAMLP(
+        <span class="rn">(activation)</span>: SiLUActivation<span class="rd">()</span>
+        <span class="rn">(input_linear)</span>: Linear<span class="rd">(in_features=1280, out_features=2560, bias=False)</span>
+        <span class="rn">(output_linear)</span>: Linear<span class="rd">(in_features=1280, out_features=1280, bias=False)</span>
+      )
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(layer_mid)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the attention add</span>
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: GraniteMoeSWARMSNorm<span class="rd">((1280,), eps=1e-05)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div>
+
+  <div class="pane" data-pane="config" data-ckpts="ibm-granite/granite-swash-3b-a600m"><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>28</span></div><div class="spec"><span>model.hidden_size</span><span>1280</span></div><div class="spec"><span>model.num_heads</span><span>20</span></div><div class="spec"><span>model.num_kv_heads</span><span>4</span></div><div class="spec"><span>model.head_dim</span><span>64</span></div><div class="spec"><span>model.qk_head_dim</span><span>64</span></div><div class="spec"><span>model.vocab_size</span><span>100352</span></div><div class="spec"><span>model.intermediate_size</span><span>512</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>GraniteMoeSWAForCausalLM</span></div><div class="spec"><span>num_hidden_layers</span><span>28</span></div><div class="spec"><span>hidden_size</span><span>1280</span></div><div class="spec"><span>intermediate_size</span><span>512</span></div><div class="spec"><span>num_attention_heads</span><span>20</span></div><div class="spec"><span>num_key_value_heads</span><span>4</span></div><div class="spec"><span>vocab_size</span><span>100352</span></div><div class="spec"><span>max_position_embeddings</span><span>8192</span></div><div class="spec"><span>sliding_window</span><span>128</span></div><div class="spec"><span>hidden_act</span><span>silu</span></div><div class="spec"><span>rms_norm_eps</span><span>1e-05</span></div><div class="spec"><span>tie_word_embeddings</span><span>True</span></div><div class="spec"><span>dtype</span><span>bfloat16</span></div><div class="spec"><span>embedding_multiplier</span><span>12</span></div><div class="spec"><span>residual_multiplier</span><span>0.26</span></div><div class="spec"><span>attention_multiplier</span><span>0.015625</span></div><div class="spec"><span>logits_scaling</span><span>5</span></div><div class="spec"><span>num_experts_per_tok</span><span>4</span></div><div class="spec"><span>num_local_experts</span><span>48</span></div><div class="spec"><span>attention_bias</span><span>False</span></div>    </div>
+  </div>
+</div></div>
+</section>
+
+<section class="frame section" id="notes">
+  <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <div class="grid-notes">
+    <div class="prose"><h2>The block, in order</h2>
+<pre class="code"><code><span class="n">x</span>      <span class="o">=</span> <span class="n role-stream">embed_tokens</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="o">*</span> <span class="n">embedding_multiplier</span>
+<span class="n">h</span>      <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="p">(</span><span class="n role-norm">input_layernorm</span><span class="p">(</span><span class="n">x</span><span class="p">))</span> <span class="o">*</span> <span class="n">residual_multiplier</span>
+<span class="n">n</span>      <span class="o">=</span> <span class="n role-norm">post_attention_layernorm</span><span class="p">(</span><span class="n">h</span><span class="p">)</span>
+<span class="n">out</span>    <span class="o">=</span> <span class="n">h</span> <span class="o">+</span> <span class="p">(</span><span class="n">block_sparse_moe</span><span class="p">(</span><span class="n">n</span><span class="p">)</span> <span class="o">+</span> <span class="n">shared_mlp</span><span class="p">(</span><span class="n">n</span><span class="p">))</span> <span class="o">*</span> <span class="n">residual_multiplier</span>
+<span class="n role-stream">logits</span> <span class="o">=</span> <span class="n role-stream">lm_head</span><span class="p">(</span><span class="n role-norm">norm</span><span class="p">(</span><span class="n">out</span><span class="p">))</span> <span class="o">/</span> <span class="n">logits_scaling</span></code></pre>
+<p>The attention is Granite Swash's: of granite-swash-3b-a600m's 28 blocks, 8 attend over the whole
+prefix (0, 3, 7, 11, 15, 19, 23 and 27) and 20 over the last 128 tokens, every block applies
+rotary embeddings with base 10000, and each head carries a sink that scales its output. The
+feed-forward is a mixture of 48 experts, 512 wide, with the top 4 routed per token, and beside it
+<code>shared_mlp</code>, a SwiGLU 1280 wide that runs on every token. The multipliers:
+<code>embedding_multiplier</code> 12, <code>residual_multiplier</code> 0.26, <code>attention_multiplier</code> 1/64 and
+<code>logits_scaling</code> 5.</p>
+<h2>mlp_output leaves the shared expert out</h2>
+<p>The mixture's native name, <code>block_sparse_moe</code>, is <code>mlp</code>, and <code>mlp_output</code> is its output times
+<code>residual_multiplier</code>. The block adds the shared expert's output times the multiplier too, and no
+standard value carries that term: <code>shared_expert_output</code> is unavailable ("this mixture has no
+shared expert"), and <code>layers[i].shared_mlp</code> keeps its native name. The block's sum therefore has a
+third term:</p>
+<pre class="code"><code><span class="n">layer</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span>
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">attn</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n role-mlp">mlp</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">shared</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n">shared_mlp</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n">layer</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">m</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">residual_multiplier</span>                 <span class="c1"># 0.26</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">attn</span> <span class="o">+</span> <span class="n role-mlp">mlp</span> <span class="o">+</span> <span class="n">shared</span> <span class="o">*</span> <span class="n">m</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span></code></pre>
+<p>The term is not small. Over the positions after the first, the shared expert's scaled output has
+a mean norm of 3.5 in block 1 against 3.4 for <code>mlp_output</code>, and 2.4 against 2.0 in block 14;
+<code>x + attn + mlp</code> misses <code>layer_output</code> by up to 0.53 in block 1 and 8.1 in block 14. Decompose the
+stream, attribute or ablate the feed-forward with both terms: a write to <code>mlp_output</code> replaces the
+mixture's term and leaves the shared expert's, so zeroing the whole feed-forward means zeroing
+<code>mlp_output</code> and <code>shared_mlp.output</code>.</p>
+<h2>The router: top 4 of the logits, then a softmax over those 4</h2>
+<p>The router is one linear map without a bias. It takes the top 4 of its 48 logits and softmaxes
+those 4 alone, so a token's <code>expert_weights</code> sum to one, and <code>expert_outputs</code> (each slot's
+weighted expert output) sum to <code>routed_output</code>, which is <code>mlp.output</code>, unscaled:</p>
+<pre class="code"><code><span class="n">moe</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span>
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">logits</span> <span class="o">=</span> <span class="n">moe</span><span class="o">.</span><span class="n role-mlp">router_logits</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>        <span class="c1"># [batch, seq, 48]</span>
+    <span class="n">w</span> <span class="o">=</span> <span class="n">moe</span><span class="o">.</span><span class="n role-mlp">expert_weights</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>            <span class="c1"># [batch, seq, 4]</span>
+    <span class="n">idx</span> <span class="o">=</span> <span class="n">moe</span><span class="o">.</span><span class="n role-mlp">expert_indices</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">slots</span> <span class="o">=</span> <span class="n">moe</span><span class="o">.</span><span class="n role-mlp">expert_outputs</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>        <span class="c1"># [batch, seq, 4, hidden_size]</span>
+    <span class="n">routed</span> <span class="o">=</span> <span class="n">moe</span><span class="o">.</span><span class="n role-mlp">routed_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">top</span><span class="p">,</span> <span class="n">chosen</span> <span class="o">=</span> <span class="n role-stream">logits</span><span class="o">.</span><span class="n">topk</span><span class="p">(</span><span class="n">moe</span><span class="o">.</span><span class="n">top_k</span><span class="p">,</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">chosen</span><span class="p">,</span> <span class="n">idx</span><span class="p">)</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">top</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">to</span><span class="p">(</span><span class="n">w</span><span class="o">.</span><span class="n">dtype</span><span class="p">),</span> <span class="n">w</span><span class="p">)</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">slots</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="mi">2</span><span class="p">),</span> <span class="n">routed</span><span class="p">)</span></code></pre>
+<p>The experts are stored fused: <code>experts.gate_up_proj</code> is <code>[48, 1024, 1280]</code>, each expert's gate
+rows then its up rows, and <code>experts.down_proj</code> is <code>[48, 1280, 512]</code>. The default
+<code>experts_implementation</code>, <code>grouped_mm</code>, serves <code>expert_outputs</code>.</p>
+<h2>The sink scales the head outputs</h2>
+<p>As on Granite Swash, each head's output is multiplied after the softmax by
+<code>sigmoid(logsumexp(scores) - sink)</code>, with the sink in <code>self_attn._module.sinks</code>, so
+<code>attention_probabilities</code> rows sum to one and <code>attention_head_outputs</code> are read after the scale.
+On a code prompt the median of that share over heads and queries is 0.84 in block 0, and 0.14 to
+0.25 in blocks 1, 3 and 27. A pattern read as what a head moves is <code>probs * share[..., None]</code>; to
+set what a head writes, edit <code>attention_head_outputs</code>.</p>
+<pre class="code"><code><span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span>
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">scores</span> <span class="o">=</span> <span class="n">attn</span><span class="o">.</span><span class="n role-attention">attention_scores</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">probs</span> <span class="o">=</span> <span class="n">attn</span><span class="o">.</span><span class="n role-attention">attention_probabilities</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">share</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">sigmoid</span><span class="p">(</span><span class="n">scores</span><span class="o">.</span><span class="n">logsumexp</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span> <span class="o">-</span> <span class="n">attn</span><span class="o">.</span><span class="n">_module</span><span class="o">.</span><span class="n">sinks</span><span class="o">.</span><span class="n">view</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="mi">1</span><span class="p">))</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">scores</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">),</span> <span class="n">probs</span><span class="p">)</span></code></pre>
+<p>transformers has no <code>sdpa</code> path for this attention, so a default load runs eager and the six
+interior values are available. The query scale is <code>attention_multiplier</code>, 1/64, which is
+<code>1 / head_dim</code>. There are 20 query heads over 4 key/value heads of 64: an edit to key/value head
+<code>j</code> reaches query heads <code>5j</code> to <code>5j + 4</code>.</p>
+<h2>A write moves the other positions in bfloat16</h2>
+<p>A write to <code>attention_output</code> or <code>mlp_output</code> reaches the model as the whole edited copy divided
+by <code>residual_multiplier</code>. With 0.26 that round trip is exact for all but 2 of the 65280 finite
+bfloat16 products <code>x * 0.26</code>, but the mixtures add a second source: an edit changes the edited
+token's routing in later blocks, and from then on the grouped expert kernels compute the other
+tokens' outputs with different rounding. Adding a unit vector at the last position of block 1, to
+<code>mlp_output</code> or as <code>mlp.output[:, -1] += v / m</code>, moved the earlier positions' logits by up to 0.62
+(a KL of 0.004) in bfloat16, against a KL of 9e-6 at the edited position. In float32 the earlier
+positions stay bit-identical. Load in float32 for any edit whose effect is small.</p>
+<pre class="code"><code><span class="n">m</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">residual_multiplier</span>
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n">output</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="n">v</span> <span class="o">/</span> <span class="n">m</span>       <span class="c1"># bfloat16: earlier positions move by rounding</span></code></pre>
+<h2>Logits are divided by 5, and the embeddings multiplied by 12</h2>
+<p><code>model.logits</code> is <code>model.lm_head.output / logits_scaling</code> exactly, and <code>project_on_vocab</code> divides
+too. A softmax over <code>lm_head.output</code> is at temperature 1/5: after "The capital of the United
+Kingdom is", <code>London</code> has probability 0.70 from <code>logits</code> and 1.00 from <code>lm_head.output</code>.
+<code>token_embeddings</code> is the plain lookup and <code>layers[0].input</code> is it times 12; to set what block 0
+reads, edit <code>layers[0].input</code>. <code>lm_head</code> and <code>embed_tokens</code> are one parameter.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">emb</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">token_embeddings</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">first</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">resid</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">raw</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">lm_head</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n role-stream">logits</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">logits</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">emb</span> <span class="o">*</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">embedding_multiplier</span><span class="p">)</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n role-stream">logits</span><span class="p">,</span> <span class="n">raw</span> <span class="o">/</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">logits_scaling</span><span class="p">)</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n role-stream">model</span><span class="o">.</span><span class="n">project_on_vocab</span><span class="p">(</span><span class="n">resid</span><span class="p">),</span> <span class="n role-stream">logits</span><span class="p">)</span></code></pre>
+<p>The vocabulary is Granite 4's, 100352 tokens; no beginning-of-sequence token is prepended, and
+<code>" London"</code> (7295) and <code>" Paris"</code> (12366) are single tokens.</p>
+<h2>What this family module covers</h2>
+<p>Every checkpoint whose config says <code>granitemoe_swa</code>: granite-swash-3b-a600m. <code>granite_swa</code> is the
+dense Swash model, the same attention with an MLP. <code>granitemoeshared</code> is GraniteMoE's block with a
+shared expert, whose <code>mlp_output</code> carries both experts' sum.</p></div>
+    <aside class="quirk-list">
+      <div class="pane" data-pane="quirk_list" data-ckpts="ibm-granite/granite-swash-3b-a600m"><p class="micro">quirks</p>
+<div class="quirk"><span class="chip">Scaled residual adds</span><p class="body-md">A multiplier sits on the residual adds: on a sublayer&#39;s output before it joins the stream, on the stream itself, or on the block&#39;s whole output.</p></div><div class="quirk"><span class="chip">Sliding window</span><p class="body-md">Some blocks, or every block, attend only to a window of the latest positions. A config key sets its length (sliding_window, window_size), and where the config lists each block&#39;s type (layer_types, attention_layers), that list says which blocks.</p></div><div class="quirk"><span class="chip">Sink-scaled heads</span><p class="body-md">A learned sink per head joins the softmax, and each head&#39;s output is scaled by the share of probability the real keys kept; the pattern&#39;s rows still sum to one.</p></div><div class="quirk"><span class="chip">Mixture of experts</span><p class="body-md">On every block or some, the MLP is a mixture of experts: layers[i].mlp serves router_logits, expert_weights, expert_indices and expert_outputs, though some families leave one or more of them unavailable.</p></div><div class="quirk"><span class="chip">Embedding multiplier</span><p class="body-md">The model scales the embedding module&#39;s output before block 0, so token_embeddings is the unscaled tensor and layers[0].input the scaled one.</p></div><div class="quirk"><span class="chip">Scaled logits</span><p class="body-md">The model multiplies or divides lm_head&#39;s output by a scale from the config, so logits is not lm_head&#39;s raw output.</p></div></div>
+    </aside>
+  </div>
+  <div class="pane" data-pane="vision_notes" data-ckpts="ibm-granite/granite-swash-3b-a600m"></div>
+</section>
+
+<section class="frame section" id="source">
+  <div class="topbar"><h2 class="disp-section">From the <em>family module</em></h2><span class="micro">04 · nnterp/families/granitemoe_swa.py</span></div>
+  <div class="grid-notes">
+    <div class="prose docstring"><p>GraniteMoE SWA (<code>GraniteMoeSWAForCausalLM</code>).</p>
+<p>Granite SWA's attention (<code>granite_swa.py</code>: sliding-window and full blocks, a
+per-head sink that scales the head outputs after the softmax) in GraniteMoE's
+block (<code>granitemoe.py</code>): <code>block_sparse_moe</code>, routed experts only, is <code>mlp</code>,
+and the block adds each sublayer's output times <code>residual_multiplier</code>, so
+<code>attention_output</code> and <code>mlp_output</code> are the scaled copies. <code>embedding_multiplier</code>
+and <code>logits_scaling</code> are as on Granite.</p>
+<p>Where the config sets <code>shared_intermediate_size</code> (1280 on
+<code>ibm-granite/granite-swash-3b-a600m</code>; 0 on the pinned tiny) the block also runs a
+<code>shared_mlp</code> beside the experts and adds the sum. This family binds <code>mlp_output</code> to
+the routed experts' output times <code>residual_multiplier</code> only, and
+<code>shared_expert_output</code> reports no shared expert, so on that checkpoint
+<code>input + attention_output + mlp_output</code> misses <code>layer_output</code> by the shared
+expert's term; read <code>layers[i]._module.shared_mlp</code> (or its envoy) for it.</p></div>
+    <aside class="quirk-list">
+      <p class="micro">sources</p>
+      <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/granitemoe_swa.py">nnterp/families/granitemoe_swa.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_granitemoe_swa.py">tests/families/test_granitemoe_swa.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
+      <p class="micro">envoys</p>
+      <p class="body-md mono">GraniteMoeSWADecoderLayer → Layer<br>GraniteMoeSWAAttention → self_attn<br>GraniteMoeSWAMoE → mlp</p>
+      <div class="pane" data-pane="envoys" data-ckpts="ibm-granite/granite-swash-3b-a600m"></div>
+    </aside>
+  </div>
+</section>
+
+<script type="application/json" id="checkpoints-json">{"default": "ibm-granite/granite-swash-3b-a600m", "checkpoints": {"ibm-granite/granite-swash-3b-a600m": {"schema": {"topology": "sequential", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "20/4 heads, scale 0.015625, sink", "variants": {"sliding_attention": "window of 128 tokens, sink", "full_attention": "full causal attention, sink"}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "moe", "label": "MoE", "detail": "48 experts \u00d7 512, top 4", "variants": {}, "pre_norm": "post_attention_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "router_logits", "short": "logits", "part": "router"}, {"name": "expert_weights", "short": "weights", "part": "router"}, {"name": "expert_indices", "short": "indices", "part": "router"}, {"name": "expert_outputs", "short": "per slot", "part": "experts"}, {"name": "routed_output", "short": "routed", "part": "experts"}], "moe": {"num_experts": 48, "top_k": 4, "scoring": "topk_softmax"}, "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output + shared_mlp.output * residual_multiplier == layer_output", "num_layers": 28, "layer_types": ["full_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention"], "mids": ["boundary.layer_mid"], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "GraniteMoeSWAAttention under its standard name. 20/4 heads, scale 0.015625, sink", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 1", "condition": null, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 2", "condition": null, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 3", "condition": null, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `F_softmax_0` inside `attention_interface_1`", "condition": null, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `F_dropout_0` inside `attention_interface_1`", "condition": null, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `attention_interface_1`, element 0", "condition": null, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream: its output times residual_multiplier", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name.", "role": "norm"}, "sub.mlp": {"eyebrow": "MoE", "expr": "model.layers[i].mlp", "desc": "GraniteMoeSWAMoE under its standard name. 48 experts \u00d7 512, top 4", "layout": null, "dims": null, "where": null, "condition": null, "extra": "9 standard values; `.input` is what the sublayer reads."}, "interior.mlp.router_logits": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.router_logits", "desc": "The router's logits, one per expert, before the scoring", "layout": "RouterLogits", "dims": "batch seq num_experts", "where": "inside `router`'s forward: the output of `F_linear_0`", "condition": null, "extra": null}, "interior.mlp.expert_weights": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.expert_weights", "desc": "The weight each selected expert's output is scaled by", "layout": "ExpertWeights", "dims": "batch seq top_k", "where": "the child module `experts`'s inputs, element 2", "condition": null, "extra": null}, "interior.mlp.expert_indices": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.expert_indices", "desc": "The expert each routing slot sends the token to", "layout": "ExpertIndices", "dims": "batch seq top_k", "where": "the child module `experts`'s inputs, element 1", "condition": null, "extra": null}, "interior.mlp.expert_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.expert_outputs", "desc": "Each routing slot's weighted expert output", "layout": "ExpertOutputs", "dims": "batch seq top_k hidden_size", "where": "inside `experts`'s forward: the output of `weighted_out_view_0` inside `experts_forward_1`", "condition": null, "extra": null}, "interior.mlp.routed_output": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.routed_output", "desc": "The routed experts' combined output", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `experts`'s output", "condition": null, "extra": null}, "moe.mlp.router": {"eyebrow": "the router", "expr": "model.layers[i].mlp.router", "desc": "`GraniteMoeSWATopKRouter`. One logit per expert (48) for each token; the scoring is `topk_softmax`, and 4 are picked: `expert_indices`, each weighted by its `expert_weights`.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "moe.mlp.experts": {"eyebrow": "the routed experts", "expr": "model.layers[i].mlp.experts", "desc": "`GraniteMoeSWAExperts`, 48 experts. Each token runs through the 4 it is routed to; `expert_outputs` holds each slot's weighted output and `routed_output` their sum.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream: its output times residual_multiplier", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `post_attention_layernorm`'s output", "condition": null, "extra": "`model.layers[i].post_attention_layernorm`, a native module under its own name. Named for its place on the stream, after the attention's add: it is the mixture's input norm, and the router, every expert and the block's shared_mlp read its output.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.layer_mid": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_mid", "desc": "The residual stream after the attention add", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `post_attention_layernorm`'s input", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output + shared_mlp.output * residual_multiplier == layer_output", "desc": "attention_output and mlp_output are the modules' outputs times residual_multiplier; the block's shared_mlp is in neither, so its scaled output is the third term. Exact in float32 on the pinned checkpoint given a shared expert; without one (shared_intermediate_size 0) the term drops out.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "token_embeddings is the lookup itself; the model multiplies it by embedding_multiplier (12) before block 0, so layers[0].input is token_embeddings \u00b7 12."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "28 blocks of GraniteMoeSWADecoderLayer; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "Each block adds its attention's output and its mixture's plus its shared expert's output, each times residual_multiplier (0.26)."}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head shares its weight with embed_tokens (tie_word_embeddings)."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": "logits = lm_head.output / logits_scaling (5). project_on_vocab divides too."}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">+<\/span> <span class=\"n\">shared_mlp<\/span><span class=\"o\">.<\/span><span class=\"n\">output<\/span> <span class=\"o\">*<\/span> <span class=\"n\">residual_multiplier<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "GraniteMoeSWAForCausalLM", "url": "https://huggingface.co/ibm-granite/granite-swash-3b-a600m"}}}</script>
+<footer class="colophon frame">
+  <div class="rule"></div>
+  <div class="colophon-row">
+    <span class="micro">nnterp encyclopedia</span>
+    <span class="mono">built 2026-10-21 · nnterp 1.3.1.dev428+gf5e97f4de · transformers 5.20.2 · reference <span id="colophon-reference">ibm-granite/granite-swash-3b-a600m</span></span>
+  </div>
+</footer>
+<script src="static/encyclopedia.js"></script>
+<script src="static/block.js"></script></body>
+</html>

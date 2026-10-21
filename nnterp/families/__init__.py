@@ -56,7 +56,12 @@ def _key(model_type: str, engine: str | None) -> str:
 def covers(model_type: str, engine: str | None = None) -> bool:
     """Whether a family covers ``model_type`` on ``engine``: one registered for it, or a module of that name here."""
     key = _key(model_type, engine)
-    return key in REGISTRY or importlib.util.find_spec(f"{__name__}.{key}") is not None
+    if key in REGISTRY:
+        return True
+    try:  # a dotted model_type (kosmos-2.5) reads as a package path; no module here has one
+        return importlib.util.find_spec(f"{__name__}.{key}") is not None
+    except ModuleNotFoundError:
+        return False
 
 
 def resolve(config: Any, engine: str | None = None) -> ModuleType:

@@ -8,7 +8,7 @@ from huggingface_hub import snapshot_download
 from safetensors.torch import load_file, save_file
 from vllm_suite import VLLMFamilySuite
 
-from nnterp.families.vllm import deepseek_v3, kimi_k2
+from nnterp.families.vllm import deepseek_v3, kimi_k25
 
 UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | frozenset({
     f"self_attn.{value}" for value in ("attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_probabilities", "attention_head_outputs")
@@ -56,7 +56,7 @@ class TestVLLMKimiK2(VLLMFamilySuite):
     """float32, on vLLM's ordinary attention layer (``VLLM_MLA_DISABLE=1``), as `deepseek_v3`'s first class."""
 
     REPO = _checkpoint()
-    FAMILY = kimi_k2
+    FAMILY = kimi_k25
     NATIVE = {
         "embed_tokens": f"{PREFIX}.embed_tokens",
         "layers": f"{PREFIX}.layers",
@@ -84,5 +84,5 @@ class TestVLLMKimiK2(VLLMFamilySuite):
 
     def test_the_family_is_deepseek_v3s(self, model):
         assert model.config.text_config.model_type == "kimi_k2"
-        assert kimi_k2.ENVOYS is deepseek_v3.ENVOYS
+        assert kimi_k25.ENVOYS is deepseek_v3.ENVOYS
         assert type(model.layers[0].mlp) is deepseek_v3.Mlp and type(model.layers[-1].mlp) is deepseek_v3.Mlp

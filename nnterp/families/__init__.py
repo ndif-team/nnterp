@@ -12,7 +12,8 @@ A toolkit is one module in this package, named after the ``model_type``
   the family's own subclasses of `nnterp.components`'s, overriding only what its
   forward spells differently.
 * ``ENVOYS``: an nnsight ``envoys`` dict keying those on the family's module
-  types (``envoys=`` matches by type or *native* path, never by alias).
+  types (``envoys=`` matches by type first, then by path, in a native or an
+  alias spelling).
 
 The module's name is its ``model_type`` (``gemma3_text.py`` covers
 ``gemma3_text``), and that is the whole registry: `lookup` imports

@@ -1,0 +1,93 @@
+# nnterp
+
+> nnterp gives every transformer family the same module names and the same standard values, on top of nnsight. StandardizedTransformer is an nnsight TransformersModel whose envoy tree answers to Llama's names (embed_tokens, layers[i].self_attn, layers[i].mlp, norm, lm_head) on every family, with values (layer_output, attention_output, mlp_output, attention_probabilities, logits, ...) that mean the same thing everywhere. StandardizedVLLM is the same over nnsight's vLLM engine.
+
+- Documentation: https://ndif-team.github.io/nnterp/
+- GitHub: https://github.com/ndif-team/nnterp
+- PyPI: https://pypi.org/project/nnterp/
+- nnsight, which nnterp builds on: https://nnsight.net
+- Paper (nnterp 1.x): https://arxiv.org/abs/2511.14465
+
+## Pages
+
+### Getting Started
+
+- Getting Started index: https://ndif-team.github.io/nnterp/getting-started/
+- Installation: https://ndif-team.github.io/nnterp/getting-started/installation/
+- Quick Start: https://ndif-team.github.io/nnterp/getting-started/quickstart/
+- Coming from nnsight: https://ndif-team.github.io/nnterp/getting-started/from-nnsight/
+- Coming from nnterp 1.x: https://ndif-team.github.io/nnterp/getting-started/from-nnterp-1/
+
+### Guide
+
+- Guide index: https://ndif-team.github.io/nnterp/guide/
+- Loading: https://ndif-team.github.io/nnterp/guide/loading/
+- Names: https://ndif-team.github.io/nnterp/guide/names/
+
+### Values
+
+- Residual stream: https://ndif-team.github.io/nnterp/guide/values/residual-stream/
+- Attention: https://ndif-team.github.io/nnterp/guide/values/attention/
+- The whole model: https://ndif-team.github.io/nnterp/guide/values/whole-model/
+- Layouts: https://ndif-team.github.io/nnterp/guide/values/layouts/
+- Availability: https://ndif-team.github.io/nnterp/guide/values/availability/
+
+### Architectures
+
+- Mixture of experts: https://ndif-team.github.io/nnterp/guide/architectures/mixture-of-experts/
+- Gated DeltaNet: https://ndif-team.github.io/nnterp/guide/architectures/delta-net/
+- Mamba: https://ndif-team.github.io/nnterp/guide/architectures/mamba/
+- Mamba-2: https://ndif-team.github.io/nnterp/guide/architectures/mamba-2/
+- Vision-language: https://ndif-team.github.io/nnterp/guide/architectures/vision-language/
+- Methods: https://ndif-team.github.io/nnterp/guide/methods/
+- Generation: https://ndif-team.github.io/nnterp/guide/generation/
+- Helpers: https://ndif-team.github.io/nnterp/guide/helpers/
+- Remote: https://ndif-team.github.io/nnterp/guide/remote/
+
+### Tutorials
+
+- Tutorials index: https://ndif-team.github.io/nnterp/tutorials/
+- Logit lens: https://ndif-team.github.io/nnterp/tutorials/logit-lens/
+- Attention patterns: https://ndif-team.github.io/nnterp/tutorials/attention-patterns/
+- Contribution decomposition: https://ndif-team.github.io/nnterp/tutorials/contribution-decomposition/
+- Ablation: https://ndif-team.github.io/nnterp/tutorials/ablation/
+- Activation patching: https://ndif-team.github.io/nnterp/tutorials/activation-patching/
+- Steering: https://ndif-team.github.io/nnterp/tutorials/steering/
+- Probing: https://ndif-team.github.io/nnterp/tutorials/probing/
+- Cross-family sweep: https://ndif-team.github.io/nnterp/tutorials/cross-family-sweep/
+- Expert ablation: https://ndif-team.github.io/nnterp/tutorials/expert-ablation/
+- Image pathway: https://ndif-team.github.io/nnterp/tutorials/image-pathway/
+- DeltaNet state: https://ndif-team.github.io/nnterp/tutorials/delta-net-state/
+
+### vLLM
+
+- Loading and what differs: https://ndif-team.github.io/nnterp/vllm/
+- What is unavailable: https://ndif-team.github.io/nnterp/vllm/unavailable/
+- Families on vLLM: https://ndif-team.github.io/nnterp/vllm/families/
+
+### Developing
+
+- Developing index: https://ndif-team.github.io/nnterp/developing/
+- Adding a family: https://ndif-team.github.io/nnterp/developing/adding-a-family/
+- Overriding a value: https://ndif-team.github.io/nnterp/developing/overriding-values/
+- Custom values: https://ndif-team.github.io/nnterp/developing/custom-values/
+- Finding source ops: https://ndif-team.github.io/nnterp/developing/finding-source-ops/
+- Registering: https://ndif-team.github.io/nnterp/developing/registering/
+
+### Internals
+
+- Architecture: https://ndif-team.github.io/nnterp/developing/internals/architecture/
+- Descriptors: https://ndif-team.github.io/nnterp/developing/internals/descriptors/
+- Recurrent mixers: https://ndif-team.github.io/nnterp/developing/internals/recurrent-mixers/
+- Vision: https://ndif-team.github.io/nnterp/developing/internals/vision/
+- Testing: https://ndif-team.github.io/nnterp/developing/testing/
+- transformers compatibility: https://ndif-team.github.io/nnterp/developing/transformers-compatibility/
+- Contributing: https://ndif-team.github.io/nnterp/developing/contributing/
+
+### Documentation
+
+- Documentation index: https://ndif-team.github.io/nnterp/documentation/
+- API at a glance: https://ndif-team.github.io/nnterp/reference/api-at-a-glance/
+- Glossary: https://ndif-team.github.io/nnterp/reference/glossary/
+
+- About: https://ndif-team.github.io/nnterp/about/

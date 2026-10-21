@@ -1,10 +1,10 @@
 name: Build and Deploy Documentation
 
-# Deploys on every push to the site branch, as nnsight-website deploys from its docs branch.
-# Once the site lives on main, change the branch here.
+# Deploys on every push that touches the site, on the branches the site lives on
+# (as nnsight-website deploys from its docs branch). Add main once it is there.
 on:
   push:
-    branches: [site]
+    branches: [site, 0.8-refactor]
     paths:
       - "site/**"
       - "nnterp/**"

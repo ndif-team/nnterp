@@ -12,11 +12,11 @@
 
 ### Getting Started
 
-- Getting Started index: https://ndif-team.github.io/nnterp/getting-started/
-- Installation: https://ndif-team.github.io/nnterp/getting-started/installation/
-- Quick Start: https://ndif-team.github.io/nnterp/getting-started/quickstart/
-- Coming from nnsight: https://ndif-team.github.io/nnterp/getting-started/from-nnsight/
-- Coming from nnterp 1.x: https://ndif-team.github.io/nnterp/getting-started/from-nnterp-1/
+- Getting Started: https://ndif-team.github.io/nnterp/getting-started/
+- Installation: https://ndif-team.github.io/nnterp/getting-started/#installation
+- Quick start: https://ndif-team.github.io/nnterp/getting-started/#quick-start
+- Coming from nnsight: https://ndif-team.github.io/nnterp/getting-started/#coming-from-nnsight
+- Coming from nnterp 1.x: https://ndif-team.github.io/nnterp/getting-started/#coming-from-nnterp-1x
 
 ### Guide
 

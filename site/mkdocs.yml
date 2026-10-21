@@ -106,12 +106,7 @@ markdown_extensions:
 # Page tree
 nav:
   - Home: index.md
-  - Getting Started:
-    - getting-started/index.md
-    - Installation: getting-started/installation.md
-    - Quick Start: getting-started/quickstart.md
-    - Coming from nnsight: getting-started/from-nnsight.md
-    - Coming from nnterp 1.x: getting-started/from-nnterp-1.md
+  - Getting Started: getting-started/index.md
   - Guide:
     - guide/index.md
     - Loading: guide/loading.md

@@ -24,7 +24,7 @@
     <h1 class="disp-title"><span class="line">StarCoder</span><span class="line">SantaCoder</span></h1>
     <p class="subtitle">GPT-2&#39;s sequential block with multi-query attention: one key head and one value head serve every query head, and the queries, keys and values are cut from one fused c_attn projection.</p>
     <div class="pane" data-pane="chips" data-ckpts="bigcode/gpt_bigcode-santacoder bigcode/tiny_starcoder_py bigcode/octocoder HuggingFaceH4/starchat-alpha WizardLMTeam/WizardCoder-15B-V1.0"><div class="chips">
-<a class="chip" href="#notes" title="A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input.">Position embeddings</a><a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a></div></div>
+<a class="chip" href="#notes" title="A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input.">Position embeddings</a><a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a><a class="chip" href="#notes" title="One key/value head serves every query head (num_kv_heads is 1), so an edit to its keys or values reaches all of them.">Multi-query attention</a></div></div>
   </div>
   <aside class="hero-side">
     <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
@@ -759,7 +759,7 @@ OctoCoder, StarChat-alpha and WizardCoder-15B are open, and are 40 × 6144 with 
 <code>gpt_bigcode-santacoder</code> does.</p></div>
     <aside class="quirk-list">
       <div class="pane" data-pane="quirk_list" data-ckpts="bigcode/gpt_bigcode-santacoder bigcode/tiny_starcoder_py bigcode/octocoder HuggingFaceH4/starchat-alpha WizardLMTeam/WizardCoder-15B-V1.0"><p class="micro">quirks</p>
-<div class="quirk"><span class="chip">Position embeddings</span><p class="body-md">A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input.</p></div><div class="quirk"><span class="chip">LayerNorm</span><p class="body-md">Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.</p></div></div>
+<div class="quirk"><span class="chip">Position embeddings</span><p class="body-md">A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input.</p></div><div class="quirk"><span class="chip">LayerNorm</span><p class="body-md">Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.</p></div><div class="quirk"><span class="chip">Multi-query attention</span><p class="body-md">One key/value head serves every query head (num_kv_heads is 1), so an edit to its keys or values reaches all of them.</p></div></div>
     </aside>
   </div>
   <div class="pane" data-pane="vision_notes" data-ckpts="bigcode/gpt_bigcode-santacoder bigcode/tiny_starcoder_py bigcode/octocoder HuggingFaceH4/starchat-alpha WizardLMTeam/WizardCoder-15B-V1.0"></div>

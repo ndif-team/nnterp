@@ -24,7 +24,7 @@
     <h1 class="disp-title"><span class="line">Arcee AFM</span></h1>
     <p class="subtitle">Llama&#39;s block whose MLP has no gate: up_proj, a squared ReLU and down_proj, so a neuron is exactly zero wherever its pre-activation is negative.</p>
     <div class="pane" data-pane="chips" data-ckpts="arcee-ai/AFM-4.5B-Base arcee-ai/AFM-4.5B arcee-ai/AFM-4.5B-Preview arcee-ai/AFM-4.5B-Base-Pre-Anneal"><div class="chips">
-<a class="chip" href="#notes" title="The MLP&#39;s activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere.">Squared ReLU</a></div></div>
+<a class="chip" href="#notes" title="The MLP&#39;s activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere.">Squared ReLU</a><a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a></div></div>
   </div>
   <aside class="hero-side">
     <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
@@ -597,7 +597,7 @@ system turn naming the model when the messages have none; its <code>eos_token</c
 are the <code>afmoe</code> family.</p></div>
     <aside class="quirk-list">
       <div class="pane" data-pane="quirk_list" data-ckpts="arcee-ai/AFM-4.5B-Base arcee-ai/AFM-4.5B arcee-ai/AFM-4.5B-Preview arcee-ai/AFM-4.5B-Base-Pre-Anneal"><p class="micro">quirks</p>
-<div class="quirk"><span class="chip">Squared ReLU</span><p class="body-md">The MLP&#39;s activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere.</p></div></div>
+<div class="quirk"><span class="chip">Squared ReLU</span><p class="body-md">The MLP&#39;s activation is relu(x)²: a neuron is exactly zero wherever its pre-activation is negative, and grows with its square elsewhere.</p></div><div class="quirk"><span class="chip">Grouped-query attention</span><p class="body-md">Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.</p></div></div>
     </aside>
   </div>
   <div class="pane" data-pane="vision_notes" data-ckpts="arcee-ai/AFM-4.5B-Base arcee-ai/AFM-4.5B arcee-ai/AFM-4.5B-Preview arcee-ai/AFM-4.5B-Base-Pre-Anneal"></div>

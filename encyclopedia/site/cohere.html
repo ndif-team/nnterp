@@ -1,0 +1,579 @@
+<!doctype html>
+<html lang="en" style="--c1: #8BAAEB; --c2: #C9A65D; --c3: #CA95CF; --c4: #E3928C; --c5: #5EC0A6; --c1-deep: #46619C; --c2-deep: #7E5D07; --c3-deep: #7F4E83; --c4-deep: #944A47; --c5-deep: #00745F; --paper: #F1E6CB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Command R / Command R+ · nnterp encyclopedia</title>
+<meta name="description" content="A parallel block whose one LayerNorm, without a bias, feeds both the attention and the MLP; rotary turns adjacent pairs of dimensions, Command R+ norms queries and keys per head, and the logits are the head&#39;s output times logit_scale.">
+<link rel="icon" type="image/svg+xml" href="static/favicon.svg">
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%238BAAEB%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23C9A65D%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23CA95CF%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23E3928C%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%235EC0A6%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Albert+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/encyclopedia.css">
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<header class="masthead frame">
+  <a class="micro-lg brand" href="index.html">nnterp · encyclopedia</a>
+  <span class="mono masthead-right">cohere · nnterp.families.cohere</span>
+</header>
+<section class="hero frame">
+  <div class="hero-text">
+    <p class="micro-lg eyebrow">family <span class="mono">cohere</span></p>
+    <h1 class="disp-title"><span class="line">Command R</span><span class="line">Command R+</span></h1>
+    <p class="subtitle">A parallel block whose one LayerNorm, without a bias, feeds both the attention and the MLP; rotary turns adjacent pairs of dimensions, Command R+ norms queries and keys per head, and the logits are the head&#39;s output times logit_scale.</p>
+    <div class="pane" data-pane="chips" data-ckpts="unsloth/c4ai-command-r-08-2024 unsloth/c4ai-command-r-plus-08-2024"><div class="chips">
+<a class="chip" href="#notes" title="Attention and MLP both read the block&#39;s input, through one shared norm or one each, and the block returns x + attn + mlp.">Parallel block</a><a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a><a class="chip" href="#notes" title="Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.">Interleaved rotary</a><a class="chip" href="#notes" title="On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.">Query/key norms</a><a class="chip" href="#notes" title="The model multiplies or divides lm_head&#39;s output by a scale from the config, so logits is not lm_head&#39;s raw output.">Scaled logits</a></div></div>
+  </div>
+  <aside class="hero-side">
+    <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
+<div class="ckpt" id="ckpt" data-selector>
+  <span class="micro ckpt-label" id="ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="ckpt-list" aria-labelledby="ckpt-label ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="ckpt-name">c4ai-command-r-08-2024</span><span class="ckpt-eye ckpt-eye-current" id="ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="ckpt-list" role="listbox" tabindex="-1" aria-labelledby="ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-1">
+      <p class="micro ckpt-group-label" id="ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="ckpt-option-unsloth--c4ai-command-r-08-2024" data-ckpt="unsloth/c4ai-command-r-08-2024" data-name="c4ai-command-r-08-2024"
+           aria-selected="true" title="unsloth/c4ai-command-r-08-2024">
+        <span class="mono">c4ai-command-r-08-2024</span>      </div>
+      <div class="ckpt-option" role="option" id="ckpt-option-unsloth--c4ai-command-r-plus-08-2024" data-ckpt="unsloth/c4ai-command-r-plus-08-2024" data-name="c4ai-command-r-plus-08-2024"
+           aria-selected="false" title="unsloth/c4ai-command-r-plus-08-2024">
+        <span class="mono">c4ai-command-r-plus-08-2024</span>      </div>
+    </div>
+    <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-2">
+      <p class="micro ckpt-group-label" id="ckpt-group-2">not available</p>
+      <div class="ckpt-option" role="option" id="ckpt-option-CohereLabs--c4ai-command-r-v01" data-ckpt="CohereLabs/c4ai-command-r-v01" data-name="c4ai-command-r-v01"
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its config is not in the Hub cache, and the build is offline">
+        <span class="mono">c4ai-command-r-v01</span>      </div>
+      <div class="ckpt-option" role="option" id="ckpt-option-CohereLabs--c4ai-command-r-plus" data-ckpt="CohereLabs/c4ai-command-r-plus" data-name="c4ai-command-r-plus"
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its config is not in the Hub cache, and the build is offline">
+        <span class="mono">c4ai-command-r-plus</span>      </div>
+      <div class="ckpt-option" role="option" id="ckpt-option-CohereLabs--c4ai-command-r-08-2024" data-ckpt="CohereLabs/c4ai-command-r-08-2024" data-name="c4ai-command-r-08-2024"
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its config is not in the Hub cache, and the build is offline">
+        <span class="mono">c4ai-command-r-08-2024</span>      </div>
+      <div class="ckpt-option" role="option" id="ckpt-option-CohereLabs--c4ai-command-r-plus-08-2024" data-ckpt="CohereLabs/c4ai-command-r-plus-08-2024" data-name="c4ai-command-r-plus-08-2024"
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its config is not in the Hub cache, and the build is offline">
+        <span class="mono">c4ai-command-r-plus-08-2024</span>      </div>
+    </div>
+  </div>
+        <div class="pane" data-pane="hub" data-ckpts="unsloth/c4ai-command-r-08-2024"><p class="ckpt-facts mono"><span><b>32.3B</b> parameters</span><span>released <b>Sep 2024</b></span></p></div><div class="pane" data-pane="hub" data-ckpts="unsloth/c4ai-command-r-plus-08-2024" hidden><p class="ckpt-facts mono"><span><b>104B</b> parameters</span><span>released <b>Sep 2024</b></span></p></div>
+      <a class="ckpt-hub" id="ckpt-hub" href="https://huggingface.co/unsloth/c4ai-command-r-08-2024" title="unsloth/c4ai-command-r-08-2024 on the Hugging Face Hub" aria-label="unsloth/c4ai-command-r-08-2024 on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
+
+</div>
+  </aside>
+</section>
+
+<div class="stickybar" id="stickybar" aria-hidden="true">
+  <div class="frame stickybar-row">
+    <span class="stickybar-title">Command R · Command R+</span>
+<div class="ckpt" id="bar-ckpt" data-selector>
+  <span class="micro ckpt-label" id="bar-ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="bar-ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="bar-ckpt-list" aria-labelledby="bar-ckpt-label bar-ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="bar-ckpt-name">c4ai-command-r-08-2024</span><span class="ckpt-eye ckpt-eye-current" id="bar-ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="bar-ckpt-list" role="listbox" tabindex="-1" aria-labelledby="bar-ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="bar-ckpt-group-1">
+      <p class="micro ckpt-group-label" id="bar-ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-unsloth--c4ai-command-r-08-2024" data-ckpt="unsloth/c4ai-command-r-08-2024" data-name="c4ai-command-r-08-2024"
+           aria-selected="true" title="unsloth/c4ai-command-r-08-2024">
+        <span class="mono">c4ai-command-r-08-2024</span>      </div>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-unsloth--c4ai-command-r-plus-08-2024" data-ckpt="unsloth/c4ai-command-r-plus-08-2024" data-name="c4ai-command-r-plus-08-2024"
+           aria-selected="false" title="unsloth/c4ai-command-r-plus-08-2024">
+        <span class="mono">c4ai-command-r-plus-08-2024</span>      </div>
+    </div>
+    <div class="ckpt-group" role="group" aria-labelledby="bar-ckpt-group-2">
+      <p class="micro ckpt-group-label" id="bar-ckpt-group-2">not available</p>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-CohereLabs--c4ai-command-r-v01" data-ckpt="CohereLabs/c4ai-command-r-v01" data-name="c4ai-command-r-v01"
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its config is not in the Hub cache, and the build is offline">
+        <span class="mono">c4ai-command-r-v01</span>      </div>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-CohereLabs--c4ai-command-r-plus" data-ckpt="CohereLabs/c4ai-command-r-plus" data-name="c4ai-command-r-plus"
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its config is not in the Hub cache, and the build is offline">
+        <span class="mono">c4ai-command-r-plus</span>      </div>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-CohereLabs--c4ai-command-r-08-2024" data-ckpt="CohereLabs/c4ai-command-r-08-2024" data-name="c4ai-command-r-08-2024"
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its config is not in the Hub cache, and the build is offline">
+        <span class="mono">c4ai-command-r-08-2024</span>      </div>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-CohereLabs--c4ai-command-r-plus-08-2024" data-ckpt="CohereLabs/c4ai-command-r-plus-08-2024" data-name="c4ai-command-r-plus-08-2024"
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its config is not in the Hub cache, and the build is offline">
+        <span class="mono">c4ai-command-r-plus-08-2024</span>      </div>
+    </div>
+  </div>
+  
+</div>
+  </div>
+</div>
+
+<section class="frame section" id="block">
+  <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
+  <div class="pane" data-pane="block_head" data-ckpts="unsloth/c4ai-command-r-08-2024"><p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+</p>
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× 40</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final_norm_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>lm_head_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>scaled</small></div>
+</div></div><div class="pane" data-pane="block_head" data-ckpts="unsloth/c4ai-command-r-plus-08-2024" hidden><p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+</p>
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× 64</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final_norm_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>lm_head_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>scaled</small></div>
+</div></div>
+
+  <div class="viz">
+    <div class="viz-panel">
+      <div class="slider-row">
+        <label class="micro" for="layer">block</label>
+        <input type="range" id="layer" min="0" max="39" value="0">
+        <span class="mono" id="layer-label">i = 0</span>
+        <span class="mono variant" id="layer-variant"></span>
+      </div>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+      <svg id="block-svg" role="img" aria-label="The decoder block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card" id="node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each box, edge and ⊕ names what nnterp calls it, where the value is read, and its layout.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity" id="identity"><span class="micro">identity</span> <code><span class="n role-stream">layers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">input</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span> <span class="o">==</span> <span class="n role-stream">layer_output</span></code></p>
+  <div class="pane" data-pane="tower" data-ckpts="unsloth/c4ai-command-r-08-2024 unsloth/c4ai-command-r-plus-08-2024"></div>
+</section>
+
+<section class="frame section" id="support">
+  <div class="topbar"><h2 class="disp-section">The <em>API</em></h2><span class="micro">02 · support()</span></div>
+  <h3 class="ttl-row">Values, by host</h3>
+  <div class="pane" data-pane="values" data-ckpts="unsloth/c4ai-command-r-08-2024 unsloth/c4ai-command-r-plus-08-2024"><p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition.</p><div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model</span> <span class="mono dim">CohereForCausalLM</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="strip.logits">
+    <span class="mono-md name role-stream">logits</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.embed">
+    <span class="mono-md name role-stream">token_embeddings</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The embedding module&#39;s output; layers[0].input is what enters the first block</span>
+    <span class="hide-sm body-md where"><p>the child module <code>embed_tokens</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.norm">
+    <span class="mono-md name role-stream">final_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the final norm, what lm_head reads</span>
+    <span class="hide-sm body-md where"><p>the child module <code>norm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.head">
+    <span class="mono-md name role-stream">lm_head_output</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The head&#39;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the child module <code>lm_head</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">next_token_probs</span>
+    <span class="hide-sm mono">NextTokenProbs <span class="dim">[batch vocab_size]</span></span>
+    <span class="body-md">The next-token distribution at the last position; derived, read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_ids</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The token ids the model was called with</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">attention_mask</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The attention mask the model was called with; zeros are padding</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_size</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">[batch, seq] of the current call; read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model.<wbr>layers[i]</span> <span class="mono dim">CohereDecoderLayer</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">layer_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream entering the block</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.attention_norm_output">
+    <span class="mono-md name role-stream">attention_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the attention</span>
+    <span class="hide-sm body-md where"><p>the child module <code>input_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream"><span class="warn" tabindex="0" data-tip="every block: a parallel block: the attention and the MLP read the same input, so there is no stream between them">&#x26A0;&#xFE0E;</span>layer_mid</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">Unavailable: a parallel block: the attention and the MLP read the same input, so there is no stream between them</span>
+    <span class="hide-sm body-md where"><p>nowhere: the family does not serve it</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_norm_output">
+    <span class="mono-md name role-stream">mlp_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the MLP: the one norm feeds both sublayers</span>
+    <span class="hide-sm body-md where"><p>the child module <code>input_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_input">
+    <span class="mono-md name role-stream">mlp_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP is called with</span>
+    <span class="hide-sm body-md where"><p>the child module <code>mlp</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="stream.output">
+    <span class="mono-md name role-stream">layer_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-attention">model.<wbr>layers[i].<wbr>self_attn</span> <span class="mono dim">CohereAttention</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_queries">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_queries</span>
+    <span class="hide-sm mono">Queries <span class="dim">[batch num_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The queries entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 1</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_keys">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_keys</span>
+    <span class="hide-sm mono">Keys <span class="dim">[batch num_kv_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The keys entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 2</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_values">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_values</span>
+    <span class="hide-sm mono">Values <span class="dim">[batch num_kv_heads seq head_dim]</span></span>
+    <span class="body-md">The values entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 3</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_scores">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_scores</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention scores entering the softmax, masked</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the input of <code>nn_functional_softmax_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_premix">
+    <span class="mono-md name role-attention">attention_premix</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">Every head&#39;s output side by side, as the output projection takes it</span>
+    <span class="hide-sm body-md where"><p>the child module <code>o_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.self_attn">
+    <span class="mono-md name role-attention">attention_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the attention adds to the residual stream</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_probabilities">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_probabilities</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention pattern the values are mixed with</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>nn_functional_dropout_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_head_outputs">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_head_outputs</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">The per-head outputs before the output projection</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>attention_interface_1</code>, element 0</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-mlp">model.<wbr>layers[i].<wbr>mlp</span> <span class="mono dim">CohereMLP</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_activation">
+    <span class="mono-md name role-mlp">mlp_activation</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">The activation function&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the child module <code>act_fn</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_neurons">
+    <span class="mono-md name role-mlp">mlp_neurons</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+    <span class="hide-sm body-md where"><p>the child module <code>down_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.mlp">
+    <span class="mono-md name role-mlp">mlp_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP adds to the residual stream</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div></div>
+
+  <h3 class="ttl-row">Printout</h3>
+  <div class="pane" data-pane="printout" data-ckpts="unsloth/c4ai-command-r-08-2024"><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">unsloth/c4ai-command-r-08-2024</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>CohereForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=8192, out_features=256000, bias=False)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(256000, 8192, padding_idx=0)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-39): 40 x CohereDecoderLayer(
+      <span class="rn role-attention">(self_attn)</span>: CohereAttention(
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=8192, out_features=8192, bias=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=8192, out_features=1024, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=8192, out_features=1024, bias=False)</span>
+        <span class="rn">(o_proj)</span>: Linear<span class="rd">(in_features=8192, out_features=8192, bias=False)</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: CohereMLP(
+        <span class="rn">(gate_proj)</span>: Linear<span class="rd">(in_features=8192, out_features=24576, bias=False)</span>
+        <span class="rn">(up_proj)</span>: Linear<span class="rd">(in_features=8192, out_features=24576, bias=False)</span>
+        <span class="rn">(down_proj)</span>: Linear<span class="rd">(in_features=24576, out_features=8192, bias=False)</span>
+        <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream</span>
+      )
+      <span class="rn role-norm">(input_layernorm)</span>: CohereLayerNorm<span class="rd">()</span>
+      (layer_mid): Unavailable: a parallel block: the attention and the MLP read the same input, so there is no stream between them
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP: the one norm feeds both sublayers</span>
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: CohereLayerNorm<span class="rd">()</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div><div class="pane" data-pane="printout" data-ckpts="unsloth/c4ai-command-r-plus-08-2024" hidden><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">unsloth/c4ai-command-r-plus-08-2024</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>CohereForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=12288, out_features=256000, bias=False)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(256000, 12288, padding_idx=0)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-63): 64 x CohereDecoderLayer(
+      <span class="rn role-attention">(self_attn)</span>: CohereAttention(
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=12288, out_features=12288, bias=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=12288, out_features=1024, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=12288, out_features=1024, bias=False)</span>
+        <span class="rn">(o_proj)</span>: Linear<span class="rd">(in_features=12288, out_features=12288, bias=False)</span>
+        <span class="rn">(q_norm)</span>: CohereLayerNorm<span class="rd">()</span>
+        <span class="rn">(k_norm)</span>: CohereLayerNorm<span class="rd">()</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: CohereMLP(
+        <span class="rn">(gate_proj)</span>: Linear<span class="rd">(in_features=12288, out_features=33792, bias=False)</span>
+        <span class="rn">(up_proj)</span>: Linear<span class="rd">(in_features=12288, out_features=33792, bias=False)</span>
+        <span class="rn">(down_proj)</span>: Linear<span class="rd">(in_features=33792, out_features=12288, bias=False)</span>
+        <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream</span>
+      )
+      <span class="rn role-norm">(input_layernorm)</span>: CohereLayerNorm<span class="rd">()</span>
+      (layer_mid): Unavailable: a parallel block: the attention and the MLP read the same input, so there is no stream between them
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP: the one norm feeds both sublayers</span>
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: CohereLayerNorm<span class="rd">()</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div>
+
+  <div class="pane" data-pane="config" data-ckpts="unsloth/c4ai-command-r-08-2024"><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>40</span></div><div class="spec"><span>model.hidden_size</span><span>8192</span></div><div class="spec"><span>model.num_heads</span><span>64</span></div><div class="spec"><span>model.num_kv_heads</span><span>8</span></div><div class="spec"><span>model.head_dim</span><span>128</span></div><div class="spec"><span>model.qk_head_dim</span><span>128</span></div><div class="spec"><span>model.vocab_size</span><span>256000</span></div><div class="spec"><span>model.intermediate_size</span><span>24576</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>CohereForCausalLM</span></div><div class="spec"><span>num_hidden_layers</span><span>40</span></div><div class="spec"><span>hidden_size</span><span>8192</span></div><div class="spec"><span>intermediate_size</span><span>24576</span></div><div class="spec"><span>num_attention_heads</span><span>64</span></div><div class="spec"><span>num_key_value_heads</span><span>8</span></div><div class="spec"><span>vocab_size</span><span>256000</span></div><div class="spec"><span>max_position_embeddings</span><span>131072</span></div><div class="spec"><span>hidden_act</span><span>silu</span></div><div class="spec"><span>layer_norm_eps</span><span>1e-05</span></div><div class="spec"><span>tie_word_embeddings</span><span>True</span></div><div class="spec"><span>dtype</span><span>bfloat16</span></div><div class="spec"><span>attention_bias</span><span>False</span></div><div class="spec"><span>logit_scale</span><span>0.0625</span></div><div class="spec"><span>use_qk_norm</span><span>False</span></div>    </div>
+  </div>
+</div></div><div class="pane" data-pane="config" data-ckpts="unsloth/c4ai-command-r-plus-08-2024" hidden><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>64</span></div><div class="spec"><span>model.hidden_size</span><span>12288</span></div><div class="spec"><span>model.num_heads</span><span>96</span></div><div class="spec"><span>model.num_kv_heads</span><span>8</span></div><div class="spec"><span>model.head_dim</span><span>128</span></div><div class="spec"><span>model.qk_head_dim</span><span>128</span></div><div class="spec"><span>model.vocab_size</span><span>256000</span></div><div class="spec"><span>model.intermediate_size</span><span>33792</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>CohereForCausalLM</span></div><div class="spec"><span>num_hidden_layers</span><span>64</span></div><div class="spec"><span>hidden_size</span><span>12288</span></div><div class="spec"><span>intermediate_size</span><span>33792</span></div><div class="spec"><span>num_attention_heads</span><span>96</span></div><div class="spec"><span>num_key_value_heads</span><span>8</span></div><div class="spec"><span>vocab_size</span><span>256000</span></div><div class="spec"><span>max_position_embeddings</span><span>131072</span></div><div class="spec"><span>hidden_act</span><span>silu</span></div><div class="spec"><span>layer_norm_eps</span><span>1e-05</span></div><div class="spec"><span>tie_word_embeddings</span><span>True</span></div><div class="spec"><span>dtype</span><span>bfloat16</span></div><div class="spec"><span>attention_bias</span><span>False</span></div><div class="spec"><span>logit_scale</span><span>0.8333333333333334</span></div><div class="spec"><span>use_qk_norm</span><span>True</span></div>    </div>
+  </div>
+</div></div>
+</section>
+
+<section class="frame section" id="notes">
+  <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <div class="grid-notes">
+    <div class="prose"><h2>One LayerNorm feeds both sublayers</h2>
+<pre class="code"><code><span class="n">h</span>   <span class="o">=</span> <span class="n role-norm">input_layernorm</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="p">(</span><span class="n">h</span><span class="p">)</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="p">(</span><span class="n">h</span><span class="p">)</span></code></pre>
+<p><code>input_layernorm</code> is the block's only norm: there is no <code>post_attention_layernorm</code>. Its one output
+tensor is passed to the attention and then to the MLP, so <code>self_attn.input</code> and <code>mlp.input</code> are the
+same tensor, not two equal ones. An in-place edit of <code>self_attn.input</code> therefore also changes what
+the MLP reads; an assignment replaces only the attention's argument. To change what both read,
+assign <code>input_layernorm.output</code>.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n">input</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>      <span class="c1"># in place</span>
+    <span class="n">mlp_in</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>       <span class="c1"># its last row is zero too</span></code></pre>
+<h2>The contributions are the two modules' outputs</h2>
+<p><code>attention_output</code> is <code>o_proj</code>'s output and <code>mlp_output</code> is <code>down_proj</code>'s; neither has a bias. The
+block computes <code>residual + attn + mlp</code>, so that sum reproduces <code>layer_output</code> bit for bit, in
+float32 and in bfloat16. Summed in another order (<code>attn + mlp + x</code>) it differs by rounding. Nothing
+inside a block connects the two sublayers: zeroing <code>attention_output</code> leaves that block's
+<code>mlp.input</code> bit-identical, and the first MLP that reads block <code>i</code>'s attention is block <code>i + 1</code>'s.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n role-mlp">mlp</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="n">torch</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">attn</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>           <span class="c1"># the block&#39;s own order</span></code></pre>
+<h2>The norms are LayerNorms with a weight and no bias</h2>
+<p><code>CohereLayerNorm</code> casts to float32, subtracts the mean, divides by the standard deviation
+(<code>layer_norm_eps</code>, 1e-5) and multiplies by <code>weight</code>; there is no bias term, and the result is cast
+back to the model's dtype. <code>input_layernorm</code> and the final <code>norm</code> are this class. Folding a norm
+into the next matrix takes <code>weight</code> alone, and the mean subtraction stays as a projection that
+removes the all-ones direction.</p>
+<h2>Rotary turns adjacent pairs</h2>
+<p>Cohere's rotary pairs dimension <code>2i</code> with <code>2i + 1</code> (its <code>rotate_half</code> takes the even and odd
+dimensions, and each frequency in the cos/sin table appears twice in a row), where Llama pairs <code>i</code> with
+<code>i + head_dim / 2</code>. The rotation covers the whole head, in float32, cast back to the model's dtype.
+<code>attention_queries</code> and <code>attention_keys</code> are read after it. A comparison with a
+<code>rotate_half</code> family's queries, or rotary code written for one, needs the head reordered, evens then
+odds. The base (<code>rope_theta</code>) is 8,000,000 on Command R v01, 4,000,000 on Command R 08-2024,
+75,000,000 on Command R+ and 8,000,000 on Command R+ 08-2024.</p>
+<pre class="code"><code><span class="n">hd</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">head_dim</span>
+<span class="n">perm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">hd</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">hd</span><span class="p">,</span> <span class="mi">2</span><span class="p">)])</span>
+
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_queries</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">q_half</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">perm</span><span class="p">]</span>          <span class="c1"># in rotate_half&#39;s order</span></code></pre>
+<h2>Command R+ norms queries and keys per head</h2>
+<p>Where <code>use_qk_norm</code> is true (Command R+ and Command R+ 08-2024), the attention has <code>q_norm</code> and
+<code>k_norm</code>, <code>CohereLayerNorm</code>s over each head's <code>head_dim</code> vector. Their weights are
+<code>[num_heads, head_dim]</code> and <code>[num_kv_heads, head_dim]</code>: every head has its own gain. They act on the projections before the rotary,
+on <code>[batch, seq, num_heads, head_dim]</code> tensors, and <code>attention_queries</code> and <code>attention_keys</code> are read
+after both. Command R and Command R 08-2024 have no <code>q_norm</code> or <code>k_norm</code>.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">normed</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n">q_norm</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="c1"># [batch, seq, num_heads, head_dim], before the rotary</span></code></pre>
+<h2>Attention</h2>
+<p>Command R v01 has 64 query heads and 64 key/value heads (no grouping); Command R 08-2024 has 64
+and 8, and Command R+ 96 and 8, so on those two an edit to a key or value head reaches 8 or 12 query heads.
+<code>attention_keys</code> and <code>attention_values</code> are served before <code>repeat_kv</code>. The query scale is
+<code>head_dim ** -0.5</code> (128 on every size). The attention runs the shared attention interface, so the
+values read inside it (marked <code>⚠</code>) need <code>attn_implementation="eager"</code>.</p>
+<h2>The logits are the head's output times <code>logit_scale</code></h2>
+<p><code>lm_head</code> is the embedding matrix (<code>tie_word_embeddings</code>), and the model multiplies its output by
+<code>config.logit_scale</code>: 0.0625 on Command R v01 and 08-2024, 0.8333 on both Command R+ releases. <code>logits</code>
+is the scaled tensor and <code>lm_head.output</code> the unscaled one. The family's <code>project_on_vocab</code> is the
+final norm, <code>lm_head</code> and the scale, so a logit lens on the last block equals <code>logits</code> exactly.
+A direct logit attribution through <code>lm_head</code> alone is off by that constant factor.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">resid</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">raw</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">lm_head</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n role-stream">logits</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">logits</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="n">torch</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n role-stream">logits</span><span class="p">,</span> <span class="n">raw</span> <span class="o">*</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">logit_scale</span><span class="p">)</span>
+<span class="k">assert</span> <span class="n">torch</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n role-stream">model</span><span class="o">.</span><span class="n">project_on_vocab</span><span class="p">(</span><span class="n">resid</span><span class="p">),</span> <span class="n role-stream">logits</span><span class="p">)</span></code></pre>
+<h2>The embeddings are not scaled</h2>
+<p><code>embed_tokens</code> is a plain lookup over 256,000 tokens, so <code>token_embeddings</code> equals
+<code>layers[0].input</code>. Because the weight is shared with <code>lm_head</code>, an edit to <code>embed_tokens.weight</code>
+also edits the unembedding.</p></div>
+    <aside class="quirk-list">
+      <div class="pane" data-pane="quirk_list" data-ckpts="unsloth/c4ai-command-r-08-2024 unsloth/c4ai-command-r-plus-08-2024"><p class="micro">quirks</p>
+<div class="quirk"><span class="chip">Parallel block</span><p class="body-md">Attention and MLP both read the block&#39;s input, through one shared norm or one each, and the block returns x + attn + mlp.</p></div><div class="quirk"><span class="chip">LayerNorm</span><p class="body-md">Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.</p></div><div class="quirk"><span class="chip">Interleaved rotary</span><p class="body-md">Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.</p></div><div class="quirk"><span class="chip">Query/key norms</span><p class="body-md">On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.</p></div><div class="quirk"><span class="chip">Scaled logits</span><p class="body-md">The model multiplies or divides lm_head&#39;s output by a scale from the config, so logits is not lm_head&#39;s raw output.</p></div></div>
+    </aside>
+  </div>
+  <div class="pane" data-pane="vision_notes" data-ckpts="unsloth/c4ai-command-r-08-2024 unsloth/c4ai-command-r-plus-08-2024"></div>
+</section>
+
+<section class="frame section" id="source">
+  <div class="topbar"><h2 class="disp-section">From the <em>family module</em></h2><span class="micro">04 · nnterp/families/cohere.py</span></div>
+  <div class="grid-notes">
+    <div class="prose docstring"><p>Cohere (<code>CohereForCausalLM</code>, Command-R).</p>
+<p><code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, mlp}, norm}</code> and
+<code>lm_head</code>: Llama's names. The block is parallel: one LayerNorm (not RMS)
+feeds both sublayers and the block returns <code>x + attn + mlp</code>, so the
+contributions are the two modules' outputs and the base holds. There is no
+<code>post_attention_layernorm</code>. The attention runs the shared interface, after
+an optional per-head <code>q_norm</code> / <code>k_norm</code> (<code>use_qk_norm</code>) and an
+interleaved rotary.</p>
+<p>The model multiplies the head's output by <code>config.logit_scale</code> to make the
+logits, so the family defines <code>project_on_vocab</code> with that step, and the
+logit lens on the last block equals <code>logits</code>.</p>
+<p>Aya Vision 32B (<code>aya_vision</code> with a <code>cohere</code> text config) loads through this
+family. It binds no tower keys, so that load has no <code>vision</code> or <code>projector</code>.</p></div>
+    <aside class="quirk-list">
+      <p class="micro">sources</p>
+      <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/cohere.py">nnterp/families/cohere.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_cohere.py">tests/families/test_cohere.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
+      <p class="micro">envoys</p>
+      <p class="body-md mono">CohereDecoderLayer → Layer<br>CohereAttention → self_attn<br>CohereMLP → mlp</p>
+      <div class="pane" data-pane="envoys" data-ckpts="unsloth/c4ai-command-r-08-2024 unsloth/c4ai-command-r-plus-08-2024"></div>
+    </aside>
+  </div>
+</section>
+
+<script type="application/json" id="checkpoints-json">{"default": "unsloth/c4ai-command-r-08-2024", "checkpoints": {"unsloth/c4ai-command-r-08-2024": {"schema": {"topology": "parallel", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "64 query, 8 key/value heads", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "SwiGLU: 8192 \u2192 24576 \u2192 8192, silu", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 40, "layer_types": null, "mids": [], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "CohereAttention under its standard name. 64 query, 8 key/value heads", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 1", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 2", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 3", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `nn_functional_dropout_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `attention_interface_1`, element 0", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. One LayerNorm, drawn on both branches: the attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "CohereMLP under its standard name. SwiGLU: 8192 \u2192 24576 \u2192 8192, silu", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP: the one norm feeds both sublayers", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. One LayerNorm, drawn on both branches: the attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "Exact in the block's own order, x + attn + mlp; another order differs by rounding.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "A plain lookup with no scale and no position embedding, so token_embeddings equals layers[0].input. Positions enter as a rotation of queries and keys inside each attention."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "40 blocks of CohereDecoderLayer; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. CohereLayerNorm: subtracts the mean, divides by the standard deviation and multiplies by a weight, with no bias, computed in float32."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head shares its weight with embed_tokens (tie_word_embeddings)."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": "logits = lm_head.output \u00d7 logit_scale (0.0625 on Command R 08-2024). project_on_vocab multiplies too."}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "CohereForCausalLM", "url": "https://huggingface.co/unsloth/c4ai-command-r-08-2024"}, "unsloth/c4ai-command-r-plus-08-2024": {"schema": {"topology": "parallel", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "96 query, 8 key/value heads", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "SwiGLU: 12288 \u2192 33792 \u2192 12288, silu", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 64, "layer_types": null, "mids": [], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "CohereAttention under its standard name. 96 query, 8 key/value heads", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 1", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 2", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 3", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `nn_functional_dropout_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `attention_interface_1`, element 0", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. One LayerNorm, drawn on both branches: the attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "CohereMLP under its standard name. SwiGLU: 12288 \u2192 33792 \u2192 12288, silu", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP: the one norm feeds both sublayers", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. One LayerNorm, drawn on both branches: the attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "Exact in the block's own order, x + attn + mlp; another order differs by rounding.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "A plain lookup with no scale and no position embedding, so token_embeddings equals layers[0].input. Positions enter as a rotation of queries and keys inside each attention."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "64 blocks of CohereDecoderLayer; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. CohereLayerNorm: subtracts the mean, divides by the standard deviation and multiplies by a weight, with no bias, computed in float32."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head shares its weight with embed_tokens (tie_word_embeddings)."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": "logits = lm_head.output \u00d7 logit_scale (0.0625 on Command R 08-2024). project_on_vocab multiplies too."}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "CohereForCausalLM", "url": "https://huggingface.co/unsloth/c4ai-command-r-plus-08-2024"}}}</script>
+<footer class="colophon frame">
+  <div class="rule"></div>
+  <div class="colophon-row">
+    <span class="micro">nnterp encyclopedia</span>
+    <span class="mono">built 2026-10-21 · nnterp 1.3.1.dev428+gf5e97f4de · transformers 5.20.2 · reference <span id="colophon-reference">unsloth/c4ai-command-r-08-2024</span></span>
+  </div>
+</footer>
+<script src="static/encyclopedia.js"></script>
+<script src="static/block.js"></script></body>
+</html>

@@ -1,0 +1,652 @@
+<!doctype html>
+<html lang="en" style="--c1: #95A7EA; --c2: #C1A95D; --c3: #D093C7; --c4: #E39383; --c5: #57BFAF; --c1-deep: #4F5E9C; --c2-deep: #786107; --c3-deep: #844C7C; --c4-deep: #944B3E; --c5-deep: #007467; --paper: #F1E6CB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>EXAONE 4.0 · nnterp encyclopedia</title>
+<meta name="description" content="Llama&#39;s tree with the norms moved after the sublayers: attention and MLP read the raw residual stream, what reaches the stream is a post-norm&#39;s output, queries and keys are RMS-normed per head, and on 32B three sliding-window blocks alternate with one full-attention block that applies no rotary.">
+<link rel="icon" type="image/svg+xml" href="static/favicon.svg">
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%2395A7EA%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23C1A95D%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23D093C7%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23E39383%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%2357BFAF%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Albert+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/encyclopedia.css">
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<header class="masthead frame">
+  <a class="micro-lg brand" href="index.html">nnterp · encyclopedia</a>
+  <span class="mono masthead-right">exaone4 · nnterp.families.exaone4</span>
+</header>
+<section class="hero frame">
+  <div class="hero-text">
+    <p class="micro-lg eyebrow">family <span class="mono">exaone4</span></p>
+    <h1 class="disp-title"><span class="line">EXAONE 4.0</span></h1>
+    <p class="subtitle">Llama&#39;s tree with the norms moved after the sublayers: attention and MLP read the raw residual stream, what reaches the stream is a post-norm&#39;s output, queries and keys are RMS-normed per head, and on 32B three sliding-window blocks alternate with one full-attention block that applies no rotary.</p>
+    <div class="pane" data-pane="chips" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B"><div class="chips">
+<a class="chip" href="#notes" title="Every block, or some, norms each sublayer&#39;s output and not its input: the sublayer reads the raw stream, and the stream receives the post-norm&#39;s output.">Post-norms only</a><a class="chip" href="#notes" title="On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.">Query/key norms</a><a class="chip" href="#notes" title="Some blocks, or every block, attend only to a window of the latest positions. A config key sets its length (sliding_window, window_size), and where the config lists each block&#39;s type (layer_types, attention_layers), that list says which blocks.">Sliding window</a><a class="chip" href="#notes" title="Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart.">Blocks without rotary</a></div></div>
+  </div>
+  <aside class="hero-side">
+    <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
+<div class="ckpt" id="ckpt" data-selector>
+  <span class="micro ckpt-label" id="ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="ckpt-list" aria-labelledby="ckpt-label ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="ckpt-name">EXAONE-4.0-1.2B</span><span class="ckpt-eye ckpt-eye-current" id="ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="ckpt-list" role="listbox" tabindex="-1" aria-labelledby="ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-1">
+      <p class="micro ckpt-group-label" id="ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="ckpt-option-LGAI-EXAONE--EXAONE-4_0-1_2B" data-ckpt="LGAI-EXAONE/EXAONE-4.0-1.2B" data-name="EXAONE-4.0-1.2B"
+           aria-selected="true" title="LGAI-EXAONE/EXAONE-4.0-1.2B">
+        <span class="mono">EXAONE-4.0-1.2B</span>      </div>
+      <div class="ckpt-option" role="option" id="ckpt-option-LGAI-EXAONE--EXAONE-4_0-32B" data-ckpt="LGAI-EXAONE/EXAONE-4.0-32B" data-name="EXAONE-4.0-32B"
+           aria-selected="false" title="LGAI-EXAONE/EXAONE-4.0-32B">
+        <span class="mono">EXAONE-4.0-32B</span>      </div>
+      <div class="ckpt-option" role="option" id="ckpt-option-LGAI-EXAONE--EXAONE-4_0_1-32B" data-ckpt="LGAI-EXAONE/EXAONE-4.0.1-32B" data-name="EXAONE-4.0.1-32B"
+           aria-selected="false" title="LGAI-EXAONE/EXAONE-4.0.1-32B">
+        <span class="mono">EXAONE-4.0.1-32B</span>      </div>
+    </div>
+  </div>
+        <div class="pane" data-pane="hub" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B"><p class="ckpt-facts mono"><span><b>1.28B</b> parameters</span><span>released <b>Jul 2025</b></span></p></div><div class="pane" data-pane="hub" data-ckpts="LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B" hidden><p class="ckpt-facts mono"><span><b>32B</b> parameters</span><span>released <b>Jul 2025</b></span></p></div>
+      <a class="ckpt-hub" id="ckpt-hub" href="https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-1.2B" title="LGAI-EXAONE/EXAONE-4.0-1.2B on the Hugging Face Hub" aria-label="LGAI-EXAONE/EXAONE-4.0-1.2B on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
+
+</div>
+  </aside>
+</section>
+
+<div class="stickybar" id="stickybar" aria-hidden="true">
+  <div class="frame stickybar-row">
+    <span class="stickybar-title">EXAONE 4.0</span>
+<div class="ckpt" id="bar-ckpt" data-selector>
+  <span class="micro ckpt-label" id="bar-ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="bar-ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="bar-ckpt-list" aria-labelledby="bar-ckpt-label bar-ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="bar-ckpt-name">EXAONE-4.0-1.2B</span><span class="ckpt-eye ckpt-eye-current" id="bar-ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="bar-ckpt-list" role="listbox" tabindex="-1" aria-labelledby="bar-ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="bar-ckpt-group-1">
+      <p class="micro ckpt-group-label" id="bar-ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-LGAI-EXAONE--EXAONE-4_0-1_2B" data-ckpt="LGAI-EXAONE/EXAONE-4.0-1.2B" data-name="EXAONE-4.0-1.2B"
+           aria-selected="true" title="LGAI-EXAONE/EXAONE-4.0-1.2B">
+        <span class="mono">EXAONE-4.0-1.2B</span>      </div>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-LGAI-EXAONE--EXAONE-4_0-32B" data-ckpt="LGAI-EXAONE/EXAONE-4.0-32B" data-name="EXAONE-4.0-32B"
+           aria-selected="false" title="LGAI-EXAONE/EXAONE-4.0-32B">
+        <span class="mono">EXAONE-4.0-32B</span>      </div>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-LGAI-EXAONE--EXAONE-4_0_1-32B" data-ckpt="LGAI-EXAONE/EXAONE-4.0.1-32B" data-name="EXAONE-4.0.1-32B"
+           aria-selected="false" title="LGAI-EXAONE/EXAONE-4.0.1-32B">
+        <span class="mono">EXAONE-4.0.1-32B</span>      </div>
+    </div>
+  </div>
+  
+</div>
+  </div>
+</div>
+
+<section class="frame section" id="block">
+  <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
+  <div class="pane" data-pane="block_head" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B"><p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+</p>
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× 30</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final_norm_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>lm_head_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>the output</small></div>
+</div></div><div class="pane" data-pane="block_head" data-ckpts="LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B" hidden><p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+The slider picks a block; this family's blocks differ by <span class="mono">layer_types</span>.</p>
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× 64</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final_norm_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>lm_head_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>the output</small></div>
+</div></div>
+
+  <div class="viz">
+    <div class="viz-panel">
+      <div class="slider-row">
+        <label class="micro" for="layer">block</label>
+        <input type="range" id="layer" min="0" max="29" value="0">
+        <span class="mono" id="layer-label">i = 0</span>
+        <span class="mono variant" id="layer-variant"></span>
+      </div>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+      <svg id="block-svg" role="img" aria-label="The decoder block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card" id="node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each box, edge and ⊕ names what nnterp calls it, where the value is read, and its layout.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity" id="identity"><span class="micro">identity</span> <code><span class="n role-stream">layers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">input</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span> <span class="o">==</span> <span class="n role-stream">layer_output</span></code></p>
+  <div class="pane" data-pane="tower" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B"></div>
+</section>
+
+<section class="frame section" id="support">
+  <div class="topbar"><h2 class="disp-section">The <em>API</em></h2><span class="micro">02 · support()</span></div>
+  <h3 class="ttl-row">Values, by host</h3>
+  <div class="pane" data-pane="values" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B"><p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition.</p><div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model</span> <span class="mono dim">Exaone4ForCausalLM</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="strip.logits">
+    <span class="mono-md name role-stream">logits</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.embed">
+    <span class="mono-md name role-stream">token_embeddings</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The embedding module&#39;s output; layers[0].input is what enters the first block</span>
+    <span class="hide-sm body-md where"><p>the child module <code>embed_tokens</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.norm">
+    <span class="mono-md name role-stream">final_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the final norm, what lm_head reads</span>
+    <span class="hide-sm body-md where"><p>the child module <code>norm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.head">
+    <span class="mono-md name role-stream">lm_head_output</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The head&#39;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the child module <code>lm_head</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">next_token_probs</span>
+    <span class="hide-sm mono">NextTokenProbs <span class="dim">[batch vocab_size]</span></span>
+    <span class="body-md">The next-token distribution at the last position; derived, read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_ids</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The token ids the model was called with</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">attention_mask</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The attention mask the model was called with; zeros are padding</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_size</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">[batch, seq] of the current call; read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model.<wbr>layers[i]</span> <span class="mono dim">Exaone4DecoderLayer</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">layer_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream entering the block</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream"><span class="warn" tabindex="0" data-tip="every block: a post-norm block: the attention reads the residual stream itself, layer_input">&#x26A0;&#xFE0E;</span>attention_norm_output</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">Unavailable: a post-norm block: the attention reads the residual stream itself, layer_input</span>
+    <span class="hide-sm body-md where"><p>nowhere: the family does not serve it</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.layer_mid">
+    <span class="mono-md name role-stream">layer_mid</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the attention add</span>
+    <span class="hide-sm body-md where"><p>the child module <code>mlp</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream"><span class="warn" tabindex="0" data-tip="every block: a post-norm block: the MLP reads the residual stream itself, layer_mid">&#x26A0;&#xFE0E;</span>mlp_norm_output</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">Unavailable: a post-norm block: the MLP reads the residual stream itself, layer_mid</span>
+    <span class="hide-sm body-md where"><p>nowhere: the family does not serve it</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_input">
+    <span class="mono-md name role-stream">mlp_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP is called with</span>
+    <span class="hide-sm body-md where"><p>the child module <code>mlp</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="stream.output">
+    <span class="mono-md name role-stream">layer_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-attention">model.<wbr>layers[i].<wbr>self_attn</span> <span class="mono dim">Exaone4Attention</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_queries">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_queries</span>
+    <span class="hide-sm mono">Queries <span class="dim">[batch num_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The queries entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 1</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_keys">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_keys</span>
+    <span class="hide-sm mono">Keys <span class="dim">[batch num_kv_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The keys entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 2</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_values">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_values</span>
+    <span class="hide-sm mono">Values <span class="dim">[batch num_kv_heads seq head_dim]</span></span>
+    <span class="body-md">The values entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 3</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_scores">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_scores</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention scores entering the softmax, masked</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the input of <code>nn_functional_softmax_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_premix">
+    <span class="mono-md name role-attention">attention_premix</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">Every head&#39;s output side by side, as the output projection takes it</span>
+    <span class="hide-sm body-md where"><p>the child module <code>o_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.self_attn">
+    <span class="mono-md name role-attention">attention_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the attention adds to the residual stream: the post-attention norm&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the sibling module <code>post_attention_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_probabilities">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_probabilities</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention pattern the values are mixed with</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>nn_functional_dropout_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_head_outputs">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_head_outputs</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">The per-head outputs before the output projection</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>attention_interface_1</code>, element 0</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-mlp">model.<wbr>layers[i].<wbr>mlp</span> <span class="mono dim">Exaone4MLP</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_activation">
+    <span class="mono-md name role-mlp">mlp_activation</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">The activation function&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the child module <code>act_fn</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_neurons">
+    <span class="mono-md name role-mlp">mlp_neurons</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+    <span class="hide-sm body-md where"><p>the child module <code>down_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.mlp">
+    <span class="mono-md name role-mlp">mlp_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP adds to the residual stream: the post-feedforward norm&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the sibling module <code>post_feedforward_layernorm</code>'s output</p></span>
+  </div>
+</div></div>
+
+  <h3 class="ttl-row">Printout</h3>
+  <div class="pane" data-pane="printout" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B"><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">LGAI-EXAONE/EXAONE-4.0-1.2B</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>Exaone4ForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=2048, out_features=102400, bias=False)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(102400, 2048, padding_idx=0)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-29): 30 x Exaone4DecoderLayer(
+      <span class="rn role-attention">(self_attn)</span>: Exaone4Attention(
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=2048, out_features=2048, bias=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=2048, out_features=512, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=2048, out_features=512, bias=False)</span>
+        <span class="rn">(o_proj)</span>: Linear<span class="rd">(in_features=2048, out_features=2048, bias=False)</span>
+        <span class="rn">(q_norm)</span>: Exaone4RMSNorm<span class="rd">((64,), eps=1e-05)</span>
+        <span class="rn">(k_norm)</span>: Exaone4RMSNorm<span class="rd">((64,), eps=1e-05)</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream: the post-attention norm&#x27;s output</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: Exaone4MLP(
+        <span class="rn">(gate_proj)</span>: Linear<span class="rd">(in_features=2048, out_features=4096, bias=False)</span>
+        <span class="rn">(up_proj)</span>: Linear<span class="rd">(in_features=2048, out_features=4096, bias=False)</span>
+        <span class="rn">(down_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=2048, bias=False)</span>
+        <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream: the post-feedforward norm&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+      )
+      <span class="rn role-norm">(post_attention_layernorm)</span>: Exaone4RMSNorm<span class="rd">((2048,), eps=1e-05)</span>
+      <span class="rn role-norm">(post_feedforward_layernorm)</span>: Exaone4RMSNorm<span class="rd">((2048,), eps=1e-05)</span>
+      (attention_norm_output): Unavailable: a post-norm block: the attention reads the residual stream itself, layer_input
+      <span class="rn role-stream">(layer_mid)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the attention add</span>
+      (mlp_norm_output): Unavailable: a post-norm block: the MLP reads the residual stream itself, layer_mid
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: Exaone4RMSNorm<span class="rd">((2048,), eps=1e-05)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div><div class="pane" data-pane="printout" data-ckpts="LGAI-EXAONE/EXAONE-4.0-32B" hidden><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">LGAI-EXAONE/EXAONE-4.0-32B</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>Exaone4ForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=5120, out_features=102400, bias=False)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(102400, 5120, padding_idx=0)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-63): 64 x Exaone4DecoderLayer(
+      <span class="rn role-attention">(self_attn)</span>: Exaone4Attention(
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=5120, bias=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=1024, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=1024, bias=False)</span>
+        <span class="rn">(o_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=5120, bias=False)</span>
+        <span class="rn">(q_norm)</span>: Exaone4RMSNorm<span class="rd">((128,), eps=1e-05)</span>
+        <span class="rn">(k_norm)</span>: Exaone4RMSNorm<span class="rd">((128,), eps=1e-05)</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream: the post-attention norm&#x27;s output</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: Exaone4MLP(
+        <span class="rn">(gate_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=27392, bias=False)</span>
+        <span class="rn">(up_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=27392, bias=False)</span>
+        <span class="rn">(down_proj)</span>: Linear<span class="rd">(in_features=27392, out_features=5120, bias=False)</span>
+        <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream: the post-feedforward norm&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+      )
+      <span class="rn role-norm">(post_attention_layernorm)</span>: Exaone4RMSNorm<span class="rd">((5120,), eps=1e-05)</span>
+      <span class="rn role-norm">(post_feedforward_layernorm)</span>: Exaone4RMSNorm<span class="rd">((5120,), eps=1e-05)</span>
+      (attention_norm_output): Unavailable: a post-norm block: the attention reads the residual stream itself, layer_input
+      <span class="rn role-stream">(layer_mid)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the attention add</span>
+      (mlp_norm_output): Unavailable: a post-norm block: the MLP reads the residual stream itself, layer_mid
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: Exaone4RMSNorm<span class="rd">((5120,), eps=1e-05)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div><div class="pane" data-pane="printout" data-ckpts="LGAI-EXAONE/EXAONE-4.0.1-32B" hidden><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">LGAI-EXAONE/EXAONE-4.0.1-32B</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>Exaone4ForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=5120, out_features=102400, bias=False)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(102400, 5120, padding_idx=0)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-63): 64 x Exaone4DecoderLayer(
+      <span class="rn role-attention">(self_attn)</span>: Exaone4Attention(
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=5120, bias=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=1024, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=1024, bias=False)</span>
+        <span class="rn">(o_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=5120, bias=False)</span>
+        <span class="rn">(q_norm)</span>: Exaone4RMSNorm<span class="rd">((128,), eps=1e-05)</span>
+        <span class="rn">(k_norm)</span>: Exaone4RMSNorm<span class="rd">((128,), eps=1e-05)</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream: the post-attention norm&#x27;s output</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: Exaone4MLP(
+        <span class="rn">(gate_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=27392, bias=False)</span>
+        <span class="rn">(up_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=27392, bias=False)</span>
+        <span class="rn">(down_proj)</span>: Linear<span class="rd">(in_features=27392, out_features=5120, bias=False)</span>
+        <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream: the post-feedforward norm&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+      )
+      <span class="rn role-norm">(post_attention_layernorm)</span>: Exaone4RMSNorm<span class="rd">((5120,), eps=1e-05)</span>
+      <span class="rn role-norm">(post_feedforward_layernorm)</span>: Exaone4RMSNorm<span class="rd">((5120,), eps=1e-05)</span>
+      (attention_norm_output): Unavailable: a post-norm block: the attention reads the residual stream itself, layer_input
+      <span class="rn role-stream">(layer_mid)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the attention add</span>
+      (mlp_norm_output): Unavailable: a post-norm block: the MLP reads the residual stream itself, layer_mid
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: Exaone4RMSNorm<span class="rd">((5120,), eps=1e-05)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div>
+
+  <div class="pane" data-pane="config" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B"><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>30</span></div><div class="spec"><span>model.hidden_size</span><span>2048</span></div><div class="spec"><span>model.num_heads</span><span>32</span></div><div class="spec"><span>model.num_kv_heads</span><span>8</span></div><div class="spec"><span>model.head_dim</span><span>64</span></div><div class="spec"><span>model.qk_head_dim</span><span>64</span></div><div class="spec"><span>model.vocab_size</span><span>102400</span></div><div class="spec"><span>model.intermediate_size</span><span>4096</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>Exaone4ForCausalLM</span></div><div class="spec"><span>num_hidden_layers</span><span>30</span></div><div class="spec"><span>hidden_size</span><span>2048</span></div><div class="spec"><span>intermediate_size</span><span>4096</span></div><div class="spec"><span>num_attention_heads</span><span>32</span></div><div class="spec"><span>num_key_value_heads</span><span>8</span></div><div class="spec"><span>head_dim</span><span>64</span></div><div class="spec"><span>vocab_size</span><span>102400</span></div><div class="spec"><span>max_position_embeddings</span><span>65536</span></div><div class="spec"><span>hidden_act</span><span>silu</span></div><div class="spec"><span>rms_norm_eps</span><span>1e-05</span></div><div class="spec"><span>tie_word_embeddings</span><span>True</span></div><div class="spec"><span>dtype</span><span>bfloat16</span></div>    </div>
+  </div>
+</div></div><div class="pane" data-pane="config" data-ckpts="LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B" hidden><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>64</span></div><div class="spec"><span>model.hidden_size</span><span>5120</span></div><div class="spec"><span>model.num_heads</span><span>40</span></div><div class="spec"><span>model.num_kv_heads</span><span>8</span></div><div class="spec"><span>model.head_dim</span><span>128</span></div><div class="spec"><span>model.qk_head_dim</span><span>128</span></div><div class="spec"><span>model.vocab_size</span><span>102400</span></div><div class="spec"><span>model.intermediate_size</span><span>27392</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>Exaone4ForCausalLM</span></div><div class="spec"><span>num_hidden_layers</span><span>64</span></div><div class="spec"><span>hidden_size</span><span>5120</span></div><div class="spec"><span>intermediate_size</span><span>27392</span></div><div class="spec"><span>num_attention_heads</span><span>40</span></div><div class="spec"><span>num_key_value_heads</span><span>8</span></div><div class="spec"><span>head_dim</span><span>128</span></div><div class="spec"><span>vocab_size</span><span>102400</span></div><div class="spec"><span>max_position_embeddings</span><span>131072</span></div><div class="spec"><span>sliding_window</span><span>4096</span></div><div class="spec"><span>hidden_act</span><span>silu</span></div><div class="spec"><span>rms_norm_eps</span><span>1e-05</span></div><div class="spec"><span>tie_word_embeddings</span><span>False</span></div><div class="spec"><span>dtype</span><span>bfloat16</span></div>    </div>
+  </div>
+</div></div>
+</section>
+
+<section class="frame section" id="notes">
+  <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <div class="grid-notes">
+    <div class="prose"><h2>The block, in order</h2>
+<pre class="code"><code><span class="n">h</span>   <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n role-norm">post_attention_layernorm</span><span class="p">(</span><span class="n role-attention">self_attn</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">h</span> <span class="o">+</span> <span class="n role-norm">post_feedforward_layernorm</span><span class="p">(</span><span class="n role-mlp">mlp</span><span class="p">(</span><span class="n">h</span><span class="p">))</span></code></pre>
+<p>Two RMSNorms on the block, both after a sublayer, none before. <code>post_attention_layernorm</code> has
+Llama's name and the opposite place: on Llama it is the norm before the MLP, here it follows the
+attention, and nothing norms the MLP's input. There is no <code>input_layernorm</code>, so code that hooks
+<code>input_layernorm.output</code> to read what the attention sees has nothing to attach to.</p>
+<h2>The sublayers read the raw stream</h2>
+<p><code>self_attn.input</code> is <code>layers[i].input</code> itself and <code>mlp.input</code> is
+<code>layers[i].input + attention_output</code>, unnormalized. A probe or dictionary trained on a
+sublayer's input sees the stream at its own scale.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">attn_in</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>           <span class="c1"># equals x</span>
+    <span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">mlp_in</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>                  <span class="c1"># equals x + attn</span></code></pre>
+<p>The attention's contribution depends almost only on the direction of its input: <code>q_norm</code> and
+<code>k_norm</code> remove the scale from the queries and keys, the projections are linear with no bias,
+and <code>post_attention_layernorm</code> removes it again. Doubling what the attention reads changes
+<code>attention_output</code> by 1e-2 relative at block 2 of 1.2B, 9e-4 at block 15 and 1e-4 at block 28;
+the residue is the norms' <code>eps</code> (with every <code>eps</code> set to 0 it is exactly 0). The MLP has no such invariance: doubling what it reads changes
+<code>mlp_output</code> by 40 to 68% at the same blocks.</p>
+<h2>The contributions are the post-norms' outputs</h2>
+<p><code>attention_output</code> and <code>mlp_output</code> are what the block adds, the outputs of
+<code>post_attention_layernorm</code> and <code>post_feedforward_layernorm</code>, not of the modules. The identity
+holds exactly, in float32 and bfloat16 alike:</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n role-mlp">mlp</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">attn</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span></code></pre>
+<p>Scale the contribution, not the module, and do not count on the post-norm undoing a scale
+in the first blocks. The modules' outputs are small at the bottom of 1.2B: the MLP's median
+RMS per token is 4e-4 at block 0 and 2e-3 at block 2, below <code>√eps</code> (3.2e-3, <code>eps</code> 1e-5), so
+there the post-norm is close to a fixed multiplier rather than a rescaling. Halving
+<code>mlp.output</code> at block 0 moves <code>layer_output</code> by 42% relative, as much as halving <code>mlp_output</code>
+does. At block 2 the two move it by 19% and 25%. From block 15 up, halving <code>mlp.output</code> moves it
+by under 0.4% (2e-5 at block 28) against 13 to 23% for <code>mlp_output</code>. The attention is the
+same in kind (10% against 45% at block 0, 0.1% against 17% at block 15). Only <code>mlp_output</code>
+and <code>attention_output</code> scale what the block adds at every depth:</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span><span class="p">[:]</span> <span class="o">*=</span> <span class="mf">0.5</span>     <span class="c1"># halves what the block adds</span>
+
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n">output</span><span class="p">[:]</span> <span class="o">*=</span> <span class="mf">0.5</span>         <span class="c1"># its effect depends on the depth</span></code></pre>
+<p>The post-norms' gains set the size of each term in a decomposition. Across 1.2B's 30 blocks
+their means rise on the attention side from 0.02 at block 0 to between 0.3 and 0.36 in the last
+blocks, and lie between 0.12 and 0.48 on the MLP side, largest in the last blocks.</p>
+<h2>Queries and keys are normed per head</h2>
+<p><code>q_norm</code> and <code>k_norm</code> are RMSNorms over <code>head_dim</code> (64 on 1.2B, 128 on 32B), applied after the
+heads are split and before the rotary embedding; <code>attention_queries</code> and <code>attention_keys</code> are
+read after both. Each head is normed on its own, so an edit to one head's slice of
+<code>q_proj.output</code> reaches no other head, and scaling the slice reaches nothing: at block 15 of
+1.2B, tripling head 0's slice changes head 0's queries by 4e-5 and head 1's by 0, while adding
+head 1's slice to head 0's changes head 0 by 35%. To weaken or strengthen a head's attention,
+edit <code>attention_queries</code> or <code>attention_keys</code>, which no norm follows. Zeroing a head's queries
+makes its scores zero and its pattern uniform over the causal prefix:</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_queries</span><span class="p">[:,</span> <span class="mi">0</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>   <span class="c1"># head 0: uniform</span></code></pre>
+<h2>Which blocks rotate</h2>
+<p>The forward applies the rotary when <code>config.sliding_window</code> is null or the block is a sliding
+one, so the two sizes differ:</p>
+<ul>
+<li><strong>1.2B</strong>: <code>sliding_window</code> is null and <code>layer_types</code> is <code>full_attention</code> on all 30 blocks;
+  every block is full causal attention with the rotary (<code>llama3</code> scaling, factor 16,
+  <code>rope_theta</code> 1e6).</li>
+<li><strong>32B</strong> (and 4.0.1-32B): <code>sliding_window</code> is 4096 and <code>layer_types</code> repeats three
+  <code>sliding_attention</code> blocks and one <code>full_attention</code> (<code>LLLG</code>): blocks 3, 7, ..., 63 are full,
+  16 of 64. The sliding blocks apply the rotary over a 4096-token window; the full blocks
+  apply none (NoPE) and see the whole prefix.</li>
+</ul>
+<p><code>attention_queries</code> and <code>attention_keys</code> are read after the rotary, so on a 32B full block they
+equal <code>q_norm.output</code> and <code>k_norm.output</code> and carry no position; on every other block they are
+rotated. On a full NoPE block the only order is the causal mask.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">normed</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n">q_norm</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">queries</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_queries</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>   <span class="c1"># = normed on NoPE</span></code></pre>
+<p>To tell the kinds apart, read <code>model.layers[i].self_attn._module.is_sliding</code>, not <code>sliding_window</code>:
+every attention module stores the config's window, 4096 on 32B's full blocks too. On a prompt
+shorter than 4096 tokens the sliding and full masks coincide, and on 32B the two kinds differ
+only in the rotary.</p>
+<h2>Grouped-query attention</h2>
+<p>32 query heads share 8 key/value heads on 1.2B (four each), 40 share 8 on 32B (five each).
+<code>attention_keys</code> and <code>attention_values</code> are served before <code>repeat_kv</code>, <code>[batch, 8, seq,
+head_dim]</code>, so an edit to key/value head <code>j</code> reaches query heads <code>4j</code> to <code>4j + 3</code> on 1.2B (an
+edit to head 1's keys at block 8 changes heads 4 to 7 and no other) and <code>5j</code> to <code>5j + 4</code> on
+32B. The query scale is <code>head_dim ** -0.5</code>.</p>
+<h2>Load with eager for the attention interior only</h2>
+<p>The attention interior needs <code>attn_implementation="eager"</code>. The default <code>sdpa</code> load computes
+the same function: on 1.2B in float32 the two loads' logits differ by at most 5e-5 (the largest
+logit is about 25). There is no softcap or sink.</p>
+<h2>The readout is lm_head after a plain RMSNorm</h2>
+<p><code>logits</code> is <code>lm_head.output</code>, with no cap or scale after it, and <code>project_on_vocab</code> is
+<code>lm_head(norm(h))</code>, equal to <code>logits</code> on the last block's <code>layer_output</code>. The final norm's
+gain is <code>model.norm._module.weight</code> itself, mean 1.79 on 1.2B, between -0.64 and 2.03. On
+1.2B <code>lm_head.weight</code> is <code>embed_tokens.weight</code>, so an edit to the embedding is an edit to the
+unembedding; 32B keeps them separate. <code>token_embeddings</code> is the unscaled lookup and equals
+<code>layers[0].input</code>.</p>
+<h2>Every checkpoint is a chat model, and the tokenizer adds no BOS</h2>
+<p>The released checkpoints are the post-trained models, with a non-reasoning and a reasoning
+mode; there is no base checkpoint. The tokenizer prepends nothing (<code>add_bos_token</code> is false;
+<code>[BOS]</code>, id 1, exists and the chat template does not use it either), and <code>eos_token</code> is
+<code>[|endofturn|]</code> (id 361). The template writes <code>[|user|]\n…[|endofturn|]\n[|assistant|]\n</code> and,
+with <code>add_generation_prompt</code>, an empty <code>&lt;think&gt;\n\n&lt;/think&gt;\n\n</code> block; <code>enable_thinking=True</code>
+ends on an open <code>&lt;think&gt;\n</code> instead. Every assistant turn already in the conversation is
+rendered with an empty think block, its reasoning dropped. <code>skip_think=False</code> keeps the reasoning
+of the last message only, when that message is an assistant turn:</p>
+<pre class="code"><code><span class="n">ids</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">tokenizer</span><span class="o">.</span><span class="n">apply_chat_template</span><span class="p">(</span>
+    <span class="p">[{</span><span class="s2">&quot;role&quot;</span><span class="p">:</span> <span class="s2">&quot;user&quot;</span><span class="p">,</span> <span class="s2">&quot;content&quot;</span><span class="p">:</span> <span class="n">prompt</span><span class="p">}],</span>
+    <span class="n">add_generation_prompt</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">enable_thinking</span><span class="o">=</span><span class="kc">True</span><span class="p">,</span> <span class="n">tokenize</span><span class="o">=</span><span class="kc">False</span><span class="p">,</span>
+<span class="p">)</span></code></pre>
+<h2>Checkpoints and kin</h2>
+<p><code>EXAONE-4.0.1-32B</code> is a patch release of 32B with the same config. EXAONE 3.5 and EXAONE Deep
+are <code>model_type</code> <code>exaone</code>, a pre-norm block (<code>ln_1</code>, <code>ln_2</code>) loaded as remote code, with no
+query/key norms, and K-EXAONE is <code>exaone_moe</code>: neither is this family. EXAONE 4.5 (<code>exaone4_5</code>)
+is a vision-language wrapper whose text model is this family's: loaded with
+<code>task="image-text-to-text"</code>, its text model takes this page's names, but its vision encoder and
+projector keep their native names only: there is no <code>model.vision</code>.</p></div>
+    <aside class="quirk-list">
+      <div class="pane" data-pane="quirk_list" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B"><p class="micro">quirks</p>
+<div class="quirk"><span class="chip">Post-norms only</span><p class="body-md">Every block, or some, norms each sublayer&#39;s output and not its input: the sublayer reads the raw stream, and the stream receives the post-norm&#39;s output.</p></div><div class="quirk"><span class="chip">Query/key norms</span><p class="body-md">On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.</p></div><div class="quirk"><span class="chip">Sliding window</span><p class="body-md">Some blocks, or every block, attend only to a window of the latest positions. A config key sets its length (sliding_window, window_size), and where the config lists each block&#39;s type (layer_types, attention_layers), that list says which blocks.</p></div><div class="quirk"><span class="chip">Blocks without rotary</span><p class="body-md">Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart.</p></div></div>
+    </aside>
+  </div>
+  <div class="pane" data-pane="vision_notes" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B"></div>
+</section>
+
+<section class="frame section" id="source">
+  <div class="topbar"><h2 class="disp-section">From the <em>family module</em></h2><span class="micro">04 · nnterp/families/exaone4.py</span></div>
+  <div class="grid-notes">
+    <div class="prose docstring"><p>EXAONE 4.0 (<code>Exaone4ForCausalLM</code>).</p>
+<p>Llama's names plus a post-norm block, OLMo-2's layout: every sublayer is normed
+after, <code>x + post_attention_layernorm(attn(x))</code> and then
+<code>+ post_feedforward_layernorm(mlp(x))</code>. What the block adds is the post-norm's
+output, not the module's, so the contributions point at the sibling norms.
+EXAONE 4.0 has only the post-norms: no <code>input_layernorm</code> exists to alias.
+The attention runs the shared eager forward with per-head q/k norms. A checkpoint
+with a <code>sliding_window</code> mixes sliding-window layers, which apply the rotary, and
+full-attention layers, which apply none (NoPE); both reach the interface the same
+way, so the values are the same on every block.</p></div>
+    <aside class="quirk-list">
+      <p class="micro">sources</p>
+      <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/exaone4.py">nnterp/families/exaone4.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_exaone4.py">tests/families/test_exaone4.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
+      <p class="micro">envoys</p>
+      <p class="body-md mono">Exaone4DecoderLayer → Layer<br>Exaone4Attention → self_attn<br>Exaone4MLP → mlp</p>
+      <div class="pane" data-pane="envoys" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B"></div>
+    </aside>
+  </div>
+</section>
+
+<script type="application/json" id="checkpoints-json">{"default": "LGAI-EXAONE/EXAONE-4.0-1.2B", "checkpoints": {"LGAI-EXAONE/EXAONE-4.0-1.2B": {"schema": {"topology": "sequential", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "32 query heads over 8 key/value heads, head_dim 64; q_norm and k_norm per head, before the rotary", "variants": {"sliding_attention": "sliding window, RoPE", "full_attention": "full causal; NoPE on 32B"}, "pre_norm": null, "post_norm": "post_attention_layernorm", "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}]}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "SwiGLU: 2048 \u2192 4096 \u2192 2048, silu", "variants": {}, "pre_norm": null, "post_norm": "post_feedforward_layernorm", "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 30, "layer_types": ["full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention", "full_attention"], "mids": ["boundary.layer_mid"], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "Exaone4Attention under its standard name. 32 query heads over 8 key/value heads, head_dim 64; q_norm and k_norm per head, before the rotary", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 1", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 2", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 3", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `nn_functional_dropout_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `attention_interface_1`, element 0", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream: the post-attention norm's output", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_attention_layernorm`'s output", "condition": null, "extra": null}, "norm.post_attention_layernorm": {"eyebrow": "post-norm", "expr": "model.layers[i].post_attention_layernorm", "desc": "A native module under its own name. Its output is the contribution: `model.layers[i].self_attn.attention_output`.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "On EXAONE 4.0 this norm follows the attention. On Llama the same name is the norm before the MLP; EXAONE 4.0 has no norm before either sublayer, so layer_mid is what the MLP is called with."}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "Exaone4MLP under its standard name. SwiGLU: 2048 \u2192 4096 \u2192 2048, silu", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream: the post-feedforward norm's output", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_feedforward_layernorm`'s output", "condition": null, "extra": null}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "norm.post_feedforward_layernorm": {"eyebrow": "post-norm", "expr": "model.layers[i].post_feedforward_layernorm", "desc": "A native module under its own name. Its output is the contribution: `model.layers[i].mlp.mlp_output`.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.layer_mid": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_mid", "desc": "The residual stream after the attention add", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The contribution identity that nnterp's test suite checks on this family.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": null}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "30 blocks of Exaone4DecoderLayer; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "30 blocks on 1.2B, all full attention with the rotary. 64 on 32B: three sliding-window blocks with the rotary, then one full-attention block without it, repeated."}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. A plain RMSNorm: the gain is norm.weight (not 1 + weight), eps 1e-5. project_on_vocab applies it."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. On 1.2B lm_head shares its weight with embed_tokens (tie_word_embeddings); on 32B it has its own."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": null}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "Exaone4ForCausalLM", "url": "https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-1.2B"}, "LGAI-EXAONE/EXAONE-4.0-32B": {"schema": {"topology": "sequential", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "40 query heads over 8 key/value heads, head_dim 128; q_norm and k_norm per head, before the rotary", "variants": {"sliding_attention": "sliding window, RoPE", "full_attention": "full causal; NoPE on 32B"}, "pre_norm": null, "post_norm": "post_attention_layernorm", "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}]}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "SwiGLU: 5120 \u2192 27392 \u2192 5120, silu", "variants": {}, "pre_norm": null, "post_norm": "post_feedforward_layernorm", "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 64, "layer_types": ["sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention"], "mids": ["boundary.layer_mid"], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "Exaone4Attention under its standard name. 40 query heads over 8 key/value heads, head_dim 128; q_norm and k_norm per head, before the rotary", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 1", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 2", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 3", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `nn_functional_dropout_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `attention_interface_1`, element 0", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream: the post-attention norm's output", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_attention_layernorm`'s output", "condition": null, "extra": null}, "norm.post_attention_layernorm": {"eyebrow": "post-norm", "expr": "model.layers[i].post_attention_layernorm", "desc": "A native module under its own name. Its output is the contribution: `model.layers[i].self_attn.attention_output`.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "On EXAONE 4.0 this norm follows the attention. On Llama the same name is the norm before the MLP; EXAONE 4.0 has no norm before either sublayer, so layer_mid is what the MLP is called with."}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "Exaone4MLP under its standard name. SwiGLU: 5120 \u2192 27392 \u2192 5120, silu", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream: the post-feedforward norm's output", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_feedforward_layernorm`'s output", "condition": null, "extra": null}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "norm.post_feedforward_layernorm": {"eyebrow": "post-norm", "expr": "model.layers[i].post_feedforward_layernorm", "desc": "A native module under its own name. Its output is the contribution: `model.layers[i].mlp.mlp_output`.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.layer_mid": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_mid", "desc": "The residual stream after the attention add", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The contribution identity that nnterp's test suite checks on this family.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": null}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "64 blocks of Exaone4DecoderLayer; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "30 blocks on 1.2B, all full attention with the rotary. 64 on 32B: three sliding-window blocks with the rotary, then one full-attention block without it, repeated."}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. A plain RMSNorm: the gain is norm.weight (not 1 + weight), eps 1e-5. project_on_vocab applies it."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. On 1.2B lm_head shares its weight with embed_tokens (tie_word_embeddings); on 32B it has its own."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": null}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "Exaone4ForCausalLM", "url": "https://huggingface.co/LGAI-EXAONE/EXAONE-4.0-32B"}, "LGAI-EXAONE/EXAONE-4.0.1-32B": {"schema": {"topology": "sequential", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "40 query heads over 8 key/value heads, head_dim 128; q_norm and k_norm per head, before the rotary", "variants": {"sliding_attention": "sliding window, RoPE", "full_attention": "full causal; NoPE on 32B"}, "pre_norm": null, "post_norm": "post_attention_layernorm", "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}]}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "SwiGLU: 5120 \u2192 27392 \u2192 5120, silu", "variants": {}, "pre_norm": null, "post_norm": "post_feedforward_layernorm", "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 64, "layer_types": ["sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention", "sliding_attention", "sliding_attention", "sliding_attention", "full_attention"], "mids": ["boundary.layer_mid"], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "Exaone4Attention under its standard name. 40 query heads over 8 key/value heads, head_dim 128; q_norm and k_norm per head, before the rotary", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 1", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 2", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 3", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `nn_functional_dropout_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `attention_interface_1`, element 0", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream: the post-attention norm's output", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_attention_layernorm`'s output", "condition": null, "extra": null}, "norm.post_attention_layernorm": {"eyebrow": "post-norm", "expr": "model.layers[i].post_attention_layernorm", "desc": "A native module under its own name. Its output is the contribution: `model.layers[i].self_attn.attention_output`.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "On EXAONE 4.0 this norm follows the attention. On Llama the same name is the norm before the MLP; EXAONE 4.0 has no norm before either sublayer, so layer_mid is what the MLP is called with."}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "Exaone4MLP under its standard name. SwiGLU: 5120 \u2192 27392 \u2192 5120, silu", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream: the post-feedforward norm's output", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_feedforward_layernorm`'s output", "condition": null, "extra": null}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "norm.post_feedforward_layernorm": {"eyebrow": "post-norm", "expr": "model.layers[i].post_feedforward_layernorm", "desc": "A native module under its own name. Its output is the contribution: `model.layers[i].mlp.mlp_output`.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.layer_mid": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_mid", "desc": "The residual stream after the attention add", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The contribution identity that nnterp's test suite checks on this family.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": null}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "64 blocks of Exaone4DecoderLayer; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "30 blocks on 1.2B, all full attention with the rotary. 64 on 32B: three sliding-window blocks with the rotary, then one full-attention block without it, repeated."}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. A plain RMSNorm: the gain is norm.weight (not 1 + weight), eps 1e-5. project_on_vocab applies it."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. On 1.2B lm_head shares its weight with embed_tokens (tie_word_embeddings); on 32B it has its own."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": null}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "Exaone4ForCausalLM", "url": "https://huggingface.co/LGAI-EXAONE/EXAONE-4.0.1-32B"}}}</script>
+<footer class="colophon frame">
+  <div class="rule"></div>
+  <div class="colophon-row">
+    <span class="micro">nnterp encyclopedia</span>
+    <span class="mono">built 2026-10-21 · nnterp 1.3.1.dev428+gf5e97f4de · transformers 5.20.2 · reference <span id="colophon-reference">LGAI-EXAONE/EXAONE-4.0-1.2B</span></span>
+  </div>
+</footer>
+<script src="static/encyclopedia.js"></script>
+<script src="static/block.js"></script></body>
+</html>

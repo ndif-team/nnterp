@@ -1,0 +1,697 @@
+<!doctype html>
+<html lang="en" style="--c1: #84BC82; --c2: #CA95CF; --c3: #50BDC8; --c4: #8BAAEB; --c5: #DC996D; --c1-deep: #3C723D; --c2-deep: #7F4E83; --c3-deep: #00717A; --c4-deep: #46619C; --c5-deep: #8E5225; --paper: #F1E6CB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GPT-J · nnterp encyclopedia</title>
+<meta name="description" content="A parallel block with one LayerNorm: ln_1&#39;s output is the input of both the attention and the MLP, the block adds both to the stream at once, and rotary turns only the first rotary_dim dimensions of each head, in adjacent pairs.">
+<link rel="icon" type="image/svg+xml" href="static/favicon.svg">
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%2384BC82%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23CA95CF%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%2350BDC8%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%238BAAEB%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23DC996D%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Albert+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/encyclopedia.css">
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<header class="masthead frame">
+  <a class="micro-lg brand" href="index.html">nnterp · encyclopedia</a>
+  <span class="mono masthead-right">gptj · nnterp.families.gptj</span>
+</header>
+<section class="hero frame">
+  <div class="hero-text">
+    <p class="micro-lg eyebrow">family <span class="mono">gptj</span></p>
+    <h1 class="disp-title"><span class="line">GPT-J</span></h1>
+    <p class="subtitle">A parallel block with one LayerNorm: ln_1&#39;s output is the input of both the attention and the MLP, the block adds both to the stream at once, and rotary turns only the first rotary_dim dimensions of each head, in adjacent pairs.</p>
+    <div class="pane" data-pane="chips" data-ckpts="EleutherAI/gpt-j-6b togethercomputer/GPT-JT-6B-v1 nomic-ai/gpt4all-j PygmalionAI/pygmalion-6b"><div class="chips">
+<a class="chip" href="#notes" title="Attention and MLP both read the block&#39;s input, through one shared norm or one each, and the block returns x + attn + mlp.">Parallel block</a><a class="chip" href="#notes" title="Rotary embeddings rotate only a leading fraction of each query and key head; the other dimensions carry no position.">Partial rotary</a><a class="chip" href="#notes" title="Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.">Interleaved rotary</a><a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a></div></div>
+  </div>
+  <aside class="hero-side">
+    <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
+<div class="ckpt" id="ckpt" data-selector>
+  <span class="micro ckpt-label" id="ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="ckpt-list" aria-labelledby="ckpt-label ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="ckpt-name">gpt-j-6b</span><span class="ckpt-eye ckpt-eye-current" id="ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="ckpt-list" role="listbox" tabindex="-1" aria-labelledby="ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-1">
+      <p class="micro ckpt-group-label" id="ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="ckpt-option-EleutherAI--gpt-j-6b" data-ckpt="EleutherAI/gpt-j-6b" data-name="gpt-j-6b"
+           aria-selected="true" title="EleutherAI/gpt-j-6b">
+        <span class="mono">gpt-j-6b</span>      </div>
+      <div class="ckpt-option" role="option" id="ckpt-option-togethercomputer--GPT-JT-6B-v1" data-ckpt="togethercomputer/GPT-JT-6B-v1" data-name="GPT-JT-6B-v1"
+           aria-selected="false" title="togethercomputer/GPT-JT-6B-v1">
+        <span class="mono">GPT-JT-6B-v1</span>      </div>
+      <div class="ckpt-option" role="option" id="ckpt-option-nomic-ai--gpt4all-j" data-ckpt="nomic-ai/gpt4all-j" data-name="gpt4all-j"
+           aria-selected="false" title="nomic-ai/gpt4all-j">
+        <span class="mono">gpt4all-j</span>      </div>
+      <div class="ckpt-option" role="option" id="ckpt-option-PygmalionAI--pygmalion-6b" data-ckpt="PygmalionAI/pygmalion-6b" data-name="pygmalion-6b"
+           aria-selected="false" title="PygmalionAI/pygmalion-6b">
+        <span class="mono">pygmalion-6b</span>      </div>
+    </div>
+  </div>
+        <div class="pane" data-pane="hub" data-ckpts="EleutherAI/gpt-j-6b"><p class="ckpt-facts mono"><span><b>6.05B</b> parameters <span class="dim">· from the config</span></span><span>released <b>Mar 2022</b></span></p></div><div class="pane" data-pane="hub" data-ckpts="togethercomputer/GPT-JT-6B-v1" hidden><p class="ckpt-facts mono"><span><b>6.05B</b> parameters <span class="dim">· from the config</span></span><span>released <b>Nov 2022</b></span></p></div><div class="pane" data-pane="hub" data-ckpts="nomic-ai/gpt4all-j" hidden><p class="ckpt-facts mono"><span><b>6.17B</b> parameters</span><span>released <b>Apr 2023</b></span></p></div><div class="pane" data-pane="hub" data-ckpts="PygmalionAI/pygmalion-6b" hidden><p class="ckpt-facts mono"><span><b>6.05B</b> parameters <span class="dim">· from the config</span></span><span>released <b>Jan 2023</b></span></p></div>
+      <a class="ckpt-hub" id="ckpt-hub" href="https://huggingface.co/EleutherAI/gpt-j-6b" title="EleutherAI/gpt-j-6b on the Hugging Face Hub" aria-label="EleutherAI/gpt-j-6b on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
+
+</div>
+  </aside>
+</section>
+
+<div class="stickybar" id="stickybar" aria-hidden="true">
+  <div class="frame stickybar-row">
+    <span class="stickybar-title">GPT-J</span>
+<div class="ckpt" id="bar-ckpt" data-selector>
+  <span class="micro ckpt-label" id="bar-ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="bar-ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="bar-ckpt-list" aria-labelledby="bar-ckpt-label bar-ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="bar-ckpt-name">gpt-j-6b</span><span class="ckpt-eye ckpt-eye-current" id="bar-ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="bar-ckpt-list" role="listbox" tabindex="-1" aria-labelledby="bar-ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="bar-ckpt-group-1">
+      <p class="micro ckpt-group-label" id="bar-ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-EleutherAI--gpt-j-6b" data-ckpt="EleutherAI/gpt-j-6b" data-name="gpt-j-6b"
+           aria-selected="true" title="EleutherAI/gpt-j-6b">
+        <span class="mono">gpt-j-6b</span>      </div>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-togethercomputer--GPT-JT-6B-v1" data-ckpt="togethercomputer/GPT-JT-6B-v1" data-name="GPT-JT-6B-v1"
+           aria-selected="false" title="togethercomputer/GPT-JT-6B-v1">
+        <span class="mono">GPT-JT-6B-v1</span>      </div>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-nomic-ai--gpt4all-j" data-ckpt="nomic-ai/gpt4all-j" data-name="gpt4all-j"
+           aria-selected="false" title="nomic-ai/gpt4all-j">
+        <span class="mono">gpt4all-j</span>      </div>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-PygmalionAI--pygmalion-6b" data-ckpt="PygmalionAI/pygmalion-6b" data-name="pygmalion-6b"
+           aria-selected="false" title="PygmalionAI/pygmalion-6b">
+        <span class="mono">pygmalion-6b</span>      </div>
+    </div>
+  </div>
+  
+</div>
+  </div>
+</div>
+
+<section class="frame section" id="block">
+  <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
+  <div class="pane" data-pane="block_head" data-ckpts="EleutherAI/gpt-j-6b togethercomputer/GPT-JT-6B-v1 nomic-ai/gpt4all-j PygmalionAI/pygmalion-6b"><p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+</p>
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× 28</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final_norm_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>lm_head_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>the output</small></div>
+</div></div>
+
+  <div class="viz">
+    <div class="viz-panel">
+      <div class="slider-row">
+        <label class="micro" for="layer">block</label>
+        <input type="range" id="layer" min="0" max="27" value="0">
+        <span class="mono" id="layer-label">i = 0</span>
+        <span class="mono variant" id="layer-variant"></span>
+      </div>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+      <svg id="block-svg" role="img" aria-label="The decoder block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card" id="node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each box, edge and ⊕ names what nnterp calls it, where the value is read, and its layout.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity" id="identity"><span class="micro">identity</span> <code><span class="n role-stream">layers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">input</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span> <span class="o">==</span> <span class="n role-stream">layer_output</span></code></p>
+  <div class="pane" data-pane="tower" data-ckpts="EleutherAI/gpt-j-6b togethercomputer/GPT-JT-6B-v1 nomic-ai/gpt4all-j PygmalionAI/pygmalion-6b"></div>
+</section>
+
+<section class="frame section" id="support">
+  <div class="topbar"><h2 class="disp-section">The <em>API</em></h2><span class="micro">02 · support()</span></div>
+  <h3 class="ttl-row">Values, by host</h3>
+  <div class="pane" data-pane="values" data-ckpts="EleutherAI/gpt-j-6b togethercomputer/GPT-JT-6B-v1 nomic-ai/gpt4all-j PygmalionAI/pygmalion-6b"><p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition.</p><div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model</span> <span class="mono dim">GPTJForCausalLM</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="strip.logits">
+    <span class="mono-md name role-stream">logits</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.embed">
+    <span class="mono-md name role-stream">token_embeddings</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The embedding module&#39;s output; layers[0].input is what enters the first block</span>
+    <span class="hide-sm body-md where"><p>the child module <code>embed_tokens</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.norm">
+    <span class="mono-md name role-stream">final_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the final norm, what lm_head reads</span>
+    <span class="hide-sm body-md where"><p>the child module <code>norm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.head">
+    <span class="mono-md name role-stream">lm_head_output</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The head&#39;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the child module <code>lm_head</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">next_token_probs</span>
+    <span class="hide-sm mono">NextTokenProbs <span class="dim">[batch vocab_size]</span></span>
+    <span class="body-md">The next-token distribution at the last position; derived, read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_ids</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The token ids the model was called with</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">attention_mask</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The attention mask the model was called with; zeros are padding</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_size</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">[batch, seq] of the current call; read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model.<wbr>layers[i]</span> <span class="mono dim">GPTJBlock</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">layer_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream entering the block</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.attention_norm_output">
+    <span class="mono-md name role-stream">attention_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the attention</span>
+    <span class="hide-sm body-md where"><p>the child module <code>input_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream"><span class="warn" tabindex="0" data-tip="every block: a parallel block: the attention and the MLP read the same input, so there is no stream between them">&#x26A0;&#xFE0E;</span>layer_mid</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">Unavailable: a parallel block: the attention and the MLP read the same input, so there is no stream between them</span>
+    <span class="hide-sm body-md where"><p>nowhere: the family does not serve it</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_norm_output">
+    <span class="mono-md name role-stream">mlp_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the MLP: the one norm feeds both sublayers</span>
+    <span class="hide-sm body-md where"><p>the child module <code>input_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_input">
+    <span class="mono-md name role-stream">mlp_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP is called with</span>
+    <span class="hide-sm body-md where"><p>the child module <code>mlp</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="stream.output">
+    <span class="mono-md name role-stream">layer_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-attention">model.<wbr>layers[i].<wbr>self_attn</span> <span class="mono dim">GPTJAttention</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_queries">
+    <span class="mono-md name role-attention">attention_queries</span>
+    <span class="hide-sm mono">Queries <span class="dim">[batch num_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The queries entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>self__attn_0</code>, element 0</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_keys">
+    <span class="mono-md name role-attention">attention_keys</span>
+    <span class="hide-sm mono">Keys <span class="dim">[batch num_kv_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The keys entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>self__attn_0</code>, element 1</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_values">
+    <span class="mono-md name role-attention">attention_values</span>
+    <span class="hide-sm mono">Values <span class="dim">[batch num_kv_heads seq head_dim]</span></span>
+    <span class="body-md">The values entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>self__attn_0</code>, element 2</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_scores">
+    <span class="mono-md name role-attention">attention_scores</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention scores entering the softmax, masked</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the input of <code>nn_functional_softmax_0</code> inside <code>self__attn_0</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_premix">
+    <span class="mono-md name role-attention">attention_premix</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">Every head&#39;s output side by side, as the output projection takes it</span>
+    <span class="hide-sm body-md where"><p>the child module <code>o_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.self_attn">
+    <span class="mono-md name role-attention">attention_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the attention adds to the residual stream</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_probabilities">
+    <span class="mono-md name role-attention">attention_probabilities</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention pattern the values are mixed with</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>self_attn_dropout_0</code> inside <code>self__attn_0</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_head_outputs">
+    <span class="mono-md name role-attention">attention_head_outputs</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">The per-head outputs before the output projection</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>self__attn_0</code>, element 0</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-mlp">model.<wbr>layers[i].<wbr>mlp</span> <span class="mono dim">GPTJMLP</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_activation">
+    <span class="mono-md name role-mlp">mlp_activation</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">The activation function&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the child module <code>act_fn</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_neurons">
+    <span class="mono-md name role-mlp">mlp_neurons</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+    <span class="hide-sm body-md where"><p>the child module <code>down_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.mlp">
+    <span class="mono-md name role-mlp">mlp_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP adds to the residual stream</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div></div>
+
+  <h3 class="ttl-row">Printout</h3>
+  <div class="pane" data-pane="printout" data-ckpts="EleutherAI/gpt-j-6b"><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">EleutherAI/gpt-j-6b</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>GPTJForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=4096, out_features=50400, bias=True)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(50400, 4096)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-27): 28 x GPTJBlock(
+      <span class="rn role-norm">(input_layernorm/ln_1)</span>: LayerNorm<span class="rd">((4096,), eps=1e-05, elementwise_affine=True, bias=True)</span>
+      <span class="rn role-attention">(self_attn/attn)</span>: GPTJAttention(
+        <span class="rn">(attn_dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn">(resid_dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(o_proj/out_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: GPTJMLP(
+        <span class="rn">(fc_in)</span>: Linear<span class="rd">(in_features=4096, out_features=16384, bias=True)</span>
+        <span class="rn">(down_proj/fc_out)</span>: Linear<span class="rd">(in_features=16384, out_features=4096, bias=True)</span>
+        <span class="rn">(act_fn/act)</span>: NewGELUActivation<span class="rd">()</span>
+        <span class="rn">(dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream</span>
+      )
+      (layer_mid): Unavailable: a parallel block: the attention and the MLP read the same input, so there is no stream between them
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP: the one norm feeds both sublayers</span>
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: LayerNorm<span class="rd">((4096,), eps=1e-05, elementwise_affine=True, bias=True)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div><div class="pane" data-pane="printout" data-ckpts="togethercomputer/GPT-JT-6B-v1" hidden><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">togethercomputer/GPT-JT-6B-v1</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>GPTJForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=4096, out_features=50400, bias=True)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(50400, 4096)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-27): 28 x GPTJBlock(
+      <span class="rn role-norm">(input_layernorm/ln_1)</span>: LayerNorm<span class="rd">((4096,), eps=1e-05, elementwise_affine=True, bias=True)</span>
+      <span class="rn role-attention">(self_attn/attn)</span>: GPTJAttention(
+        <span class="rn">(attn_dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn">(resid_dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(o_proj/out_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: GPTJMLP(
+        <span class="rn">(fc_in)</span>: Linear<span class="rd">(in_features=4096, out_features=16384, bias=True)</span>
+        <span class="rn">(down_proj/fc_out)</span>: Linear<span class="rd">(in_features=16384, out_features=4096, bias=True)</span>
+        <span class="rn">(act_fn/act)</span>: NewGELUActivation<span class="rd">()</span>
+        <span class="rn">(dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream</span>
+      )
+      (layer_mid): Unavailable: a parallel block: the attention and the MLP read the same input, so there is no stream between them
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP: the one norm feeds both sublayers</span>
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: LayerNorm<span class="rd">((4096,), eps=1e-05, elementwise_affine=True, bias=True)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div><div class="pane" data-pane="printout" data-ckpts="nomic-ai/gpt4all-j" hidden><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">nomic-ai/gpt4all-j</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>GPTJForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=4096, out_features=50400, bias=True)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(50400, 4096)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-27): 28 x GPTJBlock(
+      <span class="rn role-norm">(input_layernorm/ln_1)</span>: LayerNorm<span class="rd">((4096,), eps=1e-05, elementwise_affine=True, bias=True)</span>
+      <span class="rn role-attention">(self_attn/attn)</span>: GPTJAttention(
+        <span class="rn">(attn_dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn">(resid_dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(o_proj/out_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: GPTJMLP(
+        <span class="rn">(fc_in)</span>: Linear<span class="rd">(in_features=4096, out_features=16384, bias=True)</span>
+        <span class="rn">(down_proj/fc_out)</span>: Linear<span class="rd">(in_features=16384, out_features=4096, bias=True)</span>
+        <span class="rn">(act_fn/act)</span>: NewGELUActivation<span class="rd">()</span>
+        <span class="rn">(dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream</span>
+      )
+      (layer_mid): Unavailable: a parallel block: the attention and the MLP read the same input, so there is no stream between them
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP: the one norm feeds both sublayers</span>
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: LayerNorm<span class="rd">((4096,), eps=1e-05, elementwise_affine=True, bias=True)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div><div class="pane" data-pane="printout" data-ckpts="PygmalionAI/pygmalion-6b" hidden><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">PygmalionAI/pygmalion-6b</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>GPTJForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=4096, out_features=50400, bias=True)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(50400, 4096)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-27): 28 x GPTJBlock(
+      <span class="rn role-norm">(input_layernorm/ln_1)</span>: LayerNorm<span class="rd">((4096,), eps=1e-05, elementwise_affine=True, bias=True)</span>
+      <span class="rn role-attention">(self_attn/attn)</span>: GPTJAttention(
+        <span class="rn">(attn_dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn">(resid_dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn">(o_proj/out_proj)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=False)</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: GPTJMLP(
+        <span class="rn">(fc_in)</span>: Linear<span class="rd">(in_features=4096, out_features=16384, bias=True)</span>
+        <span class="rn">(down_proj/fc_out)</span>: Linear<span class="rd">(in_features=16384, out_features=4096, bias=True)</span>
+        <span class="rn">(act_fn/act)</span>: NewGELUActivation<span class="rd">()</span>
+        <span class="rn">(dropout)</span>: Dropout<span class="rd">(p=0.0, inplace=False)</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream</span>
+      )
+      (layer_mid): Unavailable: a parallel block: the attention and the MLP read the same input, so there is no stream between them
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP: the one norm feeds both sublayers</span>
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: LayerNorm<span class="rd">((4096,), eps=1e-05, elementwise_affine=True, bias=True)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div>
+
+  <div class="pane" data-pane="config" data-ckpts="EleutherAI/gpt-j-6b"><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>28</span></div><div class="spec"><span>model.hidden_size</span><span>4096</span></div><div class="spec"><span>model.num_heads</span><span>16</span></div><div class="spec"><span>model.num_kv_heads</span><span>16</span></div><div class="spec"><span>model.head_dim</span><span>256</span></div><div class="spec"><span>model.qk_head_dim</span><span>256</span></div><div class="spec"><span>model.vocab_size</span><span>50400</span></div><div class="spec"><span>model.intermediate_size</span><span>16384</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>GPTJForCausalLM</span></div><div class="spec"><span>vocab_size</span><span>50400</span></div><div class="spec"><span>tie_word_embeddings</span><span>False</span></div><div class="spec"><span>n_layer</span><span>28</span></div><div class="spec"><span>n_embd</span><span>4096</span></div><div class="spec"><span>n_head</span><span>16</span></div><div class="spec"><span>n_positions</span><span>2048</span></div><div class="spec"><span>activation_function</span><span>gelu_new</span></div><div class="spec"><span>layer_norm_epsilon</span><span>1e-05</span></div><div class="spec"><span>rotary_dim</span><span>64</span></div>    </div>
+  </div>
+</div></div><div class="pane" data-pane="config" data-ckpts="togethercomputer/GPT-JT-6B-v1 PygmalionAI/pygmalion-6b" hidden><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>28</span></div><div class="spec"><span>model.hidden_size</span><span>4096</span></div><div class="spec"><span>model.num_heads</span><span>16</span></div><div class="spec"><span>model.num_kv_heads</span><span>16</span></div><div class="spec"><span>model.head_dim</span><span>256</span></div><div class="spec"><span>model.qk_head_dim</span><span>256</span></div><div class="spec"><span>model.vocab_size</span><span>50400</span></div><div class="spec"><span>model.intermediate_size</span><span>16384</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>GPTJForCausalLM</span></div><div class="spec"><span>vocab_size</span><span>50400</span></div><div class="spec"><span>tie_word_embeddings</span><span>False</span></div><div class="spec"><span>dtype</span><span>float16</span></div><div class="spec"><span>n_layer</span><span>28</span></div><div class="spec"><span>n_embd</span><span>4096</span></div><div class="spec"><span>n_head</span><span>16</span></div><div class="spec"><span>n_positions</span><span>2048</span></div><div class="spec"><span>activation_function</span><span>gelu_new</span></div><div class="spec"><span>layer_norm_epsilon</span><span>1e-05</span></div><div class="spec"><span>rotary_dim</span><span>64</span></div>    </div>
+  </div>
+</div></div><div class="pane" data-pane="config" data-ckpts="nomic-ai/gpt4all-j" hidden><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>28</span></div><div class="spec"><span>model.hidden_size</span><span>4096</span></div><div class="spec"><span>model.num_heads</span><span>16</span></div><div class="spec"><span>model.num_kv_heads</span><span>16</span></div><div class="spec"><span>model.head_dim</span><span>256</span></div><div class="spec"><span>model.qk_head_dim</span><span>256</span></div><div class="spec"><span>model.vocab_size</span><span>50400</span></div><div class="spec"><span>model.intermediate_size</span><span>16384</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>GPTJForCausalLM</span></div><div class="spec"><span>vocab_size</span><span>50400</span></div><div class="spec"><span>tie_word_embeddings</span><span>False</span></div><div class="spec"><span>dtype</span><span>bfloat16</span></div><div class="spec"><span>n_layer</span><span>28</span></div><div class="spec"><span>n_embd</span><span>4096</span></div><div class="spec"><span>n_head</span><span>16</span></div><div class="spec"><span>n_positions</span><span>2048</span></div><div class="spec"><span>activation_function</span><span>gelu_new</span></div><div class="spec"><span>layer_norm_epsilon</span><span>1e-05</span></div><div class="spec"><span>rotary_dim</span><span>64</span></div>    </div>
+  </div>
+</div></div>
+</section>
+
+<section class="frame section" id="notes">
+  <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <div class="grid-notes">
+    <div class="prose"><h2>One LayerNorm feeds both sublayers</h2>
+<pre class="code"><code><span class="n">h</span>   <span class="o">=</span> <span class="n">ln_1</span><span class="p">(</span><span class="n">x</span><span class="p">)</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n role-attention">self_attn</span><span class="p">(</span><span class="n">h</span><span class="p">)</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="p">(</span><span class="n">h</span><span class="p">)</span> <span class="o">+</span> <span class="n">x</span></code></pre>
+<p><code>ln_1</code> is <code>input_layernorm</code> and the block's only norm: there is no <code>post_attention_layernorm</code>.
+Its one output tensor is passed to the attention and then to the MLP, so <code>self_attn.input</code> and
+<code>mlp.input</code> are one tensor object, not two equal copies. The block returns
+<code>(hidden_states, attn_weights)</code> on every call: <code>model.layers[i].output[1]</code> is the attention
+pattern, equal to <code>self_attn.attention_probabilities</code>, and <code>layer_output</code> is the first element.</p>
+<h2>An in-place edit of <code>self_attn.input</code> reaches the MLP</h2>
+<p>Because both sublayers read one tensor, an in-place edit of <code>self_attn.input</code> also changes what
+the MLP reads. An assignment replaces only the attention's argument and leaves <code>mlp.input</code> as it
+was. An edit of <code>mlp.input</code>, in place or assigned, reaches only the MLP: the attention has already
+run. To change what both read, assign <code>input_layernorm.output</code>.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n">input</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">=</span> <span class="mi">0</span>      <span class="c1"># in place</span>
+    <span class="n">mlp_in</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>       <span class="c1"># its last row is zero too</span>
+
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="c1"># an assignment replaces only the attention&#39;s argument</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n">input</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">zeros_like</span><span class="p">(</span><span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n">input</span><span class="p">)</span>
+    <span class="n">mlp_in</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>       <span class="c1"># unchanged</span></code></pre>
+<p>The attention runs before the MLP, so inside one trace read and edit the attention's values
+before <code>mlp.input</code>; asking for <code>mlp.input</code> first makes a later attention read fail as out of
+order.</p>
+<h2>The contributions, added in the block's order</h2>
+<p><code>attention_output</code> is the attention module's output (<code>out_proj</code>, no bias) and <code>mlp_output</code> the
+MLP's (<code>fc_out</code>, with a bias). The block computes <code>attn + mlp + x</code>, so that sum reproduces
+<code>layer_output</code> bit for bit; <code>x + attn + mlp</code> differs from it by rounding (up to 0.5 at block 4
+of 6B in bfloat16 on a sample prompt). Nothing inside a block connects the two sublayers:
+zeroing <code>attention_output</code> leaves that block's <code>mlp.input</code> bit-identical, and the first MLP that
+reads block <code>i</code>'s attention is block <code>i + 1</code>'s.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n role-mlp">mlp</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="k">assert</span> <span class="n">torch</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">attn</span> <span class="o">+</span> <span class="n role-mlp">mlp</span> <span class="o">+</span> <span class="n">x</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span>                 <span class="c1"># the block&#39;s own order</span></code></pre>
+<h2>The attention is eager by default and computes its scores in float32</h2>
+<p>transformers has no <code>sdpa</code> path for GPT-J: a load without <code>attn_implementation</code> runs the eager
+<code>GPTJAttention</code>, and all six interior values are served with no flag. They are read inside the eager
+attention, so a <code>flash_attention_2</code> load reports them unavailable. The values are read around the module's
+<code>_attn(query, key, value, mask)</code> call: its arguments are <code>attention_queries</code>, <code>attention_keys</code>
+and <code>attention_values</code> (16 heads each on 6B, no grouping, in the model's dtype), and its first
+return is <code>attention_head_outputs</code>.</p>
+<p><code>_attn</code> casts the queries and keys to float32, so <code>attention_scores</code> is float32 whatever the
+model's dtype: <code>q @ kᵀ / 16</code> (<code>sqrt(head_dim)</code>, 256 on 6B) plus the causal mask, whose masked
+entries hold the model dtype's minimum (<code>-3.39e38</code> under bfloat16). The pattern is cast back to
+the model's dtype, and <code>softmax(attention_scores)</code> cast to it equals <code>attention_probabilities</code>
+exactly. <code>q_proj</code>, <code>k_proj</code>, <code>v_proj</code> and <code>out_proj</code> are separate <code>Linear</code>s with no bias;
+<code>attention_head_outputs.flatten(-2)</code> is <code>out_proj.input</code>.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_queries</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">k</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_keys</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">scores</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_scores</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">again</span> <span class="o">=</span> <span class="n">q</span><span class="o">.</span><span class="n">float</span><span class="p">()</span> <span class="o">@</span> <span class="n">k</span><span class="o">.</span><span class="n">float</span><span class="p">()</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span> <span class="o">/</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">head_dim</span> <span class="o">**</span> <span class="mf">0.5</span>
+<span class="n">causal</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones</span><span class="p">(</span><span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">q</span><span class="o">.</span><span class="n">shape</span><span class="p">[</span><span class="mi">2</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="n">q</span><span class="o">.</span><span class="n">device</span><span class="p">)</span><span class="o">.</span><span class="n">tril</span><span class="p">()</span>
+<span class="k">assert</span> <span class="n">torch</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">again</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">causal</span><span class="p">],</span> <span class="n">scores</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">causal</span><span class="p">])</span></code></pre>
+<h2>Rotary turns the first 64 dimensions, in adjacent pairs</h2>
+<p><code>rotary_dim</code> is 64 of each head's 256 dimensions on 6B. <code>attention_queries</code> and
+<code>attention_keys</code> are read after the rotary; their dimensions 64 to 255 are the projection's
+output unchanged, and only the first 64 make a score depend on the distance between two tokens.
+Within those 64, GPT-J rotates adjacent pairs: dimensions <code>2i</code> and <code>2i + 1</code> turn together at
+frequency <code>10000 ** (-2i / 64)</code> (<code>rotate_every_two</code>). Llama and GPT-NeoX pair dimension <code>i</code> with
+<code>i + d / 2</code> across a rotated span of width <code>d</code> (<code>rotate_half</code>). Query dimension 1 on GPT-J is the
+partner of dimension 0, so a
+comparison of queries or keys across families, or rotary code written for <code>rotate_half</code>, needs
+the rotated span reordered, evens then odds. Reordered, GPT-J's rotation is <code>rotate_half</code>'s with
+the same frequencies; recomputed in float32 the two agree exactly.</p>
+<pre class="code"><code><span class="n">rot</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">rotary_dim</span>                                        <span class="c1"># 64</span>
+<span class="n">perm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">rot</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">rot</span><span class="p">,</span> <span class="mi">2</span><span class="p">)])</span>
+
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">4</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_queries</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">q_half</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">q</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="p">:</span><span class="n">rot</span><span class="p">][</span><span class="o">...</span><span class="p">,</span> <span class="n">perm</span><span class="p">],</span> <span class="n">q</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">rot</span><span class="p">:]],</span> <span class="n">dim</span><span class="o">=-</span><span class="mi">1</span><span class="p">)</span>   <span class="c1"># rotate_half&#39;s</span></code></pre>
+<p>The sine and cosine table is a float32 buffer, cast to the model's dtype before it multiplies,
+so the queries and keys are served in the model's dtype.</p>
+<h2>Loading: the main branch is float32</h2>
+<p>The <code>main</code> branch of <code>EleutherAI/gpt-j-6b</code> holds float32 weights (24 GB) and its config names no
+dtype, so a load without <code>dtype</code> is float32. Pass a half dtype to fit a single GPU, or load the
+<code>float16</code> branch, a 12 GB half-precision copy:</p>
+<pre class="code"><code><span class="n role-stream">model</span> <span class="o">=</span> <span class="n">StandardizedTransformer</span><span class="p">(</span>
+    <span class="s2">&quot;EleutherAI/gpt-j-6b&quot;</span><span class="p">,</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bfloat16</span><span class="p">,</span> <span class="n">device</span><span class="o">=</span><span class="s2">&quot;cuda&quot;</span><span class="p">,</span> <span class="n">dispatch</span><span class="o">=</span><span class="kc">True</span>
+<span class="p">)</span></code></pre>
+<h2>The head has a bias, and so does the final norm</h2>
+<p><code>logits</code> equals <code>lm_head.output</code>, and <code>project_on_vocab</code> applied to the last block's
+<code>layer_output</code> equals <code>logits</code> exactly. <code>ln_f</code> is a LayerNorm with a bias and <code>lm_head</code> adds a
+bias of its own, so a logit lens adds <code>lm_head.weight @ norm.bias + lm_head.bias</code> at every block,
+whatever the input. On 6B that vector has a standard deviation of 0.40 logits, most of it from the
+norm's bias (<code>lm_head.bias</code> alone: 0.034), and its top tokens are <code>,</code>, <code>\n</code>, <code>.</code>, <code>-</code>, <code>and</code>.
+Folding the norm into the unembedding, or a direct logit attribution, keeps both as constant
+terms. <code>wte</code> and <code>lm_head</code> are separate matrices: the unembedding is not the embedding's
+transpose.</p>
+<pre class="code"><code><span class="n">bias_logits</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">lm_head</span><span class="o">.</span><span class="n">weight</span> <span class="o">@</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-norm">norm</span><span class="o">.</span><span class="n">bias</span> <span class="o">+</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">lm_head</span><span class="o">.</span><span class="n">bias</span></code></pre>
+<h2>The vocabulary is padded to 50400</h2>
+<p>The tokenizer is GPT-2's BPE, 50257 tokens, plus 143 added <code>&lt;|extratoken_N|&gt;</code> tokens (ids 50257
+to 50399), so <code>len(model.tokenizer)</code> equals <code>vocab_size</code>, 50400. The model card states that only
+the 50257 GPT-2 ids are used. Their unembedding rows are smaller (norm 0.32 against 1.31) but not
+zero: on six sample prompts their logits stay below −3.7 while every position's top logit is
+above 12. The tokenizer adds no BOS: position 0 is the prompt's first token, and
+<code>&lt;|endoftext|&gt;</code> (50256) is the BOS, EOS and unknown token.</p>
+<h2>Model editing and causal tracing</h2>
+<ul>
+<li>ROME's GPT-J hyperparameters rewrite <code>transformer.h.5.mlp.fc_out</code>, which is
+  <code>model.layers[5].mlp.fc_out.weight</code>. Its key is the input of that <code>Linear</code> at the subject's last
+  token, <code>model.layers[5].mlp.fc_out.input</code>, and its value the output, which equals
+  <code>model.layers[5].mlp.mlp_output</code>. MEMIT spreads the same update over blocks 3 to 8.</li>
+<li>ROME's causal tracing on <code>EleutherAI/gpt-j-6B</code> adds noise to the output of <code>transformer.wte</code>,
+  <code>model.token_embeddings</code>, and restores the outputs of <code>transformer.h.{i}</code>, <code>.mlp</code> and <code>.attn</code>
+  (first element), which are <code>layer_output</code>, <code>mlp_output</code> and <code>attention_output</code>.</li>
+<li>Function vectors (Todd et al.) on GPT-J read each head from the input of <code>attn.out_proj</code> split
+  by head, which is <code>model.layers[i].self_attn.attention_head_outputs</code>, and add the vector to the
+  output of <code>transformer.h.{i}</code>, <code>model.layers[i].layer_output</code>.</li>
+</ul></div>
+    <aside class="quirk-list">
+      <div class="pane" data-pane="quirk_list" data-ckpts="EleutherAI/gpt-j-6b togethercomputer/GPT-JT-6B-v1 nomic-ai/gpt4all-j PygmalionAI/pygmalion-6b"><p class="micro">quirks</p>
+<div class="quirk"><span class="chip">Parallel block</span><p class="body-md">Attention and MLP both read the block&#39;s input, through one shared norm or one each, and the block returns x + attn + mlp.</p></div><div class="quirk"><span class="chip">Partial rotary</span><p class="body-md">Rotary embeddings rotate only a leading fraction of each query and key head; the other dimensions carry no position.</p></div><div class="quirk"><span class="chip">Interleaved rotary</span><p class="body-md">Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.</p></div><div class="quirk"><span class="chip">LayerNorm</span><p class="body-md">Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.</p></div></div>
+    </aside>
+  </div>
+  <div class="pane" data-pane="vision_notes" data-ckpts="EleutherAI/gpt-j-6b togethercomputer/GPT-JT-6B-v1 nomic-ai/gpt4all-j PygmalionAI/pygmalion-6b"></div>
+</section>
+
+<section class="frame section" id="source">
+  <div class="topbar"><h2 class="disp-section">From the <em>family module</em></h2><span class="micro">04 · nnterp/families/gptj.py</span></div>
+  <div class="grid-notes">
+    <div class="prose docstring"><p>GPT-J (<code>GPTJForCausalLM</code>).</p>
+<p><code>transformer.{wte, drop, h[i].{ln_1, attn, mlp}, ln_f}</code> and <code>lm_head</code>. A
+parallel block: <code>ln_1</code> feeds both sublayers and <code>x + attn + mlp</code> is
+summed in the block, which returns a tuple. The attention does its own
+arithmetic in <code>_attn</code> rather than the shared eager forward, so the pattern
+and the rest of the interior are read around that method call.</p></div>
+    <aside class="quirk-list">
+      <p class="micro">sources</p>
+      <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/gptj.py">nnterp/families/gptj.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_gptj.py">tests/families/test_gptj.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
+      <p class="micro">envoys</p>
+      <p class="body-md mono">GPTJBlock → Layer<br>GPTJAttention → self_attn<br>GPTJMLP → mlp</p>
+      <div class="pane" data-pane="envoys" data-ckpts="EleutherAI/gpt-j-6b togethercomputer/GPT-JT-6B-v1 nomic-ai/gpt4all-j PygmalionAI/pygmalion-6b"></div>
+    </aside>
+  </div>
+</section>
+
+<script type="application/json" id="checkpoints-json">{"default": "EleutherAI/gpt-j-6b", "checkpoints": {"EleutherAI/gpt-j-6b": {"schema": {"topology": "parallel", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "16 heads \u00d7 256, rotary 64", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "4096 \u2192 16384 \u2192 4096, gelu_new", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 28, "layer_types": null, "mids": [], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "GPTJAttention under its standard name. 16 heads \u00d7 256, rotary 64", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 0", "condition": null, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 1", "condition": null, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 2", "condition": null, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `self__attn_0`", "condition": null, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `self_attn_dropout_0` inside `self__attn_0`", "condition": null, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `self__attn_0`, element 0", "condition": null, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. ln_1 is one module, drawn on both branches. The attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "GPTJMLP under its standard name. 4096 \u2192 16384 \u2192 4096, gelu_new", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP: the one norm feeds both sublayers", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. ln_1 is one module, drawn on both branches. The attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The contribution identity that nnterp's test suite checks on this family.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "wte is a plain lookup with no scale and no position embedding (position enters through rotary in each attention), so token_embeddings equals layers[0].input. The table has 50400 rows, and the model card says only the 50257 GPT-2 BPE ids are used."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "28 blocks of GPTJBlock; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. ln_f is a LayerNorm with a bias; project_on_vocab applies it, bias included."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head has its own weight, not tied to wte (tie_word_embeddings is false), and a bias. Nothing follows it: logits equals lm_head.output."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": null}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "GPTJForCausalLM", "url": "https://huggingface.co/EleutherAI/gpt-j-6b"}, "togethercomputer/GPT-JT-6B-v1": {"schema": {"topology": "parallel", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "16 heads \u00d7 256, rotary 64", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "4096 \u2192 16384 \u2192 4096, gelu_new", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 28, "layer_types": null, "mids": [], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "GPTJAttention under its standard name. 16 heads \u00d7 256, rotary 64", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 0", "condition": null, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 1", "condition": null, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 2", "condition": null, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `self__attn_0`", "condition": null, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `self_attn_dropout_0` inside `self__attn_0`", "condition": null, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `self__attn_0`, element 0", "condition": null, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. ln_1 is one module, drawn on both branches. The attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "GPTJMLP under its standard name. 4096 \u2192 16384 \u2192 4096, gelu_new", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP: the one norm feeds both sublayers", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. ln_1 is one module, drawn on both branches. The attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The contribution identity that nnterp's test suite checks on this family.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "wte is a plain lookup with no scale and no position embedding (position enters through rotary in each attention), so token_embeddings equals layers[0].input. The table has 50400 rows, and the model card says only the 50257 GPT-2 BPE ids are used."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "28 blocks of GPTJBlock; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. ln_f is a LayerNorm with a bias; project_on_vocab applies it, bias included."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head has its own weight, not tied to wte (tie_word_embeddings is false), and a bias. Nothing follows it: logits equals lm_head.output."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": null}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "GPTJForCausalLM", "url": "https://huggingface.co/togethercomputer/GPT-JT-6B-v1"}, "nomic-ai/gpt4all-j": {"schema": {"topology": "parallel", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "16 heads \u00d7 256, rotary 64", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "4096 \u2192 16384 \u2192 4096, gelu_new", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 28, "layer_types": null, "mids": [], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "GPTJAttention under its standard name. 16 heads \u00d7 256, rotary 64", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 0", "condition": null, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 1", "condition": null, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 2", "condition": null, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `self__attn_0`", "condition": null, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `self_attn_dropout_0` inside `self__attn_0`", "condition": null, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `self__attn_0`, element 0", "condition": null, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. ln_1 is one module, drawn on both branches. The attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "GPTJMLP under its standard name. 4096 \u2192 16384 \u2192 4096, gelu_new", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP: the one norm feeds both sublayers", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. ln_1 is one module, drawn on both branches. The attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The contribution identity that nnterp's test suite checks on this family.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "wte is a plain lookup with no scale and no position embedding (position enters through rotary in each attention), so token_embeddings equals layers[0].input. The table has 50400 rows, and the model card says only the 50257 GPT-2 BPE ids are used."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "28 blocks of GPTJBlock; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. ln_f is a LayerNorm with a bias; project_on_vocab applies it, bias included."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head has its own weight, not tied to wte (tie_word_embeddings is false), and a bias. Nothing follows it: logits equals lm_head.output."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": null}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "GPTJForCausalLM", "url": "https://huggingface.co/nomic-ai/gpt4all-j"}, "PygmalionAI/pygmalion-6b": {"schema": {"topology": "parallel", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "16 heads \u00d7 256, rotary 64", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "4096 \u2192 16384 \u2192 4096, gelu_new", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 28, "layer_types": null, "mids": [], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "GPTJAttention under its standard name. 16 heads \u00d7 256, rotary 64", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 0", "condition": null, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 1", "condition": null, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `self__attn_0`, element 2", "condition": null, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `self__attn_0`", "condition": null, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `self_attn_dropout_0` inside `self__attn_0`", "condition": null, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `self__attn_0`, element 0", "condition": null, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. ln_1 is one module, drawn on both branches. The attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "GPTJMLP under its standard name. 4096 \u2192 16384 \u2192 4096, gelu_new", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP: the one norm feeds both sublayers", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name. ln_1 is one module, drawn on both branches. The attention and the MLP read the same output tensor, so an in-place edit of self_attn.input reaches the MLP too. attention_norm_output and mlp_norm_output are that one tensor, and the block has no layer_mid.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The contribution identity that nnterp's test suite checks on this family.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "wte is a plain lookup with no scale and no position embedding (position enters through rotary in each attention), so token_embeddings equals layers[0].input. The table has 50400 rows, and the model card says only the 50257 GPT-2 BPE ids are used."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "28 blocks of GPTJBlock; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. ln_f is a LayerNorm with a bias; project_on_vocab applies it, bias included."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head has its own weight, not tied to wte (tie_word_embeddings is false), and a bias. Nothing follows it: logits equals lm_head.output."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": null}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "GPTJForCausalLM", "url": "https://huggingface.co/PygmalionAI/pygmalion-6b"}}}</script>
+<footer class="colophon frame">
+  <div class="rule"></div>
+  <div class="colophon-row">
+    <span class="micro">nnterp encyclopedia</span>
+    <span class="mono">built 2026-10-21 · nnterp 1.3.1.dev428+gf5e97f4de · transformers 5.20.2 · reference <span id="colophon-reference">EleutherAI/gpt-j-6b</span></span>
+  </div>
+</footer>
+<script src="static/encyclopedia.js"></script>
+<script src="static/block.js"></script></body>
+</html>

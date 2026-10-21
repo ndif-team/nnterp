@@ -1,0 +1,1125 @@
+<!doctype html>
+<html lang="en" style="--c1: #E090A5; --c2: #56BFB1; --c3: #D89D66; --c4: #9FB56D; --c5: #96A7EA; --c1-deep: #91495E; --c2-deep: #007368; --c3-deep: #8B551B; --c4-deep: #596C24; --c5-deep: #515E9C; --paper: #F1E6CB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>HyperCLOVA X · nnterp encyclopedia</title>
+<meta name="description" content="Llama&#39;s block with a norm after each sublayer (post_norm1, post_norm2) where use_post_norm is set, and four config multipliers: on the embeddings, on each sublayer&#39;s contribution, on the attention scores (in place of head_dim ** -0.5) and on the logits.">
+<link rel="icon" type="image/svg+xml" href="static/favicon.svg">
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%23E090A5%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%2356BFB1%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23D89D66%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%239FB56D%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%2396A7EA%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Albert+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/encyclopedia.css">
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<header class="masthead frame">
+  <a class="micro-lg brand" href="index.html">nnterp · encyclopedia</a>
+  <span class="mono masthead-right">hyperclovax · nnterp.families.hyperclovax</span>
+</header>
+<section class="hero frame">
+  <div class="hero-text">
+    <p class="micro-lg eyebrow">family <span class="mono">hyperclovax</span></p>
+    <h1 class="disp-title"><span class="line">HyperCLOVA X</span></h1>
+    <p class="subtitle">Llama&#39;s block with a norm after each sublayer (post_norm1, post_norm2) where use_post_norm is set, and four config multipliers: on the embeddings, on each sublayer&#39;s contribution, on the attention scores (in place of head_dim ** -0.5) and on the logits.</p>
+    <div class="pane" data-pane="chips" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"><div class="chips">
+<a class="chip" href="#notes" title="Each sublayer is normed before and after; the stream receives the post-norm&#39;s output.">Sandwich norms</a><a class="chip" href="#notes" title="The model scales the embedding module&#39;s output before block 0, so token_embeddings is the unscaled tensor and layers[0].input the scaled one.">Embedding multiplier</a><a class="chip" href="#notes" title="The model multiplies or divides lm_head&#39;s output by a scale from the config, so logits is not lm_head&#39;s raw output.">Scaled logits</a></div></div><div class="pane" data-pane="chips" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden><div class="chips">
+<a class="chip" href="#notes" title="Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model.">Vision-language</a><a class="chip" href="#notes" title="Every image&#39;s tokens run in one row, [1, all tokens, vision_hidden_size]; the processor&#39;s per-image grid sizes split the row.">Packed vision encoder</a><a class="chip" href="#notes" title="The vision encoder takes images of any resolution, so vision.image_size raises Unavailable; each image&#39;s grid is in the processor&#39;s output.">Variable resolution</a><a class="chip" href="#notes" title="The projector merges each group of neighboring patches into one token, by pooling or by concatenating them (a pixel shuffle), so an image has fewer tokens than patches.">Pooled projector</a></div></div>
+  </div>
+  <aside class="hero-side">
+    <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
+<div class="ckpt" id="ckpt" data-selector>
+  <span class="micro ckpt-label" id="ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="ckpt-list" aria-labelledby="ckpt-label ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="ckpt-name">HyperCLOVAX-SEED-Think-14B</span><span class="ckpt-eye ckpt-eye-current" id="ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="ckpt-list" role="listbox" tabindex="-1" aria-labelledby="ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-1">
+      <p class="micro ckpt-group-label" id="ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="ckpt-option-naver-hyperclovax--HyperCLOVAX-SEED-Think-14B" data-ckpt="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B" data-name="HyperCLOVAX-SEED-Think-14B"
+           aria-selected="true" title="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B">
+        <span class="mono">HyperCLOVAX-SEED-Think-14B</span>      </div>
+    </div>
+    <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-2">
+      <p class="micro ckpt-group-label" id="ckpt-group-2">vision-language</p>
+      <div class="ckpt-option" role="option" id="ckpt-option-naver-hyperclovax--HyperCLOVAX-SEED-Think-32B" data-ckpt="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" data-name="HyperCLOVAX-SEED-Think-32B"
+           aria-selected="false" data-vision="1" title="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B · HyperCLOVA X Vision V2, Qwen ViT vision encoder">
+        <span class="mono">HyperCLOVAX-SEED-Think-32B</span><span class="ckpt-eye" aria-label="vision-language"><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span>      </div>
+    </div>
+  </div>
+        <div class="pane" data-pane="hub" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"><p class="ckpt-facts mono"><span><b>14.7B</b> parameters</span><span>released <b>Jul 2025</b></span></p></div><div class="pane" data-pane="hub" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden></div>
+      <a class="ckpt-hub" id="ckpt-hub" href="https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Think-14B" title="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B on the Hugging Face Hub" aria-label="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
+
+</div>
+  </aside>
+</section>
+
+<div class="stickybar" id="stickybar" aria-hidden="true">
+  <div class="frame stickybar-row">
+    <span class="stickybar-title">HyperCLOVA X</span>
+<div class="ckpt" id="bar-ckpt" data-selector>
+  <span class="micro ckpt-label" id="bar-ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="bar-ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="bar-ckpt-list" aria-labelledby="bar-ckpt-label bar-ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="bar-ckpt-name">HyperCLOVAX-SEED-Think-14B</span><span class="ckpt-eye ckpt-eye-current" id="bar-ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="bar-ckpt-list" role="listbox" tabindex="-1" aria-labelledby="bar-ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="bar-ckpt-group-1">
+      <p class="micro ckpt-group-label" id="bar-ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-naver-hyperclovax--HyperCLOVAX-SEED-Think-14B" data-ckpt="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B" data-name="HyperCLOVAX-SEED-Think-14B"
+           aria-selected="true" title="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B">
+        <span class="mono">HyperCLOVAX-SEED-Think-14B</span>      </div>
+    </div>
+    <div class="ckpt-group" role="group" aria-labelledby="bar-ckpt-group-2">
+      <p class="micro ckpt-group-label" id="bar-ckpt-group-2">vision-language</p>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-naver-hyperclovax--HyperCLOVAX-SEED-Think-32B" data-ckpt="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" data-name="HyperCLOVAX-SEED-Think-32B"
+           aria-selected="false" data-vision="1" title="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B · HyperCLOVA X Vision V2, Qwen ViT vision encoder">
+        <span class="mono">HyperCLOVAX-SEED-Think-32B</span><span class="ckpt-eye" aria-label="vision-language"><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span>      </div>
+    </div>
+  </div>
+  
+</div>
+  </div>
+</div>
+
+<section class="frame section" id="block">
+  <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
+  <div class="pane" data-pane="block_head" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"><p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+</p>
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× 38</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final_norm_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>lm_head_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>scaled</small></div>
+</div></div><div class="pane" data-pane="block_head" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden><p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+</p>
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× 72</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final_norm_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>lm_head_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>the output</small></div>
+</div></div>
+
+  <div class="viz">
+    <div class="viz-panel">
+      <div class="slider-row">
+        <label class="micro" for="layer">block</label>
+        <input type="range" id="layer" min="0" max="37" value="0">
+        <span class="mono" id="layer-label">i = 0</span>
+        <span class="mono variant" id="layer-variant"></span>
+      </div>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+      <svg id="block-svg" role="img" aria-label="The decoder block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card" id="node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each box, edge and ⊕ names what nnterp calls it, where the value is read, and its layout.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity" id="identity"><span class="micro">identity</span> <code><span class="n role-stream">layers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">input</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span> <span class="o">==</span> <span class="n role-stream">layer_output</span></code></p>
+  <div class="pane" data-pane="tower" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"></div><div class="pane" data-pane="tower" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden><details class="fold fold-titled tower-scope">
+  <summary><h2 class="fold-heading">The <em>vision encoder</em></h2><span class="micro fold-tag">· Qwen ViT · Qwen2_5_VisionTransformerPretrainedModel</span></summary>
+  <p class="lead">The image's path into the text model, then one block of the vision encoder. Hover any part for its nnterp name; click to pin the card.</p>
+  <div class="strip tower-strip">
+    <div class="strip-node" data-node="v:path.image"><span class="mono role-stream">image</span><small>pixel_values</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.patch_embed"><span class="mono role-stream">patch_embed</span><small>patch_embeddings</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node strip-layers" data-node="v:path.layers"><span class="mono role-stream">layers</span><small>× 32 · tower_output</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node strip-projector" data-node="v:path.projector"><span class="mono role-stream">projector</span><small>input: the merger&#39;s output, back in the image tokens&#39; order</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.features"><span class="mono role-stream">image_features</span><small>at the scatter</small></div>
+    <span class="strip-arrow">→</span>
+    <div class="strip-node" data-node="v:path.scatter"><span class="mono role-stream">layers[0].input</span><small>at image_token_mask</small></div>
+  </div>
+  <dl class="tower-facts">
+    <div><dt class="micro">rows</dt><dd class="body-md">One row, packed: every image&#x27;s patches, <code>[1, patches, vision_hidden_size]</code>, split per image by the processor&#x27;s <code>image_grid_thw</code>. Each image&#x27;s patches are in merge-block order (each 2 × 2 block the merger folds is consecutive), and on Qwen2.5-VL in window order inside the vision encoder.</dd></div>
+    <div><dt class="micro">positions</dt><dd class="body-md">A 2D rotary embedding (row and column of the patch) turns the queries and keys inside each attention. Qwen3-VL and Qwen3.5 also add a learned <code>pos_embed</code>, resampled to each image&#x27;s grid, after <code>patch_embed</code>.</dd></div>
+    <div><dt class="micro">masking</dt><dd class="body-md">The attention runs once per image, over that image&#x27;s patches, so no patch attends to another image&#x27;s; on Qwen2.5-VL&#x27;s windowed blocks once per window.</dd></div>
+    <div><dt class="micro">final norm</dt><dd class="body-md">None after the last block: the merger norms each patch as it reads it, so there is no <code>vision.norm</code>.</dd></div>
+  </dl>
+  <div class="viz">
+    <div class="viz-panel">
+      <svg class="tower-svg" role="img" aria-label="The vision encoder's block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each node of the image's path, and each box, edge and ⊕ of the vision encoder's block, names what nnterp calls it.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity"><span class="micro">identity</span> <code><span class="n role-stream">vision</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">input</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span> <span class="o">==</span> <span class="n role-stream">layer_output</span></code></p>
+</details></div>
+</section>
+
+<section class="frame section" id="support">
+  <div class="topbar"><h2 class="disp-section">The <em>API</em></h2><span class="micro">02 · support()</span></div>
+  <h3 class="ttl-row">Values, by host</h3>
+  <div class="pane" data-pane="values" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"><p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition.</p><div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model</span> <span class="mono dim">HyperCLOVAXForCausalLM</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="strip.logits">
+    <span class="mono-md name role-stream">logits</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.embed">
+    <span class="mono-md name role-stream">token_embeddings</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The embedding module&#39;s output; layers[0].input is what enters the first block</span>
+    <span class="hide-sm body-md where"><p>the child module <code>embed_tokens</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.norm">
+    <span class="mono-md name role-stream">final_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the final norm, what lm_head reads</span>
+    <span class="hide-sm body-md where"><p>the child module <code>norm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.head">
+    <span class="mono-md name role-stream">lm_head_output</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The head&#39;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the child module <code>lm_head</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">next_token_probs</span>
+    <span class="hide-sm mono">NextTokenProbs <span class="dim">[batch vocab_size]</span></span>
+    <span class="body-md">The next-token distribution at the last position; derived, read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_ids</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The token ids the model was called with</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">attention_mask</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The attention mask the model was called with; zeros are padding</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_size</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">[batch, seq] of the current call; read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model.<wbr>layers[i]</span> <span class="mono dim">HyperCLOVAXDecoderLayer</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">layer_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream entering the block</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.attention_norm_output">
+    <span class="mono-md name role-stream">attention_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the attention</span>
+    <span class="hide-sm body-md where"><p>the child module <code>input_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.layer_mid">
+    <span class="mono-md name role-stream">layer_mid</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the attention add</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_norm_output">
+    <span class="mono-md name role-stream">mlp_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the MLP</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_input">
+    <span class="mono-md name role-stream">mlp_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP is called with</span>
+    <span class="hide-sm body-md where"><p>the child module <code>mlp</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="stream.output">
+    <span class="mono-md name role-stream">layer_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-attention">model.<wbr>layers[i].<wbr>self_attn</span> <span class="mono dim">HyperCLOVAXAttention</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_queries">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_queries</span>
+    <span class="hide-sm mono">Queries <span class="dim">[batch num_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The queries entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 1</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_keys">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_keys</span>
+    <span class="hide-sm mono">Keys <span class="dim">[batch num_kv_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The keys entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 2</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_values">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_values</span>
+    <span class="hide-sm mono">Values <span class="dim">[batch num_kv_heads seq head_dim]</span></span>
+    <span class="body-md">The values entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 3</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_scores">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_scores</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention scores entering the softmax, masked</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the input of <code>nn_functional_softmax_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_premix">
+    <span class="mono-md name role-attention">attention_premix</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">Every head&#39;s output side by side, as the output projection takes it</span>
+    <span class="hide-sm body-md where"><p>the child module <code>o_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.self_attn">
+    <span class="mono-md name role-attention">attention_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the attention adds to the residual stream: the post-attention norm&#39;s output times residual_multiplier</span>
+    <span class="hide-sm body-md where"><p>the sibling module <code>post_norm1</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_probabilities">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_probabilities</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention pattern the values are mixed with</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>nn_functional_dropout_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_head_outputs">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_head_outputs</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">The per-head outputs before the output projection</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>attention_interface_1</code>, element 0</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-mlp">model.<wbr>layers[i].<wbr>mlp</span> <span class="mono dim">HyperCLOVAXMLP</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_activation">
+    <span class="mono-md name role-mlp">mlp_activation</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">The activation function&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the child module <code>act_fn</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_neurons">
+    <span class="mono-md name role-mlp">mlp_neurons</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+    <span class="hide-sm body-md where"><p>the child module <code>down_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.mlp">
+    <span class="mono-md name role-mlp">mlp_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP adds to the residual stream: the post-MLP norm&#39;s output times residual_multiplier</span>
+    <span class="hide-sm body-md where"><p>the sibling module <code>post_norm2</code>'s output</p></span>
+  </div>
+</div></div><div class="pane" data-pane="values" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden><p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition.</p><div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model</span> <span class="mono dim">HyperCLOVAXVisionV2ForConditionalGeneration</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="strip.logits">
+    <span class="mono-md name role-stream">logits</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.embed">
+    <span class="mono-md name role-stream">token_embeddings</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The embedding module&#39;s output; layers[0].input is what enters the first block</span>
+    <span class="hide-sm body-md where"><p>the child module <code>embed_tokens</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.norm">
+    <span class="mono-md name role-stream">final_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the final norm, what lm_head reads</span>
+    <span class="hide-sm body-md where"><p>the child module <code>norm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.head">
+    <span class="mono-md name role-stream">lm_head_output</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The head&#39;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the child module <code>lm_head</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">next_token_probs</span>
+    <span class="hide-sm mono">NextTokenProbs <span class="dim">[batch vocab_size]</span></span>
+    <span class="body-md">The next-token distribution at the last position; derived, read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_ids</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The token ids the model was called with</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">attention_mask</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The attention mask the model was called with; zeros are padding</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_size</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">[batch, seq] of the current call; read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model.<wbr>layers[i]</span> <span class="mono dim">HyperCLOVAXDecoderLayer</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">layer_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream entering the block</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.attention_norm_output">
+    <span class="mono-md name role-stream">attention_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the attention</span>
+    <span class="hide-sm body-md where"><p>the child module <code>input_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.layer_mid">
+    <span class="mono-md name role-stream">layer_mid</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the attention add</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_norm_output">
+    <span class="mono-md name role-stream">mlp_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the MLP</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_input">
+    <span class="mono-md name role-stream">mlp_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP is called with</span>
+    <span class="hide-sm body-md where"><p>the child module <code>mlp</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="stream.output">
+    <span class="mono-md name role-stream">layer_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-attention">model.<wbr>layers[i].<wbr>self_attn</span> <span class="mono dim">HyperCLOVAXAttention</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_queries">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_queries</span>
+    <span class="hide-sm mono">Queries <span class="dim">[batch num_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The queries entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 1</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_keys">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_keys</span>
+    <span class="hide-sm mono">Keys <span class="dim">[batch num_kv_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The keys entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 2</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_values">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_values</span>
+    <span class="hide-sm mono">Values <span class="dim">[batch num_kv_heads seq head_dim]</span></span>
+    <span class="body-md">The values entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 3</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_scores">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_scores</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention scores entering the softmax, masked</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the input of <code>nn_functional_softmax_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_premix">
+    <span class="mono-md name role-attention">attention_premix</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">Every head&#39;s output side by side, as the output projection takes it</span>
+    <span class="hide-sm body-md where"><p>the child module <code>o_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.self_attn">
+    <span class="mono-md name role-attention">attention_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the attention adds to the residual stream: the post-attention norm&#39;s output times residual_multiplier</span>
+    <span class="hide-sm body-md where"><p>the sibling module <code>post_norm1</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_probabilities">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_probabilities</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention pattern the values are mixed with</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>nn_functional_dropout_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_head_outputs">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_head_outputs</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">The per-head outputs before the output projection</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>attention_interface_1</code>, element 0</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-mlp">model.<wbr>layers[i].<wbr>mlp</span> <span class="mono dim">HyperCLOVAXMLP</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_activation">
+    <span class="mono-md name role-mlp">mlp_activation</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">The activation function&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the child module <code>act_fn</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_neurons">
+    <span class="mono-md name role-mlp">mlp_neurons</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+    <span class="hide-sm body-md where"><p>the child module <code>down_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.mlp">
+    <span class="mono-md name role-mlp">mlp_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP adds to the residual stream: the post-MLP norm&#39;s output times residual_multiplier</span>
+    <span class="hide-sm body-md where"><p>the sibling module <code>post_norm2</code>'s output</p></span>
+  </div>
+</div>
+<p class="micro ledger-part">the vision encoder · Qwen ViT</p><div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model.<wbr>vision</span> <span class="mono dim">Qwen2_5_VisionTransformerPretrainedModel</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="v:path.scatter">
+    <span class="mono-md name role-stream">image_token_mask</span>
+    <span class="hide-sm mono">ImageTokenMask <span class="dim">[batch seq]</span></span>
+    <span class="body-md">Which positions hold image tokens: input_ids == the config&#39;s image_token_id; read-only</span>
+    <span class="hide-sm body-md where"><p>the model's own inputs, at the root</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:path.patch_embed">
+    <span class="mono-md name role-stream">patch_embeddings</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">The patch embedding&#39;s output, one row per patch</span>
+    <span class="hide-sm body-md where"><p>the child module <code>patch_embed</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">tower_output</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">The last block&#39;s stream after the tower&#39;s final norm, before any pooling or adapter</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:path.features">
+    <span class="mono-md name role-stream">image_features</span>
+    <span class="hide-sm mono">ImageFeatures <span class="dim">[image_tokens hidden_size]</span></span>
+    <span class="body-md">The image features the text model receives at the image tokens, flat over them</span>
+    <span class="hide-sm body-md where"><p>inside <code>model.model</code>'s forward: the arguments of <code>inputs_embeds_masked_scatter_0</code>, element 1</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model.<wbr>vision.<wbr>layers[i]</span> <span class="mono dim">Qwen2_5_VLVisionBlock</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">layer_input</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">The tower&#39;s stream entering the block</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:boundary.attention_norm_output">
+    <span class="mono-md name role-stream">attention_norm_output</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the attention</span>
+    <span class="hide-sm body-md where"><p>the child module <code>input_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:boundary.layer_mid">
+    <span class="mono-md name role-stream">layer_mid</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">The tower&#39;s stream after the attention add</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:boundary.mlp_norm_output">
+    <span class="mono-md name role-stream">mlp_norm_output</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the MLP</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:boundary.mlp_input">
+    <span class="mono-md name role-stream">mlp_input</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">What the MLP is called with</span>
+    <span class="hide-sm body-md where"><p>the child module <code>mlp</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:stream.output">
+    <span class="mono-md name role-stream">layer_output</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">The tower&#39;s stream leaving the block</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-attention">model.<wbr>vision.<wbr>layers[i].<wbr>self_attn</span> <span class="mono dim">Qwen2_5_VLVisionAttention</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="v:interior.self_attn.attention_queries">
+    <span class="mono-md name role-attention">attention_queries</span>
+    <span class="hide-sm mono">Queries <span class="dim">[batch num_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The queries entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>unsqueeze_0</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="v:interior.self_attn.attention_keys">
+    <span class="mono-md name role-attention">attention_keys</span>
+    <span class="hide-sm mono">Keys <span class="dim">[batch num_kv_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The keys entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>unsqueeze_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="v:interior.self_attn.attention_values">
+    <span class="mono-md name role-attention">attention_values</span>
+    <span class="hide-sm mono">Values <span class="dim">[batch num_kv_heads seq head_dim]</span></span>
+    <span class="body-md">The values entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>unsqueeze_2</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="every block: the Qwen ViT&#39;s attention makes one interface call per image (attention_interface_2; one per window on Qwen2.5-VL&#39;s windowed blocks), so no one tensor is the block&#39;s pattern; read attention_queries and attention_keys, whole, and split them where the calls do: at the attention&#39;s cu_seqlens argument (self_attn.inputs[1][&#39;cu_seqlens&#39;]), which per image is the processor&#39;s image_grid_thw">&#x26A0;&#xFE0E;</span>attention_scores</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention scores entering the softmax, masked</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the input of <code>nn_functional_softmax_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="v:interior.self_attn.attention_premix">
+    <span class="mono-md name role-attention">attention_premix</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">Every head&#39;s output side by side, as the output projection takes it</span>
+    <span class="hide-sm body-md where"><p>the child module <code>o_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:contrib.self_attn">
+    <span class="mono-md name role-attention">attention_output</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">What the attention adds to the tower&#39;s stream</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="every block: the Qwen ViT&#39;s attention makes one interface call per image (attention_interface_2; one per window on Qwen2.5-VL&#39;s windowed blocks), so no one tensor is the block&#39;s pattern; read attention_queries and attention_keys, whole, and split them where the calls do: at the attention&#39;s cu_seqlens argument (self_attn.inputs[1][&#39;cu_seqlens&#39;]), which per image is the processor&#39;s image_grid_thw">&#x26A0;&#xFE0E;</span>attention_probabilities</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention pattern the values are mixed with</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>nn_functional_dropout_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="v:interior.self_attn.attention_head_outputs">
+    <span class="mono-md name role-attention">attention_head_outputs</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">The per-head outputs before the output projection</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>torch_cat_0</code></p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-mlp">model.<wbr>vision.<wbr>layers[i].<wbr>mlp</span> <span class="mono dim">Qwen2_5_VLMLP</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="v:interior.mlp.mlp_activation">
+    <span class="mono-md name role-mlp">mlp_activation</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">The activation function&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the child module <code>act_fn</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:interior.mlp.mlp_neurons">
+    <span class="mono-md name role-mlp">mlp_neurons</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">What the down projection receives</span>
+    <span class="hide-sm body-md where"><p>the child module <code>down_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="v:contrib.mlp">
+    <span class="mono-md name role-mlp">mlp_output</span>
+    <span class="hide-sm mono">Patches <span class="dim">[images patches vision_hidden_size]</span></span>
+    <span class="body-md">What the MLP adds to the tower&#39;s stream</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div></div>
+
+  <h3 class="ttl-row">Printout</h3>
+  <div class="pane" data-pane="printout" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">naver-hyperclovax/HyperCLOVAX-SEED-Think-14B</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>HyperCLOVAXForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=6144, out_features=110592, bias=False)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(110592, 6144, padding_idx=100257)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-37): 38 x HyperCLOVAXDecoderLayer(
+      <span class="rn role-attention">(self_attn)</span>: HyperCLOVAXAttention(
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=6144, out_features=6144, bias=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=6144, out_features=1024, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=6144, out_features=1024, bias=False)</span>
+        <span class="rn">(o_proj)</span>: Linear<span class="rd">(in_features=6144, out_features=6144, bias=False)</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream: the post-attention norm&#x27;s output times residual_multiplier</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: HyperCLOVAXMLP(
+        <span class="rn">(gate_proj)</span>: Linear<span class="rd">(in_features=6144, out_features=14336, bias=False)</span>
+        <span class="rn">(up_proj)</span>: Linear<span class="rd">(in_features=6144, out_features=14336, bias=False)</span>
+        <span class="rn">(down_proj)</span>: Linear<span class="rd">(in_features=14336, out_features=6144, bias=False)</span>
+        <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream: the post-MLP norm&#x27;s output times residual_multiplier</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+      )
+      <span class="rn role-norm">(input_layernorm)</span>: HyperCLOVAXRMSNorm<span class="rd">((6144,), eps=1e-05)</span>
+      <span class="rn role-norm">(post_attention_layernorm)</span>: HyperCLOVAXRMSNorm<span class="rd">((6144,), eps=1e-05)</span>
+      <span class="rn role-norm">(post_norm1)</span>: HyperCLOVAXRMSNorm<span class="rd">((6144,), eps=1e-05)</span>
+      <span class="rn role-norm">(post_norm2)</span>: HyperCLOVAXRMSNorm<span class="rd">((6144,), eps=1e-05)</span>
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(layer_mid)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the attention add</span>
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: HyperCLOVAXRMSNorm<span class="rd">((6144,), eps=1e-05)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div><div class="pane" data-pane="printout" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">naver-hyperclovax/HyperCLOVAX-SEED-Think-32B</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>HyperCLOVAXVisionV2ForConditionalGeneration(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=5120, out_features=128256, bias=False)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(128256, 5120, padding_idx=0)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-71): 72 x HyperCLOVAXDecoderLayer(
+      <span class="rn role-attention">(self_attn)</span>: HyperCLOVAXAttention(
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=5120, bias=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=1024, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=1024, bias=False)</span>
+        <span class="rn">(o_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=5120, bias=False)</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream: the post-attention norm&#x27;s output times residual_multiplier</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: HyperCLOVAXMLP(
+        <span class="rn">(gate_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=24192, bias=False)</span>
+        <span class="rn">(up_proj)</span>: Linear<span class="rd">(in_features=5120, out_features=24192, bias=False)</span>
+        <span class="rn">(down_proj)</span>: Linear<span class="rd">(in_features=24192, out_features=5120, bias=False)</span>
+        <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream: the post-MLP norm&#x27;s output times residual_multiplier</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+      )
+      <span class="rn role-norm">(input_layernorm)</span>: HyperCLOVAXRMSNorm<span class="rd">((5120,), eps=1e-05)</span>
+      <span class="rn role-norm">(post_attention_layernorm)</span>: HyperCLOVAXRMSNorm<span class="rd">((5120,), eps=1e-05)</span>
+      <span class="rn role-norm">(post_norm1)</span>: Identity<span class="rd">()</span>
+      <span class="rn role-norm">(post_norm2)</span>: Identity<span class="rd">()</span>
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(layer_mid)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the attention add</span>
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: HyperCLOVAXRMSNorm<span class="rd">((5120,), eps=1e-05)</span>
+  <span class="rn role-stream">(vision)</span>: Qwen2_5_VisionTransformerPretrainedModel(
+    <span class="rn role-stream">(patch_embed)</span>: Qwen2_5_VisionPatchEmbed(
+      <span class="rn">(proj)</span>: Conv3d<span class="rd">(3, 1280, kernel_size=(2, 14, 14), stride=(2, 14, 14), bias=False)</span>
+    )
+    <span class="rn">(rotary_pos_emb)</span>: Qwen2_5_VLVisionRotaryEmbedding<span class="rd">()</span>
+    <span class="rn role-stream">(layers/blocks)</span>: ModuleList(
+      (0-31): 32 x Qwen2_5_VLVisionBlock(
+        <span class="rn role-norm">(input_layernorm/norm1)</span>: Qwen2_5_VLRMSNorm<span class="rd">((1280,), eps=1e-06)</span>
+        <span class="rn role-norm">(post_attention_layernorm/norm2)</span>: Qwen2_5_VLRMSNorm<span class="rd">((1280,), eps=1e-06)</span>
+        <span class="rn role-attention">(self_attn/attn)</span>: Qwen2_5_VLVisionAttention(
+          <span class="rn">(qkv)</span>: Linear<span class="rd">(in_features=1280, out_features=3840, bias=True)</span>
+          <span class="rn">(o_proj/proj)</span>: Linear<span class="rd">(in_features=1280, out_features=1280, bias=True)</span>
+          <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+          <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+          <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+          <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+          <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">What the attention adds to the tower&#x27;s stream</span>
+          <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+          <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+          <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        )
+        <span class="rn role-mlp">(mlp)</span>: Qwen2_5_VLMLP(
+          <span class="rn">(gate_proj)</span>: Linear<span class="rd">(in_features=1280, out_features=3456, bias=True)</span>
+          <span class="rn">(up_proj)</span>: Linear<span class="rd">(in_features=1280, out_features=3456, bias=True)</span>
+          <span class="rn">(down_proj)</span>: Linear<span class="rd">(in_features=3456, out_features=1280, bias=True)</span>
+          <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+          <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">What the MLP adds to the tower&#x27;s stream</span>
+          <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+          <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives</span>
+        )
+        <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">The tower&#x27;s stream entering the block</span>
+        <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+        <span class="rn role-stream">(layer_mid)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">The tower&#x27;s stream after the attention add</span>
+        <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">The normed stream entering the MLP</span>
+        <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+        <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">The tower&#x27;s stream leaving the block</span>
+      )
+    )
+    <span class="rn">(merger)</span>: Qwen2_5_VLPatchMerger(
+      <span class="rn">(ln_q)</span>: Qwen2_5_VLRMSNorm<span class="rd">((1280,), eps=1e-06)</span>
+      <span class="rn role-mlp">(mlp)</span>: Sequential(
+        <span class="rn">(0)</span>: Linear<span class="rd">(in_features=5120, out_features=5120, bias=True)</span>
+        <span class="rn">(1)</span>: GELU<span class="rd">(approximate=&#x27;none&#x27;)</span>
+        <span class="rn">(2)</span>: Linear<span class="rd">(in_features=5120, out_features=5120, bias=True)</span>
+      )
+    )
+    <span class="rn role-stream">(image_token_mask)</span> -&gt; <span class="rl">ImageTokenMask</span> <span class="rd">[batch seq]</span>: <span class="rd">Which positions hold image tokens: input_ids == the config&#x27;s image_token_id; read-only</span>
+    <span class="rn role-stream">(patch_embeddings)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">The patch embedding&#x27;s output, one row per patch</span>
+    <span class="rn role-stream">(tower_output)</span> -&gt; <span class="rl">Patches</span> <span class="rd">[images patches vision_hidden_size]</span>: <span class="rd">The last block&#x27;s stream after the tower&#x27;s final norm, before any pooling or adapter</span>
+    <span class="rn role-stream">(image_features)</span> -&gt; <span class="rl">ImageFeatures</span> <span class="rd">[image_tokens hidden_size]</span>: <span class="rd">The image features the text model receives at the image tokens, flat over them</span>
+  )
+  <span class="rn role-stream">(projector)</span>: Linear<span class="rd">(in_features=5120, out_features=5120, bias=True)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div>
+
+  <div class="pane" data-pane="config" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>38</span></div><div class="spec"><span>model.hidden_size</span><span>6144</span></div><div class="spec"><span>model.num_heads</span><span>48</span></div><div class="spec"><span>model.num_kv_heads</span><span>8</span></div><div class="spec"><span>model.head_dim</span><span>128</span></div><div class="spec"><span>model.qk_head_dim</span><span>128</span></div><div class="spec"><span>model.vocab_size</span><span>110592</span></div><div class="spec"><span>model.intermediate_size</span><span>14336</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>HyperCLOVAXForCausalLM</span></div><div class="spec"><span>num_hidden_layers</span><span>38</span></div><div class="spec"><span>hidden_size</span><span>6144</span></div><div class="spec"><span>intermediate_size</span><span>14336</span></div><div class="spec"><span>num_attention_heads</span><span>48</span></div><div class="spec"><span>num_key_value_heads</span><span>8</span></div><div class="spec"><span>head_dim</span><span>128</span></div><div class="spec"><span>vocab_size</span><span>110592</span></div><div class="spec"><span>max_position_embeddings</span><span>131072</span></div><div class="spec"><span>hidden_act</span><span>silu</span></div><div class="spec"><span>rms_norm_eps</span><span>1e-05</span></div><div class="spec"><span>tie_word_embeddings</span><span>False</span></div><div class="spec"><span>dtype</span><span>float32</span></div><div class="spec"><span>embedding_multiplier</span><span>10.0</span></div><div class="spec"><span>residual_multiplier</span><span>1.0</span></div><div class="spec"><span>attention_multiplier</span><span>0.0078125</span></div><div class="spec"><span>logits_scaling</span><span>0.125</span></div><div class="spec"><span>attention_bias</span><span>False</span></div>    </div>
+  </div>
+</div></div><div class="pane" data-pane="config" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>72</span></div><div class="spec"><span>model.hidden_size</span><span>5120</span></div><div class="spec"><span>model.num_heads</span><span>40</span></div><div class="spec"><span>model.num_kv_heads</span><span>8</span></div><div class="spec"><span>model.head_dim</span><span>128</span></div><div class="spec"><span>model.qk_head_dim</span><span>128</span></div><div class="spec"><span>model.vocab_size</span><span>128256</span></div><div class="spec"><span>model.intermediate_size</span><span>24192</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>HyperCLOVAXVisionV2ForConditionalGeneration</span></div><div class="spec"><span>num_hidden_layers</span><span>72</span></div><div class="spec"><span>hidden_size</span><span>5120</span></div><div class="spec"><span>intermediate_size</span><span>24192</span></div><div class="spec"><span>num_attention_heads</span><span>40</span></div><div class="spec"><span>num_key_value_heads</span><span>8</span></div><div class="spec"><span>head_dim</span><span>128</span></div><div class="spec"><span>vocab_size</span><span>128256</span></div><div class="spec"><span>max_position_embeddings</span><span>131072</span></div><div class="spec"><span>hidden_act</span><span>silu</span></div><div class="spec"><span>rms_norm_eps</span><span>1e-05</span></div><div class="spec"><span>tie_word_embeddings</span><span>False</span></div><div class="spec"><span>dtype</span><span>bfloat16</span></div><div class="spec"><span>embedding_multiplier</span><span>1.0</span></div><div class="spec"><span>residual_multiplier</span><span>1.0</span></div><div class="spec"><span>attention_multiplier</span><span>0.08838834764831845</span></div><div class="spec"><span>logits_scaling</span><span>1.0</span></div><div class="spec"><span>attention_bias</span><span>False</span></div>    </div>
+  </div>
+</div>
+<details class="card card-tower card-fold">
+  <summary class="topstrip"><span class="micro card-fold-label">Vision Config</span><span class="card-fold-mark" aria-hidden="true"></span></summary>
+  <div class="card-body">
+    <h3 class="card-name">Vision Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.vision.num_layers</span><span>32</span></div><div class="spec"><span>model.vision.vision_hidden_size</span><span>1280</span></div><div class="spec"><span>model.vision.num_heads</span><span>16</span></div><div class="spec"><span>model.vision.head_dim</span><span>80</span></div><div class="spec"><span>model.vision.intermediate_size</span><span>3456</span></div><div class="spec"><span>model.vision.patch_size</span><span>14</span></div><div class="spec"><span>model.vision.image_size</span><span>varies</span></div><div class="spec"><span>model.vision.spatial_merge_size</span><span>2</span></div><div class="spec"><span>model.vision.window_size</span><span>112</span></div>    </div>
+  </div>
+</details></div>
+</section>
+
+<section class="frame section" id="notes">
+  <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you trace</span></div>
+  <div class="grid-notes">
+    <div class="prose"><h2>The block, in order</h2>
+<pre class="code"><code><span class="n">x</span>      <span class="o">=</span> <span class="n role-stream">embed_tokens</span><span class="p">(</span><span class="n">ids</span><span class="p">)</span> <span class="o">*</span> <span class="n">embedding_multiplier</span>
+<span class="n">h</span>      <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n role-norm">post_norm1</span><span class="p">(</span><span class="n role-attention">self_attn</span><span class="p">(</span><span class="n role-norm">input_layernorm</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span> <span class="o">*</span> <span class="n">residual_multiplier</span>
+<span class="n">out</span>    <span class="o">=</span> <span class="n">h</span> <span class="o">+</span> <span class="n role-norm">post_norm2</span><span class="p">(</span><span class="n role-mlp">mlp</span><span class="p">(</span><span class="n role-norm">post_attention_layernorm</span><span class="p">(</span><span class="n">h</span><span class="p">)))</span> <span class="o">*</span> <span class="n">residual_multiplier</span>
+<span class="n role-stream">logits</span> <span class="o">=</span> <span class="n role-stream">lm_head</span><span class="p">(</span><span class="n role-norm">norm</span><span class="p">(</span><span class="n">out</span><span class="p">))</span> <span class="o">*</span> <span class="n">logits_scaling</span></code></pre>
+<p>With <code>use_post_norm</code> (Think-14B) a block has four RMSNorms, two per sublayer, and the names are the
+trap: <code>post_attention_layernorm</code> is the MLP's <em>input</em> norm, as on Llama, and the norms after the
+sublayers are <code>post_norm1</code> (after the attention) and <code>post_norm2</code> (after the MLP). nnterp keeps the
+native names. Each multiplier is one number for the whole model. On Think-14B they are
+<code>embedding_multiplier</code> 10, <code>residual_multiplier</code> 1, <code>attention_multiplier</code> 1/128 and
+<code>logits_scaling</code> 0.125.</p>
+<h2>The contributions are the post-norms' outputs, times residual_multiplier</h2>
+<p><code>attention_output</code> is <code>post_norm1.output * residual_multiplier</code> and <code>mlp_output</code> is
+<code>post_norm2.output * residual_multiplier</code>: the tensors the block adds. On Think-14B the multiplier is
+1.0, so they equal the post-norms' outputs bit for bit. <code>self_attn.output[0]</code> and <code>mlp.output</code> are
+the tensors <em>entering</em> the post-norms. The identity is the plain sum, exact in float32 and bfloat16:</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">post</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-norm">post_norm1</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n role-mlp">mlp</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">attn</span><span class="p">,</span> <span class="n">post</span> <span class="o">*</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">residual_multiplier</span><span class="p">)</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">attn</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span></code></pre>
+<p><strong>With post-norms, scale the contribution, not the module.</strong> RMSNorm is scale-invariant: <code>post_norm2(0.5 * y)</code>
+equals <code>post_norm2(y)</code> up to <code>eps</code>: halving <code>mlp.output</code> leaves the stream as it was, and zeroing
+it works only because the norm of zero is zero. Partial ablations and steering go through
+<code>mlp_output</code> / <code>attention_output</code>, which the block adds as they are:</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span><span class="p">[:]</span> <span class="o">*=</span> <span class="mf">0.5</span>        <span class="c1"># halves what the block adds</span>
+
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n">output</span><span class="p">[:]</span> <span class="o">*=</span> <span class="mf">0.5</span>            <span class="c1"># a no-op: post_norm2 rescales it back</span></code></pre>
+<h2>A write to a contribution goes through the multiplier</h2>
+<p>The contributions are computed copies: a write to <code>attention_output</code> or <code>mlp_output</code> reaches the
+model by dividing the whole edited copy by <code>residual_multiplier</code> and handing it back as the
+post-norm's output, and the block multiplies it again. With the multiplier at 1.0, as on Think-14B,
+both steps are exact: an edit at one position leaves every other position bit-identical, in
+bfloat16 too. With another multiplier the unedited positions go through the round trip as well and
+move by rounding in bfloat16. Editing the
+post-norm's output by the vector over the multiplier reaches the same place and touches nothing
+else, for any multiplier:</p>
+<pre class="code"><code><span class="n">m</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">residual_multiplier</span>
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="n">v</span>            <span class="c1"># exact when m is 1.0</span>
+
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-norm">post_norm2</span><span class="o">.</span><span class="n">output</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span> <span class="o">+=</span> <span class="n">v</span> <span class="o">/</span> <span class="n">m</span>     <span class="c1"># position -1 only, for any m</span></code></pre>
+<p>A read changes nothing: the forward stays bit-identical.</p>
+<h2>The query scale is attention_multiplier</h2>
+<p>The attention multiplies <code>q · kᵀ</code> by <code>config.attention_multiplier</code> in place of <code>head_dim ** -0.5</code>.
+On Think-14B it is 1/128, <code>1 / head_dim</code>, a factor of 11.3 below <code>128 ** -0.5</code>; on Think-32B it is
+<code>128 ** -0.5</code>. <code>attention_scores</code>
+are read after the scale and the causal mask, and <code>softmax(attention_scores)</code> reproduces
+<code>attention_probabilities</code>. Code that recomputes scores takes the multiplier from the config:</p>
+<pre class="code"><code><span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span>
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n">attn</span><span class="o">.</span><span class="n role-attention">attention_queries</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">k</span> <span class="o">=</span> <span class="n">attn</span><span class="o">.</span><span class="n role-attention">attention_keys</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">scores</span> <span class="o">=</span> <span class="n">attn</span><span class="o">.</span><span class="n role-attention">attention_scores</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">k</span> <span class="o">=</span> <span class="n">k</span><span class="o">.</span><span class="n">repeat_interleave</span><span class="p">(</span><span class="n role-stream">model</span><span class="o">.</span><span class="n">num_heads</span> <span class="o">//</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">num_kv_heads</span><span class="p">,</span> <span class="n">dim</span><span class="o">=</span><span class="mi">1</span><span class="p">)</span>
+<span class="n">qk</span> <span class="o">=</span> <span class="n">q</span> <span class="o">@</span> <span class="n">k</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">attention_multiplier</span>    <span class="c1"># not head_dim ** -0.5</span>
+<span class="n">causal</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">ones_like</span><span class="p">(</span><span class="n">qk</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="mi">0</span><span class="p">],</span> <span class="n">dtype</span><span class="o">=</span><span class="n">torch</span><span class="o">.</span><span class="n">bool</span><span class="p">)</span><span class="o">.</span><span class="n">tril</span><span class="p">()</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">qk</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">causal</span><span class="p">],</span> <span class="n">scores</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">causal</span><span class="p">])</span></code></pre>
+<p>Think-14B has 48 query heads over 8 key/value heads: <code>attention_keys</code> and <code>attention_values</code> are
+<code>[batch, 8, seq, 128]</code>, read before <code>repeat_kv</code>, and an edit to key/value head <code>j</code> reaches query
+heads <code>6j</code> to <code>6j + 5</code>. The six interior values need <code>attn_implementation="eager"</code>.</p>
+<h2>Logits are the head's output times logits_scaling</h2>
+<p><code>model.logits</code> is <code>model.lm_head.output * logits_scaling</code> exactly (0.125 on Think-14B), and
+<code>project_on_vocab</code> multiplies too, so a logit lens at the last block equals <code>logits</code>. A softmax over
+<code>lm_head.output</code>, or over <code>lm_head(norm(hidden))</code> written by hand, is at temperature 1/8: sharper
+than the model's own distribution. Take probabilities and KLs from <code>logits</code> or
+<code>project_on_vocab</code>.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">resid</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">raw</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">lm_head</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n role-stream">logits</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">logits</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n role-stream">logits</span><span class="p">,</span> <span class="n">raw</span> <span class="o">*</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">logits_scaling</span><span class="p">)</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n role-stream">model</span><span class="o">.</span><span class="n">project_on_vocab</span><span class="p">(</span><span class="n">resid</span><span class="p">),</span> <span class="n role-stream">logits</span><span class="p">)</span></code></pre>
+<p><code>lm_head</code> and <code>embed_tokens</code> are separate weights.</p>
+<h2>token_embeddings is the unscaled lookup</h2>
+<p>The embedding module returns the plain lookup, and the model multiplies it by
+<code>embedding_multiplier</code> afterwards: <code>layers[0].input</code> is <code>token_embeddings * 10</code> on Think-14B.
+Embeddings passed as <code>inputs_embeds</code> are multiplied too. An edit to <code>token_embeddings</code> reaches
+block 0 multiplied by <code>embedding_multiplier</code>; to set what block 0 reads, edit <code>layers[0].input</code>.</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">emb</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">token_embeddings</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">first</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">first</span><span class="p">,</span> <span class="n">emb</span> <span class="o">*</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">embedding_multiplier</span><span class="p">)</span></code></pre>
+<h2>Loading Think-14B</h2>
+<p>The checkpoint is stored in float32 (<code>torch_dtype</code> in its config), and a default load keeps it, about
+59 GB for its 14.7B parameters; pass <code>dtype=torch.bfloat16</code> to halve it. The tokenizer prepends no
+BOS token to a plain prompt; the chat template starts with <code>&lt;|im_start|&gt;</code>.</p>
+<h2>The 32B vision-language checkpoint</h2>
+<p><code>HyperCLOVAX-SEED-Think-32B</code> is a vision-language wrapper (<code>hyperclovax_vision_v2</code>, remote code) whose
+text model is this family. Its text config turns the post-norms off (<code>use_post_norm</code> false), sets
+<code>embedding_multiplier</code>, <code>residual_multiplier</code> and <code>logits_scaling</code> to 1.0 and <code>attention_multiplier</code>
+to <code>128 ** -0.5</code>: under these names it computes Llama's block. With <code>use_post_norm</code> false, <code>post_norm1</code>
+and <code>post_norm2</code> are identities, and <code>attention_output</code> and <code>mlp_output</code> are the modules' outputs
+times <code>residual_multiplier</code>.</p></div>
+    <aside class="quirk-list">
+      <div class="pane" data-pane="quirk_list" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"><p class="micro">quirks</p>
+<div class="quirk"><span class="chip">Sandwich norms</span><p class="body-md">Each sublayer is normed before and after; the stream receives the post-norm&#39;s output.</p></div><div class="quirk"><span class="chip">Embedding multiplier</span><p class="body-md">The model scales the embedding module&#39;s output before block 0, so token_embeddings is the unscaled tensor and layers[0].input the scaled one.</p></div><div class="quirk"><span class="chip">Scaled logits</span><p class="body-md">The model multiplies or divides lm_head&#39;s output by a scale from the config, so logits is not lm_head&#39;s raw output.</p></div></div><div class="pane" data-pane="quirk_list" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden></div>
+    </aside>
+  </div>
+  <div class="pane" data-pane="vision_notes" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"></div><div class="pane" data-pane="vision_notes" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden><details class="fold fold-titled vision-fold vision-notes">
+<summary><h3 class="ttl-row">Vision <em>notes</em></h3><span class="micro fold-tag">· Qwen ViT · HyperCLOVA X Vision V2</span></summary>
+<div class="grid-notes">
+  <div class="prose">
+    <h2>The Qwen ViT vision encoder</h2>
+    <h3>Every image in one row</h3>
+<p>The vision encoder runs on <code>[patches, vision_hidden_size]</code>, the patches of every image in the invoke
+concatenated. Its stream values (<code>patch_embeddings</code>, every block's <code>layer_output</code>,
+<code>attention_output</code> and <code>mlp_output</code>, <code>tower_output</code>) are served <code>[1, patches, vision_hidden_size]</code>, a view with a
+leading images axis of 1, so in-place edits land; <code>vision.layers[i].input</code> and <code>.output</code> stay the
+native <code>[patches, vision_hidden_size]</code>, and the block identity holds across the two by broadcasting. The
+processor's <code>image_grid_thw</code> (<code>[t, h, w]</code> per image, in patches; an image is two identical frames, so
+<code>t</code> is 1) splits the row: image <code>j</code> has <code>t * h * w</code> patches.</p>
+<pre class="code"><code><span class="n">inputs</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">processor</span><span class="p">(</span><span class="n">text</span><span class="o">=</span><span class="n">prompt</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="p">[</span><span class="n">red</span><span class="p">,</span> <span class="n">wide</span><span class="p">],</span> <span class="n">return_tensors</span><span class="o">=</span><span class="s2">&quot;pt&quot;</span><span class="p">)</span>
+<span class="n">sizes</span> <span class="o">=</span> <span class="n">inputs</span><span class="p">[</span><span class="s2">&quot;image_grid_thw&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">prod</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span><span class="o">.</span><span class="n">tolist</span><span class="p">()</span>   <span class="c1"># patches per image</span>
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="p">[</span><span class="n">red</span><span class="p">,</span> <span class="n">wide</span><span class="p">]):</span>
+    <span class="n">patches</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">vision</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+<span class="n">per_image</span> <span class="o">=</span> <span class="n">patches</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">split</span><span class="p">(</span><span class="n">sizes</span><span class="p">)</span>                  <span class="c1"># one [t*h*w, vision_hidden_size] each</span></code></pre>
+<p>Inside an image the patches are in merge-block order: the <code>spatial_merge_size</code> ×
+<code>spatial_merge_size</code> (2 × 2) block of neighbours the merger folds into one image token is four
+consecutive rows, blocks in raster order. Index <code>4 * b</code> to <code>4 * b + 3</code> is block <code>b</code>, not a raster row.</p>
+<h3>The attention runs once per image, so there is no pattern</h3>
+<p>The attention computes queries, keys and values for the whole row, then calls the attention
+function once per image (once per window on Qwen2.5-VL's windowed blocks) and concatenates the
+outputs. <code>attention_queries</code>, <code>attention_keys</code> and <code>attention_values</code> are served whole, before the
+split, <code>[1, heads, patches, head_dim]</code>, the queries and keys after the rotary embedding;
+<code>attention_head_outputs</code> is the calls' outputs concatenated back, <code>[1, patches, heads, head_dim]</code>
+(under any implementation but flash, which runs one call over <code>cu_seqlens</code>). <code>attention_scores</code> and
+<code>attention_probabilities</code> are <code>Unavailable</code> under every implementation, eager included: "no one
+tensor is the block's pattern". The split points are the attention's <code>cu_seqlens</code> argument,
+<code>self_attn.inputs[1]["cu_seqlens"]</code>, so a pattern per image is a softmax over each slice:</p>
+<pre class="code"><code><span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">vision</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span>
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="p">[</span><span class="n">red</span><span class="p">,</span> <span class="n">wide</span><span class="p">]):</span>
+    <span class="n">cu</span> <span class="o">=</span> <span class="n">attn</span><span class="o">.</span><span class="n">inputs</span><span class="p">[</span><span class="mi">1</span><span class="p">][</span><span class="s2">&quot;cu_seqlens&quot;</span><span class="p">]</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>        <span class="c1"># read first: the module&#39;s input</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n">attn</span><span class="o">.</span><span class="n role-attention">attention_queries</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">k</span> <span class="o">=</span> <span class="n">attn</span><span class="o">.</span><span class="n role-attention">attention_keys</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">patterns</span> <span class="o">=</span> <span class="p">[]</span>
+<span class="k">for</span> <span class="n">a</span><span class="p">,</span> <span class="n">b</span> <span class="ow">in</span> <span class="nb">zip</span><span class="p">(</span><span class="n">cu</span><span class="p">[:</span><span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">tolist</span><span class="p">(),</span> <span class="n">cu</span><span class="p">[</span><span class="mi">1</span><span class="p">:]</span><span class="o">.</span><span class="n">tolist</span><span class="p">()):</span>
+    <span class="n">scores</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="n">a</span><span class="p">:</span><span class="n">b</span><span class="p">]</span> <span class="o">@</span> <span class="n">k</span><span class="p">[</span><span class="mi">0</span><span class="p">,</span> <span class="p">:,</span> <span class="n">a</span><span class="p">:</span><span class="n">b</span><span class="p">]</span><span class="o">.</span><span class="n">transpose</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">2</span><span class="p">)</span> <span class="o">*</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">vision</span><span class="o">.</span><span class="n">head_dim</span> <span class="o">**</span> <span class="o">-</span><span class="mf">0.5</span>
+    <span class="n">patterns</span><span class="o">.</span><span class="n">append</span><span class="p">(</span><span class="n">scores</span><span class="o">.</span><span class="n">softmax</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>             <span class="c1"># [heads, patches_j, patches_j]</span></code></pre>
+<p>Each pattern times that image's values reproduces <code>attention_head_outputs</code> exactly (checked on
+Qwen3.5's pinned tiny checkpoint).</p>
+<h3>The merger is inside the vision encoder</h3>
+<p><code>model.projector</code> is the vision encoder's own <code>merger</code>: it norms each patch, concatenates each 2 × 2
+block into one <code>4 * vision_hidden_size</code> vector and runs a two-layer MLP to the text model's width, so
+image tokens per image are <code>t * h * w / 4</code>. It reads the last block's stream with no norm between
+(<code>projector.input == tower_output[0]</code>, the native <code>[patches, vision_hidden_size]</code>). Because the merger
+runs inside the vision encoder's forward, <code>vision.tower_output</code> (the encoder's output) is reached after
+it: read <code>model.projector.input</code> and <code>.output</code> before <code>vision.tower_output</code> in a trace.</p>
+<h3>Sizes, and no <code>image_size</code></h3>
+<p><code>model.vision</code> reads its sizes off the vision config: <code>vision_hidden_size</code> is the encoder's width
+(<code>embed_dim</code> on Qwen2-VL, whose config's <code>hidden_size</code> is the merger's output width),
+<code>num_heads</code>, <code>intermediate_size</code> (<code>embed_dim * mlp_ratio</code> on Qwen2-VL), <code>patch_size</code>, and two of
+its own, <code>spatial_merge_size</code> (2 on every line) and <code>window_size</code> (Qwen2.5-VL's window side in
+pixels, 112; <code>None</code> on the others). <code>image_size</code> raises <code>Unavailable</code>: the processor cuts each
+image into its own grid.</p>
+<h3>The variants</h3>
+<table>
+<thead>
+<tr>
+<th>line</th>
+<th>block norms, merger norm</th>
+<th>MLP</th>
+<th>beyond the shared encoder</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Qwen2-VL</td>
+<td>LayerNorm</td>
+<td><code>fc1</code>, QuickGELU, <code>fc2</code></td>
+<td>none</td>
+</tr>
+<tr>
+<td>Qwen2.5-VL</td>
+<td>RMSNorm</td>
+<td>SwiGLU, biased</td>
+<td>windows of 112 pixels except on <code>fullatt_block_indexes</code></td>
+</tr>
+<tr>
+<td>Qwen3-VL, -MoE</td>
+<td>LayerNorm</td>
+<td><code>linear_fc1</code>, GELU (tanh), <code>linear_fc2</code></td>
+<td>learned <code>pos_embed</code>; DeepStack taps</td>
+</tr>
+<tr>
+<td>Qwen3.5, -MoE</td>
+<td>LayerNorm</td>
+<td><code>linear_fc1</code>, GELU (tanh), <code>linear_fc2</code></td>
+<td>learned <code>pos_embed</code></td>
+</tr>
+</tbody>
+</table>
+<p>On Qwen2.5-VL the encoder permutes the patches into windows at entry, so its blocks' values,
+<code>tower_output</code> and <code>projector.output</code> are in window order, and it restores the merge-block order
+after the merger: <code>vision.image_features</code> is in scatter order. On Qwen3-VL and Qwen3.5 <code>vision.layers[0].input</code>
+is <code>patch_embeddings</code> plus the resampled <code>pos_embed</code>. On Qwen2-VL <code>vision.layers[0].input</code> is
+<code>patch_embeddings</code>; on Qwen2.5-VL it is <code>patch_embeddings</code> permuted into window order; on both, positions
+enter only through the rotary embedding.</p>
+    <h2>HyperCLOVA X Vision V2</h2>
+    <h3>A linear projector after the merger</h3>
+<p>The vision encoder is Qwen2.5-VL's at <code>model.vision_model</code>, its <code>merger</code> inside, so the merger is
+<code>vision.merger</code>, not the <code>projector</code>. <code>model.projector</code> is one <code>nn.Linear</code> with a bias after the
+encoder: on Think-32B the encoder is 32 blocks of 1280, the merger folds each 2 × 2 block of patches
+into one 5120-wide row (<code>out_hidden_size</code>), and the projector maps 5120 to the text model's 5120.
+<code>vision.image_features</code> is <code>model.projector.output</code>, and the scatter holds exactly:</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">,</span> <span class="n">images</span><span class="o">=</span><span class="p">[</span><span class="n">image</span><span class="p">]):</span>
+    <span class="n">mask</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">vision</span><span class="o">.</span><span class="n role-stream">image_token_mask</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">fed</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">projector</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>           <span class="c1"># [image_tokens, out_hidden_size]</span>
+    <span class="n">projected</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">projector</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">features</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">vision</span><span class="o">.</span><span class="n role-stream">image_features</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">first</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">torch</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">projected</span><span class="p">,</span> <span class="n">features</span><span class="p">)</span>                <span class="c1"># True</span>
+<span class="n">torch</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">first</span><span class="p">[</span><span class="n">mask</span><span class="p">],</span> <span class="n">features</span><span class="p">)</span>              <span class="c1"># True</span></code></pre>
+<h3>The projector reads the merger's output in token order</h3>
+<p>The encoder runs its blocks in window order and restores the image tokens' order after the merger,
+so <code>vision.merger.output</code> is in window order and <code>model.projector.input</code> holds the same rows in the
+image tokens' order. An image of one 112 × 112 window has the two orders the same. Edit the image
+at <code>model.projector.input</code> or <code>vision.image_features</code> to address a token by its position; an edit at
+<code>vision.merger.output</code> lands on the window-ordered row. <code>vision.tower_output</code> is served at the
+encoder's output, after the merger has read it, so a write there does not reach the text model.</p>
+<h3>Image tokens</h3>
+<p>The processor expands each image to <code>t * h * w / 4</code> copies of <code>&lt;|IMAGE_PAD|&gt;</code> (the config's
+<code>image_token_id</code>, 128060 on Think-32B), one per merged block of its <code>image_grid_thw</code> row, and
+<code>vision.image_token_mask</code> marks those. Under <code>generate</code> the encoder runs before the prompt's forward,
+so in a block the encoder's values come before <code>vision.image_token_mask</code>; <code>vision.image_features</code> is
+read at the scatter as in a trace.</p>
+  </div>
+  <aside class="quirk-list">
+    <p class="micro">vision quirks</p>
+<div class="quirk"><span class="chip">Vision-language</span><p class="body-md">Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model.</p></div><div class="quirk"><span class="chip">Packed vision encoder</span><p class="body-md">Every image&#39;s tokens run in one row, [1, all tokens, vision_hidden_size]; the processor&#39;s per-image grid sizes split the row.</p></div><div class="quirk"><span class="chip">Variable resolution</span><p class="body-md">The vision encoder takes images of any resolution, so vision.image_size raises Unavailable; each image&#39;s grid is in the processor&#39;s output.</p></div><div class="quirk"><span class="chip">Pooled projector</span><p class="body-md">The projector merges each group of neighboring patches into one token, by pooling or by concatenating them (a pixel shuffle), so an image has fewer tokens than patches.</p></div>  </aside>
+</div>
+</details></div>
+</section>
+
+<section class="frame section" id="source">
+  <div class="topbar"><h2 class="disp-section">From the <em>family module</em></h2><span class="micro">04 · nnterp/families/hyperclovax.py</span></div>
+  <div class="grid-notes">
+    <div class="prose docstring"><p>HyperCLOVA X (<code>HyperCLOVAXForCausalLM</code>, NAVER's HyperCLOVA X SEED Think).</p>
+<p>Llama's tree with a sandwich block and Granite's µP multipliers::</p>
+<pre class="code"><code><span class="n">h</span> <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n role-norm">post_norm1</span><span class="p">(</span><span class="n role-attention">self_attn</span><span class="p">(</span><span class="n role-norm">input_layernorm</span><span class="p">(</span><span class="n">x</span><span class="p">)))</span> <span class="o">*</span> <span class="n">residual_multiplier</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">h</span> <span class="o">+</span> <span class="n role-norm">post_norm2</span><span class="p">(</span><span class="n role-mlp">mlp</span><span class="p">(</span><span class="n role-norm">post_attention_layernorm</span><span class="p">(</span><span class="n">h</span><span class="p">)))</span> <span class="o">*</span> <span class="n">residual_multiplier</span></code></pre>
+<p><code>post_norm1</code> / <code>post_norm2</code> are RMS norms under <code>use_post_norm</code> and
+identities otherwise; <code>post_attention_layernorm</code> is the pre-MLP norm (the Llama
+meaning). What the block adds is each post-norm's output times the multiplier, so
+<code>attention_output</code> and <code>mlp_output</code> are that product: a computed copy, divided
+by the multiplier on assignment, with a transform carrying an in-place edit back
+into the post-norm's output, as on Granite; both modules keep the config, where
+the multiplier is read. <code>attention_multiplier</code> is the
+softmax scale passed to the shared interface; <code>embedding_multiplier</code> scales the
+embedding module's output before the first block (<code>token_embeddings</code> times it is
+<code>layers[0].input</code>); <code>logits_scaling</code> <em>multiplies</em> the head's output (Granite
+divides), so the family's <code>project_on_vocab</code> does the same.</p>
+<p>HyperCLOVA X Vision V2 (<code>HyperCLOVAXVisionV2ForConditionalGeneration</code>, model
+type <code>hyperclovax_vision_v2</code>, needs transformers 5.18 or later) wraps this text model
+at <code>model.language_model</code>. Its tower is the Qwen2.5-VL ViT at <code>model.vision_model</code>,
+<code>vision</code> (a <code>QwenVision</code>: packed, windowed, its own <code>merger</code> inside), and a linear
+<code>model.projector</code> after the tower, <code>projector</code>, maps the merger's output onto
+the text width; <code>vision.image_features</code> is read at the scatter in
+<code>HyperCLOVAXVisionV2Model</code>'s forward (<code>ImageScatter</code>).</p></div>
+    <aside class="quirk-list">
+      <p class="micro">sources</p>
+      <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/hyperclovax.py">nnterp/families/hyperclovax.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_hyperclovax.py">tests/families/test_hyperclovax.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
+      <p class="micro">envoys</p>
+      <p class="body-md mono">HyperCLOVAXDecoderLayer → Layer<br>HyperCLOVAXAttention → self_attn<br>HyperCLOVAXMLP → mlp</p>
+      <div class="pane" data-pane="envoys" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"></div><div class="pane" data-pane="envoys" data-ckpts="naver-hyperclovax/HyperCLOVAX-SEED-Think-32B" hidden><p class="micro">the vision encoder's envoys</p>
+<p class="body-md mono">Qwen2_5_VisionTransformerPretrainedModel → QwenVision<br>Qwen2_5_VLVisionBlock → VisionLayer<br>Qwen2_5_VLVisionAttention → QwenVisionAttention<br>Qwen2_5_VLMLP → VisionMlp<br>HyperCLOVAXVisionV2Model → ImageScatter</p></div>
+    </aside>
+  </div>
+</section>
+
+<script type="application/json" id="checkpoints-json">{"default": "naver-hyperclovax/HyperCLOVAX-SEED-Think-14B", "checkpoints": {"naver-hyperclovax/HyperCLOVAX-SEED-Think-14B": {"schema": {"topology": "sequential", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "48/8 heads, scale 0.0078125", "variants": {}, "pre_norm": "input_layernorm", "post_norm": "post_norm1", "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "SwiGLU: 6144 \u2192 14336 \u2192 6144, silu", "variants": {}, "pre_norm": "post_attention_layernorm", "post_norm": "post_norm2", "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 38, "layer_types": null, "mids": ["boundary.layer_mid"], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "HyperCLOVAXAttention under its standard name. 48/8 heads, scale 0.0078125", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 1", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 2", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 3", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `nn_functional_dropout_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `attention_interface_1`, element 0", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream: the post-attention norm's output times residual_multiplier", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_norm1`'s output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name.", "role": "norm"}, "norm.post_norm1": {"eyebrow": "post-norm", "expr": "model.layers[i].post_norm1", "desc": "A native module under its own name. Its output is the contribution: `model.layers[i].self_attn.attention_output`.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "The norm after the attention. attention_output is its output times residual_multiplier."}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "HyperCLOVAXMLP under its standard name. SwiGLU: 6144 \u2192 14336 \u2192 6144, silu", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream: the post-MLP norm's output times residual_multiplier", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_norm2`'s output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `post_attention_layernorm`'s output", "condition": null, "extra": "`model.layers[i].post_attention_layernorm`, a native module under its own name. Named for its place on the stream, after the attention's add: it is the MLP's input norm. The norm after the attention is post_norm1.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "norm.post_norm2": {"eyebrow": "post-norm", "expr": "model.layers[i].post_norm2", "desc": "A native module under its own name. Its output is the contribution: `model.layers[i].mlp.mlp_output`.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "The norm after the MLP. mlp_output is its output times residual_multiplier."}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.layer_mid": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_mid", "desc": "The residual stream after the attention add", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `post_attention_layernorm`'s input", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The terms are already scaled: attention_output and mlp_output are the post-norms' outputs times residual_multiplier, so the plain sum is exact, in float32 and bfloat16 alike.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "token_embeddings is the plain lookup. The model multiplies it by embedding_multiplier (10.0 on Think-14B) before block 0, so layers[0].input is token_embeddings \u00b7 embedding_multiplier."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "38 blocks of HyperCLOVAXDecoderLayer; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "Each block adds its sublayers' contributions times residual_multiplier (1.0 on Think-14B)."}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head has its own weight: tie_word_embeddings is false."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": "logits = lm_head.output \u00b7 logits_scaling (0.125 on Think-14B). project_on_vocab multiplies too."}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "HyperCLOVAXForCausalLM", "url": "https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"}, "naver-hyperclovax/HyperCLOVAX-SEED-Think-32B": {"schema": {"topology": "sequential", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "40/8 heads, scale 0.08838834764831845", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "SwiGLU: 5120 \u2192 24192 \u2192 5120, silu", "variants": {}, "pre_norm": "post_attention_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 72, "layer_types": null, "mids": ["boundary.layer_mid"], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "HyperCLOVAXAttention under its standard name. 40/8 heads, scale 0.08838834764831845", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 1", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 2", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 3", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `nn_functional_dropout_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `attention_interface_1`, element 0", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream: the post-attention norm's output times residual_multiplier", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_norm1`'s output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name.", "role": "norm"}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "HyperCLOVAXMLP under its standard name. SwiGLU: 5120 \u2192 24192 \u2192 5120, silu", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream: the post-MLP norm's output times residual_multiplier", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the sibling module `post_norm2`'s output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `post_attention_layernorm`'s output", "condition": null, "extra": "`model.layers[i].post_attention_layernorm`, a native module under its own name. Named for its place on the stream, after the attention's add: it is the MLP's input norm.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.layer_mid": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_mid", "desc": "The residual stream after the attention add", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `post_attention_layernorm`'s input", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "attention_output and mlp_output are the sublayers' outputs times residual_multiplier, so the plain sum is exact.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "token_embeddings is the plain lookup. The model multiplies it by embedding_multiplier (10.0 on Think-14B) before block 0, so layers[0].input is token_embeddings \u00b7 embedding_multiplier. On this checkpoint the projected image features replace the image tokens' embeddings before block 0: layers[0].input[vision.image_token_mask] == vision.image_features."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "72 blocks of HyperCLOVAXDecoderLayer; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "Each block adds its sublayers' contributions times residual_multiplier (1.0 on Think-14B)."}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head has its own weight: tie_word_embeddings is false."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": "logits = lm_head.output \u00b7 logits_scaling (0.125 on Think-14B). project_on_vocab multiplies too."}, "v:sub.self_attn": {"eyebrow": "Attention", "expr": "model.vision.layers[i].self_attn", "desc": "Qwen2_5_VLVisionAttention under its standard name. 16 heads \u00d7 80, per image", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads. The attention runs once per image, over that image's patches, so no patch attends to another image's; on Qwen2.5-VL's windowed blocks once per window."}, "v:interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.vision.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the output of `unsqueeze_0`", "condition": null, "extra": null}, "v:interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.vision.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the output of `unsqueeze_1`", "condition": null, "extra": null}, "v:interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.vision.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the output of `unsqueeze_2`", "condition": null, "extra": null}, "v:interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.vision.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `torch_cat_0`", "condition": null, "extra": null}, "v:interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.vision.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "v:contrib.self_attn": {"eyebrow": "contribution", "expr": "model.vision.layers[i].self_attn.attention_output", "desc": "What the attention adds to the tower's stream", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "v:boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.vision.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.vision.layers[i].input_layernorm`, a native module under its own name. The native norm1: a LayerNorm, an RMSNorm on Qwen2.5-VL.", "role": "norm"}, "v:sub.mlp": {"eyebrow": "MLP", "expr": "model.vision.layers[i].mlp", "desc": "Qwen2_5_VLMLP under its standard name. 1280 \u2192 3456 \u2192 1280, silu", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "v:interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.vision.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "v:interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.vision.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "v:contrib.mlp": {"eyebrow": "contribution", "expr": "model.vision.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the tower's stream", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "v:boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.vision.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": "the child module `post_attention_layernorm`'s output", "condition": null, "extra": "`model.vision.layers[i].post_attention_layernorm`, a native module under its own name. The native norm2: a LayerNorm, an RMSNorm on Qwen2.5-VL.", "role": "norm"}, "v:boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.vision.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "v:stream.input": {"eyebrow": "vision encoder's stream", "expr": "model.vision.layers[i].input", "desc": "The vision encoder's stream entering the block.", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": null, "condition": null, "extra": null}, "v:stream.output": {"eyebrow": "vision encoder's stream", "expr": "model.vision.layers[i].layer_output", "desc": "The tower's stream leaving the block", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "v:boundary.layer_mid": {"eyebrow": "vision encoder's stream", "expr": "model.vision.layers[i].layer_mid", "desc": "The tower's stream after the attention add", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": "the child module `post_attention_layernorm`'s input", "condition": null, "extra": null}, "v:plus": {"eyebrow": "the add", "expr": "vision.layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The contribution identity that nnterp's test suite checks on every vision encoder block.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "v:path.image": {"eyebrow": "the image", "expr": "pixel_values", "desc": "What the processor passes to the vision encoder. One row, packed: every image's patches, `[1, patches, vision_hidden_size]`, split per image by the processor's `image_grid_thw`. Each image's patches are in merge-block order (each 2 \u00d7 2 block the merger folds is consecutive), and on Qwen2.5-VL in window order inside the vision encoder.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "v:path.patch_embed": {"eyebrow": "patch embedding", "expr": "model.vision.patch_embeddings", "desc": "The patch embedding's output, one row per patch", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": "the child module `patch_embed`'s output", "condition": null, "extra": "A 2D rotary embedding (row and column of the patch) turns the queries and keys inside each attention. Qwen3-VL and Qwen3.5 also add a learned `pos_embed`, resampled to each image's grid, after `patch_embed`."}, "v:path.projector": {"eyebrow": "projector", "expr": "model.projector", "desc": "`Linear` at `model.model.projector`: a linear (model.projector, with a bias) from the merger's out_hidden_size to the text model's width, after the vision encoder; the merger inside the encoder folds each 2 \u00d7 2 block of patches first.", "layout": null, "dims": null, "where": null, "condition": null, "extra": "`model.projector.input` is the merger's output, back in the image tokens' order; `model.projector.output` is what it returns."}, "v:path.features": {"eyebrow": "image features", "expr": "model.vision.image_features", "desc": "The image features the text model receives at the image tokens, flat over them", "layout": "ImageFeatures", "dims": "image_tokens hidden_size", "where": "inside `model.model`'s forward: the arguments of `inputs_embeds_masked_scatter_0`, element 1", "condition": null, "extra": null}, "v:path.scatter": {"eyebrow": "into the text model", "expr": "model.vision.image_token_mask", "desc": "Which positions hold image tokens: input_ids == the config's image_token_id; read-only", "layout": "ImageTokenMask", "dims": "batch seq", "where": "the model's own inputs, at the root", "condition": null, "extra": "`model.layers[0].input[model.vision.image_token_mask] == model.vision.image_features`: the features replace the image tokens' embeddings before block 0."}, "v:path.layers": {"eyebrow": "the vision encoder's blocks", "expr": "model.vision.layers[i].layer_output", "desc": "The tower's stream leaving the block", "layout": "Patches", "dims": "images patches vision_hidden_size", "where": "the module's own output", "condition": null, "extra": "32 blocks of Qwen2_5_VLVisionBlock; the diagram below shows any one of them. `model.vision.tower_output` is the last block's `layer_output`: None after the last block: the merger norms each patch as it reads it, so there is no `vision.norm`."}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": {"schema": {"topology": "sequential", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "16 heads \u00d7 80, per image", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "1280 \u2192 3456 \u2192 1280, silu", "variants": {}, "pre_norm": "post_attention_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "vision.layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 32, "layer_types": null, "mids": ["boundary.layer_mid"], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "identity_html": "<span class=\"n role-stream\">vision<\/span><span class=\"o\">.<\/span><span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>"}, "architecture": "HyperCLOVAXVisionV2ForConditionalGeneration", "url": "https://huggingface.co/naver-hyperclovax/HyperCLOVAX-SEED-Think-32B"}}}</script>
+<footer class="colophon frame">
+  <div class="rule"></div>
+  <div class="colophon-row">
+    <span class="micro">nnterp encyclopedia</span>
+    <span class="mono">built 2026-10-21 · nnterp 1.3.1.dev428+gf5e97f4de · transformers 5.20.2 · reference <span id="colophon-reference">naver-hyperclovax/HyperCLOVAX-SEED-Think-14B</span></span>
+  </div>
+</footer>
+<script src="static/encyclopedia.js"></script>
+<script src="static/block.js"></script></body>
+</html>

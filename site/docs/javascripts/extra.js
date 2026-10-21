@@ -11,7 +11,7 @@ document.addEventListener("DOMContentLoaded", function () {
   ];
 
   var headerInner = document.querySelector(".md-header__inner");
-  var title = document.querySelector(".md-header__title");
+  var title = document.querySelector(".md-header__button.md-logo");
   if (!headerInner || !title) return;
 
   // Links are resolved against the site root, which is not "/" on project Pages. Material's
@@ -34,4 +34,18 @@ document.addEventListener("DOMContentLoaded", function () {
     headerNav.appendChild(link);
   });
   title.parentNode.insertBefore(headerNav, title.nextSibling);
+
+  // The nnsight logo beside the repository link, pointing at nnsight.net.
+  var source = document.querySelector(".md-header__source");
+  if (source) {
+    var nnsight = document.createElement("a");
+    nnsight.href = "https://nnsight.net";
+    nnsight.title = "nnsight";
+    nnsight.className = "nn-nnsight-link";
+    var img = document.createElement("img");
+    img.src = root.replace(/\/$/, "") + "/assets/nnsight.svg";
+    img.alt = "nnsight";
+    nnsight.appendChild(img);
+    source.parentNode.insertBefore(nnsight, source);
+  }
 });

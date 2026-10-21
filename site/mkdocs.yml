@@ -376,8 +376,6 @@ extra:
       link: https://github.com/ndif-team/nnterp
     - icon: fontawesome/brands/python
       link: https://pypi.org/project/nnterp/
-    - icon: fontawesome/brands/discourse
-      link: https://discuss.ndif.us/
   generator: false
 
 # Copyright

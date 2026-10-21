@@ -1,6 +1,8 @@
 """Llama, end to end: the family the vocabulary is taken from."""
 
 import pytest
+import transformers
+from packaging.version import Version
 import torch
 from suite import FamilySuite, LLAMA_ROWS, rows
 from vision_suite import IMAGE, VisionSuite, align_processor, clip_rows, image_prompt, siglip_rows
@@ -127,6 +129,11 @@ class TestIdefics3Vision(VisionSuite):
     VISION_NATIVE = {**siglip_rows("model.vision_model"), "projector": "model.connector"}
 
 
+@pytest.mark.skipif(
+    Version(transformers.__version__) >= Version("5.20"),
+    reason="transformers 5.20 reshapes SmolVLM's image features by vision_config.patch_size instead of the features per "
+    "image (inputs_merger), which fails whenever the two differ, as on this checkpoint (81 features a tile, patch size 14)",
+)
 class TestSmolVLMVision(TestIdefics3Vision):
     """SmolVLM: Idefics 3's layout."""
 

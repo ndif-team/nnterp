@@ -95,6 +95,9 @@ RENAME = {
     "attention": "self_attn",
     "norm1": "input_layernorm",
     "norm2": "post_attention_layernorm",
+    # the RADIO tower's MLP: the activation and the down projection under their standard names
+    "activation_fn": "act_fn",
+    "fc2": "down_proj",
 }
 
 #: The operation of NemotronH Omni's own forward that scatters the image features (the root is the host:

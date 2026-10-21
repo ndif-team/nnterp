@@ -353,8 +353,10 @@ The base of the hosts.
 | Name | Signature | What |
 |---|---|---|
 | `lookup` | `lookup(model_type: str) -> ModuleType` | The family for `model_type`: a registered one, else `nnterp.families.<model_type>`, imported on first use. With neither, warns and returns `default`. |
+| `resolve` | `resolve(config, engine=None) -> ModuleType` | The family for a config: `lookup` of its own `model_type` where a family `covers` it (a wrapper with a family of its own, `kimi_k25`), else of its `text_config`'s. What `StandardizedTransformer` and `StandardizedVLLM` call. |
+| `covers` | `covers(model_type: str, engine=None) -> bool` | Whether a family covers `model_type`: registered, or a module of that name ships. |
 | `register` | `register(family: ModuleType, *model_types: str) -> ModuleType` | Add a family (any module or object with `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under `model_types`, or, with none given, the type its `__name__` ends in (`TypeError` for a nameless `SimpleNamespace`); consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
-| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (98), alphabetical; not `default`. |
+| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (99, `kimi_k25` among them), alphabetical; not `default`. |
 | `default` | module | The best-effort family for a `model_type` with none: `RENAME` over the shipped spellings, `ENVOYS` keyed on the standard names, `check(model)` at load (run when the family is `default` itself; a copy calls it). Serves `layer_output`, the module boundaries its aliases reach, the root values, the sizes and the interface interior; `attention_output`, `mlp_output`, `layer_mid`, `mlp_norm_output`, a mixture's `mlp_activation` / `mlp_neurons` and `project_on_vocab` raise `Unavailable`. See [../usage/loading.md](../usage/loading.md#an-architecture-with-no-family). |
 | `all_families` | `all_families() -> list[ModuleType]` | Every shipped family, imported. For tooling and tests. |
 | `REGISTRY` | `dict[str, ModuleType]` | `model_type -> family` for what `register` added. |

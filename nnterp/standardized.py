@@ -350,7 +350,7 @@ class StandardizedTransformer(Standardized, TransformersModel):
             config = self._read_config(repo_id, kwargs)
             # A multimodal checkpoint's config nests the language model's; the
             # text-generation task builds that model, so its family is the one.
-            family = families.lookup(getattr(config, "text_config", config).model_type)
+            family = families.resolve(config)
         self.family = family
         super().__init__(
             repo_id,

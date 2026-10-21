@@ -65,7 +65,7 @@ import hub  # noqa: E402
 import palette as palettes  # noqa: E402
 import vision as towers  # noqa: E402
 
-GITHUB = "https://github.com/ndif-team/nnterp/blob/0.8-refactor"
+GITHUB = "https://github.com/ndif-team/nnterp/blob/v2.0.0"
 
 #: The design's ink and its default paper; an entry may tint the paper.
 INK = "#3A2516"

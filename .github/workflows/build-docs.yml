@@ -4,7 +4,7 @@ name: Build and Deploy Documentation
 # (as nnsight-website deploys from its docs branch). Add main once it is there.
 on:
   push:
-    branches: [site, 0.8-refactor]
+    branches: [site, v2.0.0]
     paths:
       - "site/**"
       - "nnterp/**"

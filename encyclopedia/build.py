@@ -91,6 +91,8 @@ QUIRKS: dict[str, tuple[str, str]] = {
     "hyper-connections": ("Hyper-connections", "The residual is several parallel streams, mixed around each sublayer; layer_output is [batch, seq, streams, hidden_size]."),
     "attention-sink": ("Attention sink", "On every block or some, a learned logit per head joins the softmax as an extra key, so the pattern's rows over the real keys sum to less than one."),
     "sink-scaled-heads": ("Sink-scaled heads", "A learned sink per head joins the softmax, and each head's output is scaled by the share of probability the real keys kept; the pattern's rows still sum to one."),
+    "grouped-query": ("Grouped-query attention", "Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first."),
+    "multi-query": ("Multi-query attention", "One key/value head serves every query head (num_kv_heads is 1), so an edit to its keys or values reaches all of them."),
     "latent-attention": ("Latent attention", "Keys and values are projected up from a small latent shared by the heads; queries and keys are qk_head_dim wide, values head_dim wide."),
     "sparse-attention": ("Sparse attention", "On every block or some, an indexer picks the top keys for each query; the pattern is served as a full query × key tensor, zero outside the picked keys."),
     "mixture-of-experts": ("Mixture of experts", "On every block or some, the MLP is a mixture of experts: layers[i].mlp serves router_logits, expert_weights, expert_indices and expert_outputs, though some families leave one or more of them unavailable."),
@@ -1427,21 +1429,39 @@ def quirk_spec(entry: ModuleType, spec: str | dict[str, Any]) -> dict[str, Any]:
     return {"slug": spec["slug"], "when": spec["when"]}
 
 
+#: The quirks no entry lists: each checkpoint's are read off its sizes (`head_quirk`).
+HEAD_QUIRKS = ("grouped-query", "multi-query")
+
+
+def head_quirk(sizes: list[tuple[str, Any]]) -> str | None:
+    """``multi-query`` where one key/value head serves several query heads, ``grouped-query`` where fewer than
+    ``num_heads`` but more than one do, else ``None`` (full multi-head attention, or no attention heads)."""
+    sizes = dict(sizes)
+    heads, kv_heads = sizes.get("num_heads"), sizes.get("num_kv_heads")
+    if not isinstance(heads, int) or not isinstance(kv_heads, int) or kv_heads >= heads:
+        return None
+    return "multi-query" if kv_heads == 1 else "grouped-query"
+
+
 def quirks(entry: ModuleType, info: dict[str, Any] | None = None) -> list[dict[str, str]]:
     """The entry's quirks: every one without ``info``; with a checkpoint's ``info``, the ones that hold on it (a
-    conditional one's ``when`` is read on its text config)."""
+    conditional one's ``when`` is read on its text config), then its `head_quirk`."""
     out = []
     for spec in (quirk_spec(entry, item) for item in entry.QUIRKS):
         if info is not None and spec["when"] is not None and not spec["when"](info["text_config"]):
             continue
         out.append(quirk(spec["slug"], entry.MODEL_TYPE))
+    if info is not None and (slug := head_quirk(info.get("sizes", []))):
+        out.append(quirk(slug, entry.MODEL_TYPE))
     return out
 
 
 def quirk_union(entry: ModuleType, models: dict[str, dict[str, Any]]) -> list[dict[str, Any]]:
-    """The index card's quirks: those that hold on some checkpoint the page shows, in the entry's order."""
+    """The index card's quirks: those that hold on some checkpoint the page shows, in the entry's order, then the
+    head quirks."""
     held = {q["slug"] for m in models.values() for q in m["family_quirks"]}
-    return [q for q in quirks(entry) if q["slug"] in held]
+    listed = [q for q in quirks(entry) if q["slug"] in held]
+    return listed + [quirk(slug, entry.MODEL_TYPE) for slug in HEAD_QUIRKS if slug in held]
 
 
 #: A small eye, marking a vision-language checkpoint in the selector, the checkpoints ledger and the index.

@@ -24,7 +24,7 @@
     <h1 class="disp-title"><span class="line">ERNIE 4.5</span></h1>
     <p class="subtitle">Llama&#39;s pre-norm block whose rotary turns adjacent pairs of query and key dimensions, (2i, 2i + 1), and whose grouped query heads are together wider than the residual stream.</p>
     <div class="pane" data-pane="chips" data-ckpts="baidu/ERNIE-4.5-0.3B-Base-PT baidu/ERNIE-4.5-0.3B-PT"><div class="chips">
-<a class="chip" href="#notes" title="Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.">Interleaved rotary</a></div></div>
+<a class="chip" href="#notes" title="Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.">Interleaved rotary</a><a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a></div></div>
   </div>
   <aside class="hero-side">
     <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
@@ -447,7 +447,7 @@ layout would, pairs the wrong dimensions here.</p>
 (<code>tie_word_embeddings</code>).</p></div>
     <aside class="quirk-list">
       <div class="pane" data-pane="quirk_list" data-ckpts="baidu/ERNIE-4.5-0.3B-Base-PT baidu/ERNIE-4.5-0.3B-PT"><p class="micro">quirks</p>
-<div class="quirk"><span class="chip">Interleaved rotary</span><p class="body-md">Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.</p></div></div>
+<div class="quirk"><span class="chip">Interleaved rotary</span><p class="body-md">Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.</p></div><div class="quirk"><span class="chip">Grouped-query attention</span><p class="body-md">Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.</p></div></div>
     </aside>
   </div>
   <div class="pane" data-pane="vision_notes" data-ckpts="baidu/ERNIE-4.5-0.3B-Base-PT baidu/ERNIE-4.5-0.3B-PT"></div>

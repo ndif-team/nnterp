@@ -24,7 +24,7 @@
     <h1 class="disp-title"><span class="line">Seed-OSS</span></h1>
     <p class="subtitle">Llama&#39;s block with a bias on the query, key and value projections, and query heads that together are twice as wide as the stream.</p>
     <div class="pane" data-pane="chips" data-ckpts="ByteDance-Seed/Seed-OSS-36B-Base ByteDance-Seed/Seed-OSS-36B-Base-woSyn ByteDance-Seed/Seed-OSS-36B-Instruct"><div class="chips">
-<a class="chip" href="#notes" title="The query, key and value projections carry a bias, so each is W·x + b.">Biased q, k, v</a></div></div>
+<a class="chip" href="#notes" title="The query, key and value projections carry a bias, so each is W·x + b.">Biased q, k, v</a><a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a></div></div>
   </div>
   <aside class="hero-side">
     <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
@@ -520,7 +520,7 @@ tokens against a <code>vocab_size</code> of 155136, so the last 15 ids get logit
 synthetic instruction data, released for research that needs a base model untouched by it.</p></div>
     <aside class="quirk-list">
       <div class="pane" data-pane="quirk_list" data-ckpts="ByteDance-Seed/Seed-OSS-36B-Base ByteDance-Seed/Seed-OSS-36B-Base-woSyn ByteDance-Seed/Seed-OSS-36B-Instruct"><p class="micro">quirks</p>
-<div class="quirk"><span class="chip">Biased q, k, v</span><p class="body-md">The query, key and value projections carry a bias, so each is W·x + b.</p></div></div>
+<div class="quirk"><span class="chip">Biased q, k, v</span><p class="body-md">The query, key and value projections carry a bias, so each is W·x + b.</p></div><div class="quirk"><span class="chip">Grouped-query attention</span><p class="body-md">Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.</p></div></div>
     </aside>
   </div>
   <div class="pane" data-pane="vision_notes" data-ckpts="ByteDance-Seed/Seed-OSS-36B-Base ByteDance-Seed/Seed-OSS-36B-Base-woSyn ByteDance-Seed/Seed-OSS-36B-Instruct"></div>

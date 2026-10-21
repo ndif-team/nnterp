@@ -24,7 +24,7 @@
     <h1 class="disp-title"><span class="line">SmolLM3</span></h1>
     <p class="subtitle">Llama&#39;s block in which every fourth attention applies no rotary embedding (NoPE): there queries and keys are the projections as split, and only the causal mask orders the tokens.</p>
     <div class="pane" data-pane="chips" data-ckpts="HuggingFaceTB/SmolLM3-3B-Base HuggingFaceTB/SmolLM3-3B"><div class="chips">
-<a class="chip" href="#notes" title="Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart.">Blocks without rotary</a></div></div>
+<a class="chip" href="#notes" title="Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart.">Blocks without rotary</a><a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a></div></div>
   </div>
   <aside class="hero-side">
     <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
@@ -473,7 +473,7 @@ vocabulary, 128256 ids, and prepends no BOS (<code>bos_token</code> is <code>Non
 token. <code>" Paris"</code> (<code>12366</code>) and <code>"Paris"</code> (<code>60704</code>) are two whole-word tokens, as on Llama-3.</p></div>
     <aside class="quirk-list">
       <div class="pane" data-pane="quirk_list" data-ckpts="HuggingFaceTB/SmolLM3-3B-Base HuggingFaceTB/SmolLM3-3B"><p class="micro">quirks</p>
-<div class="quirk"><span class="chip">Blocks without rotary</span><p class="body-md">Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart.</p></div></div>
+<div class="quirk"><span class="chip">Blocks without rotary</span><p class="body-md">Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart.</p></div><div class="quirk"><span class="chip">Grouped-query attention</span><p class="body-md">Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.</p></div></div>
     </aside>
   </div>
   <div class="pane" data-pane="vision_notes" data-ckpts="HuggingFaceTB/SmolLM3-3B-Base HuggingFaceTB/SmolLM3-3B"></div>

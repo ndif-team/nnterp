@@ -4,8 +4,7 @@ document.addEventListener("DOMContentLoaded", function () {
   if (document.querySelector(".nn-hero")) {
     var banner = document.createElement("div");
     banner.className = "nn-announcement";
-    banner.innerHTML = 'Every family\u2019s block, drawn with nnterp\u2019s names: ' +
-      '<a href="encyclopedia/" target="_blank" rel="noopener"><u>the nnterp encyclopedia</u></a> \u2192';
+    banner.innerHTML = 'Check out the <a href="encyclopedia/" target="_blank" rel="noopener"><u>Model Encyclopedia</u></a>!';
     document.body.insertBefore(banner, document.body.firstChild);
   }
 

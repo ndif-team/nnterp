@@ -275,7 +275,7 @@
 
 /* ===== Announcement banner (home page): the encyclopedia's five colours ===== */
 .nn-announcement {
-  background: linear-gradient(90deg, #e3928b, #c8a65d, #82bc83, #50bdc9, #af9ee4);
+  background: linear-gradient(90deg, #e4afab, #d2bc8d, #a5cba6, #84cbd3, #c2b7e5);
   padding: 6px 20px;
   text-align: center;
   position: relative;

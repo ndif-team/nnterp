@@ -233,7 +233,7 @@ hide:
   <div class="nn-hero-content">
     <div class="nn-hero-texts">
       <div class="nn-hero-title">
-        <h1>Standardized Access for Interpretability</h1>
+        <h1>Standardizing Interpretability</h1>
       </div>
       <div class="nn-hero-text">
         <p class="nn-hero-desc">

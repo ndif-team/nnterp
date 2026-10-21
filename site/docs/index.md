@@ -233,7 +233,7 @@ hide:
   <div class="nn-hero-content">
     <div class="nn-hero-texts">
       <div class="nn-hero-title">
-        <h1>One vocabulary for every transformer</h1>
+        <h1>Standardized Access for Interpretability</h1>
       </div>
       <div class="nn-hero-text">
         <p class="nn-hero-desc">
@@ -258,7 +258,7 @@ hide:
 
 <div id="content" class="nn-home-content md-typeset" markdown>
 
-## What nnterp adds
+## What is NNterp?
 
 `StandardizedTransformer` is an nnsight `TransformersModel`, so `trace`, `generate`, `.save()`,
 `tracer.iter` and `remote=True` work as they do in nnsight. What changes is the names that you write

@@ -108,38 +108,12 @@
    the header (extra.js injects them). Material's own tabs bar is hidden. */
 
 .md-header__button.md-logo {
-  margin-right: 0;
-  padding-right: 0;
+  margin-right: 1rem;
 }
 
-.md-header__button.md-logo img {
-  height: 1.5rem;
-  width: auto;
-}
-
-/* Material positions the title text absolutely, so the container must not grow and the
-   wordmark must flow normally to give it a width. */
+/* The logo is the wordmark: no site name or page title in the header */
 .md-header__title {
-  margin-left: 0.3rem;
-  flex-grow: 0;
-}
-
-.md-header__topic:first-child {
-  position: static;
-  font-weight: 650;
-  letter-spacing: 0.01em;
-}
-
-/* Keep the wordmark fixed: Material swaps in the page title on scroll */
-.md-header__title--active .md-header__topic:first-child {
-  transform: none;
-  opacity: 1;
-  pointer-events: initial;
-  z-index: 0;
-}
-
-.md-header__topic + .md-header__topic {
-  display: none;
+  display: none !important;
 }
 
 .md-tabs {

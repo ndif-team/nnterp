@@ -88,31 +88,25 @@ hide:
     display: flex;
     flex-direction: row;
     align-items: center;
-    gap: 3rem;
-    max-width: 1100px;
+    gap: 4rem;
+    max-width: 1400px;
     padding: 2rem;
+    background: transparent;
+    border-radius: 0.5rem;
   }
 
   .nn-hero-texts {
+    position: relative;
+    z-index: 1;
     display: flex;
     flex-direction: column;
-    align-items: flex-start;
-    gap: 1.25rem;
+    align-items: center;
   }
 
-  .nn-hero-logo img {
-    width: 240px;
-    max-width: 35vw;
-    height: auto;
-  }
-
-  .nn-hero-title h1 {
-    display: block !important;
-    font-size: 3rem;
-    font-weight: 700;
-    line-height: 1.1;
-    margin: 0;
-    color: var(--md-default-fg-color);
+  .nn-hero-text {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
   }
 
   .nn-hero-desc {
@@ -120,13 +114,6 @@ hide:
     line-height: 1.5;
     color: var(--md-default-fg-color--light);
     margin: 0;
-    max-width: 44rem;
-  }
-
-  .nn-hero-code {
-    width: 100%;
-    max-width: 44rem;
-    margin: 0 !important;
   }
 
   .nn-hero-links {
@@ -157,39 +144,85 @@ hide:
   }
 
   .nn-hero-links .nn-btn-secondary {
+    background: var(--md-default-bg-color);
     border: 1px solid var(--md-default-fg-color--lighter);
     color: var(--md-default-fg-color);
-    background: var(--md-default-bg-color);
   }
 
-  /* Content below the hero */
+  .nn-hero-logo {
+    flex-shrink: 0;
+  }
+
+  .nn-hero-title h1 {
+    display: block !important;
+    font-size: 2.5rem;
+    font-weight: 700;
+    margin-bottom: 20pt;
+    color: var(--md-default-fg-color);
+  }
+
+  .nn-hero-logo img {
+    width: 550px;
+    height: auto;
+  }
+
+  /* Content section below the hero */
   .nn-home-content {
     position: relative;
     z-index: 1;
-    background: var(--md-default-bg-color);
-    padding: 3rem 1.5rem 4rem;
-  }
-
-  .nn-home-inner {
-    max-width: 44rem;
+    max-width: 1600px;
     margin: 0 auto;
+    padding: 3rem 2rem 4rem;
+    background: transparent;
   }
 
-  @media (max-width: 60em) {
-    .nn-hero-title h1 {
-      font-size: 2.2rem;
-    }
-    .nn-hero {
-      min-height: 80vh;
+  .nn-home-content h2 {
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-top: 2rem;
+    margin-bottom: 0.75rem;
+  }
+
+  .nn-home-content p,
+  .nn-home-content li {
+    font-size: 1rem;
+    line-height: 1.6;
+    color: var(--md-default-fg-color--light);
+  }
+
+  .nn-home-content ul {
+    padding-left: 1.25rem;
+  }
+
+  .nn-home-content code {
+    font-size: 0.85rem;
+  }
+
+  /* Responsive - intermediate */
+  @media (max-width: 1100px) {
+    .nn-hero-logo img {
+      width: 400px;
     }
     .nn-hero-content {
+      gap: 2rem;
+    }
+  }
+
+  /* Responsive - mobile */
+  @media (max-width: 768px) {
+    .nn-hero-content {
       flex-direction: column-reverse;
-      align-items: flex-start;
-      gap: 1.5rem;
+      gap: 2rem;
+      text-align: center;
+    }
+    .nn-hero-links {
+      justify-content: center;
     }
     .nn-hero-logo img {
-      width: 140px;
-      max-width: none;
+      width: 350px;
+    }
+    .nn-hero {
+      min-height: 70vh;
     }
   }
 </style>
@@ -199,21 +232,23 @@ hide:
 <div class="nn-hero">
   <div class="nn-hero-content">
     <div class="nn-hero-texts">
-    <div class="nn-hero-title">
-      <h1>One vocabulary for every transformer</h1>
-    </div>
-    <p class="nn-hero-desc">
-      <strong>nnterp</strong> gives every transformer family the same module names and the same
-      standard values, on top of <a href="https://nnsight.net">nnsight</a>. An experiment written
-      once runs on GPT-2, Llama, Qwen, Gemma, Mamba and the other supported families.
-    </p>
-    <div class="nn-hero-links">
-      <a href="getting-started/" class="nn-btn-primary">Get Started</a>
-      <a href="guide/" class="nn-btn-secondary">Guide</a>
-      <a href="tutorials/" class="nn-btn-secondary">Tutorials</a>
-      <a href="documentation/" class="nn-btn-secondary">Documentation</a>
-      <a href="about/" class="nn-btn-secondary">About</a>
-    </div>
+      <div class="nn-hero-title">
+        <h1>One vocabulary for every transformer</h1>
+      </div>
+      <div class="nn-hero-text">
+        <p class="nn-hero-desc">
+          <strong>nnterp</strong> gives every transformer family the same module names and the same
+          standard values, on top of <a href="https://nnsight.net">nnsight</a>. An experiment written
+          once runs on GPT-2, Llama, Qwen, Gemma, Mamba and the other supported families.
+        </p>
+        <div class="nn-hero-links">
+          <a href="getting-started/" class="nn-btn-primary">Get Started</a>
+          <a href="guide/" class="nn-btn-secondary">Guide</a>
+          <a href="tutorials/" class="nn-btn-secondary">Tutorials</a>
+          <a href="documentation/" class="nn-btn-secondary">Documentation</a>
+          <a href="about/" class="nn-btn-secondary">About</a>
+        </div>
+      </div>
     </div>
     <div class="nn-hero-logo">
       <img src="assets/logo.png" alt="nnterp">
@@ -222,7 +257,6 @@ hide:
 </div>
 
 <div id="content" class="nn-home-content md-typeset" markdown>
-<div class="nn-home-inner" markdown>
 
 ## What nnterp adds
 
@@ -267,5 +301,4 @@ print(attn.shape, resid.shape, logits.shape)
 
 Add `remote=True` to run the same block on a model hosted by [NDIF](https://ndif.us/).
 
-</div>
 </div>

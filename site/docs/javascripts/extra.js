@@ -1,13 +1,5 @@
 // Single-row navbar: the top-level sections as links beside the wordmark.
 document.addEventListener("DOMContentLoaded", function () {
-  // The encyclopedia banner, above the header on the home page.
-  if (document.querySelector(".nn-hero")) {
-    var banner = document.createElement("div");
-    banner.className = "nn-announcement";
-    banner.innerHTML = 'Check out the <a href="encyclopedia/" target="_blank" rel="noopener"><u>Model Encyclopedia</u></a>!';
-    document.body.insertBefore(banner, document.body.firstChild);
-  }
-
   var navItems = [
     { name: "Getting Started", href: "/getting-started/" },
     { name: "Guide", href: "/guide/" },
@@ -30,6 +22,15 @@ document.addEventListener("DOMContentLoaded", function () {
     try { root = new URL(home.href).pathname; } catch (e) {}
   }
   var current = window.location.pathname;
+
+  // The encyclopedia banner, above the header on the home page. Instant navigation keeps it
+  // on later pages, so its link is resolved from the site root, not the page.
+  if (document.querySelector(".nn-hero")) {
+    var banner = document.createElement("div");
+    banner.className = "nn-announcement";
+    banner.innerHTML = 'Check out the <a href="' + root.replace(/\/$/, "") + '/encyclopedia/" target="_blank" rel="noopener"><u>Model Encyclopedia</u></a>!';
+    document.body.insertBefore(banner, document.body.firstChild);
+  }
 
   var headerNav = document.createElement("nav");
   headerNav.className = "header-nav";

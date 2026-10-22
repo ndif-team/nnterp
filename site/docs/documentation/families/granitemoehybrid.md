@@ -1,0 +1,3 @@
+# granitemoehybrid
+
+::: nnterp.families.granitemoehybrid

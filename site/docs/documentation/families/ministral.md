@@ -1,0 +1,3 @@
+# ministral
+
+::: nnterp.families.ministral

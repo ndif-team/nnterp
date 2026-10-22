@@ -301,6 +301,6 @@ print(attn.shape, resid.shape, logits.shape)
 # torch.Size([1, 7, 768]) torch.Size([1, 7, 768]) torch.Size([1, 7, 50257])
 ```
 
-Add `remote=True` to run the same block on a model hosted by [NDIF](https://ndif.us/).
+Add `remote=True` to run the same block on a model hosted by [NDIF](https://ndif.us/). An agent learns nnterp from the skills in [ndif-team/skills](https://github.com/ndif-team/skills), and every page here is also served as Markdown ([llms.txt](llms.txt)).
 
 </div>

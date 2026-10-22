@@ -77,6 +77,8 @@ A shipped family is the same content as a module under `nnterp/families/` named 
 7. A test that routes kernels restores `"default"` in a `finally`, since the routing is process-wide. A degenerate tiny checkpoint gets `LOAD_KWARGS` or a family-specific override, not a weaker assertion.
 8. Commit as `area: lowercase imperative summary`, with a body that says why.
 
+The skills in [ndif-team/skills](https://github.com/ndif-team/skills) state the same facts as these pages for an agent. A change that alters what an agent should do, a renamed value, a new condition on one, a new family's quirk, is a change to the matching skill as well.
+
 ## Design decisions and open items
 
 Design decisions nnterp holds to, stated as what nnterp does not do:

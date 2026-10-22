@@ -140,6 +140,16 @@ nnterp requires nnsight 0.8.0 or later (`nnsight>=0.8`; nnsight 0.8.0 is on PyPI
 - [CLAUDE.md](CLAUDE.md) routes a task to the right page.
 - [GAPS.md](GAPS.md) maps the nnterp 1.x API onto this one, for users of nnterp 1.x.
 
+## Agents
+
+The skills that teach an agent nnterp are in [ndif-team/skills](https://github.com/ndif-team/skills): `nnterp` for the
+values, `patterns` for recipes that run on every family, `extending` for new families and values.
+In Claude Code, `/plugin marketplace add https://github.com/ndif-team/skills.git` then
+`/plugin install nnterp@ndif-team`; in Codex, `$skill-installer install https://github.com/ndif-team/skills`.
+The documentation site serves every page as Markdown, listed at
+[llms.txt](https://ndif-team.github.io/nnterp/llms.txt). [CLAUDE.md](CLAUDE.md) is for agents
+working in this repository.
+
 ## I found a bug
 
 Before opening an issue, reduce it to a minimal working example. If you can, write the

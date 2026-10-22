@@ -12,6 +12,12 @@ everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.ite
 `~/wd/nnsight/docs/`. `StandardizedVLLM` is the same over nnsight's `VLLM` engine. This file covers
 only what nnterp adds.
 
+This file is for agents working *in this repository*. An agent *using* nnterp from another project
+should install the `nnterp` plugin from https://github.com/ndif-team/skills (skills `nnterp`, `patterns`, `extending`)
+and read the documentation site, which serves every page as Markdown
+(https://ndif-team.github.io/nnterp/llms.txt). When a change here alters what an agent should do,
+the matching skill changes too.
+
 ---
 
 ## How to use this file

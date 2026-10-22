@@ -9,6 +9,27 @@
 - The encyclopedia, one page per supported family (HTML): https://ndif-team.github.io/nnterp/encyclopedia/
 - Paper (nnterp 1.x): https://arxiv.org/abs/2511.14465
 
+## Agent setup
+
+To teach an LLM agent nnterp, install the nnterp skills from https://github.com/ndif-team/skills (three skills: `nnterp` for the values, `patterns` for recipes that run on every family, `extending` for new families and values).
+
+Claude Code:
+```
+claude
+/plugin marketplace add https://github.com/ndif-team/skills.git
+/plugin install nnterp@ndif-team
+```
+
+OpenAI Codex:
+```
+codex
+$skill-installer install https://github.com/ndif-team/skills
+```
+
+The nnsight skills (`/plugin install nnsight@ndif-team`) cover the tracing that nnterp builds on.
+
+## Pages as Markdown
+
 Every page below is linked as Markdown; the same path without `.md` (for `index.md`, the directory) is the HTML. `llms-full.txt` beside this file is every page in one document: https://ndif-team.github.io/nnterp/llms-full.txt
 
 ## Pages

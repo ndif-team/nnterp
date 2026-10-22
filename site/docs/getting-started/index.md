@@ -26,6 +26,17 @@ pip install "nnterp[vllm]"     # vLLM, for StandardizedVLLM
 pip install "nnterp[test]"     # pytest and pytest-xdist, for the test suite
 ```
 
+### For agents
+
+If an agent writes your nnterp code, give it the nnterp skills from [ndif-team/skills](https://github.com/ndif-team/skills): three skills, for the values, for the recipes that run across families, and for extending nnterp. In Claude Code:
+
+```
+/plugin marketplace add https://github.com/ndif-team/skills.git
+/plugin install nnterp@ndif-team
+```
+
+In Codex, `$skill-installer install https://github.com/ndif-team/skills`. Every page of this site is also served as Markdown, listed in [llms.txt](../llms.txt), with the whole site in [llms-full.txt](https://ndif-team.github.io/nnterp/llms-full.txt).
+
 ## Quick start
 
 A `StandardizedTransformer` is an nnsight `TransformersModel` with one set of module names on every family, and with values on its blocks that mean the same thing everywhere. Load GPT-2 and read block 5's values and the logits:

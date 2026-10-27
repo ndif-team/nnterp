@@ -43,7 +43,7 @@ from .components import (
     StateSpace, Unavailable, Vision, axis_size, chunk_per_token, route_delta_rule, route_kernels, unavailable,
 )
 from .families import UnsupportedFamily
-from .standardized import Standardized, StandardizedTransformer
+from .standardized import Standardized, StandardizedTransformer, project_on_vocab
 from .standardized_vllm import StandardizedVLLM
 
 __all__ = [
@@ -51,5 +51,5 @@ __all__ = [
     "Standard", "Standardized", "StandardizedTransformer", "StandardizedVLLM", "StateSpace", "Unavailable", "UnsupportedFamily", "Vision",
     "axis_size", "chunk_per_token",
     "route_delta_rule", "route_kernels",
-    "unavailable",
+    "project_on_vocab", "unavailable",
 ]

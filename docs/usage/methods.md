@@ -112,9 +112,11 @@ block, which differs by orders of magnitude between models and changes with dept
 Logits for a residual-stream tensor: `lm_head(norm(hidden))`, then whatever the model does
 to the head's output to make its logits. That is the softcap when the text config sets
 `final_logit_softcapping` (Gemma-2), and nothing otherwise, unless the family defines its
-own `project_on_vocab` (a `StandardizedCapability`, bound in the root's place): Cohere
-multiplies by `config.logit_scale`, Granite divides by `config.logits_scaling`. Applied to
-the last block's `layer_output` it equals `logits` exactly:
+own `project_on_vocab`, which runs in the root's place: Cohere multiplies by
+`config.logit_scale`, Granite divides by `config.logits_scaling`. Applied to the last block's
+`layer_output` it equals `logits` exactly. The method is `nnterp.project_on_vocab(module,
+hidden)` on the model's transformers module, which takes a plain `PreTrainedModel` too and
+looks its family up from its config:
 
 ```python
 with model.trace(prompt):

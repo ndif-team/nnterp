@@ -64,7 +64,7 @@ Gemma-2's `attention_output` is the post-attention norm's output: The family key
 
 `Standardized`, in `nnterp/standardized.py`, is the engine-independent part: the sizes, `support()`, `skip_layers`, `steer`, `get_topk_closest_tokens` and `_read_config`. `StandardizedTransformer` mixes it over `TransformersModel`, and `StandardizedVLLM` over nnsight's `VLLM` ([vLLM](../../vllm/index.md)). The root values are `EProperty` descriptors like a block's. `logits` reads the model's output and picks `.logits`, `token_embeddings` is keyed `"embed_tokens.output"`, `final_norm_output` and `lm_head_output` read `norm` and `lm_head`, `next_token_probs` is derived and refuses assignment, and `input_ids`, `attention_mask` and `input_size` are keyed `"inputs"` and read the call's keyword arguments.
 
-Each size is a `StandardizedProperty`. On read it looks for a function of its own name on `model.family` and calls it with the model, else runs the plain rule over `config.get_text_config()`. Assignment raises `AttributeError`, which leaves the family module as the only place a size is spelled otherwise. `project_on_vocab` is a `StandardizedCapability`, the same lookup for a method.
+Each size is a `StandardizedProperty`. On read it looks for a function of its own name on `model.family` and calls it with the model, else runs the plain rule over `config.get_text_config()`. Assignment raises `AttributeError`, which leaves the family module as the only place a size is spelled otherwise. `nnterp.project_on_vocab` makes the same lookup for the logit lens: the family's `project_on_vocab(model, hidden)` where it defines one, on the transformers module.
 
 ```python
 print(model.intermediate_size, model.config.n_inner)   # 3072 None

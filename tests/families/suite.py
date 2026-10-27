@@ -14,7 +14,7 @@ import torch
 from nnsight import TransformersModel  # nnsight before any transformers submodule
 from nnsight.intervention.envoy import Envoy
 
-from nnterp import StandardizedTransformer, Unavailable
+from nnterp import StandardizedTransformer, Unavailable, project_on_vocab
 from nnterp.components import (
     BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, QUERY, SEQ, TOKENS, STATE_DIM, STREAMS,
     VALUE_DIM, Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
@@ -734,6 +734,15 @@ class FamilySuite:
         assert len(top) == 1 and len(top[0]) == 3
         assert all(isinstance(token, str) and 0 < p <= 1 for token, p in top[0].items())
         assert 0 < sum(top[0].values()) <= 1 + 1e-4
+
+    def test_project_on_vocab_on_the_transformers_module_is_the_logits(self, model):
+        """`nnterp.project_on_vocab` on the plain transformers module, its family looked up from its config: of the
+        last block's output it is the model's logits bit for bit, and the method's value."""
+        with model.trace(PROMPT):
+            last = model.layers[-1].layer_output.save()
+            logits = model.logits.save()
+        lens = project_on_vocab(model._module, last)
+        assert torch.equal(lens, logits) and torch.equal(lens, model.project_on_vocab(last))
 
     # -- layouts -------------------------------------------------------------------
 

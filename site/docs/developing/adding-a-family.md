@@ -100,7 +100,7 @@ print(model.config.n_inner, model.intermediate_size, model.layers[0].mlp.interme
 # None 3072 3072
 ```
 
-A block's own `mlp.intermediate_size` is read off the module rather than the config. Falcon's module spells `num_kv_heads` the same way. A model that scales or caps its logits after `lm_head` defines `def project_on_vocab(model, hidden)` in the module (Cohere multiplies by `logit_scale`), which is bound in place of the root's, so the logit lens on the last block still equals `logits`.
+A block's own `mlp.intermediate_size` is read off the module rather than the config. Falcon's module spells `num_kv_heads` the same way. A model that scales or caps its logits after `lm_head` defines `def project_on_vocab(model, hidden)` in the module (Cohere multiplies by `logit_scale`), which `nnterp.project_on_vocab` runs in place of the root's, so the logit lens on the last block still equals `logits`.
 
 ## The test file
 

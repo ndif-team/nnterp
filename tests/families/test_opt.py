@@ -9,6 +9,7 @@ import pytest
 import torch
 from suite import FamilySuite, PROMPT, rows
 
+from nnterp import project_on_vocab
 from nnterp.families import opt
 
 
@@ -75,6 +76,10 @@ class TestOPTPostNorm(TestOPT):
     def test_project_on_vocab_is_the_logit_lens(self, model):
         with pytest.raises(AttributeError, match="norm"):
             model.project_on_vocab(torch.zeros(1, 1, model.hidden_size))
+
+    def test_project_on_vocab_on_the_transformers_module_is_the_logits(self, model):
+        with pytest.raises(AttributeError, match="norm"):
+            project_on_vocab(model._module, torch.zeros(1, 1, model.hidden_size))
 
     def test_logits_are_the_models_output(self, model):
         """The lens half of the base test needs the final norm this layout lacks."""

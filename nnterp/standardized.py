@@ -309,8 +309,8 @@ class StandardizedTransformer(Standardized, TransformersModel):
     sizes ``num_layers``, ``num_heads``, ``num_kv_heads``, ``head_dim``,
     ``qk_head_dim``, ``hidden_size``, ``intermediate_size`` and ``vocab_size``,
     read off the config, each a `StandardizedProperty` the family can define
-    instead; `project_on_vocab` is a `StandardizedCapability`, a method the family
-    can define the same way.
+    instead; `project_on_vocab` runs the family's own ``project_on_vocab(model,
+    hidden)`` where it defines one (`nnterp.project_on_vocab`).
 
     On an image-text-to-text checkpoint loaded with ``task="image-text-to-text"``
     the text names keep their meaning (the language model's), the vision tower
@@ -452,24 +452,20 @@ class StandardizedTransformer(Standardized, TransformersModel):
 
     # -- the logit lens -----------------------------------------------------------
 
-    @StandardizedCapability
     def project_on_vocab(self, hidden: torch.Tensor) -> torch.Tensor:
-        """Logits for a residual-stream tensor: the final norm, ``lm_head``, and what the model does after the head.
+        """`nnterp.project_on_vocab` on this model's transformers module and family: the logit lens.
 
-        The logit lens: applied to a block's ``layer_output`` it reads that
-        layer's prediction; applied to the last block's, it is `logits`.
-        Works inside a trace on a live value and outside on a saved one.
-        After the head the plain case is the text config's
-        ``final_logit_softcapping``, when set (Gemma-2's own config; a
-        multimodal checkpoint's ``text_config``). A family whose model does
-        something else there (Cohere multiplies by ``logit_scale``, Granite
-        divides by ``logits_scaling``) defines
-        ``def project_on_vocab(model, hidden)`` in its module, which is bound
-        in this one's place (`StandardizedCapability`).
+        Applied to a block's ``layer_output`` it reads that layer's prediction;
+        applied to the last block's, it is `logits`. Works inside a trace on a
+        live value and outside on a saved one: inside, the trace stands down
+        for the call, as for an envoy's ad-hoc call, so the norm and the head
+        serve no value and spend no occurrence.
         """
-        logits = self.lm_head(self.norm(hidden))
-        cap = getattr(self.config.get_text_config(), "final_logit_softcapping", None)
-        return cap * torch.tanh(logits / cap) if cap else logits
+        interleaving, self.interleaver.interleaving = self.interleaver.interleaving, False
+        try:
+            return project_on_vocab(self._module, hidden, self.family)
+        finally:
+            self.interleaver.interleaving = interleaving
 
     # -- the input (inside a trace) ----------------------------------------------
 
@@ -585,3 +581,45 @@ class StandardizedTransformer(Standardized, TransformersModel):
         subclass-specific key would match nothing on the server.
         """
         return TransformersModel
+
+
+def project_on_vocab(module: Any, hidden: torch.Tensor, family: Any = None) -> torch.Tensor:
+    """Logits for a residual-stream tensor on a plain transformers model: its final norm, its head, and what it does after the head.
+
+    The logit lens: applied to a block's output it reads that layer's
+    prediction; applied to the last block's, it is the model's logits.
+    ``family`` is the model's, looked up from ``module.config`` when not
+    given; the norm and the head are the modules its ``RENAME`` names ``norm``
+    and ``lm_head`` (the module's own ``lm_head`` where it renames none).
+    After the head the plain case is the text config's
+    ``final_logit_softcapping``, when set (Gemma-2's own config; a multimodal
+    checkpoint's ``text_config``). A family whose model does something else
+    there (Cohere multiplies by ``logit_scale``, Granite divides by
+    ``logits_scaling``) defines ``def project_on_vocab(model, hidden)`` in its
+    module, which runs instead, on the module with its norm and head under
+    those names.
+    """
+    family = family or families.resolve(module.config)
+    native = _Native(module, family)
+    if hasattr(family, "project_on_vocab"):
+        return family.project_on_vocab(native, hidden)
+    logits = native.lm_head(native.norm(hidden))
+    cap = getattr(module.config.get_text_config(), "final_logit_softcapping", None)
+    return cap * torch.tanh(logits / cap) if cap else logits
+
+
+class _Native:
+    """A transformers model as a family's ``project_on_vocab(model, hidden)`` reads it: ``norm`` and ``lm_head``
+    the modules its ``RENAME`` gives those names, every other attribute the module's own."""
+
+    def __init__(self, module: Any, family: Any) -> None:
+        self._module, self.family = module, family
+
+    def __getattr__(self, name: str) -> Any:
+        if name in ("norm", "lm_head"):
+            for native in [native for native, standard in self.family.RENAME.items() if standard == name]:
+                try:
+                    return self._module.get_submodule(native)
+                except AttributeError:
+                    continue
+        return getattr(self._module, name)

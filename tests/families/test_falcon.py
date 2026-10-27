@@ -155,3 +155,8 @@ class TestFalcon11B(FamilySuite):
             mlp = model.layers[0].mlp_norm_output.save()
             raw = model.layers[0].input_layernorm.output.save()
         assert torch.equal(attn, raw) and torch.equal(mlp, raw)
+
+    def test_a_key_function_naming_a_module_boundary_is_not_inside_a_forward(self, model):
+        """Without the block, any key function counts as inside a forward; with it, its path says: a module's."""
+        value = type(model.layers[0]).attention_norm_output
+        assert value.inside_forward() and not value.inside_forward(model.layers[0])

@@ -176,9 +176,7 @@ def test_family_defines_a_size_instead_of_the_root():
 
 
 def test_family_defines_project_on_vocab_instead_of_the_softcap():
-    """A `project_on_vocab(model, hidden)` in the family module is bound in the root's place; the root's applies the softcap."""
-    from nnterp.standardized import StandardizedCapability
-
+    """A `project_on_vocab(model, hidden)` in the family module runs in the root's place; the root's applies the softcap."""
     custom = types.SimpleNamespace(
         RENAME=gpt2.RENAME, ENVOYS=gpt2.ENVOYS,
         project_on_vocab=lambda model, hidden: model.lm_head(model.norm(hidden)) * 2,
@@ -190,7 +188,6 @@ def test_family_defines_project_on_vocab_instead_of_the_softcap():
         del families.REGISTRY["gpt2"]
     plain = StandardizedTransformer(GPT2, dispatch=True)
     hidden = torch.randn(1, 3, plain.hidden_size).to(plain.lm_head.weight)
-    assert isinstance(StandardizedTransformer.project_on_vocab, StandardizedCapability)
     torch.testing.assert_close(model.project_on_vocab(hidden), plain.project_on_vocab(hidden) * 2)
     plain.config.final_logit_softcapping = 2.0
     try:

@@ -320,10 +320,10 @@ family's subclass (JetMoE's `Mlp` returns its module's `hidden_size`);
 `project_on_vocab(hidden)` is `lm_head(norm(hidden))`, then what the model does after the
 head: the root's applies the text config's `final_logit_softcapping` when it is set. A family
 whose model does something else to the head's output defines
-`def project_on_vocab(model, hidden)` in its module, which is bound in the root's place the
-way a size function is (`project_on_vocab` is a `StandardizedCapability`,
-`StandardizedProperty` for a method), so the logit lens on the last block still equals
-`logits`:
+`def project_on_vocab(model, hidden)` in its module, which `nnterp.project_on_vocab` runs in
+the root's place, on the transformers module with its final norm and head as `model.norm` and
+`model.lm_head` (the modules `RENAME` gives those names), so the logit lens on the last block
+still equals `logits`:
 
 ```python
 # nnterp/families/cohere.py

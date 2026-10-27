@@ -101,6 +101,7 @@ def test_eproperty_paths_resolve_and_write(gpt2_paths):
     model, Paths = gpt2_paths
     attn = model.layers[0].self_attn
     assert Paths.softmax.inside_forward() and Paths.scaling.inside_forward() and not Paths.sibling.inside_forward()
+    assert Paths.softmax.inside_forward(attn) and not Paths.sibling.inside_forward(attn)
     assert model.support()["self_attn.sibling"] is None and model.support()["self_attn.softmax"] is None
     with model.trace("Hello world"):  # forward order: the call's arguments, then the ops inside it, then the sibling norm
         scaling = attn.scaling.save()

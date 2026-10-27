@@ -18,7 +18,7 @@ from nnsight.intervention.source import SourceNotAvailable
 from suite import INTERIOR, PROMPT, FamilySuite, recurrent_mixer
 from transformers import AutoConfig
 
-from nnterp import StandardizedTransformer, Unavailable, UnsupportedFamily, families
+from nnterp import StandardizedTransformer, Unavailable, UnsupportedFamily, families, project_on_vocab
 from nnterp.components import Moe, SelectiveScan, StateSpace
 from nnterp.families import default
 
@@ -118,6 +118,12 @@ class DefaultSuite(FamilySuite):
             model.project_on_vocab(resid)
         with pytest.raises(Unavailable, match="cannot tell what follows lm_head"):
             model.get_topk_closest_tokens(resid[0, -1], k=3)
+
+    def test_project_on_vocab_on_the_transformers_module_is_the_logits(self, model):
+        with model.trace(PROMPT):
+            resid = model.layers[-1].layer_output.save()
+        with pytest.raises(Unavailable, match="cannot tell what follows lm_head"):
+            project_on_vocab(model._module, resid, model.family)
 
     def test_logits_are_the_models_output(self, model):
         with model.trace(PROMPT):

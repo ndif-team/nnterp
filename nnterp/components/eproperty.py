@@ -178,9 +178,12 @@ class EProperty(eproperty):
         """The key for ``obj``: the path itself, or what the key function returns for it."""
         return self.locate(obj) if self.locate is not None else self.key
 
-    def inside_forward(self) -> bool:
-        """Whether the value is an operation inside a forward (a key function, or a ``source`` segment on its path)."""
-        return self.locate is not None or "source" in (self.key or "").lstrip("./").split(".")
+    def inside_forward(self, obj: Envoy | None = None) -> bool:
+        """Whether the value is an operation inside a forward: a ``source`` segment on its path, the path a key
+        function gives for ``obj`` where one is given (without ``obj`` any key function counts, its path unknown)."""
+        if obj is None and self.locate is not None:
+            return True
+        return "source" in ((self.key if obj is None else self.path(obj)) or "").lstrip("./").split(".")
 
     @staticmethod
     def attribute(key: str) -> str:

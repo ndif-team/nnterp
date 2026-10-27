@@ -23,22 +23,48 @@ def block_values(block: Any) -> list[tuple[str, Any, Any]]:
     return found
 
 
-def probe(model: Any, targets: list[tuple[int | None, str, Any, Any]], run: Any) -> list[tuple[int | None, str, Any]]:
+TEXT = "The quick brown fox"  # any short text: the order does not depend on it
+
+
+def prompts(model: Any) -> list[tuple[tuple, dict]]:
+    """The inputs a probe may run on, each ``(args, kwargs)`` for an invoke, tried in order: on a model loaded
+    with a processor, `TEXT` with one small image first (the processor's chat template puts the image's
+    tokens in, or its ``image_token`` does where it has no template), so that a value an image gates (a block
+    that adds a deepstack feature at the image tokens) is reached too; then `TEXT` alone, which is all a
+    text-only load takes."""
+    processor = getattr(model, "processor", None)
+    token = getattr(processor, "image_token", None)
+    found: list[tuple[tuple, dict]] = []
+    if processor is not None and isinstance(token, str):
+        from PIL import Image
+
+        messages = [{"role": "user", "content": [{"type": "image"}, {"type": "text", "text": TEXT}]}]
+        try:
+            text = processor.apply_chat_template(messages, tokenize=False)
+        except Exception:
+            text = f"{token} {TEXT}"
+        found.append(((text,), {"images": [Image.new("RGB", (64, 64), "white")]}))
+    return found + [((TEXT,), {})]
+
+
+def probe(model: Any, targets: list[tuple[int | None, str, Any, Any]], run: Any,
+          prompt: tuple[tuple, dict] = ((TEXT,), {})) -> list[tuple[int | None, str, Any]]:
     """``(layer, name, location)`` for each target, in the order the forward reached them.
 
     One ``run`` (``model.scan``, meta tensors and no weights needed, or
-    ``model.trace``) with one invoke for a prompt and one empty invoke per
-    value. Each empty invoke reads its value, which parks it until the forward
-    reaches that value's location, then appends the location it was served at,
-    so the list comes out in forward order. Workers parked on one location
-    resume in the order they were written, not in any order the forward gives
-    them, so values served at one location (the attention call's queries, keys
-    and values) tie: either read order is legal. A derived value, computed from
-    several locations, is its own location ``(layer, name)``.
+    ``model.trace``) with one invoke for a prompt (`prompts`) and one empty
+    invoke per value. Each empty invoke reads its value, which parks it until
+    the forward reaches that value's location, then appends the location it
+    was served at, so the list comes out in forward order. Workers parked on
+    one location resume in the order they were written, not in any order the
+    forward gives them, so values served at one location (the attention call's
+    queries, keys and values) tie: either read order is legal. A derived value,
+    computed from several locations, is its own location ``(layer, name)``.
     """
+    args, kwargs = prompt
     with run() as tracer:
         seen = nnsight.save([])
-        with tracer.invoke("The quick brown fox"):  # any short text: the order does not depend on it
+        with tracer.invoke(*args, **kwargs):
             pass
         for layer, name, host, prop in targets:
             with tracer.invoke():
@@ -59,6 +85,10 @@ def compute(model: Any) -> dict[int, dict[str, int]]:
     (one that branches on its data: Granite's ``torch.equal``, OPT's
     data-dependent shapes, a grouped-mm mixture of experts in float32) is
     probed with a `trace`, which loads the weights of a model not yet dispatched.
+    A model loaded with its processor is probed with an image in the prompt
+    (`prompts`), since a value an image gates (Qwen3-VL's ``deepstack_output``)
+    is reached by no text-only forward; where that prompt cannot run, the
+    text alone is tried.
     """
     num_layers = len(model.layers)
     shapes: dict[tuple, list[int]] = {}
@@ -68,10 +98,18 @@ def compute(model: Any) -> dict[int, dict[str, int]]:
     targets = [(None, name, host, prop) for name, host, prop in available(model)]
     for first, *_ in shapes.values():
         targets += [(first, name, host, prop) for name, host, prop in blocks[first]]
-    try:
-        seen = probe(model, targets, model.scan)
-    except Exception:
-        seen = probe(model, targets, model.trace)
+    seen, failed = None, None
+    for run in (model.scan, model.trace):
+        for prompt in prompts(model):
+            try:
+                seen = probe(model, targets, run, prompt)
+                break
+            except Exception as e:      # a forward meta tensors cannot run, or a value the prompt never reaches
+                failed = e
+        if seen is not None:
+            break
+    if seen is None:
+        raise failed if failed is not None else RuntimeError("the probe ran on nothing")
 
     table: dict[int, dict[str, int]] = {-1: {}, num_layers: {}}
     steps: dict[int | None, dict] = {}  # location -> rank, per block and one for the root (None)

@@ -23,7 +23,7 @@ DeepSeek-VL keeps a SigLIP tower at ``model.vision_model`` with the projector
 ``model.aligner``; Idefics 3 and SmolVLM keep their SigLIP-shaped ViT at
 ``model.vision_model`` (one row per image tile) with the pixel-shuffling
 ``model.connector`` as ``projector``, and merge the features in a helper,
-``inputs_merger``. Those towers' ``post_layernorm`` does norm the patches; since a
+``inputs_merger`` (SmolVLM scatters them itself from transformers 5.21). Those towers' ``post_layernorm`` does norm the patches; since a
 rename key cannot tell it from CLIP's, `SiglipVision` serves it as ``vision.norm``.
 """
 
@@ -97,10 +97,17 @@ class SiglipVision(Vision):
 
 
 class InputsMerger(ImageScatter):
-    """Idefics 3's and SmolVLM's model: the features go in through ``inputs_merger(..., image_hidden_states=...)``."""
+    """Idefics 3's model, and SmolVLM's through transformers 5.20: the features go in through
+    ``inputs_merger(..., image_hidden_states=...)``. SmolVLM scatters them itself from 5.21, the base's
+    ``masked_scatter``, so the operation is whichever the forward has."""
 
-    scatter = "self_inputs_merger_0"
-    scatter_argument = "image_hidden_states"
+    @property
+    def scatter(self) -> str:
+        return "self_inputs_merger_0" if "self_inputs_merger_0" in self.source.names else ImageScatter.scatter
+
+    @property
+    def scatter_argument(self) -> int | str:
+        return "image_hidden_states" if self.scatter == "self_inputs_merger_0" else ImageScatter.scatter_argument
 
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.

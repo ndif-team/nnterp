@@ -133,3 +133,15 @@ def test_vllm_raises():
         model.order()
     with pytest.raises(NotImplementedError, match="vllm engine"):
         model.rank("logits")
+
+
+def test_a_model_with_a_processor_is_probed_with_an_image():
+    """Qwen3-VL's first blocks add a deepstack feature at the image tokens, a value no text-only forward reaches:
+    the probe's prompt carries an image on a model loaded with its processor, so the value is ranked, after the
+    block's output."""
+    model = StandardizedTransformer("trl-internal-testing/tiny-Qwen3VLForConditionalGeneration",
+                                    task="image-text-to-text", attn_implementation="eager")
+    order = model.order(0)
+    assert order["deepstack_output"] > order["layer_output"]
+    assert {k: v for k, v in order.items() if k != "deepstack_output"} == LLAMA_BLOCK
+    assert model.rank("logits") == (model.num_layers, 4)

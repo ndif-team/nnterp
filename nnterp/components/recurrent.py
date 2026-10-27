@@ -244,6 +244,17 @@ def pinned(n: int | None):
         mediator.iteration = previous
 
 
+def present(source: SourceEnvoy, names: str | tuple[str, ...]) -> SourceEnvoy:
+    """The first of ``names`` the forward has as an op; when it has none, the last name's own error, which lists the ops it has."""
+    names = (names,) if isinstance(names, str) else names
+    for name in names[:-1]:
+        try:
+            return getattr(source, name)
+        except AttributeError:
+            continue
+    return getattr(source, names[-1])
+
+
 def kernel(attribute: str) -> Callable[[Envoy], str]:
     """A key at whichever kernel fires on this call: ``source.<KERNEL>.<attribute>``."""
 
@@ -261,8 +272,9 @@ class RecurrentMixer(Standard):
     are. A subclass names its kernels in class constants and declares
     its values at ``kernel("inputs")`` / ``kernel("output")``:
 
-    * `BRANCH`: the binding the forward makes before it picks a kernel,
-      ``True`` when the call continues from a cached state.
+    * `BRANCH`: the ops whose value says whether the call continues from a
+      cached state, whichever of them the forward binds before it picks a
+      kernel.
     * `CHUNK_KERNEL`: the call a prompt runs through.
     * `RECURRENT_KERNEL`: the call each decode step of ``generate`` runs
       through.
@@ -275,8 +287,9 @@ class RecurrentMixer(Standard):
 
     `KERNEL` names the call that fires on this call of the mixer, decided
     once per call by the forward's own test: `RECURRENT_KERNEL` for one token
-    over a cached state (`BRANCH` true and a sequence axis of 1 at `SEQ_OP`),
-    `CHUNK_KERNEL` otherwise, a prompt or several tokens over a cached state.
+    over a cached state (a cached state at `BRANCH` and a sequence axis of 1
+    at `SEQ_OP`), `CHUNK_KERNEL` otherwise, a prompt or several tokens over a
+    cached state.
     So the same values work in a ``trace`` and at every step of
     ``tracer.iter``. The kernels have to be transformers' pure-torch ones
     for there to be a call to read inside (`needs_torch_kernels`).
@@ -293,8 +306,11 @@ class RecurrentMixer(Standard):
     reads `states` off the chunk scan's boundaries).
     """
 
-    #: The binding the forward makes before it branches: ``True`` when the call continues from a cached state.
-    BRANCH = "use_precomputed_states_0"
+    #: The ops whose value says whether the call continues from a cached state, whichever of them the forward
+    #: binds before it branches: through transformers 5.20 the bool ``use_precomputed_states``; from 5.21 the state
+    #: the forward fetches from its cache, ``cache_params.get_recurrent_state(...)``, the state or None on a fresh
+    #: prompt, which it fetches only when it receives a cache (every run but one with ``use_cache=False``).
+    BRANCH: str | tuple[str, ...] = ("use_precomputed_states_0", "cache_params_get_recurrent_state_0")
     #: The call a prompt runs through.
     CHUNK_KERNEL: str | None = None
     #: The call each decode step runs through.
@@ -312,19 +328,22 @@ class RecurrentMixer(Standard):
     def KERNEL(envoy: Envoy) -> str:
         """The kernel call that fires on this call of the mixer, decided once per call (`per_call`).
 
-        The forward's own test, ``use_precomputed_states and seq_len == 1``:
-        the token-by-token update for one token over a cached state, the
-        prompt's kernel for everything else. The two bindings are read in the
-        order the forward makes them, which differs between mixers.
+        The forward's own test, one token over a cached state
+        (``use_precomputed_states and seq_len == 1`` through transformers
+        5.20, ``recurrent_state is not None and seq_len == 1`` from 5.21): the
+        token-by-token update then, the prompt's kernel for everything else.
+        The two ops are read in the order the forward makes them, which
+        differs between mixers.
         """
         cls = type(envoy)
 
         def choose() -> str:
             source = envoy.source
-            ops = sorted((getattr(source, cls.BRANCH), getattr(source, cls.SEQ_OP)), key=lambda op: op.line)
+            branch = present(source, cls.BRANCH)
+            ops = sorted((branch, getattr(source, cls.SEQ_OP)), key=lambda op: op.line)
             served = {op.name: op.output for op in ops}
-            one = served[cls.BRANCH] and served[cls.SEQ_OP].shape[1] == 1
-            return cls.RECURRENT_KERNEL if one else cls.CHUNK_KERNEL
+            cached = served[branch.name] is not None and served[branch.name] is not False
+            return cls.RECURRENT_KERNEL if cached and served[cls.SEQ_OP].shape[1] == 1 else cls.CHUNK_KERNEL
 
         return per_call(envoy, "kernel", choose)
 

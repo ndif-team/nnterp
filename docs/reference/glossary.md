@@ -134,7 +134,7 @@ A gated DeltaNet layer's per-head memory, `[batch, heads, key_dim, value_dim]`: 
 
 ## `RecurrentMixer`
 
-The base envoy of a recurrent mixer (`nnterp.components.recurrent`): a subclass names its prompt and decode-step kernels (`CHUNK_KERNEL`, `RECURRENT_KERNEL`), the bindings the forward's test between them reads (`BRANCH`, `SEQ_OP`) and the per-token state binding (`STATE_OP`, or `None`), and declares its values at the kernel call; the base reaches them, reports their availability, holds `attention_output` and the per-token `state` / `states`, and routes the kernels (`route_kernels`). `LinearAttention` is the gated DeltaNet subclass, `SelectiveScan` the Mamba-1 one. See [../developing/recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md).
+The base envoy of a recurrent mixer (`nnterp.components.recurrent`): a subclass names its prompt and decode-step kernels (`CHUNK_KERNEL`, `RECURRENT_KERNEL`), the ops the forward's test between them reads (`BRANCH`, whichever of its names the forward binds, and `SEQ_OP`) and the per-token state binding (`STATE_OP`, or `None`), and declares its values at the kernel call; the base reaches them, reports their availability, holds `attention_output` and the per-token `state` / `states`, and routes the kernels (`route_kernels`). `LinearAttention` is the gated DeltaNet subclass, `SelectiveScan` the Mamba-1 one. See [../developing/recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md).
 
 ## Registry
 

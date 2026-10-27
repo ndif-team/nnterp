@@ -171,8 +171,10 @@ module's own path is still `model.model.layers[i].self_attn` in error messages a
 
 A prompt runs `torch_chunk_gated_delta_rule`, and each decode step of
 `generate` runs `torch_recurrent_gated_delta_rule`: two different operations
-in the forward, chosen by the forward's test `use_precomputed_states and
-seq_len == 1`. The values read that binding and the call's length and name
+in the forward, chosen by the forward's own test, one token over a cached
+state (`use_precomputed_states and seq_len == 1` through transformers 5.20,
+`recurrent_state is not None and seq_len == 1` from 5.21). The values read
+that cached-state op and the call's length and name
 the call that fires on this step (`RecurrentMixer.KERNEL`: the recurrent
 kernel for one token over a cached state, the chunked one otherwise), so
 the same value works in a `trace` and at every step of
@@ -327,6 +329,10 @@ this block`.
 
 ## Gotchas
 
+- **From transformers 5.21 a run without a cache (`use_cache=False`) serves no kernel value.** The forward
+  fetches its cached state only when it receives a cache, and the kernel choice reads that fetch, so a read inside
+  the mixer parks on `cache_params_get_recurrent_state_0` and the run ends with `OutOfOrderError` naming it. Leave
+  `use_cache` on (the default) for anything inside the mixer.
 - **A mixer's submodule and its kernel values do not mix in one trace.** Reading a
   submodule's value (`linear_attn.in_proj_qkv.output`) and then a kernel value (`attention_queries`) raises
   `OutOfOrderError` naming an op at the top of the mixer's forward (`apply_mask_to_padding_states_0`): the kernel

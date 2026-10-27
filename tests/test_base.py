@@ -367,6 +367,28 @@ def test_cached_call_with_several_tokens_reads_the_prompts_kernel():
     assert queries.shape[1] == 2 and carried is not None
 
 
+def test_a_one_token_call_reads_its_kernel_off_the_cached_state():
+    """`KERNEL` is the forward's own test, one token *over a cached state*: a one-token prompt runs the prompt's kernel
+    (no state yet) and one token over a cache the recurrent one. The state is read as the forward binds it, the bool
+    `use_precomputed_states` through transformers 5.20 or the state it fetches from its cache from 5.21."""
+    model = StandardizedTransformer("yujiepan/qwen3-next-moe-tiny-random", dispatch=True)
+    mix = next(block.linear_attn for block in model.layers if hasattr(block._module, "linear_attn"))
+    ids = model.tokenizer("Hello world there", return_tensors="pt").input_ids.to(model._module.device)
+    kernels = []                                    # bound outside the traces: a name bound inside does not survive one
+    with model.trace(ids[:, :1]):                   # one token, no cached state yet
+        kernels.append(type(mix).KERNEL(mix))
+        queries = mix.attention_queries.save()
+        entering = mix.state_input.save()
+    assert kernels == [mix.CHUNK_KERNEL] and queries.shape[1] == 1 and entering is None
+    with torch.no_grad():
+        cache = model._module(ids, use_cache=True).past_key_values
+    with model.trace(ids[:, -1:], past_key_values=cache, use_cache=True):   # one token over the cached state
+        kernels.append(type(mix).KERNEL(mix))
+        queries = mix.attention_queries.save()
+        entering = mix.state_input.save()
+    assert kernels[1] == mix.RECURRENT_KERNEL and queries.shape[1] == 1 and entering is not None
+
+
 def test_support_with_a_module_another_block_owns():
     """A block holding a module owned by another block (shared weights): its aliases are read off their own bindings."""
     from transformers import AutoModelForCausalLM, AutoTokenizer

@@ -217,13 +217,13 @@ The base of a recurrent mixer's envoy (`nnterp/components/recurrent.py`): how it
 
 | Constant | Default | What |
 |---|---|---|
-| `BRANCH` | `"use_precomputed_states_0"` | The binding the forward makes before it branches: `True` when the call continues from a cached state. |
+| `BRANCH` | `("use_precomputed_states_0", "cache_params_get_recurrent_state_0")` | The ops whose value says whether the call continues from a cached state, whichever of them the forward binds before it branches: the bool `use_precomputed_states` through transformers 5.20, the state the forward fetches from its cache (or `None`) from 5.21. |
 | `SEQ_OP` | `"apply_mask_to_padding_states_0"` | The forward's masking of its input, once per call on every mixer: `[batch, seq, ...]`, the call's length. |
 | `CHUNK_KERNEL` | `None` | The call a prompt runs through. |
 | `RECURRENT_KERNEL` | `None` | The call each decode step of `generate` runs through. |
 | `STATE_OP` | `None` | Inside the token-by-token kernel, the binding of the state after each token's update; `None` when the kernels do not materialize it, and then `state`, `states`, `state_after` and `set_state_after` are unavailable. |
 | `STEP_STATE_OP` | `None` | Set when the decode kernel is a single-step update rather than the token loop (Mamba-1): the binding of the new state inside it. The prompt's kernel is then the token loop, and `route_kernels(..., "torch")` binds each name to its own pure-torch function. |
-| `KERNEL` | a `staticmethod` of the base | Whichever kernel fires on this call, by the forward's own test (`use_precomputed_states and seq_len == 1`), decided once per call (`per_call`): `RECURRENT_KERNEL` when `BRANCH` is true and the sequence axis at `SEQ_OP` is 1, `CHUNK_KERNEL` otherwise, a prompt or several tokens over a cached state. The two bindings are read in the order the forward makes them. |
+| `KERNEL` | a `staticmethod` of the base | Whichever kernel fires on this call, by the forward's own test, one token over a cached state (`use_precomputed_states and seq_len == 1` through transformers 5.20, `recurrent_state is not None and seq_len == 1` from 5.21), decided once per call (`per_call`): `RECURRENT_KERNEL` when the `BRANCH` op the forward has holds a cached state (neither `None` nor `False`) and the sequence axis at `SEQ_OP` is 1, `CHUNK_KERNEL` otherwise, a prompt or several tokens over a cached state. The two ops are read in the order the forward makes them. From 5.21 a run with `use_cache=False` serves no kernel value: the forward fetches no state, so the read parks on an op the run never reaches. |
 
 | Value | Layout | Location | Assignable | Availability |
 |---|---|---|---|---|

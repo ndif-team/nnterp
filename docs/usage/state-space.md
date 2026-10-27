@@ -240,9 +240,11 @@ raises `Unavailable` with the reason.
 
 A prompt runs `mamba2_chunk_scan`, and each decode step of `generate` runs
 `mamba2_selective_state_update`, which takes its arguments in other places and
-has no sequence axis. The forward decodes when `use_precomputed_states and
-seq_len == 1`; the values read that binding and the call's length once per
-call and select from the kernel that fires, and a decode step's tensors are
+has no sequence axis. The forward decodes for one token over a cached state
+(`use_precomputed_states and seq_len == 1` through transformers 5.20,
+`recurrent_state is not None and seq_len == 1` from 5.21); the values read
+that cached-state op and the call's length once per call and select from the
+kernel that fires, and a decode step's tensors are
 served with a sequence axis of 1. So the same value works in a `trace` and at
 every step of `tracer.iter`, and the state hands off:
 
@@ -290,9 +292,14 @@ them.
 
 - **A mixer's submodule and its kernel values do not mix in one trace.** Reading a
   submodule's value (`linear_attn.in_proj.output`) and then a kernel value (`betas`) raises
-  `OutOfOrderError` naming an op at the top of the mixer's forward (`use_precomputed_states_0`): the kernel
+  `OutOfOrderError` naming an op at the top of the mixer's forward (the cached-state op the kernel choice reads:
+  `use_precomputed_states_0` through transformers 5.20, `cache_params_get_recurrent_state_0` from 5.21): the kernel
   values look up that op to see which kernel runs, and the submodule read has already
   passed it. The other order is out of forward order too. Read them in separate traces.
+- **From transformers 5.21 a run without a cache (`use_cache=False`) serves no kernel value.** The forward
+  fetches its cached state only when it receives a cache, and the kernel choice reads that fetch, so a read inside
+  the mixer parks on `cache_params_get_recurrent_state_0` and the run ends with `OutOfOrderError` naming it. Leave
+  `use_cache` on (the default) for anything inside the mixer.
 - **Route before the layer is traced**, with the family module before loading
   (`nnterp.families.mamba2`) or `model.family` after; see
   [recurrent-mixer-internals.md](../developing/recurrent-mixer-internals.md).
@@ -313,7 +320,8 @@ them.
   call `chunk_per_token(model, False)`.
 - **`state_input` is `None` on a fresh prompt.** Save it only when it is not.
 - **A prompt run with `use_cache=False` returns no final state**: `state_output`
-  raises `Unavailable` there.
+  raises `Unavailable` there through transformers 5.20; from 5.21 such a run serves
+  no kernel value at all (above).
 - **Falcon-H1 with `mamba_rms_norm` off** passes the gate into the decode
   kernel, so a decode step's `attention_head_outputs` is gated by `silu(z)`
   where a prompt's is not. That is Falcon-H1-0.5B and the Falcon-H1-Tiny checkpoints

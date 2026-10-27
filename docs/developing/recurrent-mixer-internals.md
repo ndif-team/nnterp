@@ -87,38 +87,53 @@ already consumed, and the read would dangle.
 
 ## Two kernels, one test
 
-The mixer's forward binds `use_precomputed_states` before it branches
-(`modeling_qwen3_5.py:561-563`), then calls
-`torch_recurrent_gated_delta_rule(...)` when it has a cached state and one
-token (`:625-637`) and `torch_chunk_gated_delta_rule(...)` otherwise
-(`:638-650`). Both take `(query, key, value, g=, beta=, initial_state=, ...)`
-and return `(core_attn_out, last_recurrent_state)`. nnsight names them
-`torch_recurrent_gated_delta_rule_0` and `torch_chunk_gated_delta_rule_0`,
-and the binding `use_precomputed_states_0` (a binding is an op,
-nnsight `source.py:26-31`). The call's length is the sequence axis of the
-masked input the forward binds once per call,
+The mixer's forward learns whether it continues from a cached state before
+it branches, then calls `torch_recurrent_gated_delta_rule(...)` when it does
+and the call is one token, and `torch_chunk_gated_delta_rule(...)` otherwise.
+Through transformers 5.20 it binds the bool `use_precomputed_states =
+cache_params is not None and cache_params.has_previous_state(self.layer_idx,
+state_idx=0)` (`modeling_qwen3_5.py:547-549` in 5.20) and tests `use_precomputed_states and
+seq_len == 1` (`:611`); from 5.21 it fetches the state itself under `if
+cache_params is not None:`, `recurrent_state =
+cache_params.get_recurrent_state(self.layer_idx, state_idx=0)` (None on a
+fresh prompt; `:550` in 5.21), and tests `recurrent_state is not None and
+seq_len == 1` (`:612`). Both kernels take `(query, key, value, g=, beta=,
+initial_state=, ...)` and return `(core_attn_out, last_recurrent_state)`.
+nnsight names them `torch_recurrent_gated_delta_rule_0` and
+`torch_chunk_gated_delta_rule_0`, and the cached-state op
+`use_precomputed_states_0` or `cache_params_get_recurrent_state_0` (a
+binding is an op, nnsight `source.py:26-31`). The call's length is the
+sequence axis of the masked input the forward binds once per call,
 `apply_mask_to_padding_states_0`.
 
-A subclass names these in class constants (`recurrent.py:296-309`):
+A subclass names these in class constants (`recurrent.py:308-323`):
 
 | constant | meaning | `LinearAttention` |
 |---|---|---|
-| `BRANCH` | the binding the forward makes before it branches, `True` when the call continues from a cached state | `"use_precomputed_states_0"` (the base's default) |
+| `BRANCH` | the ops whose value says whether the call continues from a cached state, whichever of them the forward binds before it branches: the bool `use_precomputed_states` (through transformers 5.20) or the state it fetches from its cache, the state or `None` (from 5.21) | `("use_precomputed_states_0", "cache_params_get_recurrent_state_0")` (the base's default) |
 | `SEQ_OP` | the forward's masking of its input, once per call: `[batch, seq, ...]`, the call's length | `"apply_mask_to_padding_states_0"` (the base's default) |
 | `CHUNK_KERNEL` | the call a prompt runs through | `"torch_chunk_gated_delta_rule_0"` |
 | `RECURRENT_KERNEL` | the call a decode step runs through | `"torch_recurrent_gated_delta_rule_0"` |
 | `STATE_OP` | inside the token-by-token kernel, the binding of the state after each token's update, or `None` | `"last_recurrent_state_3"` |
 | `STEP_STATE_OP` | set when the decode kernel is a single-step update, not the token loop: the binding of the new state inside it; the prompt's kernel is then the loop | `None` (Mamba-1: `"ssm_state_0"`) |
 
-- `KERNEL` (`:311-329`) is one `staticmethod` on the base, the same for
-  every mixer: the forward's own test, `use_precomputed_states and seq_len
-  == 1`. It reads `BRANCH` and `SEQ_OP` in the order the forward makes them
-  (sorted by each op's source line: the DeltaNet forward masks its input
-  before it binds the branch variable, the Mamba forwards after) and
-  returns `RECURRENT_KERNEL` when the call continues a cached state and has
-  one token, `CHUNK_KERNEL` otherwise: a prompt, or several tokens over a
-  cached state
-  (`tests/test_base.py::test_cached_call_with_several_tokens_reads_the_prompts_kernel`).
+- `KERNEL` (`:327-348`) is one `staticmethod` on the base, the same for
+  every mixer: the forward's own test, one token over a cached state
+  (`use_precomputed_states and seq_len == 1` through transformers 5.20,
+  `recurrent_state is not None and seq_len == 1` from 5.21). It reads the
+  `BRANCH` op the forward has (`present`, `:247-255`) and `SEQ_OP` in the
+  order the forward makes them (sorted by each op's source line: the
+  DeltaNet forward masks its input before it learns about the cached state,
+  the Mamba forwards after), takes a `BRANCH` value that is neither `None`
+  nor `False` as a cached state, and returns `RECURRENT_KERNEL` when the
+  call continues a cached state and has one token, `CHUNK_KERNEL`
+  otherwise: a prompt, or several tokens over a cached state
+  (`tests/test_base.py::test_cached_call_with_several_tokens_reads_the_prompts_kernel`,
+  `::test_a_one_token_call_reads_its_kernel_off_the_cached_state`). From
+  5.21 the forward fetches the state only when it receives a cache, so a
+  run with `use_cache=False` serves no kernel value: the read parks on
+  `cache_params_get_recurrent_state_0`, which that run never reaches, and
+  the run ends with `OutOfOrderError` naming it.
   Being a `staticmethod`, `type(self).KERNEL(self)` and
   `self.KERNEL(self)` are the same call.
 - `kernel(attribute)` (`:247-254`) is the key function every
@@ -364,12 +379,15 @@ transformers' Mamba mixer (`models/mamba/modeling_mamba.py`; Falcon-Mamba's
 and Jamba's are copies in their own modules) computes `dt`, `B`, `C` from the
 conv output and calls `mamba_selective_scan(x, dt, A, B, C, D=, z=,
 delta_bias=, ...)` on a prompt, `mamba_selective_state_update(state, x, dt,
-A, B, C, D, z=, dt_bias=, ...)` when `use_precomputed_states and seq_len ==
-1`. Both are decorated with the same hub dispatcher over `mamba_ssm`. Four
+A, B, C, D, z=, dt_bias=, ...)` for one token over a cached state
+(`use_precomputed_states and seq_len == 1` through transformers 5.20,
+`recurrent_state is not None and seq_len == 1` from 5.21). Both are
+decorated with the same hub dispatcher over `mamba_ssm`. Four
 things differ from the DeltaNet, and each is handled where it arises:
 
-- **The bindings come in the other order.** The forward binds
-  `use_precomputed_states_0` before it masks its input
+- **The bindings come in the other order.** The forward learns about the
+  cached state (`use_precomputed_states_0` through transformers 5.20,
+  `cache_params_get_recurrent_state_0` from 5.21) before it masks its input
   (`apply_mask_to_padding_states_0`), the reverse of the DeltaNet's. The
   base's `KERNEL` reads the two sorted by source line, so `SelectiveScan`
   declares no `KERNEL` of its own and names the decode kernel only when the
@@ -428,12 +446,14 @@ step's `(op, first, seq)`, not step 0's, and so does one whose first read is
 mixer on `mamba2`, `nemotron_h`, `bamba` and `falcon_h1`. Every one of these
 modeling files carries the same copy of transformers' Mamba-2 code, so one
 class serves them. The kernel choice is the base's: the forward decodes
-through `mamba2_selective_state_update` when `use_precomputed_states and
-seq_len == 1` and runs `mamba2_chunk_scan` otherwise, so a cached call over
-several tokens takes the chunk scan, and `KERNEL` reads the binding
-`use_precomputed_states_0` and the call's length off `SEQ_OP`
-(`apply_mask_to_padding_states_0`, the first op after the binding on both
-paths) once per call. The length is read inside the forward, not off the
+through `mamba2_selective_state_update` for one token over a cached state
+(`use_precomputed_states and seq_len == 1` through transformers 5.20,
+`recurrent_state is not None and seq_len == 1` from 5.21) and runs
+`mamba2_chunk_scan` otherwise, so a cached call over several tokens takes
+the chunk scan, and `KERNEL` reads the cached-state op
+(`use_precomputed_states_0`, or `cache_params_get_recurrent_state_0` from
+5.21) and the call's length off `SEQ_OP` (`apply_mask_to_padding_states_0`,
+the first op after it on both paths) once per call. The length is read inside the forward, not off the
 mixer's `.input`, so a user's read of `linear_attn.input` earlier in the
 step is not passed, and a step whose first read is `linear_attn.input`
 decides its own kernel

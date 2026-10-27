@@ -1,0 +1,441 @@
+<!doctype html>
+<html lang="en" style="--c1: #D692BF; --c2: #6FBE95; --c3: #E1957A; --c4: #B9AC5F; --c5: #79B0E8; --c1-deep: #884B75; --c2-deep: #1F744F; --c3-deep: #924D35; --c4-deep: #71640B; --c5-deep: #32669A; --paper: #F1E6CB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Helium · nnterp encyclopedia</title>
+<meta name="description" content="Llama&#39;s block, with one key/value head per query head and a rotary embedding that turns adjacent pairs of dimensions (2i, 2i + 1) rather than i with i + head_dim / 2.">
+<link rel="icon" type="image/svg+xml" href="static/favicon.svg">
+<link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%23D692BF%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%236FBE95%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23E1957A%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23B9AC5F%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%2379B0E8%27/%3E%3C/svg%3E">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Albert+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/encyclopedia.css">
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<header class="masthead frame">
+  <a class="micro-lg brand" href="index.html">nnterp · encyclopedia</a>
+  <span class="mono masthead-right">helium · nnterp.families.helium</span>
+</header>
+<section class="hero frame">
+  <div class="hero-text">
+    <p class="micro-lg eyebrow">family <span class="mono">helium</span></p>
+    <h1 class="disp-title"><span class="line">Helium</span></h1>
+    <p class="subtitle">Llama&#39;s block, with one key/value head per query head and a rotary embedding that turns adjacent pairs of dimensions (2i, 2i + 1) rather than i with i + head_dim / 2.</p>
+    <div class="pane" data-pane="chips" data-ckpts="kyutai/helium-1-preview-2b"><div class="chips">
+<a class="chip" href="#notes" title="Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.">Interleaved rotary</a></div></div>
+  </div>
+  <aside class="hero-side">
+    <div class="petals" aria-hidden="true"><i class="p1"></i><i class="p2"></i><i class="p3"></i><i class="p4"></i><i class="p5"></i></div>
+<div class="ckpt" id="ckpt" data-selector>
+  <span class="micro ckpt-label" id="ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="ckpt-list" aria-labelledby="ckpt-label ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="ckpt-name">helium-1-preview-2b</span><span class="ckpt-eye ckpt-eye-current" id="ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="ckpt-list" role="listbox" tabindex="-1" aria-labelledby="ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-1">
+      <p class="micro ckpt-group-label" id="ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="ckpt-option-kyutai--helium-1-preview-2b" data-ckpt="kyutai/helium-1-preview-2b" data-name="helium-1-preview-2b"
+           aria-selected="true" title="kyutai/helium-1-preview-2b">
+        <span class="mono">helium-1-preview-2b</span>      </div>
+    </div>
+  </div>
+        <div class="pane" data-pane="hub" data-ckpts="kyutai/helium-1-preview-2b"><p class="ckpt-facts mono"><span><b>2.17B</b> parameters</span><span>released <b>Jan 2025</b></span></p></div>
+      <a class="ckpt-hub" id="ckpt-hub" href="https://huggingface.co/kyutai/helium-1-preview-2b" title="kyutai/helium-1-preview-2b on the Hugging Face Hub" aria-label="kyutai/helium-1-preview-2b on the Hugging Face Hub"><img class="hf" src="static/hf-logo.svg" alt="on the Hub" height="20"></a>
+
+</div>
+  </aside>
+</section>
+
+<div class="stickybar" id="stickybar" aria-hidden="true">
+  <div class="frame stickybar-row">
+    <span class="stickybar-title">Helium</span>
+<div class="ckpt" id="bar-ckpt" data-selector>
+  <span class="micro ckpt-label" id="bar-ckpt-label">checkpoint</span>
+  <button type="button" class="ckpt-button" id="bar-ckpt-button" aria-haspopup="listbox" aria-expanded="false" aria-controls="bar-ckpt-list" aria-labelledby="bar-ckpt-label bar-ckpt-button">
+    <span class="ckpt-current"><span class="mono-md ckpt-name" id="bar-ckpt-name">helium-1-preview-2b</span><span class="ckpt-eye ckpt-eye-current" id="bar-ckpt-eye" hidden><svg class="eye" viewBox="0 0 24 14" aria-hidden="true" focusable="false"><path d="M1.5 7C5 1.8 19 1.8 22.5 7 19 12.2 5 12.2 1.5 7Z"/><circle cx="12" cy="7" r="2.8"/></svg></span></span>
+    <span class="ckpt-caret" aria-hidden="true">▾</span>
+  </button>
+  <div class="ckpt-list" id="bar-ckpt-list" role="listbox" tabindex="-1" aria-labelledby="bar-ckpt-label" hidden>
+    <div class="ckpt-group" role="group" aria-labelledby="bar-ckpt-group-1">
+      <p class="micro ckpt-group-label" id="bar-ckpt-group-1">text</p>
+      <div class="ckpt-option" role="option" id="bar-ckpt-option-kyutai--helium-1-preview-2b" data-ckpt="kyutai/helium-1-preview-2b" data-name="helium-1-preview-2b"
+           aria-selected="true" title="kyutai/helium-1-preview-2b">
+        <span class="mono">helium-1-preview-2b</span>      </div>
+    </div>
+  </div>
+  
+</div>
+  </div>
+</div>
+
+<section class="frame section" id="block">
+  <div class="topbar"><h2 class="disp-section">The <em>block</em></h2><span class="micro">01 · the residual stream</span></div>
+  <div class="pane" data-pane="block_head" data-ckpts="kyutai/helium-1-preview-2b"><p class="lead">One block of the stack. Hover any part for its nnterp name; click to pin the card.
+</p>
+<div class="strip">
+  <div class="strip-node" data-node="strip.embed"><span class="mono role-stream">embed_tokens</span><small>token_embeddings</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node strip-layers" data-node="strip.layers"><span class="mono role-stream">layers</span><small>× 24</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.norm"><span class="mono role-norm">norm</span><small>final_norm_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.head"><span class="mono role-stream">lm_head</span><small>lm_head_output</small></div>
+  <span class="strip-arrow">→</span>
+  <div class="strip-node" data-node="strip.logits"><span class="mono role-stream">logits</span><small>the output</small></div>
+</div></div>
+
+  <div class="viz">
+    <div class="viz-panel">
+      <div class="slider-row">
+        <label class="micro" for="layer">block</label>
+        <input type="range" id="layer" min="0" max="23" value="0">
+        <span class="mono" id="layer-label">i = 0</span>
+        <span class="mono variant" id="layer-variant"></span>
+      </div>
+      <div class="ticks" id="ticks" aria-hidden="true"></div>
+      <svg id="block-svg" role="img" aria-label="The decoder block, as nnterp names it"></svg>
+    </div>
+    <aside class="card node-card" id="node-card">
+      <div class="topstrip"></div>
+      <div class="card-body">
+        <p class="micro eyebrow">hover a part</p>
+        <p class="body-md">Each box, edge and ⊕ names what nnterp calls it, where the value is read, and its layout.</p>
+      </div>
+    </aside>
+  </div>
+  <p class="identity" id="identity"><span class="micro">identity</span> <code><span class="n role-stream">layers</span><span class="p">[</span><span class="n">i</span><span class="p">]</span><span class="o">.</span><span class="n">input</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span> <span class="o">==</span> <span class="n role-stream">layer_output</span></code></p>
+  <div class="pane" data-pane="tower" data-ckpts="kyutai/helium-1-preview-2b"></div>
+</section>
+
+<section class="frame section" id="support">
+  <div class="topbar"><h2 class="disp-section">The <em>API</em></h2><span class="micro">02 · support()</span></div>
+  <h3 class="ttl-row">Values, by host</h3>
+  <div class="pane" data-pane="values" data-ckpts="kyutai/helium-1-preview-2b"><p class="body-md dim"><span class="warn">&#x26A0;&#xFE0E;</span> marks a value this checkpoint has only under some load: hover it for the condition.</p><div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model</span> <span class="mono dim">HeliumForCausalLM</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="strip.logits">
+    <span class="mono-md name role-stream">logits</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.embed">
+    <span class="mono-md name role-stream">token_embeddings</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The embedding module&#39;s output; layers[0].input is what enters the first block</span>
+    <span class="hide-sm body-md where"><p>the child module <code>embed_tokens</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.norm">
+    <span class="mono-md name role-stream">final_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the final norm, what lm_head reads</span>
+    <span class="hide-sm body-md where"><p>the child module <code>norm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="strip.head">
+    <span class="mono-md name role-stream">lm_head_output</span>
+    <span class="hide-sm mono">Logits <span class="dim">[batch seq vocab_size]</span></span>
+    <span class="body-md">The head&#39;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+    <span class="hide-sm body-md where"><p>the child module <code>lm_head</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">next_token_probs</span>
+    <span class="hide-sm mono">NextTokenProbs <span class="dim">[batch vocab_size]</span></span>
+    <span class="body-md">The next-token distribution at the last position; derived, read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_ids</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The token ids the model was called with</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">attention_mask</span>
+    <span class="hide-sm mono">Tokens <span class="dim">[batch seq]</span></span>
+    <span class="body-md">The attention mask the model was called with; zeros are padding</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">input_size</span>
+    <span class="hide-sm mono"><span class="dim">scalar</span></span>
+    <span class="body-md">[batch, seq] of the current call; read-only</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-stream">model.<wbr>layers[i]</span> <span class="mono dim">HeliumDecoderLayer</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="">
+    <span class="mono-md name role-stream">layer_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream entering the block</span>
+    <span class="hide-sm body-md where"><p>the module's own input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.attention_norm_output">
+    <span class="mono-md name role-stream">attention_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the attention</span>
+    <span class="hide-sm body-md where"><p>the child module <code>input_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.layer_mid">
+    <span class="mono-md name role-stream">layer_mid</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream after the attention add</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_norm_output">
+    <span class="mono-md name role-stream">mlp_norm_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The normed stream entering the MLP</span>
+    <span class="hide-sm body-md where"><p>the child module <code>post_attention_layernorm</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="boundary.mlp_input">
+    <span class="mono-md name role-stream">mlp_input</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP is called with</span>
+    <span class="hide-sm body-md where"><p>the child module <code>mlp</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="stream.output">
+    <span class="mono-md name role-stream">layer_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-attention">model.<wbr>layers[i].<wbr>self_attn</span> <span class="mono dim">HeliumAttention</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_queries">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_queries</span>
+    <span class="hide-sm mono">Queries <span class="dim">[batch num_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The queries entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 1</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_keys">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_keys</span>
+    <span class="hide-sm mono">Keys <span class="dim">[batch num_kv_heads seq qk_head_dim]</span></span>
+    <span class="body-md">The keys entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 2</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_values">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_values</span>
+    <span class="hide-sm mono">Values <span class="dim">[batch num_kv_heads seq head_dim]</span></span>
+    <span class="body-md">The values entering attention</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the arguments of <code>attention_interface_1</code>, element 3</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_scores">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_scores</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention scores entering the softmax, masked</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the input of <code>nn_functional_softmax_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_premix">
+    <span class="mono-md name role-attention">attention_premix</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">Every head&#39;s output side by side, as the output projection takes it</span>
+    <span class="hide-sm body-md where"><p>the child module <code>o_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.self_attn">
+    <span class="mono-md name role-attention">attention_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the attention adds to the residual stream</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_probabilities">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_probabilities</span>
+    <span class="hide-sm mono">Pattern <span class="dim">[batch num_heads query key]</span></span>
+    <span class="body-md">The attention pattern the values are mixed with</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>nn_functional_dropout_0</code> inside <code>attention_interface_1</code></p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.self_attn.attention_head_outputs">
+    <span class="mono-md name role-attention"><span class="warn" tabindex="0" data-tip="Needs attn_implementation=&#34;eager&#34;. every block: read inside the eager attention forward, but this model runs &#39;sdpa&#39;; load with attn_implementation=&#39;eager&#39;">&#x26A0;&#xFE0E;</span>attention_head_outputs</span>
+    <span class="hide-sm mono">HeadOutputs <span class="dim">[batch seq num_heads head_dim]</span></span>
+    <span class="body-md">The per-head outputs before the output projection</span>
+    <span class="hide-sm body-md where"><p>inside the forward: the output of <code>attention_interface_1</code>, element 0</p></span>
+  </div>
+</div>
+<div class="ledger values">
+  <div class="ledger-head"><span><span class="role-mlp">model.<wbr>layers[i].<wbr>mlp</span> <span class="mono dim">HeliumMLP</span></span><span class="hide-sm">layout</span><span>what it is</span><span class="hide-sm">read at</span></div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_activation">
+    <span class="mono-md name role-mlp">mlp_activation</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">The activation function&#39;s output</span>
+    <span class="hide-sm body-md where"><p>the child module <code>act_fn</code>'s output</p></span>
+  </div>
+  <div class="ledger-row" data-node="interior.mlp.mlp_neurons">
+    <span class="mono-md name role-mlp">mlp_neurons</span>
+    <span class="hide-sm mono">Neurons <span class="dim">[batch seq intermediate_size]</span></span>
+    <span class="body-md">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+    <span class="hide-sm body-md where"><p>the child module <code>down_proj</code>'s input</p></span>
+  </div>
+  <div class="ledger-row" data-node="contrib.mlp">
+    <span class="mono-md name role-mlp">mlp_output</span>
+    <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
+    <span class="body-md">What the MLP adds to the residual stream</span>
+    <span class="hide-sm body-md where"><p>the module's own output</p></span>
+  </div>
+</div></div>
+
+  <h3 class="ttl-row">Printout</h3>
+  <div class="pane" data-pane="printout" data-ckpts="kyutai/helium-1-preview-2b"><p class="body-md dim">What <span class="mono">print(model)</span> shows on <span class="mono">kyutai/helium-1-preview-2b</span>: the native modules, standard names and every standard value with its layout.</p>
+<pre class="repr"><code>HeliumForCausalLM(
+  <span class="rn role-stream">(lm_head)</span>: Linear<span class="rd">(in_features=2560, out_features=48000, bias=False)</span>
+  <span class="rn">(generator)</span>: Generator(
+    <span class="rn">(streamer)</span>: Streamer<span class="rd">()</span>
+  )
+  <span class="rn role-stream">(embed_tokens)</span>: Embedding<span class="rd">(48000, 2560, padding_idx=3)</span>
+  <span class="rn role-stream">(layers)</span>: ModuleList(
+    (0-23): 24 x HeliumDecoderLayer(
+      <span class="rn role-attention">(self_attn)</span>: HeliumAttention(
+        <span class="rn">(q_proj)</span>: Linear<span class="rd">(in_features=2560, out_features=2560, bias=False)</span>
+        <span class="rn">(k_proj)</span>: Linear<span class="rd">(in_features=2560, out_features=2560, bias=False)</span>
+        <span class="rn">(v_proj)</span>: Linear<span class="rd">(in_features=2560, out_features=2560, bias=False)</span>
+        <span class="rn">(o_proj)</span>: Linear<span class="rd">(in_features=2560, out_features=2560, bias=False)</span>
+        <span class="rn role-attention">(attention_queries)</span> -&gt; <span class="rl">Queries</span> <span class="rd">[batch num_heads seq qk_head_dim]</span>: <span class="rd">The queries entering attention</span>
+        <span class="rn role-attention">(attention_keys)</span> -&gt; <span class="rl">Keys</span> <span class="rd">[batch num_kv_heads seq qk_head_dim]</span>: <span class="rd">The keys entering attention</span>
+        <span class="rn role-attention">(attention_values)</span> -&gt; <span class="rl">Values</span> <span class="rd">[batch num_kv_heads seq head_dim]</span>: <span class="rd">The values entering attention</span>
+        <span class="rn role-attention">(attention_scores)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention scores entering the softmax, masked</span>
+        <span class="rn role-attention">(attention_premix)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">Every head&#x27;s output side by side, as the output projection takes it</span>
+        <span class="rn role-attention">(attention_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the attention adds to the residual stream</span>
+        <span class="rn role-attention">(attention_probabilities)</span> -&gt; <span class="rl">Pattern</span> <span class="rd">[batch num_heads query key]</span>: <span class="rd">The attention pattern the values are mixed with</span>
+        <span class="rn role-attention">(attention_head_outputs)</span> -&gt; <span class="rl">HeadOutputs</span> <span class="rd">[batch seq num_heads head_dim]</span>: <span class="rd">The per-head outputs before the output projection</span>
+      )
+      <span class="rn role-mlp">(mlp)</span>: HeliumMLP(
+        <span class="rn">(gate_proj)</span>: Linear<span class="rd">(in_features=2560, out_features=7040, bias=False)</span>
+        <span class="rn">(up_proj)</span>: Linear<span class="rd">(in_features=2560, out_features=7040, bias=False)</span>
+        <span class="rn">(down_proj)</span>: Linear<span class="rd">(in_features=7040, out_features=2560, bias=False)</span>
+        <span class="rn">(act_fn)</span>: SiLUActivation<span class="rd">()</span>
+        <span class="rn role-mlp">(mlp_activation)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">The activation function&#x27;s output</span>
+        <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
+        <span class="rn role-mlp">(mlp_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP adds to the residual stream</span>
+      )
+      <span class="rn role-norm">(input_layernorm)</span>: HeliumRMSNorm<span class="rd">((2560,), eps=1e-08)</span>
+      <span class="rn role-norm">(post_attention_layernorm)</span>: HeliumRMSNorm<span class="rd">((2560,), eps=1e-08)</span>
+      <span class="rn role-stream">(layer_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream entering the block</span>
+      <span class="rn role-stream">(attention_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the attention</span>
+      <span class="rn role-stream">(layer_mid)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the attention add</span>
+      <span class="rn role-stream">(mlp_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The normed stream entering the MLP</span>
+      <span class="rn role-stream">(mlp_input)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">What the MLP is called with</span>
+      <span class="rn role-stream">(layer_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream leaving the block, a tensor even when the block returns a tuple</span>
+    )
+  )
+  <span class="rn role-norm">(norm)</span>: HeliumRMSNorm<span class="rd">((2560,), eps=1e-08)</span>
+  <span class="rn role-stream">(logits)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The logits the model returns, after anything it does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(token_embeddings)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The embedding module&#x27;s output; layers[0].input is what enters the first block</span>
+  <span class="rn role-stream">(final_norm_output)</span> -&gt; <span class="rl">Residual</span> <span class="rd">[batch seq hidden_size]</span>: <span class="rd">The residual stream after the final norm, what lm_head reads</span>
+  <span class="rn role-stream">(lm_head_output)</span> -&gt; <span class="rl">Logits</span> <span class="rd">[batch seq vocab_size]</span>: <span class="rd">The head&#x27;s logits before anything the model does past lm_head (a softcap, a scale)</span>
+  <span class="rn role-stream">(next_token_probs)</span> -&gt; <span class="rl">NextTokenProbs</span> <span class="rd">[batch vocab_size]</span>: <span class="rd">The next-token distribution at the last position; derived, read-only</span>
+  <span class="rn role-stream">(input_ids)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The token ids the model was called with</span>
+  <span class="rn role-stream">(attention_mask)</span> -&gt; <span class="rl">Tokens</span> <span class="rd">[batch seq]</span>: <span class="rd">The attention mask the model was called with; zeros are padding</span>
+  (input_size): [batch, seq] of the current call; read-only
+)</code></pre></div>
+
+  <div class="pane" data-pane="config" data-ckpts="kyutai/helium-1-preview-2b"><div class="card">
+  <div class="topstrip"></div>
+  <div class="card-body">
+    <h3 class="card-name">Config</h3>
+    <div class="specs specs-cols">
+<div class="spec"><span>model.num_layers</span><span>24</span></div><div class="spec"><span>model.hidden_size</span><span>2560</span></div><div class="spec"><span>model.num_heads</span><span>20</span></div><div class="spec"><span>model.num_kv_heads</span><span>20</span></div><div class="spec"><span>model.head_dim</span><span>128</span></div><div class="spec"><span>model.qk_head_dim</span><span>128</span></div><div class="spec"><span>model.vocab_size</span><span>48000</span></div><div class="spec"><span>model.intermediate_size</span><span>7040</span></div>    </div>
+    <div class="dashed"></div>
+    <div class="specs specs-cols specs-dim">
+<div class="spec"><span>architectures</span><span>HeliumForCausalLM</span></div><div class="spec"><span>num_hidden_layers</span><span>24</span></div><div class="spec"><span>hidden_size</span><span>2560</span></div><div class="spec"><span>intermediate_size</span><span>7040</span></div><div class="spec"><span>num_attention_heads</span><span>20</span></div><div class="spec"><span>num_key_value_heads</span><span>20</span></div><div class="spec"><span>head_dim</span><span>128</span></div><div class="spec"><span>vocab_size</span><span>48000</span></div><div class="spec"><span>max_position_embeddings</span><span>4096</span></div><div class="spec"><span>hidden_act</span><span>silu</span></div><div class="spec"><span>rms_norm_eps</span><span>1e-08</span></div><div class="spec"><span>tie_word_embeddings</span><span>False</span></div><div class="spec"><span>dtype</span><span>bfloat16</span></div><div class="spec"><span>attention_bias</span><span>False</span></div>    </div>
+  </div>
+</div></div>
+</section>
+
+<section class="frame section" id="notes">
+  <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you run</span></div>
+  <div class="grid-notes">
+    <div class="prose"><h2>The block, in order</h2>
+<pre class="code"><code><span class="n">h</span>   <span class="o">=</span> <span class="n">x</span> <span class="o">+</span> <span class="n role-attention">self_attn</span><span class="p">(</span><span class="n role-norm">input_layernorm</span><span class="p">(</span><span class="n">x</span><span class="p">))</span>
+<span class="n">out</span> <span class="o">=</span> <span class="n">h</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="p">(</span><span class="n role-norm">post_attention_layernorm</span><span class="p">(</span><span class="n">h</span><span class="p">))</span>
+<span class="n role-mlp">mlp</span><span class="p">(</span><span class="n">z</span><span class="p">)</span> <span class="o">=</span> <span class="n">down_proj</span><span class="p">(</span><span class="n">silu</span><span class="p">(</span><span class="n">gate_proj</span><span class="p">(</span><span class="n">z</span><span class="p">))</span> <span class="o">*</span> <span class="n">up_proj</span><span class="p">(</span><span class="n">z</span><span class="p">))</span></code></pre>
+<p>Llama's block, names and SwiGLU MLP. The RMSNorms have <code>eps</code> 1e-8 and multiply by their gain in
+float32 before casting back to the input's dtype.</p>
+<h2>The contributions are the modules' outputs</h2>
+<p><code>attention_output</code> is <code>self_attn.output[0]</code> and <code>mlp_output</code> is <code>mlp.output</code>, added to the stream
+with nothing in between. The identity holds exactly in float32 on the pinned checkpoint:</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">x</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">input</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n role-mlp">mlp</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-mlp">mlp</span><span class="o">.</span><span class="n role-mlp">mlp_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+    <span class="n">out</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-stream">layer_output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">x</span> <span class="o">+</span> <span class="n">attn</span> <span class="o">+</span> <span class="n role-mlp">mlp</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span></code></pre>
+<h2>Rotary turns adjacent pairs</h2>
+<p>Helium's rotary pairs dimension <code>2i</code> with <code>2i + 1</code>: its <code>rotate_half</code> takes the even and odd
+dimensions, and <code>apply_rotary_pos_emb</code> repeats each frequency twice in a row (<code>repeat_interleave</code>)
+before rotating. Llama pairs <code>i</code> with <code>i + head_dim / 2</code>. The rotary turns the whole head, with
+<code>rope_theta</code> 100,000. <code>attention_queries</code> and
+<code>attention_keys</code> are read after the rotation; on the pinned checkpoint they equal the interleaved
+rotation of <code>q_proj.output</code> and <code>k_proj.output</code> exactly, and differ from the <code>rotate_half</code> one.
+Code written for a <code>rotate_half</code> family's queries needs the head reordered, evens then odds:</p>
+<pre class="code"><code><span class="n">hd</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">head_dim</span>
+<span class="n">perm</span> <span class="o">=</span> <span class="n">torch</span><span class="o">.</span><span class="n">cat</span><span class="p">([</span><span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">0</span><span class="p">,</span> <span class="n">hd</span><span class="p">,</span> <span class="mi">2</span><span class="p">),</span> <span class="n">torch</span><span class="o">.</span><span class="n">arange</span><span class="p">(</span><span class="mi">1</span><span class="p">,</span> <span class="n">hd</span><span class="p">,</span> <span class="mi">2</span><span class="p">)])</span>
+
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n">q</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span><span class="o">.</span><span class="n role-attention">attention_queries</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>
+
+<span class="n">q_half</span> <span class="o">=</span> <span class="n">q</span><span class="p">[</span><span class="o">...</span><span class="p">,</span> <span class="n">perm</span><span class="p">]</span>          <span class="c1"># in rotate_half&#39;s order</span></code></pre>
+<h2>One key/value head per query head</h2>
+<p>helium-1-preview-2b has 20 query heads and 20 key/value heads, each 128 wide, in a 2560-wide stream:
+<code>attention_keys</code> and <code>attention_values</code> are <code>[batch, 20, seq, 128]</code>, and an edit to head <code>j</code>
+reaches query head <code>j</code> alone. No projection has a bias.</p>
+<h2>The default load runs the same attention as eager</h2>
+<p>The six attention interior values need <code>attn_implementation="eager"</code>. There is no softcap,
+window or sink: on helium-1-preview-2b in float32 the default <code>sdpa</code> load's logits differ from
+the eager load's by at most <code>2e-5</code>.</p>
+<h2><code>&lt;s&gt;</code> at position 0 is the sink</h2>
+<p>The tokenizer prepends <code>&lt;s&gt;</code> (id 1) though <code>tokenizer.bos_token</code> is <code>None</code>, so code that tests
+<code>bos_token</code> to decide whether a BOS is present gets the wrong answer. On helium-1-preview-2b the
+stream at position 0 has a norm of 930 after block 10, against 9 to 12 at the other positions of a
+test prompt, and the heads of block 10 put on average 0.84 of their attention on it. Drop
+<code>[:, 1:]</code> before averaging over positions.</p>
+<h2>Target tokens carry the word marker</h2>
+<p>The tokenizer is SentencePiece: <code>"Paris"</code> encodes to <code>▁Paris</code> (2291), and <code>" Paris"</code> to two
+tokens, <code>▁</code> and <code>▁Paris</code>. After <code>"The Eiffel Tower is in the city of"</code> the model puts 0.986 on
+<code>▁Paris</code>. Take the target id from the word without its leading space:</p>
+<pre class="code"><code><span class="n">ids</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">tokenizer</span><span class="p">(</span><span class="s2">&quot;Paris&quot;</span><span class="p">,</span> <span class="n">add_special_tokens</span><span class="o">=</span><span class="kc">False</span><span class="p">)</span><span class="o">.</span><span class="n role-stream">input_ids</span>   <span class="c1"># [2291]</span></code></pre>
+<h2>The readout</h2>
+<p><code>model.logits</code> is <code>model.lm_head.output</code>: no cap and no scale, and <code>project_on_vocab</code> is
+<code>lm_head(norm(hidden))</code>. <code>lm_head</code> and <code>embed_tokens</code> are separate weights.</p>
+<h2>What loads as this family</h2>
+<p>Only <code>kyutai/helium-1-preview-2b</code> is <code>model_type</code> <code>helium</code>. Helium 1 (<code>kyutai/helium-1-2b</code> and its
+per-domain variants <code>-books</code>, <code>-wiki</code>, <code>-science</code> and the others) and <code>Sequential_Helium_6B</code> are
+<code>model_type</code> <code>llama</code> and load as the Llama family, with Llama's <code>rotate_half</code> rotary;
+<code>Helium1-VL-2B</code> is a remote-code architecture.</p></div>
+    <aside class="quirk-list">
+      <div class="pane" data-pane="quirk_list" data-ckpts="kyutai/helium-1-preview-2b"><p class="micro">quirks</p>
+<div class="quirk"><span class="chip">Interleaved rotary</span><p class="body-md">Rotary rotates adjacent pairs of dimensions (2i, 2i + 1), not i with i + rot/2 as rotate_half does, so a query or key head&#39;s dimensions pair up differently from a rotate_half family&#39;s. Where the attention rotates the even and odd slices (apply_rotary_pos_emb_interleave), the rotated queries and keys come out in rotate_half order, evens first.</p></div></div>
+    </aside>
+  </div>
+  <div class="pane" data-pane="vision_notes" data-ckpts="kyutai/helium-1-preview-2b"></div>
+</section>
+
+<section class="frame section" id="source">
+  <div class="topbar"><h2 class="disp-section">From the <em>family module</em></h2><span class="micro">04 · nnterp/families/helium.py</span></div>
+  <div class="grid-notes">
+    <div class="prose docstring"><p>Helium (<code>HeliumForCausalLM</code>).</p>
+<p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
+added in the block, attention through the shared eager forward.</p></div>
+    <aside class="quirk-list">
+      <p class="micro">sources</p>
+      <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/helium.py">nnterp/families/helium.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_helium.py">tests/families/test_helium.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
+      <p class="micro">envoys</p>
+      <p class="body-md mono">HeliumDecoderLayer → Layer<br>HeliumAttention → self_attn<br>HeliumMLP → mlp</p>
+      <div class="pane" data-pane="envoys" data-ckpts="kyutai/helium-1-preview-2b"></div>
+    </aside>
+  </div>
+</section>
+
+<script type="application/json" id="checkpoints-json">{"default": "kyutai/helium-1-preview-2b", "checkpoints": {"kyutai/helium-1-preview-2b": {"schema": {"topology": "sequential", "sublayers": [{"host": "self_attn", "kind": "attention", "label": "Attention", "detail": "20 heads \u00d7 128, interleaved rotary", "variants": {}, "pre_norm": "input_layernorm", "post_norm": null, "contribution": "attention_output", "interior": [{"name": "attention_queries", "short": "q"}, {"name": "attention_keys", "short": "k"}, {"name": "attention_values", "short": "v"}, {"name": "attention_scores", "short": "scores"}, {"name": "attention_probabilities", "short": "pattern"}, {"name": "attention_head_outputs", "short": "heads"}, {"name": "attention_premix", "short": "premix"}], "pre_norm_node": "boundary.attention_norm_output"}, {"host": "mlp", "kind": "mlp", "label": "MLP", "detail": "SwiGLU: 2560 \u2192 7040 \u2192 2560, silu", "variants": {}, "pre_norm": "post_attention_layernorm", "post_norm": null, "contribution": "mlp_output", "interior": [{"name": "mlp_activation", "short": "act"}, {"name": "mlp_neurons", "short": "neurons"}], "pre_norm_node": "boundary.mlp_norm_output", "input_node": "boundary.mlp_input"}], "identity": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "num_layers": 24, "layer_types": null, "mids": ["boundary.layer_mid"], "roles": {"self_attn": "attention", "mlp": "mlp"}}, "nodes": {"sub.self_attn": {"eyebrow": "Attention", "expr": "model.layers[i].self_attn", "desc": "HeliumAttention under its standard name. 20 heads \u00d7 128, interleaved rotary", "layout": null, "dims": null, "where": null, "condition": null, "extra": "8 standard values; `.input` is what the sublayer reads."}, "interior.self_attn.attention_queries": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_queries", "desc": "The queries entering attention", "layout": "Queries", "dims": "batch num_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 1", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_keys": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_keys", "desc": "The keys entering attention", "layout": "Keys", "dims": "batch num_kv_heads seq qk_head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 2", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_values": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_values", "desc": "The values entering attention", "layout": "Values", "dims": "batch num_kv_heads seq head_dim", "where": "inside the forward: the arguments of `attention_interface_1`, element 3", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_scores": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_scores", "desc": "The attention scores entering the softmax, masked", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the input of `nn_functional_softmax_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_probabilities": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_probabilities", "desc": "The attention pattern the values are mixed with", "layout": "Pattern", "dims": "batch num_heads query key", "where": "inside the forward: the output of `nn_functional_dropout_0` inside `attention_interface_1`", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_head_outputs": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_head_outputs", "desc": "The per-head outputs before the output projection", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "inside the forward: the output of `attention_interface_1`, element 0", "condition": {"kind": "eager", "reason": "every block: read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}, "extra": null}, "interior.self_attn.attention_premix": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].self_attn.attention_premix", "desc": "Every head's output side by side, as the output projection takes it", "layout": "HeadOutputs", "dims": "batch seq num_heads head_dim", "where": "the child module `o_proj`'s input", "condition": null, "extra": null}, "contrib.self_attn": {"eyebrow": "contribution", "expr": "model.layers[i].self_attn.attention_output", "desc": "What the attention adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.attention_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].attention_norm_output", "desc": "The normed stream entering the attention", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `input_layernorm`'s output", "condition": null, "extra": "`model.layers[i].input_layernorm`, a native module under its own name.", "role": "norm"}, "sub.mlp": {"eyebrow": "MLP", "expr": "model.layers[i].mlp", "desc": "HeliumMLP under its standard name. SwiGLU: 2560 \u2192 7040 \u2192 2560, silu", "layout": null, "dims": null, "where": null, "condition": null, "extra": "3 standard values; `.input` is what the sublayer reads."}, "interior.mlp.mlp_activation": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_activation", "desc": "The activation function's output", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `act_fn`'s output", "condition": null, "extra": null}, "interior.mlp.mlp_neurons": {"eyebrow": "inside the sublayer", "expr": "model.layers[i].mlp.mlp_neurons", "desc": "What the down projection receives: act(gate)\u00b7up on a gated MLP, the activation itself otherwise", "layout": "Neurons", "dims": "batch seq intermediate_size", "where": "the child module `down_proj`'s input", "condition": null, "extra": null}, "contrib.mlp": {"eyebrow": "contribution", "expr": "model.layers[i].mlp.mlp_output", "desc": "What the MLP adds to the residual stream", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.mlp_norm_output": {"eyebrow": "pre-norm", "expr": "model.layers[i].mlp_norm_output", "desc": "The normed stream entering the MLP", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `post_attention_layernorm`'s output", "condition": null, "extra": "`model.layers[i].post_attention_layernorm`, a native module under its own name. Named for its place on the stream, after the attention's add: it is the MLP's input norm.", "role": "norm"}, "boundary.mlp_input": {"eyebrow": "the sublayer's input", "expr": "model.layers[i].mlp_input", "desc": "What the MLP is called with", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `mlp`'s input", "condition": null, "extra": null}, "stream.input": {"eyebrow": "residual stream", "expr": "model.layers[i].input", "desc": "The residual stream entering the block, a plain tensor on every family.", "layout": "Residual", "dims": "batch seq hidden_size", "where": null, "condition": null, "extra": null}, "stream.output": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_output", "desc": "The residual stream leaving the block, a tensor even when the block returns a tuple", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the module's own output", "condition": null, "extra": null}, "boundary.layer_mid": {"eyebrow": "residual stream", "expr": "model.layers[i].layer_mid", "desc": "The residual stream after the attention add", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `post_attention_layernorm`'s input", "condition": null, "extra": null}, "plus": {"eyebrow": "the add", "expr": "layers[i].input + self_attn.attention_output + mlp.mlp_output == layer_output", "desc": "The contribution identity that nnterp's test suite checks on this family.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.embed": {"eyebrow": "embeddings", "expr": "model.token_embeddings", "desc": "The embedding module's output; layers[0].input is what enters the first block", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `embed_tokens`'s output", "condition": null, "extra": "A plain lookup: token_embeddings equals layers[0].input. The tokenizer prepends <s> (id 1), though its bos_token is None."}, "strip.layers": {"eyebrow": "the blocks", "expr": "model.layers", "desc": "24 blocks of HeliumDecoderLayer; the diagram below shows any one of them.", "layout": null, "dims": null, "where": null, "condition": null, "extra": null}, "strip.norm": {"eyebrow": "final norm", "expr": "model.final_norm_output", "desc": "The residual stream after the final norm, what lm_head reads", "layout": "Residual", "dims": "batch seq hidden_size", "where": "the child module `norm`'s output", "condition": null, "extra": "`model.norm`, the final norm under its standard name. RMSNorm whose gain is norm.weight as stored, applied in float32; eps is 1e-8."}, "strip.head": {"eyebrow": "unembedding", "expr": "model.lm_head_output", "desc": "The head's logits before anything the model does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the child module `lm_head`'s output", "condition": null, "extra": "`model.lm_head`, the projection onto the vocabulary. lm_head has its own weight (tie_word_embeddings is false). logits is lm_head.output, with no cap or scale."}, "strip.logits": {"eyebrow": "logits", "expr": "model.logits", "desc": "The logits the model returns, after anything it does past lm_head (a softcap, a scale)", "layout": "Logits", "dims": "batch seq vocab_size", "where": "the module's own output", "condition": null, "extra": null}}, "identity_html": "<span class=\"n role-stream\">layers<\/span><span class=\"p\">[<\/span><span class=\"n\">i<\/span><span class=\"p\">]<\/span><span class=\"o\">.<\/span><span class=\"n\">input<\/span> <span class=\"o\">+<\/span> <span class=\"n role-attention\">self_attn<\/span><span class=\"o\">.<\/span><span class=\"n role-attention\">attention_output<\/span> <span class=\"o\">+<\/span> <span class=\"n role-mlp\">mlp<\/span><span class=\"o\">.<\/span><span class=\"n role-mlp\">mlp_output<\/span> <span class=\"o\">==<\/span> <span class=\"n role-stream\">layer_output<\/span>", "tower": null, "architecture": "HeliumForCausalLM", "url": "https://huggingface.co/kyutai/helium-1-preview-2b"}}}</script>
+<footer class="colophon frame">
+  <div class="rule"></div>
+  <div class="colophon-row">
+    <span class="micro">nnterp encyclopedia</span>
+    <span class="mono">built 2026-10-21 · nnterp 1.3.1.dev428+gf5e97f4de · transformers 5.20.2 · reference <span id="colophon-reference">kyutai/helium-1-preview-2b</span></span>
+  </div>
+</footer>
+<script src="static/encyclopedia.js"></script>
+<script src="static/block.js"></script></body>
+</html>

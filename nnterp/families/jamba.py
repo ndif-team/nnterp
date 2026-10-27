@@ -22,11 +22,12 @@ With ``mamba_ssm`` installed, call ``nnterp.route_kernels(model.family,
 "torch")`` before the first trace.
 """
 
+import torch
 from transformers.models.jamba.modeling_jamba import (
     JambaAttention, JambaAttentionDecoderLayer, JambaMambaDecoderLayer, JambaMambaMixer, JambaMLP, JambaSparseMoeBlock,
 )
 
-from ..components import Attention, Layer, Mlp, Moe, RouterLogits, SelectiveScan, TokenEProperty
+from ..components import LOGITS, Attention, Layer, Mlp, Moe, RouterLogits, SelectiveScan, TokenEProperty, mixture_reason
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -54,14 +55,25 @@ class Mlp(Mlp):
     """Jamba's dense MLP or sparse mixture of experts; both return the hidden states, added in the block."""
 
 
-class Moe(Moe, Mlp):
-    """Jamba's mixture of experts: the router is a bare ``nn.Linear``, whose output is the logits.
+def router_is_linear(moe) -> bool:
+    """Whether the router is a bare ``nn.Linear`` (transformers through 5.20), whose output is the logits; from 5.21 it is a
+    ``JambaTopKRouter`` whose forward computes them, the base's pattern."""
+    return isinstance(moe.router._module, torch.nn.Linear)
 
-    The mixture's ``route_tokens_to_experts`` method takes a softmax top-k of
-    them, without renormalizing.
+
+class Moe(Moe, Mlp):
+    """Jamba's mixture of experts: a softmax top-k of the router's logits, the selected weights left unnormalized.
+
+    The router is a bare ``nn.Linear`` through transformers 5.20, so its output is the
+    logits; from 5.21 it is a ``JambaTopKRouter`` and the logits are the ``F.linear`` inside
+    its forward, as on every other mixture.
     """
 
-    @TokenEProperty("router.output", description=Moe.router_logits.description)
+    @TokenEProperty(
+        lambda moe: "router.output" if router_is_linear(moe) else f"router.source.{LOGITS}.output",
+        description=Moe.router_logits.description,
+        unavailable=mixture_reason,
+    )
     def router_logits(self, value) -> RouterLogits:
         return value
 

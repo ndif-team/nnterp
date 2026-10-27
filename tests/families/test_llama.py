@@ -130,9 +130,10 @@ class TestIdefics3Vision(VisionSuite):
 
 
 @pytest.mark.skipif(
-    Version(transformers.__version__) >= Version("5.20"),
+    Version("5.20") <= Version(transformers.__version__) < Version("5.21"),
     reason="transformers 5.20 reshapes SmolVLM's image features by vision_config.patch_size instead of the features per "
-    "image (inputs_merger), which fails whenever the two differ, as on this checkpoint (81 features a tile, patch size 14)",
+    "image (inputs_merger), which fails whenever the two differ, as on this checkpoint (81 features a tile, patch size 14); "
+    "5.21 fixed it",
 )
 class TestSmolVLMVision(TestIdefics3Vision):
     """SmolVLM: Idefics 3's layout."""

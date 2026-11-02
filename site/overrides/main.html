@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+
+{% block content %}
+  {% if page.meta.markdown_url %}
+  <div class="nn-page-actions">
+    <button class="nn-copy-md" type="button" data-markdown="{{ page.meta.markdown_url | url }}" title="Copy this page as Markdown">Copy page</button>
+    <a class="nn-view-md" href="{{ page.meta.markdown_url | url }}" title="This page as Markdown">View as Markdown</a>
+  </div>
+  {% endif %}
+  {{ super() }}
+{% endblock %}

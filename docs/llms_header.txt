@@ -1,6 +1,0 @@
-# nnterp | Documentation
-
-## Overview
-
-nnterp is a nnsight wrapper for transformer models providing a standardized interface across architectures. Uses HuggingFace implementations via nnsight for model compatibility. Includes common interventions like logit lens, patchscope, and steering.
-

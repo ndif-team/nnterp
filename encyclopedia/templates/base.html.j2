@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en" style="{{ palette.css }}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}nnterp encyclopedia{% endblock %}</title>
+<meta name="description" content="{% block description %}How each transformer family looks through nnterp's standard names and values.{% endblock %}">
+<link rel="icon" type="image/svg+xml" href="static/favicon.svg">
+<link rel="icon" type="image/svg+xml" sizes="any" href="{{ palette.icon }}">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@700;900&family=Albert+Sans:wght@400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="static/encyclopedia.css">
+</head>
+<body>
+<div class="grain" aria-hidden="true"></div>
+<header class="masthead frame">
+  <a class="micro-lg brand" href="index.html">nnterp · encyclopedia</a>
+  <span class="mono masthead-right">{% block masthead_right %}{% endblock %}</span>
+</header>
+{% block body %}{% endblock %}
+<footer class="colophon frame">
+  <div class="rule"></div>
+  <div class="colophon-row">
+    <span class="micro">nnterp encyclopedia</span>
+    <span class="mono">{% block colophon %}built {{ built }}{% endblock %}</span>
+  </div>
+</footer>
+<script src="static/encyclopedia.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

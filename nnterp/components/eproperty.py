@@ -4,13 +4,16 @@ An `EProperty` is nnsight's ``eproperty`` with two additions: availability
 (`Unavailable`, ``unavailable=``) and a *path* for a key, so one descriptor
 serves a value wherever it lives: on the host module, on another module named
 relative to it, or at an operation inside a forward. `DerivedEProperty`
-computes one from several served values."""
+computes one from several served values. On a model split tensor-parallel, a
+value split by head or neuron is reassembled on read and split back on write
+(`EProperty.piece_axis`)."""
 
 from __future__ import annotations
 
 from functools import partial
 from typing import Any, Callable
 
+import torch
 from nnsight.intervention.envoy import Envoy
 from nnsight.intervention.eproperty import WriteBack, eproperty
 from nnsight.intervention.interleaver import Mediator
@@ -266,7 +269,8 @@ class EProperty(eproperty):
         self._check(obj)
         key = self.path(obj)
         location = self._resolve(obj, key)
-        if self._transform is not None:
+        mesh = tensor_parallel_mesh(obj)
+        if self._transform is not None or mesh is not None:
             # A write-back bound by an earlier read of this value is still
             # waiting: the view it holds is this read's value too, so an edit to
             # either is the edit that goes back (nnsight's eproperty does the same).
@@ -280,7 +284,19 @@ class EProperty(eproperty):
         value = self._pick(self.attribute(key), raw, select)
         if self._preprocess is not None:
             value = self._preprocess(obj, value)
-        if self._transform is not None:
+        axis = self.piece_axis(obj, value, mesh) if mesh is not None else None
+        if axis is not None:
+            from nnsight.modeling.tp import gather
+
+            value = gather(obj.root, value, dim=axis)
+            if torch.is_grad_enabled():
+                # A gather's output is a collective's, which torch will not edit
+                # in place with the graph live; the clone is what an edit lands on.
+                value = value.clone()
+            mediator.transform = WriteBack(
+                partial(self._split_back, obj, value, raw, axis, key, select), value, self, location, occurrence,
+            )
+        elif self._transform is not None:
             # Bound now so the user's in-place edits on the returned view are in
             # it when the worker next moves on and flushes it (nnsight's
             # eproperty does the same); the raw served value rides along for a
@@ -290,15 +306,95 @@ class EProperty(eproperty):
 
     def __set__(self, obj: Envoy, value: Any) -> None:
         self._check(obj)
-        if self._postprocess is not None:
-            value = self._postprocess(obj, value)
         key = self.path(obj)
         location = self._resolve(obj, key)
         attribute = self.attribute(key)
         select = self._selection(obj)
+        mesh = tensor_parallel_mesh(obj)
+        axis = self.split_axis if mesh is not None else None
+        current = Mediator.value(location) if axis is not None or select is not None or attribute == "input" else None
+        if axis is not None:
+            # Whether the location holds one rank's piece, judged as a read would judge it.
+            held = self._pick(attribute, current, select)
+            if self._preprocess is not None:
+                held = self._preprocess(obj, held)
+            if self.piece_axis(obj, held, mesh) is not None:
+                from nnsight.modeling.tp import shard
+
+                value = shard(obj.root, value, dim=axis)
+        Mediator.swap(location, self._packed(obj, attribute, current, value, select))
+
+    def _packed(self, obj: Envoy, attribute: str, current: Any, value: Any, select: Any) -> Any:
+        """``value`` in the location's form: postprocessed, and put back into ``current`` where it is one element."""
+        if self._postprocess is not None:
+            value = self._postprocess(obj, value)
         if select is not None or attribute == "input":
-            value = self._put(attribute, Mediator.value(location), value, select)
-        Mediator.swap(location, value)
+            value = self._put(attribute, current, value, select)
+        return value
+
+    # -- tensor parallelism ---------------------------------------------------------
+    # nnsight reassembles a sharded module's own input and output, but not what
+    # lies between two sharded modules: the attention interior (the heads are
+    # split from the query projection to the output projection) and an MLP's
+    # activation (split from the gate to the down projection). Each rank holds
+    # its piece there. These values name that axis in their layout, and nnsight's
+    # `gather` and `shard` take it, so a read hands every rank the whole value and
+    # a write hands each rank its piece of the whole it was given.
+
+    @property
+    def split_axis(self) -> int | None:
+        """The index of the layout axis tensor parallelism splits (heads, key/value heads, neurons), or ``None``."""
+        from .standard import HEADS, INTERMEDIATE, KV_HEADS
+
+        return next((i for i, axis in enumerate(self.dims or ()) if axis in (HEADS, KV_HEADS, INTERMEDIATE)), None)
+
+    def piece_axis(self, obj: Envoy, value: Any, mesh: Any) -> int | None:
+        """The axis ``value`` is one rank's piece along, or ``None`` when it is whole.
+
+        A value the model splits arrives ``1/tp`` as wide as the module's size
+        along `split_axis`; one nnsight reassembled (a sharded module's own input
+        or output, such as ``o_proj.input``) arrives whole. The shapes are the
+        same on every rank, so every rank takes the same branch and reaches the
+        same collectives.
+        """
+        axis = self.split_axis
+        if axis is None or not isinstance(value, torch.Tensor):
+            return None
+        from .standard import axis_size
+
+        whole = axis_size(obj, self.dims[axis])
+        size = value.shape[axis]
+        if size == whole:
+            return None
+        if size * mesh.size() == whole:
+            return axis
+        raise RuntimeError(
+            f"{obj.path}.{self.name} has {size} along {self.dims[axis]} on this rank, which is neither the "
+            f"module's {whole} nor its {whole // mesh.size()} per rank at tp={mesh.size()}"
+        )
+
+    def _split_back(self, obj: Envoy, whole: torch.Tensor, raw: Any, axis: int, key: str, select: int | str | None) -> Any:
+        """What a gathered read swaps back: this rank's piece of ``whole``, in the location's own form."""
+        from nnsight.modeling.tp import shard
+
+        piece = shard(obj.root, whole, dim=axis)
+        if self._transform is not None:
+            return self._transform(obj, piece, raw)
+        return self._packed(obj, self.attribute(key), raw, piece, select)
+
+
+def tensor_parallel_mesh(obj: Envoy) -> Any:
+    """The device mesh ``obj``'s model is split over tensor-parallel, or ``None``.
+
+    transformers keeps it on the root module of a model it sharded; any other
+    model (one device, vLLM, a model loaded without ``distributed_config``)
+    has none, and costs one attribute read.
+    """
+    if getattr(obj.root._module, "_device_mesh", None) is None:
+        return None
+    from nnsight.modeling.tp import device_mesh
+
+    return device_mesh(obj.root)
 
 
 def layout_name(layout: Any) -> str:

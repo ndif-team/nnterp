@@ -88,6 +88,10 @@ print(mask)
 
 `family=` gives one load its family without reading the config or the registry: a module, or any object with `RENAME` and `ENVOYS` such as `types.SimpleNamespace(**vars(gpt2))`. To cover a `model_type` for every load, register the family instead ([Registering](../developing/registering.md)).
 
+### `distributed_config=`
+
+`distributed_config=DistributedConfig(tp_size=N)` (from `transformers.distributed`), launched with `torchrun`, splits the model across N GPUs tensor-parallel; it needs transformers 5.19 or later. The values read whole, the same on every rank. nnsight reassembles a split module's own input and output, and where a GPU holds only a share of the heads or neurons (the attention interior and `mlp_activation`) nnterp gathers the value along that axis, so `attention_head_outputs[:, :, 20] = 0` ablates head 20 whichever GPU computes it. The exception is `expert_outputs` on a mixture whose experts are split: each GPU holds a partial sum of every expert's output, so read `routed_output` instead. Every rank runs the trace, and each of these reads is a collective, so never read one under a branch on the rank.
+
 ## A `model_type` with no family
 
 A `model_type` with no family module and nothing registered loads with `nnterp.families.default`, a best-effort family, and a warning. The default maps the spellings the shipped families use onto Llama's names and checks its guess at load on a shape-only scan. It serves `layer_output`, the root values, the sizes and the attention interior, and it refuses what a name cannot tell: `attention_output`, `mlp_output`, `layer_mid`, `mlp_norm_output`, a mixture's interior and `project_on_vocab`. GPT-2 has a family, so this block uses a tiny random checkpoint of a type that has none.

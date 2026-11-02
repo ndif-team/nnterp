@@ -257,6 +257,33 @@ value that needs a copy carries edits back with a transform (Falcon's
 what a tuple-returning module would need to rebuild its container
 (nnsight `eproperty.py:52-66`).
 
+### Tensor parallelism: `split_axis`, `piece_axis`
+
+On a model transformers split tensor-parallel, nnsight reassembles a sharded
+module's own input and output (`o_proj.input`, `down_proj.input`), not what
+lies between two sharded modules: the attention interior, where the heads are
+split from the query projection to the output projection, and an MLP's
+activation, split from the gate to the down projection.
+`tensor_parallel_mesh` is the mesh the root module carries, ``None`` after one
+attribute read on any model transformers did not shard; only on a split model
+is `split_axis` computed, the index of the layout axis named `num_heads`,
+`num_kv_heads` or `intermediate_size` (``None`` for any other layout).
+`piece_axis` says whether a value is one rank's piece: its size along that axis
+times the mesh size is the module's size (`axis_size`), where a value nnsight
+reassembled, or one a plan leaves whole, is already the module's size. `__get__`
+gathers a piece with nnsight's `gather`, clones it when gradients are on (a
+collective's output refuses in-place edits with the graph live), and hands it
+out with a `WriteBack` whose `_split_back` shards the possibly edited whole back
+with `shard` and rebuilds the location's form: the family's `transform` if it has
+one, else `_packed` (the postprocess and `_put`), which `__set__` shares. On a
+split model `__set__` reads what the location holds, asks `piece_axis` about
+it, and shards the assigned whole when it is a piece. Shapes are the same on
+every rank, so every rank takes the same branch and reaches the same
+collectives. A split mixture's `expert_outputs` is a partial sum on each rank
+(read before the experts' all-reduce), not a piece along an axis; its layout
+names no split axis and it passes through as it is. `tests/test_tensor_parallel.py`
+checks the rest on two CPU ranks.
+
 ### Introspection
 
 - `path(obj)` (`:154-156`): the key for this host, the string or what the

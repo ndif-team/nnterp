@@ -334,6 +334,16 @@ class, 25 to 80 s each; the checkpoints are about 250 GB together.
 
 ## The root tests
 
+`tests/test_tensor_parallel.py` (23 tests) launches `tests/tp_worker.py` in one
+process and under `torch.distributed.run` on two CPU ranks over gloo (no GPU), on
+`trl-internal-testing/tiny-Qwen3ForCausalLM` (grouped-query, so the keys' head axis
+differs from the queries'): every value that tensor parallelism splits by head or
+neuron, the boundaries nnsight reassembles, and the logits after five edits aimed at
+the last rank's heads and at the neurons around the boundary between the ranks (one
+with gradients on) must
+match the one-process run, and every rank must agree bit for bit. It skips below
+transformers 5.19.
+
 `tests/test_registry.py` (21 tests): every module under `nnterp/families/` is
 named after its type, and there are at least 31
 (`:15-20`); `import nnterp` pulls in no `transformers.models.*.modeling_*`

@@ -444,7 +444,7 @@ The pinned checkpoints, all loadable offline once cached:
 | family | checkpoint | note |
 |---|---|---|
 | `gemma3_text` | `yujiepan/gemma-3-tiny-random` | `trl-internal-testing/tiny-Gemma3ForConditionalGeneration` (the wrapper test's) has a projector that outputs exact zeros, so no edit upstream of it shows |
-| `gemma` | `hf-tiny-v2/tiny-random-PaliGemmaForConditionalGeneration` | `trl-internal-testing/tiny-PaliGemmaForConditionalGeneration` (the text test's) projects to 2048 where its text model is 16 wide, so its image path fails in transformers' own forward |
+| `gemma` | `hf-tiny-v2/tiny-random-PaliGemmaForConditionalGeneration` | the wrapper test's too |
 | `gemma2` | a tiny PaliGemma 2 the test builds once into the temp dir: `trl-internal-testing/tiny-Gemma2ForCausalLM`'s text config with PaliGemma's vocabulary, `hf-tiny-v2/tiny-random-PaliGemmaForConditionalGeneration`'s SigLIP config and processor (`image_seq_length` set to its 16 tokens), random weights | no tiny PaliGemma 2 is published; the 3B's own names are checked on meta |
 | `llama` | `trl-internal-testing/tiny-LlavaForConditionalGeneration` | real check: `llava-hf/llava-1.5-7b-hf` |
 | `llama` | `hf-tiny-v2/tiny-random-VipLlavaForConditionalGeneration`, `hf-tiny-v2/tiny-random-LlavaNextForConditionalGeneration`, `hf-tiny-v2/tiny-random-DeepseekVLForConditionalGeneration` | processors set to the model (`fix_processor`) |

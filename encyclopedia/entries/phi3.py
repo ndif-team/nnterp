@@ -11,7 +11,7 @@ SUBTITLE = (
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "microsoft/Phi-3-mini-4k-instruct"
 #: The tiny checkpoint the test suite builds the page from.
-PINNED = "trl-internal-testing/tiny-Phi3ForCausalLM"
+PINNED = "katuni4ka/tiny-random-phi3"
 CHECKPOINTS = [
     "microsoft/Phi-3-mini-4k-instruct", "microsoft/Phi-3-mini-128k-instruct",
     "microsoft/Phi-3-medium-4k-instruct", "microsoft/Phi-3-medium-128k-instruct",

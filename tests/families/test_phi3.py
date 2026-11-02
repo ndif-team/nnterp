@@ -6,6 +6,6 @@ from nnterp.families import phi3
 
 
 class TestPhi3(FamilySuite):
-    REPO = "trl-internal-testing/tiny-Phi3ForCausalLM"
+    REPO = "katuni4ka/tiny-random-phi3"
     FAMILY = phi3
     NATIVE = LLAMA_ROWS

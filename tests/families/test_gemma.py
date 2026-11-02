@@ -34,7 +34,7 @@ class TestPaliGemmaWrapper(WrapperSuite):
     @pytest.fixture(scope="class")
     def model(self):
         return StandardizedTransformer(
-            "trl-internal-testing/tiny-PaliGemmaForConditionalGeneration", task="image-text-to-text", dispatch=True, attn_implementation="eager",
+            "hf-tiny-v2/tiny-random-PaliGemmaForConditionalGeneration", task="image-text-to-text", dispatch=True, attn_implementation="eager",
         )
 
     def text_input(self, model):
@@ -42,11 +42,7 @@ class TestPaliGemmaWrapper(WrapperSuite):
 
 
 class TestPaliGemmaVision(VisionSuite):
-    """PaliGemma's SigLIP tower and linear projector, and the tower's image values.
-
-    ``hf-tiny-v2``: the trl tiny wrapper (the text test's) projects to 2048 where its text model is 16 wide, so its
-    image path fails in transformers' own forward.
-    """
+    """PaliGemma's SigLIP tower and linear projector, and the tower's image values."""
 
     REPO = "hf-tiny-v2/tiny-random-PaliGemmaForConditionalGeneration"
     FAMILY = gemma

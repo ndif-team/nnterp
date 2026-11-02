@@ -90,6 +90,10 @@ print(overwritten[0, 0, 2])
 #        grad_fn=<SelectBackward0>)
 ```
 
+## Across GPUs
+
+On a model split across GPUs ([`distributed_config=`](../loading.md#distributed_config)), each GPU computes a share of the heads. nnterp gathers the six values along the head axis, so every GPU reads all the heads, and splits an edit back: `attention_head_outputs[:, :, 20] = 0` ablates head 20 wherever it is computed.
+
 ## Grouped-query attention
 
 The keys and values are read before `repeat_kv`, so on a checkpoint with fewer key/value heads than query heads their head axis is `num_kv_heads` wide while the queries, the scores, the pattern and the head outputs are `num_heads` wide. Query head `h` reads key/value head `h // (num_heads // num_kv_heads)`, so a head-wise edit of the keys touches every query head of that group. On Qwen2.5-0.5B, 14 query heads share 2 key/value heads:

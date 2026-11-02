@@ -383,6 +383,16 @@ onto the image. The tower's own blocks serve the same six values over the patche
 (`model.vision.layers[i].self_attn.attention_probabilities`, `[images, heads, patches,
 patches]`, no causal mask), with the per-tower caveats in [vision.md](vision.md#the-values).
 
+## Across GPUs
+
+On a model split tensor-parallel (`distributed_config=`, [loading.md](loading.md#across-gpus-distributed_config)),
+each rank computes its share of the heads, so inside the attention forward it holds only
+those. nnterp gathers the six values along the head axis (`num_heads`, `num_kv_heads` for
+the keys and values) on every read, so each rank reads all of them, in the order of a
+one-device run, and splits an edit back: `attention_head_outputs[:, :, 20] = 0` ablates head
+20 whichever rank computes it. `attention_premix` is the output projection's input, which
+nnsight reassembles itself.
+
 ## Under `generate`
 
 The values are per forward call. On a decode step the queries, the scores,

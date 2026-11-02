@@ -257,6 +257,30 @@ value that needs a copy carries edits back with a transform (Falcon's
 what a tuple-returning module would need to rebuild its container
 (nnsight `eproperty.py:52-66`).
 
+### Tensor parallelism: `split_axis`, `piece_axis`
+
+On a model transformers split tensor-parallel, nnsight reassembles a sharded
+module's own input and output (`o_proj.input`, `down_proj.input`), not what
+lies between two sharded modules: the attention interior, where the heads are
+split from the query projection to the output projection, and an MLP's
+activation, split from the gate to the down projection. `split_axis` is the
+index of the layout axis named `num_heads`, `num_kv_heads` or
+`intermediate_size` (cached on the descriptor; ``None`` for any other layout),
+and `tensor_parallel_mesh` is the mesh the root module carries, ``None`` on any
+model transformers did not shard, after one attribute read. With both, `__get__`
+asks `piece_axis` whether the value is one rank's piece: its size along that
+axis times the mesh size is the module's size (`axis_size`), where a value
+nnsight reassembled is already the module's size. A piece is gathered with
+nnsight's `gather`, cloned (a collective's output refuses in-place edits with
+the graph live), and handed out with a `WriteBack` whose `_split_back` shards
+the possibly edited whole back with `shard` and rebuilds the location's form
+(the family's `transform` if it has one, else the postprocess and `_put`).
+`__set__` goes through `_set_split`: it reads what the location holds and
+shards the assigned whole when the element counts say the location holds a
+piece. Shapes are the same on every rank, so every rank takes the same branch
+and reaches the same collectives. `tests/test_tensor_parallel.py` checks it on
+two CPU ranks.
+
 ### Introspection
 
 - `path(obj)` (`:154-156`): the key for this host, the string or what the

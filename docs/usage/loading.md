@@ -236,6 +236,33 @@ component) every block.
 When the load shards across GPUs (`distributed_config=`), nnsight's tensor-parallel envoys
 are the base of the merge, so a family's or your own map never drops them.
 
+## Across GPUs: `distributed_config=`
+
+A load with `distributed_config=DistributedConfig(tp_size=N)`, launched with `torchrun`, splits
+the model tensor-parallel (transformers 5.19 or later). Every standard value reads whole, the
+same on every rank. nnsight reassembles a split module's own input and output; the values
+between two split modules, the attention interior (`attention_queries` through
+`attention_head_outputs`) and `mlp_activation`, nnterp gathers along their head or neuron
+axis. An edit to one, in place or by assignment, goes back to each rank as its piece of the
+whole:
+
+```python
+from transformers.distributed import DistributedConfig
+
+model = StandardizedTransformer(
+    "meta-llama/Llama-3.2-1B", attn_implementation="eager",
+    distributed_config=DistributedConfig(tp_size=2),
+)
+attn = model.layers[1].self_attn
+with model.trace("The Eiffel Tower is in the city of"):
+    attn.attention_head_outputs[:, :, 20] = 0     # head 20, whichever rank holds it
+    logits = model.logits.save()                   # the same on every rank
+```
+
+Every rank runs the block, and a read of one of these values is a collective, so read them
+unconditionally, never under a branch on the rank. Each read costs a gather and a copy the
+size of the whole value.
+
 ## The tokenizer
 
 `tokenizer_kwargs=` sets attributes on the loaded tokenizer, for the two a batch of

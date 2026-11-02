@@ -35,7 +35,7 @@ jobs:
         run: |
           python -m pip install --no-deps dist/*.whl
           python -c "import importlib.metadata as m; print(m.version('nnterp'))"
-          python -m zipfile -l dist/*.whl | grep -E "nnterp/(families|components)/__init__.py|nnterp/_version.py"
+          python -m zipfile -l dist/*.whl | grep -E "nnterp/(families|components)/__init__.py"
 
       - uses: actions/upload-artifact@v4
         with:

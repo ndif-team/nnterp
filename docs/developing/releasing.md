@@ -13,7 +13,7 @@ sources: [.github/workflows/publish.yml, pyproject.toml, nnterp/__init__.py]
 Publishing a GitHub release runs `.github/workflows/publish.yml`. The `build` job checks the
 tagged commit out with its history, builds the sdist and the wheel with `python -m build`,
 runs `twine check`, installs the wheel without dependencies to read its version back, and
-confirms the wheel carries `nnterp/families`, `nnterp/components` and `nnterp/_version.py`.
+confirms the wheel carries `nnterp/families` and `nnterp/components`.
 The `publish` job then uploads both to PyPI with `pypa/gh-action-pypi-publish`, pinned to a
 commit. Running the workflow by hand (`workflow_dispatch`) builds and checks without
 publishing, which is how to confirm a branch packages cleanly before tagging it.
@@ -22,9 +22,9 @@ publishing, which is how to confirm a branch packages cleanly before tagging it.
 
 `pyproject.toml` declares the version dynamic and lets setuptools-scm derive it from the git
 tag: tag `v2.0.0` builds `nnterp 2.0.0`, tag `v2.0.0rc1` builds the pre-release `2.0.0rc1`,
-and a commit with no tag builds `1.3.1.devN+g<sha>`, which PyPI refuses. setuptools-scm
-writes `nnterp/_version.py` at build time (it is not tracked), and `nnterp.__version__`
-reads it, falling back to the installed distribution's metadata. Nothing in the repository
+and a commit with no tag builds `1.3.1.devN+g<sha>`, which PyPI refuses. `nnterp.__version__`
+reads the installed distribution's metadata, as nnsight and ndif do, so it is the tag's version
+too; a source tree that was never installed reports `0.0.0`. Nothing in the repository
 states the version, so a release is: tag the commit, publish the release for the tag, and
 let the workflow run.
 

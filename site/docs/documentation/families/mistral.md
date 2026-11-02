@@ -1,0 +1,3 @@
+# mistral
+
+::: nnterp.families.mistral

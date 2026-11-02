@@ -1,9 +1,52 @@
-from .standardized_transformer import StandardizedTransformer
-from .rename_utils import get_rename_dict
-from .nnsight_utils import ModuleAccessor
+"""nnterp: one module vocabulary across transformer architectures.
+
+`StandardizedTransformer` is an nnsight `TransformersModel` whose envoy tree
+answers to the same names whatever the checkpoint's family. The vocabulary is
+Llama's::
+
+    model.embed_tokens
+    model.layers[i].input_layernorm
+    model.layers[i].self_attn
+    model.layers[i].post_attention_layernorm
+    model.layers[i].mlp
+    model.norm
+    model.lm_head
+
+and the root answers for the whole model: ``logits``, ``token_embeddings``,
+``next_token_probs`` and the sizes (``num_layers``, ``num_heads``, ...).
+
+Each family under `nnterp.families` says how its own names map onto those, and
+`nnterp.components` holds the envoys that give standard modules standard values
+(``layer_output``, ``attention_output``, ``mlp_output``,
+``attention_probabilities``), which each family subclasses. On a multimodal
+checkpoint loaded with ``task="image-text-to-text"`` the vision tower is
+``model.vision`` (its blocks ``model.vision.layers[i]``, its values
+``model.vision.image_token_mask`` and ``model.vision.image_features``) and the
+projector ``model.projector``.
+
+`StandardizedVLLM` is the same over nnsight's ``VLLM`` engine, with vLLM's own
+implementation of each family under `nnterp.families.vllm`.
+"""
+
+from importlib.metadata import PackageNotFoundError, version as _version
+
+try:
+    __version__ = _version("nnterp")  # setuptools-scm stamps the git tag into the metadata at install
+except PackageNotFoundError:  # a source tree that was never installed
+    __version__ = "0.0.0"
+
+from .components import (
+    Attention, DerivedEProperty, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard,
+    StateSpace, Unavailable, Vision, axis_size, chunk_per_token, route_delta_rule, route_kernels, unavailable,
+)
+from .families import UnsupportedFamily
+from .standardized import Standardized, StandardizedTransformer
+from .standardized_vllm import StandardizedVLLM
 
 __all__ = [
-    "StandardizedTransformer",
-    "get_rename_dict",
-    "ModuleAccessor",
+    "Attention", "DerivedEProperty", "EProperty", "Layer", "LinearAttention", "Mlp", "Moe", "RecurrentMixer", "SelectiveScan",
+    "Standard", "Standardized", "StandardizedTransformer", "StandardizedVLLM", "StateSpace", "Unavailable", "UnsupportedFamily", "Vision",
+    "axis_size", "chunk_per_token",
+    "route_delta_rule", "route_kernels",
+    "unavailable",
 ]

@@ -1,7 +1,7 @@
 ---
 title: Releasing
-one_liner: A GitHub release publishes nnterp to PyPI through `.github/workflows/publish.yml`; the tag is the version, Trusted Publishing signs the upload, and nothing is bumped by hand.
-tags: [developing, release, pypi, versioning, setuptools-scm, trusted-publishing]
+one_liner: A GitHub release publishes nnterp to PyPI through `.github/workflows/publish.yml`; the tag is the version, the `PYPI_API_TOKEN` secret authenticates the upload, and nothing is bumped by hand.
+tags: [developing, release, pypi, versioning, setuptools-scm, api-token]
 related: [docs/developing/contributing.md, docs/developing/testing.md, docs/developing/transformers-compat.md]
 sources: [.github/workflows/publish.yml, pyproject.toml, nnterp/__init__.py]
 ---
@@ -28,14 +28,13 @@ reads it, falling back to the installed distribution's metadata. Nothing in the 
 states the version, so a release is: tag the commit, publish the release for the tag, and
 let the workflow run.
 
-## Trusted Publishing
+## The PyPI token
 
-The upload carries no API token. PyPI mints a short-lived token from the publish job's OIDC
-identity and checks it against the publisher registered for the `nnterp` project: owner
-`ndif-team`, repository `nnterp`, workflow `publish.yml`, environment `pypi`. All three must
-match the workflow, so the file is not renamed and the job keeps `environment: pypi`. The
-environment exists in the repository's settings (Settings, Environments) and can require a
-reviewer, which makes every publish a click by a maintainer.
+The upload authenticates with a PyPI API token stored as the repository secret
+`PYPI_API_TOKEN` (Settings, Secrets and variables, Actions). The token belongs to a maintainer
+of the `nnterp` project on PyPI; scope it to that project. Rotating it is replacing the
+secret's value; the workflow does not change. PEP 740 attestations need Trusted Publishing, so
+the publish step turns them off.
 
 ## The nnsight it needs
 

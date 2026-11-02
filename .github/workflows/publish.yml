@@ -1,0 +1,64 @@
+name: Publish to PyPI
+
+# A GitHub release publishes the package: the tag is the version (setuptools-scm),
+# so nothing is bumped by hand. `workflow_dispatch` builds without publishing, to
+# check a branch packages cleanly.
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+# No job gets a token scope it does not ask for: neither job needs one, since the
+# upload authenticates with the PYPI_API_TOKEN repository secret.
+permissions: {}
+
+jobs:
+  build:
+    name: Build the sdist and the wheel
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # setuptools-scm reads the version off the tags
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Build
+        run: |
+          python -m pip install --upgrade pip build twine
+          python -m build
+          python -m twine check dist/*
+
+      - name: The wheel holds the package and its version
+        run: |
+          python -m pip install --no-deps dist/*.whl
+          python -c "import importlib.metadata as m; print(m.version('nnterp'))"
+          python -m zipfile -l dist/*.whl | grep -E "nnterp/(families|components)/__init__.py|nnterp/_version.py"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  publish:
+    name: Publish to PyPI
+    if: github.event_name == 'release'
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+
+      # Pinned to the commit behind v1.14.2: the one step that can publish does
+      # not track a moving tag.
+      - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
+        with:
+          packages-dir: dist
+          password: ${{ secrets.PYPI_API_TOKEN }}
+          # Attestations need Trusted Publishing; with a token the action would
+          # drop them anyway, with a warning.
+          attestations: false

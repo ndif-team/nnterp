@@ -245,19 +245,25 @@ class Standardized:
     def _read_config(repo_id: Any, kwargs: dict) -> Any:
         """The checkpoint's config, before any model is built.
 
-        A ready module carries its own; a repo id is read with ``AutoConfig``,
-        so a config transformers cannot parse fails here with its own error.
-        The Hub caches the file, and the meta build reads it again.
+        A ready module carries its own; a repo id is read with ``AutoConfig``
+        and the load's hub kwargs (``cache_dir``, ``revision``, ``token``,
+        ``local_files_only``, ...), so the checkpoint is looked for where the
+        build will look, and a config transformers cannot parse fails here with
+        its own error. The build's own kwargs (``dtype``, ``device_map``, ...)
+        stay with the build. The Hub caches the file, and the meta build reads
+        it again.
         """
         if isinstance(repo_id, torch.nn.Module):
             return repo_id.config
         from transformers import AutoConfig
 
-        return AutoConfig.from_pretrained(
-            repo_id,
-            revision=kwargs.get("revision"),
-            trust_remote_code=bool(kwargs.get("trust_remote_code", False)),
-        )
+        return AutoConfig.from_pretrained(repo_id, **{k: kwargs[k] for k in _HUB_KWARGS if k in kwargs})
+
+
+# The kwargs that say where a checkpoint is and how to fetch it: what the config read before the
+# build needs, and all it gets (transformers' own `_get_config_dict` split).
+_HUB_KWARGS = ("cache_dir", "revision", "token", "local_files_only", "subfolder", "proxies",
+               "force_download", "trust_remote_code", "code_revision")
 
 
 class StandardizedTransformer(Standardized, TransformersModel):

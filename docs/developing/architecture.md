@@ -122,9 +122,11 @@ reference, the way a remote trace does. [usage/vllm](../usage/vllm.md).
 `StandardizedTransformer.__init__` (`nnterp/standardized.py:128-155`) runs in
 this order, and the order matters:
 
-1. **Config first.** `_read_config` (`standardized.py:455-471`) returns a
-   ready module's own `config`, or `AutoConfig.from_pretrained(repo_id,
-   revision=, trust_remote_code=)`. It runs before nnsight builds anything, so
+1. **Config first.** `_read_config` (`standardized.py:245`) returns a
+   ready module's own `config`, or `AutoConfig.from_pretrained(repo_id, ...)`
+   with the load's hub kwargs (`cache_dir`, `revision`, `token`,
+   `local_files_only`, ...), so the checkpoint is looked for where the build
+   will look. It runs before nnsight builds anything, so
    a config transformers cannot parse fails here with transformers' own error,
    and so the family is known before the meta build.
 2. **Family lookup.** `families.lookup(getattr(config, "text_config",

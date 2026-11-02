@@ -95,6 +95,25 @@ def test_vllm_family_passed_skips_the_lookup(monkeypatch):
         StandardizedVLLM("some/repo")
 
 
+def test_config_is_read_with_the_loads_kwargs(tmp_path):
+    """`_read_config` looks for the checkpoint where the build will: the load's hub kwargs (`cache_dir`,
+    `local_files_only`, ...) reach `AutoConfig`; the build's own kwargs do not get in the way."""
+    import shutil
+    from pathlib import Path
+
+    from huggingface_hub.constants import HF_HUB_CACHE
+
+    load = {"task": "text-generation", "dispatch": True, "device_map": "auto", "dtype": "auto",
+            "attn_implementation": "eager", "local_files_only": True}
+    assert StandardizedTransformer._read_config(GPT2, load).model_type == "gpt2"      # the build's kwargs are ignored
+    with pytest.raises(OSError):                                                        # an empty cache_dir is looked in
+        StandardizedTransformer._read_config(GPT2, {**load, "cache_dir": tmp_path})
+    folder = f"models--{GPT2.replace('/', '--')}"
+    shutil.copytree(Path(HF_HUB_CACHE) / folder, tmp_path / folder, symlinks=False,
+                    ignore=shutil.ignore_patterns("blobs", "*.safetensors", "*.bin"))  # the snapshot's config, no weights
+    assert StandardizedTransformer._read_config(GPT2, {**load, "cache_dir": tmp_path}).model_type == "gpt2"
+
+
 def test_preloaded_module_uses_its_own_config():
     module = AutoModelForCausalLM.from_pretrained(GPT2)
     model = StandardizedTransformer(module)

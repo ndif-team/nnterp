@@ -242,28 +242,46 @@ class Standardized:
     # -- loading ---------------------------------------------------------------
 
     @staticmethod
-    def _read_config(repo_id: Any, kwargs: dict) -> Any:
+    def _read_config(
+        repo_id: Any,
+        *,
+        cache_dir: Any = None,
+        revision: str | None = None,
+        token: Any = None,
+        local_files_only: bool = False,
+        subfolder: str = "",
+        proxies: dict | None = None,
+        force_download: bool = False,
+        trust_remote_code: bool | None = None,
+        code_revision: str | None = None,
+        **kwargs: Any,
+    ) -> Any:
         """The checkpoint's config, before any model is built.
 
         A ready module carries its own; a repo id is read with ``AutoConfig``
-        and the load's hub kwargs (``cache_dir``, ``revision``, ``token``,
-        ``local_files_only``, ...), so the checkpoint is looked for where the
-        build will look, and a config transformers cannot parse fails here with
-        its own error. The build's own kwargs (``dtype``, ``device_map``, ...)
-        stay with the build. The Hub caches the file, and the meta build reads
-        it again.
+        and the named kwargs, the ones that say where the checkpoint is and how
+        to fetch it, so it is looked for where the build will look, and a config
+        transformers cannot parse fails here with its own error. The rest of
+        the load's kwargs (``dtype``, ``device_map``, ...) are the build's and
+        are ignored here. The Hub caches the file, and the meta build reads it
+        again.
         """
         if isinstance(repo_id, torch.nn.Module):
             return repo_id.config
         from transformers import AutoConfig
 
-        return AutoConfig.from_pretrained(repo_id, **{k: kwargs[k] for k in _HUB_KWARGS if k in kwargs})
-
-
-# The kwargs that say where a checkpoint is and how to fetch it: what the config read before the
-# build needs, and all it gets (transformers' own `_get_config_dict` split).
-_HUB_KWARGS = ("cache_dir", "revision", "token", "local_files_only", "subfolder", "proxies",
-               "force_download", "trust_remote_code", "code_revision")
+        return AutoConfig.from_pretrained(
+            repo_id,
+            cache_dir=cache_dir,
+            revision=revision,
+            token=token,
+            local_files_only=local_files_only,
+            subfolder=subfolder,
+            proxies=proxies,
+            force_download=force_download,
+            trust_remote_code=trust_remote_code,
+            code_revision=code_revision,
+        )
 
 
 class StandardizedTransformer(Standardized, TransformersModel):
@@ -353,7 +371,7 @@ class StandardizedTransformer(Standardized, TransformersModel):
         self._add_prefix_false_tokenizer = None
         self._order = None  # the measured ranks: see `order`
         if family is None:
-            config = self._read_config(repo_id, kwargs)
+            config = self._read_config(repo_id, **kwargs)
             # A multimodal checkpoint's config nests the language model's; the
             # text-generation task builds that model, so its family is the one.
             family = families.resolve(config)

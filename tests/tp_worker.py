@@ -76,6 +76,11 @@ def main() -> None:
             mlp.mlp_activation = activation
             out["activation_assigned"] = model.logits.save()
 
+    # With gradients on, a gathered value is a clone, which is what the in-place edit lands on.
+    with model.trace(PROMPT):
+        attn.attention_head_outputs[:, :, heads - 1] = 0
+        out["head_outputs_zeroed_with_grad"] = model.logits.save()
+
     rank = int(os.environ.get("RANK", 0))
     torch.save({name: value.detach().cpu() for name, value in out.items()}, os.path.join(args.out, f"rank{rank}.pt"))
 

@@ -90,7 +90,7 @@ print(mask)
 
 ### `distributed_config=`
 
-`distributed_config=DistributedConfig(tp_size=N)` (from `transformers.distributed`), launched with `torchrun`, splits the model across N GPUs tensor-parallel; it needs transformers 5.19 or later. Every value reads whole, the same on every rank. nnsight reassembles a split module's own input and output, and nnterp gathers the values between two split modules (the attention interior and `mlp_activation`) along their head or neuron axis, so `attention_head_outputs[:, :, 20] = 0` ablates head 20 whichever GPU computes it. Every rank runs the trace, and each of these reads is a collective, so never read one under a branch on the rank.
+`distributed_config=DistributedConfig(tp_size=N)` (from `transformers.distributed`), launched with `torchrun`, splits the model across N GPUs tensor-parallel; it needs transformers 5.19 or later. The values read whole, the same on every rank. nnsight reassembles a split module's own input and output, and where a GPU holds only a share of the heads or neurons (the attention interior and `mlp_activation`) nnterp gathers the value along that axis, so `attention_head_outputs[:, :, 20] = 0` ablates head 20 whichever GPU computes it. The exception is `expert_outputs` on a mixture whose experts are split: each GPU holds a partial sum of every expert's output, so read `routed_output` instead. Every rank runs the trace, and each of these reads is a collective, so never read one under a branch on the rank.
 
 ## A `model_type` with no family
 

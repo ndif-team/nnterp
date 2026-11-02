@@ -92,7 +92,7 @@ print(overwritten[0, 0, 2])
 
 ## Across GPUs
 
-On a model split across GPUs ([`distributed_config=`](../loading.md#distributed_config)), each GPU computes a share of the heads. nnterp gathers the six values along the head axis, so every GPU reads all the heads, and splits an edit back: `attention_head_outputs[:, :, 20] = 0` ablates head 20 wherever it is computed.
+On a model split across GPUs ([`distributed_config=`](../loading.md#distributed_config)), each GPU computes a share of the heads. nnterp gathers the six values along the head axis where a GPU holds a share, so every GPU reads all the heads, and splits an edit back: `attention_head_outputs[:, :, 20] = 0` ablates head 20 wherever it is computed.
 
 ## Grouped-query attention
 

@@ -32,7 +32,10 @@ READS = [
     "attention_head_outputs", "attention_premix", "attention_output", "mlp_activation", "mlp_neurons", "mlp_output",
     "logits",
 ]
-EDITS = ["head_outputs_zeroed_in_place", "keys_scaled_in_place", "queries_scaled_by_assignment", "activation_assigned"]
+EDITS = [
+    "head_outputs_zeroed_in_place", "keys_scaled_in_place", "queries_scaled_by_assignment", "activation_assigned",
+    "head_outputs_zeroed_with_grad",
+]
 
 
 def _free_port() -> int:

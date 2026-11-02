@@ -1,7 +1,7 @@
 ---
 title: Releasing
-one_liner: A GitHub release publishes nnterp to PyPI through `.github/workflows/publish.yml`; the tag is the version, the `PYPI_API_TOKEN` secret authenticates the upload, and nothing is bumped by hand.
-tags: [developing, release, pypi, versioning, setuptools-scm, api-token]
+one_liner: A GitHub release publishes nnterp to PyPI through `.github/workflows/publish.yml`; the tag is the version, Trusted Publishing authenticates the upload, and nothing is bumped by hand.
+tags: [developing, release, pypi, versioning, setuptools-scm, trusted-publishing]
 related: [docs/developing/contributing.md, docs/developing/testing.md, docs/developing/transformers-compat.md]
 sources: [.github/workflows/publish.yml, pyproject.toml, nnterp/__init__.py]
 ---
@@ -28,13 +28,15 @@ too; a source tree that was never installed reports `0.0.0`. Nothing in the repo
 states the version, so a release is: tag the commit, publish the release for the tag, and
 let the workflow run.
 
-## The PyPI token
+## Trusted Publishing
 
-The upload authenticates with a PyPI API token stored as the repository secret
-`PYPI_API_TOKEN` (Settings, Secrets and variables, Actions). The token belongs to a maintainer
-of the `nnterp` project on PyPI; scope it to that project. Rotating it is replacing the
-secret's value; the workflow does not change. PEP 740 attestations need Trusted Publishing, so
-the publish step turns them off.
+The upload carries no API token, as in nnsight and ndif. PyPI mints a short-lived token from
+the publish job's OIDC identity and checks it against the publisher registered for the
+`nnterp` project: owner `ndif-team`, repository `nnterp`, workflow `publish.yml`, and
+environment `pypi` where the publisher names one. These must match the workflow, so the file
+is not renamed and the job keeps `environment: pypi`. GitHub creates the environment the first
+time a job uses it; a required reviewer on it (Settings, Environments) makes every publish a
+click by a maintainer.
 
 ## The nnsight it needs
 

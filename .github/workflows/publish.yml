@@ -8,8 +8,8 @@ on:
     types: [published]
   workflow_dispatch:
 
-# No job gets a token scope it does not ask for: neither job needs one, since the
-# upload authenticates with the PYPI_API_TOKEN repository secret.
+# No job gets a token scope it does not ask for: the build needs none, the
+# publish job takes id-token for Trusted Publishing.
 permissions: {}
 
 jobs:
@@ -47,6 +47,15 @@ jobs:
     if: github.event_name == 'release'
     runs-on: ubuntu-latest
     needs: build
+    # Trusted Publishing: PyPI mints a short-lived token from this job's OIDC
+    # identity, so there is no API token to store or rotate. The publisher
+    # registered on PyPI names this repository, this workflow file and this
+    # environment, and all three must match.
+    environment:
+      name: pypi
+      url: https://pypi.org/p/nnterp
+    permissions:
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -58,7 +67,3 @@ jobs:
       - uses: pypa/gh-action-pypi-publish@dc37677b2e1c63e2034f94d8a5b11f265b73ba33  # v1.14.2
         with:
           packages-dir: dist
-          password: ${{ secrets.PYPI_API_TOKEN }}
-          # Attestations need Trusted Publishing; with a token the action would
-          # drop them anyway, with a warning.
-          attestations: false

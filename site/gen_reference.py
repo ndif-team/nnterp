@@ -7,7 +7,7 @@ Run from anywhere::
 It walks the ``nnterp`` package next to this folder, writes ``site/docs/documentation/`` (one
 ``.md`` per module, an ``index.md`` per package listing its submodules) and replaces the nav
 between the two ``reference nav`` markers in ``site/mkdocs.yml``. Pages it did not write are
-removed, so the tab always mirrors the source tree. Private modules, ``_version`` and the
+removed, so the tab always mirrors the source tree. Private modules and the
 in-package ``tests`` are skipped.
 """
 

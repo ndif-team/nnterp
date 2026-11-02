@@ -28,15 +28,12 @@ projector ``model.projector``.
 implementation of each family under `nnterp.families.vllm`.
 """
 
-try:
-    from ._version import version as __version__  # written by setuptools_scm from the git tag at install
-except ImportError:  # a source tree that was never installed
-    from importlib.metadata import PackageNotFoundError, version as _version
+from importlib.metadata import PackageNotFoundError, version as _version
 
-    try:
-        __version__ = _version("nnterp")
-    except PackageNotFoundError:
-        __version__ = "0+unknown"
+try:
+    __version__ = _version("nnterp")  # setuptools-scm stamps the git tag into the metadata at install
+except PackageNotFoundError:  # a source tree that was never installed
+    __version__ = "0.0.0"
 
 from .components import (
     Attention, DerivedEProperty, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard,

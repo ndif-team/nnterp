@@ -3,7 +3,6 @@ requires = ["setuptools>=64", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-version_file = "nnterp/_version.py"
 
 [project]
 name = "nnterp"

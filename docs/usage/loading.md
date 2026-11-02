@@ -42,7 +42,10 @@ with model.trace("The Eiffel Tower is in"):
 
 Every argument other than `family`, `rename`, `envoys` and `tokenizer_kwargs` goes straight to
 `TransformersModel`: `dispatch`, `dtype`, `device_map`, `attn_implementation`, `revision`,
-`trust_remote_code`, `task` and the rest. `task` defaults to `"text-generation"`;
+`trust_remote_code`, `task` and the rest; the config read that picks the family gets the hub
+ones among them (`cache_dir`, `revision`, `token`, `local_files_only`, ...), so a checkpoint
+that lives only in a `cache_dir`, or needs a `token`, resolves where the build will look for it.
+`task` defaults to `"text-generation"`;
 `task="image-text-to-text"` loads a vision-language checkpoint as its wrapper with its
 processor, which is what gives it `model.vision` ([vision.md](vision.md)).
 

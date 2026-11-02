@@ -59,7 +59,7 @@ rest of this page says which.
         │
         ▼  StandardizedTransformer.__init__                    nnterp/standardized.py:128-155
  ┌──────────────────────────────────────────────────────────────────────────────┐
- │ config = _read_config(repo_id, kwargs)            AutoConfig, before any build │
+ │ config = _read_config(repo_id, **kwargs)          AutoConfig, before any build │
  │ family = families.lookup(config.model_type)        REGISTRY, else import module │
  │ rename = {**family.RENAME, **user rename}                                        │
  │ envoys = {**tp envoys (if sharded), **family.ENVOYS, **user envoys}              │
@@ -122,9 +122,11 @@ reference, the way a remote trace does. [usage/vllm](../usage/vllm.md).
 `StandardizedTransformer.__init__` (`nnterp/standardized.py:128-155`) runs in
 this order, and the order matters:
 
-1. **Config first.** `_read_config` (`standardized.py:455-471`) returns a
-   ready module's own `config`, or `AutoConfig.from_pretrained(repo_id,
-   revision=, trust_remote_code=)`. It runs before nnsight builds anything, so
+1. **Config first.** `_read_config` (`standardized.py:245`) returns a
+   ready module's own `config`, or `AutoConfig.from_pretrained(repo_id, ...)`
+   with the kwargs that say where the checkpoint is (`cache_dir`, `revision`,
+   `token`, `local_files_only`, ...), so it is looked for where the build will
+   look. It runs before nnsight builds anything, so
    a config transformers cannot parse fails here with transformers' own error,
    and so the family is known before the meta build.
 2. **Family lookup.** `families.lookup(getattr(config, "text_config",

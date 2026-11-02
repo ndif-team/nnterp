@@ -79,7 +79,7 @@ class StandardizedVLLM(Standardized, VLLM):
         from nnsight.modeling.vllm.envoys import parallel_envoys
 
         if family is None:
-            config = self._read_config(repo_id, kwargs)
+            config = self._read_config(repo_id, **kwargs)
             family = families.resolve(config, engine="vllm")
         self.family = family
         super().__init__(

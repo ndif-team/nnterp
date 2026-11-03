@@ -167,7 +167,8 @@ per block: the full-attention blocks of Cohere 2, AFMoE and a hybrid EXAONE 4, t
 SmolLM3's and Llama 4's `no_rope_layers` mark, a Granite-SWA block whose
 `layer_rope_theta` is 0, and every block of a GraniteMoE-Hybrid or OLMo-Hybrid checkpoint
 whose config gives no rotary (`position_embedding_type`, `rope_theta`). `support()` names
-the reason per block. `StandardizedVLLM` serves neither value ([vllm.md](vllm.md)).
+the reason per block. `StandardizedVLLM` serves both values and `rotate` too, with the
+differences [below](#on-the-vllm-engine).
 
 ### Where a family's values before the rotary differ
 
@@ -220,6 +221,27 @@ is the last row of that step's `attention_keys`.
 On a model split tensor-parallel the two values are gathered along their head axis as the
 queries and keys are ([Across GPUs](#across-gpus)), so every rank reads and writes them
 whole, and `rotate` runs on the whole tensor on every rank.
+
+### On the vLLM engine
+
+`StandardizedVLLM` serves both values as the arguments of the attention module's own
+`self.rotary_emb(positions, q, k)` call, `[1, heads, tokens, head_dim]`, in these layouts
+([vllm.md](vllm.md#before-the-rotary-embedding)). vLLM's rotary kernel rotates in place, so they
+are private copies taken before it runs; a write is rotated for the position it lands at, as
+here. Three things differ:
+
+- **`rotate` runs inside a trace only.** It calls the block's vLLM rotary embedding, which lives
+  in the engine's worker, on a copy of `x`; there `rotate(attention_queries_prerope,
+  range(tokens))` is the `attention_queries` vLLM's attention layer receives, bit for bit, and
+  outside a trace it raises `RuntimeError`. `positions` is `[tokens]`; on the M-RoPE rotary of the
+  Qwen-VL text families a position is a text token's, the same on all three rows.
+- **Not served on vLLM's transformers backend** (OLMo, OLMo 2, SmolLM3, StarCoder2): the rotary
+  is a call inside a forward the backend rewrites at load, which nnsight cannot instrument.
+- **Not served under latent attention** (DeepSeek-V2/V3, Kimi-K2, GLM-4.7-Flash): vLLM rotates
+  only each query head's rope slice and the shared rope key, inside its latent-attention layer,
+  where `StandardizedTransformer` serves whole-head queries.
+
+The blocks without a rotary embedding are the ones above, with the same reasons.
 
 ## Requirement: eager attention
 

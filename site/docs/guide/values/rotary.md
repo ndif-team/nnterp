@@ -26,7 +26,7 @@ print(torch.equal(attn.rotate(k_src, range(k_src.shape[2])), k))
 | `attention_queries_prerope` | `[batch, num_heads, seq, qk_head_dim]` | the queries the rotary embedding receives |
 | `attention_keys_prerope` | `[batch, num_kv_heads, seq, qk_head_dim]` | the keys the rotary embedding receives, before the cache and `repeat_kv` |
 
-Both are read on the attention module's own forward, not inside the eager attention, so they are served under any `attn_implementation`, and they come before `attention_queries` in a trace.
+Both are read on the attention module's own forward, not inside the eager attention, so they are served under any `attn_implementation`, and they come before `attention_queries` in a trace. The vLLM engine serves them too, and there `rotate` runs inside a trace ([vLLM](../../vllm/index.md#before-the-rotary-embedding)).
 
 ## Moving a query or key to another position
 

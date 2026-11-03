@@ -317,6 +317,29 @@ write, that a value of other rows is refused and the engine survives; and
 compare the logits under `steer` and `skip_layers` with transformers'.
 `test_skip_layers` is last: a skip answers for the whole step.
 
+The rotary tests run on the compared blocks that rotate on vLLM. They hold
+`attention_queries_prerope` / `attention_keys_prerope` against the reference
+within `KERNEL_TOLERANCE` and check that reading them changes no logit
+(`test_prerope_values_match_transformers`); check that
+`rotate(prerope, arange(tokens))`, called inside the trace, is the
+`attention_queries` / `attention_keys` the attention layer receives bit for
+bit, and that `rotate` outside a trace raises
+(`test_rotate_gives_the_rotated_queries_and_keys`); that position 0's vector
+written at the last position before the rotary leaves every other position's
+rotated value bit-identical, makes the last one `rotate(vector, [last])`, and
+moves the logits as the same write does on the reference
+(`test_a_prerope_write_is_rotated_for_its_position`, on the reference's
+`rope` block); that on decode step `k` the keys before the rotary, rotated at
+`tokens + k - 1`, are that step's keys (`test_rotate_on_decode_steps`); and
+that `support()` and `rotate` give the same reason on a block without a
+rotary (`test_rotate_says_why_a_block_has_no_rotary`). A family whose block
+does more between its rotary and its attention layer overrides
+`rotated_as_served(attn, name, rotated)`, called inside the trace, where the
+engine's modules run (HunYuan's `query_layernorm` / `key_layernorm`, Llama 4's
+`qk_norm` in vLLM's channel order); a family with a block that applies no
+rotary, or that does not serve the values, adds `NO_ROTARY` to its
+`UNAVAILABLE`.
+
 ```bash
 PYTHON=/path/to/python tests/vllm_families/run.sh          # every family, one process each
 PYTHON=/path/to/python tests/vllm_families/run.sh llama    # one
@@ -346,7 +369,7 @@ reference's load: a wrapper's `task`, or a config value set to what vLLM
 builds). The latent-attention families' files have two classes, one per
 attention backend. Two classes skip on a stock install, with the condition
 in their file: Apertus (nnsight's meta build must answer `.cpu().item()`)
-and DBRX (vLLM 0.27.1's loader does not find the experts). About 27 tests a
+and DBRX (vLLM 0.27.1's loader does not find the experts). About 41 tests a
 class, 25 to 80 s each; the checkpoints are about 250 GB together.
 
 ## The root tests

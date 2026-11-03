@@ -98,10 +98,25 @@ before its `attention_output`. Every step repeats the order of one forward, so
 `model.order(i)` and `model.rank(name, layer)` hold here too: sort the reads of a step by
 `rank` when the code builds them ([availability.md](availability.md#forward-order-order-and-rank)).
 
-A misplaced read fails differently here. In a single trace it raises
-`OutOfOrderError`. Inside `tracer.iter` under `generate` it usually does not: the read
-waits for the value's *next* occurrence, which is the next step's, so the list is
-shifted by one step without an error. On GPT-2, reading block 6's
+A misplaced read can fail differently here. In a single trace it raises
+`OutOfOrderError`. Inside `tracer.iter` under `generate` it can instead wait for the
+value's *next* occurrence, which is the next step's, so the list is shifted by one step
+without an error. Which one happens depends on the loop and the value:
+
+- a loop that starts past step 0 (`tracer.iter[1:3]`) binds every read the step has passed
+  to the next step;
+- a loop from step 0 (`tracer.iter[:3]`) raises `OutOfOrderError` as a plain trace does,
+  except for a value inside a call the module's forward makes (the scores and the pattern,
+  inside the attention function, which every call runs anew) and a value at an operation of
+  a module's forward that no earlier read on this model has reached (`attention_queries` read
+  after `attention_output` when no earlier trace on the model has read them): those bind the
+  next step.
+
+A late read of an input of a call whose output the step has already served (the queries after
+the head outputs, a second `self_attn.interface`) raises in a loop from step 0 whatever the
+model has run before.
+
+On GPT-2, reading block 6's
 `attention_probabilities` after its `attention_output` in `tracer.iter[:3]` returns steps
 1 and 2's patterns as entries 0 and 1, and the read on the last step is never reached,
 which ends the loop with nnsight's `was never reached: the loop asked for a step the run

@@ -156,10 +156,9 @@ with model.trace(source):
 with model.trace(target):
     attn.attention_queries_prerope[:, :, -1] = q_src[:, :, -1]   # the source's last query, rotated for the target's last position
     moved = attn.attention_queries.save()
-    logits = model.logits.save()
 
 seq = k_src.shape[2]
-torch.equal(moved[:, :, -1:], attn.rotate(q_src[:, :, -1:], [moved.shape[2] - 1]))   # True
+assert torch.equal(moved[:, :, -1:], attn.rotate(q_src[:, :, -1:], [moved.shape[2] - 1]))   # what the block made of it, bit for bit
 later = attn.rotate(k_src, range(5, 5 + seq))           # the source's keys as if five positions later
 ```
 
@@ -241,6 +240,7 @@ here. Three things differ:
   Qwen-VL text families a position is a text token's, the same on all three rows.
 - **Not served on vLLM's transformers backend** (OLMo, OLMo 2, SmolLM3, StarCoder2): the rotary
   is a call inside a forward the backend rewrites at load, which nnsight cannot instrument.
+  GPT-BigCode, the backend's fifth family, has no rotary to serve and gives its no-rotary reason.
 - **Not served under latent attention** (DeepSeek-V2/V3, Kimi-K2, GLM-4.7-Flash): vLLM rotates
   only each query head's rope slice and the shared rope key, inside its latent-attention layer,
   where `StandardizedTransformer` serves whole-head queries.
@@ -362,12 +362,17 @@ first, since the forward reaches it before the interface
 ([Before the rotary embedding](#before-the-rotary-embedding-attention_queries_prerope-attention_keys_prerope-rotate)).
 
 Reading `attn.interface` takes the call's arguments, so it is read where the queries, keys
-and values are, in any order with them; calling the result takes the function, which the
-forward hands over just before it runs it, so call it before reading or writing anything
-later in the attention (the scores, the pattern, the head outputs). `model.order(i)` ranks
-`self_attn.interface` between the values and the scores. Read it once per forward and call
-the result as often as you need; a second `attn.interface` after a call asks for a call the
-model has passed (`OutOfOrderError`, or the next step's under `tracer.iter`):
+and values are, in any order with them; the first call of the result takes the function, which
+the forward hands over just before it runs it, so make the first call before reading or writing
+anything later in the attention (the scores, the pattern, the head outputs). Later calls reuse
+the function and can come after those reads. `model.order(i)` ranks `self_attn.interface`
+between the values and the scores. Read it once per forward and call the result as often as you
+need. A second `attn.interface` after a call, or a first call after those reads, asks for a
+point the model has passed: it raises `OutOfOrderError` in a plain trace and in a `tracer.iter`
+loop from step 0 (`iter[:3]`). In a loop that starts past step 0 (`iter[1:3]`) it lands on the
+next step's call instead: a second read then fails at the call with a shape mismatch (this
+step's tensors against the next step's mask), and a late first call ends the loop early with
+nnsight's `was never reached` warning:
 
 ```python
 with model.trace(prompt):
@@ -677,9 +682,11 @@ way. To change what chosen heads read without touching the cache, call
   `attention_interface` input, on the first such trace only: nnsight builds
   `self_attn.source` lazily, after the forward has started. Touch
   `model.layers[i].self_attn.source` outside a trace first, or read them in two traces.
-- **Read `interface` once per forward, and call it before the scores.** Reading it again
-  after a call, or calling it after reading the scores, the pattern or the head outputs,
-  asks for a point the forward has passed.
+- **Read `interface` once per forward, and make the first call before the scores.** Reading
+  it again after a call, or making the first call after reading the scores, the pattern or the
+  head outputs, asks for a point the forward has passed: `OutOfOrderError` in a plain trace and
+  in a `tracer.iter` loop from step 0, the next step's call in a loop that starts later. Later
+  calls of the same result can follow those reads.
 - **GPT-2 and GPT-BigCode queries, MPT queries, keys and values: assign, do not edit in place** (or edit under `torch.no_grad()`). GPT-2's and GPT-BigCode's keys and values take an in-place edit.
 - **`hasattr(attn, "attention_probabilities")` raises `Unavailable`** when the
   value is unavailable; use `attn.support()` or `model.support(layer=i)`.

@@ -119,8 +119,11 @@ What loads serves:
   `input_size`, `next_token_probs`) and the sizes; `skip_layers` and `steer`, which work on the stream.
 - The attention interior (`attention_queries/keys/values/scores/probabilities/head_outputs`),
   read on transformers' shared attention interface as on any family, wherever the module
-  calls it, and with `attn_implementation="eager"`. A module that makes no
-  `attention_interface` call (GPT-J, Falcon) reports them unavailable; a model whose eager
+  calls it, and with `attn_implementation="eager"`, and `self_attn.interface`, which calls
+  that function again ([attention-interior](attention-interior.md#calling-the-attention-function-again-interface)).
+  A module that makes no `attention_interface` call (GPT-J, Falcon) reports them and
+  `interface` unavailable ("The attention does its own arithmetic rather than transformers'
+  shared attention interface"); a model whose eager
   attention forward is its own, with no `nn.functional.softmax` (GPT-OSS's sink, Granite's
   sliding window), raises `SourceNotAvailable` naming the missing op when the scores are read.
 
@@ -130,11 +133,14 @@ block has a stream between its sublayers"), nor `mlp_norm_output` ("the default 
 whether post_attention_layernorm feeds the MLP": a sandwich or post-norm block norms the
 attention's output under that name; `mlp_input` is what the MLP reads), nor the interior of a
 mixture of experts (an MLP with `experts`, a `router` or a `gate`), nor `project_on_vocab` and `get_topk_closest_tokens` ("the
-default family cannot tell what follows lm_head"): a post-norm (Gemma-2), a residual taken
-inside the sublayer (BLOOM), a scale (Granite) or a softcap past the head is code a name does
-not show. A block's `self_attn.*` or `mlp.*` is unavailable when it has no module under a name
-the default knows. The contributions, the logit lens, the mixture values and the recurrent
-mixers (`linear_attn`) need a family module ([adding-a-family](../extending/adding-a-family.md)).
+default family cannot tell what follows lm_head"), nor `attention_queries_prerope`,
+`attention_keys_prerope` and `self_attn.rotate` ("the default family cannot tell where this
+attention applies its rotary embedding, if it has one, or with what"): a post-norm (Gemma-2),
+a residual taken inside the sublayer (BLOOM), a scale (Granite), a softcap past the head or the
+call a block rotates its queries and keys with is code a name does not show. A block's
+`self_attn.*` or `mlp.*` is unavailable when it has no module under a name the default knows.
+The contributions, the logit lens, the values before the rotary, the mixture values and the
+recurrent mixers (`linear_attn`) need a family module ([adding-a-family](../extending/adding-a-family.md)).
 
 `family=` skips all of this for one load: `StandardizedTransformer(repo_id,
 family=my_family)` uses `my_family` (a module, or a `types.SimpleNamespace` with `RENAME`

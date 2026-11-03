@@ -23,7 +23,9 @@ One layout per value on every family, except `layer_output` on the hyper-connect
 families (DeepSeek-V4), whose residual is several parallel streams: there it is `Streams`,
 `[batch, seq, streams, hidden_size]` ([below](#streams-on-deepseek-v4)), and `linear_attn.decays` on
 Kimi-Linear, whose Kimi Delta Attention decays each key channel of the state on its own:
-there it is `ChannelGates`, `[batch, seq, heads, key_dim]`; and `attention_keys_prerope`
+there it is `ChannelGates`, `[batch, seq, heads, key_dim]`; `layer_mid` and `mlp_norm_output`
+on OPT, whose block flattens the stream around its feed-forward path: there they are
+`FlatResidual`, `[tokens, hidden_size]`; and `attention_keys_prerope`
 under latent attention, where the rotary receives one rope key per position that every
 head shares: there it is `SharedRopeKeys`, `[batch, 1, seq, qk_rope_head_dim]`.
 

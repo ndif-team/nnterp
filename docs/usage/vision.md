@@ -97,6 +97,7 @@ without blocks too: `model.model.embed_audio`, native, and no `audio_tower`.
 | `layer_output` | `vision.layers[i]` | `Patches` | the tower's stream leaving the block |
 | `attention_output`, `mlp_output` | `vision.layers[i].self_attn`, `.mlp` | `Patches` | what each sublayer adds: `layer_input + attention_output + mlp_output == layer_output` |
 | `attention_probabilities`, `attention_queries`, ... | `vision.layers[i].self_attn` | `Pattern`, `Queries`, ... | as on a text block, the `batch` axis being the tower's rows; no causal mask (Pixtral masks between packed images, Gemma 4 masks its padded keys); needs eager (the Qwen ViT's: [below](#the-qwen-vit)) |
+| `interface` | `vision.layers[i].self_attn` | method | the attention function the block called, to call again on other queries, keys and values, as on a text block ([attention-interior](attention-interior.md#calling-the-attention-function-again-interface)); needs eager; served where the attention makes one interface call over the block's rows (SigLIP, CLIP, Pixtral, the ViTs of Gemma 4 and Llama 4), not on the Qwen ViT or RADIO, which make one per image |
 | `patch_embeddings` | `vision` | `Patches` | the patch embedding's output, one row per patch, before any position embedding, CLS token or pre-norm |
 | `tower_output` | `vision` | `Patches` | the last block's stream after `vision.norm` where there is one, before any pooling, CLS dropping or adapter (on the Qwen ViT, which has no final norm, the last block's `layer_output`, served at the tower's output, after the merger) |
 | `image_token_mask` | `vision` | `ImageTokenMask` `[batch seq]` bool | `input_ids == config.image_token_id`, read off the model's inputs; read-only |
@@ -349,6 +350,16 @@ Qwen-VL wrappers when dispatched, transformers having no text-only class for the
 `model.support()` has no `vision` rows, and reading any tower or block value raises
 `Unavailable` ("a text-only load: no processor, so no image reaches the model; load with
 task='image-text-to-text'"), inside a trace too.
+
+`attention_queries_prerope` and `attention_keys_prerope` are unavailable on every tower block, so
+`model.vision.support()` gives a reason for both on every wrapper whose tower has blocks ("a vision
+tower's attention: the queries and keys before a rotary embedding, and `rotate`, are served on the
+text model's blocks"), and a tower block's `self_attn.rotate` raises the same: a tower's rotary,
+where it has one (Pixtral, the Qwen ViT, the ViTs of Gemma 4 and Llama 4), runs over 2-D patch
+positions. Read them, and call `rotate`, on the text model's blocks. On the Qwen ViT and RADIO the
+scores, the pattern and `interface` are unavailable under every `attn_implementation` too (the
+attention calls the interface per image, so no one call holds the block's pattern), and on RADIO
+the head outputs as well; the other towers serve all three under an eager load.
 
 `vision.image_features` needs the family to know where the wrapper writes the features in:
 an `ImageScatter` keyed on the wrapper's model, or, on Llama 4, whose top-level forward

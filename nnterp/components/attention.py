@@ -149,9 +149,10 @@ def reinvoke(self: "Attention") -> Callable[[Queries, Keys, Values], tuple[HeadO
     ``eager_attention_forward`` or the family's own, with Gemma-2's logit
     softcap or GPT-OSS's sink column) on the given tensors, with every other
     argument the module passed it this time: the mask of this step, the
-    scale, the dropout, the sliding window, the sinks. Call it before reading
-    anything later in the attention (the scores, the pattern, the head
-    outputs): the first call takes the function where the forward runs it.
+    scale, the dropout, the sliding window, the sinks. Make the first call
+    before reading anything later in the attention (the scores, the pattern,
+    the head outputs): it takes the function where the forward runs it, and
+    later calls reuse it, after those reads too.
 
     ``q``, ``k`` and ``v`` take the layouts of `attention_queries`,
     `attention_keys` and `attention_values` (keys and values ``num_kv_heads``

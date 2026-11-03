@@ -88,7 +88,7 @@ The terms this site uses, each in the one sense the pages give it, with the page
 
 **Projector**: `model.projector`, the last module before the scatter on a wrapper. `projector.input` is what the tower hands over, which is not `tower_output` on every host ([Vision-language](../guide/architectures/vision-language.md#the-projector)).
 
-**Read order**: the order of the reads within one trace, which has to follow forward order. A read out of order raises nnsight's `OutOfOrderError` in a plain trace and binds the next step's occurrence under `tracer.iter` ([Generation](../guide/generation.md#a-read-out-of-order-inside-the-loop)).
+**Read order**: the order of the reads within one trace, which has to follow forward order. A read out of order raises nnsight's `OutOfOrderError` in a plain trace; under `tracer.iter` it raises too or binds the next step's occurrence, depending on the loop's first step and the value ([Generation](../guide/generation.md#a-read-out-of-order-inside-the-loop)).
 
 **Reason**: the string `support()` gives for a value a checkpoint lacks and `Unavailable` carries, from the descriptor's `unavailable=`: a fixed string, or a predicate of the envoy evaluated on the instance ([Availability](../guide/values/availability.md#the-reasons)).
 

@@ -156,6 +156,15 @@ The decoder block. `Layer.returns_tuple` (class attribute, default `False`) says
 |---|---|---|
 | `skip_with` | `skip_with(hidden: Tensor) -> None` | Skip this block; `hidden` takes the place of its `layer_output`, as `(hidden, None)` when `returns_tuple`. Inside a trace, before the block runs. |
 
+Three families serve block values of their own on their `Layer`, for the terms their block adds beyond the two contributions:
+
+| Value | Family | Layout | Assignable | What |
+|---|---|---|---|---|
+| `per_layer_output` | Gemma-4 | `Residual` | yes | The per-layer-embedding branch's add, `post_per_layer_input_norm.output`: `(layer_input + attention_output + mlp_output + per_layer_output) * layer_scalar == layer_output`. Unavailable on a checkpoint without per-layer embeddings (26B-A4B, 31B). [usage/residual-stream](../usage/residual-stream.md#where-the-families-differ) |
+| `attention_post`, `mlp_post` | DeepSeek-V4 | `StreamWeights` | yes | How much of each sublayer's output each parallel stream receives (`attn_hc` / `ffn_hc` output 0), float32. |
+| `attention_comb`, `mlp_comb` | DeepSeek-V4 | `StreamMixing` | yes | The matrix mixing the streams around each sublayer, applied transposed (output 1), float32. |
+| `deepstack_output` | Qwen3-VL | `ImageFeatures` | yes; in-place edits land | The deepstack image features the text model adds at the image tokens after this block: `layers[k + 1].input[mask] == layers[k].layer_output[mask] + layers[k].deepstack_output` on the blocks the deepstack feeds (one per `vision_config.deepstack_visual_indexes`), unavailable on the others and on a text-only load. [usage/vision](../usage/vision.md#the-qwen-vit) |
+
 ## `Attention`
 
 A softmax-attention module. The base class reads everything but `attention_output` inside transformers' shared eager attention forward, reached through the module's `attention_interface` call (`INTERFACE = "attention_interface_1"`). GPT-J, GPT-Neo, CodeGen, GPT-NeoX-Japanese, XGLM, BLOOM, MPT and Falcon relocate the same names onto their own operations; [families.md](families.md) has the ops.

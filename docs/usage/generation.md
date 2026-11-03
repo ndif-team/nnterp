@@ -94,7 +94,9 @@ with model.generate(prompt, max_new_tokens=3, do_sample=False) as tracer:
 Inside one step's body the reads follow the forward like in a trace:
 `input_ids` first, a block's `self_attn.*` and `mlp.*` before that block's
 `layer_output`, `logits` and `next_token_probs` last, and a block's interior values
-before its `attention_output`.
+before its `attention_output`. Every step repeats the order of one forward, so
+`model.order(i)` and `model.rank(name, layer)` hold here too: sort the reads of a step by
+`rank` when the code builds them ([availability.md](availability.md#forward-order-order-and-rank)).
 
 A misplaced read fails differently here. In a single trace it raises
 `OutOfOrderError`. Inside `tracer.iter` under `generate` it usually does not: the read

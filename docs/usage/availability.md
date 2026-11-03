@@ -1,12 +1,12 @@
 ---
-title: Availability
-one_liner: "`model.support()` says which standard values this checkpoint has and why not, before any trace; reading an unavailable one raises `nnterp.Unavailable` at that line."
-tags: [usage, support, Unavailable, SourceNotAvailable, eager, hybrids]
+title: Availability and forward order
+one_liner: "`model.support()` says which standard values this checkpoint has and why not, before any trace; reading an unavailable one raises `nnterp.Unavailable` at that line; `model.order()` and `model.rank()` give the forward order to read and edit the available ones in."
+tags: [usage, support, Unavailable, SourceNotAvailable, eager, hybrids, order, rank, OutOfOrderError]
 related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/residual-stream.md, docs/usage/layouts.md]
 sources: [nnterp/standardized.py, nnterp/order.py, nnterp/components/standard.py, nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/opt.py]
 ---
 
-# Availability
+# Availability and forward order
 
 ## What this is for
 
@@ -18,6 +18,10 @@ collects those reasons from the config alone, so a script can decide what to rea
 running anything.
 
 `None` means available. Anything else is the reason, a string.
+
+A script that reads or edits several values has a second question: which order to put them
+in. `model.order()` and `model.rank()` answer it for the values `support()` lists as
+available ([forward order](#forward-order-order-and-rank)).
 
 ## Canonical pattern
 
@@ -204,6 +208,16 @@ on `getattr(model, "vision", None)` first and on `support()` second
 Within one invoke, values are read in the order the forward reaches them. `model.order()`
 says that order for the values `support()` lists as available, and `model.rank()` gives one
 sortable tuple per value. Like `support()`, both are asked outside a trace.
+
+Use them when one trace reads or edits values at several sites in an order the code
+decides: a helper that takes a list of `(value, block)` sites, a sweep that patches several
+values per block, a port of code that hooked modules in its own order. Sort the sites by
+`rank` before the trace and issue them in that order, instead of keeping a hand-written
+table of what comes first; that table differs per family (on Falcon without alibi the values
+come before the queries, and a mixture's shared expert runs first on some families and last
+on others). When a plain trace raises `OutOfOrderError`, or a list read under `tracer.iter`
+comes back shifted by one step ([generation](generation.md#read-order-within-a-step)),
+compare the ranks of the reads involved.
 
 ```python
 from nnterp import StandardizedTransformer

@@ -195,7 +195,9 @@ is symmetric.
 - Across invokes, a consuming *write* needs a barrier; without it, `NameError`.
   Across traces, `.save()` or a session.
 - Within one invoke, reads follow the forward (`OutOfOrderError` otherwise), and
-  the source cannot be the target block's own clean value.
+  the source cannot be the target block's own clean value. To patch several sites in one
+  invoke, sort them by `model.rank(name, layer)` first
+  ([availability](../usage/availability.md#forward-order-order-and-rank)).
 - Different token lengths cannot share an absolute position; `[:, -1]` survives
   padding and length differences, an absolute index does not.
 - Patching mutates the served tensor; `.clone()` first if you want both.

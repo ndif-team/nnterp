@@ -184,8 +184,10 @@ first, before `router_logits`. On JetMoE the router computes the indices before 
 weights, so read `expert_indices` before `expert_weights` (the ablation below binds the
 indices first there).
 
-An out-of-order read raises nnsight's `OutOfOrderError`; read one value per trace when
-in doubt, as the suite does.
+An out-of-order read raises nnsight's `OutOfOrderError`. `model.order(i)` is this order
+measured on the loaded checkpoint, the shared expert's place included, and
+`model.rank(name, i)` sorts a list of reads by it
+([availability](availability.md#forward-order-order-and-rank)).
 
 ## Batches and invokes
 

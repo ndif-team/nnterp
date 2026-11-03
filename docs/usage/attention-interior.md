@@ -43,6 +43,9 @@ with model.trace("The Eiffel Tower is in the city of"):
 
 The six reads are in forward order, so they fit in one trace; a write follows
 the same rule (write the head outputs after reading the scores, not before).
+`model.order(i)` gives block `i`'s order on any family, Falcon's different one included,
+and `model.rank(name, i)` sorts a list of reads and writes by it
+([availability](availability.md#forward-order-order-and-rank)).
 `softmax(scores)` equals `pattern` to the dtype cast, and the pattern's rows
 sum to one and are lower-triangular.
 

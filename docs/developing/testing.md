@@ -327,6 +327,13 @@ check the identity on every block, that a read changes no logit, that an
 in-place edit, a statement reading twice and an assignment are the same
 write, that a value of other rows is refused and the engine survives; and
 compare the logits under `steer` and `skip_layers` with transformers'.
+Outside a trace they hold `model.rank` / `model.order` to the reference's ranks on the root and
+the compared blocks for every value both engines serve (a value the engine lacks raises
+`Unavailable` with its reason), and `model.generation_config`'s EOS to the reference's.
+`test_lm_head_output` holds `lm_head_output` to `logits` bit for bit, an in-place edit and an
+assignment both reaching the logits, where the logits processor applies nothing past the head;
+where it softcaps or scales (the family's `UNAVAILABLE` lists `lm_head_output` then), it checks
+that the reason names which.
 `test_skip_layers` is last: a skip answers for the whole step.
 
 The rotary tests run on the compared blocks that rotate on vLLM. They hold

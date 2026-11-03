@@ -147,6 +147,9 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_interface_patch_reaches_its_group_alone` | read once and called twice, the call on keys and values of key/value head 0 patched moves exactly the query heads `h < num_heads // num_kv_heads`; written into the last row of `attention_head_outputs`, it moves the attention module's output at the last position and nowhere else |
 | `test_interface_on_decode_steps` | under `generate` and `tracer.iter[:2]`, the call reproduces both values on the prompt and on a decode step (one query row) |
 
+`VisionSuite.test_tower_interface_reproduces_heads_and_pattern` checks the same on a tower block, and
+`tests/test_tensor_parallel.py` reads `interface` and patches through it across two CPU ranks.
+
 **Layouts** (`:445-485`)
 
 | method | asserts |

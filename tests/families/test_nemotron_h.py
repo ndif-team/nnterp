@@ -165,7 +165,7 @@ class TestNemotronHOmniVision(VisionSuite):
         "projector": "multi_modal_projector",
     }
     EXPECTED_VISION_UNAVAILABLE = {
-        f"self_attn.{name}": "one per image" for name in ("attention_scores", "attention_probabilities", "attention_head_outputs")
+        f"self_attn.{name}": "one per image" for name in ("attention_scores", "attention_probabilities", "attention_head_outputs", "interface")
     }
 
     @pytest.fixture(scope="class", autouse=True)

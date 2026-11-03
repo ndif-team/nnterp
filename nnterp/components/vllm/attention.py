@@ -11,7 +11,7 @@ from nnsight.intervention.interleaver import Mediator
 
 from .. import attention as standard
 from ..attention import HeadOutputs, Keys, Pattern, Queries, Values, rotary_reason
-from ..eproperty import DerivedEProperty, Unavailable
+from ..eproperty import DerivedEProperty, Unavailable, unavailable
 from ..layer import Residual
 from ..standard import absent
 from .flat import Flat, on_transformers_backend
@@ -116,6 +116,11 @@ class Attention(standard.Attention):
     to change what it wrote) and there on the prefill only, where a step
     holds every key; a decode step raises `Unavailable` (`on_decode_step`).
     """
+
+    interface = unavailable(
+        "vLLM's attention layer is a kernel that writes this step's keys and values into the engine's cache as it "
+        "runs, so it cannot be called again on other tensors"
+    )
 
     attention_scores = DerivedEProperty(
         scores,

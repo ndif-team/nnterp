@@ -144,6 +144,7 @@ outside the trace to pick blocks.
 | `the default family cannot tell what this sublayer adds to the stream; add a family module (docs/extending/adding-a-family.md)` | `attention_output`, `mlp_output` | the default family (a `model_type` with no family) serves no contribution ([loading](loading.md#an-architecture-with-no-family)); `project_on_vocab` and `get_topk_closest_tokens` raise the same way, "the default family cannot tell what follows lm_head" |
 | `no self_attn module found under the names the default family knows; ...` / `no mlp module found ...` | every value of that module | the default family found no such module on the block |
 | `the default family cannot tell whether the block has a stream between its sublayers ...` / `... whether post_attention_layernorm feeds the MLP ...` / `a mixture of experts (the module has experts, a router or a gate) ...` | `layer_mid`; `mlp_norm_output`; `mlp_activation`, `mlp_neurons` | the default family: the block's shape is a fact its names do not show ([loading](loading.md#an-architecture-with-no-family)) |
+| `the queries, keys and values are not the arguments of one call in this forward that returns the head outputs (...), so there is no attention function to call again` | `self_attn.interface` | BLOOM, MPT, Falcon and XGLM (their own arithmetic) and DeepSeek-V4 (the head outputs are the interface's output rotated back); elsewhere `interface` has the reason of the queries, keys, values, head outputs or pattern it works with ([attention-interior](attention-interior.md#calling-the-attention-function-again-interface)) |
 | `read inside transformers' pure-torch torch_chunk_gated_delta_rule, but this process dispatches it to an optimized kernel (fla) with no Python source; uninstall it, or call nnterp.route_kernels(model.family, 'torch'), to read these` | every `linear_attn` value but `attention_output` | `flash-linear-attention` or `causal-conv1d` is installed |
 | `a text-only load: no processor, so no image reaches the model; load with task='image-text-to-text'` | every value of `model.vision` and its blocks | a vision-language wrapper loaded under the default `task="text-generation"` ([vision.md](vision.md#availability)); `model.vision.support()` is then empty and `model.support()` has no `vision.` rows |
 | `<tower>.image_size is not available: the tower takes images of any resolution, each cut into its own patch grid by the processor; read the grid off the processor's output (image_grid_thw, image_sizes, image_position_ids)` | `vision.image_size` (a size, so raised at the read; not a `support()` row) | the Qwen ViT, Pixtral, Gemma 4 and Gemma 4 unified |
@@ -230,10 +231,10 @@ model.order(0)
 # {'layer_input': 0, 'attention_norm_output': 1,
 #  'self_attn.attention_queries_prerope': 2, 'self_attn.attention_keys_prerope': 2,
 #  'self_attn.attention_queries': 3, 'self_attn.attention_keys': 3, 'self_attn.attention_values': 3,
-#  'self_attn.attention_scores': 4, 'self_attn.attention_probabilities': 5,
-#  'self_attn.attention_head_outputs': 6, 'self_attn.attention_premix': 7, 'self_attn.attention_output': 8,
-#  'layer_mid': 9, 'mlp_norm_output': 10, 'mlp_input': 11, 'mlp.mlp_activation': 12,
-#  'mlp.mlp_neurons': 13, 'mlp.mlp_output': 14, 'layer_output': 15}
+#  'self_attn.interface': 4, 'self_attn.attention_scores': 5, 'self_attn.attention_probabilities': 6,
+#  'self_attn.attention_head_outputs': 7, 'self_attn.attention_premix': 8, 'self_attn.attention_output': 9,
+#  'layer_mid': 10, 'mlp_norm_output': 11, 'mlp_input': 12, 'mlp.mlp_activation': 13,
+#  'mlp.mlp_neurons': 14, 'mlp.mlp_output': 15, 'layer_output': 16}
 model.order()
 # {'input_ids': 0, 'attention_mask': 0, 'input_size': 0, 'token_embeddings': 1,
 #  'final_norm_output': 2, 'lm_head_output': 3, 'logits': 4, 'next_token_probs': 4}

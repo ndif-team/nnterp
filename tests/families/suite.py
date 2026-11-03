@@ -33,7 +33,7 @@ VALUES = {
     "self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope",
     "self_attn.attention_queries", "self_attn.attention_keys", "self_attn.attention_values",
     "self_attn.attention_scores", "self_attn.attention_head_outputs",
-    "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons",
+    "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons", "self_attn.interface",
 }
 #: The values before the rotary on a block that applies none: `support()` gives `Attention.no_rotary`'s reason.
 NO_ROTARY = {name: "no rotary embedding" for name in ("self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope")}
@@ -720,6 +720,93 @@ class FamilySuite:
             block.self_attn.attention_queries[:, 0] = 0
             queries = model.logits.save()
         assert not torch.equal(clean, queries)
+
+    # -- calling the attention function again --------------------------------------
+
+    def interface_blocks(self, model):
+        """The blocks whose attention serves `interface`; where none does, its reason is checked with the others' (`test_support_is_what_this_family_expects`)."""
+        blocks = [layer for layer in self.attn_blocks(model) if layer.self_attn.support()["interface"] is None]
+        if not blocks:
+            pytest.skip("no attention function to call again on this checkpoint")
+        return blocks
+
+    def test_interface_reproduces_heads_and_pattern(self, model):
+        """On the served queries, keys and values the call gives `attention_head_outputs` and `attention_probabilities`
+        bit for bit, on every block: sliding and global, borrowed keys, sinks, softcaps."""
+        blocks = self.interface_blocks(model)
+        read = {}  # filled inside the block: a name bound there does not survive the trace
+        with model.trace(PROMPT):
+            for layer in blocks:
+                attn = layer.self_attn
+                heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+                read[layer.path] = heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()
+        assert len(read) == len(blocks)
+        for path, (heads, pattern, probs, served) in read.items():
+            assert torch.equal(heads, served) and torch.equal(pattern, probs), path
+
+    def test_interface_on_a_padded_batch(self, model):
+        """A padded batch in one invoke: the call gives both values bit for bit, pad rows included. Under two invokes it
+        runs one invoke's rows where the model ran both at once, so they agree to rounding."""
+        if model.tokenizer.pad_token is None:
+            pytest.skip("the tokenizer has no pad token, so prompts of different lengths do not batch")
+        attn = self.interface_blocks(model)[0].self_attn
+        read = {}
+        batch = dict(model.tokenizer(PROMPTS, padding=True, return_tensors="pt"))  # the tokenizer's: a wrapper's processor may refuse to pad text alone
+        with model.trace(batch):
+            heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+            read["batch"] = heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()
+        with model.trace() as tracer:
+            for i, prompt in enumerate(PROMPTS):
+                with tracer.invoke(dict(model.tokenizer(prompt, return_tensors="pt"))):
+                    heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+                    read[i] = heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()
+        heads, pattern, probs, served = read.pop("batch")
+        assert heads.shape[0] == len(PROMPTS)
+        torch.testing.assert_close(heads, served, rtol=0, atol=0, equal_nan=True)  # a pad row can be all masked
+        torch.testing.assert_close(pattern, probs, rtol=0, atol=0, equal_nan=True)
+        for i, (heads, pattern, probs, served) in read.items():
+            torch.testing.assert_close(heads, served, equal_nan=True, msg=f"invoke {i}")
+            torch.testing.assert_close(pattern, probs, equal_nan=True, msg=f"invoke {i}")
+
+    def test_interface_patch_reaches_its_group_alone(self, model):
+        """Keys and values of key/value head 0, patched through the call, move exactly the query heads that read that
+        head; written into the last row of the head outputs, they move the attention's output there and nowhere else
+        (the module's own output: a mixture of experts after it can move the other tokens by rounding)."""
+        attn = self.interface_blocks(model)[0].self_attn
+        with model.trace(PROMPT):
+            clean = first_tensor(attn.output).save()
+        saved = {}
+        with model.trace(PROMPT):
+            interface = attn.interface  # read once, where the queries are; called twice
+            q, k, v = attn.attention_queries, attn.attention_keys, attn.attention_values
+            keys, values = k.clone(), v.clone()
+            keys[:, 0] = keys[:, 0] * 2
+            values[:, 0] = values[:, 0] + 1
+            heads, _ = interface(q, k, v)
+            patched, _ = interface(q, keys, values)
+            saved["moved"] = patched.ne(heads).flatten(0, 1).any(0).any(-1).save()  # per query head
+            saved["group"] = q.shape[1] // k.shape[1]
+            saved["served"] = torch.equal(heads, attn.attention_head_outputs)
+            attn.attention_head_outputs[:, -1] = patched[:, -1]
+            saved["output"] = first_tensor(attn.output).save()
+        group, output = saved["group"], saved["output"]
+        assert saved["served"]
+        assert saved["moved"].tolist() == [h < group for h in range(attn.num_heads)]  # query head h reads key/value head h // group
+        assert torch.equal(output[:, :-1], clean[:, :-1]) and not torch.equal(output[:, -1], clean[:, -1])
+
+    def test_interface_on_decode_steps(self, model):
+        """Under generate each step's call has that step's mask and the whole cache: on the prompt and on a decode
+        step, the call gives that step's head outputs and pattern."""
+        attn = self.interface_blocks(model)[0].self_attn
+        read = []
+        with model.generate(PROMPT, max_new_tokens=2, min_new_tokens=2, do_sample=False, use_cache=True) as tracer:  # a tiny config may turn the cache off
+            for _ in tracer.iter[:2]:
+                heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+                read.append((heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()))
+        n = len(model.tokenizer(PROMPT).input_ids)
+        for step, (heads, pattern, probs, served) in enumerate(read):
+            assert pattern.shape[-2] == (n if step == 0 else 1), (step, tuple(pattern.shape))
+            assert torch.equal(heads, served) and torch.equal(pattern, probs), step
 
     # -- the rotary embedding ------------------------------------------------------
     # The queries and keys before the rotation, and `rotate`, which applies the

@@ -159,6 +159,18 @@ what every vision tower reports for the two values, which the suite expects on a
 | `test_steer` | the last position moves by `2 * vector`, the others are untouched, the logits move |
 | `test_project_on_vocab_is_the_logit_lens` | on the last block's output it equals `logits`; `get_topk_closest_tokens(k=3)` returns one dict of three token → probability entries summing to at most one |
 
+**Calling the attention function again** (`self_attn.interface`; skipped where no block serves it, whose reason `test_support_is_what_this_family_expects` checks through `EXPECTED_UNAVAILABLE`)
+
+| method | asserts |
+|---|---|
+| `test_interface_reproduces_heads_and_pattern` | on every attention block, in one trace, `interface(attention_queries, attention_keys, attention_values)` equals `attention_head_outputs` and `attention_probabilities` bit for bit |
+| `test_interface_on_a_padded_batch` | the same on a padded batch of `PROMPTS` in one invoke (pad rows included, NaN equal to NaN), and to rounding under two invokes; skipped without a pad token |
+| `test_interface_patch_reaches_its_group_alone` | read once and called twice, the call on keys and values of key/value head 0 patched moves exactly the query heads `h < num_heads // num_kv_heads`; written into the last row of `attention_head_outputs`, it moves the attention module's output at the last position and nowhere else |
+| `test_interface_on_decode_steps` | under `generate` and `tracer.iter[:2]`, the call reproduces both values on the prompt and on a decode step (one query row) |
+
+`VisionSuite.test_tower_interface_reproduces_heads_and_pattern` checks the same on a tower block, and
+`tests/test_tensor_parallel.py` reads `interface` and patches through it across two CPU ranks.
+
 **Layouts** (`:445-485`)
 
 | method | asserts |
@@ -374,13 +386,14 @@ class, 25 to 80 s each; the checkpoints are about 250 GB together.
 
 ## The root tests
 
-`tests/test_tensor_parallel.py` (28 tests) launches `tests/tp_worker.py` in one
+`tests/test_tensor_parallel.py` (32 tests) launches `tests/tp_worker.py` in one
 process and under `torch.distributed.run` on two CPU ranks over gloo (no GPU), on
 `trl-internal-testing/tiny-Qwen3ForCausalLM` (grouped-query, so the keys' head axis
 differs from the queries'): every value that tensor parallelism splits by head or
-neuron (the queries and keys before the rotary among them, and `rotate` of the queries),
-the boundaries nnsight reassembles, and the logits after six edits aimed at
-the last rank's heads, at a query moved before the rotary and at the neurons around the
+neuron (the queries and keys before the rotary among them, `rotate` of the queries, and
+the head outputs and pattern of `interface`), the boundaries nnsight reassembles, and the
+logits after seven edits aimed at the last rank's heads, at a query moved before the
+rotary, at a head patched through `interface` and at the neurons around the
 boundary between the ranks (one with gradients on) must
 match the one-process run, and every rank must agree bit for bit. It skips below
 transformers 5.19.

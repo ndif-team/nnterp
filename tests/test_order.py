@@ -9,7 +9,8 @@ LLAMA = "hf-internal-testing/tiny-random-LlamaForCausalLM"
 QWEN3_5 = "yujiepan/qwen3.5-tiny-random"
 
 #: Tiny Llama's block, in forward order: the queries and keys before the rotary are the rotary call's arguments, and
-#: the queries, keys and values the attention call's, one location each.
+#: the queries, keys and values the attention call's, one location each; the call to make again (`interface`) is read
+#: with the attention call's arguments and called before the scores, so it ranks between.
 LLAMA_BLOCK = {
     "layer_input": 0,
     "attention_norm_output": 1,
@@ -18,18 +19,19 @@ LLAMA_BLOCK = {
     "self_attn.attention_queries": 3,
     "self_attn.attention_keys": 3,
     "self_attn.attention_values": 3,
-    "self_attn.attention_scores": 4,
-    "self_attn.attention_probabilities": 5,
-    "self_attn.attention_head_outputs": 6,
-    "self_attn.attention_premix": 7,
-    "self_attn.attention_output": 8,
-    "layer_mid": 9,
-    "mlp_norm_output": 10,
-    "mlp_input": 11,
-    "mlp.mlp_activation": 12,
-    "mlp.mlp_neurons": 13,
-    "mlp.mlp_output": 14,
-    "layer_output": 15,
+    "self_attn.interface": 4,
+    "self_attn.attention_scores": 5,
+    "self_attn.attention_probabilities": 6,
+    "self_attn.attention_head_outputs": 7,
+    "self_attn.attention_premix": 8,
+    "self_attn.attention_output": 9,
+    "layer_mid": 10,
+    "mlp_norm_output": 11,
+    "mlp_input": 12,
+    "mlp.mlp_activation": 13,
+    "mlp.mlp_neurons": 14,
+    "mlp.mlp_output": 15,
+    "layer_output": 16,
 }
 
 
@@ -51,7 +53,7 @@ def test_llama_order(llama):
     assert llama.rank("logits") == llama.rank("next_token_probs") == (2, 4)
     assert llama.rank("final_norm_output") == (2, 2) and llama.rank("lm_head_output") == (2, 3)
     assert {name: llama.rank(name, 1) for name in LLAMA_BLOCK} == {name: (1, r) for name, r in LLAMA_BLOCK.items()}
-    assert llama.rank("layer_output", -1) == (1, 15)
+    assert llama.rank("layer_output", -1) == (1, 16)
 
 
 def test_ranks_sort_reads_into_forward_order(llama):

@@ -3,6 +3,7 @@
 import torch
 from suite import NO_ROTARY, FamilySuite, rows, PROMPT
 
+from nnterp.components import OWN_ARITHMETIC
 from nnterp.families import bloom
 
 
@@ -10,7 +11,7 @@ class TestBloom(FamilySuite):
     REPO = "hf-internal-testing/tiny-random-BloomForCausalLM"
     FAMILY = bloom
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention")
-    EXPECTED_UNAVAILABLE = NO_ROTARY
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "self_attn.interface": OWN_ARITHMETIC}
 
     def test_contributions_are_before_the_residual_add(self, model):
         """Both sublayers add the residual inside the module; the values are the pre-add tensors."""

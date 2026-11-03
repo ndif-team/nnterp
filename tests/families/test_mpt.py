@@ -3,6 +3,7 @@
 import torch
 from suite import NO_ROTARY, FamilySuite, rows, PROMPT
 
+from nnterp.components import OWN_ARITHMETIC
 from nnterp.families import mpt
 
 
@@ -11,7 +12,7 @@ class TestMpt(FamilySuite):
     FAMILY = mpt
     NATIVE = rows("transformer", "blocks", "wte", "norm_f", attn="attn", mlp="ffn", ln1="norm_1", ln2="norm_2")
     REFUSES_IN_PLACE_QKV = True  # q/k/v come out of one chunk()
-    EXPECTED_UNAVAILABLE = NO_ROTARY
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "self_attn.interface": OWN_ARITHMETIC}
 
     def test_mlp_contribution_is_before_the_residual_add(self, model):
         with model.trace(PROMPT):

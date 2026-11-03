@@ -94,6 +94,29 @@ print(overwritten[0, 0, 2])
 
 On a model split across GPUs ([`distributed_config=`](../loading.md#distributed_config)), each GPU computes a share of the heads. nnterp gathers the six values along the head axis where a GPU holds a share, so every GPU reads all the heads, and splits an edit back: `attention_head_outputs[:, :, 20] = 0` ablates head 20 wherever it is computed.
 
+## Calling the attention function again
+
+`attn.interface` is the attention function the block called, with that call's mask, scale, softcap and sinks; called on queries, keys and values it returns `(head_outputs, pattern)` as the model computes them, bit for bit on the served tensors. Nothing reaches the model until you write a result, so an edit of the keys or values can reach one head and one row, which writing `attention_keys` cannot. Read it with the queries, keys and values, read it once per forward, and call it before reading anything later in the attention.
+
+```python
+with model.trace("The Eiffel Tower is in"):
+    interface = attn.interface
+    q, k, v = attn.attention_queries, attn.attention_keys, attn.attention_values
+    same, _ = interface(q, k, v)
+    patched, _ = interface(q, k, v * 0)
+    served = attn.attention_head_outputs.clone().save()
+    attn.attention_head_outputs[:, -1, 7] = patched[:, -1, 7]
+    same = same.save()
+    logits = model.logits.save()
+
+print(torch.equal(same, served), (logits[:, :-1] - clean[:, :-1]).abs().max().item(), (logits[:, -1] - clean[:, -1]).abs().max().item())
+# True 0.0 0.47303009033203125
+```
+
+BLOOM, MPT, Falcon, XGLM and DeepSeek-V4 make no one call that takes the queries, keys and values and returns the head outputs, and `support()` reports `interface` unavailable there.
+
+A key or query edited before the rotary goes in rotated for its position, `interface(q, attn.rotate(k_prerope, positions), v)`, with `attention_keys_prerope` read first, since the forward reaches it before the interface ([Rotary embedding](rotary.md)).
+
 ## Grouped-query attention
 
 The keys and values are read before `repeat_kv`, so on a checkpoint with fewer key/value heads than query heads their head axis is `num_kv_heads` wide while the queries, the scores, the pattern and the head outputs are `num_heads` wide. Query head `h` reads key/value head `h // (num_heads // num_kv_heads)`, so a head-wise edit of the keys touches every query head of that group. On Qwen2.5-0.5B, 14 query heads share 2 key/value heads:
@@ -124,7 +147,7 @@ The table lists the six in forward order, and all of them come before `attention
 
 ```python
 print(qwen.order(5))
-# {'layer_input': 0, 'attention_norm_output': 1, 'self_attn.attention_queries_prerope': 2, 'self_attn.attention_keys_prerope': 2, 'self_attn.attention_queries': 3, 'self_attn.attention_keys': 3, 'self_attn.attention_values': 3, 'self_attn.attention_scores': 4, 'self_attn.attention_probabilities': 5, 'self_attn.attention_head_outputs': 6, 'self_attn.attention_premix': 7, 'self_attn.attention_output': 8, 'layer_mid': 9, 'mlp_norm_output': 10, 'mlp_input': 11, 'mlp.mlp_activation': 12, 'mlp.mlp_neurons': 13, 'mlp.mlp_output': 14, 'layer_output': 15}
+# {'layer_input': 0, 'attention_norm_output': 1, 'self_attn.attention_queries_prerope': 2, 'self_attn.attention_keys_prerope': 2, 'self_attn.attention_queries': 3, 'self_attn.attention_keys': 3, 'self_attn.attention_values': 3, 'self_attn.interface': 4, 'self_attn.attention_scores': 5, 'self_attn.attention_probabilities': 6, 'self_attn.attention_head_outputs': 7, 'self_attn.attention_premix': 8, 'self_attn.attention_output': 9, 'layer_mid': 10, 'mlp_norm_output': 11, 'mlp_input': 12, 'mlp.mlp_activation': 13, 'mlp.mlp_neurons': 14, 'mlp.mlp_output': 15, 'layer_output': 16}
 ```
 
 A read out of order raises nnsight's `OutOfOrderError`, which names the internal location rather than the value:

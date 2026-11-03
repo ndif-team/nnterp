@@ -168,6 +168,25 @@ On every recurrent mixer the sequence axis of `attention_queries`, `attention_ke
 An index such as `q[:, -1]` is the last token on `linear_attn` and the last head on
 `self_attn`.
 
+## Calling a module outside a trace
+
+An envoy is callable. Outside a trace, calling one runs its module and returns what the
+module returns: no trace, nothing to save. Call the envoy, under its standard name where it
+has one, rather than reaching for `envoy._module`:
+
+```python
+import torch
+from nnterp import StandardizedTransformer
+
+model = StandardizedTransformer("Qwen/Qwen2.5-0.5B", dispatch=True)
+ids = model.tokenizer("The Eiffel Tower is in", return_tensors="pt").input_ids
+
+emb = model.embed_tokens(ids)                          # [1, 7, 896]: the embedding module, run
+positions = torch.arange(ids.shape[1])[None]           # [1, seq]
+cos, sin = model.model.rotary_emb(emb, positions)      # a module with no standard name, by its native path: [1, 7, 64] each
+out = model.layers[0].mlp(emb)                         # any envoy: its module's forward
+```
+
 ## Gotchas
 
 - **Aliases are not paths.** `envoy.path` is always the native path

@@ -119,7 +119,7 @@ The slider picks a block, each tick's color gives its block's shape, and the dia
   {% for row in ledger.rows %}
   <div class="ledger-row" data-node="{{ ledger.nodes.get(row.name, '') }}">
     <span class="mono-md name role-{{ ledger.role }}">{% if row.condition %}<span class="warn" tabindex="0" data-tip="{{ 'Needs attn_implementation="eager". ' if row.condition.kind == 'eager' }}{{ row.condition.reason }}">&#x26A0;&#xFE0E;</span>{% endif %}{{ row.name }}</span>
-    <span class="hide-sm mono">{% if row.layout %}{{ row.layout }} <span class="dim">[{{ row.dims }}]</span>{% else %}<span class="dim">scalar</span>{% endif %}</span>
+    <span class="hide-sm mono">{% if row.signature %}method <span class="dim">{{ row.signature }}</span>{% elif row.layout %}{{ row.layout }} <span class="dim">[{{ row.dims }}]</span>{% else %}<span class="dim">scalar</span>{% endif %}</span>
     <span class="body-md">{{ row.description }}</span>
     <span class="hide-sm body-md where">{{ row.where|md }}</span>
   </div>

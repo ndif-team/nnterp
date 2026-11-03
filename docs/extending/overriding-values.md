@@ -316,6 +316,22 @@ class Attention(Attention):
         return None
 ```
 
+`no_head_weights()` is the same decision for `Attention.value_weight` and `output_weight`: a
+family whose values are not one linear map of the attention's input (latent attention,
+Gemma-4's `v_norm`) or whose heads share no output projection (JetMoE) returns its reason, and
+both methods raise it. A family that only lays its projections out differently overrides the
+methods instead, reading the fused projection through `projection_weight(self, name)`, which
+keeps the refusal and the PEFT adapters:
+
+```python
+# nnterp/families/phi3.py
+class Attention(Attention):
+    def value_weight(self, kv_head):
+        """``qkv_proj``'s rows are every query, every key, then every value."""
+        weight = projection_weight(self, "qkv_proj")[self.num_heads * self.head_dim:]
+        return weight.unflatten(0, (2, self.num_kv_heads, self.head_dim))[1, kv_head]
+```
+
 ### A per-instance `unavailable=` callable
 
 `unavailable=` takes a function of the envoy returning a reason or `None`, evaluated on

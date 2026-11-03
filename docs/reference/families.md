@@ -340,6 +340,23 @@ views of one tensor (the queries and keys of `codegen`, `dbrx` and `gpt_neox`, `
 keys, and latent attention's shared rope key), where torch refuses them as it does GPT-2's
 queries: assign there.
 
+### Per-head weights
+
+`self_attn.value_weight(kv)` and `self_attn.output_weight(j)` slice head-major rows of `v_proj`
+and columns of `o_proj` on every family not listed; `layers[i].attention_input_gain` is the
+gain of the norm `attention_norm_output` reads, ones on a post-norm block
+([usage/attention-interior](../usage/attention-interior.md#the-weights-per-head-value_weight-output_weight-attention_input_gain)).
+
+| what differs | families | `value_weight` / `output_weight` |
+| --- | --- | --- |
+| every query, every key, then every value in one projection | `phi3` (`qkv_proj`), `dbrx`, `mpt` (`Wqkv`), `gpt_bigcode` under multi-query (`c_attn`) | the value rows of the fused projection |
+| each head's query, key and value, `[num_heads, 3, head_dim]` | `gpt_neox`, `gpt_neox_japanese`, `bloom`, `persimmon` (`query_key_value`), `gpt_bigcode` and Falcon-RW without multi-query | row 2 of the head's three |
+| Falcon's 40B (and 11B) layout, its multi-query 7B layout | `falcon` | per key/value head its group's queries, key, value; every query, then the one key and value |
+| four parts, each a quarter of the heads' queries, values, keys | `codegen` (`qkv_proj`) | the value rows of the head's part |
+| `Conv1D`, `[in, out]` | `gpt2` (`c_attn`, `c_proj`) | the columns, transposed; `output_weight` the rows of `c_proj`, transposed |
+| the values scaled after the projection | `mimo_v2_flash` (`attention_value_scale`) | `v_proj`'s rows times the scale |
+| refused: `no_head_weights()` gives the reason | latent attention (`deepseek_v2`, `deepseek_v3`, `kimi_k2`, `deepseek_v32`, `glm_moe_dsa`, `glm4_moe_lite`, `youtu`, `kimi_linear`), `deepseek_v4` (keys and values one normed projection, a low-rank output projection), `gemma4_text`, `gemma4_unified_text` (`v_norm` on the values), `jetmoe` (per-expert output projection), `zaya` (half of each value head from the previous token), the default family | `Unavailable` |
+
 ### Latent attention
 
 `deepseek_v2`, `deepseek_v3`, `kimi_k2`, `deepseek_v32`, `glm_moe_dsa`, `glm4_moe_lite`, `youtu`, and the attention blocks of `kimi_linear`: queries and keys are `qk_head_dim = qk_nope_head_dim + qk_rope_head_dim` wide, values `v_head_dim` (what the family's `head_dim` returns), and the interface receives `num_heads` key/value heads whatever `num_key_value_heads` says (`KV_HEADS_EXPANDED` in the suite). The root publishes `qk_head_dim` for this; `attention_queries` is laid out `batch num_heads seq qk_head_dim` on every family for the same reason.

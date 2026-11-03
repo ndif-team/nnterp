@@ -57,9 +57,10 @@ def panes(page, checkpoint):
 #: The standard values at the block's, the sublayers' and the root's module boundaries.
 BOUNDARIES = ("attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input", "attention_premix", "mlp_activation",
               "mlp_neurons", "final_norm_output", "lm_head_output")
-#: A ledger row: its node, its condition mark, the value's name and its description.
+#: A ledger row: its node, its condition mark, the value's name, its description and where it is read.
 LEDGER_ROW = re.compile(r'<div class="ledger-row" data-node="([^"]*)">\s*<span class="mono-md name[^"]*">(<span class="warn".*?</span>)?(\w+)</span>'
-                        r'\s*<span class="hide-sm mono">.*?</span>\s*<span class="body-md">(.*?)</span>', re.S)
+                        r'\s*<span class="hide-sm mono">.*?</span>\s*<span class="body-md">(.*?)</span>'
+                        r'\s*<span class="hide-sm body-md where">(.*?)</span>', re.S)
 
 
 def block_of(entry):
@@ -109,9 +110,9 @@ def test_entry_builds_a_page(name):
             assert "identity" in block or term in shape["identity"]
     assert '"identity"' in page and "stream.output" in page
     # Every module boundary the family serves on every block has its place on the page, its ledger row linked to it:
-    # one with no place is read somewhere the diagram does not draw.
-    for node, warn, value, what in LEDGER_ROW.findall(panes(page, embedded(page, "checkpoints-json")["default"])["values"]):
-        if value in BOUNDARIES and not warn and not what.startswith("Unavailable"):
+    # one with no place is read somewhere the diagram does not draw. One the checkpoint does not have reads nowhere.
+    for node, warn, value, _, where in LEDGER_ROW.findall(panes(page, embedded(page, "checkpoints-json")["default"])["values"]):
+        if value in BOUNDARIES and not warn and not where.startswith("<p>nowhere"):
             assert node in nodes and nodes[node]["expr"].endswith("." + value), (value, node)
     for k in range(1, 6):
         assert f"--c{k}: #" in page and f"--c{k}-deep: #" in page

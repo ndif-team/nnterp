@@ -17,8 +17,7 @@ with model.trace("The Eiffel Tower is in Paris"):
 
 print(q_src.shape, k_src.shape)
 # torch.Size([1, 16, 8, 128]) torch.Size([1, 8, 8, 128])
-print(torch.equal(attn.rotate(k_src, range(k_src.shape[2])), k))
-# True
+assert torch.equal(attn.rotate(k_src, range(k_src.shape[2])), k)
 ```
 
 | value | shape | what it is |
@@ -37,8 +36,7 @@ with model.trace("Rome is a city in"):
     attn.attention_queries_prerope[:, :, -1] = q_src[:, :, -1]
     moved = attn.attention_queries.save()
 
-print(torch.equal(moved[:, :, -1:], attn.rotate(q_src[:, :, -1:], [moved.shape[2] - 1])))
-# True
+assert torch.equal(moved[:, :, -1:], attn.rotate(q_src[:, :, -1:], [moved.shape[2] - 1]))
 ```
 
 Use these values, not `self_attn.q_proj.output`, for any edit that must come before the rotation: the projection's layout is the family's (Phi-3 and GPT-NeoX fuse the queries, keys and values into one projection), and on Qwen3, OLMo-2/3 and Gemma a norm sits between the projection and the rotary.

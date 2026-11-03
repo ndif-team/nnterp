@@ -96,7 +96,7 @@ On a model split across GPUs ([`distributed_config=`](../loading.md#distributed_
 
 ## Calling the attention function again
 
-`attn.interface` is the attention function the block called, with that call's mask, scale, softcap and sinks; called on queries, keys and values it returns `(head_outputs, pattern)` as the model computes them, bit for bit on the served tensors. Nothing reaches the model until you write a result, so an edit of the keys or values can reach one head and one row, which writing `attention_keys` cannot. Read it with the queries, keys and values, read it once per forward, and call it before reading anything later in the attention.
+`attn.interface` is the attention function the block called, with that call's mask, scale, softcap and sinks; called on queries, keys and values it returns `(head_outputs, pattern)` as the model computes them, bit for bit on the served tensors. Nothing reaches the model until you write a result, so an edit of the keys or values can reach one head and one row, which writing `attention_keys` cannot. Read it with the queries, keys and values, read it once per forward, and make the first call before reading anything later in the attention; later calls of the same result can follow those reads.
 
 ```python
 with model.trace("The Eiffel Tower is in"):

@@ -32,15 +32,20 @@ from nnterp import StandardizedTransformer
 model = StandardizedTransformer("hf-tiny-v2/tiny-random-NanoChatForCausalLM", attn_implementation="eager")
 print(model.layers[0])                                               # the native names and the aliases the default bound
 {name: reason for name, reason in model.support().items() if reason}
-# {'self_attn.attention_output': 'the default family cannot tell what this sublayer adds to the stream; ...',
+# {'layer_mid': {0: 'the default family cannot tell whether the block has a stream between its sublayers ...', 1: ...},
+#  'mlp_norm_output': ..., 'self_attn.attention_queries_prerope': ..., 'self_attn.attention_keys_prerope': ...,
+#  'self_attn.attention_output': {0: 'the default family cannot tell what this sublayer adds to the stream; ...', 1: ...},
 #  'mlp.mlp_output': ...}
 ```
 
-The default always lists the two contributions, and `model.project_on_vocab` raises
-`Unavailable` ("the default family cannot tell what follows lm_head"): a family module
-says what the block adds (an `attention_output` keyed on a post-norm's output on Gemma-2,
-[overriding-values.md](overriding-values.md)) and what follows the head (a
-`def project_on_vocab(model, hidden)` for a softcap or a scale). Anything further in the
+The default always lists the two contributions, `layer_mid`, `mlp_norm_output` and the
+queries and keys before the rotary, and `model.project_on_vocab` raises `Unavailable`
+("the default family cannot tell what follows lm_head"): a family module says what the
+block adds (an `attention_output` keyed on a post-norm's output on Gemma-2,
+[overriding-values.md](overriding-values.md)), what follows the head (a
+`def project_on_vocab(model, hidden)` for a softcap or a scale) and how its blocks rotate
+(on transformers' shared `apply_rotary_pos_emb` the base `Attention` serves the values
+before the rotary and `rotate`; a block without one overrides `no_rotary`). Anything further in the
 dict names another spot: "no self_attn module found under the names the default family
 knows" is a `RENAME` entry, and "the attention does its own arithmetic rather than
 transformers' shared attention interface" is an interior mapped onto the family's own
@@ -82,8 +87,10 @@ class Mlp(Mlp):
 ENVOYS = {LlamaDecoderLayer: Layer, LlamaAttention: Attention, LlamaMLP: Mlp}
 ```
 
-Mistral, Qwen2/3, Gemma 1, OLMo 1, Phi-3, SmolLM3 and StableLM are this file with
-the class names swapped. `gpt2.py` shows every other part of the template in use:
+Mistral, Qwen2/3, Gemma 1, OLMo 1 and Phi-3 are this file with the class names swapped
+(Phi-3 also aliases its `activation_fn`, and Mistral, Qwen2 and Gemma add their vision-language
+wrappers' names). SmolLM3 is the same plus a `no_rotary` for the blocks its `no_rope_layers`
+marks. `gpt2.py` shows every other part of the template in use:
 block-level aliases, a config flag that takes the attention off the shared
 interface, and container keys anchored at the root:
 

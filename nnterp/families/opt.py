@@ -22,7 +22,7 @@ from typing import TYPE_CHECKING
 
 from transformers.models.opt.modeling_opt import OPTAttention, OPTDecoderLayer
 
-from ..components import POST_NORM_ATTENTION, POST_NORM_MLP, Attention, EProperty, FlatResidual, Layer, Mlp
+from ..components import POST_NORM_ATTENTION, POST_NORM_MLP, Attention, EProperty, FlatResidual, Layer, Mlp, Residual
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -52,10 +52,12 @@ class Layer(Layer):
     itself, ``layer_mid`` is ``self_attn_layer_norm``'s output, and no norm precedes the feed-forward path.
     """
 
-    attention_norm_output = EProperty(
+    @EProperty(
         "input_layernorm.output", description="The normed stream entering the attention",
         unavailable=lambda block: None if norms_before(block) else POST_NORM_ATTENTION,
     )
+    def attention_norm_output(self, value) -> Residual:
+        return value
 
     @EProperty(
         lambda block: "final_layer_norm.input" if norms_before(block) else "input_layernorm.output",
@@ -69,10 +71,12 @@ class Layer(Layer):
         current = self.final_layer_norm.input if norms_before(self) else self.input_layernorm.output
         return value.view(current.shape)
 
-    mlp_norm_output = EProperty(
+    @EProperty(
         "final_layer_norm.output", description="The normed stream entering the feed-forward path, flattened to [batch * seq, hidden]",
         unavailable=lambda block: None if norms_before(block) else POST_NORM_MLP,
     )
+    def mlp_norm_output(self, value) -> FlatResidual:
+        return value
 
 
 

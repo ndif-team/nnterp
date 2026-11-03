@@ -8,7 +8,7 @@ binds only where it resolves, so both spellings map to ``lm_head``.
 
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXAttention, GPTNeoXLayer, GPTNeoXMLP
 
-from ..components import Attention, EProperty, Layer, Mlp, PARALLEL
+from ..components import Attention, EProperty, Layer, Mlp, PARALLEL, Residual
 
 RENAME = {
     "gpt_neox.embed_in": "embed_tokens",
@@ -34,11 +34,13 @@ class Layer(Layer):
     own norm of the block's input, ``post_attention_layernorm``'s output, as on the pre-norm block.
     """
 
-    layer_mid = EProperty(
+    @EProperty(
         "post_attention_layernorm.input",
         description="The residual stream after the attention add",
         unavailable=lambda block: PARALLEL if block.root.config.use_parallel_residual else None,
     )
+    def layer_mid(self, value) -> Residual:
+        return value
 
 
 

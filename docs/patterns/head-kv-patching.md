@@ -134,10 +134,11 @@ it, at the head outputs.
 
 - **Clone before editing.** `k` and `v` are the tensors the model attends with and, under
   `generate`, the cache's; an in-place edit of them is the bleed above.
-- **Read `interface` with the queries and call it before the head outputs.** The call
-  takes the function as the forward runs it, so it comes before any read of the scores,
-  the pattern or the head outputs; to call it twice, read `attn.interface` once and call
-  the result twice ([attention-interior.md](../usage/attention-interior.md#calling-the-attention-function-again-interface)).
+- **Read `interface` with the queries and make the first call before the head outputs.** The
+  first call takes the function as the forward runs it, so it comes before any read of the
+  scores, the pattern or the head outputs; later calls of the same result reuse it and can
+  follow those reads. To call it twice, read `attn.interface` once and call the result twice
+  ([attention-interior.md](../usage/attention-interior.md#calling-the-attention-function-again-interface)).
 - **Pass whole tensors.** The call takes the live call's query and key lengths (its mask
   has them): patch inside `k2` and `v2`, pass all of `q`, and slice the result.
 - **Eager only, and not everywhere.** `support()` reports `self_attn.interface` unavailable

@@ -53,19 +53,23 @@ class Layer(Layer):
     the MLP is called with and the two pre-norm outputs do not exist.
     """
 
-    attention_norm_output = EProperty(
+    @EProperty(
         "input_layernorm.output", description="The normed stream entering the mixer",
         unavailable=lambda block: POST_NORM_ATTENTION if post_norm(block) else None,
     )
+    def attention_norm_output(self, value) -> Residual:
+        return value
 
     @EProperty(lambda block: "mlp.input" if post_norm(block) else "post_attention_layernorm.input", description="The residual stream after the mixer's add")
     def layer_mid(self, value) -> Residual:
         return value
 
-    mlp_norm_output = EProperty(
+    @EProperty(
         "post_attention_layernorm.output", description="The normed stream entering the MLP",
         unavailable=lambda block: POST_NORM_MLP if post_norm(block) else None,
     )
+    def mlp_norm_output(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):

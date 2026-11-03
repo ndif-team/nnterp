@@ -1,6 +1,6 @@
 """GPT-2 on vLLM, against the transformers engine: a block that is not fused."""
 
-from vllm_suite import VLLMFamilySuite
+from vllm_suite import NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import gpt2
 
@@ -8,7 +8,7 @@ from nnterp.families.vllm import gpt2
 class TestVLLMGPT2(VLLMFamilySuite):
     REPO = "openai-community/gpt2"
     FAMILY = gpt2
-    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | NO_ROTARY) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "transformer.wte",
         "layers": "transformer.h",

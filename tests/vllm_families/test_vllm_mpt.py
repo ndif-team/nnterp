@@ -1,6 +1,6 @@
 """MPT on vLLM, against the transformers engine: ALiBi attention, a plain block with the positions first."""
 
-from vllm_suite import VLLMFamilySuite
+from vllm_suite import NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import mpt
 
@@ -8,7 +8,7 @@ from nnterp.families.vllm import mpt
 class TestVLLMMPT(VLLMFamilySuite):
     REPO = "anas-awadalla/mpt-7b"
     FAMILY = mpt
-    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | NO_ROTARY) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "transformer.wte",
         "layers": "transformer.blocks",

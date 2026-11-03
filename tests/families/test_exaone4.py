@@ -8,7 +8,7 @@ import os
 import tempfile
 
 import torch
-from suite import FamilySuite, PROMPT, rows
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows
 from vision_suite import WrapperSuite, wrapper_of
 
 from nnterp.families import exaone4
@@ -57,7 +57,7 @@ class TestExaone4Hybrid(FamilySuite):
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln1=None)
     ATTENTION_NORM = None
     MLP_NORM = None
-    EXPECTED_UNAVAILABLE = {"attention_norm_output": "a post-norm block", "mlp_norm_output": "a post-norm block"}
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "attention_norm_output": "a post-norm block", "mlp_norm_output": "a post-norm block"}  # the full blocks: no rotary
 
     def test_the_full_layer_skips_the_rotary(self, model):
         sliding, full = (layer.self_attn._module for layer in model.layers)

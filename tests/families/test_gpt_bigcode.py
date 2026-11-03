@@ -1,6 +1,6 @@
 """GPT-BigCode, end to end: GPT-2's names with multi-query attention."""
 
-from suite import FamilySuite, PROMPT, rows
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows
 
 from nnterp.families import gpt_bigcode
 
@@ -10,6 +10,7 @@ class TestGPTBigCode(FamilySuite):
     FAMILY = gpt_bigcode
     NATIVE = rows("transformer", "h", "wte", "ln_f", attn="attn", ln1="ln_1", ln2="ln_2")
     REFUSES_IN_PLACE_QKV = True  # q/k/v are split views of one c_attn tensor
+    EXPECTED_UNAVAILABLE = NO_ROTARY
 
     def test_one_kv_head_under_multi_query(self, model):
         assert model.config.multi_query and model.num_kv_heads == 1

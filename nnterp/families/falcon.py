@@ -112,6 +112,11 @@ class Attention(Attention):
     # flattened over batch and heads with it; both are served ``[batch, seq,
     # heads, head_dim]`` as a view, so in-place edits land.
 
+    def no_rotary(self) -> str | None:
+        if alibi(self):
+            return "no rotary embedding: this checkpoint sets alibi, which biases the scores instead"
+        return None
+
     @EProperty(by_alibi("apply_rotary_pos_emb_0", "query_layer_0"), description=Attention.attention_queries.description, unavailable=needs_eager)
     def attention_queries(self, value) -> Queries:
         return value if alibi(self) else value[0]

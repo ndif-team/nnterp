@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, PROMPT, rows
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows
 
 from nnterp.families import opt
 
@@ -17,7 +17,7 @@ class TestOPT(FamilySuite):
     FAMILY = opt
     NATIVE = rows("model.decoder", "layers", "embed_tokens", "final_layer_norm", mlp=None, ln1="self_attn_layer_norm", ln2=None)
     MLP_NORM = "final_layer_norm"            # the block's own, native name (the decoder's has the same name)
-    EXPECTED_UNAVAILABLE = {"mlp_input": "no mlp module"}
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "mlp_input": "no mlp module"}
 
     def test_no_mlp_module(self, model):
         """No block has an MLP module, so `support()` lists no ``mlp`` value at all."""
@@ -59,7 +59,7 @@ class TestOPTPostNorm(TestOPT):
     MLP_NORM = None
     MID_IDENTITY = False                      # layer_mid is the norm of the sum, not the sum
     EXPECTED_UNAVAILABLE = {
-        "mlp_input": "no mlp module", "attention_norm_output": "a post-norm block", "mlp_norm_output": "a post-norm block",
+        **NO_ROTARY, "mlp_input": "no mlp module", "attention_norm_output": "a post-norm block", "mlp_norm_output": "a post-norm block",
         "final_norm_output": "no norm module",
     }
 

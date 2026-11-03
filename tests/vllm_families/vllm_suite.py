@@ -163,8 +163,12 @@ class VLLMFamilySuite:
     #: The attention values vLLM's implementation of this family serves (the scores and the pattern included).
     SERVED = (*INTERIOR, *PATTERN)
     #: The values this family lacks on vLLM, by `support()` name: the mask, the head's own output (vLLM never calls
-    #: lm_head), and a gated MLP's activation, which vLLM fuses with the multiply by the up projection.
-    UNAVAILABLE = frozenset({"attention_mask", "lm_head_output", "mlp.mlp_activation"})
+    #: lm_head), a gated MLP's activation, which vLLM fuses with the multiply by the up projection, and the queries
+    #: and keys before the rotary, which vLLM's rotary_emb takes as flat rows.
+    UNAVAILABLE = frozenset({
+        "attention_mask", "lm_head_output", "mlp.mlp_activation",
+        "self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope",
+    })
     #: Engine arguments this checkpoint needs.
     ENGINE: dict = {}
     #: Arguments the transformers reference needs to load this checkpoint (a VL wrapper's ``task``).

@@ -45,6 +45,9 @@ class Layer(Layer):
 class Attention(Attention):
     """Jamba's attention (one block in ``attn_layer_period``); the shared eager forward, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: Jamba's attention blocks use no position encoding, its Mamba blocks carry position"
+
 
 class SelectiveScan(SelectiveScan):
     """Jamba's Mamba mixer; the norms on ``B``, ``C`` and the step size come before the scan, so the base holds."""

@@ -28,8 +28,8 @@ DeepSeek-V2's.
 
 from transformers.models.deepseek_v32.modeling_deepseek_v32 import DeepseekV32Attention, DeepseekV32DecoderLayer, DeepseekV32MLP, DeepseekV32MoE
 
-from ..components import Attention, Layer, Mlp, Moe
-from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
+from ..components import Layer, Mlp, Moe
+from .deepseek_v2 import Attention, head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -44,7 +44,10 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """DeepSeek-V3.2's sparse latent attention; the indexer's selection is folded into the mask before the shared eager forward, so the base holds."""
+    """DeepSeek-V3.2's sparse latent attention: V2's, the indexer's selection folded into the mask before the shared eager forward, the rope parts rotated interleaved."""
+
+    def rope_call(self) -> str:
+        return "apply_rotary_pos_emb_interleave"
 
 
 class Mlp(Mlp):

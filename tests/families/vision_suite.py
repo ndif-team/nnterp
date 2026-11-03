@@ -20,7 +20,7 @@ import torch
 from nnsight.intervention.envoy import Envoy
 from nnsight.intervention.interleaver import OutOfOrderError
 from PIL import Image
-from suite import PROMPT, contributions
+from suite import PROMPT, TOWER_NO_ROTARY, contributions
 
 from nnterp import StandardizedTransformer, Unavailable, axis_size
 from nnterp.components import (
@@ -32,6 +32,7 @@ from nnterp.components.vision import scatter_call, scatter_host
 TOWER_VALUES = ("image_token_mask", "patch_embeddings", "tower_output", "image_features")
 BLOCK_VALUES = {
     "layer_input", "attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input", "layer_output", "self_attn.attention_output", "self_attn.attention_probabilities", "self_attn.attention_queries",
+    "self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope",
     "self_attn.attention_keys", "self_attn.attention_values", "self_attn.attention_scores",
     "self_attn.attention_head_outputs", "mlp.mlp_output", "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons",
 }
@@ -214,10 +215,11 @@ class VisionSuite:
     def test_support_lists_the_tower_values(self, model):
         vision = model.vision.support()
         assert set(vision) == {*TOWER_VALUES, *BLOCK_VALUES}
+        expected = {**TOWER_NO_ROTARY, **self.EXPECTED_VISION_UNAVAILABLE}
         for name, reason in vision.items():
-            if name in self.EXPECTED_VISION_UNAVAILABLE:
+            if name in expected:
                 assert set(reason) == set(range(model.vision.num_layers)), name
-                assert all(self.EXPECTED_VISION_UNAVAILABLE[name] in r for r in reason.values()), (name, reason)
+                assert all(expected[name] in r for r in reason.values()), (name, reason)
             else:
                 assert reason is None, (name, reason)
         assert set(model.vision.support(layer=0)) == BLOCK_VALUES

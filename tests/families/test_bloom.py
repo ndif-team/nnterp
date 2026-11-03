@@ -1,7 +1,7 @@
 """BLOOM, end to end: residual added inside both sublayers."""
 
 import torch
-from suite import FamilySuite, rows, PROMPT
+from suite import NO_ROTARY, FamilySuite, rows, PROMPT
 
 from nnterp.families import bloom
 
@@ -10,6 +10,7 @@ class TestBloom(FamilySuite):
     REPO = "hf-internal-testing/tiny-random-BloomForCausalLM"
     FAMILY = bloom
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention")
+    EXPECTED_UNAVAILABLE = NO_ROTARY
 
     def test_contributions_are_before_the_residual_add(self, model):
         """Both sublayers add the residual inside the module; the values are the pre-add tensors."""

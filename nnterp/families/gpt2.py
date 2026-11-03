@@ -45,6 +45,9 @@ class Attention(Attention):
     path instead, where nothing on the interface is reachable.
     """
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: GPT-2 adds learned absolute position embeddings (wpe) to the stream"
+
     def off_interface(self):
         if self._module.config.reorder_and_upcast_attn:
             return "this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path"

@@ -51,7 +51,11 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Ministral 3's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Ministral 3's attention; the shared eager forward and the residual added in the block, so the base holds.
+
+    The queries are scaled after the rotary by ``1 + llama_4_scaling_beta * log(1 + floor(position /
+    original_max_position_embeddings))``: 1 below that length, so ``rotate`` gives ``attention_queries`` there.
+    """
 
 
 class Mlp(Mlp):

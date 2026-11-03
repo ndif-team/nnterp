@@ -71,6 +71,11 @@ class Layer(Layer):
 class Attention(Attention):
     """Cohere-2's attention; the shared eager forward on sliding and full layers alike, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        if self._module.sliding_window is None:
+            return "no rotary embedding on this block: Cohere 2's full-attention blocks use no position encoding, its sliding-window blocks rotate"
+        return None
+
 
 class Mlp(Mlp):
     """Cohere-2's MLP; the residual is added in the block, so the base holds."""

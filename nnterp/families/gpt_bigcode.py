@@ -43,6 +43,9 @@ class Layer(Layer):
 class Attention(Attention):
     """GPT-BigCode's attention; the shared eager forward and the residual added in the block, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: GPT-BigCode adds learned absolute position embeddings (wpe) to the stream"
+
 
 class Mlp(Mlp):
     """GPT-BigCode's MLP; the residual is added in the block, so the base holds."""

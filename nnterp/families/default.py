@@ -18,8 +18,9 @@ string key against a module's alias paths as well as its native one, so
 Served: ``layer_output``, the root values, the sizes, and the attention
 interior wherever the module calls transformers' shared attention interface
 (the base `Attention`'s reads). Not served: ``attention_output``,
-``mlp_output`` and `project_on_vocab`, since what a sublayer adds to the
-stream, and what follows ``lm_head``, depend on code a name does not show; nor
+``mlp_output``, `project_on_vocab`, the queries and keys before the rotary
+embedding and `Attention.rotate`, since what a sublayer adds to the stream,
+what follows ``lm_head`` and how a block rotates depend on code a name does not show; nor
 any mixture, recurrent-mixer or per-family value. Those need a family module
 (docs/extending/adding-a-family.md). `check` runs at load and raises
 `UnsupportedFamily` when the guess does not hold.
@@ -92,6 +93,11 @@ MIXTURE = (
     "a mixture of experts (the module has experts, a router or a gate): no single activation or down projection; "
     "add a family module (docs/extending/adding-a-family.md)"
 )
+#: Why the queries and keys before the rotary embedding, and `rotate`, are not served.
+ROTARY = (
+    "the default family cannot tell where this attention applies its rotary embedding, if it has one, or with what; "
+    "add a family module (docs/extending/adding-a-family.md)"
+)
 #: Why the logit lens is not served.
 LENS = (
     "the default family cannot tell what follows lm_head; "
@@ -137,7 +143,10 @@ class Attention(Attention):
 
     The interior is the base's, read on transformers' shared attention
     interface; on a forward that makes no such call it is unavailable.
-    ``attention_output`` is not served (`CONTRIBUTION`).
+    ``attention_output`` is not served (`CONTRIBUTION`), nor the values
+    before the rotary embedding and `rotate` (`ROTARY`): the rotary call's
+    arguments and its cos/sin source differ between families in ways a name
+    does not show.
     """
 
     def off_interface(self) -> str | None:
@@ -148,6 +157,9 @@ class Attention(Attention):
         if INTERFACE not in names:
             return NOT_ON_INTERFACE
         return super().off_interface() if hasattr(self._module, "config") else None
+
+    def no_rotary(self) -> str | None:
+        return ROTARY
 
     attention_output = unavailable(CONTRIBUTION)
 

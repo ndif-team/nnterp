@@ -248,6 +248,12 @@ class VisionAttention(Attention):
     def off_interface(self) -> str | None:
         return no_tower_run(self) or super().off_interface()
 
+    def no_rotary(self) -> str | None:
+        return no_tower_run(self) or (
+            "a vision tower's attention: the queries and keys before a rotary embedding, and `rotate`, are served on "
+            "the text model's blocks (a tower's rotary, where it has one, runs over 2-D patch positions)"
+        )
+
     @EProperty(key="output", description="What the attention adds to the tower's stream", unavailable=no_tower_run)
     def attention_output(self, value: Any) -> Patches:
         """The attention sublayer's contribution to the tower's stream, ``[images, patches, vision_hidden_size]``."""

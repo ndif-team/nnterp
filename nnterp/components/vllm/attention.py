@@ -86,7 +86,8 @@ class Attention(standard.Attention):
 
     They are this step's rows: on a decode step the keys and values are the
     new token's alone, and the earlier ones are in the engine's cache, which
-    the kernel reads for itself.
+    the kernel reads for itself. The queries and keys before the rotary
+    embedding, and `rotate`, are not served here (`no_rotary`).
 
     The scores and the pattern are computed inside the kernel, which serves
     nothing between its inputs and its output, so here they are *recomputed*
@@ -96,6 +97,13 @@ class Attention(standard.Attention):
     to change what it wrote) and there on the prefill only, where a step
     holds every key; a decode step raises `Unavailable` (`on_decode_step`).
     """
+
+    def no_rotary(self) -> str | None:
+        # vLLM rotates inside its own ``rotary_emb`` module, on flat rows, with kernels of its own per family.
+        return (
+            "not served on the vLLM engine: its rotary embedding runs inside vLLM's rotary_emb on flat rows; "
+            "read the queries and keys before it, and rotate, on a StandardizedTransformer"
+        )
 
     attention_scores = DerivedEProperty(
         scores,

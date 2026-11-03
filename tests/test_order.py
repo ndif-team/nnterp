@@ -8,25 +8,28 @@ from nnterp.families import qwen3_5_text
 LLAMA = "hf-internal-testing/tiny-random-LlamaForCausalLM"
 QWEN3_5 = "yujiepan/qwen3.5-tiny-random"
 
-#: Tiny Llama's block, in forward order: the queries, keys and values are the attention call's arguments, one location.
+#: Tiny Llama's block, in forward order: the queries and keys before the rotary are the rotary call's arguments, and
+#: the queries, keys and values the attention call's, one location each.
 LLAMA_BLOCK = {
     "layer_input": 0,
     "attention_norm_output": 1,
-    "self_attn.attention_queries": 2,
-    "self_attn.attention_keys": 2,
-    "self_attn.attention_values": 2,
-    "self_attn.attention_scores": 3,
-    "self_attn.attention_probabilities": 4,
-    "self_attn.attention_head_outputs": 5,
-    "self_attn.attention_premix": 6,
-    "self_attn.attention_output": 7,
-    "layer_mid": 8,
-    "mlp_norm_output": 9,
-    "mlp_input": 10,
-    "mlp.mlp_activation": 11,
-    "mlp.mlp_neurons": 12,
-    "mlp.mlp_output": 13,
-    "layer_output": 14,
+    "self_attn.attention_queries_prerope": 2,
+    "self_attn.attention_keys_prerope": 2,
+    "self_attn.attention_queries": 3,
+    "self_attn.attention_keys": 3,
+    "self_attn.attention_values": 3,
+    "self_attn.attention_scores": 4,
+    "self_attn.attention_probabilities": 5,
+    "self_attn.attention_head_outputs": 6,
+    "self_attn.attention_premix": 7,
+    "self_attn.attention_output": 8,
+    "layer_mid": 9,
+    "mlp_norm_output": 10,
+    "mlp_input": 11,
+    "mlp.mlp_activation": 12,
+    "mlp.mlp_neurons": 13,
+    "mlp.mlp_output": 14,
+    "layer_output": 15,
 }
 
 
@@ -48,7 +51,7 @@ def test_llama_order(llama):
     assert llama.rank("logits") == llama.rank("next_token_probs") == (2, 4)
     assert llama.rank("final_norm_output") == (2, 2) and llama.rank("lm_head_output") == (2, 3)
     assert {name: llama.rank(name, 1) for name in LLAMA_BLOCK} == {name: (1, r) for name, r in LLAMA_BLOCK.items()}
-    assert llama.rank("layer_output", -1) == (1, 14)
+    assert llama.rank("layer_output", -1) == (1, 15)
 
 
 def test_ranks_sort_reads_into_forward_order(llama):
@@ -68,6 +71,9 @@ def test_falcon_values_come_before_queries_and_keys():
     model = StandardizedTransformer("Rocketknight1/tiny-random-falcon-7b", attn_implementation="eager")
     order = model.order(0)
     assert order["self_attn.attention_values"] < order["self_attn.attention_queries"] == order["self_attn.attention_keys"]
+    # The rotary's arguments and returns: the queries and keys before it, then the rotated ones.
+    assert order["self_attn.attention_values"] < order["self_attn.attention_queries_prerope"] == order["self_attn.attention_keys_prerope"]
+    assert order["self_attn.attention_keys_prerope"] < order["self_attn.attention_queries"]
     assert order["layer_input"] < order["self_attn.attention_values"]
     assert model.rank("self_attn.attention_values", 0) < model.rank("self_attn.attention_queries", 0)
 

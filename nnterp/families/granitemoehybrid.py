@@ -94,6 +94,12 @@ class Layer(Layer):
 class Attention(GraniteAttention):
     """GraniteMoE-Hybrid's attention: Granite's, the block adds its output times ``residual_multiplier``."""
 
+    def no_rotary(self) -> str | None:
+        kind = self._module.config.position_embedding_type
+        if kind != "rope":
+            return f"no rotary embedding: this checkpoint's position_embedding_type is {kind!r}, so its attention uses no position encoding (NoPE)"
+        return None
+
 
 class StateSpace(StateSpace):
     """GraniteMoE-Hybrid's Mamba-2 mixer: transformers' Mamba-2 scan; the block adds its output times ``residual_multiplier``."""

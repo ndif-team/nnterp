@@ -132,6 +132,9 @@ class Layer(Layer):
 class Attention(Attention):
     """Nemotron-H's attention: the shared eager forward without a rotary embedding, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: Nemotron-H's attention blocks use no position encoding, its Mamba-2 blocks carry position"
+
 
 class StateSpace(StateSpace):
     """Nemotron-H's Mamba-2 mixer: transformers' Mamba-2 scan, so the base holds."""

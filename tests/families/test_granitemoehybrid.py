@@ -3,7 +3,7 @@
 import test_granite
 import torch
 from ssd import StateSpaceChecks
-from suite import LINEAR, LLAMA_ROWS, PROMPT, VALUES, FamilySuite
+from suite import LINEAR, LLAMA_ROWS, NO_ROTARY, PROMPT, VALUES, FamilySuite
 
 from nnterp.families import granitemoehybrid
 
@@ -30,6 +30,7 @@ class HybridSuite(StateSpaceChecks, FamilySuite):
     }
     EXPECTED_UNAVAILABLE = {
         **{name: "no self_attn module" for name in VALUES if name.startswith("self_attn.")},
+        **{name: "no " for name in NO_ROTARY},  # no self_attn module off the attention blocks, no rotary embedding on them
         **{f"linear_attn.{name}": "no linear_attn module" for name in LINEAR if name not in ("state", "states")},
         "linear_attn.state": "",   # missing off the Mamba-2 blocks, and unavailable on them
         "linear_attn.states": "",

@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 import torch
-from test_gemma4_text import Gemma4Suite
+from test_gemma4_text import BORROWED_KEYS, Gemma4Suite
 from vision_suite import IMAGE, TOWER_VALUES, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
@@ -20,6 +20,7 @@ TEXT_REPO = "hf-tiny-v2/tiny-random-Gemma4UnifiedForCausalLM"
 class TestGemma4Unified(Gemma4Suite):
     REPO = TEXT_REPO
     FAMILY = gemma4_unified_text
+    EXPECTED_UNAVAILABLE = BORROWED_KEYS
 
     def test_no_per_layer_output(self, model):
         assert "per_layer_output" not in model.support()

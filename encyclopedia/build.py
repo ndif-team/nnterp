@@ -28,6 +28,7 @@ the printout and the highlighted code.
 
 from __future__ import annotations
 
+import collections.abc
 import datetime as dt
 import html
 import importlib
@@ -36,6 +37,7 @@ import json
 import re
 import shutil
 import sys
+import typing
 import urllib.parse
 from pathlib import Path
 from types import ModuleType
@@ -54,6 +56,8 @@ from pygments.lexers import PythonLexer  # noqa: E402
 import nnterp  # noqa: E402  (import nnterp before any transformers.models module)
 from nnterp import StandardizedTransformer, Unavailable  # noqa: E402
 from nnterp.components import Layer, Moe, RecurrentMixer, Residual, Standard  # noqa: E402
+from nnterp.components.attention import attention_call  # noqa: E402
+from nnterp.components.eproperty import layout_name  # noqa: E402
 from nnterp.components.moe import SHARED_NAMES  # noqa: E402
 from nnterp.components.standard import values as class_values  # noqa: E402
 from nnterp.components.vision import Vision, scatter_host  # noqa: E402
@@ -217,6 +221,17 @@ def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
     for name, value in found.items():
         match = VALUE_LINE.match(str(value))
         assert match, str(value)
+        method = signature(value)
+        if method is not None:
+            # a function a trace calls rather than a tensor it reads (`Attention.interface`): its signature in place of
+            # a layout; where the eager build has none to call (an attention with no one call to make again), nowhere
+            reason = value.reason(host)
+            rows.append({
+                "name": name, "expr": f"{expr}.{name}", "layout": None, "dims": None, "signature": method,
+                "description": match["desc"], "key": None, "select": None,
+                "where": f"nowhere: {reason}" if reason else method_where(host), "served": reason is None,
+            })
+            continue
         key, select = getattr(value, "key", None), getattr(value, "select", None)
         if isinstance(host, (Vision, Layer)) and getattr(value, "locate", None) is not None:
             # a location the tower finds from itself (image_features: the scatter, wherever the family keys
@@ -238,6 +253,23 @@ def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
             "served": not nowhere,
         })
     return rows
+
+
+def signature(value: Any) -> str | None:
+    """``(Queries, Keys, Values) -> (HeadOutputs, Pattern)`` for a value that is a function to call, else ``None``."""
+    hint = value._hint() if hasattr(value, "_hint") else None
+    if typing.get_origin(hint) is not collections.abc.Callable:
+        return None
+    params, returned = typing.get_args(hint)
+    returns = typing.get_args(returned) if typing.get_origin(returned) is tuple else (returned,)
+    return f"({', '.join(map(layout_name, params))}) -> ({', '.join(map(layout_name, returns))})"
+
+
+def method_where(host: Any) -> str:
+    """Where `Attention.interface` is read and what calling it runs: the call `attention_call` names."""
+    call = attention_call(host)[0].rsplit(".", 1)[-1]
+    return (f"read at the arguments of `{call}`, with the queries, keys and values; called, the function that call "
+            "ran, on the tensors given and the call's other arguments")
 
 
 def humanize_key(key: Any, select: int | None) -> str:

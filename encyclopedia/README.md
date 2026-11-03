@@ -102,7 +102,7 @@ rearrange them.
    larger than the body), tagged `· CLIP · CLIPVisionModel`; absent on a text checkpoint.
 3. **The API** (`02`). In this order:
    - *Values, by host*: one ledger per host (`model`, `model.layers[i]`, `model.layers[i].self_attn`,
-     ...) with every standard value's name, layout and dims, description and where it is read. A row whose
+     ...) with every standard value's name, layout and dims, description and where it is read; a value that is a function to call (`self_attn.interface`) shows `method` and its signature in place of a layout, and where the checkpoint has no call to make again it reads `nowhere` with the reason. A row whose
      value the diagram, the strip or the image's path shows is linked to it: hovering the row lights that part
      and fills the card, as hovering the part does. A value
      the checkpoint has only under some load carries an amber `⚠` before its name; hovering it shows

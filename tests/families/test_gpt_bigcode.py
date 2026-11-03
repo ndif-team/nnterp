@@ -1,6 +1,6 @@
 """GPT-BigCode, end to end: GPT-2's names with multi-query attention."""
 
-from suite import NO_ROTARY, FamilySuite, PROMPT, rows
+from suite import NO_ROTARY, FamilySuite, PROMPT, random_weights, rows
 
 from nnterp.families import gpt_bigcode
 
@@ -20,3 +20,10 @@ class TestGPTBigCode(FamilySuite):
 
     def test_intermediate_size_is_n_inner(self, model):
         assert model.intermediate_size == (model.config.n_inner or 4 * model.hidden_size)
+
+
+def test_value_weight_without_multi_query():
+    """``c_attn`` without multi-query holds each head's query, key and value; no tiny checkpoint has it, so random weights."""
+    model = random_weights(TestGPTBigCode.REPO, multi_query=False)
+    assert model.num_kv_heads == model.num_heads
+    FamilySuite().test_value_weight_reproduces_the_values(model)

@@ -15,7 +15,7 @@ import torch
 from nnsight import TransformersModel  # nnsight before any transformers submodule
 from nnsight.intervention.envoy import Envoy
 from nnsight.intervention.source import SourceNotAvailable
-from suite import INTERIOR, PROMPT, FamilySuite, recurrent_mixer
+from suite import INTERIOR, PROMPT, FamilySuite, HEAD_WEIGHTS, recurrent_mixer
 from transformers import AutoConfig
 
 from nnterp import StandardizedTransformer, Unavailable, UnsupportedFamily, families
@@ -52,6 +52,7 @@ NOT_SERVED = {
     "self_attn.attention_output": "cannot tell what this sublayer adds", "mlp.mlp_output": "cannot tell what this sublayer adds",
     "layer_mid": "cannot tell whether the block has a stream between its sublayers",
     "mlp_norm_output": "cannot tell whether post_attention_layernorm feeds the MLP",
+    HEAD_WEIGHTS: "cannot tell which rows of this attention's projections are a head's",
 }
 #: Not served on any checkpoint, whatever the dedicated family says of it: where and how a block rotates.
 NO_ROTARY = {name: "cannot tell where this attention applies its rotary embedding" for name in ("self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope")}

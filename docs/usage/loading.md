@@ -70,7 +70,12 @@ wrapper with a family module of its own resolves to that one whatever its text c
 text config `deepseek_v3`); `nnterp.families.resolve(config)` is the rule.
 
 `model.family` is the module the checkpoint resolved to; `nnterp.families.known()` lists
-the shipped ones (99, counting `kimi_k25`) without loading anything.
+the shipped ones (99, counting `kimi_k25`) without loading anything. To know before a load
+whether a checkpoint gets a family of its own, ask `nnterp.families.covers(config.model_type)`:
+`True` for a shipped or registered family, `False` where the load would fall back to the
+best-effort default ([below](#an-architecture-with-no-family)). `nnterp.families.resolve(config)`
+returns the family the load would use, from the config alone; a sweep over unfamiliar
+checkpoints can skip or flag the uncovered ones before loading any weights.
 
 ## An architecture with no family
 

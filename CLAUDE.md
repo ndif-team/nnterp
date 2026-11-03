@@ -37,6 +37,7 @@ the matching skill changes too.
 - [docs/reference/families.md](docs/reference/families.md) — the 98 families, their native names and quirks
 - [docs/usage/loading.md#across-gpus-distributed_config](docs/usage/loading.md#across-gpus-distributed_config) — `distributed_config=DistributedConfig(tp_size=N)` under `torchrun`: the values read whole on every rank (the attention interior and `mlp_activation` gathered by head or neuron where a rank holds a piece, edits split back), except a split mixture's `expert_outputs`, a per-rank partial sum (read `routed_output`); read them unconditionally, never under a branch on the rank
 - [docs/usage/loading.md#an-architecture-with-no-family](docs/usage/loading.md#an-architecture-with-no-family) — a `model_type` with no family loads with the best-effort `default` family and a warning; it serves `layer_output`, the module boundaries its aliases reach, the root values, the sizes and the interface interior, not `attention_output`/`mlp_output`/`layer_mid`/`mlp_norm_output`/a mixture's interior/`project_on_vocab`; `UnsupportedFamily` when it cannot standardize
+- [docs/usage/loading.md#how-the-family-is-chosen](docs/usage/loading.md#how-the-family-is-chosen) — before loading an unfamiliar checkpoint, whether it gets a family of its own: `nnterp.families.covers(config.model_type)` (`False` means the best-effort default), `nnterp.families.resolve(config)` for the family itself
 
 ### "Read or edit the residual stream / a sublayer's contribution"
 - [docs/usage/residual-stream.md](docs/usage/residual-stream.md) — `layer_input`, `layer_output`, `attention_output`, `mlp_output`; `layer_input + attention_output + mlp_output == layer_output`; the module boundaries between them, `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`, inside the sublayers `attention_premix`, `mlp_activation`, `mlp_neurons`, and the root's `final_norm_output`, `lm_head_output`
@@ -59,10 +60,20 @@ the matching skill changes too.
 
 ### "Does this checkpoint have that value?"
 - [docs/usage/availability.md](docs/usage/availability.md) — `model.support()` before the trace; `nnterp.Unavailable` at the read; the reasons you will see
+- [docs/usage/availability.md#sourcenotavailable-the-forward-took-another-path](docs/usage/availability.md#sourcenotavailable-the-forward-took-another-path) — a read raised `SourceNotAvailable`: this run's forward lacks the operation the value is read at (another transformers release, a branch the config does not announce), which `support()` cannot predict
+
+### "Several reads or edits in one trace: put them in forward order"
+- [docs/usage/availability.md#forward-order-order-and-rank](docs/usage/availability.md#forward-order-order-and-rank) — `model.rank(name, layer)` is a sortable `(side, r)` per value, so sorting a list of `(value, block)` sites by it puts reads and edits in the order the forward reaches them on any family; `model.order(i)` lists block `i`'s values in that order (equal ranks share one location). Asked outside the trace, measured once per model (route kernels first), not on `StandardizedVLLM`. Reach for it before writing a per-value stage table, and to explain an `OutOfOrderError` or a shifted `tracer.iter` list
+- [docs/usage/generation.md#read-order-within-a-step](docs/usage/generation.md#read-order-within-a-step) — under `tracer.iter` a misplaced read binds the next step's value instead of raising
 
 ### "Skip layers, steer, logit lens, top-k tokens"
 - [docs/usage/methods.md](docs/usage/methods.md) — `skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`
 - [docs/patterns/logit-lens.md](docs/patterns/logit-lens.md), [docs/patterns/steering.md](docs/patterns/steering.md)
+
+### "One attention head or one MLP neuron: ablate, patch, attribute"
+- [docs/usage/attention-interior.md#attention_premix-the-heads-at-the-output-projection](docs/usage/attention-interior.md#attention_premix-the-heads-at-the-output-projection) — `self_attn.attention_premix`, `[batch, seq, num_heads, head_dim]` at `o_proj`'s input, served under any `attn_implementation`: per-head ablation and attribution without an eager load; `attention_head_outputs` (eager only) is the attention interface's return, the same tensor on a plain attention and the heads before the gate or norm on Qwen3-Next and Laguna
+- [docs/usage/residual-stream.md#the-module-boundaries](docs/usage/residual-stream.md#the-module-boundaries) — `mlp.mlp_neurons`, `down_proj`'s input, the per-neuron coefficients the down projection sums into the stream, vs `mlp.mlp_activation`, `act_fn`'s output (on a gated MLP, before the product with the up projection); both unavailable on a routed mixture, which is read per expert
+- [docs/patterns/ablation.md](docs/patterns/ablation.md), [docs/patterns/contribution-decomposition.md](docs/patterns/contribution-decomposition.md) — head ablation; per-head direct logit attribution
 
 ### "Qwen3-Next / Qwen3.5 / OLMo-Hybrid / Kimi-Linear: linear attention, the recurrent state"
 - [docs/usage/delta-net.md](docs/usage/delta-net.md) — `linear_attn` values; `route_kernels(model.family, "torch")` for the per-token `state`/`states`

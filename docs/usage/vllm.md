@@ -13,7 +13,10 @@ sources: [nnterp/standardized_vllm.py, nnterp/components/vllm/__init__.py, nnter
 `StandardizedVLLM` runs a checkpoint on nnsight's `VLLM` engine (continuous batching, tensor
 parallelism, serving; nnsight `docs/models/vllm.md`) under nnterp's vocabulary. The names and
 the values are `StandardizedTransformer`'s, with the same layouts, so a block written against
-`model.layers[i].layer_output[:, -1]` runs on either engine.
+`model.layers[i].layer_output[:, -1]` runs on either engine. Pick it for throughput: many
+concurrent prompts, long generations, a served engine. Stay on `StandardizedTransformer` for
+gradients, an edit of the attention pattern or a decode step's pattern, `model.order()` /
+`model.rank()`, and the few values the engine does not have ([What differs](#what-differs)).
 
 Everything else is nnsight's `VLLM`, with vLLM's own defaults: a trace is a generation request
 (`max_tokens=16`, `temperature=1.0` unless you say), sampling settings go on `trace` / `invoke`,
@@ -71,6 +74,8 @@ starts its engine in a spawned process, which re-imports the main module.
 - **The layouts**: `[batch, seq, hidden_size]` with a batch of 1, `logits[:, -1]` the last position.
 - **The methods**: `steer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens`,
   `support()`, and the sizes (`num_layers`, `hidden_size`, `num_heads`, ...).
+- **The base class**: both engines' models are `nnterp.Standardized`, so a helper written
+  against the standard names takes either; check `isinstance(model, nnterp.Standardized)`.
 - **Reads, in-place edits and assignment** all reach the model.
 
 ```python

@@ -155,14 +155,6 @@ the block will later write into its tensor.
 the cache's own tensor as `initial_state` and the cache then writes the new
 state into it; `state_input` returns a clone (`linear_attention.py:76-85`).
 
-## Repository
-
-**Run git from the repository root and check `git rev-parse --show-toplevel`.**
-The home directory on this machine is itself a git repository; a `git add
--A` from a directory without its own `.git` crawls all of home. An nnterp
-checkout has its own `.git`, so the toplevel must print the checkout before
-staging.
-
 ## Related
 
 - [eproperty-internals.md](eproperty-internals.md)

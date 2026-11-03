@@ -351,13 +351,14 @@ class, 25 to 80 s each; the checkpoints are about 250 GB together.
 
 ## The root tests
 
-`tests/test_tensor_parallel.py` (23 tests) launches `tests/tp_worker.py` in one
+`tests/test_tensor_parallel.py` (28 tests) launches `tests/tp_worker.py` in one
 process and under `torch.distributed.run` on two CPU ranks over gloo (no GPU), on
 `trl-internal-testing/tiny-Qwen3ForCausalLM` (grouped-query, so the keys' head axis
 differs from the queries'): every value that tensor parallelism splits by head or
-neuron, the boundaries nnsight reassembles, and the logits after five edits aimed at
-the last rank's heads and at the neurons around the boundary between the ranks (one
-with gradients on) must
+neuron (the queries and keys before the rotary among them, and `rotate` of the queries),
+the boundaries nnsight reassembles, and the logits after six edits aimed at
+the last rank's heads, at a query moved before the rotary and at the neurons around the
+boundary between the ranks (one with gradients on) must
 match the one-process run, and every rank must agree bit for bit. It skips below
 transformers 5.19.
 

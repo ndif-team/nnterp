@@ -217,6 +217,10 @@ rotary on decode step `k` of `tracer.iter` (step 0 is the prompt) are the new to
 only, at position `n + k - 1` for a prompt of `n` tokens: `attn.rotate(keys, [n + k - 1])`
 is the last row of that step's `attention_keys`.
 
+On a model split tensor-parallel the two values are gathered along their head axis as the
+queries and keys are ([Across GPUs](#across-gpus)), so every rank reads and writes them
+whole, and `rotate` runs on the whole tensor on every rank.
+
 ## Requirement: eager attention
 
 All six live inside the eager attention forward. A model loaded with `sdpa`

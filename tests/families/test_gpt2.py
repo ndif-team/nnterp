@@ -17,6 +17,6 @@ class TestGPT2(FamilySuite):
         config.reorder_and_upcast_attn = True
         try:
             support = model.support()
-            assert all("reorder_and_upcast_attn" in support[f"self_attn.{name}"][0] for name in ("attention_probabilities", "attention_queries"))
+            assert all("reorder_and_upcast_attn" in support[f"self_attn.{name}"][0] for name in ("attention_probabilities", "attention_queries", "interface"))
         finally:
             config.reorder_and_upcast_attn = False

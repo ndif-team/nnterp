@@ -9,6 +9,7 @@ import nnsight
 import torch
 from suite import FamilySuite, rows, PROMPT
 
+from nnterp.components import OWN_ARITHMETIC
 from nnterp.families import falcon
 
 
@@ -17,7 +18,7 @@ class TestFalcon(FamilySuite):
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     MLP_NORM = "input_layernorm"             # parallel (7B layout)
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block", "self_attn.interface": OWN_ARITHMETIC}
 
     def test_mlp_output_is_a_copy_the_block_does_not_touch(self, model):
         """The block adds the attention into the MLP's live tensor in place; the value is a copy."""
@@ -94,7 +95,7 @@ class TestFalconAlibi(FamilySuite):
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     MLP_NORM = "input_layernorm"
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block", "self_attn.interface": OWN_ARITHMETIC}
 
     def test_alibi_branch(self, model):
         assert model.layers[0].self_attn._module.config.alibi
@@ -114,7 +115,7 @@ class TestFalcon40B(FamilySuite):
     ATTENTION_NORM = "ln_attn"
     MLP_NORM = "ln_mlp"
     MLP_NORM_BEFORE_ATTENTION = True   # both norms are taken from the block input before either sublayer runs
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block", "self_attn.interface": OWN_ARITHMETIC}
 
     def test_new_decoder_architecture(self, model):
         assert model.config.new_decoder_architecture
@@ -127,6 +128,7 @@ class TestFalconRW(FamilySuite):
     REPO = _patched_checkpoint("Rocketknight1/tiny-random-falcon-7b", parallel_attn=False)
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention")
+    EXPECTED_UNAVAILABLE = {"self_attn.interface": OWN_ARITHMETIC}
 
     def test_sequential_block(self, model):
         assert not model.config.parallel_attn and not model.config.new_decoder_architecture
@@ -146,7 +148,7 @@ class TestFalcon11B(FamilySuite):
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     KV_HEADS_EXPANDED = True
     MLP_NORM = "input_layernorm"
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block", "self_attn.interface": OWN_ARITHMETIC}
 
     def test_one_norm_feeds_both(self, model):
         assert model.config.new_decoder_architecture and model.config.num_ln_in_parallel_attn == 1

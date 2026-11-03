@@ -3,15 +3,16 @@
 from __future__ import annotations
 
 from functools import partial
-from typing import Any
+from typing import Any, Callable
 
 import torch
 from nnsight.intervention.envoy import Envoy
+from nnsight.intervention.interleaver import Mediator
 
 from jaxtyping import Float
 from torch import Tensor
 
-from .eproperty import EProperty
+from .eproperty import DerivedEProperty, EProperty
 from .layer import Residual
 from .standard import (
     BATCH, HEAD_DIM, HEADS, KEY, KV_HEADS, QK_HEAD_DIM, QUERY, SEQ, Standard, absent, first_tensor, in_width, module_int, rewrap, unsized,
@@ -48,6 +49,14 @@ NOT_ON_INTERFACE = (
 )
 
 
+#: Why `Attention.interface` is unavailable where no one call takes the queries, keys and values and returns the head outputs.
+OWN_ARITHMETIC = (
+    "the queries, keys and values are not the arguments of one call in this forward that returns the head outputs "
+    "(the attention does its own arithmetic, or changes the call's output before the projection), so there is no "
+    "attention function to call again"
+)
+
+
 def seq_first(value: torch.Tensor) -> torch.Tensor:
     """``[batch, num_heads, seq, head_dim]`` <-> ``[batch, seq, num_heads, head_dim]``, as a view.
 
@@ -63,6 +72,102 @@ def interface_reason(envoy: Envoy) -> str | None:
     return envoy.off_interface()
 
 
+def attention_call(envoy: Envoy) -> tuple[str, tuple[int, int, int]] | None:
+    """The call `Attention.interface` makes again, read off the class's own values: ``(path, (q, k, v positions))``, or ``None``.
+
+    It is the operation whose positional arguments `attention_queries`,
+    `attention_keys` and `attention_values` are, provided its first return is
+    `attention_head_outputs`: transformers' shared interface call on most
+    families (``attention_interface(self, q, k, v, mask, ...)``), and the
+    ``_attn(q, k, v, mask, head_mask)`` method of GPT-J, GPT-Neo, CodeGen and
+    GPT-NeoX-Japanese. A family that maps those values onto its own arithmetic
+    (BLOOM, MPT, Falcon, XGLM), or whose head outputs are read after the
+    module changes the call's output (DeepSeek-V4), names no such call, and
+    it is ``None`` there. Read off the keys alone, so it answers outside a trace.
+    """
+    cls = type(envoy)
+    calls, positions = set(), []
+    for value in (cls.attention_queries, cls.attention_keys, cls.attention_values):
+        key = value.key if value.locate is None else None
+        if not (isinstance(key, str) and key.startswith("source.") and key.endswith(".inputs") and isinstance(value.select, int)):
+            return None
+        calls.add(key.removesuffix(".inputs"))
+        positions.append(value.select)
+    heads = cls.attention_head_outputs
+    if len(calls) != 1 or heads.locate is not None or heads.key != f"{next(iter(calls))}.output" or heads.select != 0:
+        return None
+    return next(iter(calls)), tuple(positions)
+
+
+def call_reason(envoy: Envoy) -> str | None:
+    """Why `Attention.interface` is unavailable, or ``None``.
+
+    It takes the queries, keys and values and gives the head outputs and the
+    pattern, so it has their reasons first (an ``sdpa`` load, a tower no image
+    reaches, a call per image), then its own: no one call to make again.
+    """
+    cls = type(envoy)
+    for name in ("attention_queries", "attention_keys", "attention_values", "attention_head_outputs", "attention_probabilities"):
+        reason = getattr(cls, name).reason(envoy)
+        if reason:
+            return reason
+    return OWN_ARITHMETIC if attention_call(envoy) is None else None
+
+
+def reinvoke(self: "Attention") -> Callable[[Queries, Keys, Values], tuple[HeadOutputs, Pattern]]:
+    """The attention function this forward called, bound to the rest of the live call: ``f(q, k, v) -> (head_outputs, pattern)``.
+
+    Reading it takes the call's arguments, so it is read where the queries,
+    keys and values are, in any order with them (``model.order`` ranks it
+    just after them); inside ``tracer.iter`` it is that step's call. Calling
+    the result runs the function the module ran (`attention_call`:
+    ``eager_attention_forward`` or the family's own, with Gemma-2's logit
+    softcap or GPT-OSS's sink column) on the given tensors, with every other
+    argument the module passed it this time: the mask of this step, the
+    scale, the dropout, the sliding window, the sinks. Call it before reading
+    anything later in the attention (the scores, the pattern, the head
+    outputs): the first call takes the function where the forward runs it.
+
+    ``q``, ``k`` and ``v`` take the layouts of `attention_queries`,
+    `attention_keys` and `attention_values` (keys and values ``num_kv_heads``
+    wide: the function repeats them for the groups itself), with the live
+    call's query and key lengths, which its mask has. The result is the head
+    outputs in the layout of `attention_head_outputs` and the pattern in that
+    of `attention_probabilities`; on the served tensors they are those two
+    values, bit for bit (dropout aside: in training mode it draws its own
+    mask). It computes and returns; nothing reaches the model, the cache or
+    the other heads until the caller writes a result::
+
+        with model.trace(prompt):
+            k = attn.attention_keys.clone()
+            k[:, 0] = 0
+            heads, pattern = attn.interface(attn.attention_queries, k, attn.attention_values)
+            attn.attention_head_outputs[:, -1, 3] = heads[:, -1, 3]
+    """
+    path, positions = attention_call(self)
+    call = self.get(path)
+    args, kwargs = call.inputs  # this invoke's rows of the live call's arguments
+    cls = type(self)
+    served = (cls.attention_queries, cls.attention_keys, cls.attention_values)
+    function = []  # the plain function, taken on the first call
+
+    def interface(queries: Tensor, keys: Tensor, values: Tensor) -> tuple[Tensor, Tensor]:
+        if not function:
+            # nnsight hands a call's function over at ``.fn`` once the call is drilled into, after its
+            # arguments; it hands over the plain function, not the instrumented copy it then runs, so
+            # calling it again fires no operation.
+            call.source
+            function.append(Mediator.value(f"{call.path}.fn"))
+        given = list(args)
+        for position, value, tensor in zip(positions, served, (queries, keys, values)):
+            # back to the argument's own layout, the way a write of the value goes
+            given[position] = tensor if value._postprocess is None else value._postprocess(self, tensor)
+        result = function[0](*given, **kwargs)
+        return cls.attention_head_outputs._preprocess(self, result[0]), result[1]
+
+    return interface
+
+
 class Attention(Standard):
     """A softmax-attention module: its contribution, its pattern, and its interior.
 
@@ -76,6 +181,11 @@ class Attention(Standard):
     ``reorder_and_upcast_attn``) overrides that method. A family whose
     attention does its own arithmetic redefines the pattern on its own op and
     marks the rest ``unavailable(NOT_ON_INTERFACE)``.
+
+    `interface` is the function that call ran, to call again on other
+    queries, keys and values with the rest of the call as it was; which call
+    that is follows from where the family reads its queries, keys, values and
+    head outputs (`attention_call`), so a family declares nothing for it.
 
     Its sizes (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) are
     this block's, read off the module, so they hold on a model whose blocks
@@ -244,3 +354,9 @@ class Attention(Standard):
         transposed view on GPT-2, and torch accepts in-place edits on both.
         """
         return value
+
+    interface = DerivedEProperty(
+        reinvoke,
+        description="The attention function this call ran, as f(queries, keys, values) -> (head outputs, pattern), with the rest of the call's arguments",
+        unavailable=call_reason,
+    )

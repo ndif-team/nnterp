@@ -20,8 +20,8 @@ from nnterp.components import (
     PER_IMAGE, HeadOutputs, ImageFeatures, Keys, Patches, Queries, QwenVision, QwenVisionAttention, Values, pinned,
 )
 
-#: The tower's pattern, unavailable on every block: the attention runs one call per image.
-PER_IMAGE_VALUES = {"self_attn.attention_scores": PER_IMAGE, "self_attn.attention_probabilities": PER_IMAGE}
+#: The tower's pattern, and the call that would make it again, unavailable on every block: the attention runs one call per image.
+PER_IMAGE_VALUES = {name: PER_IMAGE for name in ("self_attn.attention_scores", "self_attn.attention_probabilities", "self_attn.interface")}
 #: What a `FamilySuite` on a wrapper loaded with its processor expects of the tower's rows.
 PER_IMAGE_UNAVAILABLE = {f"vision.{name}": reason for name, reason in PER_IMAGE_VALUES.items()}
 

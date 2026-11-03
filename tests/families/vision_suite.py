@@ -34,6 +34,7 @@ BLOCK_VALUES = {
     "layer_input", "attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input", "layer_output", "self_attn.attention_output", "self_attn.attention_probabilities", "self_attn.attention_queries",
     "self_attn.attention_keys", "self_attn.attention_values", "self_attn.attention_scores",
     "self_attn.attention_head_outputs", "mlp.mlp_output", "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons",
+    "self_attn.interface",
 }
 
 #: A fixed random image; the processor resizes it to the tower's size.

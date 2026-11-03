@@ -173,7 +173,8 @@ recurrent state is patchable too: see [delta-net-state](delta-net-state.md).
 
 `attention_head_outputs[..., HEAD, :]` is one head's output before the projection,
 `[batch, seq, head_dim]`; patch that slice the same way, under
-`attn_implementation="eager"`.
+`attn_implementation="eager"`. To patch what a head *reads* (its keys and values over a
+span) rather than what it writes, see [head-kv-patching](head-kv-patching.md).
 
 ### Noising
 

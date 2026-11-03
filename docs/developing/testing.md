@@ -138,6 +138,15 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_steer` | the last position moves by `2 * vector`, the others are untouched, the logits move |
 | `test_project_on_vocab_is_the_logit_lens` | on the last block's output it equals `logits`; `get_topk_closest_tokens(k=3)` returns one dict of three token → probability entries summing to at most one |
 
+**Calling the attention function again** (`self_attn.interface`; skipped where no block serves it, whose reason `test_support_is_what_this_family_expects` checks through `EXPECTED_UNAVAILABLE`)
+
+| method | asserts |
+|---|---|
+| `test_interface_reproduces_heads_and_pattern` | on every attention block, in one trace, `interface(attention_queries, attention_keys, attention_values)` equals `attention_head_outputs` and `attention_probabilities` bit for bit |
+| `test_interface_on_a_padded_batch` | the same on a padded batch of `PROMPTS` in one invoke (pad rows included, NaN equal to NaN), and to rounding under two invokes; skipped without a pad token |
+| `test_interface_patch_reaches_its_group_alone` | read once and called twice, the call on keys and values of key/value head 0 patched moves exactly the query heads `h < num_heads // num_kv_heads`; written into the last row of `attention_head_outputs`, it moves the attention module's output at the last position and nowhere else |
+| `test_interface_on_decode_steps` | under `generate` and `tracer.iter[:2]`, the call reproduces both values on the prompt and on a decode step (one query row) |
+
 **Layouts** (`:445-485`)
 
 | method | asserts |

@@ -86,7 +86,7 @@ The two values of a vision tower that say where the image enters the text model:
 
 ## Interface (`attention_interface_1`)
 
-transformers' shared attention call, `attention_interface(module, query, key, value, attention_mask, ...)`, which under eager attention is `eager_attention_forward`. The base `Attention` reads the interior values on and inside this call; four families do their own arithmetic and relocate them. See [../usage/attention-interior.md](../usage/attention-interior.md).
+transformers' shared attention call, `attention_interface(module, query, key, value, attention_mask, ...)`, which under eager attention is `eager_attention_forward`. The base `Attention` reads the interior values on and inside this call; four families do their own arithmetic and relocate them. `model.layers[i].self_attn.interface` is the function the call ran, bound to the rest of the call (mask, scale, softcap, sinks): `attn.interface(q, k, v)` returns `(head_outputs, pattern)` as the model computes them, for an edit that must reach chosen heads or rows only; on GPT-J, GPT-Neo, CodeGen and GPT-NeoX-Japanese it is their `_attn` method. See [../usage/attention-interior.md](../usage/attention-interior.md#calling-the-attention-function-again-interface).
 
 ## KV heads, grouped-query attention
 

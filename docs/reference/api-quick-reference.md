@@ -170,6 +170,7 @@ A softmax-attention module. The base class reads everything but `attention_outpu
 | `attention_probabilities` | `Pattern` | the output of `nn_functional_dropout_0` inside the interface: after the softmax, in the model dtype, a sink column dropped | yes; in place reaches the model | `interface_reason` |
 | `attention_head_outputs` | `HeadOutputs` | return 0 of `attention_interface_1`, before the output projection | yes; in place reaches the model | `interface_reason` |
 | `attention_premix` | `HeadOutputs` | `o_proj.input`, split by head as a view (`o_proj` is a standard child name: the family aliases `c_proj` / `dense` / `out_proj` / `wo` in `RENAME`) | yes; in place reaches the model; assignment flattens back | where the attention has an `o_proj`; served under any `attn_implementation` |
+| `interface` | a function, `f(q: Queries, k: Keys, v: Values) -> (HeadOutputs, Pattern)` | read: the arguments of the call the queries, keys and values enter (`attention_call`: `attention_interface_1`, or `_attn` on GPT-J, GPT-Neo, CodeGen, GPT-NeoX-Japanese); called: the function that call ran, taken at its `.fn`, on the given tensors with the call's other arguments (mask, scale, dropout, sliding window); on the served tensors it returns `attention_head_outputs` and `attention_probabilities` bit for bit | no (`DerivedEProperty`); write its result into `attention_head_outputs` | `call_reason`; ranked between the values and the scores |
 
 Each layout is the alias `.layout` returns (`Attention.attention_keys.layout is Keys`), its axes in the [layouts table](#layouts) and in `.dims`. `qk_head_dim` differs from `head_dim` only under multi-head latent attention (DeepSeek: 192 against 128 on the pinned V3 checkpoint).
 
@@ -439,6 +440,9 @@ The axis names are plain string constants in `nnterp.components.standard` (expor
 | `LOGITS`, `DISPATCH`, `PER_SLOT` | `"F_linear_0"`, `"experts_forward_1"`, `"weighted_out_view_0"` | The router's logits op, the call inside transformers' `@use_experts_implementation` wrapper, and the per-slot view inside its `grouped_mm` / `batched_mm` forwards. |
 | `INTERFACE` | `"attention_interface_1"` | The shared attention call every interface family makes. |
 | `NOT_ON_INTERFACE` | `"The attention does its own arithmetic rather than transformers' shared attention interface; not mapped for this family yet"` | The reason for `unavailable(NOT_ON_INTERFACE)` in a family that has not mapped an interior value onto its own arithmetic. No shipped family uses it: all four own-arithmetic families map every interior value. |
+| `attention_call` | `attention_call(envoy) -> tuple[str, tuple[int, int, int]] \| None` | The call `Attention.interface` makes again, read off the class's keys: the operation whose positional arguments `attention_queries`, `attention_keys` and `attention_values` are, when its first return is `attention_head_outputs`, with the three positions; `None` where there is none. |
+| `call_reason` | `call_reason(envoy) -> str \| None` | The reasons of `attention_queries`, `attention_keys`, `attention_values`, `attention_head_outputs` and `attention_probabilities`, then `OWN_ARITHMETIC` where `attention_call` is `None`: the predicate of `Attention.interface`. |
+| `OWN_ARITHMETIC` | `"the queries, keys and values are not the arguments of one call in this forward that returns the head outputs (...), so there is no attention function to call again"` | `call_reason`'s own reason: BLOOM, MPT, Falcon, XGLM, DeepSeek-V4. |
 
 ### Helpers
 

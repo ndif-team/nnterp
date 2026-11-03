@@ -1,8 +1,8 @@
 ---
 title: Attention Interior
-one_liner: Read, edit and assign the queries, keys, values, scores, pattern and per-head outputs inside every family's attention, under `attn_implementation="eager"`.
+one_liner: Read, edit and assign the queries, keys, values, scores, pattern and per-head outputs inside every family's attention, under `attn_implementation="eager"`, and call the block's own attention function again on tensors of your own (`self_attn.interface`).
 tags: [usage, attention, interior, source, eager, heads]
-related: [docs/usage/residual-stream.md, docs/usage/layouts.md, docs/usage/availability.md, docs/usage/loading.md, docs/usage/generation.md, docs/usage/delta-net.md, docs/usage/remote.md]
+related: [docs/usage/residual-stream.md, docs/usage/layouts.md, docs/usage/availability.md, docs/usage/loading.md, docs/usage/generation.md, docs/usage/delta-net.md, docs/usage/remote.md, docs/patterns/head-kv-patching.md]
 sources: [nnterp/components/attention.py, nnterp/components/eproperty.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/gpt_oss.py, nnterp/families/deepseek_v4.py, nnterp/families/gptj.py, nnterp/families/codegen.py, nnterp/families/xglm.py, nnterp/families/gpt_neox_japanese.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/deepseek_v2.py, nnterp/families/gemma4_text.py, tests/families/suite.py]
 ---
 
@@ -153,10 +153,100 @@ with model.trace(prompt):
     logits = model.logits.save()
 ```
 
+## Calling the attention function again: `interface`
+
+`model.layers[i].self_attn.interface` is the attention function this block's forward called
+(`eager_attention_forward`, or the family's own: Gemma-2's with its logit softcap, GPT-OSS's
+with its sink column), bound to everything else the call received this time: the mask, the
+scale, the dropout, the sliding window. Call it on queries, keys and values and it returns
+`(head_outputs, pattern)`, computed the way the model computes its own:
+
+```python
+import torch
+from nnterp import StandardizedTransformer
+
+model = StandardizedTransformer("Qwen/Qwen2.5-0.5B", dispatch=True, attn_implementation="eager")
+attn = model.layers[14].self_attn
+prompt = "The capital of France is"
+
+with model.trace(prompt):
+    q, k, v = attn.attention_queries, attn.attention_keys, attn.attention_values
+    heads, pattern = attn.interface(q, k, v)         # the function this call ran, run again on the same tensors
+    probs = attn.attention_probabilities.save()      # read after the call: the pattern comes later in the forward
+    served = attn.attention_head_outputs.save()
+    heads, pattern = heads.save(), pattern.save()
+
+torch.equal(heads, served), torch.equal(pattern, probs)   # (True, True): the same function on the same shapes
+heads.shape, pattern.shape                                # [1, 5, 14, 64], [1, 14, 5, 5]
+```
+
+The tensors you pass take the layouts of `attention_queries`, `attention_keys` and
+`attention_values`, keys and values `num_kv_heads` wide (the function repeats them for each
+group itself), with the live call's query and key lengths, which its mask has. The result is
+in the layouts of `attention_head_outputs` and `attention_probabilities`, and on the served
+tensors it is those two values bit for bit; the per-family suite checks that on every
+family, on the prompt, on a decode step and on a padded batch. The call computes and
+returns: nothing reaches the model, the cache, the other heads or the other rows until you
+write a result.
+
+Use it for:
+
+- **any edit of keys or values that must not reach the cache or the other heads of a
+  group.** Writing `attention_keys` changes the keys every query head of the group reads, at
+  every query row; under `generate` an in-place edit also stays in the cache for every later
+  step ([Under `generate`](#under-generate)). Call `interface` on edited copies instead and
+  write only the heads you chose.
+- **any per-row patch**: compute with the edited tensors, then write the rows you want of
+  `attention_head_outputs` (the last one, for the prediction).
+- **a recompute that must match the model bit for bit.** A hand-written
+  `softmax(q @ k.T * scale)` needs the module's scale, misses Gemma-2's softcap and a sink
+  column, and rounds differently in bf16 when its matmuls have other shapes than the
+  model's; the call runs the model's function on the model's shapes.
+
+Reading `attn.interface` takes the call's arguments, so it is read where the queries, keys
+and values are, in any order with them; calling the result takes the function, which the
+forward hands over just before it runs it, so call it before reading or writing anything
+later in the attention (the scores, the pattern, the head outputs). `model.order(i)` ranks
+`self_attn.interface` between the values and the scores. Read it once per forward and call
+the result as often as you need; a second `attn.interface` after a call asks for a call the
+model has passed (`OutOfOrderError`, or the next step's under `tracer.iter`):
+
+```python
+with model.trace(prompt):
+    interface = attn.interface                       # read once, with the queries, keys and values
+    q, k, v = attn.attention_queries, attn.attention_keys, attn.attention_values
+    k2 = k.clone()                                   # a copy: k is what the model attends with (and, under generate, the cache)
+    k2[:, 1, 0] = 0                                  # key/value head 1, position 0
+    clean, _ = interface(q, k, v)
+    edited, _ = interface(q, k2, v)                  # called again: same mask, same scale
+    attn.attention_head_outputs[:, -1, 9] = edited[:, -1, 9]   # head 9, last row: the only write
+    moved = edited.ne(clean).flatten(0, 1).any(0).any(-1).save()
+
+moved.nonzero().flatten().tolist()   # [7, 8, 9, 10, 11, 12, 13]: the result moves for the whole group; only head 9 is written
+```
+
+Inside `tracer.iter` it is that step's call: on a decode step the queries have one row, the
+keys and values are the whole cache, and the mask is the step's (none, on an unpadded
+`generate`). Within one invoke, a padded batch included, it is bit for bit. Across invokes
+the model runs every invoke's rows in one call and `interface` runs one invoke's rows, so
+the two agree to rounding (about `1e-8` in float32 on the tiny checkpoints), not bit for
+bit: put the prompts in one invoke (`model.trace([a, b])`) when that matters. In training
+mode with a dropout the call draws its own mask.
+
+Which call it makes follows from where the family reads its queries, keys, values and head
+outputs: the one call that takes the first three and returns the last. That is
+transformers' shared interface call on most families, and the `_attn` method on GPT-J,
+GPT-Neo, CodeGen and GPT-NeoX-Japanese. `support()` reports `self_attn.interface`
+unavailable where those values are (any `attn_implementation` but `"eager"`, with the same
+reason) and where no such call exists: BLOOM, MPT, Falcon and XGLM do their own arithmetic,
+DeepSeek-V4 rotates the interface's output back before its projection, the Qwen ViT and
+RADIO make one call per image, and `StandardizedVLLM`'s attention is the engine's kernel.
+
 ### Recomputing by hand
 
-The softmax scale is the module's, `attn._module.scaling`, not always `1/sqrt(head_dim)`
-(Granite-SWA's is `attention_multiplier`, 0.0078 on granite-swash-2b against 0.088;
+To compute with other tensors, call `interface`. To check the served values against the
+arithmetic, two facts matter. The softmax scale is the module's, `attn._module.scaling`, not
+always `1/sqrt(head_dim)` (Granite-SWA's is `attention_multiplier`, 0.0078 on granite-swash-2b against 0.088;
 Granite's and GraniteMoE's is `attention_multiplier` too, `1/head_dim`, 0.015625 on
 granite-3.0-2b against `1/sqrt(64)` = 0.125, so `attention_scores` are an eighth of a
 Llama-scaled product), and
@@ -402,6 +492,15 @@ values (and the pattern's key axis) are as long as the cache:
 `attention_probabilities` is `[batch, num_heads, 1, prompt + step]`. See
 [generation.md](generation.md).
 
+The keys and values a decode step's attention receives are the cache's own tensors on
+most families, so an in-place edit of `attention_keys` or `attention_values` writes into the
+cache and every later step attends with it, while an assignment replaces the call's
+argument for that one forward. Under latent attention (DeepSeek-V2/V3 and the families on
+their attention) the cache holds the compressed latent and the keys and values are expanded
+from it on every call, and Gemma-4 serves copies, so there an edit lasts one forward either
+way. To change what chosen heads read without touching the cache, call
+[`interface`](#calling-the-attention-function-again-interface) on edited copies.
+
 ## Gotchas
 
 - **`attn_implementation="eager"` or nothing.** Under `sdpa` every interior
@@ -412,11 +511,15 @@ values (and the pattern's key axis) are as long as the cache:
   values before the queries and keys. An out-of-order read raises `OutOfOrderError`, and
   inside a `tracer.iter` body the error can name a later location than the one
   you misplaced.
-- **The first trace that reads a projection's output and then an interior value fails.**
-  On a fresh model `self_attn.q_proj.output` followed by `attention_queries` raises
-  `OutOfOrderError` naming an `attention_interface` input, on the first such trace only:
-  nnsight builds `self_attn.source` lazily, after the forward has started. Touch
+- **The first trace that reads a child module's value and then an interior value fails.**
+  On a fresh model `self_attn.q_proj.output` (or `k_proj.output`) followed by
+  `attention_queries` (or `interface`) raises `OutOfOrderError` naming an
+  `attention_interface` input, on the first such trace only: nnsight builds
+  `self_attn.source` lazily, after the forward has started. Touch
   `model.layers[i].self_attn.source` outside a trace first, or read them in two traces.
+- **Read `interface` once per forward, and call it before the scores.** Reading it again
+  after a call, or calling it after reading the scores, the pattern or the head outputs,
+  asks for a point the forward has passed.
 - **GPT-2 and GPT-BigCode queries, MPT queries, keys and values: assign, do not edit in place** (or edit under `torch.no_grad()`). GPT-2's and GPT-BigCode's keys and values take an in-place edit.
 - **`hasattr(attn, "attention_probabilities")` raises `Unavailable`** when the
   value is unavailable; use `attn.support()` or `model.support(layer=i)`.
@@ -444,4 +547,5 @@ values (and the pattern's key axis) are as long as the cache:
 - [generation.md](generation.md), the same values per decode step.
 - [delta-net.md](delta-net.md), the `linear_attn` counterpart on hybrids: queries, keys, values, gates and a recurrent state, no pattern.
 - [remote.md](remote.md), what a source-located value needs from an NDIF server.
+- [head-kv-patching](../patterns/head-kv-patching.md), chosen heads reading another run's keys and values through `interface`.
 - nnsight docs/usage/source.md, the mechanism these values are built on.

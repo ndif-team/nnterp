@@ -125,6 +125,13 @@ and treat that warning as a read-order error.
   the unpadded prompt's to 1.3e-5.
 - **The keys and values grow with the cache; the queries do not.** A head-wise
   edit of `attention_keys` on a decode step touches the whole context.
+- **An in-place edit of `attention_keys` or `attention_values` stays in the cache.** On
+  most families the attention receives the cache's own tensors, so the edit reaches every
+  later step; an assignment replaces the argument of that one forward. Under latent
+  attention (DeepSeek-V2/V3) and on Gemma-4 an edit lasts one forward either way. To patch
+  what chosen heads read on every step without touching the cache, use
+  `self_attn.interface` ([attention-interior.md](attention-interior.md#calling-the-attention-function-again-interface),
+  [head-kv-patching](../patterns/head-kv-patching.md)).
 - **On a DeltaNet hybrid, a decode step runs the recurrent kernel**, and
   `linear_attn.state_input` carries the previous step's `state_output`; see
   [delta-net.md](delta-net.md).

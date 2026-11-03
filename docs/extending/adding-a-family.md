@@ -490,9 +490,6 @@ into the package and the `register()` line removed.
 - **Import the modeling module only inside the family module.** An import at
   `nnterp/__init__.py` or in `components/` would load transformers modeling code on
   `import nnterp`; `test_import_is_lazy` fails.
-- **On glibc 2.31 with pyarrow installed, `import transformers.modeling_layers` before
-  nnsight segfaults** (pyarrow's jemalloc). Set `JE_ARROW_MALLOC_CONF=background_thread:false`
-  or import nnterp first; `conftest.py` does both ([transformers-compat.md](../developing/transformers-compat.md#the-import-order-segfault)).
 - **Define `Layer`, `Attention` and `Mlp` even when a module type has no such module.**
   The convention is one family, three classes; OPT keys no `Mlp` in `ENVOYS` and still
   defines one. `support()` walks the tree, so a module no block has is not listed.

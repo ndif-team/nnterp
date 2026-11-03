@@ -163,12 +163,6 @@ The home directory on this machine is itself a git repository; a `git add
 checkout has its own `.git`, so the toplevel must print the checkout before
 staging.
 
-**A silent segfault at import is pyarrow's.** On glibc 2.31 with pyarrow
-installed, `import transformers.modeling_layers` before nnsight crashes in
-pyarrow's jemalloc thread; `tests/conftest.py` sets
-`JE_ARROW_MALLOC_CONF=background_thread:false` and imports nnsight first
-([transformers-compat.md](transformers-compat.md#the-import-order-segfault)).
-
 ## Related
 
 - [eproperty-internals.md](eproperty-internals.md)

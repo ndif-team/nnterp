@@ -324,9 +324,6 @@ checkpoint of that type is looked up, and never earlier.
   canonical example reads them in that order. Read out of order and the
   trace raises `OutOfOrderError` naming the attention call's `.fn`: see
   [gotchas.md](gotchas.md).
-- On glibc 2.31 with pyarrow installed, `import transformers.modeling_layers`
-  before nnsight segfaults; set `JE_ARROW_MALLOC_CONF=background_thread:false`
-  or `import nnterp` first ([transformers-compat.md](transformers-compat.md#the-import-order-segfault)).
 - A size override is a function on the family *module*, looked up by name on
   `model.family` at read time; a family object passed to `register()` carries
   it as an attribute (`tests/test_registry.py:121-131`), and a variant that

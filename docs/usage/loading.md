@@ -294,10 +294,6 @@ The root's own values (`logits`, `token_embeddings`, `next_token_probs`, `input_
 
 ## Gotchas
 
-- **A silent segfault at import is pyarrow's, not nnterp's.** On glibc 2.31 (Ubuntu
-  20.04) with pyarrow installed, `import transformers.modeling_layers` before nnsight
-  crashes in pyarrow's jemalloc thread; set `JE_ARROW_MALLOC_CONF=background_thread:false`
-  or import `nnterp` first ([transformers-compat.md](../developing/transformers-compat.md#the-import-order-segfault)).
 - **`attn_implementation` is not defaulted to eager.** A model loaded without it runs
   transformers' default, and the attention interior is unavailable; the boundary values
   still work.

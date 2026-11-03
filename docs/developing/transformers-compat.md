@@ -191,17 +191,6 @@ keys, and nnsight binds whichever resolves (`gpt_neox.py:17-20`).
    family problem: patch the config the way `tests/families/test_olmo3.py:14-32`
    does.
 
-## The import-order segfault
-
-On glibc 2.31 (Ubuntu 20.04) with pyarrow installed, `import
-transformers.modeling_layers` segfaults with no traceback, nnsight or not:
-transformers reaches pyarrow through scikit-learn and pandas, and pyarrow's
-bundled jemalloc starts a background thread while `libarrow` is still being
-loaded (glibc bug 19329). `JE_ARROW_MALLOC_CONF=background_thread:false`
-avoids it, and `tests/conftest.py` sets it for every pytest process and the
-subprocesses its tests spawn. Importing nnsight (or nnterp) first avoids it
-too. Without pyarrow the order does not matter.
-
 ## What nnterp needs from nnsight
 
 Three behaviours of nnsight 0.8 as it stands, all used by nnterp as current

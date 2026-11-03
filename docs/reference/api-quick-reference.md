@@ -507,7 +507,6 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 - `model.logits` is the output's `.logits` (softcapped on Gemma-2, scaled on Cohere and Granite); `model.lm_head.output` is the raw projection, and `model.project_on_vocab(model.layers[-1].layer_output)` is `logits`.
 - `next_token_probs`, `input_size` and `states` are read-only.
 - `route_kernels(model.family, "torch")` before tracing a DeltaNet layer whose `state` you want; a forward `.source` has already instrumented keeps the binding it was compiled with.
-- On glibc 2.31 with pyarrow installed, `import transformers.modeling_layers` before nnsight segfaults (pyarrow's jemalloc): set `JE_ARROW_MALLOC_CONF=background_thread:false` or `import nnterp` first ([transformers-compat.md](../developing/transformers-compat.md#the-import-order-segfault)).
 - A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace (after the tower under `generate` on transformers 5.18 and later), `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden_size]`.
 
 ## Related

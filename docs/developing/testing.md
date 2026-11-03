@@ -36,10 +36,10 @@ there are no markers or custom flags.
 
 ## Import order: `tests/conftest.py`
 
-It imports nnsight first and sets `JE_ARROW_MALLOC_CONF=background_thread:false`
-in every process pytest starts, the two guards against the segfault pyarrow causes
-at import on glibc 2.31 ([transformers-compat.md](transformers-compat.md#the-import-order-segfault)),
-and gives each xdist worker one torch thread.
+It imports nnsight first, sets `JE_ARROW_MALLOC_CONF=background_thread:false` in every
+process pytest starts (a guard against a pyarrow jemalloc fault at import on glibc 2.31
+hosts; the comment in `conftest.py` has the details), and gives each xdist worker one
+torch thread.
 Test files that import a modeling class (`tests/test_base.py:6-7`,
 `tests/test_registry.py:70`) still write `from nnsight import
 TransformersModel` first for the reader; the conftest is what makes the

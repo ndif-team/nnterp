@@ -28,7 +28,7 @@ print(torch.allclose(scores.softmax(-1), pattern), pattern[0, 0].sum(-1))
 
 | value | shape | what it is |
 | --- | --- | --- |
-| `attention_queries` | `[batch, num_heads, seq, qk_head_dim]` | the queries entering attention, after the query projection and, where the family has one, the rotary embedding |
+| `attention_queries` | `[batch, num_heads, seq, qk_head_dim]` | the queries entering attention, after the query projection and, where the family has one, the rotary embedding ([before it](rotary.md)) |
 | `attention_keys` | `[batch, num_kv_heads, seq, qk_head_dim]` | the keys entering attention, before `repeat_kv` |
 | `attention_values` | `[batch, num_kv_heads, seq, head_dim]` | the values entering attention, before `repeat_kv` |
 | `attention_scores` | `[batch, num_heads, query, key]` | the scaled scores entering the softmax, with the causal mask applied |
@@ -120,11 +120,11 @@ print(torch.allclose(mixed, heads, atol=1e-5))
 
 ## Read order
 
-The table lists the six in forward order, and all of them come before `attention_output`. Several blocks' values in one trace are fine in ascending block order; the rule is forward order across the whole model, not only within a block. `model.order(i)` gives the order for block `i`, with equal ranks for values read at one location:
+The table lists the six in forward order, and all of them come before `attention_output`; the queries and keys before the rotary ([Rotary embedding](rotary.md)) come before all six. Several blocks' values in one trace are fine in ascending block order; the rule is forward order across the whole model, not only within a block. `model.order(i)` gives the order for block `i`, with equal ranks for values read at one location:
 
 ```python
 print(qwen.order(5))
-# {'layer_input': 0, 'attention_norm_output': 1, 'self_attn.attention_queries': 2, 'self_attn.attention_keys': 2, 'self_attn.attention_values': 2, 'self_attn.attention_scores': 3, 'self_attn.attention_probabilities': 4, 'self_attn.attention_head_outputs': 5, 'self_attn.attention_premix': 6, 'self_attn.attention_output': 7, 'layer_mid': 8, 'mlp_norm_output': 9, 'mlp_input': 10, 'mlp.mlp_activation': 11, 'mlp.mlp_neurons': 12, 'mlp.mlp_output': 13, 'layer_output': 14}
+# {'layer_input': 0, 'attention_norm_output': 1, 'self_attn.attention_queries_prerope': 2, 'self_attn.attention_keys_prerope': 2, 'self_attn.attention_queries': 3, 'self_attn.attention_keys': 3, 'self_attn.attention_values': 3, 'self_attn.attention_scores': 4, 'self_attn.attention_probabilities': 5, 'self_attn.attention_head_outputs': 6, 'self_attn.attention_premix': 7, 'self_attn.attention_output': 8, 'layer_mid': 9, 'mlp_norm_output': 10, 'mlp_input': 11, 'mlp.mlp_activation': 12, 'mlp.mlp_neurons': 13, 'mlp.mlp_output': 14, 'layer_output': 15}
 ```
 
 A read out of order raises nnsight's `OutOfOrderError`, which names the internal location rather than the value:

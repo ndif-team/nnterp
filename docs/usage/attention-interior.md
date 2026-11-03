@@ -97,6 +97,155 @@ with model.trace(prompt):
     model.layers[3].self_attn.attention_premix[:, :, 7] = 0     # head 7's output never reaches o_proj, under sdpa too
 ```
 
+## Before the rotary embedding: `attention_queries_prerope`, `attention_keys_prerope`, `rotate`
+
+`attention_queries` and `attention_keys` are rotated for the positions they run at. Two
+values on `model.layers[i].self_attn` are the same queries and keys one step earlier, as
+the block's rotary embedding receives them: after the projection and any query or key
+norm (Qwen3's `q_norm` / `k_norm`, OLMo-2/3, Gemma-3/4), before the rotation. And
+`attn.rotate(x, positions)` applies that block's own rotary embedding to any tensor laid
+out like them, at the absolute positions you give it.
+
+| value | what it is | layout |
+| --- | --- | --- |
+| `attention_queries_prerope` | the queries the rotary embedding receives | `Queries`: `batch num_heads seq qk_head_dim` |
+| `attention_keys_prerope` | the keys the rotary embedding receives, before the cache and `repeat_kv`: the new tokens' only | `Keys`: `batch num_kv_heads seq qk_head_dim` (`SharedRopeKeys` under latent attention, below) |
+
+`attn.rotate(attention_queries_prerope, positions)` is `attention_queries` bit for bit, and
+the same for the keys, wherever the block does nothing more between its rotary and its
+attention ([below](#where-a-familys-values-before-the-rotary-differ)): `rotate` calls the rotary embedding module the model computes its
+cos and sin with (rope scaling included, and the block's own layer type where sliding and
+full blocks rotate differently) and the apply function the block's forward calls (partial
+and interleaved rotations included). The per-family suite checks both on every family.
+`rotate` takes `x` as `[..., seq, qk_head_dim]` and `positions` as `[seq]` (a tensor, a
+list or a `range`), or `[batch, seq]` for an `x` of `[batch, heads, seq, qk_head_dim]` whose
+prompts sit at different positions; it needs no trace. Both values are on the attention
+module's own forward, not inside the eager interface, so they are served under any
+`attn_implementation`, and they come before `attention_queries` in a trace
+(`model.order(i)` ranks them first).
+
+Use them instead of `attention_queries` / `attention_keys`:
+
+- **For any transplant to another position.** A rotated query carries its position in its
+  rotation; written at another position it is attended with the wrong one. Write the value
+  before the rotary instead: the block rotates what you wrote for the position it lands
+  at, so moving a query from one prompt or position to another is one assignment.
+- **For any edit that must happen before the rotation**: a direction found on the
+  unrotated queries or keys (a probe, a steering vector), which the rotary would turn by a
+  different angle at every position.
+- **To recompute attention with keys from elsewhere**: `rotate` the source keys at the
+  destination positions, outside the trace.
+
+And instead of `self_attn.q_proj.output`: nnterp promises nothing about a projection's
+layout (Phi-3 and GPT-NeoX fuse the queries, keys and values into one projection, Phi-3
+has no `q_proj`), and on Qwen3, OLMo-2/3 and Gemma a norm sits between the projection and
+the rotary, which a hand-rotated `k_proj.output` misses.
+
+```python
+import torch
+from nnterp import StandardizedTransformer
+
+model = StandardizedTransformer("Qwen/Qwen3-8B", attn_implementation="eager")
+attn = model.layers[1].self_attn
+
+source, target = "The capital of France is Paris", "My favourite city in the whole world is Rome"
+with model.trace(source):
+    q_src = attn.attention_queries_prerope.save()       # [1, num_heads, seq, head_dim], not rotated yet
+    k_src = attn.attention_keys_prerope.save()          # [1, num_kv_heads, seq, head_dim]
+with model.trace(target):
+    attn.attention_queries_prerope[:, :, -1] = q_src[:, :, -1]   # the source's last query, rotated for the target's last position
+    moved = attn.attention_queries.save()
+    logits = model.logits.save()
+
+seq = k_src.shape[2]
+torch.equal(moved[:, :, -1:], attn.rotate(q_src[:, :, -1:], [moved.shape[2] - 1]))   # True
+later = attn.rotate(k_src, range(5, 5 + seq))           # the source's keys as if five positions later
+```
+
+On a block without a rotary embedding both values are `Unavailable` and `rotate` raises
+the same reason: GPT-2, GPT-BigCode, GPT-Neo, OPT and XGLM add absolute positions to the
+stream, BLOOM, MPT and Falcon with `alibi` bias the scores with ALiBi, and the attention
+blocks of Jamba, Nemotron-H and Kimi-Linear use no position encoding. Some families skip it
+per block: the full-attention blocks of Cohere 2, AFMoE and a hybrid EXAONE 4, the blocks
+SmolLM3's and Llama 4's `no_rope_layers` mark, a Granite-SWA block whose
+`layer_rope_theta` is 0, and every block of a GraniteMoE-Hybrid or OLMo-Hybrid checkpoint
+whose config gives no rotary (`position_embedding_type`, `rope_theta`). `support()` names
+the reason per block. `StandardizedVLLM` serves both values and `rotate` too, with the
+differences [below](#on-the-vllm-engine).
+
+### Where a family's values before the rotary differ
+
+- **A partial rotary** (GPT-NeoX, Phi, Phi-3, StableLM, Persimmon, GPT-NeoX-Japanese, GLM,
+  MiniMax-M2, MiMo-V2-Flash, GPT-J and CodeGen with a `rotary_dim`): the values are the
+  whole heads, `qk_head_dim` wide, though the rotary rotates only each head's leading
+  channels; `rotate` rotates those and passes the rest, as the forward does.
+- **GPT-J and CodeGen** rotate interleaved channel pairs, tokens before heads, with sin and
+  cos from the module's own table; the values are served heads first as views, as
+  everywhere else.
+- **Latent attention** (DeepSeek-V2/V3, Kimi-K2, DeepSeek-V3.2, GLM-5, GLM-4.7-Flash, Youtu):
+  only the trailing `qk_rope_head_dim` channels of a query head rotate, and one rope key
+  per position that every head shares; the rest of each key comes out of the latent and
+  carries no position. So `attention_queries_prerope` is whole heads (`Queries`) and
+  `attention_keys_prerope` that shared key, `SharedRopeKeys`: `batch 1 seq qk_rope_head_dim`.
+  `rotate` rotates a query head's trailing channels, or all of a rope key; every head's
+  `attention_keys[..., -qk_rope_head_dim:]` is the rotated shared key.
+- **Gemma-4**: a KV-sharing block rotates no keys of its own, so its
+  `attention_keys_prerope` is `Unavailable` (read the source block's). A source block
+  stores its rotated keys for its borrowers, so a write to its `attention_keys_prerope`
+  reaches them too, as an edit of its `k_proj` does.
+- **DeepSeek-V4** rotates each head's trailing rope slice of one tensor that is both its keys
+  and its values: a write to `attention_keys_prerope` rewrites the values too. Its sliding
+  and compressed blocks take the rotary's `main` and `compress` frequencies.
+- **Steps between the rotary and the attention**: HunYuan (dense and MoE) norms the
+  queries and keys after the rotary (`query_layernorm`, `key_layernorm`), and Llama 4 too
+  (`qk_norm`, an L2 norm), so `attention_queries` is the norm of `rotate(...)` there;
+  JetMoE tiles the keys to every routing slot (`repeat(1, top_k, 1, 1)`) after the rotary,
+  so its `attention_keys_prerope` is `num_kv_heads` wide where `attention_keys` is not;
+  Ministral 3 scales its queries after the rotary by a factor that is 1 below
+  `original_max_position_embeddings` and grows past it. `rotate` applies the rotary alone.
+
+Assignment reaches the model on every family. An in-place edit does too, except where the
+value is a split view of one fused tensor and torch refuses it as it does GPT-2's queries
+(`RuntimeError: Output 0 of Select is a view and is being modified inplace`): CodeGen's,
+DBRX's and GPT-NeoX's queries and keys, JetMoE's keys, and latent attention's shared rope
+key. Assign there, or edit under `torch.no_grad()`.
+
+### `rotate` and the positions it is given
+
+A rope scaling that adapts to the sequence (`dynamic`, Phi-3's `longrope`) picks its
+frequencies from the largest position in the call: the model's from the whole prompt,
+`rotate`'s from the positions you pass. Past `original_max_position_embeddings` the two
+differ unless the positions you pass reach as far as the prompt did; rotate the whole
+sequence and index the result to match a long prompt. Under `generate` the keys before the
+rotary on decode step `k` of `tracer.iter` (step 0 is the prompt) are the new token's
+only, at position `n + k - 1` for a prompt of `n` tokens: `attn.rotate(keys, [n + k - 1])`
+is the last row of that step's `attention_keys`.
+
+On a model split tensor-parallel the two values are gathered along their head axis as the
+queries and keys are ([Across GPUs](#across-gpus)), so every rank reads and writes them
+whole, and `rotate` runs on the whole tensor on every rank.
+
+### On the vLLM engine
+
+`StandardizedVLLM` serves both values as the arguments of the attention module's own
+`self.rotary_emb(positions, q, k)` call, `[1, heads, tokens, head_dim]`, in these layouts
+([vllm.md](vllm.md#before-the-rotary-embedding)). vLLM's rotary kernel rotates in place, so they
+are private copies taken before it runs; a write is rotated for the position it lands at, as
+here. Three things differ:
+
+- **`rotate` runs inside a trace only.** It calls the block's vLLM rotary embedding, which lives
+  in the engine's worker, on a copy of `x`; there `rotate(attention_queries_prerope,
+  range(tokens))` is the `attention_queries` vLLM's attention layer receives, bit for bit, and
+  outside a trace it raises `RuntimeError`. `positions` is `[tokens]`; on the M-RoPE rotary of the
+  Qwen-VL text families a position is a text token's, the same on all three rows.
+- **Not served on vLLM's transformers backend** (OLMo, OLMo 2, SmolLM3, StarCoder2): the rotary
+  is a call inside a forward the backend rewrites at load, which nnsight cannot instrument.
+- **Not served under latent attention** (DeepSeek-V2/V3, Kimi-K2, GLM-4.7-Flash): vLLM rotates
+  only each query head's rope slice and the shared rope key, inside its latent-attention layer,
+  where `StandardizedTransformer` serves whole-head queries.
+
+The blocks without a rotary embedding are the ones above, with the same reasons.
+
 ## Requirement: eager attention
 
 All six live inside the eager attention forward. A model loaded with `sdpa`

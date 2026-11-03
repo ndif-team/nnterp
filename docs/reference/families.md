@@ -314,6 +314,32 @@ stream; `lm_head(norm(layer_output))` returns `[batch, seq, streams, vocab_size]
 
 `granite_swa` and `granitemoe_swa` carry a learned per-head sink too, but not in the softmax: the eager forward takes the softmax over the real keys, mixes the values with it, and then scales each query's head output by `sigmoid(logsumexp(scores) - sink)`, the share a softmax with the sink as one more logit would leave on the real keys. So `attention_probabilities` rows sum to one, `softmax(attention_scores)` reproduces them, `attention_head_outputs` carry the scale (between 0.009 and 0.95 on one block of granite-swash-2b), and `SINK` is `False`. Writing the pattern there does not set what a head writes, since the scale comes after it; edit `attention_head_outputs`. The softmax scale is `attention_multiplier` (`attn._module.scaling`, 0.0078 on granite-swash-2b), not `1/sqrt(head_dim)`. The eager forward spells its softmax and dropout `F.softmax` / `F.dropout`, so both values are redefined on those operations.
 
+### Rotary embedding
+
+`attention_queries_prerope` / `attention_keys_prerope` are the arguments of the shared
+`apply_rotary_pos_emb(query, key, cos, sin)` call (`ROTARY`) on every family that makes it,
+and `Attention.rotate` calls the model's `rotary_emb` and the modeling module's
+`apply_rotary_pos_emb`; the families below differ.
+
+| what differs | families | values before the rotary | `rotate` |
+| --- | --- | --- | --- |
+| no rotary embedding: `"no rotary embedding: ..."` | `gpt2`, `gpt_bigcode`, `gpt_neo`, `opt`, `xglm` (absolute positions), `bloom`, `mpt`, `falcon` with `alibi` (ALiBi), the attention blocks of `jamba`, `nemotron_h`, `kimi_linear` | `Unavailable` | `Unavailable` |
+| NoPE blocks beside rotary ones | `cohere2`, `afmoe` and a hybrid `exaone4` (the full-attention blocks), `smollm3`, `llama4_text` (`no_rope_layers`), `granite_swa` / `granitemoe_swa` (`layer_rope_theta` 0); every block of a `granitemoehybrid` checkpoint whose `position_embedding_type` is not `rope` and of an `olmo_hybrid` one with no `rope_theta` | `Unavailable` on those blocks | `Unavailable` on those blocks |
+| a partial rotary sliced outside the apply function | `phi`, `stablelm`, `persimmon`, `gpt_neox_japanese` | the whole heads the slice is taken from (the bindings after the optional q/k layernorm) | rotates the leading `rotary_ndims` channels, passes the rest |
+| tokens before heads, interleaved pairs, sin and cos from the module's own table | `gptj`, `codegen` | the heads-split bindings, served heads first as views | the module's `apply_rotary_pos_emb(tensor, sin, cos)` on the leading `rotary_dim` channels |
+| one tensor at a time, tokens before heads | `gemma4_text`, `gemma4_unified_text` | the two calls' inputs, served heads first as views; keys `Unavailable` on a KV-sharing block | the module's `apply_rotary_pos_emb(x, cos, sin)` |
+| complex frequencies on interleaved pairs, tokens before heads | `llama4_text` | `apply_rotary_emb_0`'s arguments, served heads first | `apply_rotary_emb(q, k, freqs_cis)` |
+| latent attention: a rope part of each query head and one shared rope key | `deepseek_v2`, `deepseek_v3`, `kimi_k2`, `deepseek_v32`, `glm_moe_dsa`, `glm4_moe_lite`, `youtu` | queries: the whole heads `torch.split` receives (`Queries`); keys: the shared rope key (`SharedRopeKeys`, `batch 1 seq qk_rope_head_dim`) | the trailing `qk_rope_head_dim` channels, with `rope_call()`: V2's complex `apply_rotary_emb`, V3's `apply_rotary_pos_emb` or its `_interleave` twin per `rope_interleave`, the interleaved one on V3.2 and GLM-5 |
+| one tensor that is the keys and the values, a trailing rope slice | `deepseek_v4` | the two calls' inputs; a write to the keys rewrites the values | the module's `apply_rotary_pos_emb(x, cos, sin)` with `rope_layer_type`'s frequencies (`main`, `compress`) |
+| a rotary per layer type | `gemma3_text`, `gemma4_text`, `gemma4_unified_text`, `olmo3`, `laguna`, `mimo_v2_flash`, `zaya` | the base's | the model's `rotary_emb` with the block's `layer_types` entry |
+| a rotary per theta | `granite_swa`, `granitemoe_swa` | the base's | the model's `rotary_embs` entry for the block's `layer_rope_theta` |
+| a step after the rotary | `hunyuan_v1_dense`, `hunyuan_v1_moe` (`query_layernorm` / `key_layernorm`), `llama4_text` (`qk_norm`, an L2 norm), `jetmoe` (keys tiled `repeat(1, top_k, 1, 1)`, so `attention_keys_prerope` is `num_kv_heads` wide), `ministral3` (queries scaled past `original_max_position_embeddings`) | the base's | the rotary alone: `attention_queries` is the step applied to its result |
+
+In-place edits of the values before the rotary reach the model except where they are split
+views of one tensor (the queries and keys of `codegen`, `dbrx` and `gpt_neox`, `jetmoe`'s
+keys, and latent attention's shared rope key), where torch refuses them as it does GPT-2's
+queries: assign there.
+
 ### Latent attention
 
 `deepseek_v2`, `deepseek_v3`, `kimi_k2`, `deepseek_v32`, `glm_moe_dsa`, `glm4_moe_lite`, `youtu`, and the attention blocks of `kimi_linear`: queries and keys are `qk_head_dim = qk_nope_head_dim + qk_rope_head_dim` wide, values `v_head_dim` (what the family's `head_dim` returns), and the interface receives `num_heads` key/value heads whatever `num_key_value_heads` says (`KV_HEADS_EXPANDED` in the suite). The root publishes `qk_head_dim` for this; `attention_queries` is laid out `batch num_heads seq qk_head_dim` on every family for the same reason.

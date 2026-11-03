@@ -303,6 +303,19 @@ class Attention(Attention):
         return super().off_interface()
 ```
 
+`no_rotary()` is the same decision for the values before the rotary embedding and
+`Attention.rotate`: `None` on the base, a reason on a family without a rotary or on a block
+that skips it, read off the module where the block decides:
+
+```python
+# nnterp/families/smollm3.py
+class Attention(Attention):
+    def no_rotary(self) -> str | None:
+        if not self._module.use_rope:
+            return "no rotary embedding on this block: SmolLM3 skips it on the blocks no_rope_layers marks"
+        return None
+```
+
 ### A per-instance `unavailable=` callable
 
 `unavailable=` takes a function of the envoy returning a reason or `None`, evaluated on

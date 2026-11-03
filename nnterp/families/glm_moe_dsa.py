@@ -26,8 +26,8 @@ skip up to a full block or to the end. Dense and mixture-of-experts MLPs follow
 
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaAttention, GlmMoeDsaDecoderLayer, GlmMoeDsaMLP, GlmMoeDsaMoE
 
-from ..components import Attention, Layer, Mlp, Moe
-from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
+from ..components import Layer, Mlp, Moe
+from .deepseek_v2 import Attention, head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -44,7 +44,10 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GLM-5's sparse latent attention; the selection is folded into the mask before the shared eager forward, and the base takes the first of the three returns."""
+    """GLM-5's sparse latent attention: V2's, the selection folded into the mask before the shared eager forward, the rope parts rotated interleaved; the base takes the first of the three returns."""
+
+    def rope_call(self) -> str:
+        return "apply_rotary_pos_emb_interleave"
 
 
 class Mlp(Mlp):

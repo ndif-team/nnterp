@@ -107,6 +107,21 @@ afterwards (a kernel switch, a monkeypatch) is not what the instrumented copy
 sees. `route_kernels` must therefore run before the first trace of that
 layer (`recurrent.py:95-129`).
 
+**`.source` on a vLLM transformers-backend module sees the class's text.**
+The backend rewrites the forward of a module it fuses (`q_proj`, `k_proj`,
+`v_proj` into `qkv_proj`; a gated MLP's into `gate_up_proj`) as an AST,
+compiles it under the class's file and line numbers and binds it on the
+instance (vLLM `models/transformers/fx_utils.py` `compile_forward`,
+`fusers/base.py` `fuse`). `inspect.getsource` on that function returns the
+file at those lines: the class's forward, which calls the projections the
+fusion removed. So a value keyed on `source.<op>` of such a module (the
+queries and keys before the rotary, `apply_rotary_pos_emb_0`) cannot be
+served there; `transformers_backend.Attention.no_rotary` refuses with
+`BACKEND_ROTARY`. Values on the module's children (`qkv_proj`, `o_proj`, the
+mounted `attn`) are hooks and unaffected. The limit lifts when vLLM registers
+the rewritten text in `linecache` under a file name of its own and nnsight
+instruments the instance's forward rather than the class's.
+
 **A key function stored on a class is a bound method through an instance.**
 `RecurrentMixer.KERNEL` is a `staticmethod`
 (`recurrent.py:311-329`), so `self.KERNEL(self)` and `type(self).KERNEL(self)`

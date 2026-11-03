@@ -39,12 +39,12 @@ except RuntimeError as error:
 # Unavailable: model.model.layers.12.mlp.mlp_activation is not available: a gated
 ```
 
-A plain MLP, such as GPT-2's, serves both as the same tensor. Both are read at the down projection: vLLM builds one activation module by name and shares it between every block, and that module's output cannot tell the blocks apart.
+A plain MLP, such as GPT-2's, serves both as the same tensor. Both are read at the down projection: vLLM builds one activation module by name and shares it between every block, and that module's output cannot tell the blocks apart. GPT-2 adds learned position embeddings and has no rotary embedding, so its queries and keys before one are unavailable.
 
 ```python
 gpt2 = StandardizedVLLM("openai-community/gpt2", dispatch=True, dtype="float32", gpu_memory_utilization=0.15)
 print(sorted(name for name, reason in gpt2.support().items() if reason))
-# ['attention_mask', 'lm_head_output']
+# ['attention_mask', 'lm_head_output', 'self_attn.attention_keys_prerope', 'self_attn.attention_queries_prerope']
 ```
 
 ## `lm_head_output`
@@ -108,16 +108,21 @@ except RuntimeError as error:
 
 ## On some families
 
-A mixture of experts serves `mlp_output` and nothing inside it: the experts run in vLLM's fused MoE kernel, so `mlp_activation` and `mlp_neurons` are unavailable, and the router has no values on this engine. DeepSeek-V2, DeepSeek-V3, Kimi-K2 and GLM-4.7-Flash run latent attention in a kernel of their own, so the six values of the attention interior are unavailable there while `attention_output` is served. The two reasons are constants, which `support()` prints for the affected values.
+A mixture of experts serves `mlp_output` and nothing inside it: the experts run in vLLM's fused MoE kernel, so `mlp_activation` and `mlp_neurons` are unavailable, and the router has no values on this engine. DeepSeek-V2, DeepSeek-V3, Kimi-K2 and GLM-4.7-Flash run latent attention in a kernel of their own, so the six values of the attention interior are unavailable there while `attention_output` is served, and the queries and keys before the rotary embedding are unavailable too. The families vLLM runs through its transformers backend serve no queries and keys before the rotary either, and the blocks without a rotary embedding have none, as on transformers. The reasons are constants, which `support()` prints for the affected values.
 
 ```python
 from nnterp.components.vllm.mlp import ROUTED
-from nnterp.families.vllm.deepseek_v2 import LATENT
+from nnterp.components.vllm.transformers_backend import BACKEND_ROTARY
+from nnterp.families.vllm.deepseek_v2 import LATENT, LATENT_ROTARY
 
 print(ROUTED)
 print(LATENT)
+print(LATENT_ROTARY)
+print(BACKEND_ROTARY)
 # routed experts, inside vLLM's fused MoE kernel: there is no single activation or down projection
 # vLLM runs DeepSeek's latent attention in its own kernel, on compressed keys and values; not mapped on vLLM
+# not mapped on vLLM: DeepSeek's latent attention rotates only each query head's rope slice and the shared rope key, inside vLLM's latent-attention layer, where transformers serves whole-head queries; read them, and rotate, on a StandardizedTransformer
+# not served on vLLM's transformers backend: the rotary is a call inside the attention's forward, which the backend rewrites at load and nnsight's .source cannot instrument; read the queries and keys before it, and rotate, on a StandardizedTransformer
 ```
 
 ## Methods and nnsight's limits

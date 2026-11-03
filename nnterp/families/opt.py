@@ -79,6 +79,9 @@ class Layer(Layer):
 class Attention(Attention):
     """OPT's attention; the shared eager forward and the residual added in the block, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: OPT adds learned absolute position embeddings (embed_positions) to the stream"
+
 
 class Mlp(Mlp):
     """OPT has no MLP module; this class exists so the missing values are reported, never instantiated."""

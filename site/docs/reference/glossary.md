@@ -98,6 +98,8 @@ The terms this site uses, each in the one sense the pages give it, with the page
 
 **Residual stream**: the `[batch, seq, hidden_size]` tensor a block passes to the next, `layer_input` entering and `layer_output` leaving ([Residual stream](../guide/values/residual-stream.md)).
 
+**Rotary embedding**: the rotation of each query and key by its position (RoPE) most families apply between the projection, with any query or key norm, and the attention. `attention_queries_prerope` and `attention_keys_prerope` are the queries and keys it receives, and `self_attn.rotate(x, positions)` applies a block's own rotation ([Before the rotary embedding](../guide/values/rotary.md)).
+
 **Router**: a mixture's gate, `moe.router`, whose `router_logits` are scored to pick each token's experts ([Mixture of experts](../guide/architectures/mixture-of-experts.md)).
 
 **Routing**: on a mixture, which experts a token goes to, the pair `expert_weights` and `expert_indices`, `[batch, seq, top_k]` ([Mixture of experts](../guide/architectures/mixture-of-experts.md)). The [Recurrent mixers](../developing/internals/recurrent-mixers.md#pure-torch-kernels-and-routing) page also says routing for `route_kernels`, the process-wide rebinding of a family's kernels to transformers' pure-torch functions.

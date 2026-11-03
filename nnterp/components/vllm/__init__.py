@@ -25,6 +25,10 @@ served in nnterp's layouts with the heads split out. What the layer computes
 between them (the scores, the pattern) is inside its kernel, not Python on
 this engine, so those two are recomputed from the queries and keys:
 read-only, and there on the prefill only, where a step holds every key.
+The queries and keys before the rotary embedding are the arguments of the
+module's own ``self.rotary_emb(positions, q, k)`` call, read as an operation
+of its forward: vLLM builds one rotary embedding per configuration, which
+every block that rotates the same way holds.
 
 A family vLLM runs through its transformers backend (transformers' own
 modules inside the engine) builds on `nnterp.components.vllm.transformers_backend`
@@ -32,13 +36,13 @@ instead, where the batch axis is already there and the engine's attention
 layer is mounted as the attention module's ``attn`` child.
 """
 
-from .attention import DECODE_STEP, Attention, on_decode_step
+from .attention import DECODE_STEP, ROTARY, Attention, on_decode_step, rotary_head_size
 from .flat import Flat, batched, on_transformers_backend, unbatched
 from .layer import FusedLayer, Layer, argument, summed, with_argument
 from .mlp import Mlp
 from .project import project
 
 __all__ = [
-    "Attention", "DECODE_STEP", "Flat", "FusedLayer", "Layer", "Mlp", "argument", "batched", "on_decode_step", "on_transformers_backend",
-    "project", "summed", "unbatched", "with_argument",
+    "Attention", "DECODE_STEP", "Flat", "FusedLayer", "Layer", "Mlp", "ROTARY", "argument", "batched", "on_decode_step",
+    "on_transformers_backend", "project", "rotary_head_size", "summed", "unbatched", "with_argument",
 ]

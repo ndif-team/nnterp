@@ -22,8 +22,9 @@ from transformers.models.glm4_moe_lite.modeling_glm4_moe_lite import (
     Glm4MoeLiteMoE,
 )
 
-from ..components import Attention, Layer, Mlp, Moe
+from ..components import Layer, Mlp, Moe
 from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
+from .deepseek_v3 import Attention  # the same attention forward: V3's rope call
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -38,7 +39,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GLM-4-MoE-Lite's latent attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """GLM-4-MoE-Lite's latent attention: DeepSeek-V3's forward, so V3's envoy holds."""
 
 
 class Mlp(Mlp):

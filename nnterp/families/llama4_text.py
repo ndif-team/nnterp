@@ -62,6 +62,7 @@ adapter's output, flattened over the tiles. Loaded with
 task builds ``Llama4ForCausalLM``, which has no tower.
 """
 
+import sys
 from typing import TYPE_CHECKING
 
 from transformers.models.llama4.modeling_llama4 import (
@@ -70,8 +71,8 @@ from transformers.models.llama4.modeling_llama4 import (
 )
 
 from ..components import (
-    Attention, EProperty, ExpertIndices, Layer, Mlp, Moe, Patches, Residual, RouterLogits, TokenEProperty, Vision,
-    VisionAttention, VisionLayer, VisionMlp, unavailable,
+    Attention, EProperty, ExpertIndices, Keys, Layer, Mlp, Moe, Patches, Queries, Residual, RouterLogits, TokenEProperty, Vision,
+    VisionAttention, VisionLayer, VisionMlp, rotary_reason, seq_first, unavailable,
 )
 from ..components.vision import no_tower_run
 
@@ -133,7 +134,41 @@ class Attention(Attention):
     The queries and keys it serves are after the rotary embedding and the
     qk-norm on a RoPE block, and the queries after temperature tuning on a
     NoPE block.
+
+    The rotary is ``apply_rotary_emb(q, k, freqs_cis)``, complex frequencies
+    on interleaved channel pairs, tokens before heads; the values before it
+    are its two arguments, served heads first as views. The qk-norm (an L2
+    norm, no weight) follows the rotary, so ``attention_queries`` is the norm
+    of the rotated queries there. A NoPE block (``no_rope_layers``) has no
+    rotary.
     """
+
+    def no_rotary(self) -> str | None:
+        if not self._module.use_rope:
+            return "no rotary embedding on this block: Llama 4 skips it on the blocks no_rope_layers marks (NoPE), and scales their queries by temperature instead"
+        return None
+
+    @EProperty("source.apply_rotary_emb_0.inputs", select=0, description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
+    def attention_queries_prerope(self, value) -> Queries:
+        return seq_first(value)
+
+    @attention_queries_prerope.postprocess
+    def attention_queries_prerope(self, value):
+        return seq_first(value)
+
+    @EProperty("source.apply_rotary_emb_0.inputs", select=1, description=Attention.attention_keys_prerope.description, unavailable=rotary_reason)
+    def attention_keys_prerope(self, value) -> Keys:
+        return seq_first(value)
+
+    @attention_keys_prerope.postprocess
+    def attention_keys_prerope(self, value):
+        return seq_first(value)
+
+    def apply_rotary(self, x, embedding):
+        """The modeling module's ``apply_rotary_emb(q, k, freqs_cis)``, tokens before heads."""
+        apply = sys.modules[type(self._module).__module__].apply_rotary_emb
+        tokens = x.reshape(embedding.shape[0], -1, *x.shape[-2:]).transpose(1, 2)  # [batch, seq, heads, head_dim]
+        return apply(tokens, tokens, embedding)[0].transpose(1, 2).reshape(x.shape)
 
 
 class Mlp(Mlp):

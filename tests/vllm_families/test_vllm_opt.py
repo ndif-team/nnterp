@@ -3,7 +3,7 @@
 import pytest
 import torch
 import vllm_suite
-from vllm_suite import BOUNDARY, INTERIOR, ROOT, VLLMFamilySuite, close
+from vllm_suite import BOUNDARY, INTERIOR, NO_ROTARY, ROOT, VLLMFamilySuite, close
 
 from nnterp.families.vllm import opt
 
@@ -31,7 +31,7 @@ def boundary(layer, interior=()):
 class TestVLLMOPT(VLLMFamilySuite):
     REPO = "facebook/opt-125m"
     FAMILY = opt
-    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | {"mlp_input"}) - {"mlp.mlp_activation"}
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | {"mlp_input"}) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "model.decoder.embed_tokens",
         "layers": "model.decoder.layers",

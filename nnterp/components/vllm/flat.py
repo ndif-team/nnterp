@@ -75,6 +75,10 @@ class Flat(EProperty):
             ``head_size`` of the module the key names, vLLM's attention layer,
             or, for a module that has none (the output projection), the
             host's ``head_dim``.
+        head_dim: The width of a head as a function of the host, for a value
+            whose key names no module that knows it: an operation of the
+            host's forward (the rotary call's arguments, split by the rotary
+            embedding's ``head_size``).
         batch: Whether the tensor already carries the batch axis, ``[1,
             tokens, ...]``, as it does inside the transformers model vLLM's
             transformers backend runs: its rows are then ``tensor[0]``, served
@@ -90,12 +94,13 @@ class Flat(EProperty):
 
     def __init__(
         self, *args: Any, heads: str | None = None, batch: bool | Callable[[Envoy], bool] = False,
-        factor: Callable[[Envoy], float] | None = None, **kwargs: Any,
+        factor: Callable[[Envoy], float] | None = None, head_dim: Callable[[Envoy], int] | None = None, **kwargs: Any,
     ) -> None:
         super().__init__(*args, **kwargs)
         self.heads = heads
         self.batch = batch
         self.factor = factor
+        self.head_dim = head_dim
 
     def _batched(self, obj: Envoy) -> bool:
         """Whether the tensor ``obj`` serves here carries the batch axis already."""
@@ -105,6 +110,8 @@ class Flat(EProperty):
         """How this value's rows are laid out for the reader: the keyword arguments of `batched` and `unbatched`."""
         if self.heads is None:
             return {}
+        if self.head_dim is not None:
+            return {"head_dim": self.head_dim(obj), "heads_first": self.heads == "first"}
         *walk, _ = self.path(obj).split(".")
         layer = obj.get(".".join(walk)) if walk else obj
         head_dim = getattr(layer._module, "head_size", None) or obj.head_dim

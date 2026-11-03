@@ -54,6 +54,7 @@ weight the experts the ids chose: writing ``router_logits`` changes ``expert_wei
 not ``expert_indices``.
 """
 
+import sys
 from typing import TYPE_CHECKING
 
 import torch
@@ -62,7 +63,8 @@ from transformers.models.deepseek_v4.modeling_deepseek_v4 import (
 )
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, INTERFACE, Layer, Moe, Pattern, StreamMixing, StreamWeights, Streams, first_tensor, interface_reason, rewrap, unavailable,
+    Attention, EProperty, HeadOutputs, INTERFACE, Keys, Layer, Moe, Pattern, Queries, StreamMixing, StreamWeights, Streams, first_tensor, holding,
+    interface_reason, rewrap, rotary_reason, unavailable,
 )
 
 if TYPE_CHECKING:
@@ -133,7 +135,32 @@ class Attention(Attention):
     The scores are the masked scores bound just before the sink column is
     concatenated (GPT-OSS's binding); the pattern is the base's. The keys and
     values are one tensor object.
+
+    The rotary rotates each head's trailing rope slice, the queries and the
+    one key/value head in two calls of ``apply_rotary_pos_emb(x, cos, sin)``
+    with the cos/sin of the block's rope type (``rope_layer_type``: ``main``
+    on a sliding block, ``compress`` on a compressed one). The values before
+    it are those calls' inputs; the keys there are the values too, so a write
+    to ``attention_keys_prerope`` rewrites both.
     """
+
+    @EProperty("source.apply_rotary_pos_emb_0.input", description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
+    def attention_queries_prerope(self, value) -> Queries:
+        return value
+
+    @EProperty("source.apply_rotary_pos_emb_1.input", description=Attention.attention_keys_prerope.description, unavailable=rotary_reason)
+    def attention_keys_prerope(self, value) -> Keys:
+        return value
+
+    def rotary_embedding(self, x, position_ids):
+        """The model's rotary for this block's ``rope_layer_type`` (``main`` or ``compress``), not its ``layer_types`` entry."""
+        return holding(self, "rotary_emb").rotary_emb(x, position_ids, self._module.rope_layer_type)
+
+    def apply_rotary(self, x, embedding):
+        """The modeling module's ``apply_rotary_pos_emb(x, cos, sin)``, which rotates one tensor's trailing rope slice."""
+        cos, sin = embedding
+        apply = sys.modules[type(self._module).__module__].apply_rotary_pos_emb
+        return apply(x.reshape(cos.shape[0], -1, *x.shape[-2:]), cos, sin).reshape(x.shape)
 
     attention_premix = unavailable("a low-rank output projection: o_a_proj compresses the heads before o_b_proj, so nothing receives them side by side")
 

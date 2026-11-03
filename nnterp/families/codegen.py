@@ -19,9 +19,13 @@ are cut wrong and nothing reports it.
 
 from typing import TYPE_CHECKING
 
+import torch
 from transformers.models.codegen.modeling_codegen import CodeGenAttention, CodeGenBlock, CodeGenMLP
 
-from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, seq_first, unavailable
+from ..components import (
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, rotary_reason, seq_first, unavailable,
+)
+from .gptj import Attention as GPTJAttention
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -58,6 +62,34 @@ class Layer(Layer):
 
 class Attention(Attention):
     """CodeGen's attention: the residual is added in the block; the pattern lives in its ``_attn`` method."""
+
+    # GPT-J's rotary: tokens before heads, an interleaved rotation of each
+    # head's leading ``rotary_dim`` channels, so the values before it and the
+    # arithmetic are GPT-J's; sin and cos are indexed from the fp32 table and
+    # not cast, which is why the rotated queries come out fp32.
+
+    @EProperty("source.query_0.output", description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
+    def attention_queries_prerope(self, value) -> Queries:
+        return seq_first(value)
+
+    @attention_queries_prerope.postprocess
+    def attention_queries_prerope(self, value):
+        return seq_first(value)
+
+    @EProperty("source.key_0.output", description=Attention.attention_keys_prerope.description, unavailable=rotary_reason)
+    def attention_keys_prerope(self, value) -> Keys:
+        return seq_first(value)
+
+    @attention_keys_prerope.postprocess
+    def attention_keys_prerope(self, value):
+        return seq_first(value)
+
+    def rotary_embedding(self, x, position_ids):
+        """``(sin, cos)`` indexed from the module's fp32 sinusoid table at ``position_ids``, as the forward does."""
+        sincos = self._module.embed_positions.to(position_ids.device)[position_ids]
+        return torch.split(sincos, sincos.shape[-1] // 2, dim=-1)
+
+    apply_rotary = GPTJAttention.apply_rotary
 
     # The interior lives around the ``_attn`` method call: its arguments are the
     # queries, keys and values heads first, after the rotary embedding (no

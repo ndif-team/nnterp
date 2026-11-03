@@ -7,7 +7,7 @@ import tempfile
 
 import nnsight
 import torch
-from suite import FamilySuite, rows, PROMPT
+from suite import NO_ROTARY, FamilySuite, rows, PROMPT
 
 from nnterp.families import falcon
 
@@ -94,7 +94,7 @@ class TestFalconAlibi(FamilySuite):
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     MLP_NORM = "input_layernorm"
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "layer_mid": "a parallel block"}
 
     def test_alibi_branch(self, model):
         assert model.layers[0].self_attn._module.config.alibi

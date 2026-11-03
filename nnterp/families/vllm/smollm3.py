@@ -28,6 +28,11 @@ class Layer(Layer):
 class Attention(Attention):
     """SmolLM3's attention; its output is what the block adds, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        if not self._module.use_rope:
+            return "no rotary embedding on this block: SmolLM3 skips it on the blocks no_rope_layers marks"
+        return super().no_rotary()
+
 
 class Mlp(Mlp):
     """SmolLM3's MLP; its output is what the block adds, so the base holds."""

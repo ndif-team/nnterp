@@ -45,6 +45,8 @@ def main() -> None:
 
     with torch.no_grad():
         with model.trace(PROMPT):
+            out["attention_queries_prerope"] = attn.attention_queries_prerope.save()
+            out["attention_keys_prerope"] = attn.attention_keys_prerope.save()
             out["attention_queries"] = attn.attention_queries.save()
             out["attention_keys"] = attn.attention_keys.save()
             out["attention_values"] = attn.attention_values.save()
@@ -57,6 +59,8 @@ def main() -> None:
             out["mlp_neurons"] = mlp.mlp_neurons.save()
             out["mlp_output"] = mlp.mlp_output.save()
             out["logits"] = model.logits.save()
+        positions = torch.arange(out["attention_queries_prerope"].shape[2])
+        out["rotated_queries"] = attn.rotate(out["attention_queries_prerope"], positions)
 
         with model.trace(PROMPT):
             attn.attention_head_outputs[:, :, heads - 1] = 0
@@ -69,6 +73,12 @@ def main() -> None:
         with model.trace(PROMPT):
             attn.attention_queries = attn.attention_queries * scale
             out["queries_scaled_by_assignment"] = model.logits.save()
+
+        with model.trace(PROMPT):
+            queries = attn.attention_queries_prerope.clone()
+            queries[:, :, -1] = queries[:, :, 0]  # the first query, rotated for the last position
+            attn.attention_queries_prerope = queries
+            out["queries_prerope_moved"] = model.logits.save()
 
         with model.trace(PROMPT):
             activation = mlp.mlp_activation.clone()

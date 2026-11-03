@@ -9,7 +9,7 @@ import pytest
 import torch
 from safetensors.torch import load_file, save_file
 from ssd import StateSpaceChecks
-from suite import LINEAR, VALUES, FamilySuite, PROMPT
+from suite import LINEAR, NO_ROTARY, VALUES, FamilySuite, PROMPT
 from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable, route_kernels
@@ -56,6 +56,7 @@ class TestNemotronH(StateSpaceChecks, FamilySuite):
     EXPECTED_UNAVAILABLE = {
         "attention_norm_output": "an MLP block", "layer_mid": "a one-sublayer block", "mlp_norm_output": "no mlp module", "mlp_input": "no mlp module",
         **{name: "no self_attn module" for name in VALUES if name.startswith("self_attn.")},
+        **{name: "no " for name in NO_ROTARY},  # no self_attn module off the attention blocks, no rotary embedding on them
         **{f"linear_attn.{name}": "no linear_attn module" for name in LINEAR if name not in ("state", "states")},
         "linear_attn.state": "",   # missing off the Mamba-2 blocks, and unavailable on them
         "linear_attn.states": "",

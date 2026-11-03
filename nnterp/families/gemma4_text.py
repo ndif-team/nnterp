@@ -86,6 +86,7 @@ and multiplies by ``std_scale``. So ``vision.tower_output`` is the encoder's out
 ``model.embed_audio`` keep their native names.
 """
 
+import sys
 from typing import TYPE_CHECKING
 
 from nnsight.intervention.envoy import Envoy
@@ -95,7 +96,8 @@ from transformers.models.gemma4.modeling_gemma4 import (
 )
 
 from ..components import (
-    Attention, EProperty, INTERFACE, ImageScatter, Keys, Layer, Moe, Patches, Residual, RouterLogits, TokenEProperty, Unavailable, Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
+    Attention, EProperty, INTERFACE, ImageScatter, Keys, Layer, Moe, Patches, Queries, Residual, RouterLogits, TokenEProperty, Unavailable, Values, Vision, VisionAttention, VisionLayer, VisionMlp, interface_reason, mixture_reason,
+    rotary_reason, seq_first,
 )
 from ..components.vision import no_tower_run, variable_resolution
 
@@ -170,6 +172,13 @@ def _hand_back(index: int):
     return transform
 
 
+def _borrowed_keys(attn: Envoy) -> str | None:
+    """Why the keys before the rotary are unavailable on this block: a KV-sharing block computes no keys of its own."""
+    if attn._module.is_kv_shared_layer:
+        return "a KV-sharing block: its keys are an earlier block's, rotated there; read that block's attention_keys_prerope"
+    return rotary_reason(attn)
+
+
 class Attention(Attention):
     """Gemma-4's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output.
 
@@ -181,7 +190,36 @@ class Attention(Attention):
     reach every later block that borrows it. A transform hands the edited
     copy back as this call's argument alone, so an edit, in place or by
     assignment, changes what this block attends with and nothing else.
+
+    The rotary rotates the queries and the keys one at a time, tokens before
+    heads (``apply_rotary_pos_emb(x, cos, sin, unsqueeze_dim=2)``), so the
+    values before it are those two calls' inputs served heads first as views.
+    A KV-sharing block rotates no keys; a source block stores its rotated keys
+    for its borrowers, so a write to its ``attention_keys_prerope`` reaches
+    them too, as an edit of ``k_proj`` does.
     """
+
+    @EProperty("source.apply_rotary_pos_emb_0.input", description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
+    def attention_queries_prerope(self, value) -> Queries:
+        return seq_first(value)
+
+    @attention_queries_prerope.postprocess
+    def attention_queries_prerope(self, value):
+        return seq_first(value)
+
+    @EProperty("source.apply_rotary_pos_emb_1.input", description=Attention.attention_keys_prerope.description, unavailable=_borrowed_keys)
+    def attention_keys_prerope(self, value) -> Keys:
+        return seq_first(value)
+
+    @attention_keys_prerope.postprocess
+    def attention_keys_prerope(self, value):
+        return seq_first(value)
+
+    def apply_rotary(self, x, embedding):
+        """The modeling module's ``apply_rotary_pos_emb(x, cos, sin)``, which rotates one tensor."""
+        cos, sin = embedding
+        apply = sys.modules[type(self._module).__module__].apply_rotary_pos_emb
+        return apply(x.reshape(cos.shape[0], -1, *x.shape[-2:]), cos, sin).reshape(x.shape)
 
     @EProperty(f"source.{INTERFACE}.inputs", select=2, description=Attention.attention_keys.description, unavailable=interface_reason)
     def attention_keys(self, value) -> Keys:

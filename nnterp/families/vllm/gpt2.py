@@ -35,6 +35,9 @@ class Layer(Layer):
 class Attention(Attention):
     """GPT-2's attention; its output is what the block adds, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: GPT-2 adds learned absolute position embeddings (wpe) to the stream"
+
 
 class Mlp(Mlp):
     """GPT-2's MLP; its output is what the block adds, so the base holds."""

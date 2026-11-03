@@ -43,7 +43,7 @@ The values GPT-2 serves carry these layouts, and `print(model)` shows each value
 | `HeadOutputs` | `batch seq num_heads head_dim` | `attention_head_outputs`, `attention_premix` |
 | `Neurons` | `batch seq intermediate_size` | `mlp_activation`, `mlp_neurons` |
 
-There are 37 names in all. The mixture's (`RouterLogits`, `ExpertWeights`, ...), the recurrent mixers' (`State`, `ScanQK`, `SSDValues`, ...) and the vision tower's (`Patches`, `ImageFeatures`) are on their Guide pages and defined beside the envoy that serves them under the Documentation tab ([components](../../documentation/components/index.md)). `nnterp.components` exports 34 of them; the root's three, `Logits`, `NextTokenProbs` and `Tokens`, are in `nnterp.standardized`. A value with no tensor annotation, such as `input_size`, has `layout` and `dims` of `None`.
+There are 38 names in all. The mixture's (`RouterLogits`, `ExpertWeights`, ...), the recurrent mixers' (`State`, `ScanQK`, `SSDValues`, ...), the vision tower's (`Patches`, `ImageFeatures`) and latent attention's rope key before the rotary (`SharedRopeKeys`, [Before the rotary embedding](rotary.md)) are on their Guide pages and defined beside the envoy that serves them under the Documentation tab ([components](../../documentation/components/index.md)). `nnterp.components` exports 35 of them; the root's three, `Logits`, `NextTokenProbs` and `Tokens`, are in `nnterp.standardized`. A value with no tensor annotation, such as `input_size`, has `layout` and `dims` of `None`.
 
 ## Axes named as sizes
 

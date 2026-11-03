@@ -50,6 +50,10 @@ def _ple_checkpoint(repo="hf-tiny-v2/tiny-random-Gemma4ForCausalLM"):
 WRAPPER_ROWS = rows("model.language_model", "layers", "embed_tokens", "norm")
 
 
+#: A KV-sharing block rotates no keys of its own: it attends with an earlier block's.
+BORROWED_KEYS = {"self_attn.attention_keys_prerope": "a KV-sharing block"}
+
+
 class Gemma4Suite(FamilySuite):
     FAMILY = gemma4_text
     NATIVE = LLAMA_ROWS
@@ -261,6 +265,7 @@ class TestGemma4Text(Gemma4Suite):
     """``Gemma4ForCausalLM``: per-layer embeddings, a mixture of experts on every block, the last two blocks sharing keys and values."""
 
     REPO = _ple_checkpoint()
+    EXPECTED_UNAVAILABLE = BORROWED_KEYS
 
     def test_the_checkpoint_has_every_quirk(self, model):
         text = model.config

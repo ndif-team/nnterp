@@ -2,7 +2,7 @@
 
 import pytest
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import NO_ROTARY, FamilySuite, LLAMA_ROWS, PROMPT
 
 from nnterp import Unavailable
 from nnterp.families import afmoe
@@ -14,6 +14,7 @@ class TestAfmoe(FamilySuite):
     NATIVE = LLAMA_ROWS
     MLP_NORM = "pre_mlp_layernorm"           # sandwich: post_attention_layernorm follows the attention
     PREMIX_IS_HEAD_OUTPUTS = False           # a gate on the heads before o_proj
+    EXPECTED_UNAVAILABLE = NO_ROTARY  # the full-attention block rotates nothing
 
     def test_contributions_are_the_post_norms(self, model):
         with model.trace(PROMPT):

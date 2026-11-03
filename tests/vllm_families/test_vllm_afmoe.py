@@ -1,7 +1,7 @@
 """AFMoE on vLLM, against the transformers engine: a fused block with sandwich norms, a dense block then mixtures of experts."""
 
 import pytest
-from vllm_suite import LLAMA_ROWS, VLLMFamilySuite
+from vllm_suite import LLAMA_ROWS, NO_ROTARY, VLLMFamilySuite
 
 from nnterp import Unavailable
 from nnterp.families.vllm import afmoe
@@ -10,7 +10,7 @@ from nnterp.families.vllm import afmoe
 class TestVLLMAfmoe(VLLMFamilySuite):
     REPO = "hf-tiny-v2/tiny-random-AfmoeForCausalLM"
     FAMILY = afmoe
-    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | {"mlp.mlp_neurons"}  # the NoPE blocks do not rotate
     NATIVE = LLAMA_ROWS
 
     def test_dense_then_mixture(self, model):

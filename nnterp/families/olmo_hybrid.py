@@ -71,6 +71,12 @@ class Layer(Layer):
 class Attention(Attention):
     """OLMo-Hybrid's softmax attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
 
+    def no_rotary(self) -> str | None:
+        rope = getattr(self._module.config, "rope_parameters", None)
+        if rope is None or rope.get("rope_theta") is None:
+            return "no rotary embedding: this checkpoint sets no rope_theta, so its attention uses no position encoding (NoPE)"
+        return None
+
     @EProperty(
         "../post_attention_layernorm.output",
         description="What the attention adds to the residual stream: the post-attention norm's output",

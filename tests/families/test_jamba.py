@@ -2,7 +2,7 @@
 
 import torch
 from scan_suite import SelectiveScanSuite
-from suite import LINEAR, VALUES, FamilySuite, PROMPT, rows
+from suite import LINEAR, NO_ROTARY, VALUES, FamilySuite, PROMPT, rows
 
 from nnterp.families import jamba
 
@@ -21,6 +21,7 @@ class TestJamba(SelectiveScanSuite, FamilySuite):
     REAL = ("ai21labs/Jamba-v0.1", 32, 4096, 8192)
     EXPECTED_UNAVAILABLE = {
         **{name: "no self_attn module" for name in VALUES if name.startswith("self_attn.")},
+        **{name: "no " for name in NO_ROTARY},  # no self_attn module off the attention blocks, no rotary embedding on them
         **{f"linear_attn.{name}": "no linear_attn module" for name in LINEAR},
     }
 

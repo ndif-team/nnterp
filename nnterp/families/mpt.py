@@ -42,6 +42,9 @@ class Layer(Layer):
 class Attention(Attention):
     """MPT's attention: the residual is added in the block; the pattern is its own dropout."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: MPT biases its scores with ALiBi"
+
     # The three ``*_states`` bindings are the projections reshaped heads first
     # (no grouped-query attention); the scores are the softmax's input after
     # the mask, upcast to float32; the head outputs are the second matmul,

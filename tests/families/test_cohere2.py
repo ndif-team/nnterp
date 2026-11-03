@@ -3,7 +3,7 @@
 import pytest
 
 import torch
-from suite import FamilySuite, PROMPT, rows
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows
 from vision_suite import VisionSuite, WrapperSuite, align_processor, siglip_rows, wrapper_of
 
 from nnterp.families import cohere, cohere2
@@ -14,7 +14,7 @@ class TestCohere2(FamilySuite):
     FAMILY = cohere2
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln2=None)
     MLP_NORM = "input_layernorm"  # parallel: one norm feeds both sublayers
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "layer_mid": "a parallel block"}  # the full-attention blocks have no rotary
 
     def test_both_layer_types_are_covered(self, model):
         assert set(model.config.layer_types) == {"sliding_attention", "full_attention"}

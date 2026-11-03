@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from transformers.models.mpt.modeling_mpt import MptAttention, MptBlock, MptMLP
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, seq_first,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, projection_weight, seq_first,
 )
 
 if TYPE_CHECKING:
@@ -80,6 +80,10 @@ class Attention(Attention):
     )
     def attention_probabilities(self, value) -> Pattern:
         return value
+
+    def value_weight(self, kv_head):
+        """``Wqkv``'s rows are every query, key, then value; a ``clip_qkv`` checkpoint clamps the projection's output after it."""
+        return projection_weight(self, "Wqkv").unflatten(0, (3, self.num_heads, self.head_dim))[2, kv_head]
 
 
 class Mlp(Mlp):

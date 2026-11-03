@@ -164,6 +164,12 @@ class Attention(Attention):
 
     attention_premix = unavailable("a low-rank output projection: o_a_proj compresses the heads before o_b_proj, so nothing receives them side by side")
 
+    def no_head_weights(self) -> str | None:
+        return (
+            "the values are the keys, one projection normed per head (kv_proj, then kv_norm), and the output projection "
+            "is low-rank (o_a_proj, then o_b_proj), so no slice of a projection is a head's"
+        )
+
 
     #: The pattern's rows sum to less than one: the sink takes the rest.
     SINK = True

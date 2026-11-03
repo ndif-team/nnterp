@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from transformers.models.bloom.modeling_bloom import BloomAttention, BloomBlock, BloomMLP
 
-from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values
+from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, projection_weight
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -88,6 +88,10 @@ class Attention(Attention):
     )
     def attention_probabilities(self, value) -> Pattern:
         return value
+
+    def value_weight(self, kv_head):
+        """``query_key_value``'s rows are each head's query, key and value, ``[num_heads, 3, head_dim]``."""
+        return projection_weight(self, "query_key_value").unflatten(0, (self.num_heads, 3, self.head_dim))[kv_head, 2]
 
 
 class Mlp(Mlp):

@@ -99,6 +99,12 @@ class Attention(Attention):
         """The envoy of the merge that follows this sublayer, its sibling in the block."""
         return self.parent.post_attention_residual_scale
 
+    def no_head_weights(self) -> str | None:
+        return (
+            "compressed convolutional attention: half of each value head is the previous token's projection "
+            "(v_proj_delayed), so no slice of one projection maps a position's input to its values"
+        )
+
     @EProperty(key="output", description="What the attention adds to the residual stream: its output plus the merge's hidden_states_bias, times its hidden_states_scale")
     def attention_output(self, value) -> Residual:
         return _scale(first_tensor(value), self.merge._module)

@@ -7,7 +7,7 @@ added in the block, attention through the shared eager forward. Queries, keys an
 
 from transformers.models.phi3.modeling_phi3 import Phi3Attention, Phi3DecoderLayer, Phi3MLP
 
-from ..components import Attention, Layer, Mlp
+from ..components import Attention, Layer, Mlp, projection_weight
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -24,6 +24,11 @@ class Layer(Layer):
 
 class Attention(Attention):
     """Phi-3's attention; the shared eager forward and the residual added in the block, so the base holds."""
+
+    def value_weight(self, kv_head):
+        """``qkv_proj``'s rows are every query, every key, then every value."""
+        weight = projection_weight(self, "qkv_proj")[self.num_heads * self.head_dim:]
+        return weight.unflatten(0, (2, self.num_kv_heads, self.head_dim))[1, kv_head]
 
 
 class Mlp(Mlp):

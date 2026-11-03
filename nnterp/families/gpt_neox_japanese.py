@@ -24,8 +24,8 @@ from transformers.models.gpt_neox_japanese.modeling_gpt_neox_japanese import (
 )
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, first_tensor, rewrap,
-    rotary_reason, seq_first,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, first_tensor, projection_weight,
+    rewrap, rotary_reason, seq_first,
 )
 
 if TYPE_CHECKING:
@@ -131,6 +131,10 @@ class Attention(Attention):
         if bias is None or torch.equal(value, raw[0] + bias):
             return raw
         return (value - bias, *raw[1:])
+
+    def value_weight(self, kv_head):
+        """``query_key_value``'s rows are each head's query, key and value, ``[num_heads, 3, head_dim]``."""
+        return projection_weight(self, "query_key_value").unflatten(0, (self.num_heads, 3, self.head_dim))[kv_head, 2]
 
 
 class Mlp(Mlp):

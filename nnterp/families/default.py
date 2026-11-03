@@ -98,6 +98,11 @@ ROTARY = (
     "the default family cannot tell where this attention applies its rotary embedding, if it has one, or with what; "
     "add a family module (docs/extending/adding-a-family.md)"
 )
+#: Why `value_weight` / `output_weight` are not served.
+HEAD_WEIGHTS = (
+    "the default family cannot tell which rows of this attention's projections are a head's (they may be fused, "
+    "interleaved or transposed); add a family module (docs/extending/adding-a-family.md)"
+)
 #: Why the logit lens is not served.
 LENS = (
     "the default family cannot tell what follows lm_head; "
@@ -160,6 +165,9 @@ class Attention(Attention):
 
     def no_rotary(self) -> str | None:
         return ROTARY
+
+    def no_head_weights(self) -> str | None:
+        return HEAD_WEIGHTS
 
     attention_output = unavailable(CONTRIBUTION)
 

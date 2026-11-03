@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from transformers.models.dbrx.modeling_dbrx import DbrxAttention, DbrxBlock, DbrxFFN
 
-from ..components import Attention, Layer, Moe, RouterLogits, TokenEProperty, unavailable
+from ..components import Attention, Layer, Moe, RouterLogits, TokenEProperty, projection_weight, unavailable
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -44,6 +44,11 @@ class Layer(Layer):
 
 class Attention(Attention):
     """DBRX's attention; the shared eager forward, and the residual added outside it in ``norm_attn_norm``."""
+
+    def value_weight(self, kv_head):
+        """``Wqkv``'s rows are every query, every key, then every value; the forward clamps its output at ``clip_qkv``."""
+        weight = projection_weight(self, "Wqkv")[self.num_heads * self.head_dim:]
+        return weight.unflatten(0, (2, self.num_kv_heads, self.head_dim))[1, kv_head]
 
 
 class Mlp(Moe):

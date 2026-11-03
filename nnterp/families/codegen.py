@@ -23,7 +23,8 @@ import torch
 from transformers.models.codegen.modeling_codegen import CodeGenAttention, CodeGenBlock, CodeGenMLP
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, rotary_reason, seq_first, unavailable,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, projection_weight, rotary_reason, seq_first,
+    unavailable,
 )
 from .gptj import Attention as GPTJAttention
 
@@ -133,6 +134,12 @@ class Attention(Attention):
     )
     def attention_probabilities(self, value) -> Pattern:
         return value
+
+    def value_weight(self, kv_head):
+        """``qkv_proj``'s rows are four parts (the forward's ``mp_num``), each a quarter of the heads' queries, values, then keys."""
+        per_part = self.num_heads // 4
+        weight = projection_weight(self, "qkv_proj").unflatten(0, (4, 3, per_part, self.head_dim))
+        return weight[kv_head // per_part, 1, kv_head % per_part]
 
 
 class Mlp(Mlp):

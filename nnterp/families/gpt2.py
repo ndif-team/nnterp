@@ -15,7 +15,7 @@ from typing import TYPE_CHECKING
 
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention, GPT2Block, GPT2MLP
 
-from ..components import Attention, Layer, Mlp
+from ..components import Attention, Layer, Mlp, projection_weight
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -52,6 +52,14 @@ class Attention(Attention):
         if self._module.config.reorder_and_upcast_attn:
             return "this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path"
         return super().off_interface()
+
+    def value_weight(self, kv_head):
+        """``c_attn`` is a ``Conv1D``, ``[hidden_size, 3 * hidden_size]``, whose columns are every query, key, then value."""
+        return projection_weight(self, "c_attn").unflatten(1, (3, self.num_heads, self.head_dim))[:, 2, kv_head].T
+
+    def output_weight(self, head):
+        """``c_proj`` is a ``Conv1D``, ``[hidden_size, hidden_size]``, whose rows are the heads' outputs."""
+        return projection_weight(self, "o_proj").unflatten(0, (self.num_heads, self.head_dim))[head].T
 
 
 class Mlp(Mlp):

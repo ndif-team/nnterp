@@ -48,6 +48,8 @@ def main() -> None:
             out["attention_queries"] = attn.attention_queries.save()
             out["attention_keys"] = attn.attention_keys.save()
             out["attention_values"] = attn.attention_values.save()
+            heads_again, pattern_again = attn.interface(out["attention_queries"], out["attention_keys"], out["attention_values"])
+            out["interface_head_outputs"], out["interface_probabilities"] = heads_again.save(), pattern_again.save()
             out["attention_scores"] = attn.attention_scores.save()
             out["attention_probabilities"] = attn.attention_probabilities.save()
             out["attention_head_outputs"] = attn.attention_head_outputs.save()
@@ -69,6 +71,13 @@ def main() -> None:
         with model.trace(PROMPT):
             attn.attention_queries = attn.attention_queries * scale
             out["queries_scaled_by_assignment"] = model.logits.save()
+
+        with model.trace(PROMPT):
+            values = attn.attention_values.clone()
+            values[:, kv_heads - 1] += 1
+            heads_patched, _ = attn.interface(attn.attention_queries, attn.attention_keys, values)
+            attn.attention_head_outputs[:, -1, heads - 1] = heads_patched[:, -1, heads - 1]
+            out["head_patched_through_interface"] = model.logits.save()
 
         with model.trace(PROMPT):
             activation = mlp.mlp_activation.clone()

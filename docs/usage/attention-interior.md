@@ -230,8 +230,10 @@ keys and values are the whole cache, and the mask is the step's (none, on an unp
 `generate`). Within one invoke, a padded batch included, it is bit for bit. Across invokes
 the model runs every invoke's rows in one call and `interface` runs one invoke's rows, so
 the two agree to rounding (about `1e-8` in float32 on the tiny checkpoints), not bit for
-bit: put the prompts in one invoke (`model.trace([a, b])`) when that matters. In training
-mode with a dropout the call draws its own mask.
+bit: put the prompts in one invoke (`model.trace([a, b])`) when that matters. On a model
+split tensor-parallel ([Across GPUs](#across-gpus)) it takes the gathered queries, keys and
+values and runs every head on every rank. In training mode with a dropout the call draws
+its own mask.
 
 Which call it makes follows from where the family reads its queries, keys, values and head
 outputs: the one call that takes the first three and returns the last. That is

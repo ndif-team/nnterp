@@ -37,11 +37,13 @@ class Layer(Layer):
     ``input_layernorm``'s output; without it the block is the pre-norm one.
     """
 
-    layer_mid = EProperty(
+    @EProperty(
         "post_attention_layernorm.input",
         description="The residual stream after the attention add",
         unavailable=lambda block: PARALLEL if block.root.config.use_parallel_residual else None,
     )
+    def layer_mid(self, value) -> Residual:
+        return value
 
     @EProperty(
         lambda block: "input_layernorm.output" if block.root.config.use_parallel_residual else "post_attention_layernorm.output",

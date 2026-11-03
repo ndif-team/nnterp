@@ -70,11 +70,13 @@ class Layer(Layer):
     def attention_norm_output(self, value) -> Residual:
         return value
 
-    layer_mid = EProperty(
+    @EProperty(
         "post_attention_layernorm.input",
         description="The residual stream after the attention add",
         unavailable=lambda block: PARALLEL if parallel(block) else None,
     )
+    def layer_mid(self, value) -> Residual:
+        return value
 
     @EProperty(
         lambda block: "ln_mlp.output" if two_norms(block) else "input_layernorm.output" if parallel(block) else "post_attention_layernorm.output",

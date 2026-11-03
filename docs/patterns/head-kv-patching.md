@@ -19,7 +19,7 @@ prediction? The edit has to reach the chosen heads and nothing else, and writing
   key/value head `g` is read by every query head `h` with `h // group == g`, so an edit of
   it reaches the whole group.
 - **Every query row reads them.** An edit of the keys at the span changes the attention of
-  every row after the span, not only the last.
+  every row from the span on, not only the last.
 - **Under `generate` they are the cache.** On most families the attention receives the
   cache's own tensors, so an in-place edit stays in the cache for every later step, and
   an assignment, though it lasts one forward, still reaches the whole group and every row.
@@ -80,7 +80,7 @@ right positions in the target too.
 ## Why not write the keys
 
 Written directly, the same span edit reaches every head of the group and every row
-after the span:
+from the span on:
 
 ```python
 with model.trace(target):

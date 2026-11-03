@@ -3,6 +3,7 @@
 import torch
 from suite import FamilySuite, PROMPT, rows
 
+from nnterp import axis_size
 from nnterp.families import jetmoe
 
 
@@ -13,6 +14,16 @@ class TestJetMoe(FamilySuite):
     MOE_UNAVAILABLE = {"expert_outputs": "sorted by expert"}
     KV_HEADS_EXPANDED = True  # keys and values are tiled to every routing slot before the interface
     EXPECTED_UNAVAILABLE = {"self_attn.attention_premix": "a mixture of attention heads"}
+
+    def rotated_as_served(self, attn, name, rotated):
+        """The keys are tiled to every routing slot after the rotary (``repeat(1, top_k, 1, 1)``)."""
+        return rotated.repeat(1, attn._module.top_k, 1, 1) if name == "attention_keys_prerope" else rotated
+
+    def model_size(self, host, axis, name=None):
+        """The keys before the rotary are not tiled yet: ``num_kv_heads`` wide."""
+        if name == "attention_keys_prerope":
+            return axis_size(host, axis)
+        return super().model_size(host, axis, name)
 
     def test_attention_returns_router_logits_third(self, model):
         with model.trace(PROMPT):

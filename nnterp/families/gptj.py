@@ -7,12 +7,15 @@ arithmetic in ``_attn`` rather than the shared eager forward, so the pattern
 and the rest of the interior are read around that method call.
 """
 
+import sys
 from typing import TYPE_CHECKING
 
+import torch
 from transformers.models.gptj.modeling_gptj import GPTJAttention, GPTJBlock, GPTJMLP
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, needs_eager, seq_first, unavailable,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, needs_eager, rotary_reason, seq_first,
+    unavailable,
 )
 
 if TYPE_CHECKING:
@@ -50,6 +53,44 @@ class Layer(Layer):
 
 class Attention(Attention):
     """GPT-J's attention: the residual is added in the block; the pattern lives in its ``_attn`` method."""
+
+    # The rotary runs in the forward itself, tokens before heads: sin and cos
+    # gathered from the module's ``embed_positions`` at the position ids, an
+    # interleaved rotation (``rotate_every_two``) of each head's leading
+    # ``rotary_dim`` channels (the whole head without one). The values before
+    # it are the heads-split bindings, served heads first as a view.
+
+    @EProperty("source.query_1.output", description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
+    def attention_queries_prerope(self, value) -> Queries:
+        return seq_first(value)
+
+    @attention_queries_prerope.postprocess
+    def attention_queries_prerope(self, value):
+        return seq_first(value)
+
+    @EProperty("source.key_1.output", description=Attention.attention_keys_prerope.description, unavailable=rotary_reason)
+    def attention_keys_prerope(self, value) -> Keys:
+        return seq_first(value)
+
+    @attention_keys_prerope.postprocess
+    def attention_keys_prerope(self, value):
+        return seq_first(value)
+
+    def rotary_embedding(self, x, position_ids):
+        """``(sin, cos)`` gathered from the module's sinusoid table at ``position_ids``, in ``x``'s dtype, as the forward does."""
+        embed_positions = self._module._get_embed_positions(position_ids)
+        repeated = position_ids.unsqueeze(-1).repeat(1, 1, embed_positions.shape[-1])
+        sincos = torch.gather(embed_positions, 1, repeated).to(x.dtype)
+        return torch.split(sincos, sincos.shape[-1] // 2, dim=-1)
+
+    def apply_rotary(self, x, embedding):
+        """The modeling module's ``apply_rotary_pos_emb(tensor, sin, cos)`` on each head's leading ``rotary_dim`` channels, tokens before heads."""
+        sin, cos = embedding
+        apply = sys.modules[type(self._module).__module__].apply_rotary_pos_emb
+        width = self._module.rotary_dim or x.shape[-1]
+        tokens = x.reshape(sin.shape[0], -1, *x.shape[-2:]).transpose(1, 2)  # [batch, seq, heads, head_dim]
+        rotated = torch.cat((apply(tokens[..., :width], sin, cos), tokens[..., width:]), dim=-1)
+        return rotated.transpose(1, 2).reshape(x.shape)
 
     # The interior lives around the ``_attn`` method call: its arguments are the
     # queries, keys and values after rotary embeddings (no grouped-query

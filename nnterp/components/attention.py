@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+import sys
 from functools import partial
 from typing import Any, Callable
 
@@ -12,10 +14,10 @@ from nnsight.intervention.interleaver import Mediator
 from jaxtyping import Float
 from torch import Tensor
 
-from .eproperty import DerivedEProperty, EProperty
+from .eproperty import DerivedEProperty, EProperty, Unavailable
 from .layer import Residual
 from .standard import (
-    BATCH, HEAD_DIM, HEADS, KEY, KV_HEADS, QK_HEAD_DIM, QUERY, SEQ, Standard, absent, first_tensor, in_width, module_int, rewrap, unsized,
+    BATCH, HEAD_DIM, HEADS, KEY, KV_HEADS, QK_HEAD_DIM, QK_ROPE_HEAD_DIM, QUERY, SEQ, Standard, absent, first_tensor, in_width, module_int, rewrap, unsized,
 )
 
 
@@ -31,6 +33,10 @@ def needs_eager(envoy: Envoy) -> str | None:
 #: ``attention_interface(module, query, key, value, attention_mask, ...)``.
 INTERFACE = "attention_interface_1"
 
+#: The call every family on transformers' shared rotary path makes, before the interface:
+#: ``apply_rotary_pos_emb(query, key, cos, sin)``.
+ROTARY = "apply_rotary_pos_emb_0"
+
 #: The layouts of the interior, as transformers hands them to its attention interface: heads before tokens on
 #: the queries, keys and values; ``num_kv_heads`` wide under grouped-query attention; queries and keys ``qk_head_dim``
 #: deep and values ``head_dim`` deep (the same number outside latent attention).
@@ -39,6 +45,9 @@ Keys = Float[Tensor, f"{BATCH} {KV_HEADS} {SEQ} {QK_HEAD_DIM}"]
 Values = Float[Tensor, f"{BATCH} {KV_HEADS} {SEQ} {HEAD_DIM}"]
 #: A pattern over the tokens: the scores entering the softmax and the probabilities leaving it.
 Pattern = Float[Tensor, f"{BATCH} {HEADS} {QUERY} {KEY}"]
+#: Latent attention's rope key: one per position, which every head shares, ``qk_rope_head_dim`` wide (what the rotary
+#: receives for the keys there, where the rest of each head's key is position-free).
+SharedRopeKeys = Float[Tensor, f"{BATCH} 1 {SEQ} {QK_ROPE_HEAD_DIM}"]
 #: Each head's output before they are concatenated and projected, tokens before heads.
 HeadOutputs = Float[Tensor, f"{BATCH} {SEQ} {HEADS} {HEAD_DIM}"]
 
@@ -70,6 +79,22 @@ def seq_first(value: torch.Tensor) -> torch.Tensor:
 
 def interface_reason(envoy: Envoy) -> str | None:
     return envoy.off_interface()
+
+
+def rotary_reason(envoy: Envoy) -> str | None:
+    return envoy.no_rotary()
+
+
+def holding(envoy: Envoy, name: str) -> Envoy:
+    """The nearest envoy from ``envoy`` up whose module holds a module ``name``: where the model keeps its rotary embedding."""
+    host = envoy
+    while host is not None and not isinstance(getattr(host._module, name, None), torch.nn.Module):
+        host = host.parent
+    if host is None:
+        raise NotImplementedError(
+            f"no {name} module above {envoy.path}; the family's {type(envoy).__name__} overrides `rotary_embedding`"
+        )
+    return host
 
 
 def attention_call(envoy: Envoy) -> tuple[str, tuple[int, int, int]] | None:
@@ -187,6 +212,12 @@ class Attention(Standard):
     that is follows from where the family reads its queries, keys, values and
     head outputs (`attention_call`), so a family declares nothing for it.
 
+    Before the interface, on the module's own forward and so under any
+    ``attn_implementation``: the queries and keys the rotary embedding
+    receives, read at the shared ``apply_rotary_pos_emb`` call (`ROTARY`),
+    and `rotate`, which applies the block's rotary to any such tensor.
+    `no_rotary` is the one place that decides a block has none.
+
     Its sizes (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) are
     this block's, read off the module, so they hold on a model whose blocks
     differ (Gemma-4, MiMo-V2-Flash) and outside a trace.
@@ -204,6 +235,15 @@ class Attention(Standard):
     def off_interface(self) -> str | None:
         """Why the shared attention interface does not run on this module, or ``None``."""
         return needs_eager(self)
+
+    def no_rotary(self) -> str | None:
+        """Why this block applies no rotary embedding, or ``None``: the one place the prerope values and `rotate` ask.
+
+        A family without rotary embeddings (learned or sinusoidal positions,
+        ALiBi, none) overrides it with its reason, as does one whose blocks
+        differ (a NoPE block beside rotary ones).
+        """
+        return None
 
     # -- sizes (off the module) ---------------------------------------------------
     # What this block runs with, read off the module's own attributes and, where
@@ -250,15 +290,40 @@ class Attention(Standard):
         width = getattr(getattr(module, "k_proj", None), "out_features", None)
         return width // self.qk_head_dim if width else self.num_heads
 
+    @EProperty(f"source.{ROTARY}.inputs", select=0, description="The queries entering the rotary embedding", unavailable=rotary_reason)
+    def attention_queries_prerope(self, value: torch.Tensor) -> Queries:
+        """The queries the rotary embedding receives, ``[batch, num_heads, seq, qk_head_dim]``.
+
+        After the query projection and any query norm, before the rotation:
+        `rotate` at the positions they run at gives `attention_queries`.
+        Assign to replace them; the block rotates what is written for the
+        position it is written at, so a query moved from another position or
+        prompt is one assignment. Served on the attention's own forward, so
+        under any ``attn_implementation``.
+        """
+        return value
+
+    @EProperty(f"source.{ROTARY}.inputs", select=1, description="The keys entering the rotary embedding", unavailable=rotary_reason)
+    def attention_keys_prerope(self, value: torch.Tensor) -> Keys:
+        """The keys the rotary embedding receives, ``[batch, num_kv_heads, seq, qk_head_dim]``.
+
+        After the key projection and any key norm, before the rotation, the
+        cache and ``repeat_kv``: the new tokens' keys only, on a decode step.
+        `rotate` gives `attention_keys`; assign to replace them, rotated for
+        the position they are written at.
+        """
+        return value
+
     @EProperty(f"source.{INTERFACE}.inputs", select=1, description="The queries entering attention", unavailable=interface_reason)
     def attention_queries(self, value: torch.Tensor) -> Queries:
         """The queries the attention interface receives, ``[batch, num_heads, seq, head_dim]``.
 
         After the query projection and, on a family with rotary embeddings,
-        after they are applied. Assign to replace them. In-place edits reach
-        the model where torch allows them: GPT-2's queries, keys and values are
-        split views of one ``c_attn`` tensor and torch refuses to edit those in
-        place, so assign there.
+        after they are applied (`attention_queries_prerope` is before). Assign
+        to replace them. In-place edits reach the model where torch allows
+        them: GPT-2's queries, keys and values are split views of one
+        ``c_attn`` tensor and torch refuses to edit those in place, so assign
+        there.
         """
         return value
 
@@ -360,3 +425,69 @@ class Attention(Standard):
         description="The attention function this call ran, as f(queries, keys, values) -> (head outputs, pattern), with the rest of the call's arguments",
         unavailable=call_reason,
     )
+
+    # -- the rotary embedding -------------------------------------------------------
+    # `rotate` applies the block's own rotation outside the model: the cos/sin
+    # source the model computes them with and the apply function the forward
+    # calls. A family whose rotary differs overrides `rotary_embedding` (the
+    # source) or `apply_rotary` (the arithmetic), not `rotate`.
+
+    def rotate(self, x: torch.Tensor, positions: Any) -> torch.Tensor:
+        """``x`` rotated by this block's rotary embedding at absolute ``positions``, as the block rotates its queries and keys.
+
+        Args:
+            x: ``[..., seq, qk_head_dim]``: queries or keys the way
+                `attention_queries_prerope` / `attention_keys_prerope` serve them.
+            positions: Each row's absolute position, ``[seq]`` (a tensor or a
+                list), or ``[batch, seq]`` for an ``x`` of ``[batch, heads, seq,
+                qk_head_dim]`` whose prompts sit at different positions.
+
+        The rotary embedding module (its rope scaling included, and the
+        block's layer type where sliding and full blocks rotate differently)
+        and the apply function (partial or interleaved) are the family's own,
+        so ``rotate(attention_queries_prerope, positions)`` is the block's
+        `attention_queries` bit for bit, and the same for the keys, where the
+        block does nothing more between its rotary and its attention (a family
+        that norms after the rotary, HunYuan or Llama 4, or tiles its keys,
+        JetMoE, does that to the result). A rope scaling that adapts to the
+        sequence (``dynamic``, ``longrope``) picks its frequencies from the
+        largest position given, as the model does from the whole prompt. An
+        ordinary call outside a trace; inside one it computes without
+        touching the trace.
+
+        Raises:
+            Unavailable: the block applies no rotary embedding (`no_rotary`).
+        """
+        reason = self.no_rotary()
+        if reason:
+            raise Unavailable(f"{self.path}.rotate is not available: {reason}")
+        positions = torch.as_tensor(positions, device=x.device)
+        position_ids = positions.reshape(1, -1) if positions.dim() < 2 else positions
+        return self.apply_rotary(x, self.rotary_embedding(x, position_ids))
+
+    def rotary_embedding(self, x: torch.Tensor, position_ids: torch.Tensor) -> Any:
+        """What the block's rotary call is given for ``position_ids`` (``[batch, seq]``): ``(cos, sin)``, ``[batch, seq, width]``.
+
+        From the rotary embedding the model computes them with, the nearest
+        ``rotary_emb`` above this attention, called through its envoy, with
+        this block's ``config.layer_types`` entry where its forward takes a
+        ``layer_type``.
+        """
+        rotary = holding(self, "rotary_emb").rotary_emb
+        if "layer_type" in inspect.signature(rotary._module.forward).parameters:
+            layer_type = self._module.config.layer_types[self._module.layer_idx]
+            return rotary(x, position_ids, layer_type)
+        return rotary(x, position_ids)
+
+    def apply_rotary(self, x: torch.Tensor, embedding: Any) -> torch.Tensor:
+        """``x`` rotated by ``embedding`` with the family's ``apply_rotary_pos_emb(q, k, cos, sin)``, the function the forward calls.
+
+        Whatever that function does is what happens: a partial rotary it
+        slices itself (GPT-NeoX, Phi-3, GLM), an interleaved one (Cohere). A
+        family that slices outside it, or calls another function, overrides
+        this method.
+        """
+        cos, sin = embedding
+        apply = sys.modules[type(self._module).__module__].apply_rotary_pos_emb
+        heads = x.reshape(cos.shape[0], -1, *x.shape[-2:])  # [batch, heads, seq, qk_head_dim], as the forward holds it
+        return apply(heads, heads, cos, sin)[0].reshape(x.shape)

@@ -10,8 +10,8 @@ spellings; their ``text_config`` says ``kimi_k2``, which ``kimi_k2.py`` maps to 
 
 from transformers.models.deepseek_v3.modeling_deepseek_v3 import DeepseekV3Attention, DeepseekV3DecoderLayer, DeepseekV3MLP, DeepseekV3MoE
 
-from ..components import Attention, Layer, Mlp, Moe
-from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
+from ..components import Layer, Mlp, Moe
+from .deepseek_v2 import Attention, head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -30,7 +30,10 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """DeepSeek-V3's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """DeepSeek-V3's latent attention: V2's, rotating its rope parts with ``apply_rotary_pos_emb`` or, where the config sets ``rope_interleave``, its interleaved twin."""
+
+    def rope_call(self) -> str:
+        return "apply_rotary_pos_emb_interleave" if self._module.config.rope_interleave else "apply_rotary_pos_emb"
 
 
 class Mlp(Mlp):

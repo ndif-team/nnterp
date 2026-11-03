@@ -182,9 +182,10 @@ Moe component`, [mixture-of-experts](mixture-of-experts.md)).
 MLP's `mlp_activation` (vLLM computes `act(gate) * up` in one kernel) and `lm_head_output` (vLLM
 never calls `lm_head`) ([vllm](vllm.md#the-module-boundaries-and-the-sublayers-interiors)).
 
-`model.order(i)` places them: on Llama, `layer_input`, `attention_norm_output`, the
-attention interior, `attention_premix`, `attention_output`, `layer_mid`, `mlp_norm_output`,
-`mlp_input`, `mlp_activation`, `mlp_neurons`, `mlp_output`, `layer_output`.
+`model.order(i)` places them ([availability](availability.md#forward-order-order-and-rank)):
+on Llama, `layer_input`, `attention_norm_output`, the attention interior, `attention_premix`,
+`attention_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`, `mlp_activation`,
+`mlp_neurons`, `mlp_output`, `layer_output`.
 
 ## Where the families differ
 

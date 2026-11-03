@@ -29,6 +29,7 @@ The constructors of [`StandardizedTransformer`](../documentation/standardized.md
 | `to_model_key()` | nnsight's remote key, naming `TransformersModel` (or `VLLM`) | outside | [Remote](../guide/remote.md) |
 | `num_layers`, `hidden_size`, `vocab_size`, `num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`, [`intermediate_size`](../documentation/standardized.md#nnterp.standardized.Standardized.intermediate_size) | the sizes, read off the config and read-only; a family defines `def <size>(model)` to spell one otherwise | outside; no `dispatch` needed | [The whole model](../guide/values/whole-model.md#sizes) |
 | `layers[i].self_attn.num_heads`, `.num_kv_heads`, `.head_dim`, `.qk_head_dim`; `layers[i].mlp.intermediate_size`; `layers[i].mlp.num_experts`, `.top_k` | a block's own sizes, read off the module | either | [The whole model](../guide/values/whole-model.md#sizes) |
+| [`layers[i].self_attn.rotate(x, positions)`](../documentation/components/attention.md#nnterp.components.attention.Attention.rotate) | `x` rotated by that block's own rotary embedding at absolute `positions`: `rotate(attention_queries_prerope, positions)` is `attention_queries` | either (inside a trace on the vLLM engine); `Unavailable` on a block without one | [Before the rotary embedding](../guide/values/rotary.md) |
 | [`family`](../documentation/standardized.md#nnterp.standardized.StandardizedTransformer.family) | the family module the load resolved to, or the `family=` passed | | [Loading](../guide/loading.md) |
 | `layers`, `embed_tokens`, `norm`, `lm_head`; `layers[i].self_attn`, `.mlp`, `.linear_attn` | the standard names: the root's modules, and a block's `Attention`, `Mlp` and recurrent mixer | | [Names](../guide/names.md) |
 | [`vision`](../documentation/standardized.md#nnterp.standardized.StandardizedTransformer.vision), [`projector`](../documentation/standardized.md#nnterp.standardized.StandardizedTransformer.projector) | the vision tower and the last module before the scatter, on a wrapper whose family names them | | [Vision-language](../guide/architectures/vision-language.md) |
@@ -60,6 +61,8 @@ The whole-model values, in forward order; the layouts are `Logits`, `NextTokenPr
 | [`mlp_input`](../documentation/components/layer.md#nnterp.components.layer.Layer.mlp_input) | `layers[i]` | `Residual` | the block has an `mlp` | [Residual stream](../guide/values/residual-stream.md#between-the-sublayers) |
 | [`layer_output`](../documentation/components/layer.md#nnterp.components.layer.Layer.layer_output) | `layers[i]` | `Residual` (`Streams` on DeepSeek-V4) | always | [Residual stream](../guide/values/residual-stream.md) |
 | [`attention_output`](../documentation/components/attention.md#nnterp.components.attention.Attention.attention_output) | `self_attn` | `Residual` | always | [Residual stream](../guide/values/residual-stream.md) |
+| [`attention_queries_prerope`](../documentation/components/attention.md#nnterp.components.attention.Attention.attention_queries_prerope) | `self_attn` | `Queries` | the block applies a rotary embedding; any implementation | [Before the rotary embedding](../guide/values/rotary.md) |
+| [`attention_keys_prerope`](../documentation/components/attention.md#nnterp.components.attention.Attention.attention_keys_prerope) | `self_attn` | `Keys` (`SharedRopeKeys` under latent attention) | the block applies a rotary embedding; any implementation | [Before the rotary embedding](../guide/values/rotary.md) |
 | [`attention_queries`](../documentation/components/attention.md#nnterp.components.attention.Attention.attention_queries) | `self_attn` | `Queries` | eager attention | [Attention](../guide/values/attention.md) |
 | [`attention_keys`](../documentation/components/attention.md#nnterp.components.attention.Attention.attention_keys) | `self_attn` | `Keys` | eager attention | [Attention](../guide/values/attention.md) |
 | [`attention_values`](../documentation/components/attention.md#nnterp.components.attention.Attention.attention_values) | `self_attn` | `Values` | eager attention | [Attention](../guide/values/attention.md) |
@@ -159,7 +162,7 @@ What `nnterp.components` exports beyond the layouts, grouped by role.
 
 ## Layouts
 
-The 34 layout names `nnterp.components` exports and the root's three in `nnterp.standardized`, each defined in the generated page of the envoy that serves it.
+The 35 layout names `nnterp.components` exports and the root's three in `nnterp.standardized`, each defined in the generated page of the envoy that serves it.
 
 | layout | axes | carried by | defined in |
 | --- | --- | --- | --- |
@@ -167,8 +170,9 @@ The 34 layout names `nnterp.components` exports and the root's three in `nnterp.
 | `FlatResidual` | `tokens hidden_size` | OPT's `layer_mid`, `mlp_norm_output` | [layer](../documentation/components/layer.md) |
 | `Streams`, `StreamWeights`, `StreamMixing` | `batch seq streams hidden_size`; `batch seq streams`; `batch seq streams streams` | DeepSeek-V4's `layer_output`, `layer_input`; its `attention_post`, `mlp_post`; its `attention_comb`, `mlp_comb` | [layer](../documentation/components/layer.md) |
 | `Logits`, `NextTokenProbs`, `Tokens` | `batch seq vocab_size`; `batch vocab_size`; `batch seq` (integer) | `logits`, `lm_head_output`; `next_token_probs`; `input_ids`, `attention_mask` | [standardized](../documentation/standardized.md) |
-| `Queries` | `batch num_heads seq qk_head_dim` | `attention_queries` | [attention](../documentation/components/attention.md) |
-| `Keys`, `Values` | `batch num_kv_heads seq qk_head_dim`; `batch num_kv_heads seq head_dim` | `attention_keys`; `attention_values` | [attention](../documentation/components/attention.md) |
+| `Queries` | `batch num_heads seq qk_head_dim` | `attention_queries`, `attention_queries_prerope` | [attention](../documentation/components/attention.md) |
+| `Keys`, `Values` | `batch num_kv_heads seq qk_head_dim`; `batch num_kv_heads seq head_dim` | `attention_keys`, `attention_keys_prerope`; `attention_values` | [attention](../documentation/components/attention.md) |
+| `SharedRopeKeys` | `batch 1 seq qk_rope_head_dim` | `attention_keys_prerope` under latent attention | [attention](../documentation/components/attention.md) |
 | `Pattern` | `batch num_heads query key` | `attention_scores`, `attention_probabilities` | [attention](../documentation/components/attention.md) |
 | `HeadOutputs` | `batch seq num_heads head_dim` | `attention_head_outputs`, `attention_premix` | [attention](../documentation/components/attention.md) |
 | `Neurons` | `batch seq intermediate_size` | `mlp_activation`, `mlp_neurons` | [mlp](../documentation/components/mlp.md) |

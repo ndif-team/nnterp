@@ -49,6 +49,9 @@ class Layer(Layer):
 class Attention(Attention):
     """GPT-Neo's inner self-attention: the residual is added in the block; the pattern lives in its ``_attn`` method."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: GPT-Neo adds learned absolute position embeddings (wpe) to the stream"
+
     # The interior lives around the ``_attn`` method call: its arguments are the
     # queries, keys and values split into heads (no rotary embeddings, no
     # grouped-query attention, so all three are ``num_heads`` wide), its softmax

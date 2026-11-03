@@ -4,7 +4,7 @@ import math
 
 import pytest
 import torch
-from suite import FamilySuite, PROMPT, rows
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows
 
 from nnterp.components import OWN_ARITHMETIC
 from nnterp.families import xglm
@@ -15,7 +15,7 @@ class TestXGLM(FamilySuite):
     FAMILY = xglm
     NATIVE = rows("model", "layers", "embed_tokens", "layer_norm", mlp=None, ln1="self_attn_layer_norm", ln2=None)
     MLP_NORM = "final_layer_norm"            # the block's own, native name
-    EXPECTED_UNAVAILABLE = {"mlp_input": "no mlp module", "self_attn.interface": OWN_ARITHMETIC}
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "mlp_input": "no mlp module", "self_attn.interface": OWN_ARITHMETIC}
 
     @pytest.mark.xfail(strict=True, reason="the interior is served off [batch * num_heads, ...] tensors, which nnsight narrows to no invoke: each invoke reads the whole batch")
     def test_pattern_per_invoke(self, model):

@@ -6,11 +6,11 @@ import tempfile
 
 from huggingface_hub import snapshot_download
 from safetensors.torch import load_file, save_file
-from vllm_suite import VLLMFamilySuite
+from vllm_suite import NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import deepseek_v3, kimi_k25
 
-UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | frozenset({
+UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | frozenset({
     f"self_attn.{value}" for value in ("attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_probabilities", "attention_head_outputs")
 }) | {"mlp.mlp_neurons"}
 PREFIX = "language_model.model"

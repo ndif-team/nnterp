@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed
+from suite import NO_ROTARY, FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed
 
 from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
 from nnterp.components import Moe
@@ -56,6 +56,7 @@ class TestKimiLinear(FamilySuite):
     KV_HEADS_EXPANDED = True  # latent attention projects keys and values for every head
     EXPECTED_UNAVAILABLE = {
         **{name: "no self_attn module" for name in VALUES if name.startswith("self_attn.")},
+        **{name: "no " for name in NO_ROTARY},  # no self_attn module off the attention blocks, no rotary embedding on them
         **{f"linear_attn.{name}": "no linear_attn module" for name in LINEAR if name not in ("state", "states")},
         "linear_attn.state": "",    # missing on the attention blocks, and needing route_kernels on the others
         "linear_attn.states": "",

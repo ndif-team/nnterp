@@ -82,6 +82,11 @@ class Layer(Layer):
 class Attention(Attention):
     """Falcon's attention, which returns ``(output, bias)``; the output is what the block adds."""
 
+    def no_rotary(self) -> str | None:
+        if not self._module.use_rotary:
+            return "no rotary embedding: this checkpoint sets alibi, which biases the scores instead"
+        return None
+
     @Flat("output", select=0, unavailable=attention_bias, description="What the attention adds to the residual stream, [1, tokens, hidden_size]")
     def attention_output(self, value) -> Residual:
         return value

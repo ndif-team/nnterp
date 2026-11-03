@@ -35,6 +35,9 @@ class Layer(Layer):
 class Attention(Attention):
     """BLOOM's attention; its output is what the block adds, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: BLOOM biases its scores with ALiBi"
+
 
 class Mlp(Mlp):
     """BLOOM's MLP; its output is what the block adds, so the base holds."""

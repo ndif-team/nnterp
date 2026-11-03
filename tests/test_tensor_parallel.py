@@ -28,12 +28,12 @@ TP_SIZE = 2
 WORKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tp_worker.py")
 
 READS = [
-    "attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_probabilities",
+    "attention_queries_prerope", "attention_keys_prerope", "rotated_queries", "attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_probabilities",
     "attention_head_outputs", "attention_premix", "attention_output", "mlp_activation", "mlp_neurons", "mlp_output",
     "logits", "interface_head_outputs", "interface_probabilities",
 ]
 EDITS = [
-    "head_outputs_zeroed_in_place", "keys_scaled_in_place", "queries_scaled_by_assignment", "activation_assigned",
+    "head_outputs_zeroed_in_place", "keys_scaled_in_place", "queries_scaled_by_assignment", "queries_prerope_moved", "activation_assigned",
     "head_outputs_zeroed_with_grad", "head_patched_through_interface",
 ]
 

@@ -3,17 +3,29 @@
 from __future__ import annotations
 
 from functools import partial
+from typing import Any
 
 import torch
 from nnsight.intervention.envoy import Envoy
 from nnsight.intervention.interleaver import Mediator
 
 from .. import attention as standard
-from ..attention import HeadOutputs, Keys, Pattern, Queries, Values
-from ..eproperty import DerivedEProperty, unavailable
+from ..attention import HeadOutputs, Keys, Pattern, Queries, Values, rotary_reason
+from ..eproperty import DerivedEProperty, Unavailable, unavailable
 from ..layer import Residual
 from ..standard import absent
 from .flat import Flat, on_transformers_backend
+
+#: The call every vLLM attention module makes to rotate its queries and keys, before its attention layer:
+#: ``q, k = self.rotary_emb(positions, q, k)``. Read as an operation of the module's own forward, because vLLM
+#: builds one rotary embedding per configuration and every block that rotates the same way holds that one module,
+#: whose own inputs cannot tell the blocks apart.
+ROTARY = "self_rotary_emb_0"
+
+
+def rotary_head_size(envoy: Envoy) -> int:
+    """The width of a head as the block's rotary embedding views its rows: the module's ``head_size``."""
+    return envoy._module.rotary_emb.head_size
 
 #: Why the scores and the pattern are not there on a decode step: they are recomputed from the step's own rows.
 DECODE_STEP = (
@@ -88,6 +100,14 @@ class Attention(standard.Attention):
     new token's alone, and the earlier ones are in the engine's cache, which
     the kernel reads for itself.
 
+    The queries and keys before the rotary embedding are the arguments of
+    the module's rotary call (`ROTARY`), after any query and key norm, in
+    the same layouts, and `rotate` calls that rotary embedding on any tensor
+    laid out like them. vLLM's rotary kernel rotates its arguments in place,
+    and they are split views of the fused ``qkv`` projection, so these are
+    private copies like every vLLM value, taken before the kernel runs.
+    `no_rotary` is the one place that decides a block has no rotary.
+
     The scores and the pattern are computed inside the kernel, which serves
     nothing between its inputs and its output, so here they are *recomputed*
     from the queries and keys, with the layer's own scale, softcap and
@@ -112,6 +132,29 @@ class Attention(standard.Attention):
         description="The attention pattern, [1, num_heads, query, key], recomputed from the queries and keys; prefill only, read-only",
         unavailable=on_decode_step,
     )
+
+    @Flat(
+        f"source.{ROTARY}.inputs", select=1, heads="first", head_dim=rotary_head_size, unavailable=rotary_reason,
+        description="The queries entering the rotary embedding, [1, num_heads, tokens, head_dim]",
+    )
+    def attention_queries_prerope(self, value: torch.Tensor) -> Queries:
+        """The queries the rotary embedding receives: after the projection and any query norm, before the rotation.
+
+        `rotate` at the positions they run at gives `attention_queries`
+        where the block does nothing more between the two. Assign or edit in
+        place; the block rotates what is written for the position it is
+        written at, so a query moved from another position or prompt is one
+        assignment.
+        """
+        return value
+
+    @Flat(
+        f"source.{ROTARY}.inputs", select=2, heads="first", head_dim=rotary_head_size, unavailable=rotary_reason,
+        description="The keys entering the rotary embedding, [1, num_kv_heads, tokens, head_dim]",
+    )
+    def attention_keys_prerope(self, value: torch.Tensor) -> Keys:
+        """This step's keys as the rotary embedding receives them; ``num_kv_heads`` wide under grouped-query attention."""
+        return value
 
     @Flat("attn.inputs", select=0, heads="first", description="The queries entering vLLM's attention layer, [1, num_heads, tokens, head_dim]")
     def attention_queries(self, value: torch.Tensor) -> Queries:
@@ -144,3 +187,47 @@ class Attention(standard.Attention):
     @Flat("output", description="What the attention adds to the residual stream, [1, tokens, hidden_size]")
     def attention_output(self, value: torch.Tensor) -> Residual:
         return value
+
+    # -- the rotary embedding -------------------------------------------------------
+
+    def rotate(self, x: torch.Tensor, positions: Any) -> torch.Tensor:
+        """``x`` rotated by this block's rotary embedding at absolute ``positions``, as the block rotates its queries and keys.
+
+        Args:
+            x: ``[..., tokens, head_dim]``: queries or keys the way
+                `attention_queries_prerope` / `attention_keys_prerope` serve them.
+            positions: Each row's absolute position, ``[tokens]`` (a tensor, a
+                list or a ``range``). On an M-RoPE rotary (the Qwen-VL text
+                models) these are text positions, the same on its three rows;
+                a ``[3, tokens]`` tensor gives each row its own.
+
+        The block's ``rotary_emb``, vLLM's own module for the family (its rope
+        scaling, partial and interleaved rotations included), is called on a
+        private copy of ``x``, since its kernel rotates in place, so
+        ``rotate(attention_queries_prerope, positions)`` is the block's
+        `attention_queries` bit for bit where the block does nothing more
+        between its rotary and its attention. It runs in the engine's dtype
+        and on its device and returns ``x``'s. The module is the engine's, so
+        it is called inside a trace only, like `project_on_vocab`.
+
+        Raises:
+            Unavailable: the block applies no rotary embedding (`no_rotary`).
+            RuntimeError: outside a trace.
+        """
+        reason = self.no_rotary()
+        if reason:
+            raise Unavailable(f"{self.path}.rotate is not available: {reason}")
+        if not self.interleaver.interleaving:
+            raise RuntimeError(f"{self.path}.rotate calls the engine's rotary embedding, which runs inside a trace only")
+        rotary = self.rotary_emb
+        # The rotary casts and moves its cos/sin cache to what it is given, and keeps the result: what it is given
+        # here is in the cache's dtype, on its device, so a call never changes what the model rotates with.
+        cache = next((getattr(rotary._module, name) for name in ("cos_sin_cache", "long_short_cos_sin_cache") if hasattr(rotary._module, name)), x)
+        positions = torch.as_tensor(positions, device=cache.device, dtype=torch.long)
+        if positions.dim() == 1 and getattr(rotary._module, "mrope_section", None):
+            positions = positions.expand(3, -1)  # M-RoPE: a text token sits at the same position on every row
+        *_, tokens, width = x.shape
+        rows = x.reshape(-1, tokens, width).transpose(0, 1).to(device=cache.device, dtype=cache.dtype)
+        rows = rows.clone(memory_format=torch.contiguous_format).reshape(tokens, -1)  # the kernel's to rotate in place
+        rotated, _ = rotary(positions, rows, rows.clone())  # a key too: the M-RoPE kernel takes both
+        return rotated.reshape(tokens, -1, width).transpose(0, 1).reshape(x.shape).to(device=x.device, dtype=x.dtype)

@@ -23,6 +23,11 @@ class Layer(Layer):
 class Attention(Attention):
     """SmolLM3's attention; the shared eager forward and the residual added in the block, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        if not self._module.use_rope:
+            return "no rotary embedding on this block: SmolLM3 skips it on the blocks no_rope_layers marks"
+        return None
+
 
 class Mlp(Mlp):
     """SmolLM3's MLP; the residual is added in the block, so the base holds."""

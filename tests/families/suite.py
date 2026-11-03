@@ -30,10 +30,15 @@ VALUES = {
     "logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", "final_norm_output", "lm_head_output",
     "layer_input", "attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input", "layer_output",
     "self_attn.attention_output", "self_attn.attention_probabilities", "mlp.mlp_output",
+    "self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope",
     "self_attn.attention_queries", "self_attn.attention_keys", "self_attn.attention_values",
     "self_attn.attention_scores", "self_attn.attention_head_outputs",
     "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons", "self_attn.interface",
 }
+#: The values before the rotary on a block that applies none: `support()` gives `Attention.no_rotary`'s reason.
+NO_ROTARY = {name: "no rotary embedding" for name in ("self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope")}
+#: The same values on a vision tower's blocks, which never serve them (`VisionAttention.no_rotary`).
+TOWER_NO_ROTARY = {name: "a vision tower's attention" for name in NO_ROTARY}
 #: The MLP's interior, unavailable on a block whose MLP is a routed mixture.
 MLP_INTERIOR = ("mlp.mlp_activation", "mlp.mlp_neurons")
 #: A mixture of experts' values, on `Moe` (`nnterp.components.moe`).
@@ -288,22 +293,23 @@ class FamilySuite:
         } - {"logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", "final_norm_output", "lm_head_output"}
 
     def test_support_is_what_this_family_expects(self, model):
+        expected = {**{f"vision.{name}": reason for name, reason in TOWER_NO_ROTARY.items()}, **self.EXPECTED_UNAVAILABLE}
         for name, reason in model.support().items():
             if name.removeprefix("mlp.") in MOE:
                 continue  # test_moe_support_is_what_this_family_expects
-            if name in MLP_INTERIOR and name not in self.EXPECTED_UNAVAILABLE:
+            if name in MLP_INTERIOR and name not in expected:
                 routed = {i for i, layer in enumerate(model.layers) if isinstance(getattr(layer, "mlp", None), Moe) and not layer.mlp.no_mixture()}
                 no_mlp = {i for i, layer in enumerate(model.layers) if getattr(layer, "mlp", None) is None}
                 if routed:
                     assert isinstance(reason, dict) and set(reason) == routed | no_mlp, (name, reason)
                     assert all("routed experts" in r for i, r in reason.items() if i in routed), (name, reason)
                     continue
-            if name in self.EXPECTED_UNAVAILABLE:
+            if name in expected:
                 if isinstance(reason, str):  # a root value's reason is one string
-                    assert self.EXPECTED_UNAVAILABLE[name] in reason, (name, reason)
+                    assert expected[name] in reason, (name, reason)
                     continue
                 assert isinstance(reason, dict) and reason, name
-                assert all(self.EXPECTED_UNAVAILABLE[name] in r for r in reason.values()), name
+                assert all(expected[name] in r for r in reason.values()), name
             else:
                 assert reason is None, (name, reason)
 
@@ -644,10 +650,11 @@ class FamilySuite:
         assert "attention_probabilities" in names
         read = {}
         for name in names:  # one trace per value: reads within a trace must follow forward order
+            hosts = [layer.self_attn for layer in blocks if layer.self_attn.support()[name] is None]  # a NoPE block has no prerope values
             with model.trace(PROMPT):
-                for layer in blocks:
-                    read[layer.path, name] = getattr(layer.self_attn, name).save()
-        assert len(read) == len(names) * len(blocks)
+                for attn in hosts:
+                    read[attn.path, name] = getattr(attn, name).save()
+            assert len(hosts) and all((attn.path, name) in read for attn in hosts), name
         assert all(isinstance(value, torch.Tensor) for value in read.values())
 
     # -- the attention interior -------------------------------------------------
@@ -801,6 +808,93 @@ class FamilySuite:
             assert pattern.shape[-2] == (n if step == 0 else 1), (step, tuple(pattern.shape))
             assert torch.equal(heads, served) and torch.equal(pattern, probs), step
 
+    # -- the rotary embedding ------------------------------------------------------
+    # The queries and keys before the rotation, and `rotate`, which applies the
+    # block's own: proved together against the model's computation, since
+    # rotating the served value must give the rotated value the model serves.
+
+    def rope_block(self, model):
+        """The first softmax-attention block that applies a rotary embedding; the test does not apply to a model with none."""
+        for layer in self.attn_blocks(model):
+            if layer.self_attn.no_rotary() is None:
+                return layer
+        pytest.skip("no rotary embedding on any block")
+
+    def rope_pairs(self, attn):
+        """``(prerope, rotated)`` value names this block serves both of."""
+        support = attn.support()
+        pairs = (("attention_queries_prerope", "attention_queries"), ("attention_keys_prerope", "attention_keys"))
+        return [(pre, post) for pre, post in pairs if support[pre] is None and support[post] is None]
+
+    def read_one(self, model, host, name, prompt=PROMPT):
+        with model.trace(prompt):  # one trace each: families bind these at different points of the forward
+            value = getattr(host, name).save()
+        return value
+
+    def rotated_as_served(self, attn, name, rotated):
+        """What the attention receives, given `rotate` of the value before the rotary ``name``: the rotated value itself,
+        unless the block does more between the rotary and the attention (a norm, a tiling), which a family's test says."""
+        return rotated
+
+    def test_rotate_gives_the_rotated_queries_and_keys(self, model):
+        """``rotate(prerope, positions)`` is the served queries and keys bit for bit.
+
+        A rotated value wider than what the rotary receives (latent attention's
+        keys, whose one rope key every head shares) holds it in its trailing
+        channels, on every head; the layouts say where the two differ.
+        """
+        attn = self.rope_block(model).self_attn
+        pairs = self.rope_pairs(attn)
+        assert pairs, attn.support()
+        for pre, post in pairs:
+            before, after = self.read_one(model, attn, pre), self.read_one(model, attn, post)
+            rotated = self.rotated_as_served(attn, pre, attn.rotate(before, torch.arange(before.shape[-2])))
+            if getattr(type(attn), pre).layout is getattr(type(attn), post).layout:
+                assert rotated.shape == after.shape, (pre, tuple(rotated.shape), tuple(after.shape))
+            width = rotated.shape[-1]
+            assert rotated.dtype == after.dtype, (pre, rotated.dtype, after.dtype)
+            assert torch.equal(rotated.expand_as(after[..., -width:]), after[..., -width:]), (pre, (rotated - after[..., -width:]).abs().max())
+
+    def test_a_prerope_write_is_rotated_for_its_position(self, model):
+        """Writing one position's query (key) before the rotary moves the rotated value at that position only, rotated for it."""
+        attn = self.rope_block(model).self_attn
+        for pre, post in self.rope_pairs(attn):
+            before, clean = self.read_one(model, attn, pre), self.read_one(model, attn, post)
+            seq = before.shape[-2]
+            source, target = 0, seq - 1
+            written = before.clone()
+            written[..., target, :] = before[..., source, :]  # one position's vector moved to another
+            with model.trace(PROMPT):
+                setattr(attn, pre, written)
+                after = getattr(attn, post).save()
+            others = list(range(target))
+            assert torch.equal(after[..., others, :], clean[..., others, :]), pre
+            assert not torch.equal(after[..., target, :], clean[..., target, :]), pre
+            rotated = self.rotated_as_served(attn, pre, attn.rotate(before[..., source:source + 1, :], [target]))
+            width = rotated.shape[-1]
+            assert torch.equal(after[..., target:, -width:], rotated.expand_as(after[..., target:, -width:])), pre
+
+    def test_rotate_says_why_a_block_has_no_rotary(self, model):
+        """On a block without a rotary embedding, `support` and `rotate` give the same reason."""
+        blocks = [layer for layer in self.attn_blocks(model) if layer.self_attn.no_rotary()]
+        if not blocks:
+            pytest.skip("every attention block applies a rotary embedding")
+        for layer in blocks:
+            attn = layer.self_attn
+            reason = attn.support()["attention_queries_prerope"]
+            assert reason == attn.no_rotary(), (layer.path, reason)
+            with pytest.raises(Unavailable, match=re.escape(reason[:40])):
+                attn.rotate(torch.zeros(1, 1, 2, attn.qk_head_dim), [0, 1])
+
+    def test_order_ranks_the_prerope_values_first(self, model):
+        """`model.order` measures the values before the rotation ahead of the rotated ones."""
+        layer = self.rope_block(model)
+        index = int(layer.path.rsplit(".", 1)[1])
+        order = model.order(index)
+        for pre, post in self.rope_pairs(layer.self_attn):
+            assert order[f"self_attn.{pre}"] < order[f"self_attn.{post}"], (pre, order)
+            assert model.rank(f"self_attn.{pre}", index) < model.rank(f"self_attn.{post}", index)
+
     # -- methods over the values -------------------------------------------------
 
     def test_skip_layers_hands_the_stream_straight_through(self, model):
@@ -868,8 +962,8 @@ class FamilySuite:
                           KEY_DIM: module.ssm_state_size, VALUE_DIM: module.head_dim})
         return sizes
 
-    def model_size(self, host, axis):
-        """A model-fact axis's size by `axis_size`, where the family's tensor differs from it by design."""
+    def model_size(self, host, axis, name=None):
+        """A model-fact axis's size by `axis_size` for value ``name``, where the family's tensor differs from it by design."""
         if axis == KV_HEADS and self.KV_HEADS_EXPANDED:
             return axis_size(host, HEADS)
         size = axis_size(host, axis)
@@ -910,7 +1004,10 @@ class FamilySuite:
                 for axis, size in zip(value.dims, saved.shape):
                     if axis == HEAD_DIM and self.KV_HEADS_EXPANDED:
                         continue
-                    expected = sizes[axis] if axis in sizes else self.model_size(host, axis)  # every other axis resolves
+                    if axis.isdigit():  # a fixed axis (latent attention's one shared rope key)
+                        expected = int(axis)
+                    else:
+                        expected = sizes[axis] if axis in sizes else self.model_size(host, axis, name)  # every other axis resolves
                     assert size == expected, (host.path, name, axis, size, expected)
                 checked += 1
         assert checked >= (11 if attention else 4)  # root 3 + layer 1 + attention 7, plus the MLP and linear hosts where present

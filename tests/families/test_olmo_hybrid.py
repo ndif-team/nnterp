@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, mixer
+from suite import NO_ROTARY, FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, mixer
 
 from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
 
@@ -304,6 +304,10 @@ class TestOlmoHybridReleasedConfig(TestOlmoHybrid):
     """The whole suite again on the released checkpoints' configuration: NoPE attention, betas in (0, 2)."""
 
     REPO = _released_checkpoint()
+    EXPECTED_UNAVAILABLE = {
+        **TestOlmoHybrid.EXPECTED_UNAVAILABLE,
+        **{name: "no " for name in NO_ROTARY},  # no self_attn module off the attention block, no rotary embedding on it
+    }
 
     def test_the_config_is_the_released_one(self, model):
         assert model._module.model.rotary_emb is None

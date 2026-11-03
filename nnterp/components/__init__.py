@@ -51,8 +51,8 @@ One descriptor, `EProperty`, whose key is a path from the host envoy:
 """
 
 from .attention import (
-    INTERFACE, NOT_ON_INTERFACE, OWN_ARITHMETIC, Attention, HeadOutputs, Keys, Pattern, Queries, Values, interface_reason,
-    needs_eager, seq_first,
+    INTERFACE, NOT_ON_INTERFACE, OWN_ARITHMETIC, ROTARY, Attention, HeadOutputs, Keys, Pattern, Queries, SharedRopeKeys, Values, holding, interface_reason, needs_eager, rotary_reason,
+    seq_first,
 )
 from .eproperty import (
     DerivedEProperty, EProperty, Unavailable, unavailable,
@@ -74,7 +74,7 @@ from .selective_scan import (
 )
 from .standard import (
     BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, HIDDEN, IMAGE_TOKENS, IMAGES, INTERMEDIATE, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, TOKENS,
-    PATCHES, QK_HEAD_DIM, QUERY, SEQ, STATE_DIM, STREAMS, TOP_K, VALUE_DIM, VISION_HIDDEN, VOCAB, Standard,
+    PATCHES, QK_HEAD_DIM, QK_ROPE_HEAD_DIM, QUERY, SEQ, STATE_DIM, STREAMS, TOP_K, VALUE_DIM, VISION_HIDDEN, VOCAB, Standard,
     axis_size, blocks_support, first_tensor, rewrap,
 )
 from .tokens import TokenEProperty
@@ -88,15 +88,15 @@ from .vision import (
 
 __all__ = [
     "BATCH", "CHANNELS", "EXPERTS", "GROUPS", "HEAD_DIM", "HEADS", "HIDDEN", "IMAGE_TOKENS", "IMAGES", "INTERMEDIATE", "KEY", "KEY_DIM", "KV_HEADS", "TOKENS",
-    "MIXER_HEADS", "PATCHES", "QK_HEAD_DIM", "QUERY", "SEQ", "STATE_DIM", "STREAMS", "TOP_K", "VALUE_DIM", "VISION_HIDDEN", "VOCAB",
-    "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "ImageFeatures", "ImageTokenMask", "Keys", "Layer", "LinearAttention", "Patches",
+    "MIXER_HEADS", "PATCHES", "QK_HEAD_DIM", "QK_ROPE_HEAD_DIM", "QUERY", "SEQ", "STATE_DIM", "STREAMS", "TOP_K", "VALUE_DIM", "VISION_HIDDEN", "VOCAB",
+    "Attention", "ChannelGates", "DISPATCH", "DerivedEProperty", "EProperty", "ExpertIndices", "ExpertOutputs", "ExpertWeights", "Gates", "HeadOutputs", "INTERFACE", "ROTARY", "ImageFeatures", "ImageTokenMask", "Keys", "Layer", "LinearAttention", "Patches",
     "LOGITS", "LinearQK", "LinearV", "Mlp", "Moe", "PER_SLOT", "Pattern", "Queries", "RecurrentMixer", "Residual", "RouterLogits", "ScanDecays", "ScanQK", "ScanState",
-    "ScanStates", "ScanSteps", "ScanValues", "SelectiveScan", "State", "States", "StreamMixing", "StreamWeights", "Streams", "TokenEProperty",
+    "ScanStates", "ScanSteps", "ScanValues", "SelectiveScan", "SharedRopeKeys", "State", "States", "StreamMixing", "StreamWeights", "Streams", "TokenEProperty",
     "Values", "Vision", "VisionAttention", "VisionLayer", "VisionMlp", "axis_size", "blocks_support",
     "ImageScatter", "PER_IMAGE", "PixtralVision", "QwenVision", "QwenVisionAttention",
     "NOT_ON_INTERFACE", "OWN_ARITHMETIC", "SSDHeadOutputs", "SSDKeys", "SSDQueries", "SSDValues", "Standard", "StateSpace", "Unavailable",
-    "chunk_per_token", "first_tensor", "image_token_id", "interface_reason", "mixture_reason", "needs_eager",
-    "needs_grouped_experts", "needs_kernel_source", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert",
+    "chunk_per_token", "first_tensor", "holding", "image_token_id", "interface_reason", "mixture_reason", "needs_eager",
+    "needs_grouped_experts", "needs_kernel_source", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert", "rotary_reason",
     "per_call", "pinned", "rewrap", "route_delta_rule", "route_kernels", "seq_first", "unavailable",
     "Neurons",
     "FlatResidual",

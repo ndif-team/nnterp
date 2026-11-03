@@ -19,7 +19,9 @@ attention layer receives, after all of that, with one change: vLLM permutes
 each head's query and key channels at load (``q_proj`` and ``k_proj`` rows,
 so that its rotary embedding can rotate halves where transformers rotates
 adjacent pairs), and the values put them back in transformers' order, and an
-edit back in vLLM's.
+edit back in vLLM's. The queries and keys before the rotary are served the
+same way, and `rotate` takes and returns transformers' order around vLLM's
+rotary.
 
 One difference from transformers is in vLLM's model, not here: vLLM applies
 the NoPE blocks' attention temperature tuning only when the generation
@@ -36,8 +38,9 @@ from vllm.model_executor.models.llama import LlamaMLP
 from vllm.model_executor.models.llama4 import Llama4Attention, Llama4DecoderLayer, Llama4MoE
 
 from ...components import Keys, Queries, Residual
+from ...components.attention import rotary_reason
 from ...components.eproperty import DerivedEProperty
-from ...components.vllm import Attention, Flat, FusedLayer, Mlp, on_decode_step
+from ...components.vllm import ROTARY, Attention, Flat, FusedLayer, Mlp, on_decode_step, rotary_head_size
 from ...components.vllm.attention import scores
 from ..llama4_text import intermediate_size  # noqa: F401  the dense MLP's width, as on transformers
 
@@ -89,6 +92,31 @@ class Layer(FusedLayer):
 
 class Attention(Attention):
     """The attention; its output is what the block adds. On a chunked block a query sees only its own chunk's keys."""
+
+    def no_rotary(self) -> str | None:
+        if self._module.rotary_emb is None:
+            return "no rotary embedding on this block: Llama 4 skips it on the blocks no_rope_layers marks (NoPE), and scales their queries by temperature instead"
+        return None
+
+    def rotate(self, x: torch.Tensor, positions) -> torch.Tensor:
+        """The base's, on ``x`` in transformers' channel order: permuted to vLLM's for its rotary, and back."""
+        return pairs_first(super().rotate(halves_first(x), positions))
+
+    @Interleaved(
+        f"source.{ROTARY}.inputs", select=1, heads="first", head_dim=rotary_head_size, unavailable=rotary_reason,
+        description="The queries entering the rotary embedding, [1, num_heads, tokens, head_dim], in transformers' channel order",
+    )
+    def attention_queries_prerope(self, value: torch.Tensor) -> Queries:
+        """The queries the rotary embedding receives, each head's channels in transformers' order."""
+        return pairs_first(value)
+
+    @Interleaved(
+        f"source.{ROTARY}.inputs", select=2, heads="first", head_dim=rotary_head_size, unavailable=rotary_reason,
+        description="The keys entering the rotary embedding, [1, num_kv_heads, tokens, head_dim], in transformers' channel order",
+    )
+    def attention_keys_prerope(self, value: torch.Tensor) -> Keys:
+        """This step's keys as the rotary embedding receives them, each head's channels in transformers' order."""
+        return pairs_first(value)
 
     attention_scores = DerivedEProperty(
         chunked_scores,

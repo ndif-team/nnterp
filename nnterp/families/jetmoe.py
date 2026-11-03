@@ -51,6 +51,8 @@ class Attention(Attention):
     """JetMoE's mixture of attention heads; the shared eager forward, a 3-tuple whose first element is the contribution, and the residual added in the block, so the base holds.
 
     The output projection is per expert, inside ``experts``, so ``attention_premix`` is unavailable.
+    The keys are tiled to every routing slot after the rotary (``repeat(1, top_k, 1, 1)``), so
+    ``attention_keys_prerope`` is ``num_kv_heads`` wide where ``attention_keys`` is ``top_k`` times that.
     """
 
     attention_premix = unavailable("a mixture of attention heads: the output projection is per expert, inside experts")

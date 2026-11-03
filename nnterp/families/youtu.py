@@ -12,8 +12,9 @@ from ``deepseek_v2``'s size functions. The MLP is dense on every block.
 
 from transformers.models.youtu.modeling_youtu import YoutuAttention, YoutuDecoderLayer, YoutuMLP
 
-from ..components import Attention, Layer, Mlp
+from ..components import Layer, Mlp
 from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
+from .deepseek_v3 import Attention  # the same attention forward: V3's rope call
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -27,7 +28,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Youtu's latent attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Youtu's latent attention: DeepSeek-V3's forward, so V3's envoy holds."""
 
 
 class Mlp(Mlp):

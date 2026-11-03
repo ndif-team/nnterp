@@ -60,6 +60,11 @@ class Layer(Layer):
 class Attention(Attention):
     """AFMoE's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
 
+    def no_rotary(self) -> str | None:
+        if not self._module.is_local_attention:
+            return "no rotary embedding on this block: AFMoE's full-attention blocks use no position encoding, its sliding-window blocks rotate"
+        return None
+
     @EProperty(
         "../post_attention_layernorm.output",
         description="What the attention adds to the residual stream: the post-attention norm's output",

@@ -77,6 +77,9 @@ class Layer(Layer):
 class Attention(Attention):
     """XGLM's attention: the residual is added in the block; the interior on its own ``bmm`` arithmetic."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: XGLM adds sinusoidal absolute position embeddings to the stream"
+
     # The queries, keys and values are the three ``reshape`` calls that flatten
     # them for ``bmm`` (the keys and values after the cache update), viewed back
     # to heads first; the scores are the softmax's input, masked; the pattern is

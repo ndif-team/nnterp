@@ -40,6 +40,9 @@ class Layer(Layer):
 class Attention(Attention):
     """BLOOM's attention adds the residual inside: the contribution is what enters ``dropout_add``."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: BLOOM biases its scores with ALiBi"
+
     # ``_reshape`` splits the fused projection into ``(query, key, value)``,
     # heads first (the keys are transposed for the score matmul only later);
     # the scores are the softmax's input after the mask; the head outputs are

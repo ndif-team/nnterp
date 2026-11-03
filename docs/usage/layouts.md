@@ -1,6 +1,6 @@
 ---
 title: Layouts
-one_liner: "Every standard value has one axis layout on every family (three exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear, `layer_mid` and `mlp_norm_output` are `FlatResidual` on OPT), one of thirty-seven named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
+one_liner: "Every standard value has one axis layout on every family (four exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear, `layer_mid` and `mlp_norm_output` are `FlatResidual` on OPT, `attention_keys_prerope` is `SharedRopeKeys` under latent attention), one of thirty-eight named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
 tags: [usage, layouts, shapes, jaxtyping, dims, axis_size, num_heads, num_kv_heads, hidden_size, Residual, Pattern, Streams, num_experts, top_k]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/reference/families.md, docs/usage/availability.md, docs/extending/custom-values.md]
 sources: [nnterp/components/eproperty.py, nnterp/components/standard.py, nnterp/components/moe.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/components/__init__.py]
@@ -11,8 +11,8 @@ sources: [nnterp/components/eproperty.py, nnterp/components/standard.py, nnterp/
 ## What this is for
 
 A value's shape is part of what it means. Each standard value is annotated with one of
-thirty-seven named layouts, each defined in the file of the envoy that serves it (`Residual`, `FlatResidual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs` in `nnterp/components/attention.py`; `Neurons` in `nnterp/components/mlp.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Patches`, `ImageTokenMask`, `ImageFeatures` in `nnterp/components/vision.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
-re-exports the thirty-two envoy-level names, and the root's three come from `nnterp.standardized`.
+thirty-eight named layouts, each defined in the file of the envoy that serves it (`Residual`, `FlatResidual`, `Streams`, `StreamWeights`, `StreamMixing` in `nnterp/components/layer.py`; `Queries`, `Keys`, `Values`, `Pattern`, `HeadOutputs`, `SharedRopeKeys` in `nnterp/components/attention.py`; `Neurons` in `nnterp/components/mlp.py`; `LinearQK`, `LinearV`, `Gates`, `ChannelGates` in `nnterp/components/linear_attention.py`; `ScanQK`, `ScanValues`, `ScanSteps`, `ScanDecays`, `ScanState`, `ScanStates` in `nnterp/components/selective_scan.py`; `SSDQueries`, `SSDKeys`, `SSDValues`, `SSDHeadOutputs` in `nnterp/components/state_space.py`; `State`, `States` in `nnterp/components/recurrent.py`; `RouterLogits`, `ExpertWeights`, `ExpertIndices`, `ExpertOutputs` in `nnterp/components/moe.py`; `Patches`, `ImageTokenMask`, `ImageFeatures` in `nnterp/components/vision.py`; `Logits`, `NextTokenProbs`, `Tokens` beside the root values in `nnterp/standardized.py`); `nnterp.components`
+re-exports the thirty-five envoy-level names, and the root's three come from `nnterp.standardized`.
 They are `jaxtyping` types composed from the axis names ([below](#axis-names-and-sizes)), such as
 `Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]` (`batch seq hidden_size`) and
 `Pattern = Float[Tensor, f"{BATCH} {HEADS} {QUERY} {KEY}"]` (`batch num_heads query key`). `value.layout` returns that alias itself
@@ -23,7 +23,9 @@ One layout per value on every family, except `layer_output` on the hyper-connect
 families (DeepSeek-V4), whose residual is several parallel streams: there it is `Streams`,
 `[batch, seq, streams, hidden_size]` ([below](#streams-on-deepseek-v4)), and `linear_attn.decays` on
 Kimi-Linear, whose Kimi Delta Attention decays each key channel of the state on its own:
-there it is `ChannelGates`, `[batch, seq, heads, key_dim]`.
+there it is `ChannelGates`, `[batch, seq, heads, key_dim]`; and `attention_keys_prerope`
+under latent attention, where the rotary receives one rope key per position that every
+head shares: there it is `SharedRopeKeys`, `[batch, 1, seq, qk_rope_head_dim]`.
 
 ## Canonical pattern
 
@@ -61,7 +63,7 @@ from the base.
 
 ## The layouts
 
-The thirty-seven names, their axes, and the values that carry each:
+The thirty-eight names, their axes, and the values that carry each:
 
 | layout | axes | values |
 | --- | --- | --- |
@@ -73,8 +75,9 @@ The thirty-seven names, their axes, and the values that carry each:
 | `Logits` | `batch seq vocab_size` | `logits` |
 | `NextTokenProbs` | `batch vocab_size` | `next_token_probs` |
 | `Tokens` | `batch seq` (`Int`) | `input_ids`, `attention_mask` |
-| `Queries` | `batch num_heads seq qk_head_dim` | `attention_queries` |
-| `Keys` | `batch num_kv_heads seq qk_head_dim` | `attention_keys` |
+| `Queries` | `batch num_heads seq qk_head_dim` | `attention_queries`, `attention_queries_prerope` |
+| `Keys` | `batch num_kv_heads seq qk_head_dim` | `attention_keys`, `attention_keys_prerope` |
+| `SharedRopeKeys` | `batch 1 seq qk_rope_head_dim` | `attention_keys_prerope` under latent attention (DeepSeek-V2/V3, Kimi-K2, DeepSeek-V3.2, GLM-5, GLM-4.7-Flash, Youtu): the one rope key per position every head shares |
 | `Values` | `batch num_kv_heads seq head_dim` | `attention_values` |
 | `Pattern` | `batch num_heads query key` | `attention_scores`, `attention_probabilities` |
 | `HeadOutputs` | `batch seq num_heads head_dim` | `attention_head_outputs`, `attention_premix` |
@@ -117,6 +120,7 @@ about the model is named exactly as the size attribute that holds it:
 | `KV_HEADS` | `num_kv_heads` | the block's `self_attn.num_kv_heads` (the key/value heads) |
 | `HEAD_DIM` | `head_dim` | the block's `self_attn.head_dim` (a head's values and outputs); a Mamba-2 mixer's own `head_dim` |
 | `QK_HEAD_DIM` | `qk_head_dim` | the block's `self_attn.qk_head_dim` (a head's queries and keys; `head_dim` outside latent attention) |
+| `QK_ROPE_HEAD_DIM` | `qk_rope_head_dim` | a latent attention block's `self_attn.qk_rope_head_dim` (the rotated part of a query head, the shared rope key's width) |
 | `EXPERTS` | `num_experts` | the mixture's `num_experts` (the router's classes) |
 | `TOP_K` | `top_k` | the mixture's `top_k` (the routing slots per token) |
 | `VISION_HIDDEN` | `vision_hidden_size` | `vision.vision_hidden_size`, the tower's width (`Patches`); `image_features` is the text model's `hidden_size`, which the walk from `vision` finds on the root |
@@ -144,7 +148,8 @@ the tensor's: `BATCH` (`batch`, axis 0 everywhere), `SEQ` (`seq`, the token axis
 copies of a hyper-connection residual, `hc_mult`), a recurrent mixer's `MIXER_HEADS`
 (`heads`), `KEY_DIM` / `VALUE_DIM` (a gated DeltaNet state's two sides), `STATE_DIM`,
 `GROUPS` and `CHANNELS` (a Mamba state's), and the vision tower's `IMAGES`, `PATCHES` and
-`IMAGE_TOKENS`. A mixture routes
+`IMAGE_TOKENS`. `SharedRopeKeys`' second axis is the literal `1`: one head, whatever the
+model. A mixture routes
 tensors flat over tokens, `[batch * seq, ...]`; its values are served in these layouts, one
 invoke's rows each ([mixture-of-experts](mixture-of-experts.md)).
 
@@ -183,7 +188,7 @@ axis constants where none does (a per-row entropy, `f"{BATCH} {HEADS} {QUERY}"`)
 
 Batch is axis 0 everywhere. The sequence axis is 1 on every value that has one, with one
 exception: softmax attention's `attention_queries`, `attention_keys` and
-`attention_values`, where it is 2, the `[batch, num_heads, seq, head_dim]` layout transformers
+`attention_values` (and the queries and keys before the rotary), where it is 2, the `[batch, num_heads, seq, head_dim]` layout transformers
 hands its attention interface. `attention_head_outputs` is back to sequence-first,
 `[batch, seq, num_heads, head_dim]`, on every family (a family whose own arithmetic keeps heads
 first serves a transposed view). `attention_scores` and `attention_probabilities` have two
@@ -235,6 +240,17 @@ with model.trace(prompt):
 
 The keys share the queries' width, so their last axis is `qk_head_dim` too; the two sizes
 coincide on every family without latent attention.
+
+Before the rotary only part of that is there. `attention_queries_prerope` is the whole query
+heads, `qk_head_dim` wide, of which the rotary turns the trailing `qk_rope_head_dim`
+channels; `attention_keys_prerope` is the one rope key per position that every head shares,
+`SharedRopeKeys`, since the rest of each key comes out of the latent with no position in it:
+
+```python
+with model.trace(prompt):
+    k = model.layers[0].self_attn.attention_keys_prerope.save()   # (1, 1, seq, 64): qk_rope_head_dim
+model.layers[0].self_attn.qk_rope_head_dim                         # 64
+```
 
 ## `Streams` on DeepSeek-V4
 

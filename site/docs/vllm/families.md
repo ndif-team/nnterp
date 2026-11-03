@@ -75,7 +75,7 @@ print(issubclass(olmo2.Layer, BackendLayer), list(olmo2.ENVOYS)[0].__module__)
 
 ## The transformers backend
 
-vLLM has no implementation of its own for OLMo, OLMo 2, SmolLM3, StarCoder2 and GPT-BigCode and runs transformers' modules inside the engine. Those five families key `ENVOYS` on transformers' classes and build on `nnterp.components.vllm.transformers_backend`, where the activations already carry the batch axis and the engine's attention layer, which the backend keeps outside the module tree, is mounted as `self_attn.attn` inside a trace, and the queries, keys, values and head outputs are then served as on every other vLLM family. `.source` does not work on these modules, because the backend rewrites their forwards. Passing the module as `family=` is how a family is tried before it ships, as on transformers ([Checking the module](../developing/adding-a-family.md#checking-the-module-before-it-ships)):
+vLLM has no implementation of its own for OLMo, OLMo 2, SmolLM3, StarCoder2 and GPT-BigCode and runs transformers' modules inside the engine. Those five families key `ENVOYS` on transformers' classes and build on `nnterp.components.vllm.transformers_backend`, where the activations already carry the batch axis and the engine's attention layer, which the backend keeps outside the module tree, is mounted as `self_attn.attn` inside a trace, and the queries, keys, values and head outputs are then served as on every other vLLM family. `.source` does not work on these modules, because the backend rewrites their forwards, so the queries and keys before the rotary embedding, which are read inside the attention's forward, are unavailable there. Passing the module as `family=` is how a family is tried before it ships, as on transformers ([Checking the module](../developing/adding-a-family.md#checking-the-module-before-it-ships)):
 
 ```python
 import torch
@@ -144,7 +144,7 @@ vLLM's implementation of a family is not always transformers' model. Where the t
 | PhiMoE | the logits leave out `lm_head.bias`, which vLLM loads and never adds |
 | StableLM | vLLM builds the sequential block only, ignoring `use_parallel_residual` and `qk_layernorm` |
 | FlexOlmo | the experts run SiLU whatever `hidden_act` says |
-| Llama 4 | vLLM permutes each head's query and key channels at load, which the values undo; the attention temperature tuning follows the generation config, not the model config |
+| Llama 4 | vLLM permutes each head's query and key channels at load, which the values undo, before the rotary and after it, and `rotate` takes and returns transformers' order; the attention temperature tuning follows the generation config, not the model config |
 | DBRX | transformers reads the rotary base from `rope_parameters` only, where vLLM reads the checkpoint's `attn_config.rope_theta`; vLLM 0.27.1 loads no DBRX checkpoint |
 | the kernels | given the same queries, keys and values, the two engines' float32 attention kernels differ by about 1e-3 of the head outputs' scale, and by 2.4e-2 on a softmax as sharp as Qwen2.5-0.5B's first block |
 

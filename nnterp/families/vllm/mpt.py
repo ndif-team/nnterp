@@ -37,6 +37,9 @@ class Layer(Layer):
 class Attention(Attention):
     """MPT's attention; its output is what the block adds, so the base holds."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: MPT biases its scores with ALiBi"
+
 
 class Mlp(Mlp):
     """MPT's feed-forward; its output is what the block adds, so the base holds."""

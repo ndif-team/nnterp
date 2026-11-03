@@ -47,7 +47,12 @@ class Layer(FusedLayer):
 
 
 class Attention(Attention):
-    """The attention: what reaches the residual stream is the post-attention norm's output."""
+    """The attention: what reaches the residual stream is the post-attention norm's output. A full-attention block does not rotate."""
+
+    def no_rotary(self) -> str | None:
+        if not self._module.is_local_attention:
+            return "no rotary embedding on this block: AFMoE's full-attention blocks use no position encoding, its sliding-window blocks rotate"
+        return None
 
     @Flat(
         "../post_attention_layernorm.output",

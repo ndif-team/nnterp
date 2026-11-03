@@ -30,7 +30,9 @@ Three things differ, and these envoys absorb them:
   rewriting the module's forward to call it, and swaps RMSNorms for vLLM's.
   The values do not read inside those forwards: nnsight's ``.source``
   instruments a module from its class's source, which still calls the
-  projections the fusion removed.
+  projections the fusion removed. So the queries and keys before the rotary
+  embedding, which are arguments of a call inside the attention's forward
+  (``apply_rotary_pos_emb``), are not served here (`BACKEND_ROTARY`).
 """
 
 from __future__ import annotations
@@ -46,6 +48,14 @@ from .attention import Attention as VLLMAttention
 from .layer import Layer as VLLMLayer
 from .flat import Flat
 from .mlp import Mlp as VLLMMlp
+
+
+#: Why the queries and keys before the rotary, and `rotate`, are not served on this backend.
+BACKEND_ROTARY = (
+    "not served on vLLM's transformers backend: the rotary is a call inside the attention's forward, which the backend "
+    "rewrites at load and nnsight's .source cannot instrument; read the queries and keys before it, and rotate, on a "
+    "StandardizedTransformer"
+)
 
 
 def engine_attention(envoy: Envoy) -> torch.nn.Module | None:
@@ -88,6 +98,9 @@ class Attention(VLLMAttention):
     It returns ``(attn_output, attn_weights)``; the first is what the block
     adds, unless a family's block norms it first.
     """
+
+    def no_rotary(self) -> str | None:
+        return BACKEND_ROTARY
 
     def __getattr__(self, name: str) -> Any:
         """``attn``: the engine's attention layer, mounted as this module's child in the worker, on first use.

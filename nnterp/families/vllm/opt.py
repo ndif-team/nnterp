@@ -74,6 +74,9 @@ class Layer(Layer):
 class Attention(Attention):
     """OPT's attention: its output is what the block adds; its queries are served pre-scaled, as on transformers."""
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: OPT adds learned absolute position embeddings (embed_positions) to the stream"
+
     attention_scores = DerivedEProperty(
         scores,
         description="The scores entering the softmax, [1, num_heads, query, key], recomputed from the pre-scaled queries and the keys; prefill only, read-only",

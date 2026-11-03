@@ -2,6 +2,7 @@
 
 import math
 
+import pytest
 import torch
 from suite import FamilySuite, PROMPT, rows
 
@@ -14,6 +15,10 @@ class TestXGLM(FamilySuite):
     NATIVE = rows("model", "layers", "embed_tokens", "layer_norm", mlp=None, ln1="self_attn_layer_norm", ln2=None)
     MLP_NORM = "final_layer_norm"            # the block's own, native name
     EXPECTED_UNAVAILABLE = {"mlp_input": "no mlp module"}
+
+    @pytest.mark.xfail(strict=True, reason="the interior is served off [batch * num_heads, ...] tensors, which nnsight narrows to no invoke: each invoke reads the whole batch")
+    def test_pattern_per_invoke(self, model):
+        super().test_pattern_per_invoke(model)
 
     def test_no_mlp_module(self, model):
         """No block has an MLP module, so `support()` lists no ``mlp`` value at all."""

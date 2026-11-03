@@ -310,8 +310,9 @@ checkpoint of that type is looked up, and never earlier.
 
 ## Gotchas
 
-- `envoys=` matches type before path and never an alias; a family's type key
-  can only be displaced by a type key (nnsight `envoy.py:364-369`).
+- `envoys=` matches type before path (a path key matches the native path or
+  any alias spelling of it); a family's type key can only be displaced by a
+  type key (nnsight `envoy.py:364-369`).
 - The family is chosen from `config.model_type` *before* the model is built,
   so an already-loaded `nn.Module` is looked up by its own `config`
   (`standardized.py:463-464`; `tests/test_registry.py:54-58`).
@@ -323,9 +324,9 @@ checkpoint of that type is looked up, and never earlier.
   canonical example reads them in that order. Read out of order and the
   trace raises `OutOfOrderError` naming the attention call's `.fn`: see
   [gotchas.md](gotchas.md).
-- `import nnterp` before any `transformers.models...modeling_*` import in a
-  script; the reverse order segfaults on this stack
-  ([transformers-compat.md](transformers-compat.md)).
+- On glibc 2.31 with pyarrow installed, `import transformers.modeling_layers`
+  before nnsight segfaults; set `JE_ARROW_MALLOC_CONF=background_thread:false`
+  or `import nnterp` first ([transformers-compat.md](transformers-compat.md#the-import-order-segfault)).
 - A size override is a function on the family *module*, looked up by name on
   `model.family` at read time; a family object passed to `register()` carries
   it as an attribute (`tests/test_registry.py:121-131`), and a variant that

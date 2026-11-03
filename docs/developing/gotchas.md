@@ -100,11 +100,6 @@ the reason is lost (`components/eproperty.py:28-32`, `:112-123`; nnsight
 value parks the worker and spends the read. Decide structure outside the
 trace; inside, ask `support()`.
 
-**`if envoy:` falls to `__len__`.** `Envoy.__len__` is `len(self._module)`
-(nnsight `envoy.py:950-952`): truthy for `model.layers` (a `ModuleList`),
-`TypeError: object of type 'GPT2Block' has no len()` for a block. Test
-`is not None`.
-
 **`.source` snapshots module globals.** The instrumented forward is a new
 function built over the original's `__globals__` (nnsight `source.py:439-444`,
 `:447-471`) and cached per code object; a module-level name rebound
@@ -168,9 +163,11 @@ The home directory on this machine is itself a git repository; a `git add
 checkout has its own `.git`, so the toplevel must print the checkout before
 staging.
 
-**Import nnterp before transformers modeling modules.** The reverse order
-segfaults ([transformers-compat.md](transformers-compat.md));
-`tests/conftest.py` is the one line that enforces it under pytest.
+**A silent segfault at import is pyarrow's.** On glibc 2.31 with pyarrow
+installed, `import transformers.modeling_layers` before nnsight crashes in
+pyarrow's jemalloc thread; `tests/conftest.py` sets
+`JE_ARROW_MALLOC_CONF=background_thread:false` and imports nnsight first
+([transformers-compat.md](transformers-compat.md#the-import-order-segfault)).
 
 ## Related
 

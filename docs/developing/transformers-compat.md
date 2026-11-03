@@ -193,12 +193,14 @@ keys, and nnsight binds whichever resolves (`gpt_neox.py:17-20`).
 
 ## The import-order segfault
 
-On this stack, importing a `transformers.models.*.modeling_*` module
-**before** nnsight segfaults at import. `tests/conftest.py` imports nnsight
-first in every pytest process; every family module is imported only through
-`nnterp.families.lookup`, after `import nnterp`; a script must `import nnterp`
-(or `import nnsight`) before any `from transformers.models... import`. A
-plain `import transformers` first is fine.
+On glibc 2.31 (Ubuntu 20.04) with pyarrow installed, `import
+transformers.modeling_layers` segfaults with no traceback, nnsight or not:
+transformers reaches pyarrow through scikit-learn and pandas, and pyarrow's
+bundled jemalloc starts a background thread while `libarrow` is still being
+loaded (glibc bug 19329). `JE_ARROW_MALLOC_CONF=background_thread:false`
+avoids it, and `tests/conftest.py` sets it for every pytest process and the
+subprocesses its tests spawn. Importing nnsight (or nnterp) first avoids it
+too. Without pyarrow the order does not matter.
 
 ## What nnterp needs from nnsight
 
@@ -218,10 +220,10 @@ behaviour:
   deserialized tower's root is the deserialized `StandardizedTransformer`).
 
 - **`envoys=` chooses the envoy class per module at construction**, by type
-  (MRO) first and native path suffix second, before aliases bind
-  (nnsight `envoy.py:224-230`, `:349-370`, `:177`). nnterp keys every
-  `ENVOYS` on a transformers type; an alias never matches; a user displaces a
-  family envoy by keying on the same type (`tests/test_registry.py:67-77`).
+  (MRO) first and path suffix second, the native path or any alias spelling
+  of it (nnsight `envoy.py:224-230`, `:349-370`, `:177`). nnterp keys every
+  `ENVOYS` on a transformers type, so no path key displaces a family envoy;
+  a user displaces one by keying on the same type (`tests/test_registry.py:67-77`).
 - **`eproperty.transform` takes `(self, view, raw)`**: the edited view and
   the value as served (nnsight `eproperty.py:158-166`, `:178-184`). Falcon's
   `mlp_output` uses it to carry an in-place edit on a clone back into the

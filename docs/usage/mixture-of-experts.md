@@ -192,9 +192,7 @@ in doubt, as the suite does.
 The model routes tensors flat over tokens, `[batch * seq, ...]`. Each value is a `TokenEProperty`, served as
 `[batch, seq, ...]`: a whole batch in one invoke, this invoke's rows under several. The
 rows are a view, so in-place edits land on the model's tensor and reach that invoke only.
-An assignment under one invoke always lands; under two or more it needs nnsight's widen
-of an edit to a tensor whose leading axis is not the batch (nnsight PR #738). On an nnsight
-without it, edit in place under several invokes.
+An assignment lands too, and under several invokes it reaches that invoke only.
 
 ## Per-family caveats
 

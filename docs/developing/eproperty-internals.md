@@ -101,10 +101,12 @@ with model.trace("Hello world there"):
    listing the available ops (`source.py:1014-1033`). A module's own
    `.source` is different: `Envoy.source` instruments the forward once, for
    good, and works outside a trace (`envoy.py:645-663`).
-6. **The tree is navigable downward from any envoy, and an envoy knows its
-   own path but not its parent.** `Envoy.get(path)` resolves a dotted path
+6. **The tree is navigable from any envoy, down by path and up by `parent`.**
+   `Envoy.get(path)` resolves a dotted path
    from an envoy, aliases included (`envoy.py:954-975`); `.path` is the
-   native dotted name from the root (`model.model.layers.0.self_attn`). An envoy's `.input` is the call's first argument,
+   native dotted name from the root (`model.model.layers.0.self_attn`), and
+   `.parent` and `.root` are the envoy that holds it and the model's
+   ([transformers-compat.md](transformers-compat.md#what-nnterp-needs-from-nnsight)). An envoy's `.input` is the call's first argument,
    `first_input` over the served `(args, kwargs)` pair, and assigning it is
    `replace_first_input` (`envoy.py:569-584`, `util.py:20-36`).
 

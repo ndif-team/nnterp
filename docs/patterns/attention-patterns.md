@@ -174,10 +174,9 @@ one block of granite-swash-2b). So `attention_probabilities` there is not what r
   columns at its pad positions and its real tokens start later. The pad *query* rows are
   not attention at all (uniform over every key on GPT-2, all on key 0 on GPT-Neo), so
   mask them with `model.attention_mask` before a per-row metric such as entropy.
-- A pattern or scores read in two invokes of one trace raises `TypeError: 'NoneType'
-  object is not subscriptable` today (an nnsight bug with values nnterp reads inside a
-  nested `.source` call). Read one prompt's pattern per trace, or the whole batch in one
-  invoke; `attention_head_outputs` works across invokes.
+- Two invokes of one trace can both read and edit the pattern and the scores. At one
+  location the invoke written first is served first, so an empty `tracer.invoke()` after
+  an edit to the pattern reads the edited one.
 - The pattern is in the model's dtype: on a bf16 checkpoint rows sum to one within
   a few ulps, not exactly.
 - A GPT-2 checkpoint with `reorder_and_upcast_attn` set takes GPT-2's own upcast

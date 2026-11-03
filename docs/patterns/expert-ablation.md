@@ -83,9 +83,6 @@ The baseline comes from the batch, not from the single-prompt `clean` above, bec
 batch is computed with other kernels and rounding than one prompt: in bf16 that difference
 alone can exceed one expert's effect.
 
-An assignment (`moe.expert_weights = ...`) under two or more invokes needs nnsight's
-widen of an edit to a tensor whose leading axis is not the batch (nnsight PR #738).
-
 ## Gotchas
 
 - **One expert can carry the position-0 sink.** On granite-3.0-1b-a400m-base block 5's

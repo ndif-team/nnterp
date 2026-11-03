@@ -181,7 +181,7 @@ attention_blocks = [i for i, layer in enumerate(model.layers) if getattr(layer, 
 LAYER = attention_blocks[len(attention_blocks) // 2]          # on a hybrid, num_layers // 2 can be a linear block
 attention = model.layers[LAYER].self_attn
 
-projection = None                          # `or` over envoys calls __len__ on the module; test `is not None`
+projection = None
 for name in ("o_proj", "c_proj", "dense", "out_proj"):
     candidate = getattr(attention, name, None)
     if candidate is not None:
@@ -303,8 +303,6 @@ tensor when the prompt is one token or exactly `hc_mult` (4) tokens long.
   [above](#families-where-the-plain-sum-does-not-hold).
 - A softcapped model's logits are not a sum of anything; `project_on_vocab` applies
   the cap, the linear DLA does not.
-- `getattr(a, "x", None) or getattr(b, ...)` on envoys raises on a module without
-  `__len__`; chain with `is not None`.
 - The match holds to the checkpoint's dtype: within ~1e-4 relative in float32, and
   a few percent on a bf16 load (a sum of 60 bf16 terms on SmolLM2 lands about 2% off
   logits in the hundreds). Use a relative tolerance, or load with

@@ -593,6 +593,30 @@ class FamilySuite:
         if block is not last:
             assert not torch.equal(first, last_probs)
 
+    def test_pattern_per_invoke(self, model):
+        """Two invokes of one trace each read their own rows of the scores and the pattern, as one invoke of both does."""
+        block = self.attn_block(model)
+        unavailable = block.self_attn.support()
+        names = [name for name in ("attention_scores", "attention_probabilities") if not unavailable.get(name)]
+        if not names:
+            pytest.skip("no attention interior on this checkpoint")
+        ids = model.tokenizer(PROMPT).input_ids
+        prompts = [ids, ids[::-1]]  # two different prompts of one length: no padding, so no pad token needed
+        together, first, second = {}, {}, {}
+        with model.trace(prompts):
+            for name in names:
+                together[name] = getattr(block.self_attn, name).save()
+        with model.trace() as tracer:
+            with tracer.invoke(prompts[0]):
+                for name in names:
+                    first[name] = getattr(block.self_attn, name).save()
+            with tracer.invoke(prompts[1]):
+                for name in names:
+                    second[name] = getattr(block.self_attn, name).save()
+        for name in names:
+            torch.testing.assert_close(first[name][0], together[name][0], msg=name)
+            torch.testing.assert_close(second[name][0], together[name][1], msg=name)
+
     def test_written_pattern_moves_the_logits(self, model):
         """A read can be causally inert (weights a mixer merely returns); only a write tells."""
         block = self.attn_block(model)

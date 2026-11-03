@@ -99,7 +99,7 @@ with model.trace("The Eiffel Tower is in", temperature=0.0, max_tokens=1):
 print(raw.shape, torch.equal(raw, x), q.shape, pattern.shape)
 print((x + attn + mlp - out).abs().max().item(), repr(model.tokenizer.decode(logits[0, -1].argmax())))
 # True TransformersForCausalLM Olmo2DecoderLayer
-# ['attention_mask', 'attention_norm_output', 'lm_head_output', 'mlp.mlp_activation', 'mlp_norm_output']
+# ['attention_mask', 'attention_norm_output', 'mlp.mlp_activation', 'mlp_norm_output', 'self_attn.attention_keys_prerope', 'self_attn.attention_queries_prerope', 'self_attn.interface']
 # torch.Size([1, 7, 2048]) True torch.Size([1, 16, 7, 128]) torch.Size([1, 16, 7, 7])
 # 0.0 ' Paris'
 ```

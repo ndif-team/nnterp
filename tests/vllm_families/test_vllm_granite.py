@@ -11,6 +11,7 @@ class TestVLLMGranite(VLLMFamilySuite):
     FAMILY = granite
     NATIVE = LLAMA_ROWS
     MEMORY = 0.4
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"lm_head_output"}  # the logits processor divides by logits_scaling
 
     def test_first_block_input_is_the_multiplied_embeddings(self, model, reference):
         with self.run(model, reference):

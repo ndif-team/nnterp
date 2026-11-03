@@ -173,7 +173,8 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
   off one probe `scan` per model and block shape (`nnterp/order.py`), so a
   family's quirk (Falcon's values before its queries) is in the ranks
   without anyone writing it down (§2a "Forward-order"). The probe runs on
-  `StandardizedTransformer`; `StandardizedVLLM` raises.
+  `StandardizedTransformer`; `StandardizedVLLM` answers from a weightless
+  `StandardizedTransformer` of the same checkpoint.
 - **Eager attention is not forced at load**; `attention_probabilities` says
   `eager` is needed when the checkpoint runs `sdpa` (§3 item 5;
   `tests/test_registry.py:88-92`).

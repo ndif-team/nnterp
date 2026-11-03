@@ -2,16 +2,54 @@
 
 from __future__ import annotations
 
+import contextlib
+import copy
 from types import ModuleType
 from typing import Any
 
 import torch
 from nnsight.modeling.vllm import VLLM
 
-from . import families
-from .components import EProperty, Residual, unavailable
+from . import families, order as forward_order
+from .components import EProperty, Residual, Unavailable, unavailable
+from .components.standard import values
 from .components.vllm import Flat, argument, on_transformers_backend, project
-from .standardized import Logits, NextTokenProbs, Standardized, StandardizedCapability, Tokens
+from .standardized import Logits, NextTokenProbs, Standardized, StandardizedCapability, StandardizedTransformer, Tokens
+
+#: vLLM's engine arguments that say where the checkpoint is and how to fetch it, by the name transformers gives each.
+HUB_ARGUMENTS = {
+    "revision": "revision",
+    "code_revision": "code_revision",
+    "trust_remote_code": "trust_remote_code",
+    "download_dir": "cache_dir",
+    "hf_token": "token",
+}
+
+
+def hub_kwargs(kwargs: dict) -> dict:
+    """The load's arguments that say where the checkpoint is and how to fetch it, under transformers' names (`HUB_ARGUMENTS`)."""
+    return {HUB_ARGUMENTS[name]: value for name, value in kwargs.items() if name in HUB_ARGUMENTS and value is not None}
+
+
+def past_the_head(model: Any) -> str | None:
+    """Why ``lm_head_output`` is unavailable: what vLLM's logits processor applies after the projection, or ``None``.
+
+    The processor projects with the head's weight (adding the head's bias where
+    the model passes one) and then softcaps and scales in the same call, so
+    where it does either the projection alone is never a tensor.
+    """
+    processor = model.logits_processor._module
+    after = []
+    if processor.soft_cap is not None:
+        after.append(f"softcaps it at {processor.soft_cap}")
+    if processor.scale != 1.0:
+        after.append(f"multiplies it by {processor.scale}")
+    if not after:
+        return None
+    return (
+        f"vLLM never calls lm_head: its logits processor projects with lm_head's weight and {' and '.join(after)} "
+        "in the same call, so the head's own projection is never a tensor; read logits"
+    )
 
 
 class StandardizedVLLM(Standardized, VLLM):
@@ -44,6 +82,15 @@ class StandardizedVLLM(Standardized, VLLM):
       step raises `Unavailable`). There is no ``attention_mask``.
     * `project_on_vocab` runs the engine's modules, so it works inside a
       trace only.
+    * ``lm_head_output`` is `logits` where vLLM's logits processor applies
+      nothing past the head, and unavailable where it softcaps or scales,
+      naming which: vLLM never calls ``lm_head``.
+
+    Outside a trace, `order` and `rank` give the forward order of the values
+    this engine serves, measured on the transformers model of the checkpoint
+    (a weightless `StandardizedTransformer`, built on first use): the values
+    sit at the same module boundaries on both engines. `generation_config` is
+    the checkpoint's ``transformers.GenerationConfig``.
 
     Args:
         repo_id: A HuggingFace repo id.
@@ -78,8 +125,10 @@ class StandardizedVLLM(Standardized, VLLM):
     ) -> None:
         from nnsight.modeling.vllm.envoys import parallel_envoys
 
+        self._order_model = None  # the transformers model `order` and `rank` read: see `_transformers_model`
+        self._generation_config = None
         if family is None:
-            config = self._read_config(repo_id, **kwargs)
+            config = self._read_config(repo_id, **hub_kwargs(kwargs))
             family = families.resolve(config, engine="vllm")
         self.family = family
         super().__init__(
@@ -139,10 +188,28 @@ class StandardizedVLLM(Standardized, VLLM):
         """
         return value
 
-    lm_head_output = unavailable(
-        "vLLM never calls lm_head: its logits processor projects with lm_head's weight and applies any softcap and "
-        "scale in the same call, on the last position only; read logits"
+    @EProperty(
+        "logits",
+        description="The head's logits of this step, [1, 1, vocab_size]: the logits, where vLLM applies no softcap or scale past the head",
+        unavailable=past_the_head,
     )
+    def lm_head_output(self, value: torch.Tensor) -> Logits:
+        """The head's projection of this step's last position, ``[1, 1, vocab_size]``: `logits`, at the same location.
+
+        vLLM never calls ``lm_head``: its logits processor projects with the
+        head's weight (and the head's bias, on GPT-J and Phi) and applies any
+        softcap and scale in the same call. Where it applies neither, the
+        logits are the head's projection, as ``lm_head.output`` and ``logits``
+        are one tensor on transformers there; read, edit in place and assign
+        it as `logits`. Where it applies one (Gemma-2's softcap; the scale of
+        Cohere, Granite and HyperCLOVA X checkpoints), the projection alone is
+        never a tensor, and this is unavailable, naming what follows the head.
+        """
+        return value.unsqueeze(1)
+
+    @lm_head_output.postprocess
+    def lm_head_output(self, value: torch.Tensor) -> torch.Tensor:
+        return value.squeeze(1)
 
     # -- the input (inside a trace) ----------------------------------------------
 
@@ -181,18 +248,141 @@ class StandardizedVLLM(Standardized, VLLM):
         """
         return project(self, hidden, self.lm_head)
 
-    # -- forward order -------------------------------------------------------------
+    # -- forward order (outside a trace) -------------------------------------------
 
     def order(self, layer: int | None = None) -> dict[str, int]:
-        """Not supported on the vllm engine: the forward order is measured on `StandardizedTransformer` only."""
-        raise NotImplementedError("model.order is not supported on the vllm engine; it is measured on a StandardizedTransformer")
+        """The values this engine serves in forward order: name -> rank; equal ranks are one location, either read first.
+
+        `StandardizedTransformer.order` of the transformers model of the
+        checkpoint (`_transformers_model`), kept to the values `support` lists
+        as available here: the standard values sit at the same module
+        boundaries on both engines, so the forward reaches them in the same
+        order. With ``layer``, that block's values by dotted name; without,
+        the root's, numbered across the whole forward. The ranks are the
+        transformers model's, so a value this engine lacks leaves a gap.
+        """
+        table = self._transformers_model().order(layer)
+        served = self._served(layer)
+        return {name: rank for name, rank in table.items() if served.get(name, "absent") is None}
 
     def rank(self, name: str, layer: int | None = None) -> tuple[int, int]:
-        """Not supported on the vllm engine: the forward order is measured on `StandardizedTransformer` only."""
-        raise NotImplementedError("model.rank is not supported on the vllm engine; it is measured on a StandardizedTransformer")
+        """Where a value falls in the forward: ``(side, r)``, which sorts reads into forward order.
+
+        `StandardizedTransformer.rank` of the transformers model of the
+        checkpoint (`_transformers_model`), for a value this engine serves:
+        ``side`` is ``-1`` or ``num_layers`` for a root value served before or
+        after the blocks, else ``layer``; ``r`` is `order`'s rank.
+
+        Raises:
+            Unavailable: this engine does not serve the value on the checkpoint
+                (`support` gives the reason), or the transformers model does not.
+            KeyError: there is no value of that name (a block value needs ``layer``).
+            NotImplementedError: no transformers family covers the checkpoint.
+        """
+        reference = self._transformers_model()
+        if layer is not None:
+            layer = range(self.num_layers)[layer]  # negative layers count from the end; IndexError past it
+        served = self._served(layer)
+        if name not in served:
+            where = "the root" if layer is None else f"block {layer}"
+            raise KeyError(f"{name!r} is not a value of {where}; a block value takes layer=, by its dotted support() name")
+        if served[name]:
+            raise Unavailable(f"{name} is not available{'' if layer is None else f' on block {layer}'}: {served[name]}")
+        try:
+            return reference.rank(name, layer)
+        except Unavailable as error:
+            raise Unavailable(f"{error}, on the transformers model of this checkpoint, where the forward order is measured") from None
+
+    def _served(self, layer: int | None) -> dict[str, Any]:
+        """`support`'s rows for one block, or for the root's own values (without the blocks')."""
+        if layer is None:
+            return {name: value.reason(self) for name, value in values(type(self)).items()}
+        return self.support(layer)
+
+    def _transformers_model(self) -> StandardizedTransformer:
+        """The weightless transformers model of this checkpoint whose forward order `order` and `rank` give; built and measured on first use.
+
+        Loaded as transformers loads the checkpoint (as its vision-language
+        wrapper, ``task="image-text-to-text"``, where transformers has no
+        causal-LM class for the config), with the load's hub arguments
+        (`hub_kwargs`), eager attention and ``dispatch=False``: its probe
+        runs on meta tensors, except where the forward cannot
+        (`nnterp.order.compute`), and then it loads the weights on the CPU.
+
+        Raises:
+            NotImplementedError: no transformers family covers the checkpoint's
+                ``model_type`` (nor its text config's).
+        """
+        if self._order_model is None:
+            from transformers.models.auto.modeling_auto import (
+                MODEL_FOR_CAUSAL_LM_MAPPING,
+                MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING,
+            )
+
+            config = self.config
+            text = getattr(config, "text_config", config)
+            if not (families.covers(config.model_type) or families.covers(text.model_type)):
+                raise NotImplementedError(
+                    f"model.order and model.rank are measured on the transformers model of the checkpoint, and no "
+                    f"transformers family covers model_type {config.model_type!r}"
+                )
+            wrapper = type(config) not in MODEL_FOR_CAUSAL_LM_MAPPING and type(config) in MODEL_FOR_IMAGE_TEXT_TO_TEXT_MAPPING
+            built = contextlib.nullcontext()
+            if on_transformers_backend(self):
+                from vllm.config import CompilationConfig, CompilationMode, set_current_vllm_config
+
+                # vLLM's transformers backend decorates transformers' decoder class in place for its compiler, and the
+                # decorated class reads vLLM's current config whenever it is built (here, and again where the probe
+                # loads the weights): the backend model's own config, with nothing compiled.
+                engine = copy.copy(self._module.vllm_config)
+                engine.compilation_config = CompilationConfig(mode=CompilationMode.NONE)
+                built = set_current_vllm_config(engine)
+            with built:
+                model = StandardizedTransformer(
+                    self.args[0],
+                    dispatch=False,
+                    device_map=None,
+                    attn_implementation="eager",
+                    task="image-text-to-text" if wrapper else "text-generation",
+                    **hub_kwargs(self.kwargs),
+                )
+                forward_order.cached(model)
+            self._order_model = model
+        return self._order_model
+
+    # -- generation (outside a trace) ----------------------------------------------
+
+    @property
+    def generation_config(self) -> Any:
+        """The checkpoint's ``transformers.GenerationConfig``, loaded once on first use.
+
+        Read from the repo's ``generation_config.json`` with the load's hub
+        arguments, or made from the model's config
+        (``GenerationConfig.from_model_config``) where the repo has none, as
+        transformers does when it loads a model: the checkpoint's EOS ids and
+        its own sampling settings. A trace samples with vLLM's defaults unless
+        it is given settings (``trace(..., temperature=0.0)``), not with these.
+        """
+        if self._generation_config is None:
+            from transformers import GenerationConfig
+
+            hub = {key: value for key, value in hub_kwargs(self.kwargs).items() if key in ("revision", "cache_dir", "token")}
+            try:
+                self._generation_config = GenerationConfig.from_pretrained(self.args[0], **hub)
+            except OSError:  # the repo has no generation_config.json
+                self._generation_config = GenerationConfig.from_model_config(self.config)
+        return self._generation_config
 
     # -- remote ------------------------------------------------------------------
 
     def _remoteable_class(self) -> type:
         """The class in this model's remote key: ``VLLM``, what a server deploys (see `StandardizedTransformer`)."""
         return VLLM
+
+    def __getstate__(self) -> dict:
+        state = super().__getstate__()
+        # A block that names the model ships it to the engine's worker: the transformers model `order` reads and the
+        # generation config stay here (the first would resolve its own modules to the engine's on the far side).
+        state["_order_model"] = None
+        state["_generation_config"] = None
+        return state

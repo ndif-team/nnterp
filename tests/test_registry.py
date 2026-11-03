@@ -90,9 +90,12 @@ def test_vllm_family_passed_skips_the_lookup(monkeypatch):
     assert built["envoys"] == {"parallel": "mine", int: "layer", str: "extra"}  # the family's win over nnsight's, the load's over both
     assert "family" not in built and families.REGISTRY == {}
 
-    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, **kwargs: types.SimpleNamespace(model_type="xglm")))
+    read = {}
+    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, **kwargs: read.update(kwargs) or types.SimpleNamespace(model_type="xglm")))
     with pytest.raises(UnsupportedFamily, match="'xglm' on vllm"):
-        StandardizedVLLM("some/repo")
+        StandardizedVLLM("some/repo", download_dir="/models", hf_token="t", revision="main", dtype="float32", trust_remote_code=False)
+    # The config is looked for where the engine looks: vLLM's spellings of the hub arguments, under transformers' names.
+    assert read == {"cache_dir": "/models", "token": "t", "revision": "main", "trust_remote_code": False}
 
 
 def test_config_is_read_with_the_loads_kwargs(tmp_path):

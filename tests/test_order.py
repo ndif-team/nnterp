@@ -1,5 +1,7 @@
 """`model.order` / `model.rank`: the forward order of the values, measured by one probe scan."""
 
+import types
+
 import pytest
 
 from nnterp import StandardizedTransformer, StandardizedVLLM, Unavailable, route_kernels
@@ -135,12 +137,15 @@ def test_routed_kernels_add_the_state():
     assert set(routed) - set(chunked) == {"linear_attn.state", "linear_attn.states"}
 
 
-def test_vllm_raises():
-    model = object.__new__(StandardizedVLLM)  # the methods raise before touching the engine
-    with pytest.raises(NotImplementedError, match="vllm engine"):
-        model.order()
-    with pytest.raises(NotImplementedError, match="vllm engine"):
-        model.rank("logits")
+def test_vllm_order_needs_a_transformers_family(monkeypatch):
+    """On vLLM the order is the transformers model's of the checkpoint (`tests/vllm_families/` holds it to the
+    reference's); where no transformers family covers the checkpoint, both methods raise before touching the engine."""
+    model = object.__new__(StandardizedVLLM)
+    model._order_model = None
+    monkeypatch.setattr(StandardizedVLLM, "config", property(lambda self: types.SimpleNamespace(model_type="no_such_type")))
+    for ask in (model.order, lambda: model.rank("logits")):
+        with pytest.raises(NotImplementedError, match="no transformers family covers model_type 'no_such_type'"):
+            ask()
 
 
 def test_a_model_with_a_processor_is_probed_with_an_image():

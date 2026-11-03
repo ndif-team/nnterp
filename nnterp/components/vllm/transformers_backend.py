@@ -28,11 +28,15 @@ Three things differ, and these envoys absorb them:
 * **Some modules are vLLM's.** The backend fuses the query, key and value
   projections into one ``qkv_proj`` (and a gated MLP's into ``gate_up_proj``),
   rewriting the module's forward to call it, and swaps RMSNorms for vLLM's.
-  The values do not read inside those forwards: nnsight's ``.source``
-  instruments a module from its class's source, which still calls the
-  projections the fusion removed. So the queries and keys before the rotary
+  The values do not read inside those forwards: the rewritten forward is
+  compiled under the class's file and line numbers and bound on the
+  instance, so ``inspect``, and nnsight's ``.source`` with it, returns the
+  class's text, which still calls the projections the fusion removed
+  (docs/developing/gotchas.md). So the queries and keys before the rotary
   embedding, which are arguments of a call inside the attention's forward
-  (``apply_rotary_pos_emb``), are not served here (`BACKEND_ROTARY`).
+  (``apply_rotary_pos_emb``), are not served here (`BACKEND_ROTARY`); the
+  limit lifts when vLLM registers the rewritten text in ``linecache`` under
+  its own file name and nnsight instruments the instance's forward.
 """
 
 from __future__ import annotations

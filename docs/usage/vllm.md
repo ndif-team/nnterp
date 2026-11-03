@@ -3,7 +3,7 @@ title: The vLLM engine
 one_liner: "`StandardizedVLLM` is nnsight's `VLLM` with nnterp's names and values: the same layouts as `StandardizedTransformer` (batch axis 1), private copies, vLLM's own defaults, and a family per vLLM implementation under `nnterp/families/vllm/`."
 tags: [usage, vllm, engine, StandardizedVLLM, layer_input, families]
 related: [docs/usage/loading.md, docs/usage/residual-stream.md, docs/usage/root-values.md, docs/usage/availability.md, docs/usage/generation.md, docs/extending/adding-a-family.md]
-sources: [nnterp/standardized_vllm.py, nnterp/components/vllm/__init__.py, nnterp/components/vllm/flat.py, nnterp/components/vllm/layer.py, nnterp/components/vllm/attention.py, nnterp/components/vllm/mlp.py, nnterp/components/vllm/transformers_backend.py, nnterp/families/vllm/__init__.py, nnterp/families/vllm/llama.py, nnterp/families/vllm/gemma2.py, nnterp/families/vllm/gpt2.py, tests/vllm_families/vllm_suite.py]
+sources: [nnterp/standardized_vllm.py, nnterp/order.py, nnterp/components/vllm/__init__.py, nnterp/components/vllm/flat.py, nnterp/components/vllm/layer.py, nnterp/components/vllm/attention.py, nnterp/components/vllm/mlp.py, nnterp/components/vllm/transformers_backend.py, nnterp/families/vllm/__init__.py, nnterp/families/vllm/llama.py, nnterp/families/vllm/gemma2.py, nnterp/families/vllm/gpt2.py, tests/vllm_families/vllm_suite.py]
 ---
 
 # The vLLM engine
@@ -15,8 +15,8 @@ parallelism, serving; nnsight `docs/models/vllm.md`) under nnterp's vocabulary. 
 the values are `StandardizedTransformer`'s, with the same layouts, so a block written against
 `model.layers[i].layer_output[:, -1]` runs on either engine. Pick it for throughput: many
 concurrent prompts, long generations, a served engine. Stay on `StandardizedTransformer` for
-gradients, an edit of the attention pattern or a decode step's pattern, `model.order()` /
-`model.rank()`, and the few values the engine does not have ([What differs](#what-differs)).
+gradients, an edit of the attention pattern or a decode step's pattern, and the few values the
+engine does not have ([What differs](#what-differs)).
 
 Everything else is nnsight's `VLLM`, with vLLM's own defaults: a trace is a generation request
 (`max_tokens=16`, `temperature=1.0` unless you say), sampling settings go on `trace` / `invoke`,
@@ -74,6 +74,14 @@ starts its engine in a spawned process, which re-imports the main module.
 - **The layouts**: `[batch, seq, hidden_size]` with a batch of 1, `logits[:, -1]` the last position.
 - **The methods**: `steer`, `skip_layers`, `project_on_vocab`, `get_topk_closest_tokens`,
   `support()`, and the sizes (`num_layers`, `hidden_size`, `num_heads`, ...).
+- **The forward order**: `model.order(i)` and `model.rank(name, i)`, outside a trace, for the
+  values this engine serves ([availability](availability.md#forward-order-order-and-rank)). The
+  order is measured on the transformers model of the checkpoint, a weightless
+  `StandardizedTransformer` built on the first call: the values sit at the same module boundaries
+  on both engines, so the forward reaches them in the same order.
+- **The generation config**: `model.generation_config` is the checkpoint's
+  `transformers.GenerationConfig` (its EOS ids, its sampling settings), as on transformers. A
+  trace samples with vLLM's defaults unless it is given settings, not with these.
 - **The base class**: both engines' models are `nnterp.Standardized`, so a helper written
   against the standard names takes either; check `isinstance(model, nnterp.Standardized)`.
 - **Reads, in-place edits and assignment** all reach the model.
@@ -87,6 +95,15 @@ with model.trace("The Eiffel Tower is in the city of", temperature=0.0, max_toke
 
 print(list(lens[0]))
 assert not torch.equal(edited, logits)
+```
+
+The order and the generation config are asked outside a trace, like `support()`:
+
+```python
+reads = [("logits", None), ("layer_output", 12), ("self_attn.attention_queries", 12), ("token_embeddings", None)]
+reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, attention_queries@12, layer_output@12, logits
+print(model.rank("self_attn.attention_queries", 12), model.order(12)["layer_output"], model.generation_config.eos_token_id)
+# (12, 3) 16 2
 ```
 
 ## What differs
@@ -288,13 +305,14 @@ with model.trace("The Eiffel Tower is in the city of", temperature=0.0, max_toke
     mid = block.layer_mid.save()                         # [1, tokens, hidden_size]: the stream between the sublayers
     neurons = block.mlp.mlp_neurons.save()               # [1, tokens, intermediate_size]: down_proj's input
     final = model.final_norm_output.save()               # [1, tokens, hidden_size]: every position
+    head = model.lm_head_output.save()                   # [1, 1, vocab_size]: the logits, nothing follows the head here
 
-print(tuple(premix.shape), tuple(neurons.shape), tuple(final.shape))
-# (1, 9, 9, 64) (1, 9, 1536) (1, 9, 576)
+print(tuple(premix.shape), tuple(neurons.shape), tuple(final.shape), torch.equal(head, logits))
+# (1, 9, 9, 64) (1, 9, 1536) (1, 9, 576) True
 torch.testing.assert_close(before + added, mid)
 ```
 
-Two differ from the transformers engine:
+Two can differ from the transformers engine:
 
 - **`mlp_activation` on a gated MLP.** vLLM fuses the gate and up projections into one
   `gate_up_proj`, and its `act_fn` (`SiluAndMul`, `GeluAndMul`) computes `act(gate) * up` in one
@@ -307,8 +325,14 @@ Two differ from the transformers engine:
   module, so `layers[i].mlp.act_fn.output` cannot tell the blocks apart. A mixture of experts
   serves neither: its experts are inside vLLM's fused MoE kernel.
 - **`lm_head_output`.** vLLM never calls `lm_head`: its logits processor projects with the head's
-  weight and applies any softcap and scale in the same call, for the last position only. Read
-  `logits`.
+  weight (adding the head's bias on GPT-J and Phi) and applies any softcap and scale in the same
+  call, for the last position only. Where it applies neither, the logits are the head's
+  projection, so `lm_head_output` is served as `logits`, `[1, 1, vocab_size]`, the same tensor at
+  the same location, read and written as `logits` is (on transformers the two are one tensor on
+  such a family too). Where the processor softcaps or scales (Gemma-2's softcap; the scale of
+  Cohere, Granite and HyperCLOVA X checkpoints), the projection alone is never a tensor:
+  `lm_head_output` is unavailable, its reason naming what follows the head, and `logits` is the
+  value to read.
 
 The output projection, the activation and the down projection are `o_proj`, `act_fn` and
 `down_proj` under every family's `RENAME`, as on transformers (vLLM spells them `dense`,
@@ -327,11 +351,14 @@ there (`FlatResidual`).
 ```python
 support = model.support()
 print(sorted(name for name, reason in support.items() if reason))
-# ['attention_mask', 'lm_head_output', 'mlp.mlp_activation']
+# ['attention_mask', 'mlp.mlp_activation', 'self_attn.interface']
 ```
 
-A request is one unpadded sequence, so there is no `attention_mask`; `lm_head_output` and a gated
-MLP's `mlp_activation` are [above](#the-module-boundaries-and-the-sublayers-interiors). The queries and
+A request is one unpadded sequence, so there is no `attention_mask`; a gated MLP's
+`mlp_activation`, and `lm_head_output` where the logits processor softcaps or scales, are
+[above](#the-module-boundaries-and-the-sublayers-interiors). `self_attn.interface` is unavailable:
+vLLM's attention layer is a kernel that writes the step's keys and values into the engine's cache
+as it runs, so it cannot be called again on other tensors. The queries and
 keys before the rotary embedding are unavailable, and `self_attn.rotate` raises the same reason, where
 a block applies no rotary (absolute positions, ALiBi, a NoPE block, as on transformers), on the
 families vLLM runs through its transformers backend (the rotary is a call inside a forward the
@@ -414,7 +441,7 @@ the families above, on vLLM 0.27.1 and transformers 5.15:
 - **GLM-4.5 MoE** (`glm4_moe`): vLLM ignores `tie_word_embeddings`; on a tied checkpoint its
   `lm_head` is never loaded and the logits are garbage.
 - **PhiMoE**: vLLM loads `lm_head.bias` but its logits processor is called without it, so the
-  logits lack the bias transformers adds.
+  logits, and `lm_head_output` with them, lack the bias transformers adds.
 - **StableLM**: vLLM builds the sequential block only, with no query/key norms:
   `use_parallel_residual` and `qk_layernorm` are ignored, so on StableLM-2-12B (both set) it runs
   another model.

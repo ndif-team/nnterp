@@ -12,6 +12,7 @@ class TestVLLMGemma2(VLLMFamilySuite):
     FAMILY = gemma2
     NATIVE = {name: path for name, path in LLAMA_ROWS.items() if name != "lm_head"}   # vLLM unembeds with embed_tokens
     MEMORY = 0.3
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"lm_head_output"}  # the logits processor softcaps
 
     def embedding_scale(self, model):
         return model.hidden_size ** 0.5   # vLLM scales after the module; transformers' module scales itself

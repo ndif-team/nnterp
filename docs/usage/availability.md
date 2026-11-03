@@ -276,7 +276,14 @@ reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_outpu
   also ranks `state` and `states`.
 - **One forward pass.** The order is within one call of the model. Under `generate`, every
   step repeats it; `tracer.iter` picks the step. The vision tower's values
-  (`vision.*`) are not ranked, and `StandardizedVLLM` raises `NotImplementedError`.
+  (`vision.*`) are not ranked.
+- **On the vLLM engine, the transformers model's ranks.** `StandardizedVLLM.order` and `.rank`
+  are measured on the transformers model of the checkpoint, a weightless `StandardizedTransformer`
+  built on the first call (eager attention, the load's hub arguments), and answer for the values
+  the engine serves: the standard values sit at the same module boundaries on both engines, so the
+  forward reaches them in the same order. A value the engine lacks is absent from `order(i)`, and
+  `rank` raises `Unavailable` with the engine's reason (`model.rank("attention_mask")`: no mask on a
+  vLLM request); a checkpoint no transformers family covers raises `NotImplementedError`.
 
 ## Gotchas
 

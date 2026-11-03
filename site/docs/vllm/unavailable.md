@@ -1,6 +1,6 @@
 # What is unavailable
 
-`model.support()` on a vLLM engine reports the values the engine cannot serve, each with its reason as a string, and `None` for the rest, as on transformers ([Availability](../guide/values/availability.md)). On a checkpoint with a gated MLP, such as Qwen2.5-0.5B, there are three.
+`model.support()` on a vLLM engine reports the values the engine cannot serve, each with its reason as a string, and `None` for the rest, as on transformers ([Availability](../guide/values/availability.md)). On a checkpoint with a gated MLP, such as Qwen2.5-0.5B, there are three: the mask, the attention's callable interface, and the gated activation.
 
 ```python
 from nnterp import StandardizedVLLM
@@ -10,10 +10,10 @@ for name, reason in model.support().items():
     if reason:
         print(name)
         print("   ", reason if isinstance(reason, str) else reason[0])
-# lm_head_output
-#     vLLM never calls lm_head: its logits processor projects with lm_head's weight and applies any softcap and scale in the same call, on the last position only; read logits
 # attention_mask
 #     a vLLM request is one unpadded sequence; there is no mask
+# self_attn.interface
+#     vLLM's attention layer is a kernel that writes this step's keys and values into the engine's cache as it runs, so it cannot be called again on other tensors
 # mlp.mlp_activation
 #     a gated MLP on vLLM: act(gate) is never a module's output (gate_up_proj feeds act_fn, an act-and-multiply kernel, whose output is already act(gate) * up), so it is not served; mlp_neurons is the product
 ```
@@ -44,19 +44,24 @@ A plain MLP, such as GPT-2's, serves both as the same tensor. Both are read at t
 ```python
 gpt2 = StandardizedVLLM("openai-community/gpt2", dispatch=True, dtype="float32", gpu_memory_utilization=0.15)
 print(sorted(name for name, reason in gpt2.support().items() if reason))
-# ['attention_mask', 'lm_head_output', 'self_attn.attention_keys_prerope', 'self_attn.attention_queries_prerope']
+# ['attention_mask', 'self_attn.attention_keys_prerope', 'self_attn.attention_queries_prerope', 'self_attn.interface']
 ```
 
-## `lm_head_output`
+## `self_attn.interface`
 
-vLLM never calls `lm_head`. Its logits processor projects with the head's weight and applies any softcap and scale in the same call, for the last position only. Read `logits`, or run `project_on_vocab` on a stream: on the last block's stream it is `logits`, as on transformers. The module is still on the tree. `project_on_vocab` and `get_topk_closest_tokens` call the engine's modules and work inside a trace only.
+vLLM's attention layer is a kernel that writes the step's keys and values into the engine's cache as it runs, so the attention function the block called cannot be called again on queries, keys and values of your own; `interface` is a `StandardizedTransformer` value.
+
+## `lm_head_output` where something follows the head
+
+vLLM never calls `lm_head`: its logits processor projects with the head's weight and applies any softcap and scale in the same call, for the last position only. Where it applies neither, as on Qwen2.5, the logits are the head's projection, and `lm_head_output` is served as `logits` at the same location, `[1, 1, vocab_size]`, read and written alike. Where the processor softcaps (Gemma-2) or scales (Cohere, Granite, HyperCLOVA X) the projection alone is never a tensor, and `lm_head_output` is unavailable with a reason naming the cap or the scale. `project_on_vocab` on the last block's stream is `logits` too, as on transformers; it and `get_topk_closest_tokens` call the engine's modules and work inside a trace only.
 
 ```python
 with model.trace("The Eiffel Tower is in", temperature=0.0, max_tokens=1):
+    head = model.lm_head_output.save()
     lens = model.project_on_vocab(model.layers[-1].layer_output[:, -1:]).save()
     logits = model.logits.save()
-print(lens.shape, (lens - logits).abs().max().item())
-# torch.Size([1, 1, 151936]) 4.76837158203125e-06
+print(head.shape, (head - logits).abs().max().item(), (lens - logits).abs().max().item())
+# torch.Size([1, 1, 151936]) 0.0 0.0
 ```
 
 ## The pattern on a decode step
@@ -127,14 +132,13 @@ print(BACKEND_ROTARY)
 
 ## Methods and nnsight's limits
 
-`model.order` and `model.rank` are measured on `StandardizedTransformer` only. Gradients, `.source` inside a kernel and `scan` are nnsight's limits on this engine ([Capabilities and limits](https://nnsight.net/vllm/capabilities/#not-on-vllm)). `skip_layers` has to answer for every row of a step, and a step holds whatever requests the engine batched together: it is safe on a request that runs alone. To ablate a block on a shared engine, write its contributions to zero instead.
+`model.order` and `model.rank` give the forward order of the values this engine serves, measured on a weightless `StandardizedTransformer` of the checkpoint, built on first use: the standard values sit at the same module boundaries on both engines. A value the engine lacks raises `Unavailable` with the engine's reason. `model.generation_config` is the checkpoint's. Gradients, `.source` inside a kernel and `scan` are nnsight's limits on this engine ([Capabilities and limits](https://nnsight.net/vllm/capabilities/#not-on-vllm)). `skip_layers` has to answer for every row of a step, and a step holds whatever requests the engine batched together: it is safe on a request that runs alone. To ablate a block on a shared engine, write its contributions to zero instead.
 
 ```python
-try:
-    model.order(12)
-except NotImplementedError as error:
-    print(error)
-# model.order is not supported on the vllm engine; it is measured on a StandardizedTransformer
+print(dict(list(model.order(12).items())[:4]))
+print(model.rank("layer_output", 12), model.rank("logits"), model.generation_config.eos_token_id)
+# {'layer_input': 0, 'attention_norm_output': 1, 'self_attn.attention_queries_prerope': 2, 'self_attn.attention_keys_prerope': 2}
+# (12, 16) (24, 4) 151643
 ```
 
 Which families run on this engine, and what each changes, is on [Families on vLLM](families.md).

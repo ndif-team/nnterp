@@ -89,7 +89,8 @@ def close(got, want, tolerance, name=""):
 
 @torch.no_grad()
 def transformers_values(repo, skip, load=None):
-    """`PROMPT` through `StandardizedTransformer` in float32: the standard values, and the logits under three edits.
+    """`PROMPT` through `StandardizedTransformer` in float32: the standard values, the logits under three edits, the
+    ranks of the root's values and the picked blocks', and the generation config's EOS.
 
     Without gradients: a value saved with its graph keeps the weights it was
     computed from on the card, and the engine sizes itself from what is free.
@@ -153,12 +154,14 @@ def transformers_values(repo, skip, load=None):
     with hf.trace(torch.tensor([ids])):
         hf.skip_layers(*(skip or (middle, middle)))
         skipped = hf.logits[:, -1:].cpu().save()
+    ranks = {(None, name): hf.rank(name) for name in hf.order()}
+    ranks.update(((i, name), hf.rank(name, i)) for i in picked for name in hf.order(i))
     positions = getattr(hf.config, "max_position_embeddings", None) or getattr(hf.config, "n_positions", None) or 512
     return {
         "ids": ids, "picked": picked, "middle": middle, "vector": vector, "scale": scale, "embeddings": embeddings,
         "final_norm": final_norm, "layers": layers, "logits": logits, "steered": steered, "headless": headless, "skipped": skipped,
         "skip": skip or (middle, middle), "max_len": min(512, positions), "sizes": {name: getattr(hf, name) for name in SIZES},
-        "rope": rope, "moved": moved,
+        "rope": rope, "moved": moved, "ranks": ranks, "eos": hf.generation_config.eos_token_id,
     }
 
 
@@ -186,11 +189,12 @@ class VLLMFamilySuite:
     SKIP = None
     #: The attention values vLLM's implementation of this family serves (the scores and the pattern included).
     SERVED = (*INTERIOR, *PATTERN)
-    #: The values this family lacks on vLLM, by `support()` name: the mask, the head's own output (vLLM never calls
-    #: lm_head), a gated MLP's activation, which vLLM fuses with the multiply by the up projection, and the attention
-    #: function to call again (the engine's kernel writes its cache as it runs). A family with a block that applies no
-    #: rotary embedding adds `NO_ROTARY`.
-    UNAVAILABLE = frozenset({"attention_mask", "lm_head_output", "mlp.mlp_activation", "self_attn.interface"})
+    #: The values this family lacks on vLLM, by `support()` name: the mask, a gated MLP's activation, which vLLM fuses
+    #: with the multiply by the up projection, and the attention function to call again (the engine's kernel writes its
+    #: cache as it runs). A family with a block that applies no rotary embedding adds `NO_ROTARY`; one whose logits
+    #: processor softcaps or scales adds ``lm_head_output`` (vLLM never calls lm_head, and the logits are its
+    #: projection only where nothing follows it).
+    UNAVAILABLE = frozenset({"attention_mask", "mlp.mlp_activation", "self_attn.interface"})
     #: Engine arguments this checkpoint needs.
     ENGINE: dict = {}
     #: Arguments the transformers reference needs to load this checkpoint (a VL wrapper's ``task``).
@@ -255,6 +259,58 @@ class VLLMFamilySuite:
         assert unavailable == self.UNAVAILABLE
         for name in ("layer_input", "layer_output", "self_attn.attention_output", "mlp.mlp_output", "final_norm_output", *(f"self_attn.{name}" for name in self.SERVED)):
             assert support[name] is None, name
+
+    def test_order_and_rank_are_transformers(self, model, reference):
+        """`order` and `rank` are the transformers model's ranks for every value both engines serve, on the root and
+        the compared blocks; a value this engine lacks raises `Unavailable` with this engine's reason."""
+        compared = 0
+        for layer in (None, *reference["picked"]):
+            served = model.support() if layer is None else model.support(layer=layer)
+            want = {name: rank for (side, name), rank in reference["ranks"].items() if side == layer and served.get(name, "absent") is None}
+            assert model.order(layer) == {name: r for name, (_, r) in want.items()}, layer
+            for name, rank in want.items():
+                assert model.rank(name, layer) == rank, (layer, name)
+                compared += 1
+        assert compared >= len(BOUNDARY) * len(reference["picked"]), "too few values ranked on both engines"
+        support = model.support()
+        for name in self.UNAVAILABLE:
+            layer, reason = next(iter(support[name].items())) if isinstance(support[name], dict) else (None, support[name])
+            with pytest.raises(Unavailable, match=re.escape(reason)):
+                model.rank(name, layer)
+        with pytest.raises(KeyError, match="not a value"):
+            model.rank("no_such_value")
+
+    def test_generation_config(self, model, reference):
+        """The checkpoint's generation config, loaded once, with the EOS ids the transformers reference loads."""
+        from transformers import GenerationConfig
+
+        config = model.generation_config
+        assert isinstance(config, GenerationConfig) and model.generation_config is config
+        assert config.eos_token_id == reference["eos"]
+
+    def test_lm_head_output(self, model, reference):
+        """Where vLLM's logits processor applies nothing past the head, `lm_head_output` is `logits` bit for bit and a
+        write to it is a write to the logits; where it softcaps or scales, it is unavailable, naming which."""
+        reason = model.support()["lm_head_output"]
+        if "lm_head_output" in self.UNAVAILABLE:
+            processor = model.logits_processor._module
+            named = f"softcaps it at {processor.soft_cap}" if processor.soft_cap is not None else f"multiplies it by {processor.scale}"
+            assert named in reason, reason
+            with pytest.raises(Unavailable, match=re.escape(reason)):
+                model.lm_head_output
+            return
+        clean = self.clean(model, reference)
+        with self.run(model, reference):
+            head = model.lm_head_output.cpu().save()
+            logits = model.logits.cpu().save()
+        assert head.shape == (1, 1, model.vocab_size) and torch.equal(head, logits) and torch.equal(logits, clean)
+        with self.run(model, reference):
+            model.lm_head_output[:] *= 0.5
+            in_place = model.logits.cpu().save()
+        with self.run(model, reference):
+            model.lm_head_output = model.lm_head_output * 0.5
+            assigned = model.logits.cpu().save()
+        assert torch.equal(in_place, clean * 0.5) and torch.equal(assigned, clean * 0.5)
 
     def test_support_matches_what_reads(self, model):
         layer = model.layers[0]

@@ -55,6 +55,7 @@ class TestVLLMHyperCLOVAX(VLLMFamilySuite):
     )
     FAMILY = hyperclovax
     NATIVE = LLAMA_ROWS
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"lm_head_output"}  # the logits processor multiplies by logits_scaling
 
     def test_first_block_input_is_the_multiplied_embeddings(self, model, reference):
         with self.run(model, reference):

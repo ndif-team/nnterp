@@ -8,6 +8,6 @@ from nnterp.families.vllm import cohere
 class TestVLLMCohere(VLLMFamilySuite):
     REPO = "adamo1139/aya-expanse-8b-ungated"
     FAMILY = cohere
-    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"layer_mid"}
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"layer_mid", "lm_head_output"}  # the logits processor multiplies by logit_scale
     NATIVE = {name: path for name, path in LLAMA_ROWS.items() if name != "lm_head"}   # vLLM unembeds with embed_tokens
     MEMORY = 0.55

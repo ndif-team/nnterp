@@ -54,7 +54,7 @@ The terms this site uses, each in the one sense the pages give it, with the page
 
 **Image token mask**: `vision.image_token_mask`, `input_ids == image_token_id` as a `[batch, seq]` bool, read off the inputs and so first in a trace ([Vision-language](../guide/architectures/vision-language.md)).
 
-**Interface**: transformers' shared attention call, `attention_interface_1` (`nnterp.components.INTERFACE`), which under eager attention is `eager_attention_forward`. The base `Attention` reads the interior on and inside it, and a family with its own arithmetic relocates the names ([transformers compatibility](../developing/transformers-compatibility.md#the-shared-interface)).
+**Interface**: transformers' shared attention call, `attention_interface_1` (`nnterp.components.INTERFACE`), which under eager attention is `eager_attention_forward`. The base `Attention` reads the interior on and inside it, and a family with its own arithmetic relocates the names ([transformers compatibility](../developing/transformers-compatibility.md#the-shared-interface)). `self_attn.interface` is the function that call ran, bound to the rest of the call: `interface(q, k, v)` returns `(head_outputs, pattern)` as the model computes them, for an edit of keys or values that must reach chosen heads or rows only ([Attention](../guide/values/attention.md#calling-the-attention-function-again)).
 
 **Invoke**: nnsight's `tracer.invoke(prompt)`, one prompt batch inside a trace ([nnsight.net](https://nnsight.net/features/8_batching/)). A mixture's routing values serve each invoke its own rows, on vLLM an invoke is one prompt, and a trace with images carries one image-carrying invoke ([Mixture of experts](../guide/architectures/mixture-of-experts.md#ablating-and-rerouting)).
 

@@ -9,7 +9,7 @@ import torch
 from nnsight.intervention.envoy import Envoy
 
 from .. import layer as standard
-from ..eproperty import EProperty
+from ..eproperty import EProperty, Unavailable
 from ..layer import Residual
 from ..standard import absent
 from .flat import Flat, on_transformers_backend, unbatched
@@ -42,6 +42,15 @@ class Layer(standard.Layer):
 
     #: The index of the residual stream in the block's call.
     STREAM = 0
+
+    @property
+    def attention_input_gain(self) -> torch.Tensor:
+        """Not served on this engine: it is measured by calling the block's norm, and vLLM's modules are the engine's."""
+        raise Unavailable(
+            f"{self.path}.attention_input_gain is not available: it is measured by calling the block's norm, and vLLM's "
+            "modules are the engine's (meta on the client, fused with the residual add in the worker); read it off the "
+            "transformers model of the checkpoint"
+        )
 
     def skip_with(self, hidden: torch.Tensor) -> None:
         """Skip this block, handing ``hidden`` (``[1, tokens, hidden_size]``) on as its residual stream.
@@ -124,6 +133,8 @@ class FusedLayer(standard.Layer):
     a read that edits nothing changes nothing: the difference it hands back is
     exactly zero.
     """
+
+    attention_input_gain = Layer.attention_input_gain
 
     #: The boundaries between the block values: the norms' outputs (the normed half of the pair a norm returns),
     #: the MLP's input, and the stream the MLP's pre-norm adds up.

@@ -102,11 +102,17 @@ rearrange them.
    larger than the body), tagged `· CLIP · CLIPVisionModel`; absent on a text checkpoint.
 3. **The API** (`02`). In this order:
    - *Values, by host*: one ledger per host (`model`, `model.layers[i]`, `model.layers[i].self_attn`,
-     ...) with every standard value's name, layout and dims, description and where it is read; a value that is a function to call (`self_attn.interface`) shows `method` and its signature in place of a layout, and where the checkpoint has no call to make again it reads `nowhere` with the reason. A row whose
+     ...) with every standard value's name, layout and dims, description and where it is read; a value that is a function to call (`self_attn.interface`) shows `method` and its signature in place of a layout, and where the checkpoint has no call to make again it reads `nowhere` with the reason. A value
+     read where a key function of the family puts it reads at the path that function gives on this checkpoint,
+     block by block where the blocks differ (OLMo-Hybrid's post-norm attention blocks), never at the function's
+     name; a recurrent mixer's, which picks the kernel on each call, reads at that kernel, described. A row whose
      value the diagram, the strip or the image's path shows is linked to it: hovering the row lights that part
      and fills the card, as hovering the part does. A value
      the checkpoint has only under some load carries an amber `⚠` before its name; hovering it shows
-     the condition in a popup.
+     the condition in a popup. A value it has under no load, unavailable on every block under both loads
+     the build makes for a reason that names nothing that lifts it (no rotary embedding, a parallel block),
+     reads `nowhere` with the reason and has no `⚠`; a reason that names another load or a call before the
+     trace (`load with ...`, `nnterp.route_kernels`, `nnterp.chunk_per_token`) keeps the `⚠`.
    - *Printout*: `print(model)`, highlighted, without the native container (`model`, `transformer`,
      ...): the standard names on the root, the blocks collapsed to one (`(0-25): 26 x ...`), and the
      root's values. On a wrapper the vision encoder follows under `vision`, its native `encoder` left out the
@@ -146,7 +152,7 @@ card carries its org's logo, the name on hover. The org is the author of the ent
 ## Where each part comes from
 
 - **From the code**, by `build.py`, with nothing to write: the architecture class, `support()` under
-  an eager load and under the default one (the difference is what gets a `⚠`), every value's key,
+  an eager load and under the default one (the difference is what gets a `⚠`; a value neither serves reads `nowhere`), every value's key,
   layout, dims and description, the printout, the root sizes and config keys, the native path behind
   each standard name, the family module's docstring, the envoy classes, the palette (generated from a
   hue), and all syntax highlighting.
@@ -518,8 +524,8 @@ Add `#ckpt=<repo id>` to the URL to render it on another checkpoint, and render 
   in the page's `checkpoints-json`), and every module boundary the family serves has its place: a ledger row
   with no link is a value read somewhere the diagram does not draw, which is worth a look at the family;
 - the slider's variants match `config.layer_types`;
-- the values that carry a `⚠` are the ones that need a non-default load, and no value is missing
-  from the ledgers;
+- the values that carry a `⚠` are the ones that need a non-default load or a call before the trace, the
+  ones that read `nowhere` are the ones the checkpoint does not have, and no value is missing from the ledgers;
 - the notes' code blocks are highlighted and nothing overflows the page at either width;
 - on a vision-language checkpoint, the vision encoder's block reads in forward order, the image's path has a
   norm node only where the vision encoder has `vision.norm`, and the vision encoder's ledgers, sizes and Vision notes

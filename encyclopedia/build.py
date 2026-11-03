@@ -57,7 +57,7 @@ import nnterp  # noqa: E402  (import nnterp before any transformers.models modul
 from nnterp import StandardizedTransformer, Unavailable  # noqa: E402
 from nnterp.components import Layer, Moe, RecurrentMixer, Residual, Standard  # noqa: E402
 from nnterp.components.attention import attention_call  # noqa: E402
-from nnterp.components.eproperty import layout_name  # noqa: E402
+from nnterp.components.eproperty import DerivedEProperty, layout_name  # noqa: E402
 from nnterp.components.moe import SHARED_NAMES  # noqa: E402
 from nnterp.components.standard import values as class_values  # noqa: E402
 from nnterp.components.vision import Vision, scatter_host  # noqa: E402
@@ -209,13 +209,21 @@ CONFIG_KEYS = (
 
 #: A reason that is the model's shape, not a condition on the load: the block lacks the host, or the mixture a part.
 STRUCTURAL = re.compile(r"^(no \w+ (module|value) on this block|this mixture has no shared expert)")
+#: A reason that names what lifts it: another load (``load with attn_implementation='eager'``) or a call before the
+#: trace (``nnterp.route_kernels``, ``nnterp.chunk_per_token``). A value with such a reason is the checkpoint's under
+#: that setup, so it is a condition, not a value the checkpoint lacks.
+REMEDY = re.compile(r"\bload with\b|\bnnterp\.(?:route_kernels|chunk_per_token)\b")
 VALUE_LINE = re.compile(r"^\((?P<name>\w+)\)(?: -> (?P<layout>\w+(?: \| None)?) \[(?P<dims>[^\]]*)\])?: (?P<desc>.*)$")
 
 
 # -- introspection ----------------------------------------------------------------
 
-def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
-    """Every standard value on ``host`` (an envoy or the root), as the page shows it."""
+def value_rows(host: Any, expr: str, peers: list[tuple[int, Any]] | None = None) -> list[dict[str, Any]]:
+    """Every standard value on ``host`` (an envoy or the root), as the page shows it.
+
+    ``peers`` are the envoys the ledger row stands for, ``(block, envoy)`` with ``host`` among them: every block's
+    envoy of ``host``'s class, so a key function that reads the block (OLMo-Hybrid's post-norm attention blocks) is
+    shown where it puts the value on each."""
     found = host.values() if isinstance(host, Standard) else class_values(type(host))
     rows = []
     for name, value in found.items():
@@ -233,11 +241,22 @@ def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
             })
             continue
         key, select = getattr(value, "key", None), getattr(value, "select", None)
-        if isinstance(host, (Vision, Layer)) and getattr(value, "locate", None) is not None:
-            # a location the tower finds from itself (image_features: the scatter, wherever the family keys
-            # it), with the argument it selects there; a block's, from its config or its class (Falcon's 40B norms)
-            key = value.locate(host)
-            select = select(host) if callable(select) else select
+        where = None
+        if isinstance(value, DerivedEProperty):
+            # computed at the read from other values (a Mamba-1 mixer's betas, the state after every token)
+            where = "computed from other values read in the same call"
+        elif getattr(value, "locate", None) is not None and not isinstance(host, RecurrentMixer):
+            # a key function of the checkpoint: the tower's scatter (image_features, wherever the family keys it), a
+            # config's branch (Falcon's alibi, its 40B norms), the block (OLMo-Hybrid's post-norm blocks). It is
+            # shown as the path it gives, block by block where the blocks differ. A recurrent mixer's picks the
+            # kernel on each call, inside the trace, so its key stays a description (`humanize_key`).
+            placed: dict[tuple[str, Any], list[int]] = {}
+            for block, envoy in peers or [(0, host)]:
+                at = (value.locate(envoy), select(envoy) if callable(select) else select)
+                placed.setdefault(at, []).append(block)
+            key, select = value.locate(host), select(host) if callable(select) else select
+            if len(placed) > 1:
+                where = "; ".join(f"{humanize_key(*at)} on blocks {blocks_range(blocks)}" for at, blocks in placed.items())
         # `unavailable(reason)`: a value the family declares it does not have; its key falls back to its
         # own name and names no location, so it is read nowhere.
         nowhere = isinstance(getattr(value, "unavailable", None), str)
@@ -249,10 +268,40 @@ def value_rows(host: Any, expr: str) -> list[dict[str, Any]]:
             "description": match["desc"],
             "key": None if nowhere else key if isinstance(key, str) else ("computed" if key is not None else None),
             "select": select,
-            "where": "nowhere: the family does not serve it" if nowhere else humanize_key(key, select),
+            "where": "nowhere: the family does not serve it" if nowhere else where or humanize_key(key, select),
             "served": not nowhere,
         })
     return rows
+
+
+def never_served(eager: Any, default: Any, blocks: int) -> str | None:
+    """Why the checkpoint has a value under no load the build makes, or ``None``: its ``support()`` entries under the
+    eager load and the default one.
+
+    Never served means a reason on every block (the blocks without the value's host give a structural one) under
+    both loads, none of which names what lifts it (`REMEDY`): no rotary embedding, a parallel block, no one call to
+    make again. The reason is the eager load's, without the blocks it holds on."""
+    def reasons(why: Any) -> set[str]:
+        if isinstance(why, str):
+            return {why}
+        if isinstance(why, dict) and len(why) == blocks:
+            return {w for w in why.values() if not STRUCTURAL.match(w)}
+        return set()
+    under_eager = reasons(eager)
+    if not under_eager or not reasons(default) or any(REMEDY.search(why) for why in under_eager):
+        return None
+    return " / ".join(sorted(under_eager))
+
+
+def settle(row: dict[str, Any], condition: dict[str, Any] | None) -> None:
+    """Give a ledger row its ``support()`` condition. A value the checkpoint never has (`never_served`) has no
+    condition, since no load gives it: it reads nowhere, with the reason."""
+    if condition and condition["kind"] == "never":
+        if row["served"]:  # an `unavailable(...)` marker, or a call with none to make again, already reads nowhere
+            row["where"] = f"nowhere: {condition['reason']}"
+        row.update(condition=None, served=False)
+    else:
+        row["condition"] = condition
 
 
 def signature(value: Any) -> str | None:
@@ -277,13 +326,11 @@ def humanize_key(key: Any, select: int | None) -> str:
     if not isinstance(key, str):
         return "computed from several served values" if key is not None else "derived"
     if callable(select):
-        # a select chosen per call (a Mamba-1 kernel argument sits at a different position in each kernel)
-        name = getattr(select, "__name__", "")
-        element = f", argument `{name.split('.', 1)[1]}`" if name.startswith("argument.") else ", the element this call's kernel takes"
-        # a select resolved per call (a Mamba-2 value): the argument the kernel that fires takes it as,
-        # or the element of its output that call returns it in
-        named = re.fullmatch(r"argument\((\w+)\)", select.__name__)
-        element = f", argument `{named[1]}`" if named else ", the element that call returns it in"
+        # a select resolved per call (a Mamba-1 or Mamba-2 kernel argument sits at a different position in each
+        # kernel): the argument the kernel that fires takes it as (`argument.C`, `argument(C)`), or the element of
+        # its output that call returns it in
+        named = re.fullmatch(r"argument(?:\.(\w+)|\((\w+)\))", getattr(select, "__name__", ""))
+        element = f", argument `{named[1] or named[2]}`" if named else ", the element that call returns it in"
     else:
         element = "" if select is None else f", argument `{select}`" if isinstance(select, str) else f", element {select}"
     if key.startswith("/"):
@@ -293,12 +340,11 @@ def humanize_key(key: Any, select: int | None) -> str:
             return "the model's own inputs, at the root" + element
         return humanize_key(inner, select).replace("inside `", "inside `model.", 1)  # the root's child, as a user writes it
     if key.startswith("<"):
-        # a location the value finds per call: a recurrent mixer's kernel, whichever fires on this call
-        name = key[1:-1]
-        if name.startswith("kernel."):
-            what = {"inputs": "the arguments of", "output": "the output of"}.get(name.split(".", 1)[1], name)
-            return f"inside the forward: {what} the kernel this call runs (a prompt's chunked one or a decode step's recurrent one){element}"
-        return f"inside the forward, at the operation that `{name}` finds on each call"
+        # a location the value finds on each call, inside the trace: a recurrent mixer's kernel, whichever fires on
+        # this call, or a binding inside it (the key function's name is the family's own and says nothing to a reader)
+        kernel = "the kernel this call runs (a prompt's chunked one or a decode step's recurrent one)"
+        what = {"kernel.inputs": "the arguments of", "kernel.output": "the output of"}.get(key[1:-1])
+        return f"inside the forward: {what} {kernel}{element}" if what else f"inside the forward: at or inside {kernel}{element}"
     if key == "output":
         return "the module's own output" + element
     if key in ("input", "inputs"):
@@ -399,8 +445,10 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
     # Each block's standard children, and whether each is a mixture; one block of each
     # combination of child classes stands for the rest, so a hybrid's ledgers list every host.
     block_hosts, block_classes, block_children, block_paths, block_keys, block_scoring, shapes = [], [], [], [], [], [], {}
+    layer_children = []  # each block's standard children by alias, where a ledger row's key function is resolved
     for layer in eager.layers:
         found = StandardizedTransformer._standard_children(layer)
+        layer_children.append(found)
         block_hosts.append({alias: runs_mixture(child) for alias, child in found.items()})
         block_classes.append(type(layer._module).__name__)
         block_children.append(children_of(layer))
@@ -437,7 +485,11 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
         blocks = tower_layers if name.startswith("vision.") else num_layers
         under_eager = summarize_reason(support_eager[name], blocks)
         under_default = summarize_reason(support_default.get(name), blocks)
-        if under_eager is None and under_default is not None:
+        # a value neither load serves on any block is not conditional: the page says it is read nowhere, and why
+        never = never_served(support_eager[name], support_default.get(name), blocks)
+        if never:
+            condition = {"kind": "never", "reason": never}
+        elif under_eager is None and under_default is not None:
             condition = {"kind": "eager", "reason": under_default}
         elif under_eager is not None:
             condition = {"kind": "other", "reason": under_eager}
@@ -448,12 +500,21 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
 
     hosts = [("root", "model", [eager]), ("layer", "model.layers[i]", [block])]
     hosts += [(alias, f"model.layers[i].{alias}", found) for alias, found in children.items()]
+
+    def peers(alias: str, host: Any) -> list[tuple[int, Any]]:
+        """Every block's envoy the ledger row of ``host`` stands for: the blocks themselves, or their ``alias`` child of ``host``'s class."""
+        if alias == "root":
+            return [(0, host)]
+        if alias == "layer":
+            return [(i, layer) for i, layer in enumerate(eager.layers) if type(layer) is type(host)]
+        return [(i, found[alias]) for i, found in enumerate(layer_children) if type(found.get(alias)) is type(host)]
+
     values: dict[str, list[dict[str, Any]]] = {}
     for alias, expr, found in hosts:
         # a host of several classes (a dense MLP and a mixture) lists the union, the fullest class's order first
         merged: dict[str, dict[str, Any]] = {}
         for host in sorted(found, key=lambda h: -len(value_rows(h, expr))):
-            for row in value_rows(host, expr):
+            for row in value_rows(host, expr, peers(alias, host)):
                 row["module"] = type(host._module).__name__ if alias != "root" else type(eager._module).__name__
                 # a value one class serves and another marks unavailable (a dense MLP beside the mixtures, which have
                 # no single activation) is shown as served; its condition names the blocks without it
@@ -461,7 +522,7 @@ def introspect(entry: ModuleType, reference: str | None = None, wrapper: str | N
                     merged[row["name"]] = row
         prefix = "" if alias in ("root", "layer") else alias + "."
         for row in merged.values():
-            row["condition"] = conditions.get(prefix + row["name"])
+            settle(row, conditions.get(prefix + row["name"]))
             row["host"] = alias
         values[alias] = [row for row in merged.values() if prefix + row["name"] not in absent]
 
@@ -586,15 +647,18 @@ def vision_info(entry: ModuleType, model: Any, wrapper: str, conditions: dict[st
     blockless = vision.num_layers == 0
     layer = None if blockless else vision.layers[0]
     children = {} if blockless else StandardizedTransformer._standard_children(layer)
-    hosts = [("vision", "model.vision", vision, "vision.")]
+    hosts = [("vision", "model.vision", vision, "vision.", [(0, vision)])]
     if not blockless:
-        hosts.append(("layer", "model.vision.layers[i]", layer, "vision."))
-    hosts += [(alias, f"model.vision.layers[i].{alias}", child, f"vision.{alias}.") for alias, child in children.items()]
+        hosts.append(("layer", "model.vision.layers[i]", layer, "vision.", list(enumerate(vision.layers))))
+    hosts += [(alias, f"model.vision.layers[i].{alias}", child, f"vision.{alias}.",
+               [(i, StandardizedTransformer._standard_children(block)[alias]) for i, block in enumerate(vision.layers)])
+              for alias, child in children.items()]
     values: dict[str, list[dict[str, Any]]] = {}
-    for alias, expr, host, prefix in hosts:
-        rows = value_rows(host, expr)
+    for alias, expr, host, prefix, peers in hosts:
+        rows = value_rows(host, expr, peers)
         for row in rows:
-            row.update(condition=conditions.get(prefix + row["name"]), host=alias, module=type(host._module).__name__)
+            settle(row, conditions.get(prefix + row["name"]))
+            row.update(host=alias, module=type(host._module).__name__)
         values[alias] = rows
     sizes = []
     for name in TOWER_SIZE_NAMES:
@@ -1607,7 +1671,8 @@ def checkpoint_model(entry: ModuleType, info: dict[str, Any]) -> dict[str, Any]:
                             "architecture": info["architecture"], "url": f"https://huggingface.co/{info['reference']}"}
     shown = list(family_quirks)
     model: dict[str, Any] = {**info, "block": block, "roles": roles,
-                             "conditional": any(row["condition"] for row in info["support"]), "strip_labels": strip["labels"],
+                             "conditional": any(row["condition"] and row["condition"]["kind"] != "never" for row in info["support"]),
+                             "strip_labels": strip["labels"],
                              "repr_html": highlight_repr(info["repr"], roles), "logits_label": logits_label(family_quirks)}
     v = info.get("vision")
     if v:

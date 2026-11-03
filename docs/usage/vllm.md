@@ -282,11 +282,15 @@ there (`FlatResidual`).
 ```python
 support = model.support()
 print(sorted(name for name, reason in support.items() if reason))
-# ['attention_mask', 'lm_head_output', 'mlp.mlp_activation']
+# ['attention_mask', 'lm_head_output', 'mlp.mlp_activation',
+#  'self_attn.attention_keys_prerope', 'self_attn.attention_queries_prerope']
 ```
 
 A request is one unpadded sequence, so there is no `attention_mask`; `lm_head_output` and a gated
-MLP's `mlp_activation` are [above](#the-module-boundaries-and-the-sublayers-interiors). `input_ids` and `input_size` are read-only. `project_on_vocab`
+MLP's `mlp_activation` are [above](#the-module-boundaries-and-the-sublayers-interiors). The queries and
+keys before the rotary embedding, and `self_attn.rotate`, are not served: vLLM rotates inside its own
+`rotary_emb` module, on the flat rows, with a kernel per family; read them, and rotate, on a
+`StandardizedTransformer` ([attention-interior](attention-interior.md#before-the-rotary-embedding-attention_queries_prerope-attention_keys_prerope-rotate)). `input_ids` and `input_size` are read-only. `project_on_vocab`
 and `get_topk_closest_tokens` call the engine's modules, so they work inside a trace only.
 Gradients, `.source` inside a kernel and `scan` are nnsight's limits on this engine.
 

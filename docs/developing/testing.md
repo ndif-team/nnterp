@@ -73,6 +73,13 @@ once per class: `model` (`suite.py:88-92`), a `StandardizedTransformer` with
 | `MOE_UNAVAILABLE` | mixture value → a substring of the reason, for the mixture values this checkpoint lacks on its mixture (a mixture without a shared expert needs no entry for `shared_expert_output`) |
 | `ROUTER_EXTRA_CLASSES` | router classes beyond the experts: ZAYA's skip class is one more column of `router_logits` |
 
+Two methods a family file overrides the way it sets an attribute: `pattern_from_scores`
+(what the softmax makes of the scores; GPT-OSS adds its sink column) and
+`rotated_as_served(attn, name, rotated)` (what the attention receives given `rotate` of a
+value before the rotary; the identity, HunYuan's and Llama 4's post-rotary norms, JetMoE's
+tiling of the keys). `model_size(host, axis, name)` takes the value's name, so JetMoE's file
+says its keys before the rotary are `num_kv_heads` wide where `KV_HEADS_EXPANDED` holds for the rest.
+
 Three helpers: `mixer(layer)` (`:40-43`) is `self_attn` or, on a linear
 block, `linear_attn`; `has_mlp(model)` (`:184-186`) reads `support()`;
 `attn_blocks(model)` is the blocks with softmax attention and `attn_block(model)` the first of them, skipping the test when there is none;
@@ -128,6 +135,20 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_interior_shapes` | q `[b, num_heads, s, qk_head_dim]`, k/v `[b, num_kv_heads, s, ·]`, scores and pattern `[b, num_heads, s, s]`, head outputs `[b, s, num_heads, ·]`; `pattern_from_scores(scores)` equals the pattern (overridable: GPT-OSS adds the sink column) |
 | `test_interior_writes_are_causal` | zeroing each of the five interior values moves the logits; with head outputs zeroed the contribution is the same at every position |
 | `test_interior_in_place_edits` | zeroing scores and head outputs in place moves the logits; queries too, or raise `RuntimeError` matching `view` with `REFUSES_IN_PLACE_QKV` |
+
+**The rotary embedding**
+
+| method | asserts |
+|---|---|
+| `test_rotate_gives_the_rotated_queries_and_keys` | on the first block with a rotary, `self_attn.rotate(prerope, arange(seq))` equals `attention_queries` / `attention_keys` bit for bit, in their dtype, and has their shape where the two layouts are the same name (`rotated_as_served` first: a family's test file says what its block does after the rotary, HunYuan's norms, Llama 4's `qk_norm`, JetMoE's tiling); a rotated value narrower than the served one (latent attention's shared rope key) is its trailing channels on every head |
+| `test_a_prerope_write_is_rotated_for_its_position` | assigning position 0's prerope vector at the last position leaves the rotated value at every other position bit-identical and makes the last one `rotate(vector, [last])` |
+| `test_rotate_says_why_a_block_has_no_rotary` | on every block whose `no_rotary()` gives a reason, `support()` gives the same one and `rotate` raises `Unavailable` with it |
+| `test_order_ranks_the_prerope_values_first` | `model.order(i)` and `model.rank` put both values before the rotated ones |
+
+`NO_ROTARY` (`suite.py`) is the `EXPECTED_UNAVAILABLE` entry of a family without a rotary
+(GPT-2, OPT, BLOOM, ...) or with NoPE blocks (Cohere 2, SmolLM3, ...); `TOWER_NO_ROTARY` is
+what every vision tower reports for the two values, which the suite expects on a wrapper's
+`vision.*` rows without a family saying so.
 
 **Methods over the values** (`:400-441`)
 

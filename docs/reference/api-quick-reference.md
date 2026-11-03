@@ -163,6 +163,8 @@ A softmax-attention module. The base class reads everything but `attention_outpu
 | Value | Layout | Base location | Assignable | Availability |
 |---|---|---|---|---|
 | `attention_output` | `Residual` | the module's `.output`, first tensor | yes; in place reaches the model | always |
+| `attention_queries_prerope` | `Queries` | argument 0 of `apply_rotary_pos_emb_0` (`ROTARY`): after the projection and any query norm, before the rotation | assign: the block rotates what you write for the position it lands at; in place except on split views of a fused projection (CodeGen, DBRX, GPT-NeoX), outside `torch.no_grad()` | `rotary_reason`; served under any `attn_implementation` |
+| `attention_keys_prerope` | `Keys` (`SharedRopeKeys` under latent attention) | argument 1 of `ROTARY`: before the rotation, the cache and `repeat_kv` | as above; JetMoE's keys and latent attention's shared rope key are split views too: assign | `rotary_reason` |
 | `attention_queries` | `Queries` | argument 1 of `attention_interface_1`, after RoPE | assign; in place except on GPT-2 and GPT-BigCode (split views) and MPT (`chunk`), outside `torch.no_grad()` | `interface_reason` |
 | `attention_keys` | `Keys` | argument 2, before `repeat_kv` | as above | `interface_reason` |
 | `attention_values` | `Values` | argument 3, before `repeat_kv` | as above | `interface_reason` |
@@ -173,16 +175,22 @@ A softmax-attention module. The base class reads everything but `attention_outpu
 
 Each layout is the alias `.layout` returns (`Attention.attention_keys.layout is Keys`), its axes in the [layouts table](#layouts) and in `.dims`. `qk_head_dim` differs from `head_dim` only under multi-head latent attention (DeepSeek: 192 against 128 on the pinned V3 checkpoint).
 
-`interface_reason(envoy)` calls `envoy.off_interface()`, and the base `off_interface()` is `needs_eager`: `"read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"`. A family overrides `off_interface` to add its own reason (GPT-2's `reorder_and_upcast_attn`).
+`interface_reason(envoy)` calls `envoy.off_interface()`, and the base `off_interface()` is `needs_eager`: `"read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"`. A family overrides `off_interface` to add its own reason (GPT-2's `reorder_and_upcast_attn`). `rotary_reason(envoy)` calls `envoy.no_rotary()`, `None` on the base; a family without a rotary embedding, or with blocks that skip it, overrides `no_rotary` with the reason (`"no rotary embedding: ..."`).
 
 | Method / attribute | What |
 |---|---|
 | `off_interface() -> str \| None` | Why the shared interface does not run on this module, or `None`. |
+| `no_rotary() -> str \| None` | Why this block applies no rotary embedding, or `None`: what the two values before the rotary and `rotate` report. |
+| `rotate(x, positions) -> Tensor` | `x` (`[..., seq, qk_head_dim]`, laid out like the values before the rotary) rotated by this block's rotary embedding at absolute `positions` (`[seq]`, or `[batch, seq]` for `[batch, heads, seq, qk_head_dim]`): `rotate(attention_queries_prerope, positions)` is `attention_queries` bit for bit. Outside a trace or inside one. `Unavailable` with `no_rotary()`'s reason on a block without one. |
+| `rotary_embedding(x, position_ids)` | What the block's rotary call is given at `position_ids` (`[batch, seq]`): `(cos, sin)` from the nearest `rotary_emb` above the attention, called through its envoy with the block's `config.layer_types` entry where its forward takes a `layer_type`. A family with another source overrides it (GPT-J's sinusoid table, Granite-SWA's per-theta `rotary_embs`, DeepSeek-V4's `rope_layer_type`). |
+| `apply_rotary(x, embedding)` | `x` rotated with the family's own apply function, `apply_rotary_pos_emb(q, k, cos, sin)` of the attention's modeling module on the base. A family that slices outside it (Phi's `rotary_ndims`), or calls another (Llama 4's and DeepSeek-V2's complex `apply_rotary_emb`, latent attention's rope part), overrides it. |
 | `SINK` | `True` on a family whose pattern rows sum to less than one (GPT-OSS). |
 | `num_heads` | This block's query heads: the module's `num_heads` / `num_attention_heads` / `n_heads` / `n_head`, else the output projection's input width over `head_dim`. |
 | `num_kv_heads` | This block's key/value heads as projected: the module's `num_key_value_heads` / `num_kv_heads` / `kv_heads`, else `num_heads // num_key_value_groups`, else `k_proj`'s width over `qk_head_dim`, else `num_heads`. |
 | `head_dim` | This block's value and head-output width: the module's `v_head_dim`, else `head_dim` / `head_size`. |
 | `qk_head_dim` | This block's query and key width: the module's `qk_head_dim`, else `head_dim` / `head_size`. |
+
+Latent attention's `Attention` (DeepSeek-V2 and the families that subclass it) adds `qk_rope_head_dim`, the rotated part of a query head and the shared rope key's width, and `rope_call()`, the modeling module's function it rotates with.
 
 The four sizes are plain read-only properties, read off the module outside or inside a trace (`model.layers[i].self_attn.num_heads`), so they are the block's own on a model whose blocks differ. A family whose module spells a size another way overrides the property on its subclass; a module the base cannot read raises `NotImplementedError` naming the size.
 
@@ -379,7 +387,7 @@ Every descriptor exposes `.layout` (the layout alias the defining function's ret
 
 ### Layouts
 
-The thirty-seven `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the thirty-four envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
+The thirty-eight `jaxtyping` types every standard value is annotated with, each defined in the file of the envoy that serves it. `nnterp.components` re-exports the thirty-five envoy-level names; the root's three are importable from `nnterp.standardized` only. `value.layout` is the alias itself (`Attention.attention_probabilities.layout is Pattern`), `value.dims` its axes split; a redefinition in a family and a value of your own annotate with the same name (`-> Residual`). `isinstance(tensor, Pattern)` checks rank and dtype.
 
 | Name | Axes | Defined in | Carried by |
 |---|---|---|---|
@@ -391,8 +399,9 @@ The thirty-seven `jaxtyping` types every standard value is annotated with, each 
 | `Logits` | `batch seq vocab_size` | `standardized.py` | `logits`, `lm_head_output` |
 | `NextTokenProbs` | `batch vocab_size` | `standardized.py` | `next_token_probs` |
 | `Tokens` | `batch seq` (`Int`) | `standardized.py` | `input_ids`, `attention_mask` |
-| `Queries` | `batch num_heads seq qk_head_dim` | `components/attention.py` | `attention_queries` |
-| `Keys` | `batch num_kv_heads seq qk_head_dim` | `components/attention.py` | `attention_keys` |
+| `Queries` | `batch num_heads seq qk_head_dim` | `components/attention.py` | `attention_queries`, `attention_queries_prerope` |
+| `Keys` | `batch num_kv_heads seq qk_head_dim` | `components/attention.py` | `attention_keys`, `attention_keys_prerope` |
+| `SharedRopeKeys` | `batch 1 seq qk_rope_head_dim` | `components/attention.py` | `attention_keys_prerope` under latent attention: the one rope key per position every head shares |
 | `Values` | `batch num_kv_heads seq head_dim` | `components/attention.py` | `attention_values` |
 | `Pattern` | `batch num_heads query key` | `components/attention.py` | `attention_scores`, `attention_probabilities` |
 | `HeadOutputs` | `batch seq num_heads head_dim` | `components/attention.py` | `attention_head_outputs`, `attention_premix` |
@@ -419,7 +428,7 @@ The thirty-seven `jaxtyping` types every standard value is annotated with, each 
 | `ImageTokenMask` | `batch seq` (`Bool`) | `components/vision.py` | `vision.image_token_mask` |
 | `ImageFeatures` | `image_tokens hidden_size` | `components/vision.py` | `vision.image_features` |
 
-The axis names are plain string constants in `nnterp.components.standard` (exported by `nnterp.components`), and every alias is composed from them: the model facts are named as the size that holds them (`HIDDEN` = `hidden_size`, `VOCAB` = `vocab_size`, `HEADS` = `num_heads`, `KV_HEADS` = `num_kv_heads`, `HEAD_DIM` = `head_dim`, `QK_HEAD_DIM` = `qk_head_dim`, `EXPERTS` = `num_experts`, `TOP_K` = `top_k`, `VISION_HIDDEN` = `vision_hidden_size`, the tower's width on `model.vision`), which `axis_size` resolves; the rest are not facts about the model (`BATCH`, `SEQ`, `QUERY`/`KEY` a pattern's two token axes, `STREAMS`, a recurrent mixer's `MIXER_HEADS` = `heads`, `KEY_DIM`/`VALUE_DIM` a DeltaNet state's two sides, `CHANNELS`/`STATE_DIM` a Mamba-1 state's, `GROUPS` the `B`/`C` groups, and the vision tower's `IMAGES`, `PATCHES`, `IMAGE_TOKENS`). [../usage/layouts.md](../usage/layouts.md#axis-names-and-sizes) is the page.
+The axis names are plain string constants in `nnterp.components.standard` (exported by `nnterp.components`), and every alias is composed from them: the model facts are named as the size that holds them (`HIDDEN` = `hidden_size`, `VOCAB` = `vocab_size`, `HEADS` = `num_heads`, `KV_HEADS` = `num_kv_heads`, `HEAD_DIM` = `head_dim`, `QK_HEAD_DIM` = `qk_head_dim`, `QK_ROPE_HEAD_DIM` = `qk_rope_head_dim` on a latent attention block, `EXPERTS` = `num_experts`, `TOP_K` = `top_k`, `VISION_HIDDEN` = `vision_hidden_size`, the tower's width on `model.vision`), which `axis_size` resolves; the rest are not facts about the model (`BATCH`, `SEQ`, `QUERY`/`KEY` a pattern's two token axes, `STREAMS`, a recurrent mixer's `MIXER_HEADS` = `heads`, `KEY_DIM`/`VALUE_DIM` a DeltaNet state's two sides, `CHANNELS`/`STATE_DIM` a Mamba-1 state's, `GROUPS` the `B`/`C` groups, and the vision tower's `IMAGES`, `PATCHES`, `IMAGE_TOKENS`). [../usage/layouts.md](../usage/layouts.md#axis-names-and-sizes) is the page.
 
 ### Availability predicates and constants
 
@@ -428,6 +437,7 @@ The axis names are plain string constants in `nnterp.components.standard` (expor
 | `unavailable` | `unavailable(reason: str) -> EProperty` | A value a family does not have: assign it in the class body in place of the inherited one. The name stays in the tree and the repr (`"Unavailable: <reason>"`), and every access raises `Unavailable`. |
 | `needs_eager` | `needs_eager(envoy) -> str \| None` | The reason when `config._attn_implementation != "eager"`. |
 | `interface_reason` | `interface_reason(envoy) -> str \| None` | `envoy.off_interface()`: the predicate of the base `Attention`'s interior values. |
+| `rotary_reason` | `rotary_reason(envoy) -> str \| None` | `envoy.no_rotary()`: the predicate of the queries and keys before the rotary. |
 | `needs_torch_kernels` | `needs_torch_kernels(envoy) -> str \| None` | The reason when the mixer's `CHUNK_KERNEL` or `RECURRENT_KERNEL` name dispatches to an optimized kernel (`flash-linear-attention`, `mamba_ssm`) with no Python source. |
 | `needs_per_token_chunks` | `needs_per_token_chunks(envoy) -> str \| None` | `needs_torch_kernels`, then, when the mixer's `chunk_size` is not 1, the reason naming the chunk size and `chunk_per_token`: the predicate of `StateSpace.states`. |
 | `needs_recurrent_routing` | `needs_recurrent_routing(envoy) -> str \| None` | The reason when `STATE_OP` is `None` (the kernels do not materialize the state per token), then `needs_torch_kernels`, then the reason when the prompt kernel is not the token-by-token loop (or, with `STEP_STATE_OP`, the decode kernel is still the dispatcher): call `route_kernels`. |
@@ -438,6 +448,7 @@ The axis names are plain string constants in `nnterp.components.standard` (expor
 | `no_shared_expert` | `no_shared_expert(envoy) -> str \| None` | `no_mixture()`, then `"this mixture has no shared expert"` when the module has no `shared_experts` / `shared_expert` / `shared_mlp` child. |
 | `LOGITS`, `DISPATCH`, `PER_SLOT` | `"F_linear_0"`, `"experts_forward_1"`, `"weighted_out_view_0"` | The router's logits op, the call inside transformers' `@use_experts_implementation` wrapper, and the per-slot view inside its `grouped_mm` / `batched_mm` forwards. |
 | `INTERFACE` | `"attention_interface_1"` | The shared attention call every interface family makes. |
+| `ROTARY` | `"apply_rotary_pos_emb_0"` | The rotary call every family on transformers' shared rotary path makes, `apply_rotary_pos_emb(query, key, cos, sin)`. |
 | `NOT_ON_INTERFACE` | `"The attention does its own arithmetic rather than transformers' shared attention interface; not mapped for this family yet"` | The reason for `unavailable(NOT_ON_INTERFACE)` in a family that has not mapped an interior value onto its own arithmetic. No shipped family uses it: all four own-arithmetic families map every interior value. |
 
 ### Helpers
@@ -449,6 +460,7 @@ The axis names are plain string constants in `nnterp.components.standard` (expor
 | `route_kernels` | `route_kernels(family, kernel: str = "torch") -> None` | Bind a family's recurrent kernel names process-wide: `"torch"` to transformers' pure-torch kernels (on a mixer with a `STATE_OP`, the prompt's name to the token-by-token loop, the only kernel that materializes `state`, `states`, `state_after`, `set_state_after`: the decode kernel's function on a gated DeltaNet, so both names; the scan's own on Mamba-1, where each name keeps its own), `"default"` back to what the modeling module bound at import. `family` is `model.family`, `nnterp.families.<name>` or the modeling module. Call it before tracing a layer. |
 | `route_delta_rule` | `route_delta_rule(family, kernel: str = "recurrent") -> None` | `route_kernels` in the delta rule's words: `"recurrent"` is `"torch"`, `"chunked"` is `"default"`. |
 | `chunk_per_token` | `chunk_per_token(model, enabled: bool = True) -> None` | Set every `StateSpace` mixer's module `chunk_size` to 1, so the chunk scan's boundaries are the tokens and `states` / `state_after` read the state after each; `enabled=False` restores the chunk size each mixer was built with (`config.chunk_size`, or `mamba_chunk_size`). Per model, unlike `route_kernels`; slower on long prompts (the inter-chunk recurrence is quadratic in the number of chunks). `ValueError` on a model with no `StateSpace`. |
+| `holding` | `holding(envoy, name: str) -> Envoy` | The nearest envoy from `envoy` up whose module holds a module `name`: where `Attention.rotary_embedding` finds the model's `rotary_emb`. `NotImplementedError` when none does. |
 | `seq_first` | `seq_first(value: Tensor) -> Tensor` | `value.transpose(1, 2)`: `[batch, num_heads, seq, d]` to `[batch, seq, num_heads, d]` as a view, and its own inverse. Used by families whose arithmetic keeps heads first. |
 | `axis_size` | `axis_size(envoy, axis: str) -> int` | The size of layout axis `axis` for a value served on `envoy`: the attribute named `axis` on `envoy` when its class declares it, else on the first envoy above it that does, up to the root (`num_heads` on an attention value is that block's, `hidden_size` the root's). `ValueError` for an axis no envoy holds (`batch`, `seq`, `query`, `key`, a mixer's `heads`): it is not a fact about the model. Defined in `nnterp.components.standard`; also `nnterp.axis_size`. |
 | `first_tensor` | `first_tensor(value) -> Tensor` | The first element of a tuple output, or the tensor itself. |

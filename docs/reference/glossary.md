@@ -94,11 +94,11 @@ The number of key/value heads, `num_kv_heads`, fewer than `num_heads` under grou
 
 ## Layout, dims
 
-The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-seven named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]`, axes `batch seq hidden_size`, in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the thirty-two envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple; a model-fact axis is named as its size, so `axis_size(envoy, axis)` reads it. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`) and `linear_attn.decays` on Kimi-Linear (`ChannelGates`). See [../usage/layouts.md](../usage/layouts.md).
+The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-eight named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]`, axes `batch seq hidden_size`, in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the thirty-five envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple; a model-fact axis is named as its size, so `axis_size(envoy, axis)` reads it. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`), `linear_attn.decays` on Kimi-Linear (`ChannelGates`) and `attention_keys_prerope` under latent attention (`SharedRopeKeys`). See [../usage/layouts.md](../usage/layouts.md).
 
 ## MLA (multi-head latent attention)
 
-DeepSeek-V2/V3's attention, where queries and keys are `qk_head_dim = qk_nope_head_dim + qk_rope_head_dim` wide, values `v_head_dim`, and the interface sees `num_heads` key/value heads. The root publishes `qk_head_dim` beside `head_dim` for it. See [families.md](families.md#latent-attention).
+DeepSeek-V2/V3's attention, where queries and keys are `qk_head_dim = qk_nope_head_dim + qk_rope_head_dim` wide, values `v_head_dim`, and the interface sees `num_heads` key/value heads. The root publishes `qk_head_dim` beside `head_dim` for it. Only the trailing `qk_rope_head_dim` channels of a query head rotate, and one rope key per position that every head shares, so `attention_keys_prerope` is that key (`SharedRopeKeys`). See [families.md](families.md#latent-attention).
 
 ## Native name
 
@@ -147,6 +147,10 @@ nnsight's `rename=` constructor argument, a dict of native path to alias. A key 
 ## Residual stream
 
 The tensor a block passes to the next, `[batch, seq, hidden_size]`: `layers[i].input` entering, `layer_output` leaving, each sublayer adding its contribution in between. See [../usage/residual-stream.md](../usage/residual-stream.md).
+
+## Rotary embedding, prerope values, `rotate`
+
+The rotation of each query and key by its position (RoPE) that most families apply between the projection (and any query or key norm) and the attention. `attention_queries_prerope` / `attention_keys_prerope` are the queries and keys the rotary receives, before it; `attention_queries` / `attention_keys` are after it. `Attention.rotate(x, positions)` applies a block's own rotary at the absolute positions given, so `rotate(attention_queries_prerope, positions) == attention_queries`; `Attention.no_rotary()` is why a block has none (absolute or sinusoidal positions, ALiBi, a NoPE block). Use the values before the rotary for anything moved to another position. See [../usage/attention-interior.md](../usage/attention-interior.md#before-the-rotary-embedding-attention_queries_prerope-attention_keys_prerope-rotate).
 
 ## `route_kernels`, `route_delta_rule`
 

@@ -43,6 +43,7 @@ the matching skill changes too.
 
 ### "Read or edit attention: the pattern, queries, keys, values, scores, heads"
 - [docs/usage/attention-interior.md](docs/usage/attention-interior.md) — `attention_probabilities`, `attention_queries/keys/values/scores/head_outputs`; needs eager; per-family caveats
+- [docs/usage/attention-interior.md#before-the-rotary-embedding-attention_queries_prerope-attention_keys_prerope-rotate](docs/usage/attention-interior.md#before-the-rotary-embedding-attention_queries_prerope-attention_keys_prerope-rotate) — `attention_queries_prerope` / `attention_keys_prerope` (after any q/k norm, before RoPE; under any `attn_implementation`) and `self_attn.rotate(x, positions)`, the block's own RoPE outside a trace: use them, not `attention_queries` or `q_proj.output`, for a query or key moved to another position and for an edit that must come before the rotation
 - [docs/patterns/attention-patterns.md](docs/patterns/attention-patterns.md) — head metrics and pattern edits
 
 ### "Mixture of experts: the router, the experts, expert ablation and rerouting"

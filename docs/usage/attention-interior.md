@@ -427,11 +427,9 @@ values (and the pattern's key axis) are as long as the cache:
 - **A padded prompt's pad query rows are not attention**: uniform over every key on
   GPT-2, all on key 0 on GPT-Neo. Mask them with `model.attention_mask` before a
   per-row metric.
-- **`attention_probabilities` and `attention_scores` cannot be touched in two invokes
-  of one trace today**: the second invoke raises `TypeError: 'NoneType' object is not
-  subscriptable` (an nnsight bug with values read inside a nested `.source` call). Use
-  one trace per prompt, a batch in one invoke, or `attention_head_outputs`, which
-  works across invokes.
+- **Two invokes of one trace can both read and edit `attention_probabilities` and
+  `attention_scores`.** At one location the invoke written first is served first: an
+  empty `tracer.invoke()` after an invoke that edits the scores reads the edited pattern.
 - **On a hybrid, three blocks in four have no `self_attn`.** Decide which blocks
   have one outside the trace; see [delta-net.md](delta-net.md).
 - **Remote runs re-resolve these on the server**, against its transformers; see

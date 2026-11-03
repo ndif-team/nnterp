@@ -329,9 +329,6 @@ The root's own values (`logits`, `token_embeddings`, `next_token_probs`, `input_
 
 ## Gotchas
 
-- **Import `nnterp` (or `nnsight`) before any `transformers.models...` or
-  `transformers.modeling_layers` import.** The reverse order segfaults at import on this
-  stack. A plain `import transformers` first is fine.
 - **`attn_implementation` is not defaulted to eager.** A model loaded without it runs
   transformers' default, and the attention interior is unavailable; the boundary values
   still work.

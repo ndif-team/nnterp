@@ -499,7 +499,7 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 
 - Nothing assigned inside a trace survives it unless it is `.save()`d, and the save is bound to a name: `x = model.logits.save()`.
 - Reads follow forward order within one invoke: the model's input (`input_ids`, `attention_mask`, `input_size`) first, a block's interior (`attention_probabilities`, queries, scores) before that block's `attention_output`, block 3 before block 5. On Falcon read `attention_values` before `attention_queries` / `attention_keys`; on DeltaNet read `states` before any state write.
-- Decide which blocks have `self_attn` outside the trace: `[i for i, l in enumerate(model.layers) if getattr(l, "self_attn", None) is not None]`. Compare with `is not None`: an envoy has no truthiness (`getattr(layer, "self_attn", None) or layer.linear_attn` raises `TypeError: object of type 'LlamaAttention' has no len()`), and inside a trace `getattr(envoy, name, None)` can trip a served value.
+- Decide which blocks have `self_attn` outside the trace: `[i for i, l in enumerate(model.layers) if getattr(l, "self_attn", None) is not None]`; inside a trace `getattr(envoy, name, None)` can trip a served value.
 - `hasattr(envoy, "attention_probabilities")` raises `Unavailable` when the value is unavailable; ask `support()` instead.
 - The interior attention values need `attn_implementation="eager"`, which the constructor does not force; BLOOM and MPT are the exception (their pattern is their own dropout and carries no `attn_implementation` predicate).
 - `get_topk_closest_tokens(hidden)` takes a residual-stream tensor and projects it itself; passing `project_on_vocab`'s output fails inside `norm` with a shape error.
@@ -507,7 +507,6 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 - `model.logits` is the output's `.logits` (softcapped on Gemma-2, scaled on Cohere and Granite); `model.lm_head.output` is the raw projection, and `model.project_on_vocab(model.layers[-1].layer_output)` is `logits`.
 - `next_token_probs`, `input_size` and `states` are read-only.
 - `route_kernels(model.family, "torch")` before tracing a DeltaNet layer whose `state` you want; a forward `.source` has already instrumented keeps the binding it was compiled with.
-- `import nnterp` (or `nnsight`) before any `transformers.models...modeling_*` import; the reverse order segfaults at import on this stack.
 - A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace (after the tower under `generate` on transformers 5.18 and later), `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden_size]`.
 
 ## Related

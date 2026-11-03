@@ -490,9 +490,6 @@ into the package and the `register()` line removed.
 - **Import the modeling module only inside the family module.** An import at
   `nnterp/__init__.py` or in `components/` would load transformers modeling code on
   `import nnterp`; `test_import_is_lazy` fails.
-- **Import nnterp (or nnsight) before any `transformers.models...` import** in a script or
-  test; the reverse order segfaults at import on this stack. The suite and `conftest.py`
-  do this on their first line.
 - **Define `Layer`, `Attention` and `Mlp` even when a module type has no such module.**
   The convention is one family, three classes; OPT keys no `Mlp` in `ENVOYS` and still
   defines one. `support()` walks the tree, so a module no block has is not listed.

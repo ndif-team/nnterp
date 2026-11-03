@@ -340,8 +340,6 @@ this block`.
   passed it. The other order is out of forward order too. Read them in separate traces.
 - **In-place edits on the queries, keys and values need `torch.no_grad()`**; assignment
   always works.
-- **`state` takes assignment, not in-place edits.** `mix.state[:] = 0` raises
-  `OutOfOrderError`; assign a tensor.
 - **Route before the layer is traced.** `route_kernels` after a model has
   already traced that layer leaves the forward on the kernel it was
   instrumented with: `states` then raises `AttributeError: 'LinearAttention'

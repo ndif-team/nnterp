@@ -100,11 +100,6 @@ the reason is lost (`components/eproperty.py:28-32`, `:112-123`; nnsight
 value parks the worker and spends the read. Decide structure outside the
 trace; inside, ask `support()`.
 
-**`if envoy:` falls to `__len__`.** `Envoy.__len__` is `len(self._module)`
-(nnsight `envoy.py:950-952`): truthy for `model.layers` (a `ModuleList`),
-`TypeError: object of type 'GPT2Block' has no len()` for a block. Test
-`is not None`.
-
 **`.source` snapshots module globals.** The instrumented forward is a new
 function built over the original's `__globals__` (nnsight `source.py:439-444`,
 `:447-471`) and cached per code object; a module-level name rebound
@@ -159,18 +154,6 @@ the block will later write into its tensor.
 **DeltaNet's cache buffer is overwritten in place.** The kernel receives
 the cache's own tensor as `initial_state` and the cache then writes the new
 state into it; `state_input` returns a clone (`linear_attention.py:76-85`).
-
-## Repository
-
-**Run git from the repository root and check `git rev-parse --show-toplevel`.**
-The home directory on this machine is itself a git repository; a `git add
--A` from a directory without its own `.git` crawls all of home. An nnterp
-checkout has its own `.git`, so the toplevel must print the checkout before
-staging.
-
-**Import nnterp before transformers modeling modules.** The reverse order
-segfaults ([transformers-compat.md](transformers-compat.md));
-`tests/conftest.py` is the one line that enforces it under pytest.
 
 ## Related
 

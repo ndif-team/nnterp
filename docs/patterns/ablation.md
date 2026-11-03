@@ -143,10 +143,7 @@ with model.trace() as tracer:
 print([round(float(p), 4) for p in rows])
 ```
 
-Do this through `attention_head_outputs`, not the pattern. A value nnterp reads inside a
-nested `.source` call (`attention_probabilities`, `attention_scores`) cannot be touched in
-two invokes of one trace today: the second invoke raises `TypeError: 'NoneType' object is
-not subscriptable` (an nnsight bug). For per-head pattern edits, use one trace per head.
+The pattern takes the same loop: `attention_probabilities[:, head] = 0` in each invoke.
 
 ### A DeltaNet mixer on a hybrid
 

@@ -201,7 +201,7 @@ on `getattr(model, "vision", None)` first and on `support()` second
 
 ## Forward order: `order` and `rank`
 
-Within one invoke, values are read in the order the forward reaches them. `model.order()`
+Within one invoke, values are read and edited in the order the forward reaches them. `model.order()`
 says that order for the values `support()` lists as available, and `model.rank()` gives one
 sortable tuple per value. Like `support()`, both are asked outside a trace.
 
@@ -211,17 +211,19 @@ from nnterp import StandardizedTransformer
 model = StandardizedTransformer("hf-internal-testing/tiny-random-LlamaForCausalLM", attn_implementation="eager")
 
 model.order(0)
-# {'layer_input': 0, 'self_attn.attention_queries': 1, 'self_attn.attention_keys': 1,
-#  'self_attn.attention_values': 1, 'self_attn.attention_scores': 2,
-#  'self_attn.attention_probabilities': 3, 'self_attn.attention_head_outputs': 4,
-#  'self_attn.attention_output': 5, 'mlp.mlp_output': 6, 'layer_output': 7}
+# {'layer_input': 0, 'attention_norm_output': 1, 'self_attn.attention_queries': 2,
+#  'self_attn.attention_keys': 2, 'self_attn.attention_values': 2, 'self_attn.attention_scores': 3,
+#  'self_attn.attention_probabilities': 4, 'self_attn.attention_head_outputs': 5,
+#  'self_attn.attention_premix': 6, 'self_attn.attention_output': 7, 'layer_mid': 8,
+#  'mlp_norm_output': 9, 'mlp_input': 10, 'mlp.mlp_activation': 11, 'mlp.mlp_neurons': 12,
+#  'mlp.mlp_output': 13, 'layer_output': 14}
 model.order()
 # {'input_ids': 0, 'attention_mask': 0, 'input_size': 0, 'token_embeddings': 1,
-#  'logits': 2, 'next_token_probs': 2}
+#  'final_norm_output': 2, 'lm_head_output': 3, 'logits': 4, 'next_token_probs': 4}
 
 model.rank("input_ids")                            # (-1, 0): before the blocks
-model.rank("self_attn.attention_queries", 1)       # (1, 1)
-model.rank("logits")                               # (2, 2): num_layers, after the blocks
+model.rank("self_attn.attention_queries", 1)       # (1, 2)
+model.rank("logits")                               # (2, 4): num_layers, after the blocks
 
 reads = [("logits", None), ("layer_output", 1), ("mlp.mlp_output", 0), ("token_embeddings", None)]
 reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_output@0, layer_output@1, logits
@@ -230,7 +232,8 @@ reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_outpu
 - **A rank is `(side, r)`.** `side` is `-1` for a root value the model serves before the
   blocks, the layer for a block value (named as in `support(layer=i)`), and `num_layers`
   for a root value after the blocks; `r` is the value's place in `order(side's layer)`.
-  Sorting reads by rank sorts them into forward order, layer by layer.
+  Sorting reads by rank sorts them into forward order, layer by layer, and so does sorting
+  the edits of an intervention: an edit lands at its value's location as a read does.
 - **Equal ranks are one location.** The queries, keys and values are the arguments of one
   attention call, so either can be read first. On Falcon the values come before the
   queries and keys (`rank("self_attn.attention_values", 0) < rank("self_attn.attention_queries", 0)`);
@@ -257,8 +260,9 @@ reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_outpu
 
 - **`hasattr(envoy, "attention_probabilities")` raises.** Python's `hasattr` treats only
   `AttributeError` as absence; an unavailable value raises `Unavailable` through it, and an
-  *available* source-located value read outside a trace raises `ValueError` (`Cannot access
-  ... outside of interleaving`). This is a documented limitation; use `support()`.
+  *available* value read outside a trace raises too (`ValueError: Cannot access ... outside
+  of interleaving`, or `SourceNotAvailable` for a value inside a nested call, such as the
+  pattern). This is a documented limitation; use `support()`.
 - **`getattr(envoy, name, None)` inside a trace can trip a served value.** Decide which
   blocks have `self_attn` or `mlp` before the trace.
 - **`support()` predicts; the forward decides.** A `SourceNotAvailable` at read time means

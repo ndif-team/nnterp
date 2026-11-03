@@ -744,12 +744,13 @@ class FamilySuite:
             pytest.skip("the tokenizer has no pad token, so prompts of different lengths do not batch")
         attn = self.interface_blocks(model)[0].self_attn
         read = {}
-        with model.trace(PROMPTS):
+        batch = dict(model.tokenizer(PROMPTS, padding=True, return_tensors="pt"))  # the tokenizer's: a wrapper's processor may refuse to pad text alone
+        with model.trace(batch):
             heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
             read["batch"] = heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()
         with model.trace() as tracer:
             for i, prompt in enumerate(PROMPTS):
-                with tracer.invoke(prompt):
+                with tracer.invoke(dict(model.tokenizer(prompt, return_tensors="pt"))):
                     heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
                     read[i] = heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()
         heads, pattern, probs, served = read.pop("batch")

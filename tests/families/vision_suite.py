@@ -433,6 +433,20 @@ class VisionSuite:
             assert pattern.shape == (out.shape[0], model.vision.num_heads, out.shape[1], out.shape[1])
             torch.testing.assert_close(pattern.sum(-1), torch.ones_like(pattern[..., 0]))
 
+    def test_tower_interface_reproduces_heads_and_pattern(self, model):
+        """A tower block serving `interface` gives its head outputs and pattern bit for bit on the served queries, keys and values."""
+        layers = model.vision.layers if model.vision.num_layers else []
+        blocks = [layer for layer in layers if layer.self_attn.support()["interface"] is None]
+        if not blocks:
+            pytest.skip("no tower block calls one attention function: test_support_lists_the_tower_values")
+        attn = blocks[0].self_attn
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+            probs = attn.attention_probabilities.save()
+            served = attn.attention_head_outputs.save()
+            heads, pattern = heads.save(), pattern.save()
+        assert torch.equal(heads, served) and torch.equal(pattern, probs)
+
     def read_patches_at(self, model):
         """The native value ``patch_embeddings`` is read at (`PATCHES_AT`), in a trace."""
         module, attribute = self.PATCHES_AT.rsplit(".", 1)

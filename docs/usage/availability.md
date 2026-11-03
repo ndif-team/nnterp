@@ -231,10 +231,10 @@ model.order(0)
 # {'layer_input': 0, 'attention_norm_output': 1,
 #  'self_attn.attention_queries_prerope': 2, 'self_attn.attention_keys_prerope': 2,
 #  'self_attn.attention_queries': 3, 'self_attn.attention_keys': 3, 'self_attn.attention_values': 3,
-#  'self_attn.attention_scores': 4, 'self_attn.attention_probabilities': 5,
-#  'self_attn.attention_head_outputs': 6, 'self_attn.attention_premix': 7, 'self_attn.attention_output': 8,
-#  'layer_mid': 9, 'mlp_norm_output': 10, 'mlp_input': 11, 'mlp.mlp_activation': 12,
-#  'mlp.mlp_neurons': 13, 'mlp.mlp_output': 14, 'layer_output': 15}
+#  'self_attn.interface': 4, 'self_attn.attention_scores': 5, 'self_attn.attention_probabilities': 6,
+#  'self_attn.attention_head_outputs': 7, 'self_attn.attention_premix': 8, 'self_attn.attention_output': 9,
+#  'layer_mid': 10, 'mlp_norm_output': 11, 'mlp_input': 12, 'mlp.mlp_activation': 13,
+#  'mlp.mlp_neurons': 14, 'mlp.mlp_output': 15, 'layer_output': 16}
 model.order()
 # {'input_ids': 0, 'attention_mask': 0, 'input_size': 0, 'token_embeddings': 1,
 #  'final_norm_output': 2, 'lm_head_output': 3, 'logits': 4, 'next_token_probs': 4}

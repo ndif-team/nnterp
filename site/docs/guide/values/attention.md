@@ -115,6 +115,8 @@ print(torch.equal(same, served), (logits[:, :-1] - clean[:, :-1]).abs().max().it
 
 BLOOM, MPT, Falcon, XGLM and DeepSeek-V4 make no one call that takes the queries, keys and values and returns the head outputs, and `support()` reports `interface` unavailable there.
 
+A key or query edited before the rotary goes in rotated for its position, `interface(q, attn.rotate(k_prerope, positions), v)`, with `attention_keys_prerope` read first, since the forward reaches it before the interface ([Rotary embedding](rotary.md)).
+
 ## Grouped-query attention
 
 The keys and values are read before `repeat_kv`, so on a checkpoint with fewer key/value heads than query heads their head axis is `num_kv_heads` wide while the queries, the scores, the pattern and the head outputs are `num_heads` wide. Query head `h` reads key/value head `h // (num_heads // num_kv_heads)`, so a head-wise edit of the keys touches every query head of that group. On Qwen2.5-0.5B, 14 query heads share 2 key/value heads:

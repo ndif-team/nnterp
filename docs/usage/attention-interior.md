@@ -134,7 +134,8 @@ Use them instead of `attention_queries` / `attention_keys`:
   unrotated queries or keys (a probe, a steering vector), which the rotary would turn by a
   different angle at every position.
 - **To recompute attention with keys from elsewhere**: `rotate` the source keys at the
-  destination positions, outside the trace.
+  destination positions, outside the trace, and run the block's attention on them with
+  [`interface`](#calling-the-attention-function-again-interface).
 
 And instead of `self_attn.q_proj.output`: nnterp promises nothing about a projection's
 layout (Phi-3 and GPT-NeoX fuse the queries, keys and values into one projection, Phi-3
@@ -354,6 +355,11 @@ Use it for:
   `softmax(q @ k.T * scale)` needs the module's scale, misses Gemma-2's softcap and a sink
   column, and rounds differently in bf16 when its matmuls have other shapes than the
   model's; the call runs the model's function on the model's shapes.
+
+A key or query edited before the rotary goes in rotated for its position,
+`interface(q, attn.rotate(k_prerope, positions), v)`, with `attention_keys_prerope` read
+first, since the forward reaches it before the interface
+([Before the rotary embedding](#before-the-rotary-embedding-attention_queries_prerope-attention_keys_prerope-rotate)).
 
 Reading `attn.interface` takes the call's arguments, so it is read where the queries, keys
 and values are, in any order with them; calling the result takes the function, which the

@@ -89,6 +89,8 @@ class Layer(standard.Layer):
     def layer_output(self, value: torch.Tensor) -> Residual:
         return value
 
+    attention_input_gain = VLLMLayer.attention_input_gain
+
     #: The boundaries between them, read as on every vLLM block (with the batch axis this backend keeps).
     attention_norm_output = VLLMLayer.attention_norm_output
     layer_mid = VLLMLayer.layer_mid

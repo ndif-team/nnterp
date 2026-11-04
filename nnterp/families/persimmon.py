@@ -14,7 +14,7 @@ is the identity in eval.
 import torch
 from transformers.models.persimmon.modeling_persimmon import PersimmonAttention, PersimmonDecoderLayer, PersimmonMLP
 
-from ..components import Attention, EProperty, Keys, Layer, Mlp, Queries, rotary_reason
+from ..components import Attention, EProperty, Keys, Layer, Mlp, Queries, projection_weight, rotary_reason
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -51,6 +51,10 @@ class Attention(Attention):
         """Persimmon rotates the leading ``rotary_ndims`` channels of each head and passes the rest, outside its apply function."""
         width = self._module.rotary_ndims
         return torch.cat((super().apply_rotary(x[..., :width], embedding), x[..., width:]), dim=-1)
+
+    def value_weight(self, kv_head):
+        """``query_key_value``'s rows are each head's query, key and value, ``[num_heads, 3, head_dim]``."""
+        return projection_weight(self, "query_key_value").unflatten(0, (self.num_heads, 3, self.head_dim))[kv_head, 2]
 
 
 class Mlp(Mlp):

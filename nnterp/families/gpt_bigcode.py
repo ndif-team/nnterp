@@ -17,7 +17,7 @@ from typing import TYPE_CHECKING
 
 from transformers.models.gpt_bigcode.modeling_gpt_bigcode import GPTBigCodeAttention, GPTBigCodeBlock, GPTBigCodeMLP
 
-from ..components import Attention, Layer, Mlp
+from ..components import Attention, Layer, Mlp, projection_weight
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -45,6 +45,13 @@ class Attention(Attention):
 
     def no_rotary(self) -> str | None:
         return "no rotary embedding: GPT-BigCode adds learned absolute position embeddings (wpe) to the stream"
+
+    def value_weight(self, kv_head):
+        """``c_attn``'s rows are every query, the key, then the value under multi-query, else each head's query, key and value."""
+        weight = projection_weight(self, "c_attn")
+        if self._module.multi_query:
+            return weight[self.num_heads * self.head_dim:].unflatten(0, (2, self.num_kv_heads, self.head_dim))[1, kv_head]
+        return weight.unflatten(0, (self.num_heads, 3, self.head_dim))[kv_head, 2]
 
 
 class Mlp(Mlp):

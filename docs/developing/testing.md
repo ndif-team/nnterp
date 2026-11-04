@@ -171,6 +171,23 @@ what every vision tower reports for the two values, which the suite expects on a
 `VisionSuite.test_tower_interface_reproduces_heads_and_pattern` checks the same on a tower block, and
 `tests/test_tensor_parallel.py` reads `interface` and patches through it across two CPU ranks.
 
+**The weights per head** (`value_weight`, `output_weight`, `attention_input_gain`; the first two skipped where no
+attention block serves them, whose reason is checked against `EXPECTED_UNAVAILABLE[HEAD_WEIGHTS]`)
+
+| method | asserts |
+|---|---|
+| `test_value_weight_reproduces_the_values` | on the first block serving them, for every key/value head, `value_weight(kv) @ self_attn.input` plus the head's bias (the values with the attention's input zeroed) is `attention_values[:, kv]` to 8 ulps of the model's dtype at the values' scale (`to_rounding`: a matmul over a slice of rows does not sum in the whole projection's order, so not bit for bit); `value_weight(num_kv_heads)` raises `IndexError` |
+| `test_output_weight_reproduces_the_projection` | `sum_j output_weight(j) @ attention_premix[:, :, j]` plus the bias (the output with the heads zeroed) is `o_proj.output`, to the same rounding |
+| `test_attention_input_gain` | on block 0, with the norm's weight set to a ramp for the test (a tiny checkpoint's is often all ones), `attention_norm_output` is `gain * n(layer_input)` plus the norm's bias, `n` the RMS (or, on a norm that takes a constant to its bias, centred) normalization with the norm's own eps; ones on a post-norm block; `Unavailable` with `attention_norm_output`'s reason otherwise |
+| `test_head_weights_say_why_a_block_has_none` | `no_head_weights()` is `None` on every attention block, or contains `EXPECTED_UNAVAILABLE[HEAD_WEIGHTS]` on every one, and both methods raise `Unavailable` with it |
+
+`HEAD_WEIGHTS` (`suite.py`) is the key a family's `EXPECTED_UNAVAILABLE` names that reason by: the weights are
+methods, not `support()` rows. Layouts no tiny checkpoint has run the value test on random weights
+(`random_weights(repo, **config)`): GPT-BigCode and Falcon-RW without multi-query. `tests/families/test_llama.py`
+runs both tests on the tiny Llama under a throwaway LoRA on `v_proj` and `o_proj` (`peft=` at load, B not zero)
+with the adapter enabled, disabled, merged, and disabled while merged, and checks the merged weight is
+`value_weight`'s bit for bit.
+
 **Layouts** (`:445-485`)
 
 | method | asserts |
@@ -351,7 +368,9 @@ moves the logits as the same write does on the reference
 `rope` block); that on decode step `k` the keys before the rotary, rotated at
 `tokens + k - 1`, are that step's keys (`test_rotate_on_decode_steps`); and
 that `support()` and `rotate` give the same reason on a block without a
-rotary (`test_rotate_says_why_a_block_has_no_rotary`). A family whose block
+rotary (`test_rotate_says_why_a_block_has_no_rotary`). `test_head_weights_are_refused` checks that
+`no_head_weights()` gives the engine's reason on every block, both methods raise it, and
+`attention_input_gain` raises too. A family whose block
 does more between its rotary and its attention layer overrides
 `rotated_as_served(attn, name, rotated)`, called inside the trace, where the
 engine's modules run (HunYuan's `query_layernorm` / `key_layernorm`, Llama 4's
@@ -393,7 +412,7 @@ class, 25 to 80 s each; the checkpoints are about 250 GB together.
 
 ## The root tests
 
-`tests/test_tensor_parallel.py` (32 tests) launches `tests/tp_worker.py` in one
+`tests/test_tensor_parallel.py` (34 tests) launches `tests/tp_worker.py` in one
 process and under `torch.distributed.run` on two CPU ranks over gloo (no GPU), on
 `trl-internal-testing/tiny-Qwen3ForCausalLM` (grouped-query, so the keys' head axis
 differs from the queries'): every value that tensor parallelism splits by head or
@@ -402,8 +421,9 @@ the head outputs and pattern of `interface`), the boundaries nnsight reassembles
 logits after seven edits aimed at the last rank's heads, at a query moved before the
 rotary, at a head patched through `interface` and at the neurons around the
 boundary between the ranks (one with gradients on) must
-match the one-process run, and every rank must agree bit for bit. It skips below
-transformers 5.19.
+match the one-process run, and every rank must agree bit for bit; `attention_input_gain` too, while
+`value_weight` and `output_weight` are refused on every rank with `SHARDED_WEIGHTS` and served in one
+process (`test_head_weights_are_refused_on_a_split_model`). It skips below transformers 5.19.
 
 `tests/test_registry.py` (21 tests): every module under `nnterp/families/` is
 named after its type, and there are at least 31

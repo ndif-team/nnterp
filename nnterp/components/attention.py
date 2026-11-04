@@ -14,7 +14,7 @@ from nnsight.intervention.interleaver import Mediator
 from jaxtyping import Float
 from torch import Tensor
 
-from .eproperty import DerivedEProperty, EProperty, Unavailable
+from .eproperty import DerivedEProperty, EProperty, Unavailable, tensor_parallel_mesh
 from .layer import Residual
 from .standard import (
     BATCH, HEAD_DIM, HEADS, KEY, KV_HEADS, QK_HEAD_DIM, QK_ROPE_HEAD_DIM, QUERY, SEQ, Standard, absent, first_tensor, in_width, module_int, rewrap, unsized,
@@ -194,6 +194,55 @@ def reinvoke(self: "Attention") -> Callable[[Queries, Keys, Values], tuple[HeadO
     return interface
 
 
+#: Why `Attention.value_weight` and `Attention.output_weight` are unavailable on a model split tensor-parallel.
+SHARDED_WEIGHTS = (
+    "the model is split tensor-parallel: each rank holds a shard (a DTensor) of every projection, so no process "
+    "holds a head's rows; load it on one device to read them"
+)
+
+
+def projection_weight(attn: "Attention", name: str) -> Tensor:
+    """The weight the attention's projection ``name`` applies, as the module holds it: what the per-head weights slice.
+
+    The module's ``weight`` (``[out_features, in_features]`` on a ``Linear``,
+    the transpose on GPT-2's ``Conv1D``), so a slice of it is a view. On a
+    PEFT LoRA layer it is the weight the layer's forward applies, computed as
+    ``merge()`` and ``unmerge()`` compute it, in the base weight's dtype, as a
+    new tensor: the base layer's plus each active adapter's delta; the base
+    weight alone once an adapter is merged into it (the forward then runs the
+    base layer only); and with the adapters disabled, the base weight without
+    any adapter merged into it (the forward unmerges it first).
+
+    Raises:
+        Unavailable: the block has no per-head weights (`Attention.no_head_weights`).
+        NotImplementedError: an adapter whose forward is not the base layer plus a
+            delta (DoRA, aLoRA, a non-LoRA tuner).
+    """
+    reason = attn.no_head_weights()
+    if reason:
+        raise Unavailable(f"{attn.path} serves no per-head weights: {reason}")
+    module = attn.get(name)._module
+    tuners = sys.modules.get("peft.tuners.tuners_utils")  # an adapter layer exists only once peft is imported
+    if tuners is None or not isinstance(module, tuners.BaseTunerLayer):
+        return module.weight
+    from peft.tuners.lora import LoraLayer
+
+    if not isinstance(module, LoraLayer) or getattr(module, "lora_variant", None) or any(getattr(module, "use_dora", {}).values()):
+        raise NotImplementedError(
+            f"{attn.path}.{name} is a {type(module).__name__} whose adapter is not a plain LoRA: its forward is not "
+            "the base layer plus a delta, so it has no one weight to slice"
+        )
+    weight = module.get_base_layer().weight
+    if module.disable_adapters:
+        for adapter in reversed(module.merged_adapters):
+            weight = weight - module.get_delta_weight(adapter).to(weight.dtype)
+    elif not module.merged:
+        for adapter in module.active_adapters:
+            if adapter in module.lora_A:
+                weight = (weight + module.get_delta_weight(adapter)).to(weight.dtype)
+    return weight
+
+
 class Attention(Standard):
     """A softmax-attention module: its contribution, its pattern, and its interior.
 
@@ -245,6 +294,19 @@ class Attention(Standard):
         differ (a NoPE block beside rotary ones).
         """
         return None
+
+    def no_head_weights(self) -> str | None:
+        """Why this block serves no per-head weights, or ``None``: the one place `value_weight` and `output_weight` ask.
+
+        The base slices ``v_proj`` and ``o_proj``; a family that lays its
+        projections out otherwise overrides those two methods instead. A family
+        whose values are not one linear map of the attention's input (latent
+        attention, a norm on the values) or that has no output projection
+        shared by its heads overrides this with its reason.
+        """
+        if tensor_parallel_mesh(self) is not None:
+            return SHARDED_WEIGHTS
+        return absent(self, "o_proj", where="attention")
 
     # -- sizes (off the module) ---------------------------------------------------
     # What this block runs with, read off the module's own attributes and, where
@@ -492,3 +554,38 @@ class Attention(Standard):
         apply = sys.modules[type(self._module).__module__].apply_rotary_pos_emb
         heads = x.reshape(cos.shape[0], -1, *x.shape[-2:])  # [batch, heads, seq, qk_head_dim], as the forward holds it
         return apply(heads, heads, cos, sin)[0].reshape(x.shape)
+
+    # -- the weights per head ---------------------------------------------------------
+    # Read off the module, outside a trace or inside one. The base slices the
+    # shared layout, head-major rows of ``v_proj`` and columns of ``o_proj``; a
+    # family that fuses or transposes its projections overrides the method,
+    # through `projection_weight`, which keeps the refusal and the adapters.
+
+    def value_weight(self, kv_head: int) -> Tensor:
+        """Key/value head ``kv_head``'s value weight, ``[head_dim, hidden_size]``: what maps the attention's input to that head's values.
+
+        ``value_weight(kv) @ x``, plus that head's slice of the projection's
+        bias where it has one, is ``attention_values[:, kv]`` for the
+        attention's input ``x`` (`attention_norm_output`, or the stream itself
+        on a post-norm block). Under grouped-query attention query head ``h``
+        reads key/value head ``h // (num_heads // num_kv_heads)``. The weight's
+        dtype and device; a view of the parameter, so an in-place edit is an
+        edit of the model, except on a PEFT adapter (`projection_weight`).
+
+        Raises:
+            Unavailable: the block has no per-head weights (`no_head_weights`).
+        """
+        return projection_weight(self, "v_proj").unflatten(0, (self.num_kv_heads, self.head_dim))[kv_head]
+
+    def output_weight(self, head: int) -> Tensor:
+        """Head ``head``'s output weight, ``[hidden_size, head_dim]``: what maps its output into the residual stream.
+
+        ``sum_j output_weight(j) @ attention_premix[:, t, j]``, plus the
+        projection's bias, is what the output projection returns at ``t``. The
+        weight's dtype and device; a view of the parameter except on a PEFT
+        adapter (`projection_weight`).
+
+        Raises:
+            Unavailable: the block has no per-head weights (`no_head_weights`).
+        """
+        return projection_weight(self, "o_proj").unflatten(1, (self.num_heads, self.head_dim))[:, head]

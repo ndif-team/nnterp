@@ -7,7 +7,7 @@ import tempfile
 
 import nnsight
 import torch
-from suite import NO_ROTARY, FamilySuite, rows, PROMPT
+from suite import NO_ROTARY, FamilySuite, rows, PROMPT, random_weights
 
 from nnterp.components import OWN_ARITHMETIC
 from nnterp.families import falcon
@@ -157,3 +157,11 @@ class TestFalcon11B(FamilySuite):
             mlp = model.layers[0].mlp_norm_output.save()
             raw = model.layers[0].input_layernorm.output.save()
         assert torch.equal(attn, raw) and torch.equal(mlp, raw)
+
+
+def test_value_weight_without_multi_query():
+    """Falcon-RW's ``query_key_value`` without multi-query holds each head's query, key and value; no tiny checkpoint
+    has it, so random weights."""
+    model = random_weights("Rocketknight1/tiny-random-falcon-7b", multi_query=False, parallel_attn=False, alibi=True)
+    assert model.num_kv_heads == model.num_heads
+    FamilySuite().test_value_weight_reproduces_the_values(model)

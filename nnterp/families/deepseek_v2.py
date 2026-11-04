@@ -28,6 +28,13 @@ class Layer(Layer):
     """DeepSeek-V2's decoder block; returns a bare tensor, so the base holds."""
 
 
+#: Why latent attention serves no per-head weights.
+LATENT_VALUES = (
+    "latent attention: the values come out of a low-rank latent (kv_a_proj_with_mqa, its norm, kv_b_proj), "
+    "so no slice of one projection maps the attention's input to a head's values"
+)
+
+
 def _rope_call_inputs(attn: "Attention") -> str:
     """The rope call's arguments, whichever function the family rotates with (`Attention.rope_call`)."""
     return f"source.{attn.rope_call()}_0.inputs"
@@ -71,6 +78,9 @@ class Attention(Attention):
         rot = x[..., -rope:]
         heads = rot.reshape(args[0].shape[0], -1, *rot.shape[-2:])
         return torch.cat((x[..., :-rope], apply(heads, heads, *args)[0].reshape(rot.shape)), dim=-1)
+
+    def no_head_weights(self) -> str | None:
+        return LATENT_VALUES
 
 
 class Mlp(Mlp):

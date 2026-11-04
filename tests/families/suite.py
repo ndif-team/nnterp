@@ -16,8 +16,8 @@ from nnsight.intervention.envoy import Envoy
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.components import (
-    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, QUERY, SEQ, TOKENS, STATE_DIM, STREAMS,
-    VALUE_DIM, Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
+    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, POST_NORM_ATTENTION, QUERY, SEQ, TOKENS, STATE_DIM,
+    STREAMS, VALUE_DIM, Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
     Vision, axis_size, first_tensor,
 )
 from nnterp.components.standard import in_width
@@ -39,6 +39,9 @@ VALUES = {
 NO_ROTARY = {name: "no rotary embedding" for name in ("self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope")}
 #: The same values on a vision tower's blocks, which never serve them (`VisionAttention.no_rotary`).
 TOWER_NO_ROTARY = {name: "a vision tower's attention" for name in NO_ROTARY}
+#: The key `EXPECTED_UNAVAILABLE` names `Attention.no_head_weights`' reason by: `value_weight` and `output_weight` are
+#: methods, not `support()` rows, and share that one reason.
+HEAD_WEIGHTS = "self_attn.no_head_weights"
 #: The MLP's interior, unavailable on a block whose MLP is a routed mixture.
 MLP_INTERIOR = ("mlp.mlp_activation", "mlp.mlp_neurons")
 #: A mixture of experts' values, on `Moe` (`nnterp.components.moe`).
@@ -121,6 +124,30 @@ def near(actual, expected, like, ulps: int = 16):
     scale = max(1.0, float(like.detach().abs().max())) if like.numel() else 1.0
     expected = expected if isinstance(expected, torch.Tensor) else torch.as_tensor(expected)
     torch.testing.assert_close(actual.double(), expected.double().to(actual.device).expand_as(actual), rtol=0, atol=ulps * eps * scale)
+
+
+def random_weights(repo, **overrides):
+    """``repo``'s config with ``overrides`` and random weights, loaded as a module with the repo's tokenizer: a layout no tiny checkpoint has."""
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+
+    config = AutoConfig.from_pretrained(repo)
+    for name, value in overrides.items():
+        setattr(config, name, value)
+    torch.manual_seed(0)
+    module = AutoModelForCausalLM.from_config(config, attn_implementation="eager").eval()
+    return StandardizedTransformer(module, tokenizer=AutoTokenizer.from_pretrained(repo))
+
+
+def to_rounding(actual, expected, ulps: int = 8):
+    """``actual`` (the model's, in its dtype) is ``expected`` (float64) to ``ulps`` units of that dtype at ``expected``'s scale.
+
+    For a product the model computes in one shape and the test in another: a
+    matmul over a slice of a projection's rows sums in another order than the
+    whole projection's, so the two agree to rounding, not bit for bit.
+    """
+    eps = torch.finfo(actual.dtype).eps
+    error = (actual.double() - expected).abs().max().item()
+    assert error <= ulps * eps * expected.abs().max().item(), (error, expected.abs().max().item(), actual.dtype)
 
 
 def expert_by_hand(host, x: torch.Tensor, expert: int, weight: torch.Tensor) -> torch.Tensor:
@@ -894,6 +921,104 @@ class FamilySuite:
         for pre, post in self.rope_pairs(layer.self_attn):
             assert order[f"self_attn.{pre}"] < order[f"self_attn.{post}"], (pre, order)
             assert model.rank(f"self_attn.{pre}", index) < model.rank(f"self_attn.{post}", index)
+
+    # -- the weights per head ------------------------------------------------------
+    # Read off the modules, and proved against the values the model serves:
+    # a head's slice of a projection, applied to what the projection receives,
+    # is that head's share of what it returns.
+
+    def head_weights_block(self, model):
+        """The first softmax-attention block that serves its per-head weights; where none does, the reason is checked by `test_head_weights_say_why_a_block_has_none`."""
+        for layer in self.attn_blocks(model):
+            if layer.self_attn.no_head_weights() is None:
+                return layer
+        pytest.skip("no attention block serves per-head weights")
+
+    def test_value_weight_reproduces_the_values(self, model):
+        """``value_weight(kv) @ x``, plus that head's bias, is ``attention_values[:, kv]`` for what the attention is called with, on every key/value head."""
+        attn = self.head_weights_block(model).self_attn
+        with model.trace(PROMPT):
+            x = attn.input.save()
+            values = attn.attention_values.save()
+        with model.trace(PROMPT):  # the input zeroed: the values are the projection's bias, that head's slice of it
+            attn.input = torch.zeros_like(attn.input)
+            bias = attn.attention_values.save()
+        group = values.shape[1] // attn.num_kv_heads  # 1, or the query heads per key/value head where values are read broadcast (Falcon's 40B layout)
+        for kv in range(attn.num_kv_heads):
+            weight = attn.value_weight(kv)
+            assert weight.shape == (attn.head_dim, x.shape[-1]), (kv, tuple(weight.shape))
+            expected = torch.nn.functional.linear(x.double(), weight.double()) + bias[:, kv * group].double()
+            to_rounding(values[:, kv * group], expected)
+        with pytest.raises(IndexError):
+            attn.value_weight(attn.num_kv_heads)
+
+    def test_output_weight_reproduces_the_projection(self, model):
+        """``sum_j output_weight(j) @ attention_premix[:, t, j]``, plus the projection's bias, is what the output projection returns."""
+        attn = self.head_weights_block(model).self_attn
+        with model.trace(PROMPT):
+            premix = attn.attention_premix.save()
+            out = attn.o_proj.output.save()
+        with model.trace(PROMPT):  # the heads zeroed: what the projection returns is its bias
+            attn.attention_premix = torch.zeros_like(attn.attention_premix)
+            bias = attn.o_proj.output.save()
+        weights = [attn.output_weight(j) for j in range(attn.num_heads)]
+        assert all(weight.shape == (model.hidden_size, attn.head_dim) for weight in weights), [tuple(w.shape) for w in weights]
+        expected = sum(torch.nn.functional.linear(premix[:, :, j].double(), weight.double()) for j, weight in enumerate(weights))
+        to_rounding(out, expected + bias.double())
+
+    def test_attention_input_gain(self, model):
+        """The attention reads ``gain * n(x)``, plus the norm's bias, of the stream ``x`` on a pre-norm block, where ``n``
+        normalizes (centring first on a LayerNorm); the gain is ones where it reads the stream itself."""
+        layer = model.layers[0]
+        reason = layer.support()["attention_norm_output"]
+        if reason and reason != POST_NORM_ATTENTION:
+            with pytest.raises(Unavailable, match=re.escape(reason[:40])):
+                layer.attention_input_gain
+            return
+        if reason:
+            gain = layer.attention_input_gain
+            assert gain.shape == (model.hidden_size,) and torch.equal(gain, torch.ones_like(gain))
+            return
+        norm = layer.get(type(layer).attention_norm_output.path(layer).removesuffix(".output"))
+        weight = getattr(norm._module, "weight", None)
+        kept = None if weight is None else weight.detach().clone()
+        try:
+            if weight is not None:  # a tiny checkpoint's norm is often all ones: give each channel its own gain
+                with torch.no_grad():
+                    weight.copy_(torch.linspace(0.5, 1.5, weight.numel()).view_as(weight))
+            gain = layer.attention_input_gain
+            with model.trace(PROMPT):
+                x = layer.layer_input.save()
+                normed = layer.attention_norm_output.save()
+            zero = torch.zeros(x.shape[-1], dtype=x.dtype)
+            offset = norm(zero).double()  # the norm's bias, zero on an RMS norm
+            centred = torch.equal(norm(zero + 3), norm(zero))  # a LayerNorm takes a constant to its bias
+        finally:
+            if weight is not None:
+                with torch.no_grad():
+                    weight.copy_(kept)
+        assert gain.shape == (x.shape[-1],) and gain.dtype == (x.dtype if weight is None else weight.dtype)
+        eps = next((value for name in ("variance_epsilon", "eps", "epsilon") if isinstance(value := getattr(norm._module, name, None), float)), 1e-5)
+        stream = x.double() - x.double().mean(-1, keepdim=True) if centred else x.double()
+        expected = gain.double() * stream / (stream.pow(2).mean(-1, keepdim=True) + eps).sqrt() + offset
+        to_rounding(normed, expected)
+
+    def test_head_weights_say_why_a_block_has_none(self, model):
+        """`no_head_weights` is the one reason: the one this family expects (or none, on every block), and what both methods raise."""
+        blocks = self.attn_blocks(model)
+        if not blocks:
+            pytest.skip("no softmax attention on any block")
+        expected = self.EXPECTED_UNAVAILABLE.get(HEAD_WEIGHTS)
+        for layer in blocks:
+            attn = layer.self_attn
+            reason = attn.no_head_weights()
+            if expected is None:
+                assert reason is None, (layer.path, reason)
+                continue
+            assert reason and expected in reason, (layer.path, reason)
+            for method in (attn.value_weight, attn.output_weight):
+                with pytest.raises(Unavailable, match=re.escape(reason[:40])):
+                    method(0)
 
     # -- methods over the values -------------------------------------------------
 

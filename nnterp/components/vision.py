@@ -254,6 +254,9 @@ class VisionAttention(Attention):
             "the text model's blocks (a tower's rotary, where it has one, runs over 2-D patch positions)"
         )
 
+    def no_head_weights(self) -> str | None:
+        return "a vision tower's attention: the per-head weights are served on the text model's blocks"
+
     @EProperty(key="output", description="What the attention adds to the tower's stream", unavailable=no_tower_run)
     def attention_output(self, value: Any) -> Patches:
         """The attention sublayer's contribution to the tower's stream, ``[images, patches, vision_hidden_size]``."""

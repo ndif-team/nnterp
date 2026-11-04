@@ -23,7 +23,8 @@ from typing import TYPE_CHECKING
 from transformers.models.falcon.modeling_falcon import FalconAttention, FalconDecoderLayer, FalconMLP
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, first_tensor, needs_eager, rewrap, seq_first, unavailable,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, first_tensor, needs_eager, projection_weight, rewrap,
+    seq_first, unavailable,
 )
 
 if TYPE_CHECKING:
@@ -169,6 +170,16 @@ class Attention(Attention):
     )
     def attention_probabilities(self, value) -> Pattern:
         return value
+
+    def value_weight(self, kv_head):
+        """``query_key_value``'s rows, as ``_split_heads`` reads them: per key/value head its group's queries, its key and
+        its value on the 40B layout; each head's query, key and value without multi-query; else every query, the key, the value."""
+        weight, heads, head_dim = projection_weight(self, "query_key_value"), self.num_heads, self.head_dim
+        if self._module.new_decoder_architecture:
+            return weight.unflatten(0, (self.num_kv_heads, heads // self.num_kv_heads + 2, head_dim))[kv_head, -1]
+        if not self._module.multi_query:
+            return weight.unflatten(0, (heads, 3, head_dim))[kv_head, 2]
+        return weight.unflatten(0, (heads + 2, head_dim))[heads + 1:][kv_head]
 
 
 class Mlp(Mlp):

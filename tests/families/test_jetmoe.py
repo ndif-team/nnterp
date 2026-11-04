@@ -1,7 +1,7 @@
 """JetMoE, end to end: a mixture of attention heads under ``self_attention``, a mixture-of-experts MLP."""
 
 import torch
-from suite import FamilySuite, PROMPT, rows
+from suite import FamilySuite, HEAD_WEIGHTS, PROMPT, rows
 
 from nnterp import axis_size
 from nnterp.families import jetmoe
@@ -13,7 +13,7 @@ class TestJetMoe(FamilySuite):
     NATIVE = rows("model", "layers", "embed_tokens", "norm", attn="self_attention")
     MOE_UNAVAILABLE = {"expert_outputs": "sorted by expert"}
     KV_HEADS_EXPANDED = True  # keys and values are tiled to every routing slot before the interface
-    EXPECTED_UNAVAILABLE = {"self_attn.attention_premix": "a mixture of attention heads"}
+    EXPECTED_UNAVAILABLE = {"self_attn.attention_premix": "a mixture of attention heads", HEAD_WEIGHTS: "a mixture of attention heads"}
 
     def rotated_as_served(self, attn, name, rotated):
         """The keys are tiled to every routing slot after the rotary (``repeat(1, top_k, 1, 1)``)."""

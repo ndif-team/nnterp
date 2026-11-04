@@ -11,8 +11,8 @@ from nnsight.intervention.envoy import Envoy
 from jaxtyping import Float
 from torch import Tensor
 
-from .eproperty import EProperty
-from .standard import BATCH, HIDDEN, SEQ, STREAMS, TOKENS, Standard, absent, first_tensor, rewrap
+from .eproperty import EProperty, Unavailable
+from .standard import BATCH, HIDDEN, SEQ, STREAMS, TOKENS, Standard, absent, axis_size, first_tensor, rewrap
 
 if TYPE_CHECKING:
     from .attention import Attention
@@ -82,6 +82,43 @@ class Layer(Standard):
         before the block runs.
         """
         self.skip((hidden, None) if self.returns_tuple else hidden)
+
+    @property
+    def attention_input_gain(self) -> Tensor:
+        """The per-channel gain between the residual stream and what the attention reads, ``[hidden_size]``.
+
+        The gain of the norm `attention_norm_output` is read at (``weight``;
+        ``1 + weight`` on Gemma; ones on a norm without one), so the attention
+        reads ``gain * n(x)``, plus the norm's bias where it has one, for a
+        stream ``x`` and its normalization ``n`` (``x / rms(x)``, or ``x``
+        centred first on a LayerNorm). On a post-norm block the attention reads
+        the stream itself, and the gain is ones. Folding it into a head's
+        weights, ``value_weight(kv) @ (gain * h)``, is that head's map of a
+        stream direction ``h``.
+
+        Measured by calling the norm, outside a trace or inside one, on
+        ``+-256`` in alternating channels, which it normalizes to ``+-1``
+        whatever it computes in: exact on a norm without a bias, to the
+        rounding of the bias otherwise. In the dtype and on the device of the
+        norm's weight (else the block's).
+
+        Raises:
+            Unavailable: with `attention_norm_output`'s reason, where the block
+                has no stream entering an attention (a mixture of hyper-connection
+                streams, an MLP-only block).
+        """
+        value = type(self).attention_norm_output
+        reason = value.reason(self)
+        if reason and reason != POST_NORM_ATTENTION:
+            raise Unavailable(f"{self.path}.attention_input_gain is not available: {reason}")
+        block = next(self._module.parameters())
+        if reason:  # a post-norm block: the attention reads the stream itself
+            return torch.ones(axis_size(self, HIDDEN), dtype=block.dtype, device=block.device)
+        norm = self.get(value.path(self).removesuffix(".output"))
+        weight = next(norm._module.parameters(), block)
+        signs = torch.ones(axis_size(self, value.dims[-1]), dtype=weight.dtype, device=weight.device)
+        signs[1::2] = -1
+        return (norm(signs * 256) - norm(signs * -256)) / 2 * signs
 
     @EProperty(key="input", description="The residual stream entering the block")
     def layer_input(self, value: torch.Tensor) -> Residual:

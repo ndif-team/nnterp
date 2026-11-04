@@ -221,6 +221,12 @@ class Attention(Attention):
         apply = sys.modules[type(self._module).__module__].apply_rotary_pos_emb
         return apply(x.reshape(cos.shape[0], -1, *x.shape[-2:]), cos, sin).reshape(x.shape)
 
+    def no_head_weights(self) -> str | None:
+        return (
+            "Gemma-4 RMS-normalizes each head's values after the projection (v_norm), so they are not a linear map of "
+            "the attention's input (and a KV-sharing block projects none)"
+        )
+
     @EProperty(f"source.{INTERFACE}.inputs", select=2, description=Attention.attention_keys.description, unavailable=interface_reason)
     def attention_keys(self, value) -> Keys:
         """The keys this block's attention receives, as a copy private to it (see the class)."""

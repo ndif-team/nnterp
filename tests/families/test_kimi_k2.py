@@ -6,7 +6,7 @@ import os
 import tempfile
 
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
 
 from nnterp import StandardizedTransformer
 from nnterp.components import Moe
@@ -47,6 +47,7 @@ class TestKimiK2(FamilySuite):
     FAMILY = kimi_k25  # the wrapper checkpoint resolves to its own module, kimi_k2 re-exported
     NATIVE = {key: f"model.language_model.{native.removeprefix('model.')}" if native.startswith("model.") else native for key, native in LLAMA_ROWS.items()}
     KV_HEADS_EXPANDED = True  # latent attention projects keys and values for every head
+    EXPECTED_UNAVAILABLE = {HEAD_WEIGHTS: "latent attention"}
 
     def test_the_wrapper_names_the_family(self, model):
         """The text config says ``kimi_k2`` before transformers 5.20 and ``deepseek_v3`` from it; the wrapper's own family decides."""

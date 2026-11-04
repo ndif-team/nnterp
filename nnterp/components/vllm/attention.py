@@ -122,6 +122,12 @@ class Attention(standard.Attention):
         "runs, so it cannot be called again on other tensors"
     )
 
+    def no_head_weights(self) -> str | None:
+        return (
+            "vLLM fuses the projections (qkv_proj) and shards them across its tensor-parallel ranks, and the client's "
+            "modules hold no weights; read them off the transformers model of the checkpoint"
+        )
+
     attention_scores = DerivedEProperty(
         scores,
         description="The scores entering the softmax, [1, num_heads, query, key], recomputed from the queries and keys; prefill only, read-only",

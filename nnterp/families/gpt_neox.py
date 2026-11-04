@@ -8,7 +8,7 @@ binds only where it resolves, so both spellings map to ``lm_head``.
 
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXAttention, GPTNeoXLayer, GPTNeoXMLP
 
-from ..components import Attention, EProperty, Layer, Mlp, PARALLEL, Residual
+from ..components import Attention, EProperty, Layer, Mlp, PARALLEL, Residual, projection_weight
 
 RENAME = {
     "gpt_neox.embed_in": "embed_tokens",
@@ -46,6 +46,10 @@ class Layer(Layer):
 
 class Attention(Attention):
     """GPT-NeoX's attention; the shared eager forward and the residual added in the block, so the base holds."""
+
+    def value_weight(self, kv_head):
+        """``query_key_value``'s rows are each head's query, key and value, ``[num_heads, 3, head_dim]``."""
+        return projection_weight(self, "query_key_value").unflatten(0, (self.num_heads, 3, self.head_dim))[kv_head, 2]
 
 
 class Mlp(Mlp):

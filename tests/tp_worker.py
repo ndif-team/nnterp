@@ -10,6 +10,7 @@ same block, as a sharded model requires; nothing here branches on rank.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 
 import nnsight  # noqa: F401  nnsight before any transformers submodule
@@ -26,7 +27,7 @@ def main() -> None:
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
-    from nnterp import StandardizedTransformer
+    from nnterp import StandardizedTransformer, Unavailable
 
     kwargs = {"dispatch": True, "dtype": torch.float32, "attn_implementation": "eager"}
     if args.tp > 1:
@@ -63,6 +64,14 @@ def main() -> None:
             out["logits"] = model.logits.save()
         positions = torch.arange(out["attention_queries_prerope"].shape[2])
         out["rotated_queries"] = attn.rotate(out["attention_queries_prerope"], positions)
+        out["attention_input_gain"] = model.layers[LAYER].attention_input_gain
+        refusals = {"no_head_weights": attn.no_head_weights()}
+        for name in ("value_weight", "output_weight"):
+            try:
+                getattr(attn, name)(kv_heads - 1)
+                refusals[name] = None
+            except Unavailable as error:
+                refusals[name] = str(error)
 
         with model.trace(PROMPT):
             attn.attention_head_outputs[:, :, heads - 1] = 0
@@ -102,6 +111,8 @@ def main() -> None:
 
     rank = int(os.environ.get("RANK", 0))
     torch.save({name: value.detach().cpu() for name, value in out.items()}, os.path.join(args.out, f"rank{rank}.pt"))
+    with open(os.path.join(args.out, f"rank{rank}.json"), "w") as file:
+        json.dump(refusals, file)
 
 
 if __name__ == "__main__":

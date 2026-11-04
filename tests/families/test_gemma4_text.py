@@ -9,7 +9,7 @@ import numpy as np
 
 import pytest
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT, contributions, near, rows
+from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT, contributions, near, rows
 from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
@@ -50,14 +50,17 @@ def _ple_checkpoint(repo="hf-tiny-v2/tiny-random-Gemma4ForCausalLM"):
 WRAPPER_ROWS = rows("model.language_model", "layers", "embed_tokens", "norm")
 
 
+#: Every block normalizes its values after the projection, so none has per-head weights.
+NORMED_VALUES = {HEAD_WEIGHTS: "v_norm"}
 #: A KV-sharing block rotates no keys of its own: it attends with an earlier block's.
-BORROWED_KEYS = {"self_attn.attention_keys_prerope": "a KV-sharing block"}
+BORROWED_KEYS = {"self_attn.attention_keys_prerope": "a KV-sharing block", **NORMED_VALUES}
 
 
 class Gemma4Suite(FamilySuite):
     FAMILY = gemma4_text
     NATIVE = LLAMA_ROWS
     MLP_NORM = "pre_feedforward_layernorm"   # sandwich: post_attention_layernorm follows the attention
+    EXPECTED_UNAVAILABLE = NORMED_VALUES
 
     def expected_values(self, model):
         return super().expected_values(model) | ({"per_layer_output"} if hasattr(self.FAMILY.Layer, "per_layer_output") else set())
@@ -392,7 +395,7 @@ class TestGemma4KEqV(Gemma4Suite):
 
     REPO = "yujiepan/gemma-4-moe-tiny-random"
     NATIVE = WRAPPER_ROWS
-    EXPECTED_UNAVAILABLE = {"per_layer_output": "no per-layer embeddings"}
+    EXPECTED_UNAVAILABLE = {"per_layer_output": "no per-layer embeddings", **NORMED_VALUES}
 
     def test_values_come_from_k_proj_on_full_blocks(self, model):
         layer = model.layers[1]

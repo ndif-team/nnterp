@@ -90,6 +90,7 @@ class Layer(standard.Layer):
         return value
 
     attention_input_gain = VLLMLayer.attention_input_gain
+    attention_output_gain = VLLMLayer.attention_output_gain
 
     #: The boundaries between them, read as on every vLLM block (with the batch axis this backend keeps).
     attention_norm_output = VLLMLayer.attention_norm_output

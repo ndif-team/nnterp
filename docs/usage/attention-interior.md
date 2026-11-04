@@ -1,6 +1,6 @@
 ---
 title: Attention Interior
-one_liner: Read, edit and assign the queries, keys, values, scores, pattern and per-head outputs inside every family's attention, under `attn_implementation="eager"`, call the block's own attention function again on tensors of your own (`self_attn.interface`), and read each head's value and output weights (`value_weight`, `output_weight`, `attention_input_gain`).
+one_liner: Read, edit and assign the queries, keys, values, scores, pattern and per-head outputs inside every family's attention, under `attn_implementation="eager"`, call the block's own attention function again on tensors of your own (`self_attn.interface`), and read each head's value and output weights (`value_weight`, `output_weight`, `attention_input_gain`, `attention_output_gain`).
 tags: [usage, attention, interior, source, eager, heads]
 related: [docs/usage/residual-stream.md, docs/usage/layouts.md, docs/usage/availability.md, docs/usage/loading.md, docs/usage/generation.md, docs/usage/delta-net.md, docs/usage/remote.md, docs/patterns/head-kv-patching.md]
 sources: [nnterp/components/attention.py, nnterp/components/eproperty.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/gpt_oss.py, nnterp/families/deepseek_v4.py, nnterp/families/gptj.py, nnterp/families/codegen.py, nnterp/families/xglm.py, nnterp/families/gpt_neox_japanese.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/deepseek_v2.py, nnterp/families/gemma4_text.py, nnterp/components/layer.py, nnterp/families/phi3.py, nnterp/families/gpt_neox.py, tests/families/suite.py, tests/families/test_llama.py]
@@ -249,21 +249,24 @@ The blocks without a rotary embedding are the ones above, with the same reasons.
 
 ## The weights per head: `value_weight`, `output_weight`, `attention_input_gain`
 
-Three accessors read a head's weights off the modules, outside a trace or inside one:
+Four accessors read a head's weights off the modules, outside a trace or inside one:
 
 | accessor | what it is | shape |
 | --- | --- | --- |
 | `self_attn.value_weight(kv)` | key/value head `kv`'s slice of the value projection: what maps the attention's input to that head's values | `[head_dim, hidden_size]` |
-| `self_attn.output_weight(j)` | head `j`'s slice of the output projection: what maps its output (its slice of `attention_premix`) into the stream | `[hidden_size, head_dim]` |
+| `self_attn.output_weight(j)` | head `j`'s slice of the output projection: what maps its output (its slice of `attention_premix`) to the projection's output | `[hidden_size, head_dim]` |
 | `layers[i].attention_input_gain` | the per-channel gain between the stream and what the attention reads: the pre-attention norm's gain, ones on a post-norm block | `[hidden_size]` |
+| `layers[i].attention_output_gain` | the per-channel gain between the output projection's output and what the block adds to the stream: the post-attention norm's gain, ones where the block adds the output unnormed | `[hidden_size]` |
 
 Use them for anything that multiplies a head's weights rather than reading its activations:
-an OV circuit (`output_weight(j) @ value_weight(kv)`), direct logit attribution per head
-(`model.lm_head.weight @ output_weight(j)` against that head's `attention_premix`), a head's
-write of a given stream direction; and to read an adapted model's weights without merging
-the adapter. Use them instead of slicing `v_proj.weight` / `o_proj.weight` by hand: the rows
-of a head are laid out differently on fused projections (below), a LoRA layer's `.weight` is
-the base weight, and the norm's gain is `weight` on one family and `1 + weight` on another.
+an OV circuit (`output_weight(j) @ value_weight(kv)`), direct logit attribution per head (head
+`j`'s write `output_weight(j) @ attention_premix[0, t, j]` through the final norm frozen at the
+real stream, then the unembedding, as
+[contribution-decomposition](../patterns/contribution-decomposition.md#through-the-final-norm)
+does), a head's write of a given stream direction; and to read an adapted model's weights without
+merging the adapter. Use them instead of slicing `v_proj.weight` / `o_proj.weight` by hand: the
+rows of a head are laid out differently on fused projections (below), a LoRA layer's `.weight`
+is the base weight, and a norm's gain is `weight` on one family and `1 + weight` on another.
 
 ```python
 import torch
@@ -276,28 +279,29 @@ group = attn.num_heads // attn.num_kv_heads     # query heads per key/value head
 
 paris = model.tokenizer(" Paris", add_special_tokens=False).input_ids
 assert len(paris) == 1
-h = model.embed_tokens.weight[paris[0]]
+h = model.embed_tokens.weight[paris[0]].float()
 h = h / h.pow(2).mean().sqrt()                  # unit RMS, as the block's norm leaves the stream
 
 j = 3                                            # query head 3 reads key/value head 3 // group
 with torch.no_grad():
-    ov = attn.output_weight(j) @ attn.value_weight(j // group) @ (layer.attention_input_gain * h)   # [hidden_size]
-    top = model.project_on_vocab(ov).topk(5).indices    # what head 3 writes for " Paris", through the unembedding
+    W_V, W_O = attn.value_weight(j // group).float(), attn.output_weight(j).float()   # the gains are float32
+    ov = layer.attention_output_gain * (W_O @ W_V @ (layer.attention_input_gain * h))  # [hidden_size]
+    top = model.project_on_vocab(ov.to(model.dtype)).topk(5).indices    # what head 3 writes for " Paris", through the unembedding
 ```
 
 `value_weight(kv) @ x`, plus that head's slice of the projection's bias, is
 `attention_values[:, kv]` for what the attention is called with (`attention_norm_output`, or
 the stream itself on a post-norm block); `sum_j output_weight(j) @ attention_premix[:, t, j]`,
-plus the projection's bias, is what `o_proj` returns at `t`. The suite checks both on every
-family, to the rounding of a matmul over a slice of rows (which sums in another order than the
-whole projection's, so not bit for bit). Under grouped-query attention query head `j` reads
-key/value head `j // (num_heads // num_kv_heads)`. The accessors serve weights only: read a
-bias off the module, and note that DBRX, and MPT and OLMo where `clip_qkv` is set, clamp the
-projections' outputs after them, and that MiMo-V2-Flash's `value_weight` carries the
-`attention_value_scale` its forward multiplies the values by. They are in the weight's dtype
-and on its device, views of the parameter where torch allows (an in-place edit of one is an
-edit of the model), and the model must hold its weights: an undispatched model's are meta until
-its first trace or `model.dispatch()`.
+plus the projection's bias, is what `o_proj` returns at `t`. Under grouped-query attention query
+head `j` reads key/value head `j // (num_heads // num_kv_heads)`. The accessors serve weights
+only: read a bias off the module, and note that DBRX, and MPT and OLMo where `clip_qkv` is set,
+clamp the projections' outputs after them, and that MiMo-V2-Flash's `value_weight` carries the
+`attention_value_scale` its forward multiplies the values by. The two weights are in the
+parameter's dtype and on its device, live views of the parameter where torch allows: an in-place
+edit of one is an edit of the model, and they require grad as the parameters do. The model must
+hold its weights: on an undispatched model, whose weights are meta until its first trace or
+`model.dispatch()`, they raise `Unavailable`, and so they do on a quantized one (its weights are
+codes, not values).
 
 **The layouts.** The base slices head-major rows of `v_proj` and columns of `o_proj`. Where a
 family fuses or transposes its projections, its `Attention` reads its own:
@@ -311,34 +315,54 @@ family fuses or transposes its projections, its `Attention` reads its own:
 | four parts, each a quarter of the heads' queries, values, then keys | CodeGen (`qkv_proj`, the forward's `mp_num`) |
 | `Conv1D`, `[in, out]`: columns of `c_attn`, rows of `c_proj`, transposed | GPT-2 |
 
-**Under a PEFT adapter** the weight is the one the projection's LoRA layer applies: the base
-layer's plus each active adapter's `get_delta_weight`, in the base weight's dtype, which is what
-`merge()` leaves, bit for bit. Once an adapter is merged it is in the base weight (the forward
-then runs the base layer alone); with the adapters disabled it is the base weight, without an
-adapter still merged into it (the forward unmerges that first). The result is a new tensor, not a
-view. A DoRA or aLoRA adapter, or a non-LoRA tuner, raises `NotImplementedError`: its forward is
-not the base layer plus a delta.
+**Under a PEFT adapter** the weight is the one the projection's next forward applies: the base
+plus each active, unmerged adapter's delta, in the base weight's dtype; the base once merged. A
+DoRA or aLoRA adapter, or a non-LoRA tuner, raises `NotImplementedError`: its forward is not the
+base layer plus a delta.
 
-**The gain** is measured by calling the norm `attention_norm_output` is read at on `+-256` in
-alternating channels, which every norm here normalizes to `+-1`, so it is the gain whatever the
-parameterization (`weight`, Gemma's `1 + weight`, ones on OLMo's weightless LayerNorm): exact on
-a norm without a bias, to the rounding of the bias on a LayerNorm with one (which the accessor
-leaves out, as the weights leave out theirs). The attention reads `gain * n(x)`, plus that bias,
-of a stream `x` whose normalization `n` is `x / rms(x)` (centred first on a LayerNorm). On a
-post-norm block (OLMo-2/3, FlexOlmo, EXAONE-4, OLMo-Hybrid's attention blocks, OPT-350m) the
-attention reads the stream itself and the gain is ones, so a head's OV map there has no norm to
-fold. It follows `attention_norm_output`: on a block where that is unavailable (DeepSeek-V4's
-hyper-connection streams, Nemotron-H's MLP blocks) it raises the same reason, and on a Mamba
-block it is the gain of the norm the mixer reads.
+**The gains** are measured by calling the norm on `+-256` in alternating channels, which every
+norm here normalizes to `+-1`, so each is the gain whatever the parameterization (`weight`,
+Gemma's `1 + weight`, ones on OLMo's weightless LayerNorm): exact on a norm without a bias, to
+the rounding of the bias on a LayerNorm with one (which the accessor leaves out, as the weights
+leave out theirs). The probe is float32, so the gains are float32, the gain the norm multiplies
+by (on a bf16 Gemma, `1 + weight` in float32, not rounded to bf16); torch's LayerNorm takes no
+float32 input beside a bf16 weight, so it is probed in its weight's dtype, and on a bf16 load its
+gain is to the bf16 rounding of its bias. They are detached, on the device of the norm's weight. The attention reads `attention_input_gain * n(x)`, plus that bias,
+of a stream `x` whose normalization `n` is `x / rms(x)` (centred first on a LayerNorm); on a
+post-norm block (OLMo-2/3, FlexOlmo, EXAONE-4, OLMo-Hybrid's attention blocks, OPT-350m) it
+reads the stream itself and the input gain is ones. `attention_input_gain` follows
+`attention_norm_output`: on a block where that is unavailable (DeepSeek-V4's hyper-connection
+streams, Nemotron-H's MLP blocks) it raises the same reason, and on a Mamba block it is the gain
+of the norm the mixer reads.
 
-**Where they are refused**, `self_attn.no_head_weights()` gives the one reason both methods raise:
-latent attention (DeepSeek-V2/V3/V3.2, Kimi-K2/K2.5, GLM-5, GLM-4.7-Flash, Youtu, Kimi-Linear's
-attention blocks: the values come out of a low-rank latent), DeepSeek-V4 (keys and values one
-normed projection, a low-rank output projection), Gemma-4 (`v_norm` normalizes each head's values
-after the projection), JetMoE (a mixture of attention heads, each expert with its own output
-projection), ZAYA (half of each value head is the previous token's projection), the default
-family, a vision tower's attention, a model split tensor-parallel (each rank holds a shard), and
-`StandardizedVLLM` (fused, sharded projections; `attention_input_gain` is refused there too).
+What `output_weight` maps a head into is `o_proj`'s output, not yet the stream: a post-norm
+block (the families above) and a pre-norm block with a post-attention norm (Gemma-2/3/4, AFMoE,
+GLM-4's `post_self_attn_layernorm`, HyperCLOVA X's `post_norm1`) norm it before adding it, so the
+stream receives `attention_output_gain * n(y)` of the projection's output `y`.
+`attention_output_gain` is the gain of the norm `attention_output` is read at, ones where the
+block adds the attention's output unnormed, and it raises `attention_output`'s reason where that
+is refused. Head `j`'s full map from stream to stream is then
+
+    attention_output_gain * (output_weight(j) @ value_weight(kv) @ (attention_input_gain * h))
+
+up to the positive per-token scale each norm divides by, on a block with no further step. The
+exceptions: Granite's and HyperCLOVA X's `residual_multiplier` and Falcon-H1's
+`attention_out_multiplier` scale the output (Falcon-H1's scalar `attention_in_multiplier` the
+input), and on the gated families (Qwen3-Next, Qwen3.5, Laguna, AFMoE) and BitNet (a sub-norm
+before `o_proj`) a head's OV map is not its whole map; see the table under
+[contribution-decomposition](../patterns/contribution-decomposition.md#per-head).
+
+**Where they are refused.** `value_weight` alone is refused on latent attention
+(DeepSeek-V2/V3/V3.2, Kimi-K2/K2.5, GLM-5, GLM-4.7-Flash, Youtu, Kimi-Linear's attention blocks:
+the values come out of a low-rank latent), Gemma-4 (`v_norm` normalizes each head's values after
+the projection) and ZAYA (half of each value head is the previous token's projection); their
+output projection is a plain `o_proj`, so `output_weight` is served. Both are refused, with the
+one reason `self_attn.no_head_weights()` gives, on DeepSeek-V4 (keys and values one normed
+projection, a low-rank output projection), JetMoE (a mixture of attention heads, each expert with
+its own output projection), the default family, a vision tower's attention, a model split
+tensor-parallel (each rank holds a shard; the projection's `weight.full_tensor()`, called on
+every rank, gathers the whole weight) and `StandardizedVLLM` (fused, sharded projections; both
+gains are refused there too).
 
 ## Requirement: eager attention
 

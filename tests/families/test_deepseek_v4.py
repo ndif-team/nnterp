@@ -1,7 +1,7 @@
 """DeepSeek-V4, end to end: a hyper-connection residual, compressed attention with a sink, all-MoE."""
 
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
 from nnterp.components import OWN_ARITHMETIC, Residual, StreamMixing, Streams, StreamWeights
 from nnterp.families import deepseek_v4
@@ -43,7 +43,7 @@ class TestDeepseekV4(FamilySuite):
     LOAD_KWARGS = {"dtype": torch.float32}  # the norms are kept in float32; a bf16 forward fails on CPU inside transformers
     ATTENTION_SINK = True
     MLP_WIDTH_KEY = "moe_intermediate_size"
-    EXPECTED_UNAVAILABLE = {"attention_norm_output": "hyper-connection streams", "self_attn.attention_premix": "a low-rank output projection", "layer_mid": "hyper-connection streams", "mlp_norm_output": "hyper-connection streams", "mlp_input": "hyper-connection streams", "self_attn.interface": OWN_ARITHMETIC, HEAD_WEIGHTS: "the values are the keys"}
+    EXPECTED_UNAVAILABLE = {"attention_norm_output": "hyper-connection streams", "self_attn.attention_premix": "a low-rank output projection", "layer_mid": "hyper-connection streams", "mlp_norm_output": "hyper-connection streams", "mlp_input": "hyper-connection streams", "self_attn.interface": OWN_ARITHMETIC, "self_attn.value_weight": "the values are the keys", "self_attn.output_weight": "the values are the keys"}
 
     def expected_values(self, model):
         return super().expected_values(model) | set(WEIGHTS)

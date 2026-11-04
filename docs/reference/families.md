@@ -344,7 +344,11 @@ queries: assign there.
 
 `self_attn.value_weight(kv)` and `self_attn.output_weight(j)` slice head-major rows of `v_proj`
 and columns of `o_proj` on every family not listed; `layers[i].attention_input_gain` is the
-gain of the norm `attention_norm_output` reads, ones on a post-norm block
+gain of the norm `attention_norm_output` reads, ones on a post-norm block, and
+`layers[i].attention_output_gain` the gain of the norm `attention_output` is read at
+(`post_attention_layernorm` on `olmo2`, `olmo3`, `flex_olmo`, `exaone4`, `olmo_hybrid`'s attention
+blocks, `gemma2`, `gemma3_text`, `gemma4_text` and `afmoe`; `post_self_attn_layernorm` on `glm4`;
+`post_norm1` on `hyperclovax`), ones elsewhere
 ([usage/attention-interior](../usage/attention-interior.md#the-weights-per-head-value_weight-output_weight-attention_input_gain)).
 
 | what differs | families | `value_weight` / `output_weight` |
@@ -355,7 +359,8 @@ gain of the norm `attention_norm_output` reads, ones on a post-norm block
 | four parts, each a quarter of the heads' queries, values, keys | `codegen` (`qkv_proj`) | the value rows of the head's part |
 | `Conv1D`, `[in, out]` | `gpt2` (`c_attn`, `c_proj`) | the columns, transposed; `output_weight` the rows of `c_proj`, transposed |
 | the values scaled after the projection | `mimo_v2_flash` (`attention_value_scale`) | `v_proj`'s rows times the scale |
-| refused: `no_head_weights()` gives the reason | latent attention (`deepseek_v2`, `deepseek_v3`, `kimi_k2`, `deepseek_v32`, `glm_moe_dsa`, `glm4_moe_lite`, `youtu`, `kimi_linear`), `deepseek_v4` (keys and values one normed projection, a low-rank output projection), `gemma4_text`, `gemma4_unified_text` (`v_norm` on the values), `jetmoe` (per-expert output projection), `zaya` (half of each value head from the previous token), the default family | `Unavailable` |
+| values refused, `output_weight` served (a plain `o_proj`) | latent attention (`deepseek_v2`, `deepseek_v3`, `kimi_k2`, `deepseek_v32`, `glm_moe_dsa`, `glm4_moe_lite`, `youtu`, `kimi_linear`), `gemma4_text`, `gemma4_unified_text` (`v_norm` on the values), `zaya` (half of each value head from the previous token) | `value_weight` raises `Unavailable` |
+| both refused: `no_head_weights()` gives the reason | `deepseek_v4` (keys and values one normed projection, a low-rank output projection), `jetmoe` (per-expert output projection), the default family | `Unavailable` |
 
 ### Latent attention
 

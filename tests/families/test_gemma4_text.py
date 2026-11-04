@@ -9,7 +9,7 @@ import numpy as np
 
 import pytest
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT, contributions, near, rows
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, contributions, near, rows
 from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
@@ -51,7 +51,7 @@ WRAPPER_ROWS = rows("model.language_model", "layers", "embed_tokens", "norm")
 
 
 #: Every block normalizes its values after the projection, so none has per-head weights.
-NORMED_VALUES = {HEAD_WEIGHTS: "v_norm"}
+NORMED_VALUES = {"self_attn.value_weight": "v_norm"}
 #: A KV-sharing block rotates no keys of its own: it attends with an earlier block's.
 BORROWED_KEYS = {"self_attn.attention_keys_prerope": "a KV-sharing block", **NORMED_VALUES}
 

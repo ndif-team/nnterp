@@ -7,6 +7,7 @@ native modules, the standard values read and write and mean what they say,
 availability is honest, sizes match the tensors.
 """
 
+import contextlib
 import re
 
 import pytest
@@ -39,9 +40,6 @@ VALUES = {
 NO_ROTARY = {name: "no rotary embedding" for name in ("self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope")}
 #: The same values on a vision tower's blocks, which never serve them (`VisionAttention.no_rotary`).
 TOWER_NO_ROTARY = {name: "a vision tower's attention" for name in NO_ROTARY}
-#: The key `EXPECTED_UNAVAILABLE` names `Attention.no_head_weights`' reason by: `value_weight` and `output_weight` are
-#: methods, not `support()` rows, and share that one reason.
-HEAD_WEIGHTS = "self_attn.no_head_weights"
 #: The MLP's interior, unavailable on a block whose MLP is a routed mixture.
 MLP_INTERIOR = ("mlp.mlp_activation", "mlp.mlp_neurons")
 #: A mixture of experts' values, on `Moe` (`nnterp.components.moe`).
@@ -138,16 +136,32 @@ def random_weights(repo, **overrides):
     return StandardizedTransformer(module, tokenizer=AutoTokenizer.from_pretrained(repo))
 
 
-def to_rounding(actual, expected, ulps: int = 8):
-    """``actual`` (the model's, in its dtype) is ``expected`` (float64) to ``ulps`` units of that dtype at ``expected``'s scale.
+@contextlib.contextmanager
+def ramped(norm):
+    """``norm``'s weight set to a ramp for the duration: a tiny checkpoint's norm is often all ones, which a gain of ones would pass."""
+    weight = getattr(norm._module, "weight", None)
+    if weight is None:
+        yield
+        return
+    kept = weight.detach().clone()
+    with torch.no_grad():
+        weight.copy_(torch.linspace(0.5, 1.5, weight.numel()).view_as(weight))
+    try:
+        yield
+    finally:
+        with torch.no_grad():
+            weight.copy_(kept)
 
-    For a product the model computes in one shape and the test in another: a
-    matmul over a slice of a projection's rows sums in another order than the
-    whole projection's, so the two agree to rounding, not bit for bit.
-    """
-    eps = torch.finfo(actual.dtype).eps
-    error = (actual.double() - expected).abs().max().item()
-    assert error <= ulps * eps * expected.abs().max().item(), (error, expected.abs().max().item(), actual.dtype)
+
+def normalized(norm, x, gain):
+    """What ``norm`` returns for ``x`` by its ``gain``, float64: ``gain * n(x) + norm(0)``, ``n`` the RMS normalization with the
+    norm's own eps, centred first on a norm that takes a constant to its bias (a LayerNorm)."""
+    zero = torch.zeros(x.shape[-1], dtype=x.dtype)
+    offset = norm(zero).double()  # the norm's bias, zero on an RMS norm
+    centred = torch.equal(norm(zero + 3), norm(zero))
+    eps = next((value for name in ("variance_epsilon", "eps", "epsilon") if isinstance(value := getattr(norm._module, name, None), float)), 1e-5)
+    x = x.double() - x.double().mean(-1, keepdim=True) if centred else x.double()
+    return gain.double() * x / (x.pow(2).mean(-1, keepdim=True) + eps).sqrt() + offset
 
 
 def expert_by_hand(host, x: torch.Tensor, expert: int, weight: torch.Tensor) -> torch.Tensor:
@@ -927,16 +941,19 @@ class FamilySuite:
     # a head's slice of a projection, applied to what the projection receives,
     # is that head's share of what it returns.
 
-    def head_weights_block(self, model):
-        """The first softmax-attention block that serves its per-head weights; where none does, the reason is checked by `test_head_weights_say_why_a_block_has_none`."""
+    def head_weights_block(self, model, method):
+        """The first softmax-attention block serving ``method`` (``"value_weight"``, ``"output_weight"``); where none does, the reason is checked by `test_head_weights_say_why_a_block_has_none`."""
         for layer in self.attn_blocks(model):
-            if layer.self_attn.no_head_weights() is None:
-                return layer
-        pytest.skip("no attention block serves per-head weights")
+            try:
+                getattr(layer.self_attn, method)(0)
+            except Unavailable:
+                continue
+            return layer
+        pytest.skip(f"no attention block serves {method}")
 
     def test_value_weight_reproduces_the_values(self, model):
         """``value_weight(kv) @ x``, plus that head's bias, is ``attention_values[:, kv]`` for what the attention is called with, on every key/value head."""
-        attn = self.head_weights_block(model).self_attn
+        attn = self.head_weights_block(model, "value_weight").self_attn
         with model.trace(PROMPT):
             x = attn.input.save()
             values = attn.attention_values.save()
@@ -948,13 +965,13 @@ class FamilySuite:
             weight = attn.value_weight(kv)
             assert weight.shape == (attn.head_dim, x.shape[-1]), (kv, tuple(weight.shape))
             expected = torch.nn.functional.linear(x.double(), weight.double()) + bias[:, kv * group].double()
-            to_rounding(values[:, kv * group], expected)
+            torch.testing.assert_close(values[:, kv * group], expected.to(values.dtype))
         with pytest.raises(IndexError):
             attn.value_weight(attn.num_kv_heads)
 
     def test_output_weight_reproduces_the_projection(self, model):
         """``sum_j output_weight(j) @ attention_premix[:, t, j]``, plus the projection's bias, is what the output projection returns."""
-        attn = self.head_weights_block(model).self_attn
+        attn = self.head_weights_block(model, "output_weight").self_attn
         with model.trace(PROMPT):
             premix = attn.attention_premix.save()
             out = attn.o_proj.output.save()
@@ -963,8 +980,9 @@ class FamilySuite:
             bias = attn.o_proj.output.save()
         weights = [attn.output_weight(j) for j in range(attn.num_heads)]
         assert all(weight.shape == (model.hidden_size, attn.head_dim) for weight in weights), [tuple(w.shape) for w in weights]
-        expected = sum(torch.nn.functional.linear(premix[:, :, j].double(), weight.double()) for j, weight in enumerate(weights))
-        to_rounding(out, expected + bias.double())
+        expected = sum(torch.nn.functional.linear(premix[:, :, j].double(), weight.double()) for j, weight in enumerate(weights)) + bias.double()
+        scale = expected.abs().max()  # at the output's scale: an element that cancels to near zero keeps its terms' rounding (DeepSeek-V3)
+        torch.testing.assert_close(out / scale, (expected / scale).to(out.dtype))
 
     def test_attention_input_gain(self, model):
         """The attention reads ``gain * n(x)``, plus the norm's bias, of the stream ``x`` on a pre-norm block, where ``n``
@@ -980,45 +998,66 @@ class FamilySuite:
             assert gain.shape == (model.hidden_size,) and torch.equal(gain, torch.ones_like(gain))
             return
         norm = layer.get(type(layer).attention_norm_output.path(layer).removesuffix(".output"))
-        weight = getattr(norm._module, "weight", None)
-        kept = None if weight is None else weight.detach().clone()
-        try:
-            if weight is not None:  # a tiny checkpoint's norm is often all ones: give each channel its own gain
-                with torch.no_grad():
-                    weight.copy_(torch.linspace(0.5, 1.5, weight.numel()).view_as(weight))
+        with ramped(norm):
             gain = layer.attention_input_gain
             with model.trace(PROMPT):
                 x = layer.layer_input.save()
                 normed = layer.attention_norm_output.save()
-            zero = torch.zeros(x.shape[-1], dtype=x.dtype)
-            offset = norm(zero).double()  # the norm's bias, zero on an RMS norm
-            centred = torch.equal(norm(zero + 3), norm(zero))  # a LayerNorm takes a constant to its bias
-        finally:
-            if weight is not None:
-                with torch.no_grad():
-                    weight.copy_(kept)
-        assert gain.shape == (x.shape[-1],) and gain.dtype == (x.dtype if weight is None else weight.dtype)
-        eps = next((value for name in ("variance_epsilon", "eps", "epsilon") if isinstance(value := getattr(norm._module, name, None), float)), 1e-5)
-        stream = x.double() - x.double().mean(-1, keepdim=True) if centred else x.double()
-        expected = gain.double() * stream / (stream.pow(2).mean(-1, keepdim=True) + eps).sqrt() + offset
-        to_rounding(normed, expected)
+            expected = normalized(norm, x, gain)
+        assert gain.shape == (x.shape[-1],) and gain.dtype == torch.float32 and not gain.requires_grad
+        torch.testing.assert_close(normed, expected.to(normed.dtype))
+
+    def test_attention_output_gain(self, model):
+        """The block adds ``gain * n(y)``, plus the norm's bias, of the output projection's output ``y`` where
+        ``attention_output`` is read at a norm after the attention; the gain is ones where the output enters unnormed."""
+        layer = next(iter(self.attn_blocks(model)), model.layers[0])
+        attn = mixer(layer)
+        if attn is None:
+            with pytest.raises(Unavailable, match="no self_attn module"):
+                layer.attention_output_gain
+            return
+        reason = attn.support()["attention_output"]
+        if reason:
+            with pytest.raises(Unavailable, match=re.escape(reason[:40])):
+                layer.attention_output_gain
+            return
+        sibling = re.fullmatch(r"\.\./(\w+)\.output", type(attn).attention_output.path(attn))
+        norm = None if sibling is None else layer.get(sibling[1])
+        if norm is None or isinstance(norm._module, torch.nn.Identity):  # HyperCLOVA X without use_post_norm
+            gain = layer.attention_output_gain
+            assert gain.shape == (model.hidden_size,) and torch.equal(gain, torch.ones_like(gain))
+            return
+        with ramped(norm):
+            gain = layer.attention_output_gain
+            with model.trace(PROMPT):
+                y = attn.o_proj.output.save()
+                normed = norm.output.save()
+            expected = normalized(norm, y, gain)
+        assert gain.shape == (y.shape[-1],) and gain.dtype == torch.float32 and not gain.requires_grad
+        torch.testing.assert_close(normed, expected.to(normed.dtype))
 
     def test_head_weights_say_why_a_block_has_none(self, model):
-        """`no_head_weights` is the one reason: the one this family expects (or none, on every block), and what both methods raise."""
+        """Each per-head weight is served on every attention block or refused on every one with the reason this family
+        expects; `no_head_weights` is the reason where both are, and ``None`` otherwise."""
         blocks = self.attn_blocks(model)
         if not blocks:
             pytest.skip("no softmax attention on any block")
-        expected = self.EXPECTED_UNAVAILABLE.get(HEAD_WEIGHTS)
         for layer in blocks:
             attn = layer.self_attn
+            refused = set()
+            for method in ("value_weight", "output_weight"):
+                expected = self.EXPECTED_UNAVAILABLE.get(f"self_attn.{method}")
+                if expected is None:
+                    getattr(attn, method)(0)
+                    continue
+                with pytest.raises(Unavailable, match=re.escape(expected)):
+                    getattr(attn, method)(0)
+                refused.add(method)
             reason = attn.no_head_weights()
-            if expected is None:
+            if refused == {"value_weight", "output_weight"}:
+                assert reason and self.EXPECTED_UNAVAILABLE["self_attn.output_weight"] in reason, (layer.path, reason)
+            else:
                 assert reason is None, (layer.path, reason)
-                continue
-            assert reason and expected in reason, (layer.path, reason)
-            for method in (attn.value_weight, attn.output_weight):
-                with pytest.raises(Unavailable, match=re.escape(reason[:40])):
-                    method(0)
 
     # -- methods over the values -------------------------------------------------
 

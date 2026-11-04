@@ -119,9 +119,10 @@ full blocks rotate differently) and the apply function the block's forward calls
 and interleaved rotations included). The per-family suite checks both on every family.
 `rotate` takes `x` as `[..., seq, qk_head_dim]` and `positions` as `[seq]` (a tensor, a
 list or a `range`), or `[batch, seq]` for an `x` of `[batch, heads, seq, qk_head_dim]` whose
-prompts sit at different positions; it needs no trace. Both values are on the attention
-module's own forward, not inside the eager interface, so they are served under any
-`attn_implementation`, and they come before `attention_queries` in a trace
+prompts sit at different positions; it needs no trace, and on a model split over several
+devices with `device_map` it applies the embedding on `x`'s device. Both values are on
+the attention module's own forward, not inside the eager interface, so they are served
+under any `attn_implementation`, and they come before `attention_queries` in a trace
 (`model.order(i)` ranks them first).
 
 Use them instead of `attention_queries` / `attention_keys`:

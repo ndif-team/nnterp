@@ -514,9 +514,11 @@ class Attention(Standard):
         that norms after the rotary, HunYuan or Llama 4, or tiles its keys,
         JetMoE, does that to the result). A rope scaling that adapts to the
         sequence (``dynamic``, ``longrope``) picks its frequencies from the
-        largest position given, as the model does from the whole prompt. An
-        ordinary call outside a trace; inside one it computes without
-        touching the trace.
+        largest position given, as the model does from the whole prompt. The
+        embedding is computed by the model's rotary module wherever it lives
+        and applied on ``x``'s device, so `rotate` works on a model split over
+        several devices with ``device_map``. An ordinary call outside a trace;
+        inside one it computes without touching the trace.
 
         Raises:
             Unavailable: the block applies no rotary embedding (`no_rotary`).
@@ -526,7 +528,9 @@ class Attention(Standard):
             raise Unavailable(f"{self.path}.rotate is not available: {reason}")
         positions = torch.as_tensor(positions, device=x.device)
         position_ids = positions.reshape(1, -1) if positions.dim() < 2 else positions
-        return self.apply_rotary(x, self.rotary_embedding(x, position_ids))
+        embedding = self.rotary_embedding(x, position_ids)  # (cos, sin), or one tensor of complex frequencies
+        embedding = tuple(e.to(x.device) for e in embedding) if isinstance(embedding, tuple) else embedding.to(x.device)
+        return self.apply_rotary(x, embedding)
 
     def rotary_embedding(self, x: torch.Tensor, position_ids: torch.Tensor) -> Any:
         """What the block's rotary call is given for ``position_ids`` (``[batch, seq]``): ``(cos, sin)``, ``[batch, seq, width]``.

@@ -50,7 +50,7 @@ from nnsight.intervention.envoy import Envoy
 from transformers.models.zaya.modeling_zaya import ZayaAttention, ZayaDecoderLayer, ZayaSparseMoeBlock
 
 from ..components import (
-    Attention, EProperty, Layer, Moe, Residual, RouterLogits, TokenEProperty, first_tensor, rewrap,
+    Attention, EProperty, Layer, Moe, Residual, RouterLogits, TokenEProperty, Unavailable, first_tensor, rewrap,
 )
 
 if TYPE_CHECKING:
@@ -99,10 +99,11 @@ class Attention(Attention):
         """The envoy of the merge that follows this sublayer, its sibling in the block."""
         return self.parent.post_attention_residual_scale
 
-    def no_head_weights(self) -> str | None:
-        return (
-            "compressed convolutional attention: half of each value head is the previous token's projection "
-            "(v_proj_delayed), so no slice of one projection maps a position's input to its values"
+    def value_weight(self, kv_head):
+        raise Unavailable(
+            f"{self.path}.value_weight is not available: compressed convolutional attention: half of each value head "
+            "is the previous token's projection (v_proj_delayed), so no slice of one projection maps a position's input "
+            "to its values"
         )
 
     @EProperty(key="output", description="What the attention adds to the residual stream: its output plus the merge's hidden_states_bias, times its hidden_states_scale")

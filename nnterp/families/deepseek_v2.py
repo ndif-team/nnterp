@@ -11,7 +11,7 @@ from typing import TYPE_CHECKING
 import torch
 from transformers.models.deepseek_v2.modeling_deepseek_v2 import DeepseekV2Attention, DeepseekV2DecoderLayer, DeepseekV2MLP, DeepseekV2Moe
 
-from ..components import Attention, EProperty, Layer, Mlp, Moe, Queries, SharedRopeKeys, rotary_reason
+from ..components import Attention, EProperty, Layer, Mlp, Moe, Queries, SharedRopeKeys, Unavailable, rotary_reason
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -28,7 +28,7 @@ class Layer(Layer):
     """DeepSeek-V2's decoder block; returns a bare tensor, so the base holds."""
 
 
-#: Why latent attention serves no per-head weights.
+#: Why latent attention serves no value weight per head (its output projection is a plain ``o_proj``, so `output_weight` is served).
 LATENT_VALUES = (
     "latent attention: the values come out of a low-rank latent (kv_a_proj_with_mqa, its norm, kv_b_proj), "
     "so no slice of one projection maps the attention's input to a head's values"
@@ -79,8 +79,8 @@ class Attention(Attention):
         heads = rot.reshape(args[0].shape[0], -1, *rot.shape[-2:])
         return torch.cat((x[..., :-rope], apply(heads, heads, *args)[0].reshape(rot.shape)), dim=-1)
 
-    def no_head_weights(self) -> str | None:
-        return LATENT_VALUES
+    def value_weight(self, kv_head):
+        raise Unavailable(f"{self.path}.value_weight is not available: {LATENT_VALUES}")
 
 
 class Mlp(Mlp):

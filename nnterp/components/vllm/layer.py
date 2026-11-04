@@ -14,6 +14,12 @@ from ..layer import Residual
 from ..standard import absent
 from .flat import Flat, on_transformers_backend, unbatched
 
+#: Why the gains (`attention_input_gain`, `attention_output_gain`) are not served on this engine.
+NORM_PROBE = (
+    "it is measured by calling the block's norm, and vLLM's modules are the engine's (meta on the client, fused with "
+    "the residual add in the worker); read it off the transformers model of the checkpoint"
+)
+
 
 def argument(inputs: tuple, index: int, name: str) -> Any:
     """One argument of a call served as ``(args, kwargs)``, however the caller passed it; ``None`` when absent."""
@@ -46,11 +52,12 @@ class Layer(standard.Layer):
     @property
     def attention_input_gain(self) -> torch.Tensor:
         """Not served on this engine: it is measured by calling the block's norm, and vLLM's modules are the engine's."""
-        raise Unavailable(
-            f"{self.path}.attention_input_gain is not available: it is measured by calling the block's norm, and vLLM's "
-            "modules are the engine's (meta on the client, fused with the residual add in the worker); read it off the "
-            "transformers model of the checkpoint"
-        )
+        raise Unavailable(f"{self.path}.attention_input_gain is not available: {NORM_PROBE}")
+
+    @property
+    def attention_output_gain(self) -> torch.Tensor:
+        """Not served on this engine, as `attention_input_gain`."""
+        raise Unavailable(f"{self.path}.attention_output_gain is not available: {NORM_PROBE}")
 
     def skip_with(self, hidden: torch.Tensor) -> None:
         """Skip this block, handing ``hidden`` (``[1, tokens, hidden_size]``) on as its residual stream.
@@ -135,6 +142,7 @@ class FusedLayer(standard.Layer):
     """
 
     attention_input_gain = Layer.attention_input_gain
+    attention_output_gain = Layer.attention_output_gain
 
     #: The boundaries between the block values: the norms' outputs (the normed half of the pair a norm returns),
     #: the MLP's input, and the stream the MLP's pre-norm adds up.

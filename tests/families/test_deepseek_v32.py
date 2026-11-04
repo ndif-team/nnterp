@@ -6,7 +6,7 @@ import os
 import tempfile
 
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
 from nnterp.families import deepseek_v32
 
@@ -60,7 +60,7 @@ class TestDeepseekV32(FamilySuite):
     FAMILY = deepseek_v32
     NATIVE = LLAMA_ROWS
     KV_HEADS_EXPANDED = True  # latent attention projects keys and values for every head
-    EXPECTED_UNAVAILABLE = {HEAD_WEIGHTS: "latent attention"}
+    EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "latent attention"}
 
     def test_latent_attention_widths(self, model):
         assert model.qk_head_dim == model.config.qk_nope_head_dim + model.config.qk_rope_head_dim
@@ -87,7 +87,7 @@ class TestDeepseekV32Sparse(FamilySuite):
     FAMILY = deepseek_v32
     NATIVE = LLAMA_ROWS
     KV_HEADS_EXPANDED = True
-    EXPECTED_UNAVAILABLE = {HEAD_WEIGHTS: "latent attention"}
+    EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "latent attention"}
 
     def test_pattern_is_zero_outside_the_selection(self, model):
         for layer in model.layers:

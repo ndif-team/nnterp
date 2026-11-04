@@ -663,7 +663,7 @@ class VLLMFamilySuite:
                 attn.rotate(torch.zeros(1, 1, 2, 8), [0, 1])
 
     def test_head_weights_are_refused(self, model):
-        """The per-head weights are refused on this engine, with `no_head_weights`' one reason (it fuses and shards the projections), and so is the gain."""
+        """The per-head weights are refused on this engine, with `no_head_weights`' one reason (it fuses and shards the projections), and so are the gains."""
         for layer in model.layers:
             attn = layer.self_attn
             reason = attn.no_head_weights()
@@ -673,6 +673,8 @@ class VLLMFamilySuite:
                     method(0)
             with pytest.raises(Unavailable, match="attention_input_gain is not available"):
                 layer.attention_input_gain
+            with pytest.raises(Unavailable, match="attention_output_gain is not available"):
+                layer.attention_output_gain
 
     # -- the engine's own shape: steps and invokes -----------------------------------
 

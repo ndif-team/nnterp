@@ -34,6 +34,19 @@ class TestGemma2(FamilySuite):
         assert not torch.equal(raw, logits)
 
 
+def test_the_gains_are_float32_on_a_bf16_load():
+    """Gemma's norms multiply by ``1 + weight`` in float32: on a bf16 load both gains are that, bit for bit, not its
+    rounding to bf16."""
+    model = StandardizedTransformer(TestGemma2.REPO, dispatch=True, dtype=torch.bfloat16)
+    layer = model.layers[0]
+    for norm, gain in ((layer.input_layernorm, "attention_input_gain"), (layer.post_attention_layernorm, "attention_output_gain")):
+        weight = norm._module.weight
+        with torch.no_grad():
+            weight.copy_(torch.linspace(-0.01, 0.01, weight.numel()))
+        assert not torch.equal((1 + weight).float(), 1 + weight.float())  # 1 + weight is no bf16 number on most channels
+        assert torch.equal(getattr(layer, gain), 1 + weight.float()), gain
+
+
 TEXT_REPO = TestGemma2.REPO
 #: PaliGemma 1's tiny wrapper: its SigLIP config and its processor (the PaliGemma tokenizer and a 20-pixel image processor).
 PALIGEMMA_REPO = "hf-tiny-v2/tiny-random-PaliGemmaForConditionalGeneration"

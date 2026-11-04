@@ -22,8 +22,11 @@ tries a config's own type before its text model's), and every snippet in `docs/`
 identical values on both wherever they do not depend on unseeded randomness. On **5.21.0** the recurrent mixers hold
 too: it dropped the `use_precomputed_states` binding from every recurrent forward for a fetch from the cache, which
 `RecurrentMixer.BRANCH` now names beside the old binding ([below](#gated-deltanet-qwen3-next-qwen35-qwen35-moe)), and
-the recurrent families' tests pass there (Jamba's mixture tests do not: one of its mixture values is a tuple on 5.21,
-not yet handled); `pyproject.toml` requires `nnsight>=0.8`,
+the recurrent families' tests pass there; Jamba's router became a ``JambaTopKRouter`` module there (a bare ``nn.Linear``
+before), so its `router_logits` read whichever the mixture has; SmolVLM's model scatters its image features itself there
+(``masked_scatter``, as Llava does) where 5.20 called ``inputs_merger``, so its scatter host reads whichever operation
+the forward has, and the 5.20-only SmolVLM reshape bug that skipped its tower tests is fixed in 5.21. The suite passes
+on 5.21.0 with 0 failures. `pyproject.toml` requires `nnsight>=0.8`,
 `transformers>=5.17` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below) and whose `rename` takes a dotted alias (nnsight #768: `{"attn.c_proj":
 "attn.o_proj"}` binds on the attention, which GPT-2's two `c_proj` need); nnsight 0.8.0

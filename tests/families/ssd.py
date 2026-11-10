@@ -329,7 +329,7 @@ def read(model):
             steps.append(mix.state_output.save())
     return support, [states, *steps]
 
-load = lambda: StandardizedTransformer({self.REPO!r}, dispatch=True, device="cpu", attn_implementation="eager", **{self.LOAD_KWARGS!r})
+load = lambda: StandardizedTransformer({self.REPO!r}, dispatch=True, attn_implementation="eager", **{dict(self.LOAD_KWARGS, device="cpu")!r})
 model = load()
 support, unrouted = read(model)
 route_kernels(model.family, "torch")

@@ -3,7 +3,7 @@
 import math
 
 import torch
-from suite import FamilySuite, rows, PROMPT
+from suite import FamilySuite, rows, PROMPT, random_weights
 
 from nnterp.families import codegen
 
@@ -39,3 +39,11 @@ class TestCodeGen(FamilySuite):
         with model.trace(PROMPT):
             pattern = model.layers[0].self_attn.attention_probabilities.save()
         torch.testing.assert_close(pattern.sum(-1), torch.ones_like(pattern.sum(-1)))
+
+
+def test_value_weight_with_two_heads_per_part():
+    """The tiny checkpoint has one head in each of the four ``mp_num`` parts, where a part and a head within it cannot be
+    told apart; two per part can, so random weights."""
+    model = random_weights(TestCodeGen.REPO, n_head=8, rotary_dim=4)
+    assert model.num_heads // 4 == 2
+    FamilySuite().test_value_weight_reproduces_the_values(model)

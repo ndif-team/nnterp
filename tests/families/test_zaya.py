@@ -5,7 +5,7 @@ import os
 import tempfile
 
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
 from nnterp.families import zaya
 
@@ -70,7 +70,7 @@ class TestZaya(FamilySuite):
     MID_IDENTITY = False                     # the stream gates scale what the block adds
     MLP_WIDTH_KEY = "moe_intermediate_size"   # every block is a mixture
     ROUTER_EXTRA_CLASSES = 1  # router_logits' last column is the skip class
-    EXPECTED_UNAVAILABLE = {HEAD_WEIGHTS: "compressed convolutional attention"}
+    EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "compressed convolutional attention"}
 
     def test_merged_identity(self, model):
         merged_identity(model)
@@ -85,7 +85,7 @@ class TestZayaMerged(FamilySuite):
     MID_IDENTITY = False                     # the stream gates scale what the block adds
     MLP_WIDTH_KEY = "moe_intermediate_size"
     ROUTER_EXTRA_CLASSES = 1  # router_logits' last column is the skip class
-    EXPECTED_UNAVAILABLE = {HEAD_WEIGHTS: "compressed convolutional attention"}
+    EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "compressed convolutional attention"}
 
     def test_contribution_identity(self, model):
         """The suite's identity through each merge's residual scale and bias."""

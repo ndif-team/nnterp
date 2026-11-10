@@ -316,12 +316,25 @@ class Attention(Attention):
         return None
 ```
 
-`no_head_weights()` is the same decision for `Attention.value_weight` and `output_weight`: a
-family whose values are not one linear map of the attention's input (latent attention,
-Gemma-4's `v_norm`) or whose heads share no output projection (JetMoE) returns its reason, and
-both methods raise it. A family that only lays its projections out differently overrides the
-methods instead, reading the fused projection through `projection_weight(self, name)`, which
-keeps the refusal and the PEFT adapters:
+`no_head_weights()` is the decision both `Attention.value_weight` and `output_weight` ask: a
+family whose heads share no output projection as one matrix (JetMoE's per-expert ones,
+DeepSeek-V4's low-rank one) returns its reason, and both methods raise it. A family whose values
+alone are not one linear map of the attention's input, behind a plain `o_proj` (latent attention,
+Gemma-4's `v_norm`, ZAYA), overrides `value_weight` to refuse instead, so `output_weight` is
+still served:
+
+```python
+# nnterp/families/deepseek_v2.py
+class Attention(Attention):
+    def value_weight(self, kv_head):
+        raise Unavailable(f"{self.path}.value_weight is not available: {LATENT_VALUES}")
+```
+
+A family that only lays its projections out differently overrides the methods, reading the
+fused projection through `projection_weight(self, name)` (in `nnterp.components`). It returns
+the weight the projection's next forward applies (under a PEFT LoRA layer, the base plus each
+active, unmerged adapter's delta; the base once merged), and raises `Unavailable` with
+`no_head_weights()`'s reason, on an undispatched model's meta weight, and on a quantized one:
 
 ```python
 # nnterp/families/phi3.py

@@ -171,20 +171,24 @@ what every vision tower reports for the two values, which the suite expects on a
 `VisionSuite.test_tower_interface_reproduces_heads_and_pattern` checks the same on a tower block, and
 `tests/test_tensor_parallel.py` reads `interface` and patches through it across two CPU ranks.
 
-**The weights per head** (`value_weight`, `output_weight`, `attention_input_gain`; the first two skipped where no
-attention block serves them, whose reason is checked against `EXPECTED_UNAVAILABLE[HEAD_WEIGHTS]`)
+**The weights per head** (`value_weight`, `output_weight`, `attention_input_gain`, `attention_output_gain`; the first
+two skipped where no attention block serves them, whose reasons are checked against `EXPECTED_UNAVAILABLE`)
 
 | method | asserts |
 |---|---|
-| `test_value_weight_reproduces_the_values` | on the first block serving them, for every key/value head, `value_weight(kv) @ self_attn.input` plus the head's bias (the values with the attention's input zeroed) is `attention_values[:, kv]` to 8 ulps of the model's dtype at the values' scale (`to_rounding`: a matmul over a slice of rows does not sum in the whole projection's order, so not bit for bit); `value_weight(num_kv_heads)` raises `IndexError` |
-| `test_output_weight_reproduces_the_projection` | `sum_j output_weight(j) @ attention_premix[:, :, j]` plus the bias (the output with the heads zeroed) is `o_proj.output`, to the same rounding |
-| `test_attention_input_gain` | on block 0, with the norm's weight set to a ramp for the test (a tiny checkpoint's is often all ones), `attention_norm_output` is `gain * n(layer_input)` plus the norm's bias, `n` the RMS (or, on a norm that takes a constant to its bias, centred) normalization with the norm's own eps; ones on a post-norm block; `Unavailable` with `attention_norm_output`'s reason otherwise |
-| `test_head_weights_say_why_a_block_has_none` | `no_head_weights()` is `None` on every attention block, or contains `EXPECTED_UNAVAILABLE[HEAD_WEIGHTS]` on every one, and both methods raise `Unavailable` with it |
+| `test_value_weight_reproduces_the_values` | on the first block serving them, for every key/value head, `value_weight(kv) @ self_attn.input` plus the head's bias (the values with the attention's input zeroed) is `attention_values[:, kv]`, by `torch.testing.assert_close` at the dtype's default tolerance (a matmul over a slice of rows does not sum in the whole projection's order, so not bit for bit); `value_weight(num_kv_heads)` raises `IndexError` |
+| `test_output_weight_reproduces_the_projection` | `sum_j output_weight(j) @ attention_premix[:, :, j]` plus the bias (the output with the heads zeroed) is `o_proj.output`, at the default tolerance on both divided by the output's largest magnitude (an element that cancels to near zero keeps the rounding of the terms it sums: DeepSeek-V3) |
+| `test_attention_input_gain` | on block 0, with the norm's weight set to a ramp for the test (`ramped`: a tiny checkpoint's is often all ones), `attention_norm_output` is `gain * n(layer_input)` plus the norm's bias (`normalized`), `n` the RMS (or, on a norm that takes a constant to its bias, centred) normalization with the norm's own eps, and the gain is float32 and detached; ones on a post-norm block; `Unavailable` with `attention_norm_output`'s reason otherwise |
+| `test_attention_output_gain` | on the first attention block, where `attention_output` is read at a norm after the attention, that norm's output is `gain * n(o_proj.output)` plus its bias, ramped and normalized as above; ones where it is read at the attention's own output, at an operation, or at an identity (HyperCLOVA X without `use_post_norm`); `Unavailable` with `attention_output`'s reason where that is refused |
+| `test_head_weights_say_why_a_block_has_none` | each method is served on every attention block, or raises `Unavailable` containing `EXPECTED_UNAVAILABLE["self_attn.value_weight"]` / `["self_attn.output_weight"]` on every one; `no_head_weights()` contains the output weight's reason where both are refused, and is `None` otherwise |
 
-`HEAD_WEIGHTS` (`suite.py`) is the key a family's `EXPECTED_UNAVAILABLE` names that reason by: the weights are
-methods, not `support()` rows. Layouts no tiny checkpoint has run the value test on random weights
-(`random_weights(repo, **config)`): GPT-BigCode and Falcon-RW without multi-query. `tests/families/test_llama.py`
-runs both tests on the tiny Llama under a throwaway LoRA on `v_proj` and `o_proj` (`peft=` at load, B not zero)
+`"self_attn.value_weight"` and `"self_attn.output_weight"` are keys `support()` does not have (the weights are
+methods), so `test_support_is_what_this_family_expects` never meets them; latent attention, Gemma-4 and ZAYA name
+the first only, DeepSeek-V4, JetMoE and the default family both. Layouts no tiny checkpoint has run the value
+test on random weights (`random_weights(repo, **config)`): GPT-BigCode and Falcon-RW without multi-query,
+CodeGen with two heads per `mp_num` part, and Phi-3 under grouped-query attention. `test_gemma2.py` checks that
+on a bf16 load both gains are `1 + weight` in float32, bit for bit. `tests/families/test_llama.py` runs both
+weight tests on the tiny Llama under a throwaway LoRA on `v_proj` and `o_proj` (`peft=` at load, B not zero)
 with the adapter enabled, disabled, merged, and disabled while merged, and checks the merged weight is
 `value_weight`'s bit for bit.
 
@@ -370,7 +374,7 @@ moves the logits as the same write does on the reference
 that `support()` and `rotate` give the same reason on a block without a
 rotary (`test_rotate_says_why_a_block_has_no_rotary`). `test_head_weights_are_refused` checks that
 `no_head_weights()` gives the engine's reason on every block, both methods raise it, and
-`attention_input_gain` raises too. A family whose block
+both gains raise too. A family whose block
 does more between its rotary and its attention layer overrides
 `rotated_as_served(attn, name, rotated)`, called inside the trace, where the
 engine's modules run (HunYuan's `query_layernorm` / `key_layernorm`, Llama 4's

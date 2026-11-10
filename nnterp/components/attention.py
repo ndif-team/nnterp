@@ -112,14 +112,10 @@ def attention_call(envoy: Envoy) -> tuple[str, tuple[int, int, int]] | None:
     it is ``None`` there. Read off the keys alone, so it answers outside a trace:
     a key or ``select`` function is called on ``envoy``, so one that picks the
     call (GPT-2's, by the module's flag) reads the module or its config, never the forward.
-    A `by_cache` key, which asks the forward whether the call has a cache, is
-    not called: it is ``None`` there.
     """
     cls = type(envoy)
     calls, positions = set(), []
     for value in (cls.attention_queries, cls.attention_keys, cls.attention_values):
-        if getattr(value.locate, "by_cache", False):
-            return None  # read where the call's cache puts it (`by_cache`), which only the forward says: its own arithmetic
         key, select = value.path(envoy), value._selection(envoy)
         if not (isinstance(key, str) and key.startswith("source.") and key.endswith(".inputs") and isinstance(select, int)):
             return None

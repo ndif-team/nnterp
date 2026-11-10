@@ -274,20 +274,6 @@ def normalized(norm, x, gain):
     return gain.double() * x / (x.pow(2).mean(-1, keepdim=True) + eps).sqrt() + offset
 
 
-def cached_positions(model, block, n: int) -> int:
-    """How many of an ``n``-token prompt's positions a decode step's cache holds at ``block``: all ``n``, or on a block
-    whose cache layer slides (transformers' ``DynamicSlidingWindowLayer``) the last ``sliding_window - 1``."""
-    from transformers import DynamicCache
-
-    index = next(i for i, layer in enumerate(model.layers) if layer is block)
-    try:
-        layer = DynamicCache(config=model.config.get_text_config()).layers[index]
-    except Exception:  # a family with a cache of its own
-        return n
-    window = getattr(layer, "sliding_window", None)
-    return n if window is None else min(n, window - 1)
-
-
 def expert_by_hand(host, x: torch.Tensor, expert: int, weight: torch.Tensor) -> torch.Tensor:
     """``weight * expert(x)`` for one token ``x`` ``[hidden_size]``, computed outside the model.
 

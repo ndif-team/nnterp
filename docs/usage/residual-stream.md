@@ -163,6 +163,9 @@ one sublayer: the norm's output is `attention_norm_output` on a mixer block and 
 (and `mlp_input`) on an MLP block, and `layer_mid` is unavailable (`a one-sublayer block: ...`).
 DeepSeek-V4's norms read a collapse of its parallel streams, and its `layer_mid` is the streams
 between the sublayers ([below](#where-the-families-differ)).
+GraniteMoE-Shared, GraniteMoE-SWA and GraniteMoE-Hybrid call two feed-forward modules, the
+routed experts and a shared expert, with the norm's output, so their `mlp_input` is that
+output rather than one module's argument, and a write to it reaches both.
 A block without the module reports `no <module> module on this block` ([availability](availability.md)).
 Inside the sublayers, three more boundaries are standard values on the attention and the
 MLP, keyed on three standard child names the families alias in `RENAME` (`o_proj` for
@@ -325,7 +328,10 @@ shrunk by its own block's scalar and by every later one. Compare contributions a
 blocks with that in mind; nnterp computes nothing for it. On a mixture-of-experts block
 (26B-A4B) `mlp_output` is the dense MLP and the experts together: the block norms each and
 then their sum, and `mlp_output` is that last norm's output, while `mlp.output` is the dense
-MLP alone.
+MLP alone. On the way in, the dense MLP, the router and the experts each norm `layer_mid`
+themselves, so `mlp_norm_output` and `mlp_input` are the dense MLP's input alone and an edit
+there leaves the routed experts reading the unedited stream; to change what the whole
+feed-forward reads, edit `layer_mid`, which is also the residual the block adds to.
 
 **Doge and ZAYA: the stream is rescaled too.** Two families scale the residual the block
 carries, not only what it adds, so the identity carries the block's parameters as Gemma-4's

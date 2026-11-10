@@ -132,9 +132,10 @@ pinned checkpoint).
 XGLM has one attention implementation, so the interior values need no eager load and carry no `⚠`.
 The queries are scaled by `1/sqrt(head_dim)` as they are projected, so `attention_queries` is
 `q_proj`'s output times that scale. `attention_scores` is `attention_queries @
-attention_keys.transpose(-1, -2)` plus the mask, clamped below at the dtype's minimum. Every value is a view of the `[batch * num_heads, ...]`
-tensor the forward holds, served heads first, so an in-place edit reaches the model. Every head has its
-own keys and values.
+attention_keys.transpose(-1, -2)` plus the mask, clamped below at the dtype's minimum. The `bmm` calls take
+`[batch * num_heads, ...]` tensors, which nnsight does not narrow to an invoke's rows, so every value is read
+where the forward still holds it batch first, or a view of it: an in-place edit reaches the model and stays in
+its invoke. Every head has its own keys and values.
 
 ## Block 0 writes a large shared vector, and position 0 is a sink
 

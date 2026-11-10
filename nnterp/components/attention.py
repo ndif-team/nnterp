@@ -97,6 +97,75 @@ def holding(envoy: Envoy, name: str) -> Envoy:
     return host
 
 
+def has_cache(envoy: Envoy, argument: str) -> bool:
+    """Whether this call of ``envoy``'s attention receives a key/value cache: its argument ``argument`` is not ``None``.
+
+    Read off the call's arguments once per call (`per_call`), by the first of
+    the call's values that asks, so it has to ask before the forward is
+    inside the call: every value read at or before the cache update asks
+    (`by_cache`). Raises when a read inside the call came first.
+    """
+    from .recurrent import per_call
+
+    def compute() -> bool:
+        location = f"{envoy.path}.input"
+        mediator = Mediator.current(location)
+        # Inside the call already (its input passed, its output not yet), unless pinned to a later call by tracer.iter.
+        if not mediator.iteration and mediator.occurrence(location) > mediator.occurrence(f"{envoy.path}.output"):
+            raise RuntimeError(
+                f"{envoy.path}: whether this call has a key/value cache is read off the call's arguments, which the "
+                "forward has passed: read the attention's standard values before anything else inside it "
+                "(its child modules' inputs and outputs, its own input)"
+            )
+        args, kwargs = Mediator.value(location)
+        if argument in kwargs:
+            return kwargs[argument] is not None
+        names = list(inspect.signature(type(envoy._module).forward).parameters)[1:]  # without ``self``
+        position = names.index(argument)
+        return position < len(args) and args[position] is not None
+
+    return per_call(envoy, "has_cache", compute)
+
+
+#: The two cases `by_cache` describes, in the words the encyclopedia shows them with.
+CACHE_CASES = ((True, "where the call has a key/value cache"), (False, "where it has none (use_cache=False)"))
+
+
+def by_cache(
+    cached: tuple[str, int | None] | Callable[[Envoy], tuple[str, int | None]],
+    uncached: tuple[str, int | None] | Callable[[Envoy], tuple[str, int | None]],
+    argument: str = "past_key_values",
+) -> tuple[Callable[..., str], Callable[..., int | None]]:
+    """An `EProperty` key and select for a value whose location depends on whether the call has a cache (`has_cache`).
+
+    An attention that updates the cache in its own forward (``keys, values =
+    cache.update(keys, values)``, BLOOM, MPT, Falcon, XGLM) computes with what
+    the update returns, every position so far, where the call has a cache, and
+    with the new tokens' own keys and values where it has none: ``cached`` and
+    ``uncached`` are each ``(path, select)``, or a function of the host giving
+    one. A value read before the update with the same location either way
+    (the queries) takes ``by_cache`` too, so that reading it first does not
+    leave the keys unable to ask. Outside a trace, ``locate(envoy, cache=True)``
+    or ``cache=False`` gives either case's key (the encyclopedia shows both).
+    """
+
+    def choose(envoy: Envoy, cache: bool | None) -> tuple[str, int | None]:
+        if cache is None:
+            cache = has_cache(envoy, argument)
+        case = cached if cache else uncached
+        return case(envoy) if callable(case) else case
+
+    def locate(envoy: Envoy, cache: bool | None = None) -> str:
+        return choose(envoy, cache)[0]
+
+    def select(envoy: Envoy, cache: bool | None = None) -> int | None:
+        return choose(envoy, cache)[1]
+
+    locate.__name__ = select.__name__ = "by_cache"
+    locate.by_cache = select.by_cache = True
+    return locate, select
+
+
 def attention_call(envoy: Envoy) -> tuple[str, tuple[int, int, int]] | None:
     """The call `Attention.interface` makes again, read off the class's own values: ``(path, (q, k, v positions))``, or ``None``.
 
@@ -224,6 +293,9 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
     if reason:
         raise Unavailable(f"{attn.path} serves no per-head weights: {reason}")
     module = attn.get(name)._module
+    applied = bitnet_weight(module)  # a BitNet layer applies a function of the weight it stores
+    if applied is not None:
+        return applied
     tuners = sys.modules.get("peft.tuners.tuners_utils")  # an adapter layer exists only once peft is imported
     adapted = tuners is not None and isinstance(module, tuners.BaseTunerLayer)
     weight = module.get_base_layer().weight if adapted else module.weight
@@ -254,6 +326,41 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
             if adapter in module.lora_A:
                 weight = (weight + module.get_delta_weight(adapter)).to(weight.dtype)
     return weight
+
+
+def bitnet_weight(module: torch.nn.Module) -> Tensor | None:
+    """The weight a transformers BitNet layer multiplies its input by, in its stored weight's dtype; ``None`` for any other module.
+
+    A ``quant_method: bitnet`` checkpoint loads its projections as the layers
+    of ``transformers.integrations.bitnet``, which apply a function of the
+    weight they store: ``AutoBitLinear`` with online quantization ternarizes
+    its weight on every call (``WeightQuant``: ``round(w * s).clamp(-1, 1) / s``
+    with ``s = 1 / mean(|w|)``), offline it multiplies the stored ternary
+    weight by ``weight_scale``, and ``BitLinear`` unpacks its 2-bit codes and
+    divides by ``weight_scale``. That weight is what `projection_weight` gives
+    the per-head weights to slice. Each layer also rounds its input to 8 bits
+    per token before the product, so ``value_weight(kv) @ x`` reproduces
+    ``attention_values`` to that rounding, not exactly.
+
+    Raises:
+        Unavailable: the layer norms its input before the product (``use_rms_norm``),
+            so no one weight maps the input it receives.
+    """
+    bitnet = sys.modules.get("transformers.integrations.bitnet")  # the layers exist only once a bitnet load imports it
+    if bitnet is None or not isinstance(module, (bitnet.AutoBitLinear, bitnet.BitLinear)):
+        return None
+    if module.rms_norm is not None:
+        raise Unavailable(
+            f"{type(module).__name__} norms its input (use_rms_norm) before applying its weight, so no one weight "
+            "maps the input it receives"
+        )
+    if isinstance(module, bitnet.BitLinear):
+        return bitnet.unpack_weights(module.weight, dtype=module.dtype) / module.weight_scale
+    if not module.online_quant:
+        return module.weight * module.weight_scale
+    weight = module.weight.float()
+    scale = 1.0 / weight.abs().mean().clamp(min=1e-5)
+    return ((weight * scale).round().clamp(-1, 1) / scale).to(module.weight.dtype)
 
 
 class Attention(Standard):

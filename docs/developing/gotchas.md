@@ -43,9 +43,11 @@ pre-binds its containers (`tests/families/suite.py:198`, `:225`, `:472`).
 
 **Reads follow the forward within one invoke.** Reading block 3 then block
 1 raises `OutOfOrderError` ('model.transformer.h.1.output.i0' was requested
-but the model already ran past it). Falcon binds values before the rotary
-that produces queries and keys, so read `attention_values` first
-(`nnterp/families/falcon.py:37-41`; `tests/families/test_falcon.py:33-38`);
+but the model already ran past it). Falcon's keys and values are its cache
+update's return, after the rotary that produces the queries, so read the
+queries first; without a cache (`use_cache=False`) the values are bound before
+the rotary, so read them first (`tests/families/test_falcon.py`,
+`test_the_values_follow_the_cache_update`);
 on DeltaNet, `states` reads every position, so it goes before any state
 write (`nnterp/components/recurrent.py:405-422`).
 

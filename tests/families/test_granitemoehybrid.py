@@ -1,9 +1,11 @@
 """GraniteMoE-Hybrid, end to end: Mamba-2 or attention per block, Granite's scaled adds, a feed-forward of two experts."""
 
+import pytest
 import test_granite
 import torch
 from ssd import StateSpaceChecks
 from suite import LINEAR, LLAMA_ROWS, NO_ROTARY, PROMPT, VALUES, FamilySuite
+from test_granitemoeshared import written_mlp_input_reaches
 
 from nnterp.families import granitemoehybrid
 
@@ -53,6 +55,12 @@ class HybridSuite(StateSpaceChecks, FamilySuite):
                 shared = layer.mlp.output.save()
                 out = layer.mlp.mlp_output.save()
             torch.testing.assert_close(out, (shared if routed is None else routed + shared) * scale)
+
+    def test_mlp_input_reaches_the_routed_and_the_shared_experts(self, model):
+        layer = model.layers[0]
+        if not layer._module.has_experts:
+            pytest.skip("no routed experts: the shared expert is the whole feed-forward")
+        written_mlp_input_reaches(model, layer, layer.block_sparse_moe, layer.mlp)
 
 
 class TestGraniteMoeHybrid(HybridSuite):

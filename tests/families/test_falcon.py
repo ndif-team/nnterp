@@ -61,12 +61,18 @@ class TestFalcon(FamilySuite):
         assert [c.shape[1] for c in copies[1:]] == [1, 1] and copies[0].shape[1] > 1
         assert not torch.equal(copies[1], copies[2])
 
-    def test_values_bind_before_the_rotary(self, model):
-        """In one trace the values must be read before the queries or keys."""
+    def test_the_values_follow_the_cache_update(self, model):
+        """With a cache the keys and values are the update's return, after the rotary: read the queries first. Without
+        one (``use_cache=False``) the values are the binding before the rotary: read them first."""
+        attn = model.layers[0].self_attn
         with model.trace(PROMPT):
-            v = model.layers[0].self_attn.attention_values.save()
-            q = model.layers[0].self_attn.attention_queries.save()
+            q = attn.attention_queries.save()
+            v = attn.attention_values.save()
+        with model.trace(PROMPT, use_cache=False):
+            v_new = attn.attention_values.save()
+            q_new = attn.attention_queries.save()
         assert v.shape[1] == 1 and q.shape[1] == model.num_heads  # multi-query
+        assert torch.equal(v, v_new) and torch.equal(q, q_new)
 
 
 

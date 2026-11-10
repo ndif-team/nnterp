@@ -292,6 +292,14 @@ with torch.no_grad():
     top = model.project_on_vocab(ov.to(model.dtype)).topk(5).indices    # what head 3 writes for " Paris", through the unembedding
 ```
 
+On a BitNet load (`quant_method: bitnet`, transformers' `AutoBitLinear` or `BitLinear`) a
+projection applies a function of the weight it stores, and the accessors slice the weight it
+applies: the stored weight ternarized as every forward does it (`online`), times `weight_scale`
+(`offline`), or the unpacked codes over `weight_scale` (`BitLinear`), computed anew on each
+call. Such a layer also rounds its input to 8 bits per token, so there `value_weight(kv) @ x`
+gives the values to that rounding (a relative error of about 0.01 on
+`microsoft/bitnet-b1.58-2B-4T`; 0.002 with the input rounded as the layer rounds it).
+
 `value_weight(kv) @ x`, plus that head's slice of the projection's bias, is
 `attention_values[:, kv]` for what the attention is called with (`attention_norm_output`, or
 the stream itself on a post-norm block); `sum_j output_weight(j) @ attention_premix[:, t, j]`,
@@ -603,21 +611,26 @@ the keys touches the group of query heads that shares that key head.
 Falcon's attention does its own arithmetic, and `config.alibi` picks one of
 two branches with different operations. Each of the six values names its
 operation by that flag, and all six need only an eager load on either branch.
-Without alibi the queries and keys are the two returns of the rotary
-embedding and the values are bound *before* it, so in one trace the values
-must be read before the queries or keys:
+Without alibi the queries are the rotary embedding's first return; with alibi
+there is no rotary and they are the `query_layer` binding. Either branch then
+updates the cache itself, and where the call has a cache (every call but
+`use_cache=False`) the keys and values are what the update returns, every
+position so far, read after the queries:
 
 ```python
 with model.trace(prompt):
-    v = attn.attention_values.save()       # binds first
     q = attn.attention_queries.save()
-    k = attn.attention_keys.save()
+    k = attn.attention_keys.save()         # the cache update's return
+    v = attn.attention_values.save()
 ```
 
-The other order raises `OutOfOrderError` naming `value_layer_0`. With alibi
-there is no rotary: the three are the `query_layer`, `key_layer` and
-`value_layer` bindings, in that order, so read queries, then keys, then
-values. The pattern is the softmax itself without alibi (no dropout follows)
+Without a cache they are the new tokens' own: the rotary's second return and
+the `value_layer` binding before it without alibi (read the values first
+there), the `key_layer` and `value_layer` bindings with alibi. BLOOM, MPT and
+XGLM update the cache in their own forwards too, and their keys and values are
+the update's return the same way. Whether the call has a cache is read off the
+call's arguments, so read the attention's standard values before its child
+modules' inputs or outputs in one trace. The pattern is the softmax itself without alibi (no dropout follows)
 and the dropout after the second softmax with it. The head outputs are the
 `scores @ values` product on both branches, served `[batch, seq, heads,
 head_dim]` as a view: heads-first without alibi, flattened over batch and
@@ -635,8 +648,12 @@ query head before the rotary embedding, so `attention_keys` and
 
 These seven do their own attention arithmetic too, and their families map the
 same six values onto it: GPT-J's, GPT-Neo's, CodeGen's and GPT-NeoX-Japanese's around
-their `_attn` calls, XGLM's on the flattened tensors its two `bmm` calls take, BLOOM's on
-its `_reshape` split and `bmm`, MPT's on its `*_states` bindings and second `matmul`. The
+their `_attn` calls, XGLM's on its projections, its cache update and the bindings around
+its two `bmm` calls, BLOOM's on its `_reshape` split, its cache update and its merge of the
+heads, MPT's on its `*_states` bindings, its cache update and second `matmul`. Where a
+forward flattens batch and heads together for a `bmm`, the value is read where the batch
+still leads, since nnsight narrows a tensor to an invoke's rows only then: each invoke of a
+trace reads and edits its own rows on all seven. The
 head outputs are heads-first in those forwards and are served as a sequence-first view,
 so an in-place edit still lands. All seven load eager by default. BLOOM's, MPT's,
 CodeGen's, XGLM's and GPT-NeoX-Japanese's values do not check the implementation at all
@@ -657,9 +674,10 @@ The scale sits in a different place on each of the others. CodeGen's scores are
 Its rotary embedding multiplies by a float32 buffer, so on a half-precision model its
 queries (and its keys, when no cache casts them back) are served in float32. XGLM scales
 the queries by `1/sqrt(head_dim)` as it projects them, so `attention_queries` is already
-scaled and the scores are `q @ k^T` plus the mask; each of its six values is a view of the
-`[batch * num_heads, ...]` tensor the forward holds, so an in-place edit lands and an
-assignment is reshaped back. GPT-NeoX-Japanese folds the scale into a `baddbmm` and adds
+scaled and the scores are `q @ k^T` plus the mask, clamped at the dtype's minimum; each of
+its six values is the tensor the forward holds, or a view of it, so an in-place edit lands.
+Its pattern is the softmax's output, which the dropout leaves as it is outside training; in
+training it is the dropout's output. GPT-NeoX-Japanese folds the scale into a `baddbmm` and adds
 the mask after it.
 
 ### GPT-OSS: an attention sink
@@ -681,7 +699,8 @@ pattern_again = combined.softmax(-1)[..., :-1]                        # equals a
 Granite-SWA's sink is not in the pattern. Its rows sum to one and `softmax(scores)`
 reproduces them; the sink scales each head's output after the values are mixed, so
 `attention_head_outputs` carries it and forcing the pattern does not set what a head
-writes ([families.md](../reference/families.md#attention-sink)).
+writes. The scale is computed from the scores, which are read before it, so a write to
+`attention_scores` moves the pattern and the scale together ([families.md](../reference/families.md#attention-sink)).
 
 ### DeepSeek: multi-head latent attention
 
@@ -796,8 +815,9 @@ way. To change what chosen heads read without touching the cache, call
   value is `Unavailable` with the reason above; `support()` says so per block
   before any trace.
 - **Reads follow the forward within one trace.** Queries, keys and values,
-  then scores, then pattern, then head outputs; on Falcon without alibi the
-  values before the queries and keys. An out-of-order read raises `OutOfOrderError`, and
+  then scores, then pattern, then head outputs; on Falcon, BLOOM and MPT the
+  keys and values after the queries where the call has a cache (on Falcon without
+  alibi and without one, the values first). An out-of-order read raises `OutOfOrderError`, and
   inside a `tracer.iter` body the error can name a later location than the one
   you misplaced.
 - **The first trace that reads a child module's value and then an interior value fails.**

@@ -10,6 +10,7 @@ availability is honest, sizes match the tensors.
 import contextlib
 import re
 
+import nnsight
 import pytest
 import torch
 from nnsight import TransformersModel  # nnsight before any transformers submodule
@@ -628,6 +629,57 @@ class FamilySuite:
                 else:
                     assert torch.allclose(sums, torch.ones_like(sums), atol=8 * torch.finfo(probs.dtype).eps, rtol=0)
 
+    def test_keys_and_values_under_generate_are_the_cache(self, model):
+        """On a decode step the keys and values are every position so far, what the attention computes with, and the
+        prompt's rows are what the prompt's call served: the cache's, on a family that updates it in its own forward too."""
+        block = self.attn_block(model)
+        unavailable = block.self_attn.support()
+        names = [name for name in ("attention_keys", "attention_values") if not unavailable.get(name)]
+        if not names:
+            pytest.skip("no keys or values on this checkpoint")
+        read = {name: [] for name in names}
+        with model.generate(PROMPT, max_new_tokens=2, min_new_tokens=2, do_sample=False, use_cache=True) as tracer:
+            for _ in tracer.iter[:2]:
+                for name in names:
+                    read[name].append(getattr(block.self_attn, name).save())
+        n = len(model.tokenizer(PROMPT).input_ids)
+        for name, (prompt, step) in read.items():
+            assert prompt.shape[-2] == n and step.shape[-2] == n + 1, (name, tuple(prompt.shape), tuple(step.shape))
+            torch.testing.assert_close(step[..., :n, :], prompt, msg=name)
+
+    def test_assigned_keys_stay_out_of_the_cache(self, model):
+        """An assignment replaces the keys of that one call: the next step's cache holds the keys the model computed."""
+        block = self.attn_block(model)
+        if block.self_attn.support()["attention_keys"]:
+            pytest.skip("no keys on this checkpoint")
+        n = len(model.tokenizer(PROMPT).input_ids)
+        runs = []
+        for edit in (False, True):
+            with model.generate(PROMPT, max_new_tokens=2, min_new_tokens=2, do_sample=False, use_cache=True) as tracer:
+                read = nnsight.save([])
+                for step in tracer.iter[:2]:
+                    if edit and step == 0:
+                        block.self_attn.attention_keys = block.self_attn.attention_keys * 0
+                    read.append(block.self_attn.attention_keys)
+            runs.append(read)
+        (_, clean), (edited, after) = runs
+        assert not edited.any() and after.shape[-2] == n + 1
+        torch.testing.assert_close(after[..., :n, :], clean[..., :n, :])
+
+    def test_keys_and_values_without_a_cache(self, model):
+        """``use_cache=False``: the keys and values are the call's own, the same a call with a cache computes with on a prompt."""
+        attn = self.attn_block(model).self_attn
+        unavailable = attn.support()
+        names = [name for name in ("attention_keys", "attention_values") if not unavailable.get(name)]
+        if not names:
+            pytest.skip("no keys or values on this checkpoint")
+        for name in names:  # one trace each: without a cache Falcon's values come before its keys
+            with model.trace(PROMPT):
+                cached = getattr(attn, name).save()
+            with model.trace(PROMPT, use_cache=False):
+                uncached = getattr(attn, name).save()
+            torch.testing.assert_close(uncached, cached, msg=name)
+
     def test_pattern_across_layers_and_traces(self, model):
         block = self.attn_block(model)
         last = self.attn_block(model, last=True)
@@ -663,6 +715,39 @@ class FamilySuite:
         for name in names:
             torch.testing.assert_close(first[name][0], together[name][0], msg=name)
             torch.testing.assert_close(second[name][0], together[name][1], msg=name)
+
+    def test_interior_per_invoke(self, model):
+        """Every interior value, under two invokes of one trace: each invoke reads its own row, as one invoke of both
+        does, and an assignment in the first leaves the second's logits as they were."""
+        attn = self.attn_block(model).self_attn
+        unavailable = attn.support()
+        names = [name for name in INTERIOR + ("attention_probabilities",) if not unavailable.get(name)]
+        if not names:
+            pytest.skip("no attention interior on this checkpoint")
+        ids = model.tokenizer(PROMPT).input_ids
+        prompts = [ids, ids[::-1]]  # two different prompts of one length: no padding, so no pad token needed
+        with model.trace() as tracer:
+            with tracer.invoke(prompts[0]):
+                pass
+            with tracer.invoke(prompts[1]):
+                clean = model.logits.save()
+        for name in names:  # one trace each: families bind these at different points of the forward
+            with model.trace(prompts):
+                together = getattr(attn, name).save()
+            with model.trace() as tracer:
+                with tracer.invoke(prompts[0]):
+                    first = getattr(attn, name).save()
+                with tracer.invoke(prompts[1]):
+                    second = getattr(attn, name).save()
+            assert first.shape[0] == second.shape[0] == 1, (name, tuple(first.shape))
+            torch.testing.assert_close(first[0], together[0], msg=name)
+            torch.testing.assert_close(second[0], together[1], msg=name)
+            with model.trace() as tracer:
+                with tracer.invoke(prompts[0]):
+                    setattr(attn, name, getattr(attn, name) * 0)
+                with tracer.invoke(prompts[1]):
+                    other = model.logits.save()
+            torch.testing.assert_close(other, clean, msg=name)
 
     def test_written_pattern_moves_the_logits(self, model):
         """A read can be causally inert (weights a mixer merely returns); only a write tells."""

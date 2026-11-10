@@ -17,10 +17,6 @@ class TestXGLM(FamilySuite):
     MLP_NORM = "final_layer_norm"            # the block's own, native name
     EXPECTED_UNAVAILABLE = {**NO_ROTARY, "mlp_input": "no mlp module", "self_attn.interface": OWN_ARITHMETIC}
 
-    @pytest.mark.xfail(strict=True, reason="the interior is served off [batch * num_heads, ...] tensors, which nnsight narrows to no invoke: each invoke reads the whole batch")
-    def test_pattern_per_invoke(self, model):
-        super().test_pattern_per_invoke(model)
-
     def test_no_mlp_module(self, model):
         """No block has an MLP module, so `support()` lists no ``mlp`` value at all."""
         assert not hasattr(model.layers[0], "mlp")
@@ -54,6 +50,22 @@ class TestXGLM(FamilySuite):
         raw = q @ k.transpose(-1, -2)
         causal = torch.ones(raw.shape[-2:], dtype=torch.bool).tril()
         torch.testing.assert_close(scores[..., causal], raw[..., causal])
+
+    def test_pattern_in_training_is_the_dropout_output(self, model):
+        """Outside training the pattern is read at the softmax's output viewed batch first, which the dropout leaves as it
+        is; in training it is the dropout's output, which differs from it."""
+        attn = model.layers[0].self_attn
+        model._module.train()
+        try:
+            torch.manual_seed(0)
+            with model.trace(PROMPT):
+                softmax = attn.source.attn_weights_reshaped_0.output.clone().save()
+                pattern = attn.attention_probabilities.save()
+                dropped = attn.source.nn_functional_dropout_0.output.save()
+        finally:
+            model._module.eval()
+        torch.testing.assert_close(pattern, dropped.view(pattern.shape))
+        assert not torch.equal(pattern, softmax)
 
     def test_interior_needs_no_eager_load(self):
         """XGLM has one attention implementation, so a default load serves the pattern."""

@@ -1,10 +1,15 @@
 """OPT on vLLM, against the transformers engine: no MLP module on either engine, and pre-scaled queries."""
 
+import gc
+
+import nnsight
 import pytest
 import torch
 import vllm_suite
 from vllm_suite import BOUNDARY, INTERIOR, NO_ROTARY, ROOT, VLLMFamilySuite, close
 
+from nnterp import StandardizedTransformer, StandardizedVLLM
+from nnterp.components import POST_NORM_ATTENTION, POST_NORM_MLP
 from nnterp.families.vllm import opt
 
 suite_boundary = vllm_suite.boundary
@@ -26,6 +31,43 @@ def boundary(layer, interior=()):
     values["mlp_output"] = fc2_output(layer).cpu()
     values["layer_output"] = layer.layer_output.cpu()
     return values
+
+
+class TestVLLMOPTPostNormBoundaries:
+    """OPT-350m's post-norm blocks (``do_layer_norm_before`` false), on vLLM against transformers: the norms follow the
+    adds, so ``layer_mid`` is ``self_attn_layer_norm``'s output and no norm precedes either sublayer, on both engines."""
+
+    REPO = "facebook/opt-350m"
+    BOUNDARIES = ("attention_norm_output", "layer_mid", "mlp_norm_output")
+
+    @pytest.fixture(scope="class")
+    def reference(self):
+        hf = StandardizedTransformer(self.REPO, device_map="cuda", dtype=torch.float32, attn_implementation="eager")
+        ids = hf.tokenizer(vllm_suite.PROMPT)["input_ids"]
+        picked = sorted({0, hf.num_layers // 2, hf.num_layers - 1})
+        support = {name: hf.support(layer=0)[name] for name in self.BOUNDARIES}
+        with torch.no_grad(), hf.trace(torch.tensor([ids])):
+            mids = nnsight.save({i: hf.layers[i].layer_mid.cpu() for i in picked})
+        del hf
+        gc.collect()
+        torch.cuda.empty_cache()
+        return {"ids": ids, "picked": picked, "support": support, "mids": mids}
+
+    @pytest.fixture(scope="class")
+    def model(self, reference):
+        model = StandardizedVLLM(self.REPO, dispatch=True, dtype="float32", gpu_memory_utilization=0.2, max_model_len=512)
+        yield model
+        model.vllm_entrypoint.llm_engine.engine_core.shutdown()
+
+    def test_boundaries_are_transformers(self, model, reference):
+        support = model.support(layer=0)
+        assert {name: support[name] for name in self.BOUNDARIES} == reference["support"]
+        assert support["attention_norm_output"] == POST_NORM_ATTENTION and support["mlp_norm_output"] == POST_NORM_MLP
+        with model.trace(reference["ids"], temperature=0.0, max_tokens=1):
+            mids = nnsight.save({i: model.layers[i].layer_mid.cpu() for i in reference["picked"]})
+        for i, mid in mids.items():
+            want = reference["mids"][i]  # transformers' rows are flat
+            close(mid, want.reshape(mid.shape), 5e-3, f"layers[{i}].layer_mid")
 
 
 class TestVLLMOPT(VLLMFamilySuite):

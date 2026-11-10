@@ -149,8 +149,9 @@ As on Granite Swash, each head's output is multiplied after the softmax by
 `sigmoid(logsumexp(scores) - sink)`, with the sink in `self_attn._module.sinks`, so
 `attention_probabilities` rows sum to one and `attention_head_outputs` are read after the scale.
 On a code prompt the median of that share over heads and queries is 0.84 in block 0, and 0.14 to
-0.25 in blocks 1, 3 and 27. A pattern read as what a head moves is `probs * share[..., None]`; to
-set what a head writes, edit `attention_head_outputs`.
+0.25 in blocks 1, 3 and 27. A pattern read as what a head moves is `probs * share[..., None]`; a
+write to `attention_scores` moves the pattern and the share together; to set what a head writes,
+edit `attention_head_outputs`.
 
 ```python
 attn = model.layers[1].self_attn

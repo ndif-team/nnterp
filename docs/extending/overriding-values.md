@@ -211,10 +211,12 @@ exists.
   for the queries, `select=1` keys, `select=2` values.
 - `output` with `select=i` is one element of a returned tuple. BLOOM's `_reshape`
   returns `(query, key, value)`, so its family reads
-  `EProperty("source.self__reshape_0.output", select=0)` for the queries and
-  `select=1`, `select=2` for the rest; Falcon's queries and keys are
-  `apply_rotary_pos_emb_0`'s two returns, and its values the `value_layer_0` binding just
-  before it.
+  `EProperty("source.self__reshape_0.output", select=0)` for the queries; its forward
+  then updates the cache, `layer_past.update(key, value)`, which returns every position's
+  keys and values, and the keys and values are that call's `select=0` and `select=1`
+  where the call has a cache, `_reshape`'s `select=1` and `select=2` where it has none
+  (`nnterp.components.by_cache` gives the key and the select). Falcon's queries and keys
+  are `apply_rotary_pos_emb_0`'s two returns where it has none.
 
 The element handed back is the object the call holds, so in-place edits reach the model;
 a transform is there for a value whose stub returns a copy.
@@ -393,9 +395,13 @@ def attention_head_outputs(self, value):
     return seq_first(value)
 ```
 
-A view keeps in-place edits landing on the model's tensor. BLOOM's `bmm` result is
-`[batch * num_heads, seq, head_dim]`, so its family views and transposes on read and
-reverses both on write in the `postprocess`.
+A view keeps in-place edits landing on the model's tensor. Read a value where the forward
+holds it batch first: nnsight narrows a served tensor to an invoke's rows only when its
+leading axis is the batch, so a `[batch * num_heads, ...]` tensor would hand every invoke
+the whole batch, and an edit in one invoke would reach the others. BLOOM's `bmm` result is
+such a tensor, so its family reads the head outputs once `_merge_heads` has made them
+`[batch, seq, num_heads * head_dim]`, and views them per head (`unflatten`, `flatten` back
+in the `postprocess`).
 
 ## A clone carried back by a transform
 

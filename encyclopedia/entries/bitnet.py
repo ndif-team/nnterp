@@ -116,7 +116,11 @@ forward. On the packed checkpoint they are stored ternary, four to a byte, with 
 of the rounded input by the ternarized weight exactly, and differs from
 `F.linear(input, weight)` by 2.4 times its own norm. An edit at a projection's input is rounded
 with the rest of the row, and a weight edit on the bf16 checkpoint is re-ternarized: adding
-`0.1 · mean|W|` to one `q_proj` weight at block 1 leaves the logits bit-identical. The page's
+`0.1 · mean|W|` to one `q_proj` weight at block 1 leaves the logits bit-identical.
+`self_attn.value_weight(kv)` and `output_weight(j)` slice the weight a projection applies,
+ternarized (times `weight_scale` on the packed checkpoint), not the one it stores; with the input
+rounded as the projection rounds it, `value_weight(kv)` reproduces `attention_values` to bfloat16
+rounding (a relative error of 0.002 at block 3 of either checkpoint). The page's
 printout comes from a meta build, where the projections are plain `Linear`: transformers replaces
 them with `AutoBitLinear` when the weights load.
 

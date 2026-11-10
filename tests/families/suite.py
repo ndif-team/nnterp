@@ -754,7 +754,7 @@ class FamilySuite:
         sums_plainly = plain(out, mid, added)
         generator = torch.Generator().manual_seed(0)
         rms = mid.float().pow(2).mean().sqrt().clamp(min=1e-3).item()
-        delta = (torch.randn(mid.shape, generator=generator) * rms * 0.5).to(mid.dtype)
+        delta = (torch.randn(mid.shape, generator=generator) * rms * 0.5).to(mid)  # on the model's device
         new, other = mid + delta, mid - 2 * delta
 
         written = {}
@@ -795,8 +795,8 @@ class FamilySuite:
 
         grads = {}
         for form in ("assign", "in place"):
-            v = torch.zeros(mid.shape[-1], dtype=mid.dtype, requires_grad=True)
-            alpha = torch.ones((), dtype=mid.dtype, requires_grad=True)
+            v = torch.zeros(mid.shape[-1], dtype=mid.dtype, device=mid.device, requires_grad=True)
+            alpha = torch.ones((), dtype=mid.dtype, device=mid.device, requires_grad=True)
             with model.trace(PROMPT):
                 if form == "assign":
                     layer.layer_mid = layer.layer_mid.clone() * alpha + v

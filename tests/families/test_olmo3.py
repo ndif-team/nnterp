@@ -1,12 +1,11 @@
 """OLMo 3, end to end: post-norms only, sliding and full attention layers."""
 
-import glob
 import json
 import os
 import tempfile
 
 import torch
-from suite import FamilySuite, PROMPT, rows
+from suite import FamilySuite, PROMPT, rows, cached_snapshot, built
 
 from nnterp.families import olmo3
 
@@ -22,7 +21,7 @@ def _patched_checkpoint(repo="yujiepan/olmo-3-tiny-random"):
     tokenizer are symlinked, only ``config.json`` is rewritten. The family itself
     needs nothing.
     """
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="olmo3-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -36,7 +35,7 @@ def _patched_checkpoint(repo="yujiepan/olmo-3-tiny-random"):
 
 
 class TestOlmo3(FamilySuite):
-    REPO = _patched_checkpoint()
+    REPO = built(_patched_checkpoint)
     FAMILY = olmo3
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln1=None)
     ATTENTION_NORM = None

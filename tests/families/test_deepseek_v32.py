@@ -1,12 +1,11 @@
 """DeepSeek-V3.2, end to end: latent attention with DeepSeek Sparse Attention."""
 
-import glob
 import json
 import os
 import tempfile
 
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT, cached_snapshot, built
 
 from nnterp.families import deepseek_v32
 
@@ -15,7 +14,7 @@ REPO = "hf-tiny-v2/tiny-random-DeepseekV32ForCausalLM"
 
 def _patched_checkpoint(repo=REPO, **changes):
     """The tiny checkpoint with ``changes`` written into its config: the same weights, symlinked."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="deepseek-v32-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -83,7 +82,7 @@ class TestDeepseekV32(FamilySuite):
 class TestDeepseekV32Sparse(FamilySuite):
     """The same weights with ``index_topk = 2``: the suite's three-token prompt then drops a key from the last row."""
 
-    REPO = _patched_checkpoint(index_topk=2)
+    REPO = built(_patched_checkpoint, index_topk=2)
     FAMILY = deepseek_v32
     NATIVE = LLAMA_ROWS
     KV_HEADS_EXPANDED = True

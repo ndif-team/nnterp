@@ -1,7 +1,6 @@
 """Gemma 4 unified, text: Gemma 4's sandwich block and learned block scale, with no per-layer embeddings and no
 mixture of experts, behind an encoder-free image embedder."""
 
-import glob
 import os
 import tempfile
 
@@ -24,8 +23,10 @@ def _tiny_wrapper() -> str:
     """The tiny wrapper ``tests/families/test_gemma4_unified_text.py`` builds (``_unified_checkpoint``): no tiny
     ``gemma4_unified`` checkpoint is published, so the suite writes one into the temp dir, named after the snapshot of
     the tiny text checkpoint it wraps. The same path, so the wrapper's ``pinned`` is the suite's ``REPO``."""
-    snapshots = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{PINNED.replace('/', '--')}/snapshots/*"))
-    snapshot = os.path.basename(snapshots[0]) if snapshots else "missing"
+    from huggingface_hub import try_to_load_from_cache
+
+    config = try_to_load_from_cache(PINNED, "config.json")  # the configured cache's snapshot, as the suite resolves it
+    snapshot = os.path.basename(os.path.dirname(config)) if isinstance(config, str) else "missing"
     return os.path.join(tempfile.gettempdir(), f"nnterp-gemma4-unified-{snapshot}")
 
 

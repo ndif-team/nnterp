@@ -5,7 +5,7 @@ import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, cached_snapshot, built
 from vision_suite import IMAGE, VisionSuite, WrapperSuite, image_prompt, siglip_rows
 
 from nnterp import StandardizedTransformer
@@ -50,12 +50,11 @@ def _paligemma2_checkpoint():
     """
     from transformers import AutoConfig, AutoModelForImageTextToText, AutoProcessor, PaliGemmaConfig, PaliGemmaProcessor
 
-    cache = os.path.expanduser(f"~/.cache/huggingface/hub/models--{TEXT_REPO.replace('/', '--')}")
-    snapshot = open(os.path.join(cache, "refs", "main")).read().strip()
-    built = os.path.join(tempfile.gettempdir(), f"nnterp-paligemma2-{snapshot}")
+    snapshot = cached_snapshot(TEXT_REPO)
+    built = os.path.join(tempfile.gettempdir(), f"nnterp-paligemma2-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(built, "processor_config.json")):
         return built
-    text = AutoConfig.from_pretrained(os.path.join(cache, "snapshots", snapshot))
+    text = AutoConfig.from_pretrained(snapshot)
     text.vocab_size = 257216
     processor = AutoProcessor.from_pretrained(PALIGEMMA_REPO)
     vision = AutoConfig.from_pretrained(PALIGEMMA_REPO).vision_config
@@ -75,18 +74,17 @@ def _paligemma2_checkpoint():
     return built
 
 
-PALIGEMMA2 = _paligemma2_checkpoint()
-
 
 class TestPaliGemma2Wrapper(WrapperSuite):
     """PaliGemma 2: the Gemma 2 text stack at ``model.language_model``. Its processor refuses a prompt without an image,
     so the text-only trace takes the tokenizer's encoding."""
 
     FAMILY = gemma2
+    REPO = built(_paligemma2_checkpoint)
 
     @pytest.fixture(scope="class")
     def model(self):
-        return StandardizedTransformer(PALIGEMMA2, task="image-text-to-text", dispatch=True, attn_implementation="eager")
+        return StandardizedTransformer(self.REPO, task="image-text-to-text", dispatch=True, attn_implementation="eager")
 
     def text_input(self, model):
         return dict(model.tokenizer(PROMPT, return_tensors="pt"))
@@ -113,7 +111,7 @@ class TestPaliGemma2Wrapper(WrapperSuite):
 class TestPaliGemma2Vision(VisionSuite):
     """PaliGemma 2's SigLIP tower and linear projector, and the tower's image values, on `_paligemma2_checkpoint`."""
 
-    REPO = PALIGEMMA2
+    REPO = built(_paligemma2_checkpoint)
     FAMILY = gemma2
     TEXT_REPO = TEXT_REPO
     VISION_NATIVE = siglip_rows()

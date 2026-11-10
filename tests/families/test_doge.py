@@ -1,6 +1,5 @@
 """Doge, end to end: a gated residual (the stream is scaled, the contributions are not) and a dynamic mask."""
 
-import glob
 import os
 import tempfile
 
@@ -8,7 +7,7 @@ import pytest
 import torch
 import transformers
 from packaging.version import Version
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, cached_snapshot, built, patched_checkpoint
 
 from nnterp.families import doge
 
@@ -25,7 +24,7 @@ def _gated_checkpoint(repo=REPO):
     """
     from safetensors.torch import load_file, save_file
 
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = os.path.join(tempfile.gettempdir(), f"nnterp-doge-gated-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
@@ -72,7 +71,7 @@ class TestDoge(FamilySuite):
 class TestDogeGated(FamilySuite):
     """Gates away from one: the contributions are still the modules' outputs, and the identity carries the gates."""
 
-    REPO = _gated_checkpoint()
+    REPO = built(_gated_checkpoint)
     FAMILY = doge
     NATIVE = LLAMA_ROWS
     MID_IDENTITY = False                     # the residual gates scale what the block adds
@@ -98,32 +97,27 @@ class TestDogeGated(FamilySuite):
         assert not torch.allclose(x + attn + mlp, out)
 
 
-def _moe_checkpoint(repo=REPO):
-    """The tiny checkpoint's config with ``is_moe`` set (16 product-key experts, top 4), randomly initialised, with its tokenizer."""
-    from transformers import AutoConfig, AutoModelForCausalLM
-
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
-    patched = tempfile.mkdtemp(prefix="nnterp-doge-moe-")
-    config = AutoConfig.from_pretrained(snapshot)
-    config.is_moe, config.num_experts, config.num_experts_per_tok = True, 16, 4
-    torch.manual_seed(0)
-    AutoModelForCausalLM.from_config(config).save_pretrained(patched)
-    for name in os.listdir(snapshot):
-        if name.startswith("tokenizer") or name.endswith((".jinja", "special_tokens_map.json")):
-            target = os.path.join(patched, name)
-            if not os.path.exists(target):
-                os.symlink(os.path.realpath(os.path.join(snapshot, name)), target)
-    return patched
+def draw_gates(model):
+    """The residual gates drawn from ``[0.5, 1.5)``: an initialization leaves them one, a trained Doge's are not."""
+    for layer in model.model.layers:
+        layer.input_residual.uniform_(0.5, 1.5)
+        layer.post_attention_residual.uniform_(0.5, 1.5)
 
 
-class TestDogeMoe:
-    """The cross-domain mixture: it runs from transformers 5.18; its mixture values are unavailable either way."""
+class TestDogeMoe(FamilySuite):
+    """The cross-domain mixture (``is_moe``, as on Doge-40M-MoE): 16 product-key experts, top 4, behind gates away from
+    one. It runs from transformers 5.18; its mixture values are unavailable either way. The tiny config with
+    ``is_moe`` set, weights drawn for it, the gates too."""
 
-    @pytest.fixture(scope="class")
-    def model(self):
-        from nnterp import StandardizedTransformer
+    REPO = built(patched_checkpoint, REPO, init=draw_gates, is_moe=True, num_experts=16, num_experts_per_tok=4)
+    FAMILY = doge
+    NATIVE = LLAMA_ROWS
+    MID_IDENTITY = False                     # the residual gates scale the stream the block carries
+    EXPECTED_UNAVAILABLE = {"mlp.mlp_activation": "", "mlp.mlp_neurons": ""}  # the mixture's interior: no one activation
 
-        return StandardizedTransformer(_moe_checkpoint(), attn_implementation="eager")
+    def test_contribution_identity(self, model):
+        """The suite's identity with the block's gates on the residual."""
+        gated_identity(model)
 
     def test_mixture_values_say_why(self, model):
         assert isinstance(model.layers[0].mlp, doge.Moe)

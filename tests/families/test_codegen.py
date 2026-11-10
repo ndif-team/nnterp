@@ -2,8 +2,9 @@
 
 import math
 
+import pytest
 import torch
-from suite import FamilySuite, rows, PROMPT
+from suite import FamilySuite, rows, PROMPT, built, patched_checkpoint
 
 from nnterp.families import codegen
 
@@ -14,6 +15,23 @@ class TestCodeGen(FamilySuite):
     NATIVE = rows("transformer", "h", "wte", "ln_f", attn="attn", ln1="ln_1", ln2=None)
     MLP_NORM = "input_layernorm"             # parallel: ln_1 feeds both sublayers
     EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+
+    def test_an_in_place_edit_before_the_rotary(self, model):
+        """The head split reshapes a ``torch.split`` output: with one head per ``mp_num`` group (the tiny checkpoint's 4
+        heads) the result is a view torch refuses to edit in place; with more (every released CodeGen: 16 to 24
+        heads) it is a copy, and the edit lands."""
+        attn = model.layers[0].self_attn
+        if model.num_heads // 4 == 1:
+            with pytest.raises(RuntimeError, match="view"):
+                with model.trace(PROMPT):
+                    attn.attention_queries_prerope[:, 0, -1] += 1.0
+            return
+        with model.trace(PROMPT):
+            clean = attn.attention_queries.save()
+        with model.trace(PROMPT):
+            attn.attention_queries_prerope[:, 0, -1] += 1.0
+            moved = attn.attention_queries.save()
+        assert not torch.equal(moved[:, 0, -1], clean[:, 0, -1]) and torch.equal(moved[:, 1:], clean[:, 1:])
 
     def test_block_returns_a_tuple(self, model):
         with model.trace(PROMPT):
@@ -39,3 +57,10 @@ class TestCodeGen(FamilySuite):
         with model.trace(PROMPT):
             pattern = model.layers[0].self_attn.attention_probabilities.save()
         torch.testing.assert_close(pattern.sum(-1), torch.ones_like(pattern.sum(-1)))
+
+
+class TestCodeGenHeads(TestCodeGen):
+    """Every released CodeGen's head layout: several heads per ``mp_num`` group (16 heads of 4 here; 16 of 64 on
+    codegen-350M), where the head split copies. The tiny config with 16 heads, weights drawn for it."""
+
+    REPO = built(patched_checkpoint, TestCodeGen.REPO, draw=True, n_head=16, n_embd=64)

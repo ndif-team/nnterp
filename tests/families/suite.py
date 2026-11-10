@@ -89,6 +89,12 @@ def rows(container, layers, embed, norm, attn="self_attn", mlp="mlp", ln1="input
 LLAMA_ROWS = rows("model", "layers", "embed_tokens", "norm")
 
 
+def blocks(model, kind: str) -> list[int]:
+    """The blocks the text config's ``layer_types`` names ``kind`` (``linear_attention``, ``full_attention``; ``mlp``,
+    ``moe`` on Nemotron-H): a hybrid's test reads its layout from the checkpoint it runs on, not the tiny one's indices."""
+    return [i for i, k in enumerate(model.config.get_text_config().layer_types) if k == kind]
+
+
 def listed(name: str, text: str) -> bool:
     """Whether an envoy repr lists value ``name``: ``(name) -> Layout [axes]: ...``, or ``(name): ...`` for a value without a layout (and on an nnsight that prints the description alone)."""
     return f"({name}):" in text or f"({name}) -> " in text
@@ -124,6 +130,108 @@ def near(actual, expected, like, ulps: int = 16):
     scale = max(1.0, float(like.detach().abs().max())) if like.numel() else 1.0
     expected = expected if isinstance(expected, torch.Tensor) else torch.as_tensor(expected)
     torch.testing.assert_close(actual.double(), expected.double().to(actual.device).expand_as(actual), rtol=0, atol=ulps * eps * scale)
+
+
+class built:
+    """A class attribute computed when it is first read, not at import: ``REPO = built(patched_checkpoint, repo, ...)``.
+
+    A helper that writes a patched copy of a cached checkpoint then runs where the attribute is read (the ``model``
+    fixture; pytest also reads it when it looks the class over, and ignores an error there), so a snapshot missing
+    from the cache errors that class's tests instead of stopping the module's collection, and a subclass that sets
+    the attribute itself (the harness's trained checkpoint) never builds it. The value is kept once built.
+    """
+
+    def __init__(self, build, *args, **kwargs):
+        self.build, self.args, self.kwargs, self.value = build, args, kwargs, None
+
+    def __get__(self, obj, owner=None):
+        if self.value is None:
+            self.value = self.build(*self.args, **self.kwargs)
+        return self.value
+
+
+def cached_snapshot(repo: str) -> str:
+    """The directory of ``repo``'s cached snapshot, in the Hugging Face cache the environment configures (``HF_HOME``,
+    ``HF_HUB_CACHE``); never a download. The snapshot is the one a load of ``repo`` by name reads (``main``), whose
+    ``config.json`` is cached; files the tests never load (an ONNX export) may be missing from it."""
+    import os
+
+    from huggingface_hub import try_to_load_from_cache
+
+    config = try_to_load_from_cache(repo, "config.json")
+    if not isinstance(config, str):
+        raise FileNotFoundError(f"{repo}'s config.json is not in the Hugging Face cache")
+    return os.path.dirname(config)
+
+
+def patched_checkpoint(repo: str, draw: bool = False, init=None, **config) -> str:
+    """A copy of ``repo``'s cached checkpoint with ``config`` written over its ``config.json``, in the temp dir: the
+    layout of a config branch no pinned tiny checkpoint takes, for a test class to load as its ``REPO``.
+
+    A dict value updates the dict the config holds under that key (``rope_parameters``). The weights are the
+    checkpoint's own, linked, unless ``draw`` (the new layout changes their shapes) or ``init`` is given: then they
+    are drawn for the new config with seed 0, ``init(model)`` (under ``torch.no_grad()``) sets what the branch needs
+    and an initialization leaves degenerate (a router of zeros, a bias of zeros), and they are written. The
+    tokenizer and the other files are linked either way. The copy is written once per snapshot, change and
+    transformers release, and shared by the test processes (each builds its own and renames it into place).
+    """
+    import hashlib
+    import inspect
+    import json
+    import os
+    import shutil
+    import tempfile
+
+    import transformers
+    from transformers import AutoConfig, AutoModelForCausalLM
+
+    source = cached_snapshot(repo)
+    draw = draw or init is not None
+    key = json.dumps([source, config, draw, init and inspect.getsource(init), transformers.__version__], sort_keys=True)
+    patched = os.path.join(tempfile.gettempdir(), f"nnterp-{repo.rsplit('/', 1)[-1]}-{hashlib.sha1(key.encode()).hexdigest()[:12]}")
+    if os.path.isdir(patched):
+        return patched
+    building = tempfile.mkdtemp(prefix=os.path.basename(patched) + "-")
+    raw = json.load(open(os.path.join(source, "config.json")))
+    for name, value in config.items():
+        raw[name] = {**raw[name], **value} if isinstance(value, dict) and isinstance(raw.get(name), dict) else value
+    json.dump(raw, open(os.path.join(building, "config.json"), "w"))
+    if draw:
+        torch.manual_seed(0)
+        model = AutoModelForCausalLM.from_config(AutoConfig.from_pretrained(building), dtype=torch.float32)
+        if init is not None:
+            with torch.no_grad():
+                init(model)
+        model.save_pretrained(building)
+    weights = (".safetensors", ".bin", ".safetensors.index.json", ".bin.index.json")
+    for name in os.listdir(source):  # after the save: a file it writes must not land through a link in the cache
+        target = os.path.join(building, name)
+        if not os.path.exists(target) and not (draw and name.endswith(weights)):
+            os.symlink(os.path.realpath(os.path.join(source, name)), target)
+    try:
+        os.rename(building, patched)
+    except OSError:  # another process put its copy there first
+        shutil.rmtree(building)
+    return patched
+
+
+def draw_routers(model):
+    """An ``init`` for `patched_checkpoint`: every router's weight (``mlp.gate.weight``) and selection bias
+    (``e_score_correction_bias``) drawn. An initialization leaves them zero, so every token routes alike (ties broken
+    by index), as on several tiny checkpoints; a trained router discriminates."""
+    for name, tensor in [*model.named_parameters(), *model.named_buffers()]:
+        if name.endswith("mlp.gate.weight"):
+            tensor.normal_(0, 0.5)
+        elif name.endswith("e_score_correction_bias"):
+            tensor.normal_(0, 0.1)
+
+
+def draw_biases(model):
+    """An ``init`` for `patched_checkpoint`: every linear projection's bias drawn. An initialization leaves them zero,
+    where a trained checkpoint's are not."""
+    for module in model.modules():
+        if isinstance(module, torch.nn.Linear) and module.bias is not None:
+            module.bias.normal_(0, 0.1)
 
 
 def random_weights(repo, **overrides):
@@ -188,7 +296,8 @@ class FamilySuite:
     ATTENTION_SINK = False
     #: The keys and values are read already expanded to ``num_heads`` (latent attention; Falcon's 40B layout).
     KV_HEADS_EXPANDED = False
-    #: A config key naming the first block's MLP width when it is not `intermediate_size` (an all-MoE family's experts).
+    #: A config key naming the MLP width of a mixture block when it is not `intermediate_size` (the experts' width);
+    #: read where the first block with an MLP is a mixture, so a checkpoint whose first MLP is dense uses the plain rule.
     MLP_WIDTH_KEY = None
     #: Extra load arguments for this checkpoint (a dtype a degenerate tiny checkpoint needs).
     LOAD_KWARGS: dict = {}
@@ -264,8 +373,13 @@ class FamilySuite:
     def test_family_resolved(self, model):
         assert model.family is self.FAMILY
 
+    def native(self, model) -> dict:
+        """`NATIVE` for this checkpoint: a family whose block kinds follow the config overrides it to name a block of
+        each kind by the config, not by the tiny checkpoint's indices."""
+        return self.NATIVE
+
     def test_standard_names_alias_native_envoys(self, model):
-        for standard, native in self.NATIVE.items():
+        for standard, native in self.native(model).items():
             assert isinstance(model.get(standard), Envoy), standard
             assert model.get(standard) is model.get(native), (standard, native)
 
@@ -274,8 +388,8 @@ class FamilySuite:
         assert "model" not in model._aliases
 
     def test_every_layer_is_renamed(self, model):
-        assert len(model.layers) > 1
-        names = [key.removeprefix("layers.0.") for key in self.NATIVE if key.startswith("layers.0.")]
+        assert len(model.layers) == model.num_layers >= 1
+        names = [key.removeprefix("layers.0.") for key in self.native(model) if key.startswith("layers.0.")]
         for layer in model.layers:
             for name in names:
                 assert isinstance(getattr(layer, name), Envoy), (layer.path, name)
@@ -324,12 +438,13 @@ class FamilySuite:
         for name, reason in model.support().items():
             if name.removeprefix("mlp.") in MOE:
                 continue  # test_moe_support_is_what_this_family_expects
-            if name in MLP_INTERIOR and name not in expected:
+            if name in MLP_INTERIOR and name not in expected:  # per block: served on a dense MLP, not on a mixture or where no MLP is
                 routed = {i for i, layer in enumerate(model.layers) if isinstance(getattr(layer, "mlp", None), Moe) and not layer.mlp.no_mixture()}
                 no_mlp = {i for i, layer in enumerate(model.layers) if getattr(layer, "mlp", None) is None}
-                if routed:
+                if routed or no_mlp:
                     assert isinstance(reason, dict) and set(reason) == routed | no_mlp, (name, reason)
                     assert all("routed experts" in r for i, r in reason.items() if i in routed), (name, reason)
+                    assert all("no mlp module" in r for i, r in reason.items() if i in no_mlp), (name, reason)
                     continue
             if name in expected:
                 if isinstance(reason, str):  # a root value's reason is one string
@@ -374,8 +489,9 @@ class FamilySuite:
             assert torch.equal(std, raw) and std.shape[-1] == model.hidden_size, i
         with model.trace(PROMPT):
             clean = model.logits.save()
+        second = model.layers[min(1, len(model.layers) - 1)]  # block 1, or the only block of a one-block checkpoint
         with model.trace(PROMPT):
-            model.layers[1].layer_input = model.layers[1].layer_input * 0
+            second.layer_input = second.layer_input * 0
             edited = model.logits.save()
         assert not torch.equal(clean, edited)
 
@@ -858,9 +974,10 @@ class FamilySuite:
             value = getattr(host, name).save()
         return value
 
-    def rotated_as_served(self, attn, name, rotated):
-        """What the attention receives, given `rotate` of the value before the rotary ``name``: the rotated value itself,
-        unless the block does more between the rotary and the attention (a norm, a tiling), which a family's test says."""
+    def rotated_as_served(self, attn, name, rotated, positions):
+        """What the attention receives, given `rotate` of the value before the rotary ``name`` at ``positions``: the
+        rotated value itself, unless the block does more between the rotary and the attention (a norm, a tiling, a
+        scale by position), which a family's test says."""
         return rotated
 
     def test_rotate_gives_the_rotated_queries_and_keys(self, model):
@@ -875,7 +992,8 @@ class FamilySuite:
         assert pairs, attn.support()
         for pre, post in pairs:
             before, after = self.read_one(model, attn, pre), self.read_one(model, attn, post)
-            rotated = self.rotated_as_served(attn, pre, attn.rotate(before, torch.arange(before.shape[-2])))
+            positions = torch.arange(before.shape[-2])
+            rotated = self.rotated_as_served(attn, pre, attn.rotate(before, positions), positions)
             if getattr(type(attn), pre).layout is getattr(type(attn), post).layout:
                 assert rotated.shape == after.shape, (pre, tuple(rotated.shape), tuple(after.shape))
             width = rotated.shape[-1]
@@ -897,7 +1015,7 @@ class FamilySuite:
             others = list(range(target))
             assert torch.equal(after[..., others, :], clean[..., others, :]), pre
             assert not torch.equal(after[..., target, :], clean[..., target, :]), pre
-            rotated = self.rotated_as_served(attn, pre, attn.rotate(before[..., source:source + 1, :], [target]))
+            rotated = self.rotated_as_served(attn, pre, attn.rotate(before[..., source:source + 1, :], [target]), torch.tensor([target]))
             width = rotated.shape[-1]
             assert torch.equal(after[..., target:, -width:], rotated.expand_as(after[..., target:, -width:])), pre
 
@@ -990,7 +1108,7 @@ class FamilySuite:
             with model.trace(PROMPT):
                 x = layer.layer_input.save()
                 normed = layer.attention_norm_output.save()
-            zero = torch.zeros(x.shape[-1], dtype=x.dtype)
+            zero = torch.zeros(x.shape[-1], dtype=x.dtype, device=x.device)  # where the norm's weights are
             offset = norm(zero).double()  # the norm's bias, zero on an RMS norm
             centred = torch.equal(norm(zero + 3), norm(zero))  # a LayerNorm takes a constant to its bias
         finally:
@@ -1023,6 +1141,8 @@ class FamilySuite:
     # -- methods over the values -------------------------------------------------
 
     def test_skip_layers_hands_the_stream_straight_through(self, model):
+        if model.num_layers < 2:
+            pytest.skip("one block: no blocks after the first to skip")
         last = model.num_layers - 1
         with model.trace(PROMPT):
             first = model.layers[0].layer_output.save()
@@ -1033,6 +1153,8 @@ class FamilySuite:
         torch.testing.assert_close(logits, model.project_on_vocab(first))
 
     def test_skip_layers_with_a_given_stream(self, model):
+        if model.num_layers < 2:
+            pytest.skip("one block: no next block to receive the given stream")
         with model.trace(PROMPT):
             clean = model.layers[0].layer_output.save()
         with model.trace(PROMPT):
@@ -1239,8 +1361,14 @@ class FamilySuite:
         block = next((layer for layer in model.layers if getattr(layer, "mlp", None) is not None), block)._module
         dims = {d for p in block.parameters() for d in p.shape}
         assert isinstance(model.intermediate_size, int)  # resolves on every family, whatever the config calls it
-        width = getattr(model.config.get_text_config(), self.MLP_WIDTH_KEY) if self.MLP_WIDTH_KEY else model.intermediate_size
-        assert width in dims, (self.MLP_WIDTH_KEY or "intermediate_size", width, dims)
+        key = self.mlp_width_key(model)
+        width = getattr(model.config.get_text_config(), key) if key else model.intermediate_size
+        assert width in dims, (key or "intermediate_size", width, dims)
+
+    def mlp_width_key(self, model):
+        """`MLP_WIDTH_KEY` where the first block with an MLP runs a mixture of experts; None (`intermediate_size`) where it is dense."""
+        first = next((layer.mlp for layer in model.layers if getattr(layer, "mlp", None) is not None), None)
+        return self.MLP_WIDTH_KEY if isinstance(first, Moe) and first.no_mixture() is None else None
 
     def test_per_module_sizes_match_each_block(self, model):
         """Each block's attention and MLP report the sizes of their own tensors.
@@ -1293,8 +1421,8 @@ class FamilySuite:
             assert width in dims, (mlp.path, width, dims)
             if experts is None:
                 assert width == model.intermediate_size, (mlp.path, width, model.intermediate_size)
-        if mlps and self.MLP_WIDTH_KEY:
-            assert mlps[0].intermediate_size == getattr(model.config.get_text_config(), self.MLP_WIDTH_KEY)
+        if mlps and self.mlp_width_key(model):
+            assert mlps[0].intermediate_size == getattr(model.config.get_text_config(), self.mlp_width_key(model))
 
     def test_repr_lists_the_values(self, model):
         blocks = self.attn_blocks(model)
@@ -1331,6 +1459,11 @@ class FamilySuite:
     def routed_scale(self, host) -> float:
         """What ``routed_output`` is times the experts' sum (Laguna scales it in the mixture)."""
         return 1.0
+
+    def routed_from_experts(self, host, summed):
+        """What a sum of expert outputs, or a difference of them, adds to ``routed_output``: the sum times `routed_scale`,
+        unless the mixture maps the experts' width back to the stream's (Nemotron-H's ``fc2_latent_proj``)."""
+        return summed * self.routed_scale(host)
 
     def mixture_output(self, model, host):
         """What ``routed_output + shared_expert_output`` equals: the mixture's own output, ``[batch, seq, hidden_size]``."""
@@ -1372,7 +1505,7 @@ class FamilySuite:
         got = self.moe_read(model, host, "expert_outputs", "routed_output")
         slots, routed = got["expert_outputs"], got["routed_output"]
         assert slots.shape[:3] == (*routed.shape[:2], host.top_k) and slots.shape[3] == routed.shape[2]
-        near(slots.sum(2) * self.routed_scale(host), routed, routed)
+        near(self.routed_from_experts(host, slots.sum(2)), routed, routed)
 
     def test_routed_plus_shared_is_the_mixture(self, model):
         host = self.moe(model)
@@ -1422,7 +1555,7 @@ class FamilySuite:
         assert change[t].abs().max() > 0
         if self.available(host, "expert_outputs"):
             slots = self.moe_read(model, host, "expert_outputs")["expert_outputs"]
-            near(change[t], slots[0, t, j] * self.routed_scale(host), routed)
+            near(change[t], self.routed_from_experts(host, slots[0, t, j]), routed)
 
     def test_ablating_one_expert_everywhere(self, model):
         """``expert_weights = w.masked_fill(expert_indices == e, 0)`` removes exactly expert ``e``'s slots."""
@@ -1443,7 +1576,7 @@ class FamilySuite:
         near(change[~touched], 0.0, routed)
         if self.available(host, "expert_outputs"):
             slots = self.moe_read(model, host, "expert_outputs")["expert_outputs"]
-            expected = routed - (slots * (idx == e)[..., None]).sum(2) * self.routed_scale(host)
+            expected = routed - self.routed_from_experts(host, (slots * (idx == e)[..., None]).sum(2))
             near(ablated, expected, routed)
 
     def test_rerouting_one_token_matches_a_hand_computation(self, model):
@@ -1475,7 +1608,7 @@ class FamilySuite:
         if x is None:
             return  # no experts module to compute an expert with (JetMoE)
         x_t = x.reshape(-1, x.shape[-1])[t]
-        expected = (expert_by_hand(host, x_t, e2, w[0, t, j]) - expert_by_hand(host, x_t, e, w[0, t, j])) * self.routed_scale(host)
+        expected = self.routed_from_experts(host, expert_by_hand(host, x_t, e2, w[0, t, j]) - expert_by_hand(host, x_t, e, w[0, t, j]))
         near(change[t], expected, routed, ulps=64)
 
     def test_writing_router_logits_changes_the_routing(self, model):

@@ -32,8 +32,10 @@ def _tiny_wrapper() -> str:
     """The tiny PaliGemma 2 ``tests/families/test_gemma2.py`` builds (``_paligemma2_checkpoint``): no tiny PaliGemma 2
     is published, so the suite writes one into the temp dir, named after the snapshot of the tiny text checkpoint it
     wraps. The same path, so the wrapper's ``pinned`` is the suite's ``REPO``."""
-    ref = os.path.expanduser(f"~/.cache/huggingface/hub/models--{PINNED.replace('/', '--')}/refs/main")
-    snapshot = open(ref).read().strip() if os.path.exists(ref) else "missing"
+    from huggingface_hub import try_to_load_from_cache
+
+    config = try_to_load_from_cache(PINNED, "config.json")  # the configured cache's snapshot, as the suite resolves it
+    snapshot = os.path.basename(os.path.dirname(config)) if isinstance(config, str) else "missing"
     return os.path.join(tempfile.gettempdir(), f"nnterp-paligemma2-{snapshot}")
 
 

@@ -1,13 +1,12 @@
 """GLM-5, end to end: latent attention with DeepSeek Sparse Attention, the selection shared across blocks."""
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT, cached_snapshot, built
 
 from nnterp import StandardizedTransformer
 from nnterp.families import glm_moe_dsa
@@ -17,7 +16,7 @@ REPO = "hf-tiny-v2/tiny-random-GlmMoeDsaForCausalLM"
 
 def _patched_checkpoint(repo=REPO, **changes):
     """The tiny checkpoint with ``changes`` written into its config: the same weights, symlinked."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="glm-moe-dsa-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -100,7 +99,7 @@ class TestGlmMoeDsa(FamilySuite):
 class TestGlmMoeDsaSparse(FamilySuite):
     """The same weights with ``index_topk = 2``: the suite's three-token prompt then drops a key from the last row."""
 
-    REPO = _patched_checkpoint(index_topk=2)
+    REPO = built(_patched_checkpoint, index_topk=2)
     FAMILY = glm_moe_dsa
     NATIVE = LLAMA_ROWS
     KV_HEADS_EXPANDED = True

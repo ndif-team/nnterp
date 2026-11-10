@@ -4,7 +4,7 @@ import pytest
 import transformers
 from packaging.version import Version
 import torch
-from suite import FamilySuite, LLAMA_ROWS, rows
+from suite import FamilySuite, LLAMA_ROWS, rows, built, patched_checkpoint
 from vision_suite import IMAGE, VisionSuite, align_processor, clip_rows, image_prompt, siglip_rows
 
 from nnterp import StandardizedTransformer, Unavailable
@@ -197,3 +197,16 @@ def test_image_features_need_an_image_scatter():
     assert model.vision.support()["image_token_mask"] is None
     with pytest.raises(Unavailable, match="ImageScatter"):
         model.vision.image_features
+
+
+class TestLlama3(TestLlama):
+    """Llama 3's layout: grouped queries (4 heads, 2 key/value heads here; 32 and 8 on Llama-3.2-1B), the ``llama3``
+    rotary scaling and tied embeddings (3.2). Weights drawn for it; no ``pad_token_id`` (the tiny config's -1 is not a
+    token, which a saved generation config refuses)."""
+
+    REPO = built(
+        patched_checkpoint, TestLlama.REPO, draw=True, num_key_value_heads=2, tie_word_embeddings=True, pad_token_id=None, rope_parameters={
+            "rope_type": "llama3", "rope_theta": 10000.0, "factor": 32.0, "low_freq_factor": 1.0, "high_freq_factor": 4.0,
+            "original_max_position_embeddings": 8,
+        },
+    )

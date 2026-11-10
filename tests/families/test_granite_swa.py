@@ -2,7 +2,7 @@
 
 import test_granite
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, built
 
 from nnterp.families import granite_swa
 
@@ -46,6 +46,6 @@ class TestGraniteSWA(FamilySuite):
 class TestGraniteSWAScaled(test_granite.TestGraniteScaled):
     """The same weights with every multiplier away from 1.0 (Granite's rewrite)."""
 
-    REPO = test_granite._scaled_checkpoint(REPO)
+    REPO = built(test_granite._scaled_checkpoint, REPO)
     FAMILY = granite_swa
     NATIVE = LLAMA_ROWS

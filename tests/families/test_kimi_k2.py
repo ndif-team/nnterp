@@ -1,12 +1,11 @@
 """Kimi K2, end to end: DeepSeek-V3's family under Moonshot's ``kimi_k2`` model type."""
 
-import glob
 import json
 import os
 import tempfile
 
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT, cached_snapshot, built
 
 from nnterp import StandardizedTransformer
 from nnterp.components import Moe
@@ -26,7 +25,7 @@ def _checkpoint(repo="hf-tiny-v2/tiny-random-Kimi_K25ForConditionalGeneration"):
     token, so the routing is sparse as on K2 (8 of 384). Only ``config.json`` is rewritten; the weights and the tokenizer
     are symlinked. Written once per snapshot.
     """
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = os.path.join(tempfile.gettempdir(), f"nnterp-kimi-k2-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "config.json")):
         return patched
@@ -43,7 +42,7 @@ def _checkpoint(repo="hf-tiny-v2/tiny-random-Kimi_K25ForConditionalGeneration"):
 
 
 class TestKimiK2(FamilySuite):
-    REPO = _checkpoint()
+    REPO = built(_checkpoint)
     FAMILY = kimi_k25  # the wrapper checkpoint resolves to its own module, kimi_k2 re-exported
     NATIVE = {key: f"model.language_model.{native.removeprefix('model.')}" if native.startswith("model.") else native for key, native in LLAMA_ROWS.items()}
     KV_HEADS_EXPANDED = True  # latent attention projects keys and values for every head

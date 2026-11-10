@@ -1130,7 +1130,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                 after = f"{subs[k - 1]['label'].lower()} and {after}"
             mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
             # the stream between the sublayers, where the block serves it (layer_mid): its segment is that value's
-            at = (f"{nxt['hc']}.input" if streams else f"{subs[k]['stream_norm']}.output" if subs[k].get("stream_norm")
+            at = ((streams.get("mid") or f"{nxt['hc']}.input") if streams else f"{subs[k]['stream_norm']}.output" if subs[k].get("stream_norm")
                   else f"{nxt['pre_norm']}.input" if nxt["pre_norm"] else f"{nxt['host']}.input")
             mid_row = boundary(("layer_mid",), at, [i for i, drawn_shape in enumerate(shape_of) if drawn_shape == shape])
             if mid_row:
@@ -1238,7 +1238,7 @@ def stream_spec(owner: str, block_spec: dict[str, Any], specs: list[dict[str, An
     spec = block_spec.get("streams")
     if not spec:
         return None
-    unknown = set(spec) - {"count_key", "collapse", "post", "readout"}
+    unknown = set(spec) - {"count_key", "collapse", "post", "readout", "mid"}
     assert not unknown, f"{owner}: BLOCK's streams has unknown keys {sorted(unknown)}"
     count = getattr(info["text_config"], spec["count_key"], None)
     assert isinstance(count, int) and count > 1, f"{owner}: config.{spec['count_key']} is {count!r}, not a stream count"

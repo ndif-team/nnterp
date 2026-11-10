@@ -80,6 +80,7 @@ BLOCK = {
         "collapse": {"self_attn": "attention_comb", "mlp": "mlp_comb"},
         "post": {"self_attn": "attention_post", "mlp": "mlp_post"},
         "readout": "hc_head",
+        "mid": "source.hidden_states_0.output",
     },
 }
 

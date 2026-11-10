@@ -1493,7 +1493,7 @@
 <section class="frame section" id="notes">
   <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you run</span></div>
   <div class="grid-notes">
-    <div class="prose"><h2>The prompt's first token is an attention sink</h2>
+<div class="prose"><h2>The prompt's first token is an attention sink</h2>
 <p>The tokenizer adds no beginning-of-sequence token, so the prompt's first token takes most of the
 attention and its stream has a norm tens of times the other positions'. Leave position 0 out of
 activation statistics and steering-vector norms, or prepend <code>&lt;|endoftext|&gt;</code>, as TransformerLens does
@@ -1501,14 +1501,12 @@ by default.</p>
 <h2><code>gpt2-small-res-jb</code> reads the centered stream</h2>
 <p>TransformerLens' default <code>HookedTransformer.from_pretrained</code> centers every weight that writes to the
 stream, so its <code>hook_resid_pre</code>, and the <code>gpt2-small-res-jb</code> SAEs trained on it, see
-<code>layers[i].input</code> minus its mean over the hidden axis. Subtract that mean before encoding. Fed the raw stream, block 8's
-SAE leaves 250% of the variance unexplained, against 15% on the centered one.</p>
+<code>layers[i].input</code> minus its mean over the hidden axis. Subtract that mean before encoding.</p>
 <h2>The Stanford CRFM checkpoints need a different load for the attention interior</h2>
 <p>They set <code>reorder_and_upcast_attn</code>, so the queries, the pattern and the other interior values are
 unavailable. Load them in float32 with <code>reorder_and_upcast_attn=False</code> and
 <code>attn_implementation="eager"</code>: that load computes the flagged path's logits to rounding, and a float16
-load does not.</p></div>
-    <aside class="quirk-list">
+load does not.</p></div>    <aside class="quirk-list">
       <div class="pane" data-pane="quirk_list" data-ckpts="openai-community/gpt2 openai-community/gpt2-medium openai-community/gpt2-large openai-community/gpt2-xl distilbert/distilgpt2 stanford-crfm/alias-gpt2-small-x21 stanford-crfm/battlestar-gpt2-small-x49 stanford-crfm/caprica-gpt2-small-x81 stanford-crfm/darkmatter-gpt2-small-x343 stanford-crfm/expanse-gpt2-small-x777 stanford-crfm/arwen-gpt2-medium-x21 stanford-crfm/beren-gpt2-medium-x49 stanford-crfm/celebrimbor-gpt2-medium-x81 stanford-crfm/durin-gpt2-medium-x343 stanford-crfm/eowyn-gpt2-medium-x777"><p class="micro">quirks</p>
 <div class="quirk"><span class="chip">Position embeddings</span><p class="body-md">A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input.</p></div><div class="quirk"><span class="chip">LayerNorm</span><p class="body-md">Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.</p></div></div>
     </aside>
@@ -1543,7 +1541,7 @@ none of the attention's interior values is available there.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">openai-community/gpt2</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">openai-community/gpt2</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

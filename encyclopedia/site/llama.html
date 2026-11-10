@@ -4607,11 +4607,10 @@
 <section class="frame section" id="notes">
   <div class="topbar"><h2 class="disp-section">The <em>Notes</em></h2><span class="micro">03 · what to know before you run</span></div>
   <div class="grid-notes">
-    <div class="prose"><h2>circuit-tracer's transcoders read <code>layer_mid</code></h2>
+<div class="prose"><h2>circuit-tracer's transcoders read <code>layer_mid</code></h2>
 <p>The Llama-3.2-1B transcoders (<code>mntss/transcoder-Llama-3.2-1B</code>, <code>mntss/clt-llama-3.2-1b-524k</code>) read
 <code>hook_resid_mid</code>, which is <code>layers[i].layer_mid</code>, the stream before the MLP's norm, and write
-<code>mlp_output</code>.</p></div>
-    <aside class="quirk-list">
+<code>mlp_output</code>.</p></div>    <aside class="quirk-list">
       <div class="pane" data-pane="quirk_list" data-ckpts="meta-llama/Llama-2-7b-hf meta-llama/Llama-2-13b-hf llava-hf/llava-1.5-7b-hf llava-hf/llava-1.5-13b-hf llava-hf/vip-llava-7b-hf llava-hf/llava-v1.6-vicuna-7b-hf deepseek-community/deepseek-vl-1.3b-chat HuggingFaceTB/SmolVLM-Instruct HuggingFaceTB/SmolVLM2-2.2B-Instruct" hidden></div><div class="pane" data-pane="quirk_list" data-ckpts="meta-llama/Llama-2-70b-hf meta-llama/Meta-Llama-3-8B meta-llama/Meta-Llama-3-70B meta-llama/Llama-3.1-8B meta-llama/Llama-3.1-8B-Instruct meta-llama/Llama-3.1-70B meta-llama/Llama-3.1-405B meta-llama/Llama-3.2-1B meta-llama/Llama-3.2-1B-Instruct meta-llama/Llama-3.2-3B meta-llama/Llama-3.2-3B-Instruct meta-llama/Llama-3.3-70B-Instruct HuggingFaceM4/Idefics3-8B-Llama3"><p class="micro">quirks</p>
 <div class="quirk"><span class="chip">Grouped-query attention</span><p class="body-md">Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.</p></div></div>
     </aside>
@@ -4631,12 +4630,11 @@ row to a patch.</p>
 result: <code>vision.layers[0].input</code> is <code>pre_layrnorm</code>'s output, not <code>patch_embeddings</code> plus positions.
 After the last block, <code>post_layernorm</code> norms the pooled CLS token only, never the patches, so it is
 not <code>vision.norm</code>, and <code>vision.tower_output</code> equals <code>vision.layers[-1].layer_output</code>.</p>
-    <h2>Llava 1.5</h2>
+<h2>Llava 1.5</h2>
     <h3>Writes to <code>vision.tower_output</code> do not reach the text model</h3>
 <p>The projector reads block -2's patches without the CLS token, <code>vision.layers[-2].layer_output[:, 1:]</code>,
 so the last block and <code>vision.tower_output</code> are computed and discarded. Ablate or patch the image at
-block -2 or at <code>vision.image_features</code>.</p>
-  </div>
+block -2 or at <code>vision.image_features</code>.</p>  </div>
   <aside class="quirk-list">
     <p class="micro">vision quirks</p>
 <div class="quirk"><span class="chip">Vision-language</span><p class="body-md">Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model.</p></div><div class="quirk"><span class="chip">CLS token</span><p class="body-md">The vision encoder&#39;s stream carries class tokens beside the patches (one first on CLIP, one last on Llama 4, several with register tokens before each image on RADIO), so its patch axis is longer than the patch grid.</p></div>  </aside>
@@ -4656,12 +4654,11 @@ row to a patch.</p>
 result: <code>vision.layers[0].input</code> is <code>pre_layrnorm</code>'s output, not <code>patch_embeddings</code> plus positions.
 After the last block, <code>post_layernorm</code> norms the pooled CLS token only, never the patches, so it is
 not <code>vision.norm</code>, and <code>vision.tower_output</code> equals <code>vision.layers[-1].layer_output</code>.</p>
-    <h2>VipLlava</h2>
+<h2>VipLlava</h2>
     <h3>The projector reads five blocks' streams</h3>
 <p>On <code>vip-llava-7b-hf</code> it concatenates the patches of blocks 22, 19, 16, 13 and 5, each without its
 CLS token. The config's <code>vision_feature_layers</code> counts hidden states, so its <code>k &gt; 0</code> is block <code>k - 1</code>.
-The last block and <code>vision.tower_output</code> are computed and discarded.</p>
-  </div>
+The last block and <code>vision.tower_output</code> are computed and discarded.</p>  </div>
   <aside class="quirk-list">
     <p class="micro">vision quirks</p>
 <div class="quirk"><span class="chip">Vision-language</span><p class="body-md">Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model.</p></div><div class="quirk"><span class="chip">CLS token</span><p class="body-md">The vision encoder&#39;s stream carries class tokens beside the patches (one first on CLIP, one last on Llama 4, several with register tokens before each image on RADIO), so its patch axis is longer than the patch grid.</p></div>  </aside>
@@ -4681,12 +4678,11 @@ row to a patch.</p>
 result: <code>vision.layers[0].input</code> is <code>pre_layrnorm</code>'s output, not <code>patch_embeddings</code> plus positions.
 After the last block, <code>post_layernorm</code> norms the pooled CLS token only, never the patches, so it is
 not <code>vision.norm</code>, and <code>vision.tower_output</code> equals <code>vision.layers[-1].layer_output</code>.</p>
-    <h2>LLaVA-NeXT</h2>
+<h2>LLaVA-NeXT</h2>
     <h3>Writes to <code>vision.tower_output</code> do not reach the text model</h3>
 <p>As on Llava 1.5, the projector reads each crop's block -2 patches without the CLS token, so the last
 block and <code>vision.tower_output</code> are discarded. The wrapper then unpads the projector's output and
-adds newline tokens, so edit <code>vision.image_features</code> for what the text model receives.</p>
-  </div>
+adds newline tokens, so edit <code>vision.image_features</code> for what the text model receives.</p>  </div>
   <aside class="quirk-list">
     <p class="micro">vision quirks</p>
 <div class="quirk"><span class="chip">Vision-language</span><p class="body-md">Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model.</p></div><div class="quirk"><span class="chip">CLS token</span><p class="body-md">The vision encoder&#39;s stream carries class tokens beside the patches (one first on CLIP, one last on Llama 4, several with register tokens before each image on RADIO), so its patch axis is longer than the patch grid.</p></div><div class="quirk"><span class="chip">Tiled images</span><p class="body-md">The processor cuts an image into crops or tiles, each a row of the vision encoder&#39;s batch.</p></div><div class="quirk"><span class="chip">Unpadded features</span><p class="body-md">The wrapper removes the padding from the projector&#39;s output and appends a newline token to each row, so projector.output is not image_features.</p></div>  </aside>
@@ -4704,10 +4700,9 @@ column <code>c</code> of the grid is index <code>r * (image_size // patch_size) 
 <p><code>post_layernorm</code> norms every patch after the last block, so
 <code>vision.tower_output == vision.norm(vision.layers[-1].layer_output)</code>. Each wrapper's notes say whether its
 projector reads <code>tower_output</code> or a block's <code>layer_output</code> before the norm.</p>
-    <h2>DeepSeek-VL</h2>
+<h2>DeepSeek-VL</h2>
     <h3>The projector reads <code>vision.tower_output</code></h3>
-<p>A write to <code>tower_output</code>, or to the last block through <code>vision.norm</code>, reaches the text model.</p>
-  </div>
+<p>A write to <code>tower_output</code>, or to the last block through <code>vision.norm</code>, reaches the text model.</p>  </div>
   <aside class="quirk-list">
     <p class="micro">vision quirks</p>
 <div class="quirk"><span class="chip">Vision-language</span><p class="body-md">Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model.</p></div>  </aside>
@@ -4725,10 +4720,9 @@ column <code>c</code> of the grid is index <code>r * (image_size // patch_size) 
 <p><code>post_layernorm</code> norms every patch after the last block, so
 <code>vision.tower_output == vision.norm(vision.layers[-1].layer_output)</code>. Each wrapper's notes say whether its
 projector reads <code>tower_output</code> or a block's <code>layer_output</code> before the norm.</p>
-    <h2>Idefics 3</h2>
+<h2>Idefics 3</h2>
     <h3>The projector reads <code>vision.tower_output</code></h3>
-<p>A write to <code>tower_output</code>, or to the last block through <code>vision.norm</code>, reaches the text model.</p>
-  </div>
+<p>A write to <code>tower_output</code>, or to the last block through <code>vision.norm</code>, reaches the text model.</p>  </div>
   <aside class="quirk-list">
     <p class="micro">vision quirks</p>
 <div class="quirk"><span class="chip">Vision-language</span><p class="body-md">Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model.</p></div><div class="quirk"><span class="chip">Tiled images</span><p class="body-md">The processor cuts an image into crops or tiles, each a row of the vision encoder&#39;s batch.</p></div><div class="quirk"><span class="chip">Pooled projector</span><p class="body-md">The projector merges each group of neighboring patches into one token, by pooling or by concatenating them (a pixel shuffle), so an image has fewer tokens than patches.</p></div>  </aside>
@@ -4746,10 +4740,9 @@ column <code>c</code> of the grid is index <code>r * (image_size // patch_size) 
 <p><code>post_layernorm</code> norms every patch after the last block, so
 <code>vision.tower_output == vision.norm(vision.layers[-1].layer_output)</code>. Each wrapper's notes say whether its
 projector reads <code>tower_output</code> or a block's <code>layer_output</code> before the norm.</p>
-    <h2>SmolVLM</h2>
+<h2>SmolVLM</h2>
     <h3>The projector reads <code>vision.tower_output</code></h3>
-<p>A write to <code>tower_output</code>, or to the last block through <code>vision.norm</code>, reaches the text model.</p>
-  </div>
+<p>A write to <code>tower_output</code>, or to the last block through <code>vision.norm</code>, reaches the text model.</p>  </div>
   <aside class="quirk-list">
     <p class="micro">vision quirks</p>
 <div class="quirk"><span class="chip">Vision-language</span><p class="body-md">Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model.</p></div><div class="quirk"><span class="chip">Tiled images</span><p class="body-md">The processor cuts an image into crops or tiles, each a row of the vision encoder&#39;s batch.</p></div><div class="quirk"><span class="chip">Pooled projector</span><p class="body-md">The projector merges each group of neighboring patches into one token, by pooling or by concatenating them (a pixel shuffle), so an image has fewer tokens than patches.</p></div>  </aside>
@@ -4805,7 +4798,7 @@ rename key cannot tell it from CLIP's, <code>SiglipVision</code> serves it as <c
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">meta-llama/Llama-3.1-8B</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">meta-llama/Llama-3.1-8B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

@@ -15,14 +15,6 @@ block's residual stream is `layer_output` on every family, a sublayer's contribu
 `project_on_vocab` is the model's own norm, unembedding and softcap. nnsight's
 `docs/patterns/` has the same techniques written against raw module paths.
 
-Every example loads eager, so the attention interior is available:
-
-```python
-from nnterp import StandardizedTransformer
-
-model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_implementation="eager")
-```
-
 ## Look at activations
 
 - [logit-lens](logit-lens.md) — `project_on_vocab(layer.layer_output)` per block; where the answer emerges.

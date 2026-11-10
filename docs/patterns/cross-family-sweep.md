@@ -71,7 +71,7 @@ for name, repo in REPOS.items():
     with model.trace(prompt):
         for i, layer in enumerate(model.layers):
             if i in attention_blocks:
-                p = layer.self_attn.attention_probabilities
+                p = layer.self_attn.attention_probabilities.float()     # float32: 1e-12 underflows in float16
                 entropy[i] = (-p * (p + 1e-12).log()).sum(-1).mean().save()
             norms[i] = layer.layer_output[0, -1].norm().save()
 
@@ -116,7 +116,8 @@ and the mixer's `attention_output` exist on both kinds of block, so most
 experiments do not branch at all.
 
 **Memory.** Load one checkpoint at a time; `del model` and `torch.cuda.empty_cache()`
-between them. For 8B-class checkpoints pass `dtype=torch.bfloat16,
+between them. Wrap the traces in `torch.no_grad()`: a trace runs with autograd on, and
+1 + 2 × num_layers invokes otherwise keep every activation for a backward pass. For 8B-class checkpoints pass `dtype=torch.bfloat16,
 device_map="auto"` to `StandardizedTransformer` like any `TransformersModel`.
 
 ## Variations
@@ -155,9 +156,10 @@ top-1 grid, an [activation-patching](activation-patching.md) layer sweep, a
   position matters.
 - `attention_probabilities` needs `attn_implementation="eager"` on every load; a
   checkpoint's default is `sdpa`.
-- A DeltaNet mixer under `flash-linear-attention` or `causal-conv1d` has no Python
-  source to read; `support()` reports its interior values unavailable with that
-  reason. Its `attention_output` is a module boundary and stays available.
+- A DeltaNet mixer under `flash-linear-attention` has no Python source to read;
+  `support()` reports its interior values unavailable with that reason until
+  `nnterp.route_kernels(model.family, "torch")`. Its `attention_output` is a module
+  boundary and stays available.
 - Names bound inside a trace do not survive it; every container above is made
   outside and every entry is a `.save()`.
 - A `model_type` nnterp has no family for loads with the best-effort default family and a

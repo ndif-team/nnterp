@@ -155,7 +155,7 @@ print(model.tokenizer.decode(ids[0]))
 `token_positions=-1` is the right index across steps: on the prefill it is the
 prompt's last token, and on each decode step the one token that step processes.
 An absolute position is out of range from step 1 on. See nnsight
-`docs/usage/iter-all-next.md` for the bound and `docs/usage/generate.md` for
+`docs/usage/iteration.md` for the bound and `docs/usage/generate.md` for
 `tracer.result`.
 
 ### Suppressing
@@ -197,6 +197,6 @@ only its component and is the form refusal-direction work uses.
   the contribution values.
 - [../usage/generation.md](../usage/generation.md): `generate` and per-step
   interventions.
-- nnsight `docs/usage/iter-all-next.md`, `docs/usage/generate.md`.
+- nnsight `docs/usage/iteration.md`, `docs/usage/generate.md`.
 - Turner et al. (2023), "Activation Addition"; Arditi et al. (2024), "Refusal in
   Language Models Is Mediated by a Single Direction".

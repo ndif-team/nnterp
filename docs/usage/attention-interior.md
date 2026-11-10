@@ -581,26 +581,21 @@ the keys touches the group of query heads that shares that key head.
 Falcon's attention does its own arithmetic, and `config.alibi` picks one of
 two branches with different operations. Each of the six values names its
 operation by that flag, and all six need only an eager load on either branch.
-Without alibi the queries are the rotary embedding's first return; with alibi
-there is no rotary and they are the `query_layer` binding. Either branch then
-updates the cache itself, and where the call has a cache (every call but
-`use_cache=False`) the keys and values are what the update returns, every
-position so far, read after the queries:
+Without alibi the queries and keys are the two returns of the rotary
+embedding and the values are bound *before* it, so in one trace the values
+must be read before the queries or keys:
 
 ```python
 with model.trace(prompt):
+    v = attn.attention_values.save()       # binds first
     q = attn.attention_queries.save()
-    k = attn.attention_keys.save()         # the cache update's return
-    v = attn.attention_values.save()
+    k = attn.attention_keys.save()
 ```
 
-Without a cache they are the new tokens' own: the rotary's second return and
-the `value_layer` binding before it without alibi (read the values first
-there), the `key_layer` and `value_layer` bindings with alibi. BLOOM, MPT and
-XGLM update the cache in their own forwards too, and their keys and values are
-the update's return the same way. Whether the call has a cache is read off the
-call's arguments, so read the attention's standard values before its child
-modules' inputs or outputs in one trace. The pattern is the softmax itself without alibi (no dropout follows)
+The other order raises `OutOfOrderError` naming `value_layer_0`. With alibi
+there is no rotary: the three are the `query_layer`, `key_layer` and
+`value_layer` bindings, in that order, so read queries, then keys, then
+values. The pattern is the softmax itself without alibi (no dropout follows)
 and the dropout after the second softmax with it. The head outputs are the
 `scores @ values` product on both branches, served `[batch, seq, heads,
 head_dim]` as a view: heads-first without alibi, flattened over batch and
@@ -619,8 +614,8 @@ query head before the rotary embedding, so `attention_keys` and
 These seven do their own attention arithmetic too, and their families map the
 same six values onto it: GPT-J's, GPT-Neo's, CodeGen's and GPT-NeoX-Japanese's around
 their `_attn` calls, XGLM's on its projections and the bindings around its two `bmm`
-calls, BLOOM's on its `_reshape` split, its cache update and its merge of the
-heads, MPT's on its `*_states` bindings, its cache update and second `matmul`. Where a
+calls, BLOOM's on its `_reshape` split and its merge of the heads, MPT's on its
+`*_states` bindings and second `matmul`. Where a
 forward flattens batch and heads together for a `bmm`, the value is read where the batch
 still leads, since nnsight narrows a tensor to an invoke's rows only then: each invoke of a
 trace reads and edits its own rows on all seven, except XGLM's keys and values. Those are
@@ -788,9 +783,8 @@ way. To change what chosen heads read without touching the cache, call
   value is `Unavailable` with the reason above; `support()` says so per block
   before any trace.
 - **Reads follow the forward within one trace.** Queries, keys and values,
-  then scores, then pattern, then head outputs; on Falcon, BLOOM and MPT the
-  keys and values after the queries where the call has a cache (on Falcon without
-  alibi and without one, the values first). An out-of-order read raises `OutOfOrderError`, and
+  then scores, then pattern, then head outputs; on Falcon without alibi the
+  values before the queries and keys. An out-of-order read raises `OutOfOrderError`, and
   inside a `tracer.iter` body the error can name a later location than the one
   you misplaced.
 - **The first trace that reads a child module's value and then an interior value fails.**

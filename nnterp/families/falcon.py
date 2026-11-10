@@ -12,12 +12,9 @@ operation by that flag. Without alibi the queries and keys leave
 ``apply_rotary_pos_emb`` and the pattern is the first softmax, which has no
 dropout after it; with alibi there is no rotary, the pattern is the dropout
 after the second softmax, and the head outputs are read once merged, since the
-product is flattened over batch and heads. Either branch updates the cache itself before the scores, so where the
-call has a cache the keys and values are what the update returns, every
-position so far, as on the families that call transformers' attention
-interface. The 40B layout (``ln_attn`` / ``ln_mlp``, ``new_decoder_architecture``)
-runs the same forward with its key/value heads already broadcast. falcon-11B has
-the 40B layout with ``num_ln_in_parallel_attn`` 1: one ``input_layernorm`` feeds both
+product is flattened over batch and heads. The 40B layout (``ln_attn`` /
+``ln_mlp``, ``new_decoder_architecture``) runs the same forward with its
+key/value heads already broadcast. falcon-11B has the 40B layout with ``num_ln_in_parallel_attn`` 1: one ``input_layernorm`` feeds both
 sublayers, and 8 key/value heads serve its 32 query heads.
 """
 
@@ -26,8 +23,8 @@ from typing import TYPE_CHECKING
 from transformers.models.falcon.modeling_falcon import FalconAttention, FalconDecoderLayer, FalconMLP
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, by_cache, first_tensor, needs_eager, projection_weight, rewrap,
-    rotary_reason, seq_first, unavailable,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, first_tensor, needs_eager, projection_weight, rewrap,
+    seq_first, unavailable,
 )
 
 if TYPE_CHECKING:
@@ -104,38 +101,14 @@ def by_alibi(without: str, with_alibi: str, attribute: str = "output"):
     return choose
 
 
-def _queries(envoy) -> tuple[str, int | None]:
-    return ("source.query_layer_0.output", None) if alibi(envoy) else ("source.apply_rotary_pos_emb_0.output", 0)
-
-
-def _new_keys(envoy) -> tuple[str, int | None]:
-    return ("source.key_layer_0.output", None) if alibi(envoy) else ("source.apply_rotary_pos_emb_0.output", 1)
-
-
-#: Where the queries, keys and values are, by whether the call has a cache (`by_cache`): the keys and values are
-#: ``layer_past.update``'s return where it has one, else the new tokens' own; the queries are the same either way.
-QUERIES = by_cache(_queries, _queries, "layer_past")
-#: The rotary's arguments come before the cache update too, so they ask the same.
-QUERIES_PREROPE = by_cache(("source.apply_rotary_pos_emb_0.inputs", 0), ("source.apply_rotary_pos_emb_0.inputs", 0), "layer_past")
-KEYS_PREROPE = by_cache(("source.apply_rotary_pos_emb_0.inputs", 1), ("source.apply_rotary_pos_emb_0.inputs", 1), "layer_past")
-KEYS = by_cache(("source.layer_past_update_0.output", 0), _new_keys, "layer_past")
-VALUES = by_cache(("source.layer_past_update_0.output", 1), ("source.value_layer_0.output", None), "layer_past")
-
-
 class Attention(Attention):
     """Falcon's attention: the residual is added in the block; the pattern and the interior on its own ops, per ``alibi``."""
 
     # Without alibi, queries and keys are ``apply_rotary_pos_emb``'s two
-    # returns and the values the binding just before it; with alibi there is
-    # no rotary and all three are the reshaped bindings. The forward then
-    # updates the cache itself, ``layer_past.update(key, value)``, and computes
-    # with what that returns, every position so far, so where the call has a
-    # cache (every call but ``use_cache=False``) the keys and values are the
-    # update's return, read after the queries; without one they are the new
-    # tokens' own (on the rotary branch the values then come before the
-    # queries and keys). The queries ask whether the call has a cache too
-    # (`by_cache`), so reading them first leaves the keys able to. Keys and
-    # values are ``num_kv_heads`` wide (1 under multi-query).
+    # returns and the values the binding just before it (so read the values
+    # before the queries or keys in one trace: they bind first); with alibi
+    # there is no rotary and all three are the reshaped bindings, in forward
+    # order. Keys and values are ``num_kv_heads`` wide (1 under multi-query).
     # The scores are the softmax's input after the mask, the pattern the
     # softmax itself (no alibi) or the dropout after it (alibi). The head
     # outputs are the ``scores @ values`` product, heads first, without alibi;
@@ -149,28 +122,30 @@ class Attention(Attention):
             return "no rotary embedding: this checkpoint sets alibi, which biases the scores instead"
         return None
 
-    @EProperty(QUERIES_PREROPE[0], select=QUERIES_PREROPE[1], description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
-    def attention_queries_prerope(self, value) -> Queries:
-        """The queries the rotary embedding receives, as on every family (`Attention.attention_queries_prerope`)."""
-        return value
-
-    @EProperty(KEYS_PREROPE[0], select=KEYS_PREROPE[1], description=Attention.attention_keys_prerope.description, unavailable=rotary_reason)
-    def attention_keys_prerope(self, value) -> Keys:
-        """The keys the rotary embedding receives, as on every family (`Attention.attention_keys_prerope`)."""
-        return value
-
-    @EProperty(QUERIES[0], select=QUERIES[1], description=Attention.attention_queries.description, unavailable=needs_eager)
+    @EProperty(by_alibi("apply_rotary_pos_emb_0", "query_layer_0"), description=Attention.attention_queries.description, unavailable=needs_eager)
     def attention_queries(self, value) -> Queries:
-        return value
+        return value if alibi(self) else value[0]
 
-    @EProperty(KEYS[0], select=KEYS[1], description=Attention.attention_keys.description, unavailable=needs_eager)
+    @attention_queries.postprocess
+    def attention_queries(self, value):
+        if alibi(self):
+            return value
+        _, keys = self.source.apply_rotary_pos_emb_0.output
+        return value, keys
+
+    @EProperty(by_alibi("apply_rotary_pos_emb_0", "key_layer_0"), description=Attention.attention_keys.description, unavailable=needs_eager)
     def attention_keys(self, value) -> Keys:
-        """The keys the attention computes with: the cache's, every position so far, where the call has a cache."""
-        return value
+        return value if alibi(self) else value[1]
 
-    @EProperty(VALUES[0], select=VALUES[1], description=Attention.attention_values.description, unavailable=needs_eager)
+    @attention_keys.postprocess
+    def attention_keys(self, value):
+        if alibi(self):
+            return value
+        queries, _ = self.source.apply_rotary_pos_emb_0.output
+        return queries, value
+
+    @EProperty("source.value_layer_0.output", description=Attention.attention_values.description, unavailable=needs_eager)
     def attention_values(self, value) -> Values:
-        """The values the attention computes with: the cache's, every position so far, where the call has a cache."""
         return value
 
     @EProperty(by_alibi("F_softmax_0", "F_softmax_1", "input"), description=Attention.attention_scores.description, unavailable=needs_eager)

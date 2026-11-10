@@ -136,9 +136,6 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_interior_writes_are_causal` | zeroing each of the five interior values moves the logits; with head outputs zeroed the contribution is the same at every position |
 | `test_interior_in_place_edits` | zeroing scores and head outputs in place moves the logits; queries too, or raise `RuntimeError` matching `view` with `REFUSES_IN_PLACE_QKV` |
 | `test_interior_per_invoke` | under two invokes each interior value is that invoke's row of one invoke of both, and an assignment in the first leaves the second's logits as they were (XGLM's keys and values are not per invoke: `TestXGLM` checks the other four and marks those two `xfail`) |
-| `test_keys_and_values_under_generate_are_the_cache` | on a decode step the keys and values span prompt + step, and their prompt rows are the prompt step's |
-| `test_assigned_keys_stay_out_of_the_cache` | keys assigned on the prompt's step are not what the next step's cache holds |
-| `test_keys_and_values_without_a_cache` | a `use_cache=False` trace serves the keys and values a trace with a cache serves on the prompt |
 
 **The rotary embedding**
 

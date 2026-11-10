@@ -505,8 +505,8 @@ into the package and the `register()` line removed.
   `EXPECTED_UNAVAILABLE` with a substring of the reason.
 - **Interior values bind at different points of the forward.** The suite reads one per
   trace; a family-specific test that reads two in one trace must read them in forward
-  order (Falcon: `attention_queries`, then the keys and values where the call has a
-  cache; without one and without alibi, `attention_values` first).
+  order (Falcon without alibi: `attention_values` before `attention_queries`; with alibi
+  queries, keys, values).
 - **`known()` and `all_families()` list the shipped modules only**, and not `default`, which
   covers no model type. A registered family is reached through `lookup` and the model's
   `family` attribute.

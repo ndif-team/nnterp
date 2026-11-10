@@ -123,7 +123,12 @@ Command A Vision's projector has no norm: the shuffled vector goes straight into
 
 #: Set by hues.py (lineage: Cohere).
 PALETTE = {"hue": 177}
-QUIRKS = ["parallel-blocks", "layernorm", "sliding-window", "nope-blocks", "interleaved-rotary", "scaled-logits"]
+QUIRKS = [
+    "parallel-blocks", "layernorm", "sliding-window", "nope-blocks", "interleaved-rotary",
+    # Cohere2ForCausalLM multiplies lm_head's output by logit_scale; the Aya Vision and Command A Vision wrappers return it
+    # unscaled. A causal-LM checkpoint's config names its class in `architectures`; a wrapper's text config names none.
+    {"slug": "scaled-logits", "when": lambda config: "Cohere2ForCausalLM" in (config.architectures or [])},
+]
 
 #: What the visualization draws: one input_layernorm whose output both sublayers read (drawn once per branch,
 #: one node), no post-norms; the two contributions join the stream in one add.

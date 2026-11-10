@@ -357,8 +357,10 @@ The entry states facts about a family, and each one has a source. Before writing
    checkpoint's text config (as `BLOCK`'s), so it holds on the pinned tiny checkpoint as on the public
    ones. Each checkpoint's chips, quirk list and `logits` label show the quirks that hold on it; the
    index card shows those that hold on any checkpoint on the page, as plain chips. StableLM (`qkv-bias`
-   on 1.6B, `parallel-blocks` and `qk-norm` on 12B), OPT (`post-ln` on 350m), Llama 4 (`interleaved-moe` on Maverick) and VaultGemma
-   (`softcapped-logits` on a config that sets `final_logit_softcapping`) carry such items. The notes still
+   on 1.6B, `parallel-blocks` and `qk-norm` on 12B), OPT (`post-ln` on 350m), Llama 4 (`interleaved-moe` on Maverick), VaultGemma
+   (`softcapped-logits` on a config that sets `final_logit_softcapping`) and Cohere 2 (`scaled-logits` where the config
+   names `Cohere2ForCausalLM` in `architectures`: its vision wrappers return the head's output unscaled, and their
+   text config names no class) carry such items. The notes still
    say which checkpoints have the property.
 
    The vision slugs are not an entry's: a page adds them on a vision-language checkpoint, from the

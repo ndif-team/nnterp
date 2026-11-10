@@ -1,6 +1,6 @@
 ---
 title: Vision design
-one_liner: How nnterp standardizes the vision side of image-text-to-text checkpoints — the tower under model.vision with its blocks and the image values, the projector, where image_features is read, where the code lives, how loading and the suite work, what does not fit, and what is left.
+one_liner: How nnterp standardizes the vision side of image-text-to-text checkpoints — the tower under model.vision with its blocks and the image values, the projector, where image_features is read, where the code lives, how loading and the suite work, and what does not fit.
 tags: [developing, design, vision, multimodal, families]
 related: [docs/usage/vision.md, docs/developing/architecture.md, docs/developing/eproperty-internals.md, docs/developing/testing.md, docs/extending/adding-a-family.md]
 sources: [nnterp/components/vision.py, nnterp/components/standard.py, nnterp/standardized.py, nnterp/components/eproperty.py, nnterp/families/gemma3_text.py, nnterp/families/gemma.py, nnterp/families/llama.py, nnterp/families/qwen2.py, nnterp/families/cohere2.py, nnterp/families/mistral.py, nnterp/families/ministral3.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/gemma4_unified_text.py, nnterp/families/qwen2_vl_text.py, nnterp/families/qwen2_5_vl_text.py, nnterp/families/qwen3_vl_text.py, nnterp/families/qwen3_vl_moe_text.py, nnterp/families/qwen3_5_text.py, nnterp/families/qwen3_5_moe_text.py, nnterp/families/hyperclovax.py, nnterp/families/nemotron_h.py, tests/families/vision_suite.py, tests/families/qwen_vision_suite.py, tests/families/suite.py]
@@ -16,8 +16,7 @@ model already; this page is how the vision side is standardized so the same name
 values hold on every wrapper: what the tower and projector are called, which values the
 tower serves, where `image_features` is read, where the code lives, and how loading and the
 suite work. The names, values and per-tower layouts themselves are in
-[docs/usage/vision.md](../usage/vision.md). Facts quoted here were run on transformers 5.17
-and nnsight `dev` on the tiny checkpoints named in [the suite section](#the-suite).
+[docs/usage/vision.md](../usage/vision.md).
 
 The rules:
 
@@ -163,8 +162,7 @@ unified strips the padded rows of the projector's output; Qwen2.5-VL restores th
 merge-block order after the merger (`merger(hidden)[reverse_indices]`, an indexing op, not
 a module), so its `projector.output` is in window order once an image spans more than one
 window. On the other wrappers the scattered tensor is the projector's output, reshaped.
-Reading at the scatter costs nothing measurable: an instrumented `LlavaModel` forward traced
-`llava-hf/llava-1.5-7b-hf` in 111 ms against 110 ms without.
+Reading at the scatter costs nothing measurable.
 
 **Availability.** `Vision.no_images()` is the one place that decides whether an image can
 reach the model: not where the family names no `projector`, nor on a load with no processor
@@ -246,21 +244,18 @@ an alias for, as it lists the `Standard` children of a block.
   `image_features` is read at the scatter, keyed on `Gemma4UnifiedModel`. Fuyu is not bound.
 - **Mllama (Llama 3.2 Vision).** Its text model (`mllama_text_model`) interleaves
   cross-attention blocks that attend to `cross_attention_states` (the projector's output) and
-  are skipped entirely on a text-only input; nothing is scattered. It needs its own family
-  with a `CrossAttention` component; `image_features` is unavailable there with that reason.
-  Its tower has two encoders (`transformer`, `global_transformer` with gated blocks) over
+  are skipped entirely on a text-only input; nothing is scattered. No family covers
+  `mllama_text_model`. Its tower has two encoders (`transformer`, `global_transformer` with gated blocks) over
   tiles and concatenates intermediate layers' outputs.
-- **Gemma 4's audio tower** is a Conformer; its blocks are not `Layer`/`Attention`/`Mlp`.
-  The audio tower's component gets `audio_token_mask` and `audio_features`, as `Vision`
-  carries the image values (read at the audio scatter, since the embedder's output still
-  holds padding); the tower's blocks stay native.
+- **Gemma 4's audio tower** is a Conformer; its blocks are not `Layer`/`Attention`/`Mlp`,
+  and it stays native.
 - **InternVL's ViT** scales each sublayer by a learned `lambda_1`/`lambda_2` before the
-  residual add, so its `attention_output`/`mlp_output` point at those products, the way
-  Gemma's point at the post-norms.
+  residual add. No envoy class is keyed on it, so it serves no tower values; its text stack
+  is standardized under `qwen2`.
 - **MoonViT (Kimi K2.5)** is packed like the Qwen ViT (`model.vision_tower`, blocks
-  `layers`, `final_layernorm`, projector `model.mm_projector`); its tiny checkpoint's
-  processor uses 14-pixel patches merged 2x2 where its tower config says 8 and 1x1, so it
-  waits for a matching tiny.
+  `layers`, `final_layernorm`, projector `model.mm_projector`); `kimi_k25` does not name it:
+  its tiny checkpoint's processor uses 14-pixel patches merged 2x2 where its tower config
+  says 8 and 1x1.
 
 ## Where the code lives
 
@@ -362,7 +357,7 @@ What a trace takes on a wrapper:
 An invoke carrying `pixel_values` cannot share a trace with another invoke (nnsight refuses
 it); several images or prompts go in one invoke, as lists. Two text-only invokes work. Chat-message
 inputs with the image embedded batch through the pipeline, but the scatter runs once over the batch,
-so `image_features` is the whole batch's rows in every invoke (slicing it per invoke is open).
+so `image_features` is the whole batch's rows in every invoke.
 
 ## The suite
 
@@ -464,7 +459,7 @@ The pinned checkpoints, all loadable offline once cached:
 | `nemotron_h` | `hf-tiny-v2/tiny-random-NemotronH_Omni_Reasoning_V3` (transformers 5.18 and later) | ships no processor files: the test builds the processor from its tokenizer with a 16 to 24 patch budget, and sets the unset `image_token_id`; pure-torch kernels (`route_kernels`) |
 | `gemma4_unified_text` | a tiny wrapper the test builds once into the temp dir: `google/gemma-4-12B`'s config (config only is cached) with `hf-tiny-v2/tiny-random-Gemma4UnifiedForCausalLM`'s text config, a 16-wide embedder, random weights, and a processor from that checkpoint's tokenizer plus the default image processor | no tiny wrapper is published; 12B's own names are checked on meta |
 
-## What is done, what is left
+## What is served
 
 The wrappers' text stacks carry their wrapper spellings (`model.language_model.*`, Idefics 3's
 `model.text_model.*`) on `qwen3_5_text`, `qwen3_5_moe_text`, `llama`, `qwen2`, `mistral`,
@@ -479,21 +474,3 @@ host); Gemma 4's ViT on `gemma4_text`; Gemma 4 unified's embedder on `gemma4_uni
 the Qwen2.5-VL ViT of HyperCLOVA X Vision V2 on `hyperclovax`; RADIO on `nemotron_h`
 (NemotronH Omni, the root as the scatter's host).
 `image_features` is read at the scatter on every one, and `VisionSuite` runs on each.
-
-Left, in rough order of value:
-
-- From nnsight, the task derived from the config (`image-text-to-text` where
-  `AutoModelForImageTextToText` maps it; nnsight #755), after which nnterp drops its
-  `text-generation` default; batching several image-carrying invokes in one trace (the batcher
-  has to collate `pixel_values`); `mm_token_type_ids` padded as a row field, so two text invokes
-  on Gemma 4's wrapper batch; the image-text-to-text mapping checked first when inferring a
-  pre-loaded wrapper module's task.
-- MoonViT for `kimi_k2` (needs a matching tiny checkpoint); the towers of EXAONE 4.5 and
-  LightOnOCR, whose text names bind but whose towers are native-only.
-- NemotronH Omni's audio tower (Parakeet, `audio_tower`) and its `embed_audio`, native-only.
-- Video and audio values (`video_token_mask`, `video_features`, `audio_token_mask`,
-  `audio_features`; Gemma 4's audio tower as `model.audio` by the same pattern), Mllama's
-  family (`mllama_text_model`) with a `CrossAttention` component, and the long tail (InternViT,
-  Janus, Video-Llava's separate image and video towers, LLaVA-NeXT-Video).
-- `scatter_host` walks nnsight's private `_named_children`; a public way to enumerate a root's
-  children would remove that.

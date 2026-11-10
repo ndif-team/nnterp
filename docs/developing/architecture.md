@@ -39,8 +39,9 @@ model.layers[0]._aliases                   # {'input_layernorm': 'ln_1', 'self_a
 model.layers[0].self_attn is model.transformer.h[0].attn   # True: an alias is the same envoy
 type(model.layers[0]) is gpt2.Layer        # True: the block is wrapped by the family's Layer
 list(type(model.layers[0].self_attn).values())
-# ['attention_queries', 'attention_keys', 'attention_values', 'attention_scores',
-#  'attention_output', 'attention_probabilities', 'attention_head_outputs']
+# ['attention_queries_prerope', 'attention_keys_prerope', 'attention_queries', 'attention_keys',
+#  'attention_values', 'attention_scores', 'attention_premix', 'attention_output',
+#  'attention_probabilities', 'attention_head_outputs', 'interface']
 
 with model.trace("The Eiffel Tower is in"):
     pattern = model.layers[2].self_attn.attention_probabilities.save()   # fires inside block 2 ...
@@ -60,7 +61,7 @@ rest of this page says which.
         ▼  StandardizedTransformer.__init__                    nnterp/standardized.py:128-155
  ┌──────────────────────────────────────────────────────────────────────────────┐
  │ config = _read_config(repo_id, **kwargs)          AutoConfig, before any build │
- │ family = families.lookup(config.model_type)        REGISTRY, else import module │
+ │ family = families.resolve(config)                   wrapper's type, else text's │
  │ rename = {**family.RENAME, **user rename}                                        │
  │ envoys = {**tp envoys (if sharded), **family.ENVOYS, **user envoys}              │
  │ TransformersModel.__init__(repo_id, rename=..., envoys=..., task=text-generation)│
@@ -129,10 +130,10 @@ this order, and the order matters:
    look. It runs before nnsight builds anything, so
    a config transformers cannot parse fails here with transformers' own error,
    and so the family is known before the meta build.
-2. **Family lookup.** `families.lookup(getattr(config, "text_config",
-   config).model_type)` (`standardized.py:142`). A multimodal config nests the
-   language model's config as `text_config`; the text-generation task builds
-   that model, so its `model_type` is the one that decides.
+2. **Family lookup.** `families.resolve(config)` (`nnterp/families/__init__.py`),
+   which calls `lookup` on the config's own `model_type` when a family covers it (a
+   wrapper with a family named after it, `kimi_k25`), else on its `text_config`'s: a
+   multimodal config nests the language model's config there.
 3. **Merge and hand to nnsight.** `rename={**self.family.RENAME, **(rename
    or {})}` and `envoys={**self._base_envoys(...), **self.family.ENVOYS,
    **(envoys or {})}` (`standardized.py:146-151`). Later keys win: a user's
@@ -190,7 +191,7 @@ eproperty that carries a `description` (`envoy.py:1066-1095`), which is how
 |---|---|---|
 | `nnterp/families/<model_type>.py` | `RENAME` (native name → standard name); `Layer`/`Attention`/`Mlp`/`Moe`/`LinearAttention` subclasses that point a value at *this family's* op or sibling; `ENVOYS` keyed on transformers types; a module-level `def <size>(model)` for each root size *this family's* config spells its own way (`falcon.py`: `num_kv_heads`, `intermediate_size`; `deepseek_v2.py`: `head_dim`, `qk_head_dim`) | what a value means, how nnsight serves it; the plain rule for a size |
 | `nnterp/components/` | what each standard value **means** (`layer_output` is the residual stream leaving the block, `attention_output` the contribution, `attention_probabilities` the post-dropout pattern); how to read/write it (`EProperty` with a path for a key, `DerivedEProperty`); availability (`unavailable=`, `support`); the default op on transformers' shared interface (`INTERFACE`, `attention.py:28`) | any one family's module names or classes |
-| `nnterp/standardized.py` | the root values (`logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`); the methods (`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`); the sizes (`num_layers` … `intermediate_size`, `standardized.py:398-438`), each a `StandardizedProperty` (`:26-50`) holding the plain rule over the config and yielding on read to a same-named function in `model.family`; `support()` over the tree (`:287-348`: `_hosts` unions each block's `Standard` children under their standard names, each alias read off its own binding on the block, a mounted alias such as DBRX's `norm_attn_norm.attn` and a module another block owns (shared weights) included, so a value installed through `envoys=` is listed and a module no block has is not); the remote key (`:440-451`) | op names inside a forward; any one family's config keys |
+| `nnterp/standardized.py` | the root values (`logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`); the methods (`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`); the sizes (`num_layers` … `intermediate_size`, `standardized.py:398-438`), each a `StandardizedProperty` (`:26-50`) holding the plain rule over the config and yielding on read to a same-named function in `model.family`; `support()` over the tree (`Standardized.support`, through `standard_children` and `blocks_support` in `nnterp/components/standard.py`: each block's `Standard` children under their standard names, each alias read off its own binding on the block, a mounted alias such as DBRX's `norm_attn_norm.attn` and a module another block owns (shared weights) included, so a value installed through `envoys=` is listed and a module no block has is not); the remote key (`:440-451`) | op names inside a forward; any one family's config keys |
 
 Two examples of the boundary. Gemma-2's contribution is the post-attention
 norm's output: the *family* says so with an `EProperty` keyed
@@ -307,6 +308,7 @@ checkpoint of that type is looked up, and never earlier.
 | descriptors | `nnterp/components/eproperty.py` ([eproperty-internals.md](eproperty-internals.md)) |
 | base envoys | `nnterp/components/{standard,layer,attention,mlp}.py` |
 | recurrent mixers: the base, and the DeltaNet subclass | `nnterp/components/recurrent.py`, `nnterp/components/linear_attention.py` ([recurrent-mixer-internals.md](recurrent-mixer-internals.md)) |
+| forward order (`order()`, `rank()`), measured by one probe run per model and block shape | `nnterp/order.py` |
 | helpers that use the values | `nnterp/prompt_utils.py`, `nnterp/nnsight_utils.py` |
 | the executable contract | `tests/families/suite.py` ([testing.md](testing.md)) |
 

@@ -20,26 +20,25 @@ test asserts, and how a family file states its specifics.
 
 ```bash
 cd nnterp                                # the repository root
+pip install -e ".[test,models]"          # nnterp editable, with the test and models extras
 export HF_HUB_OFFLINE=1
-pytest                                   # 5221 passed, 906 skipped in ~395 s (6 min 40 s wall) on CPU
-pytest tests/families/test_gpt2.py -q    # one family: 37 passed, 12 skipped in 3.0 s (7.1 s wall)
-pytest tests/test_registry.py -q         # 14 passed in 10.6 s (one test spawns a subprocess)
+pytest                                   # the whole suite
+pytest -n 8                              # the same on eight pytest-xdist workers
+pytest tests/families/test_gpt2.py -q    # one family
+pytest tests/test_registry.py -q         # one test spawns a subprocess
 pytest "tests/families/test_gpt2.py::TestGPT2::test_contribution_identity" -q -x   # one test, stop on first failure
 ```
 
-Timings are from `/home/localjadenfk/miniconda3/envs/ndif2` (the stack
-[transformers-compat.md](transformers-compat.md) names) on this machine's
-CPU; the wall time above the reported one is interpreter and import start-up. Every
-checkpoint is cached, so `HF_HUB_OFFLINE=1` is what keeps a run from
-touching the Hub. `pyproject.toml` configures only `testpaths = ["tests"]`;
-there are no markers or custom flags.
+`HF_HUB_OFFLINE=1` keeps a run from touching the Hub once the pinned checkpoints are
+cached; a first run without it downloads them. `pyproject.toml` sets `testpaths =
+["tests"]` and `addopts = "--dist loadgroup"`, so under `-n` a class marked
+`xdist_group` stays on one worker. The classes that load a wrapper whose processor imports
+`torchvision` (the Qwen ViT's, Gemma 4's, NemotronH Omni's) error without it, and
+SmolVLM's processor needs `num2words`; neither is in an extra.
 
 ## Import order: `tests/conftest.py`
 
-It imports nnsight first, sets `JE_ARROW_MALLOC_CONF=background_thread:false` in every
-process pytest starts (a guard against a pyarrow jemalloc fault at import on glibc 2.31
-hosts; the comment in `conftest.py` has the details), and gives each xdist worker one
-torch thread.
+It imports nnsight first and gives each xdist worker one torch thread.
 Test files that import a modeling class (`tests/test_base.py:6-7`,
 `tests/test_registry.py:70`) still write `from nnsight import
 TransformersModel` first for the reader; the conftest is what makes the
@@ -80,10 +79,10 @@ value before the rotary; the identity, HunYuan's and Llama 4's post-rotary norms
 tiling of the keys). `model_size(host, axis, name)` takes the value's name, so JetMoE's file
 says its keys before the rotary are `num_kv_heads` wide where `KV_HEADS_EXPANDED` holds for the rest.
 
-Three helpers: `mixer(layer)` (`:40-43`) is `self_attn` or, on a linear
+Helpers: `mixer(layer)` (`:40-43`) is `self_attn` or, on a linear
 block, `linear_attn`; `has_mlp(model)` (`:184-186`) reads `support()`;
 `attn_blocks(model)` is the blocks with softmax attention and `attn_block(model)` the first of them, skipping the test when there is none;
-`recurrent_mixers(model)` is the family's `RecurrentMixer` classes from its `ENVOYS`;
+`recurrent_mixer(family)` is the family's `RecurrentMixer` class from its `ENVOYS`;
 `expected_values(model)` (`:106-112`) adds the `linear_attn.*` names on a
 hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES`, `INTERIOR` and `LINEAR` (`:20-27`) are the value name sets.
 
@@ -97,14 +96,14 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_standard_names_alias_native_envoys` | every `NATIVE` row: the standard path resolves to an `Envoy`, and it *is* the native envoy |
 | `test_no_inner_model_alias` | nothing is bound at `model.model`: the containers are lifted to the root |
 | `test_every_layer_is_renamed` | every `layers.0.*` row of `NATIVE` resolves on every block, and there is more than one block |
-| `test_envoy_classes` | every block is exactly `FAMILY.Layer`, every softmax attention `FAMILY.Attention`, every MLP `FAMILY.Mlp`, every mixer `FAMILY.LinearAttention`, and each subclasses the component base |
+| `test_envoy_classes` | every block is exactly `FAMILY.Layer`, every softmax attention `FAMILY.Attention`, every MLP `FAMILY.Mlp` (or `FAMILY.Moe`), every mixer the `RecurrentMixer` subclass the family's `ENVOYS` keys, and each subclasses the component base |
 | `test_trace_through_standard_names` | a trace through `mixer(...).output`, `layers[-1].output`, `norm.output`, `lm_head.output` gives `hidden_size` / `vocab_size` widths |
 
 **Availability** (`:158-184`)
 
 | method | asserts |
 |---|---|
-| `test_support_lists_every_standard_value` | `support()` keys equal `expected_values`; `support(layer=0)` drops the six root keys |
+| `test_support_lists_every_standard_value` | `support()` keys equal `expected_values`; `support(layer=0)` drops the eight root keys |
 | `test_support_is_what_this_family_expects` | every key in `EXPECTED_UNAVAILABLE` is a non-empty per-block dict whose reasons contain the substring; every other key is `None` |
 | `test_support_matches_what_reads` | on block 0, an available name is an `EProperty` on the host's class; a missing module says `no ... module`; an unavailable value raises `Unavailable` matching the reason |
 
@@ -220,8 +219,9 @@ adds `REFUSES_IN_PLACE_QKV = True` and one test that flipping
 `reorder_and_upcast_attn` on the config makes the interface unavailable,
 `:14-22`). Two files show the two other things a family file does.
 
-`tests/families/test_falcon.py` has **three classes for one family**: the 7B
-layout, the 7B layout with alibi, and the 40B layout:
+`tests/families/test_falcon.py` has **five classes for one family**: the 7B
+layout, the 7B layout with alibi, the 40B layout, and Falcon-RW's and Falcon-11B's
+layouts patched into copies of the 7B and 40B checkpoints. The first three:
 
 ```python
 class TestFalcon(FamilySuite):                       # 7B layout
@@ -407,12 +407,12 @@ reference's load: a wrapper's `task`, or a config value set to what vLLM
 builds). The latent-attention families' files have two classes, one per
 attention backend. Two classes skip on a stock install, with the condition
 in their file: Apertus (nnsight's meta build must answer `.cpu().item()`)
-and DBRX (vLLM 0.27.1's loader does not find the experts). About 41 tests a
-class, 25 to 80 s each; the checkpoints are about 250 GB together.
+and DBRX (vLLM 0.27.1's loader does not find the experts). The checkpoints are
+about 250 GB together.
 
 ## The root tests
 
-`tests/test_tensor_parallel.py` (34 tests) launches `tests/tp_worker.py` in one
+`tests/test_tensor_parallel.py` launches `tests/tp_worker.py` in one
 process and under `torch.distributed.run` on two CPU ranks over gloo (no GPU), on
 `trl-internal-testing/tiny-Qwen3ForCausalLM` (grouped-query, so the keys' head axis
 differs from the queries'): every value that tensor parallelism splits by head or
@@ -425,7 +425,7 @@ match the one-process run, and every rank must agree bit for bit; `attention_inp
 `value_weight` and `output_weight` are refused on every rank with `SHARDED_WEIGHTS` and served in one
 process (`test_head_weights_are_refused_on_a_split_model`). It skips below transformers 5.19.
 
-`tests/test_registry.py` (21 tests): every module under `nnterp/families/` is
+`tests/test_registry.py`: every module under `nnterp/families/` is
 named after its type, and there are at least 31
 (`:15-20`); `import nnterp` pulls in no `transformers.models.*.modeling_*`
 module and `lookup("gpt2")` imports only that family, checked in a
@@ -454,13 +454,13 @@ extra alias and envoy class composes with `rename=` (`:192-213`); size and
 `project_on_vocab` functions on a passed family win (`:216-226`); none of them
 touches `REGISTRY`.
 
-`tests/test_base.py` (2 tests): the base `Layer` on a plain
+`tests/test_base.py`: the base `Layer` on a plain
 `TransformersModel` over GPT-J unwraps and rewraps a tuple block output
 (`:13-36`); an `unavailable(...)` marker is listed in the repr with its
 reason, reported by `support()` at both levels, raises `Unavailable` on read,
 and `hasattr` raises too (`:39-52`).
 
-`tests/test_prompt_utils.py` (7 tests, GPT-2 with `tokenizer_kwargs`
+`tests/test_prompt_utils.py` (GPT-2 with `tokenizer_kwargs`
 setting left padding and a pad token): `tokenizer_kwargs` are applied;
 `get_first_tokens` returns one or two deduplicated ids per word and uses the
 `add_prefix_false_tokenizer`; the hacky (pear) implementation agrees;
@@ -469,7 +469,7 @@ setting left padding and a pad token): `tokenizer_kwargs` are applied;
 `next_token_probs_unsqueeze` gives `[1, 1, vocab_size]` distributions;
 `run_prompts` batched equals one by one and refuses mismatched targets.
 
-`tests/test_nnsight_utils.py` (6 tests, same fixture): `get_token_activations`
+`tests/test_nnsight_utils.py` (same fixture): `get_token_activations`
 is `[num_layers, num_prompts, hidden_size]` on the CPU and equals
 `layer_output[:, -1]`; it reads inside a caller's tracer; a positive index
 needs right padding; batched and one-at-a-time collection agree; the
@@ -495,8 +495,7 @@ session collector agrees; `compute_next_token_probs` rows sum to one.
   `"chunked"` in a `finally`.
 - pytest imports `tests/families/suite.py` as the bare module `suite`
   (`from suite import FamilySuite`); do not name another test helper that.
-- Run from the repository root: `git rev-parse --show-toplevel` is
-  the nnterp checkout, and pytest's `testpaths` is relative to it.
+- Run pytest from the repository root: `testpaths` is relative to it.
 - The fixtures load with `dispatch=True` and no `device=`, so with a GPU visible every
   tiny model lands on `cuda:0`; on a shared card a parallel run fails by the hundreds
   (CUDA out of memory, cuBLAS errors). Run with `CUDA_VISIBLE_DEVICES=""` to keep the

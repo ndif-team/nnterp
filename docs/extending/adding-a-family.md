@@ -91,15 +91,33 @@ Mistral, Qwen2/3, Gemma 1, OLMo 1 and Phi-3 are this file with the class names s
 (Phi-3 also aliases its `activation_fn`, and Mistral, Qwen2 and Gemma add their vision-language
 wrappers' names). SmolLM3 is the same plus a `no_rotary` for the blocks its `no_rope_layers`
 marks. `gpt2.py` shows every other part of the template in use:
-block-level aliases, a config flag that takes the attention off the shared
-interface, and container keys anchored at the root:
+container keys anchored at the root, block-level aliases, the sublayers' interior
+modules aliased to `o_proj`, `act_fn` and `down_proj`, a `no_rotary` reason, a config
+flag that takes the attention off the shared interface, the head weights read off a
+fused projection, and a size function:
 
 ```python
-"""GPT-2 (``GPT2LMHeadModel``)."""
+"""GPT-2 (``GPT2LMHeadModel``).
+
+Its tree is ``transformer.{wte, wpe, drop, h[i].{ln_1, attn, ln_2, mlp}, ln_f}``
+plus ``lm_head``. The container-level keys are anchored at the root
+(``transformer.h``) so the aliases land on the root envoy: ``model.layers``,
+not ``model.model.layers``. ``wpe`` (learned absolute positions) and ``drop``
+have no standard name; they stay reachable under their own.
+
+A checkpoint with ``reorder_and_upcast_attn`` set takes GPT-2's own
+``_upcast_and_reordered_attn`` path instead of the shared eager forward, so
+none of the attention's interior values is available there.
+"""
+
+from typing import TYPE_CHECKING
 
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention, GPT2Block, GPT2MLP
 
-from ..components import Attention, Layer, Mlp
+from ..components import Attention, Layer, Mlp, projection_weight
+
+if TYPE_CHECKING:
+    from ..standardized import StandardizedTransformer
 
 RENAME = {
     "transformer.wte": "embed_tokens",
@@ -108,6 +126,10 @@ RENAME = {
     "ln_1": "input_layernorm",
     "attn": "self_attn",
     "ln_2": "post_attention_layernorm",
+    # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
+    "attn.c_proj": "attn.o_proj",
+    "mlp.c_proj": "mlp.down_proj",
+    "act": "act_fn",
 }
 
 
@@ -122,25 +144,45 @@ class Attention(Attention):
     path instead, where nothing on the interface is reachable.
     """
 
+    def no_rotary(self) -> str | None:
+        return "no rotary embedding: GPT-2 adds learned absolute position embeddings (wpe) to the stream"
+
     def off_interface(self):
         if self._module.config.reorder_and_upcast_attn:
             return "this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path"
         return super().off_interface()
+
+    def value_weight(self, kv_head):
+        """``c_attn`` is a ``Conv1D``, ``[hidden_size, 3 * hidden_size]``, whose columns are every query, key, then value."""
+        return projection_weight(self, "c_attn").unflatten(1, (3, self.num_heads, self.head_dim))[:, 2, kv_head].T
+
+    def output_weight(self, head):
+        """``c_proj`` is a ``Conv1D``, ``[hidden_size, hidden_size]``, whose rows are the heads' outputs."""
+        return projection_weight(self, "o_proj").unflatten(0, (self.num_heads, self.head_dim))[head].T
 
 
 class Mlp(Mlp):
     """GPT-2's MLP; the residual is added in the block, so the base holds."""
 
 
+#: Module type -> Envoy subclass, for nnsight's ``envoys=``.
 ENVOYS = {GPT2Block: Layer, GPT2Attention: Attention, GPT2MLP: Mlp}
+
+
+# -- sizes: what GPT-2's config calls them ------------------------------------------
+
+def intermediate_size(model: "StandardizedTransformer") -> int:
+    """The MLP width is ``n_inner``, ``None`` meaning four times the hidden size; the config's ``intermediate_size`` is never read by the model."""
+    return model.config.n_inner or 4 * model.hidden_size
 ```
 
 ## The recipe
 
 1. Read `config.model_type` off the checkpoint (`AutoConfig.from_pretrained(repo).model_type`;
    a multimodal config nests the text model's under `text_config`, and that is the type
-   used). Create `nnterp/families/<model_type>.py`. The file name is what `lookup` imports,
-   so `gemma3_text.py` covers `gemma3_text` and nothing else; the module declares no
+   used, unless a family is named after the wrapper's own type). Create
+   `nnterp/families/<model_type>.py`. The file name is what `lookup` imports, so
+   `gemma3_text.py` covers `gemma3_text` and nothing else; the module declares no
    type of its own.
 2. Write `RENAME`. Print the raw model (`TransformersModel(repo)`) or its `named_modules()`
    to see the native tree, then map the containers and any block names that differ.
@@ -153,6 +195,16 @@ ENVOYS = {GPT2Block: Layer, GPT2Attention: Attention, GPT2MLP: Mlp}
    root ([Sizes](#sizes) below). Define `def project_on_vocab(model, hidden)` if the model
    scales the head's output ([The logits](#the-logits)).
 6. Add `tests/families/test_<model_type>.py` and run it.
+
+A family that ships with nnterp also touches:
+
+- its rows in `docs/reference/families.md` (both tables, and each "Quirks by theme" list it belongs to);
+- an encyclopedia entry, `encyclopedia/entries/<model_type>.py`, with the family placed in
+  `encyclopedia/hues.py`'s layout ([encyclopedia/README.md](../../encyclopedia/README.md));
+- the site's API pages, regenerated with `python site/gen_reference.py`;
+- the family counts in `CLAUDE.md`, `README.md` and `docs/reference/families.md` (and
+  `docs/usage/mixture-of-experts.md` for a mixture);
+- the `nnterp` plugin's skills in https://github.com/ndif-team/skills, where they count or list families.
 
 ### `RENAME`
 
@@ -180,8 +232,12 @@ relative to every envoy in the tree (nnsight docs/usage/rename-modules.md):
   its class, `{NemotronHMamba2Mixer: "linear_attn", NemotronHAttention: "self_attn", ...}`.
   A class that two children of one envoy share is an error there; key those by name.
 
-The standard names are `embed_tokens`, `layers`, `norm`, `lm_head`, and on blocks
-`self_attn`, `mlp`, `input_layernorm`, `post_attention_layernorm`, `linear_attn`. Bind
+The standard names are `embed_tokens`, `layers`, `norm`, `lm_head`, on blocks
+`self_attn`, `mlp`, `input_layernorm`, `post_attention_layernorm`, `linear_attn`, and
+inside the sublayers `o_proj` (the attention's output projection), `act_fn` and
+`down_proj` (the MLP's activation and down projection), where `attention_premix`,
+`mlp_activation` and `mlp_neurons` are read; GPT-2 keys `"attn.c_proj": "attn.o_proj"`
+dotted, since both of its sublayers have a `c_proj`. Bind
 the norms only where the family has a module in that position; their meaning varies
 and the suite checks the sublayer inputs against the family's own norm
 (`ATTENTION_NORM`, `MLP_NORM` below), not the alias. Anything else (`wpe`, `drop`,
@@ -305,7 +361,7 @@ def intermediate_size(model: "StandardizedTransformer") -> int:
 ```
 
 The function may read other sizes off the model (`model.num_heads`, `model.hidden_size`),
-which resolve the same way. Twenty-five shipped families define one or more, for example
+which resolve the same way. Twenty-seven shipped families define one or more, for example
 Falcon (`num_kv_heads`, `intermediate_size`), DeepSeek-V2 (`head_dim` = `v_head_dim`,
 `qk_head_dim` = `qk_nope_head_dim + qk_rope_head_dim`; DeepSeek-V3, -V3.2, GLM-5,
 GLM-4.7-Flash and Youtu import both from `deepseek_v2`), GPT-2 (`intermediate_size` =
@@ -364,6 +420,8 @@ RENAME = {
     # block-level names that differ from Llama's, single-component:
     # "<attention>": "self_attn", "<feed-forward>": "mlp",
     # "<pre-attention norm>": "input_layernorm", "<pre-mlp norm>": "post_attention_layernorm",
+    # the sublayers' interiors, where the family spells them otherwise (dotted when two sublayers share a name):
+    # "<output projection>": "o_proj", "<activation>": "act_fn", "<down projection>": "down_proj",
     # "<old head name>": "lm_head",   # binds only where it resolves
 }
 
@@ -376,6 +434,11 @@ class Layer(Layer):
 
 class Attention(Attention):
     """<Family>'s attention; the shared eager forward and the residual added in the block, so the base holds."""
+
+    # def no_rotary(self) -> str | None:   # a block with no rotary embedding; NO_ROTARY in the test's EXPECTED_UNAVAILABLE
+    #     return "no rotary embedding: <why>"
+    # value_weight / output_weight: overridden where q/k/v or the output projection are fused or
+    # transposed (gpt2.py above, phi3.py in overriding-values.md)
 
 
 class Mlp(Mlp):
@@ -411,14 +474,20 @@ class TestLlama(FamilySuite):
     NATIVE = LLAMA_ROWS
 ```
 
-GPT-2's states one quirk and adds one family-specific test:
+GPT-2's states two quirks and adds one family-specific test:
 
 ```python
+from suite import NO_ROTARY, FamilySuite, rows
+
+from nnterp.families import gpt2
+
+
 class TestGPT2(FamilySuite):
     REPO = "hf-internal-testing/tiny-random-gpt2"
     FAMILY = gpt2
     NATIVE = rows("transformer", "h", "wte", "ln_f", attn="attn", ln1="ln_1", ln2="ln_2")
     REFUSES_IN_PLACE_QKV = True  # q/k/v are split views of one c_attn tensor
+    EXPECTED_UNAVAILABLE = NO_ROTARY
 
     def test_reorder_and_upcast_makes_the_interface_unavailable(self, model):
         config = model.layers[0].self_attn._module.config
@@ -442,7 +511,7 @@ Every class attribute of `FamilySuite`:
 | `REPO` | The pinned tiny checkpoint, offline-cached. |
 | `FAMILY` | The family module the checkpoint must resolve to (`model.family is FAMILY`). |
 | `NATIVE` | Standard path to native path; each pair must be the same envoy, and every `layers.0.*` name must exist on every block. |
-| `EXPECTED_UNAVAILABLE` | `support()` key to a substring of the reason, for values this checkpoint lacks; every other value must report `None`. Default `{}`. |
+| `EXPECTED_UNAVAILABLE` | `support()` key to a substring of the reason, for values this checkpoint lacks; every other value must report `None`. Default `{}`. `suite.NO_ROTARY` is the entry of a family without a rotary embedding. |
 | `REFUSES_IN_PLACE_QKV` | torch refuses in-place edits on queries that are views out of a `split`/`chunk` (GPT-2, GPT-BigCode, MPT); the suite expects a `RuntimeError` on the in-place query edit and skips it. |
 | `ATTENTION_SINK` | The pattern's rows sum to less than one (GPT-OSS). |
 | `KV_HEADS_EXPANDED` | Keys and values are read already expanded to `num_heads` (latent attention; Falcon's 40B layout). |
@@ -454,6 +523,10 @@ Every class attribute of `FamilySuite`:
 | `MLP_NORM_BEFORE_ATTENTION` | The MLP's norm runs before the attention does (Falcon's 40B layout takes both norms from the block input up front). |
 | `MOE_UNAVAILABLE` | Mixture value to a substring of the reason, for the mixture values this checkpoint lacks on its mixture; a mixture without a shared expert needs no entry for `shared_expert_output`. Default `{}`. |
 | `ROUTER_EXTRA_CLASSES` | Router classes beyond the experts (ZAYA's skip class is one more column of `router_logits`). Default `0`. |
+| `DECODE_MASK_COVERS_CACHE` | A decode step's attention mask covers the cache and the new token; `False` where it covers the new token only (a pure state-space model). Default `True`. |
+| `MID_IDENTITY` | `layer_mid == layer_input + the mixers' contributions`; `False` where a gate scales what the block adds (Doge, ZAYA). Default `True`. |
+| `PREMIX_IS_HEAD_OUTPUTS` | `attention_premix` is `attention_head_outputs`; `False` where a gate or a norm sits between the heads and the output projection. Default `True`. |
+| `NEURONS_FROM_ACTIVATION` | `mlp_neurons` is `mlp_activation * up_proj.output` on a gated MLP, `mlp_activation` on a plain one. Default `True`. |
 
 `pattern_from_scores(self, model, scores)` is the one method a subclass may override:
 what the softmax makes of `attention_scores`; a sink family adds its column.
@@ -481,14 +554,12 @@ A failure in `test_every_source_value_resolves_on_every_layer` names the operati
 forward does not have; [finding-source-ops.md](finding-source-ops.md) is how to find the
 one it does.
 
-## Verified outside the package
+## Outside the package
 
-The template above, written as a standalone module for `gpt2` and passed to
-`nnterp.families.register(module, "gpt2")` at the top of a test file that subclasses `FamilySuite`
-with GPT-2's `NATIVE` and `REFUSES_IN_PLACE_QKV`, passes the whole suite (35 tests) on
-`hf-internal-testing/tiny-random-gpt2`; `model.family` is the standalone module. Nothing
-under `nnterp/families/` was touched. A family that will ship is the same module moved
-into the package and the `register()` line removed.
+A family outside the package is the same module, importing from `nnterp.components`;
+`nnterp.families.register(module, "<model_type>")` at the top of its test file runs
+`FamilySuite` on it, and `model.family` is that module. Shipping it is moving the file
+into `nnterp/families/` and dropping the `register()` line.
 
 ## Gotchas
 

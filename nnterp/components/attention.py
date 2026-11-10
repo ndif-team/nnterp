@@ -105,21 +105,24 @@ def attention_call(envoy: Envoy) -> tuple[str, tuple[int, int, int]] | None:
     `attention_head_outputs`: transformers' shared interface call on most
     families (``attention_interface(self, q, k, v, mask, ...)``), and the
     ``_attn(q, k, v, mask, head_mask)`` method of GPT-J, GPT-Neo, CodeGen and
-    GPT-NeoX-Japanese. A family that maps those values onto its own arithmetic
-    (BLOOM, MPT, Falcon, XGLM), or whose head outputs are read after the
+    GPT-NeoX-Japanese, and GPT-2's ``_upcast_and_reordered_attn(q, k, v, mask)``
+    on a ``reorder_and_upcast_attn`` checkpoint. A family that maps those
+    values onto its own arithmetic (BLOOM, MPT, Falcon, XGLM), or whose head outputs are read after the
     module changes the call's output (DeepSeek-V4), names no such call, and
-    it is ``None`` there. Read off the keys alone, so it answers outside a trace.
+    it is ``None`` there. Read off the keys alone, so it answers outside a trace:
+    a key or ``select`` function is called on ``envoy``, so one that picks the
+    call (GPT-2's, by the module's flag) reads the module or its config, never the forward.
     """
     cls = type(envoy)
     calls, positions = set(), []
     for value in (cls.attention_queries, cls.attention_keys, cls.attention_values):
-        key = value.key if value.locate is None else None
-        if not (isinstance(key, str) and key.startswith("source.") and key.endswith(".inputs") and isinstance(value.select, int)):
+        key, select = value.path(envoy), value._selection(envoy)
+        if not (isinstance(key, str) and key.startswith("source.") and key.endswith(".inputs") and isinstance(select, int)):
             return None
         calls.add(key.removesuffix(".inputs"))
-        positions.append(value.select)
+        positions.append(select)
     heads = cls.attention_head_outputs
-    if len(calls) != 1 or heads.locate is not None or heads.key != f"{next(iter(calls))}.output" or heads.select != 0:
+    if len(calls) != 1 or heads.path(envoy) != f"{next(iter(calls))}.output" or heads._selection(envoy) != 0:
         return None
     return next(iter(calls)), tuple(positions)
 

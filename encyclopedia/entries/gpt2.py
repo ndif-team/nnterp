@@ -163,20 +163,14 @@ The Stanford CRFM checkpoints (`stanford-crfm/*-gpt2-small-*` and `*-gpt2-medium
 each, with intermediate training checkpoints as revision tags such as `checkpoint-99000`) set
 `reorder_and_upcast_attn` and `scale_attn_by_inverse_layer_idx`. `scale_attn_by_inverse_layer_idx`
 divides block `i`'s score scale by `i + 1`, on every attention path. `reorder_and_upcast_attn` makes
-an eager load take GPT-2's own upcast path, where nnterp reads nothing inside the attention. In
-float32 that path computes what the eager attention function does, up to rounding: on
-`alias-gpt2-small-x21` the logits of the two paths agree within 2e-5. A float32 load with the flag
-off therefore serves the interior values and computes the same logits to within that rounding:
-
-```python
-model = StandardizedTransformer(
-    "stanford-crfm/alias-gpt2-small-x21", dispatch=True, dtype=torch.float32,
-    attn_implementation="eager", reorder_and_upcast_attn=False,
-)
-```
-
-`alias-gpt2-small-x21` loads in float16 by default, and there the paths differ, since the upcast one
-computes the scores in float32 (largest logit difference 0.025 on GPU).
+an eager load call GPT-2's own `_upcast_and_reordered_attn(query, key, value, attention_mask)` in
+place of the eager attention function: the same arguments and return, the scores computed in
+float32. nnterp reads the interior at whichever call runs, so the queries, keys, values, pattern,
+head outputs and `interface` are served on these checkpoints as on any GPT-2, and the scores are
+float32 whatever the load's dtype. In float32 the two paths agree up to rounding: on
+`alias-gpt2-small-x21` their logits agree within 2e-5. `alias-gpt2-small-x21` loads in float16 by
+default, and there the paths differ, since the upcast one computes the scores in float32 (largest
+logit difference 0.025 on GPU); keep the flag the checkpoint sets.
 
 ## The readout: LayerNorm with a bias, tied weights
 

@@ -187,9 +187,9 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
 
 - **Load-time validation**: a causal check that a written pattern moves the
   logits, a refusal of heterogeneous layer classes (Mllama's cross-attention
-  blocks would be plain `Envoy`s with no `layer_output`), detection of
-  `reorder_and_upcast_attn` and of a sublayer that takes a `residual`
-  argument (§2a "Load-time validation", §4 items 9-11).
+  blocks would be plain `Envoy`s with no `layer_output`), detection of a
+  sublayer that takes a `residual` argument (§2a "Load-time validation",
+  §4 items 9-11).
 - **Interventions and display conveniences**: nnterp 1.x's `logit_lens`,
   `patchscope_lens`, `patchscope_generate`, `patch_object_attn_lens`,
   `TargetPrompt(Batch)`, `repeat_prompt`, `plot_topk_tokens`, `prompts_to_df`

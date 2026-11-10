@@ -494,8 +494,9 @@ its own mask.
 
 Which call it makes follows from where the family reads its queries, keys, values and head
 outputs: the one call that takes the first three and returns the last. That is
-transformers' shared interface call on most families, and the `_attn` method on GPT-J,
-GPT-Neo, CodeGen and GPT-NeoX-Japanese. `support()` reports `self_attn.interface`
+transformers' shared interface call on most families, the `_attn` method on GPT-J,
+GPT-Neo, CodeGen and GPT-NeoX-Japanese, and `_upcast_and_reordered_attn` on a GPT-2 checkpoint
+with `reorder_and_upcast_attn`. `support()` reports `self_attn.interface`
 unavailable where those values are (any `attn_implementation` but `"eager"`, with the same
 reason) and where no such call exists: BLOOM, MPT, Falcon and XGLM do their own arithmetic,
 DeepSeek-V4 rotates the interface's output back before its projection, the Qwen ViT and
@@ -555,10 +556,12 @@ tensor of the same shape. The scores, the pattern and the head outputs accept
 in-place edits on both (GPT-2's head outputs are a transposed view, which
 torch allows).
 
-A GPT-2 checkpoint with `reorder_and_upcast_attn` set takes GPT-2's own upcast
-attention path, where the shared interface never runs. All six values then
-report `this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own
-upcast attention path`; `attention_output` stays available.
+A GPT-2 checkpoint with `reorder_and_upcast_attn` set (the `stanford-crfm`
+GPT-2 checkpoints) takes GPT-2's own `_upcast_and_reordered_attn(query, key,
+value, attention_mask)` under eager in place of the shared interface. The six
+values and `interface` are read at that call, so they mean the same as on any
+GPT-2; the scores there are computed in float32 whatever the model's dtype,
+and the pattern is cast back to it.
 
 ### Grouped-query attention: two head widths
 

@@ -179,8 +179,9 @@ one block of granite-swash-2b). So `attention_probabilities` there is not what r
   an edit to the pattern reads the edited one.
 - The pattern is in the model's dtype: on a bf16 checkpoint rows sum to one within
   a few ulps, not exactly.
-- A GPT-2 checkpoint with `reorder_and_upcast_attn` set takes GPT-2's own upcast
-  path, off the shared interface; `support()` reports the pattern unavailable there.
+- A GPT-2 checkpoint with `reorder_and_upcast_attn` set (the `stanford-crfm` ones)
+  takes GPT-2's own upcast call in place of the shared interface; the pattern is read
+  there, the same tensor, and the scores are float32 whatever the model's dtype.
 - GPT-J, GPT-Neo, BLOOM, MPT and Falcon compute attention themselves; their families map
   the pattern onto their own softmax (Falcon's onto the softmax without alibi and
   onto the dropout after the second softmax with it, by `config.alibi`).

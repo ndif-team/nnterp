@@ -7,8 +7,10 @@ encoding. Both kinds make the same ``attention_interface`` call, so every
 interior value resolves on every block, and on a full layer
 ``attention_queries`` / ``attention_keys`` are the unrotated projections.
 
-The model multiplies the head's output by ``config.logit_scale``, as Cohere's
-does, so the family takes Cohere's ``project_on_vocab``.
+``Cohere2ForCausalLM`` multiplies the head's output by ``config.logit_scale``, as
+Cohere's does, so the family takes Cohere's ``project_on_vocab``, which scales
+only on the causal-LM classes: the Aya Vision and Cohere2-Vision wrappers return
+the head's output unscaled, whatever their ``text_config`` says.
 
 Aya Vision and Cohere2-Vision put a SigLIP tower at ``model.vision_tower``, which is
 ``vision`` (its ``post_layernorm`` over the patches is ``vision.norm``), and a
@@ -26,7 +28,7 @@ from transformers.models.cohere2_vision.modeling_cohere2_vision import Cohere2Vi
 from transformers.models.siglip.modeling_siglip import SiglipAttention, SiglipEncoderLayer, SiglipMLP, SiglipVisionModel
 
 from ..components import Attention, EProperty, ImageScatter, Layer, Mlp, PARALLEL, Residual, Vision, VisionAttention, VisionLayer, VisionMlp, unavailable
-from .cohere import project_on_vocab  # noqa: F401  the same head: the same logit_scale
+from .cohere import project_on_vocab  # noqa: F401  the same head: the same logit_scale, on the causal-LM class only
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",

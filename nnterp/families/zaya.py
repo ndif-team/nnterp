@@ -41,6 +41,11 @@ its index **0**, an alias of expert 0, so usage counts mask ``expert_weights == 
 The router picks on its softmax plus ``balancing_biases``; on ZAYA1-8B and
 ZAYA1-74B-preview (``num_experts_per_tok`` 1) the skip class's bias is -1 and some
 expert's is positive on every block, so skip is never chosen there; the tiny picks it.
+
+The stream is float32 whatever the load dtype (the model keeps ZAYA's
+``residual_in_fp32`` path), so ``layer_output`` is float32 on a bfloat16 load. The
+model casts it to the final norm's dtype before the norm, and `project_on_vocab`
+does the same.
 """
 
 from typing import TYPE_CHECKING
@@ -154,3 +159,13 @@ ENVOYS = {ZayaDecoderLayer: Layer, ZayaAttention: Attention, ZayaSparseMoeBlock:
 def intermediate_size(model: "StandardizedTransformer") -> int:
     """The MLP width is one expert's, ``moe_intermediate_size``: every block is a mixture and the config has no dense width."""
     return model.config.moe_intermediate_size
+
+
+def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:
+    """The logit lens as the model makes its logits: the stream cast to the final norm's dtype, the norm, ``lm_head``.
+
+    The float32 stream reaches the norm in the norm's own dtype (bfloat16 on a
+    bfloat16 load), as in the model; without the cast the norm would hand
+    ``lm_head`` float32 rows its bfloat16 weight cannot multiply.
+    """
+    return model.lm_head(model.norm(hidden.to(model.norm.weight.dtype)))

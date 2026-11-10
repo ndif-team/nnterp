@@ -321,7 +321,7 @@ def test_every_vision_host_in_nnterp_is_a_wrapper():
         if not getattr(entry, "WRAPPERS", None):
             continue
         module = importlib.import_module(f"test_{entry.MODEL_TYPE}")
-        suites = {cls.REPO for cls in vars(module).values()
+        suites = {cls.REPO for cls in list(vars(module).values())  # reading a REPO can warn, adding __warningregistry__
                   if isinstance(cls, type) and issubclass(cls, VisionSuite) and getattr(cls, "REPO", None)}
         pinned_wrappers = {wrapper["pinned"] for wrapper in entry.WRAPPERS.values()}
         # a suite's local copy of PINNED, unless that local dir is itself a record's pinned (a wrapper the suite writes)

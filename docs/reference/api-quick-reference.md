@@ -408,7 +408,7 @@ The thirty-eight `jaxtyping` types every standard value is annotated with, each 
 |---|---|---|---|
 | `Residual` | `batch seq hidden_size` | `components/layer.py` | `layer_input`, `layer_output`, `attention_output`, `mlp_output`, `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`, `token_embeddings`, `final_norm_output` |
 | `FlatResidual` | `tokens hidden_size` | `components/layer.py` | OPT's `layer_mid` and `mlp_norm_output`: the stream as its block holds it around the feed-forward path, batch and sequence flattened |
-| `Streams` | `batch seq streams hidden_size` | `components/layer.py` | `layer_output` on a hyper-connection family (DeepSeek-V4) |
+| `Streams` | `batch seq streams hidden_size` | `components/layer.py` | `layer_input`, `layer_mid` and `layer_output` on a hyper-connection family (DeepSeek-V4) |
 | `StreamWeights` | `batch seq streams` | `components/layer.py` | a hyper-connection family's `attention_post`, `mlp_post` |
 | `StreamMixing` | `batch seq streams streams` | `components/layer.py` | a hyper-connection family's `attention_comb`, `mlp_comb` |
 | `Logits` | `batch seq vocab_size` | `standardized.py` | `logits`, `lm_head_output` |

@@ -19,7 +19,12 @@ matrix mixing the streams, consumed transposed. The block, per token::
 * **``layer_output`` is the block's own stream tensor**, under the `Streams`
   layout, and so is ``layers[i].input``; writes land natively, and
   ``skip_layers`` and ``steer`` work unchanged (a ``[hidden_size]`` steering vector
-  broadcasts over the streams).
+  broadcasts over the streams). ``layer_mid`` is the streams between the
+  sublayers, ``h`` above, also `Streams`.
+* **What each sublayer is called with** is one stream's width:
+  ``attention_norm_output`` is ``input_layernorm(collapsed_a)``,
+  ``mlp_norm_output`` and ``mlp_input`` are ``post_attention_layernorm(collapsed_f)``,
+  ``[batch, seq, hidden_size]``.
 * **The contributions are the sublayers' own outputs**, ``[batch, seq, hidden_size]``,
   unscaled: ``attention_output`` is ``self_attn.output[0]``, ``mlp_output`` the
   mixture's return (routed plus shared experts). The weights that put them into
@@ -45,7 +50,8 @@ compressor's entries are concatenated after the token keys once the prompt is
 sequence there. The interface's output keeps a rotation on its rotary slice
 (the values are the rotated keys); the module rotates it back before the grouped
 output projection, and ``attention_head_outputs`` is that de-rotated tensor, what
-the projection reads. Not latent attention: the plain root sizes hold.
+the projection reads (``attention_premix`` is the projection's input, the same
+numbers). Not latent attention: the plain root sizes hold.
 
 Every MLP is a mixture (``DeepseekV4SparseMoeBlock``, a `Moe`; its router, ``gate``,
 is aliased ``router``); on the ``hash_moe`` blocks the router picks experts from the
@@ -64,7 +70,7 @@ from transformers.models.deepseek_v4.modeling_deepseek_v4 import (
 
 from ..components import (
     Attention, EProperty, HeadOutputs, INTERFACE, Keys, Layer, Moe, Pattern, Queries, StreamMixing, StreamWeights, Streams, first_tensor, holding,
-    interface_reason, rewrap, rotary_reason, unavailable,
+    interface_reason, rewrap, rotary_reason,
 )
 
 if TYPE_CHECKING:
@@ -78,9 +84,6 @@ RENAME = {
 }
 
 
-STREAMS_BOUNDARY = "hyper-connection streams: the sublayers read a mix of the streams, not the stream; the block's inner boundaries are not mapped for this family yet"
-
-
 class Layer(Layer):
     """DeepSeek-V4's decoder block; returns the bare stream tensor, so the base holds, under the `Streams` layout.
 
@@ -88,13 +91,22 @@ class Layer(Layer):
     ``attention_comb`` (``attn_hc``) and ``mlp_post`` / ``mlp_comb``
     (``ffn_hc``), float32 whatever the model's dtype.
 
-    The inner boundaries are not mapped: each sublayer reads a mix of the streams.
+    The inner boundaries: ``attention_norm_output``, ``mlp_norm_output`` and
+    ``mlp_input`` are the base's, ``[batch, seq, hidden_size]``: what each
+    sublayer is called with, its norm's output on the collapsed mix of the
+    streams. ``layer_mid`` is the streams between the sublayers, under the
+    `Streams` layout: the block's binding of ``attention_combᵀ · x +
+    attention_post ⊗ attention_output``, which ``ffn_hc`` and the block's own
+    mixing after the MLP both read, so a write reaches both. It is an
+    operation of the block's forward, read after the block has begun, so the
+    forward is instrumented at build (``sourced``).
     """
 
-    attention_norm_output = unavailable(STREAMS_BOUNDARY)
-    layer_mid = unavailable(STREAMS_BOUNDARY)
-    mlp_norm_output = unavailable(STREAMS_BOUNDARY)
-    mlp_input = unavailable(STREAMS_BOUNDARY)
+    sourced = True
+
+    @EProperty("source.hidden_states_0.output", description="The residual streams between the two sublayers")
+    def layer_mid(self, value) -> Streams:
+        return value
 
 
     @EProperty(key="input", description="The residual streams entering the block")
@@ -129,8 +141,11 @@ class Layer(Layer):
 class Attention(Attention):
     """DeepSeek-V4's attention: the shared interface with a sink column, and head outputs rotated back after it.
 
-    The output projection is low-rank (``o_a_proj`` compresses the heads before ``o_b_proj``), so no module
-    receives every head's output side by side and ``attention_premix`` is unavailable.
+    The output projection is grouped and low-rank: ``o_a_proj`` maps each of
+    ``o_groups`` groups of heads to ``o_lora_rank`` numbers, then ``o_b_proj``
+    mixes the groups into the stream. ``o_a_proj`` receives every head's output
+    side by side, ``[batch, seq, o_groups, heads_per_group * head_dim]``, heads
+    in order, so ``attention_premix`` is its input split by head.
 
     The scores are the masked scores bound just before the sink column is
     concatenated (GPT-OSS's binding); the pattern is the base's. The keys and
@@ -162,12 +177,19 @@ class Attention(Attention):
         apply = sys.modules[type(self._module).__module__].apply_rotary_pos_emb
         return apply(x.reshape(cos.shape[0], -1, *x.shape[-2:]), cos, sin).reshape(x.shape)
 
-    attention_premix = unavailable("a low-rank output projection: o_a_proj compresses the heads before o_b_proj, so nothing receives them side by side")
+    @EProperty("o_a_proj.input", description=Attention.attention_premix.description)
+    def attention_premix(self, value) -> HeadOutputs:
+        """What the grouped projection ``o_a_proj`` receives, split by head as a view: ``[batch, seq, num_heads, head_dim]``, the same numbers as `attention_head_outputs`."""
+        return value.view(*value.shape[:-2], self.num_heads, self.head_dim)
+
+    @attention_premix.postprocess
+    def attention_premix(self, value):
+        return value.reshape(*value.shape[:-2], self._module.config.o_groups, -1)
 
     def no_head_weights(self) -> str | None:
         return (
             "the values are the keys, one projection normed per head (kv_proj, then kv_norm), and the output projection "
-            "is low-rank (o_a_proj, then o_b_proj), so no slice of a projection is a head's"
+            "is two matrices (o_a_proj per group of heads, then o_b_proj), so a head's weights are no slice of one projection"
         )
 
 

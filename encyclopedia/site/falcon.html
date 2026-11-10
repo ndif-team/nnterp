@@ -1263,9 +1263,8 @@ implementation.</p>
 <code>x + attn + mlp</code>, but it does so by adding the attention output <em>into the
 MLP's output tensor in place</em>, so <code>mlp_output</code> reads a copy taken as the
 MLP returns (on every layout), and a transform carries edits to it back into the model. The RW
-layout (<code>parallel_attn</code> false: falcon-rw-1b and -7b, which also set <code>alibi</code>,
-per-head keys and values and biased projections) is a sequential pre-norm block
-with <code>post_attention_layernorm</code> before the MLP, so <code>layer_mid</code> is served there.</p>
+layout (<code>parallel_attn</code> false: falcon-rw-1b and -7b) is a sequential pre-norm block, so
+<code>layer_mid</code> is served there.</p>
 <p>The attention does its own arithmetic, and <code>config.alibi</code> picks one of two
 branches of it with different operations, so each interior value names its
 operation by that flag. Without alibi the queries and keys leave
@@ -1291,7 +1290,7 @@ sublayers, and 8 key/value heads serve its 32 query heads.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev115+gcd2ea50e5 · transformers 5.21.0 · reference <span id="colophon-reference">tiiuae/falcon-7b</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev135+ge5bb7b325 · transformers 5.21.0 · reference <span id="colophon-reference">tiiuae/falcon-7b</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

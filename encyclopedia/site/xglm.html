@@ -707,13 +707,10 @@ returns a bare tensor. The attention does its own arithmetic whatever
 <code>attn_implementation</code> says (the model has no other): queries scaled by
 <code>1/sqrt(head_dim)</code> as they are projected, queries, keys and values flattened to
 <code>[batch * num_heads, seq, head_dim]</code> for <code>torch.bmm</code>, the mask added and clamped,
-softmax, dropout, <code>bmm</code> with the values; the interior needs no eager load. nnsight
-narrows a tensor to an invoke's rows only when its leading axis is the batch, so
-the queries, scores, pattern and head outputs are read where the forward still
-holds them batch first, and each invoke of a trace reads and edits its own rows of
-them. The keys and values are read at the <code>reshape</code> that flattens them, after the
-cache update, the one operation that holds them with or without a cache: each
-invoke reads, and an edit reaches, the whole batch's.</p></div>
+softmax, dropout, <code>bmm</code> with the values; the interior needs no eager load. The
+queries, scores, pattern and head outputs are read where the forward holds them
+batch first, so each invoke reads and edits its own rows; the keys and values, read
+after the cache update, are the whole batch's in every invoke.</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
       <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/xglm.py">nnterp/families/xglm.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_xglm.py">tests/families/test_xglm.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
@@ -729,7 +726,7 @@ invoke reads, and an edit reaches, the whole batch's.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev64+g5bb65b903 · transformers 5.21.0 · reference <span id="colophon-reference">facebook/xglm-564M</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev135+ge5bb7b325 · transformers 5.21.0 · reference <span id="colophon-reference">facebook/xglm-564M</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

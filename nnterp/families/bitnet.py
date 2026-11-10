@@ -8,8 +8,8 @@ interface and before ``o_proj``, so ``attention_head_outputs`` is before that
 norm; the MLP norms its gated product (``ffn_sub_norm``) before ``down_proj``.
 The released checkpoints (``quant_method: bitnet``) load their projections as
 transformers' ``AutoBitLinear``; a meta build and the pinned tiny show plain
-``nn.Linear``. ``value_weight`` and ``output_weight`` are the weights those
-layers apply, not the ones they store (`nnterp.components.attention.bitnet_weight`).
+``nn.Linear``. ``value_weight`` and ``output_weight`` refuse on those layers,
+which apply a function of the weight they store.
 """
 
 from transformers.models.bitnet.modeling_bitnet import BitNetAttention, BitNetDecoderLayer, BitNetMLP

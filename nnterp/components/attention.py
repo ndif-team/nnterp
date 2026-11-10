@@ -213,7 +213,8 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
     Raises:
         Unavailable: the block has no per-head weights (`Attention.no_head_weights`),
             the model is not dispatched (its weights are meta), or the weight is
-            quantized (its elements are codes, not the values it applies).
+            quantized (its elements are codes, not the values it applies; a BitNet
+            layer applies a function of it).
         NotImplementedError: an adapter whose forward is not the base layer plus a
             delta (DoRA, aLoRA, a non-LoRA tuner).
     """
@@ -221,9 +222,6 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
     if reason:
         raise Unavailable(f"{attn.path} serves no per-head weights: {reason}")
     module = attn.get(name)._module
-    applied = bitnet_weight(module)  # a BitNet layer applies a function of the weight it stores
-    if applied is not None:
-        return applied
     tuners = sys.modules.get("peft.tuners.tuners_utils")  # an adapter layer exists only once peft is imported
     adapted = tuners is not None and isinstance(module, tuners.BaseTunerLayer)
     weight = module.get_base_layer().weight if adapted else module.weight
@@ -236,6 +234,11 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
         raise Unavailable(
             f"{attn.path}.{name}'s weight is quantized ({type(weight).__name__} of {weight.dtype}): its elements are "
             "codes, not the values the projection applies; load the model unquantized to read its weights"
+        )
+    if type(module).__name__ in ("AutoBitLinear", "BitLinear"):  # transformers' BitNet layers
+        raise Unavailable(
+            f"{attn.path}.{name} is a BitNet {type(module).__name__}: it applies a function of the weight it stores "
+            "(ternarized or scaled), so no slice of that weight is a head's"
         )
     if not adapted:
         return weight
@@ -254,41 +257,6 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
             if adapter in module.lora_A:
                 weight = (weight + module.get_delta_weight(adapter)).to(weight.dtype)
     return weight
-
-
-def bitnet_weight(module: torch.nn.Module) -> Tensor | None:
-    """The weight a transformers BitNet layer multiplies its input by, in its stored weight's dtype; ``None`` for any other module.
-
-    A ``quant_method: bitnet`` checkpoint loads its projections as the layers
-    of ``transformers.integrations.bitnet``, which apply a function of the
-    weight they store: ``AutoBitLinear`` with online quantization ternarizes
-    its weight on every call (``WeightQuant``: ``round(w * s).clamp(-1, 1) / s``
-    with ``s = 1 / mean(|w|)``), offline it multiplies the stored ternary
-    weight by ``weight_scale``, and ``BitLinear`` unpacks its 2-bit codes and
-    divides by ``weight_scale``. That weight is what `projection_weight` gives
-    the per-head weights to slice. Each layer also rounds its input to 8 bits
-    per token before the product, so ``value_weight(kv) @ x`` reproduces
-    ``attention_values`` to that rounding, not exactly.
-
-    Raises:
-        Unavailable: the layer norms its input before the product (``use_rms_norm``),
-            so no one weight maps the input it receives.
-    """
-    bitnet = sys.modules.get("transformers.integrations.bitnet")  # the layers exist only once a bitnet load imports it
-    if bitnet is None or not isinstance(module, (bitnet.AutoBitLinear, bitnet.BitLinear)):
-        return None
-    if module.rms_norm is not None:
-        raise Unavailable(
-            f"{type(module).__name__} norms its input (use_rms_norm) before applying its weight, so no one weight "
-            "maps the input it receives"
-        )
-    if isinstance(module, bitnet.BitLinear):
-        return bitnet.unpack_weights(module.weight, dtype=module.dtype) / module.weight_scale
-    if not module.online_quant:
-        return module.weight * module.weight_scale
-    weight = module.weight.float()
-    scale = 1.0 / weight.abs().mean().clamp(min=1e-5)
-    return ((weight * scale).round().clamp(-1, 1) / scale).to(module.weight.dtype)
 
 
 class Attention(Standard):

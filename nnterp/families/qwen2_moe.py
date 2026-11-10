@@ -4,14 +4,14 @@ Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernor
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
 added in the block, attention through the shared eager forward. The MLP is a sparse mixture of experts with a shared expert.
 
-A config with ``mlp_only_layers`` set gives those blocks a dense ``Qwen2MoeMLP`` that no
-envoy is keyed to: ``layers[i].mlp`` is a plain Envoy there and ``support()`` reports
-"no mlp module on this block". No released checkpoint sets it.
+A config with ``mlp_only_layers`` set (or a ``decoder_sparse_step`` above 1) gives the
+blocks it names a dense ``Qwen2MoeMLP``, an `Mlp`; no released checkpoint sets either.
+The shared expert is a ``Qwen2MoeMLP`` too, so it serves the `Mlp` values of its own.
 """
 
-from transformers.models.qwen2_moe.modeling_qwen2_moe import Qwen2MoeAttention, Qwen2MoeDecoderLayer, Qwen2MoeSparseMoeBlock
+from transformers.models.qwen2_moe.modeling_qwen2_moe import Qwen2MoeAttention, Qwen2MoeDecoderLayer, Qwen2MoeMLP, Qwen2MoeSparseMoeBlock
 
-from ..components import Attention, Layer, Moe, Residual, TokenEProperty, no_shared_expert
+from ..components import Attention, Layer, Mlp, Moe, Residual, TokenEProperty, no_shared_expert
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -30,7 +30,11 @@ class Attention(Attention):
     """Qwen2-MoE's attention; the shared eager forward and the residual added in the block, so the base holds."""
 
 
-class Mlp(Moe):
+class Mlp(Mlp):
+    """Qwen2-MoE's dense MLP (a block ``mlp_only_layers`` names, and the shared expert); the residual is added in the block, so the base holds."""
+
+
+class Moe(Moe, Mlp):
     """A mixture of experts plus a gated shared expert, returned as one bare tensor, so the base `mlp_output` holds.
 
     The shared expert's contribution is its output times a sigmoid gate,
@@ -47,4 +51,4 @@ class Mlp(Moe):
 
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
-ENVOYS = {Qwen2MoeDecoderLayer: Layer, Qwen2MoeAttention: Attention, Qwen2MoeSparseMoeBlock: Mlp}
+ENVOYS = {Qwen2MoeDecoderLayer: Layer, Qwen2MoeAttention: Attention, Qwen2MoeMLP: Mlp, Qwen2MoeSparseMoeBlock: Moe}

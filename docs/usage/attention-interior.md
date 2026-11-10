@@ -597,10 +597,11 @@ there is no rotary: the three are the `query_layer`, `key_layer` and
 `value_layer` bindings, in that order, so read queries, then keys, then
 values. The pattern is the softmax itself without alibi (no dropout follows)
 and the dropout after the second softmax with it. The head outputs are the
-`scores @ values` product on both branches, served `[batch, seq, heads,
-head_dim]` as a view: heads-first without alibi, flattened over batch and
-heads with it, where the view unflattens them and a write reshapes back. The
-7B layout is multi-query: keys and values have one head.
+`scores @ values` product, served `[batch, seq, heads, head_dim]` as a view:
+without alibi the product itself, heads first; with alibi the product is
+flattened over batch and heads, so they are read once `_merge_heads` has
+merged them to `[batch, seq, heads * head_dim]`, and the view splits the
+heads. The 7B layout is multi-query: keys and values have one head.
 
 ### Falcon-40B layout: keys and values already expanded
 
@@ -771,7 +772,10 @@ values (and the pattern's key axis) are as long as the cache:
 The keys and values a decode step's attention receives are the cache's own tensors on
 most families, so an in-place edit of `attention_keys` or `attention_values` writes into the
 cache and every later step attends with it, while an assignment replaces the call's
-argument for that one forward. Under latent attention (DeepSeek-V2/V3 and the families on
+argument for that one forward. BLOOM, MPT and Falcon are the exception: a call with a cache
+serves the new tokens' keys and values (`[batch, num_kv_heads, 1, head_dim]` on a decode
+step, while the pattern spans the cache), which the forward then adds to the cache, so an
+assignment to them is stored in the cache too. Under latent attention (DeepSeek-V2/V3 and the families on
 their attention) the cache holds the compressed latent and the keys and values are expanded
 from it on every call, and Gemma-4 serves copies, so there an edit lasts one forward either
 way. To change what chosen heads read without touching the cache, call

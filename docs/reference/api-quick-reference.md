@@ -31,7 +31,7 @@ with model.trace("The Eiffel Tower is in"):
     resid = model.layers[3].layer_output.save()
     logits = model.logits.save()
 
-torch.testing.assert_close(x + attn + mlp, resid)    # the contribution identity, on every family
+torch.testing.assert_close(x + attn + mlp, resid)    # the contribution identity (families.md: where a block's sum is another formula)
 print(pattern.shape)                                 # [batch, num_heads, query, key]
 ```
 
@@ -46,12 +46,13 @@ Reads within one trace follow the forward: the pattern is produced inside block 
 | `StandardizedTransformer` | The model class: a `TransformersModel` renamed to the standard vocabulary and wrapped in the family's envoys. |
 | `StandardizedVLLM` | The same over nnsight's `VLLM` engine, with the family from `nnterp.families.vllm` (or `family=`); see [usage/vllm](../usage/vllm.md). |
 | `Standardized` | What the two share: sizes, `support()`, `steer`, `skip_layers`, `get_topk_closest_tokens`. |
-| `Layer`, `Attention`, `Mlp`, `LinearAttention`, `StateSpace` | The base envoys a family subclasses; the hosts of the standard values. |
-| `RecurrentMixer` | The base of `LinearAttention` and `StateSpace`: how a recurrent mixer's values are reached at its kernel call, the per-token state and the kernel routing. |
+| `Layer`, `Attention`, `Mlp`, `Moe`, `LinearAttention`, `SelectiveScan`, `StateSpace` | The base envoys a family subclasses; the hosts of the standard values. |
+| `RecurrentMixer` | The base of `LinearAttention`, `SelectiveScan` and `StateSpace`: how a recurrent mixer's values are reached at its kernel call, the per-token state and the kernel routing. |
 | `Standard` | The envoy base of them all, with `values()`, `support()` and the `sourced` flag. |
 | `EProperty`, `DerivedEProperty` | The descriptors a value is made of: one keyed on a path from the host, one computed. |
 | `unavailable`, `route_kernels`, `route_delta_rule` | A value a family lacks; the recurrent kernel switch, and its DeltaNet spelling. |
 | `chunk_per_token` | A Mamba-2 model's chunk scan with a chunk size of 1, so `StateSpace.states` reads the state after every token. |
+| `axis_size` | The size of a layout axis for a value served on an envoy; see [Helpers](#helpers). |
 | `Unavailable`, `UnsupportedFamily` | The two exceptions nnterp raises itself. |
 | `Vision` | A vision tower's root envoy (`model.vision`): its blocks at `layers` (`VisionLayer`, with `VisionAttention`, `VisionMlp` from `nnterp.components`), its sizes, `image_token_mask`, `patch_embeddings`, `tower_output`, `image_features`, `support()`; `PixtralVision` for Pixtral's packed tower, `QwenVision` and `QwenVisionAttention` for the Qwen ViT, and `ImageScatter`, keyed on the wrapper's model, for where `image_features` is read. See [../usage/vision.md](../usage/vision.md). |
 
@@ -133,7 +134,7 @@ Each is a `StandardizedProperty`: it reads the config by the plain rule unless t
 | `model.family` | The family module the checkpoint resolved to (`nnterp.families.llama`); what `route_kernels` takes. |
 | `model.layers` | The decoder blocks, `Sequence[Layer]` of the family's `Layer`. |
 | `model.embed_tokens`, `model.norm`, `model.lm_head` | The embedding, the final norm, the unembedding, as envoys. |
-| `model.layers[i].self_attn`, `.mlp`, `.linear_attn` | The family's `Attention`, `Mlp`, `LinearAttention`; `linear_attn` on a hybrid's DeltaNet blocks only, `mlp` absent on OPT. |
+| `model.layers[i].self_attn`, `.mlp`, `.linear_attn` | The family's `Attention`, `Mlp`, `LinearAttention`; `linear_attn` (a `LinearAttention`, `SelectiveScan` or `StateSpace`) on a recurrent mixer's blocks only; `mlp` absent on OPT, XGLM, Mamba, Falcon-Mamba and Mamba-2 and on Nemotron-H's mixer and attention blocks. |
 | `model.layers[i].input_layernorm`, `.post_attention_layernorm` | Aliases of the block's norms where the family has them; their meaning varies by family (see [families.md](families.md)). |
 | `model.vision`, `model.projector` | On a multimodal wrapper whose family names them: the vision tower (a `Vision`; `vision.layers[i]`, `vision.patch_embed`, `vision.norm`; sizes `num_layers`, `vision_hidden_size`, `num_heads`, `head_dim`, `intermediate_size`, `patch_size`, `image_size`; values in [`Vision`](#vision)) and the last module before the scatter into the text stream. |
 | `model.add_prefix_false_tokenizer` | The checkpoint's tokenizer loaded with `add_prefix_space=False`, so `"word"` and `" word"` differ; loaded on first use. |
@@ -142,7 +143,7 @@ Each is a `StandardizedProperty`: it reads the config by the plain rule unless t
 
 ## `Layer`
 
-The decoder block. `Layer.returns_tuple` (class attribute, default `False`) says whether the block returns `(hidden_states, ...)`; GPT-J, GPT-Neo, CodeGen, GPT-NeoX-Japanese, BLOOM, MPT, Falcon, GLM-5, Bamba and Falcon-H1 set it.
+The decoder block. `Layer.returns_tuple` (class attribute, default `False`) says whether the block returns `(hidden_states, ...)`; GPT-J, GPT-Neo, CodeGen, GPT-NeoX-Japanese, BLOOM, MPT, Falcon, GLM-5, Bamba, Falcon-H1 and ZAYA set it.
 
 | Value | Layout | Assignable | Description |
 |---|---|---|---|
@@ -379,7 +380,7 @@ The base of the hosts.
 | `resolve` | `resolve(config, engine=None) -> ModuleType` | The family for a config: `lookup` of its own `model_type` where a family `covers` it (a wrapper with a family of its own, `kimi_k25`), else of its `text_config`'s. What `StandardizedTransformer` and `StandardizedVLLM` call. |
 | `covers` | `covers(model_type: str, engine=None) -> bool` | Whether a family covers `model_type`: registered, or a module of that name ships. |
 | `register` | `register(family: ModuleType, *model_types: str) -> ModuleType` | Add a family (any module or object with `RENAME`, `ENVOYS`, and a function per root size it spells its own way) under `model_types`, or, with none given, the type its `__name__` ends in (`TypeError` for a nameless `SimpleNamespace`); consulted before the shipped modules, so it also overrides a shipped family. Returns `family`. |
-| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (99, `kimi_k25` among them), alphabetical; not `default`. |
+| `known` | `known() -> list[str]` | The shipped families' model types: the module names in the package (99, counting `kimi_k25`), alphabetical; not `default`. |
 | `default` | module | The best-effort family for a `model_type` with none: `RENAME` over the shipped spellings, `ENVOYS` keyed on the standard names, `check(model)` at load (run when the family is `default` itself; a copy calls it). Serves `layer_output`, the module boundaries its aliases reach, the root values, the sizes and the interface interior; `attention_output`, `mlp_output`, `layer_mid`, `mlp_norm_output`, a mixture's `mlp_activation` / `mlp_neurons` and `project_on_vocab` raise `Unavailable`. See [../usage/loading.md](../usage/loading.md#an-architecture-with-no-family). |
 | `all_families` | `all_families() -> list[ModuleType]` | Every shipped family, imported. For tooling and tests. |
 | `REGISTRY` | `dict[str, ModuleType]` | `model_type -> family` for what `register` added. |
@@ -398,7 +399,7 @@ A family module, named after the `model_type` it covers, declares `RENAME: dict[
 | `TokenEProperty` | `TokenEProperty(key=None, description=None, unavailable=None, select=None)` | An `EProperty` (in `nnterp/components/tokens.py`) for a value the model may hold flat over tokens, `[batch * seq, ...]`, one rank below its layout: `__get__` reads as `EProperty` does and serves this invoke's `[batch, seq, ...]` rows of the result, a view, so in-place edits land; `__set__` splices the assigned rows into the whole tensor the location holds, then writes as `EProperty` does. A tensor already at the layout's rank passes through both ways; preprocess, postprocess and transform see the model's own tensor. `Moe`'s routing values use it. |
 | `DerivedEProperty` | `DerivedEProperty(compute, description=None, unavailable=None)` | `compute(envoy)` runs at read time inside the trace over any served values; read-only (assignment raises `AttributeError`). Its layout is read off `compute`'s return annotation. |
 
-Every descriptor exposes `.layout` (the layout alias the defining function's return annotation names, or `None`), `.dims` (its axis names as a tuple), `.description`, `.reason(envoy)`. `str(value)` is its line in the envoy's repr, `(name) -> Layout [axes]: description` when the value has a layout (nnsight prints it from #737 on).
+Every descriptor exposes `.layout` (the layout alias the defining function's return annotation names, or `None`), `.dims` (its axis names as a tuple), `.description`, `.reason(envoy)`. `str(value)` is its line in the envoy's repr, `(name) -> Layout [axes]: description` when the value has a layout.
 
 ### Layouts
 
@@ -465,7 +466,7 @@ The axis names are plain string constants in `nnterp.components.standard` (expor
 | `INTERFACE` | `"attention_interface_1"` | The shared attention call every interface family makes. |
 | `ROTARY` | `"apply_rotary_pos_emb_0"` | The rotary call every family on transformers' shared rotary path makes, `apply_rotary_pos_emb(query, key, cos, sin)`. |
 | `components.vllm.ROTARY` | `"self_rotary_emb_0"` | The rotary call every vLLM attention module makes, `q, k = self.rotary_emb(positions, q, k)`, read as an operation of the module's forward: vLLM shares one rotary module between the blocks that rotate the same way. `components.vllm.rotary_head_size(envoy)` is its `head_size`, the width the values are split into heads by (`Flat(..., head_dim=)`). |
-| `NOT_ON_INTERFACE` | `"The attention does its own arithmetic rather than transformers' shared attention interface; not mapped for this family yet"` | The reason for `unavailable(NOT_ON_INTERFACE)` in a family that has not mapped an interior value onto its own arithmetic. No shipped family uses it: all four own-arithmetic families map every interior value. |
+| `NOT_ON_INTERFACE` | `"The attention does its own arithmetic rather than transformers' shared attention interface; not mapped for this family yet"` | The reason for `unavailable(NOT_ON_INTERFACE)` in a family that has not mapped an interior value onto its own arithmetic. No shipped family uses it: all eight own-arithmetic families map every interior value. |
 | `attention_call` | `attention_call(envoy) -> tuple[str, tuple[int, int, int]] \| None` | The call `Attention.interface` makes again, read off the class's keys: the operation whose positional arguments `attention_queries`, `attention_keys` and `attention_values` are, when its first return is `attention_head_outputs`, with the three positions; `None` where there is none. |
 | `call_reason` | `call_reason(envoy) -> str \| None` | The reasons of `attention_queries`, `attention_keys`, `attention_values`, `attention_head_outputs` and `attention_probabilities`, then `OWN_ARITHMETIC` where `attention_call` is `None`: the predicate of `Attention.interface`. |
 | `OWN_ARITHMETIC` | `"the queries, keys and values are not the arguments of one call in this forward that returns the head outputs (...), so there is no attention function to call again"` | `call_reason`'s own reason: BLOOM, MPT, Falcon, XGLM, DeepSeek-V4. |

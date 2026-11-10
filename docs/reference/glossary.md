@@ -78,7 +78,7 @@ The linear-attention mixer of Qwen3-Next and Qwen3.5 (`linear_attn`): queries, k
 
 ## Hybrid
 
-A family whose blocks are of two kinds: Qwen3-Next, Qwen3.5 (text), Qwen3.5-MoE (text), OLMo-Hybrid and Kimi-Linear have `linear_attn` (gated DeltaNet, a `LinearAttention`, a `RecurrentMixer`) on three blocks in four and `self_attn` on the fourth, per `config.layer_types`; never both on one block. `support()` reads per block there. See [families.md](families.md#hybrids).
+A family whose blocks hold a recurrent mixer (`linear_attn`, a `RecurrentMixer`) or softmax attention (`self_attn`) by `config.layer_types` or the like: the DeltaNet hybrids (Qwen3-Next, Qwen3.5 (text), Qwen3.5-MoE (text), OLMo-Hybrid, Kimi-Linear) and the Mamba hybrids (Jamba, Bamba, Nemotron-H, GraniteMoE-Hybrid). A block has at most one of the two, except on Falcon-H1, which runs both in parallel on every block. `support()` reads per block there. See [families.md](families.md#hybrids).
 
 ## Image features, image token mask
 
@@ -86,7 +86,7 @@ The two values of a vision tower that say where the image enters the text model:
 
 ## Interface (`attention_interface_1`)
 
-transformers' shared attention call, `attention_interface(module, query, key, value, attention_mask, ...)`, which under eager attention is `eager_attention_forward`. The base `Attention` reads the interior values on and inside this call; four families do their own arithmetic and relocate them. `model.layers[i].self_attn.interface` is the function the call ran, bound to the rest of the call (mask, scale, softcap, sinks): `attn.interface(q, k, v)` returns `(head_outputs, pattern)` as the model computes them, for an edit that must reach chosen heads or rows only; on GPT-J, GPT-Neo, CodeGen and GPT-NeoX-Japanese it is their `_attn` method. See [../usage/attention-interior.md](../usage/attention-interior.md#calling-the-attention-function-again-interface).
+transformers' shared attention call, `attention_interface(module, query, key, value, attention_mask, ...)`, which under eager attention is `eager_attention_forward`. The base `Attention` reads the interior values on and inside this call; eight families do their own arithmetic and relocate them ([families.md](families.md#own-attention-arithmetic)). `model.layers[i].self_attn.interface` is the function the call ran, bound to the rest of the call (mask, scale, softcap, sinks): `attn.interface(q, k, v)` returns `(head_outputs, pattern)` as the model computes them, for an edit that must reach chosen heads or rows only; on GPT-J, GPT-Neo, CodeGen and GPT-NeoX-Japanese it is their `_attn` method. See [../usage/attention-interior.md](../usage/attention-interior.md#calling-the-attention-function-again-interface).
 
 ## KV heads, grouped-query attention
 
@@ -94,7 +94,7 @@ The number of key/value heads, `num_kv_heads`, fewer than `num_heads` under grou
 
 ## Layout, dims
 
-The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-eight named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]`, axes `batch seq hidden_size`, in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the thirty-five envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple; a model-fact axis is named as its size, so `axis_size(envoy, axis)` reads it. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`), `linear_attn.decays` on Kimi-Linear (`ChannelGates`) and `attention_keys_prerope` under latent attention (`SharedRopeKeys`). See [../usage/layouts.md](../usage/layouts.md).
+The shape a value has on every family, as a `jaxtyping` annotation on the descriptor: one of thirty-eight named aliases, each defined beside the envoy that serves it (`Residual = Float[Tensor, f"{BATCH} {SEQ} {HIDDEN}"]`, axes `batch seq hidden_size`, in `components/layer.py`, `Pattern` and `Keys` in `components/attention.py`, `State` in `components/linear_attention.py`, `Logits` in `standardized.py`, ...); `nnterp.components` re-exports the thirty-five envoy-level names. `value.layout` is that alias itself (`Attention.attention_keys.layout is Keys`, usable with `isinstance`), `value.dims` the axis names as a tuple; a model-fact axis is named as its size, so `axis_size(envoy, axis)` reads it. A family's redefinition and a custom value annotate with the same name. Layouts differ between values, not between families, except `layer_output` on DeepSeek-V4 (`Streams`), `linear_attn.decays` on Kimi-Linear (`ChannelGates`), OPT's `layer_mid` and `mlp_norm_output` (`FlatResidual`) and `attention_keys_prerope` under latent attention (`SharedRopeKeys`). See [../usage/layouts.md](../usage/layouts.md).
 
 ## MLA (multi-head latent attention)
 
@@ -106,7 +106,7 @@ The module's name in the checkpoint's own architecture (`transformer.h[i].attn` 
 
 ## Occurrence
 
-nnsight's count of how many times a run has reached one location; each visit is an occurrence, and `tracer.iter[t]` binds a read to occurrence `t`. Occurrences are counted per location over the whole run, so a decode step's token is not occurrence 0 once an earlier step fired the same op. See [../usage/delta-net.md](../usage/delta-net.md) and nnsight `docs/usage/iter-all-next.md`.
+nnsight's count of how many times a run has reached one location; each visit is an occurrence, and `tracer.iter[t]` binds a read to occurrence `t`. Occurrences are counted per location over the whole run, so a decode step's token is not occurrence 0 once an earlier step fired the same op. See [../usage/delta-net.md](../usage/delta-net.md) and nnsight `docs/usage/iteration.md`.
 
 ## Operation, op
 
@@ -194,7 +194,7 @@ The descriptor each root size is (`num_layers`, `hidden_size`, `vocab_size`, `nu
 
 ## Step (`tracer.iter`)
 
-One iteration of nnsight's `for step in tracer.iter[...]:`: a decode step under `generate`, or on a DeltaNet layer routed recurrent, one token of the prompt when the loop walks `state`. A step body starts pinned to its step and relaxes after its first read. See [../usage/generation.md](../usage/generation.md) and nnsight `docs/usage/iter-all-next.md`.
+One iteration of nnsight's `for step in tracer.iter[...]:`: a decode step under `generate`, or on a DeltaNet layer routed recurrent, one token of the prompt when the loop walks `state`. A step body starts pinned to its step and relaxes after its first read. See [../usage/generation.md](../usage/generation.md) and nnsight `docs/usage/iteration.md`.
 
 ## Sublayer
 
@@ -210,7 +210,7 @@ The vision side of an image-text-to-text wrapper under its standard names: `mode
 
 ## Tuple block, `returns_tuple`
 
-A decoder block whose forward returns `(hidden_states, ...)` rather than the tensor alone: GPT-J, GPT-Neo, CodeGen, GPT-NeoX-Japanese, BLOOM, MPT, Falcon set `Layer.returns_tuple = True`. `layer_output` is the tensor either way; `skip_layers` packs the replacement the way the block would have. See [families.md](families.md#tuple-blocks).
+A decoder block whose forward returns `(hidden_states, ...)` rather than the tensor alone: GPT-J, GPT-Neo, CodeGen, GPT-NeoX-Japanese, BLOOM, MPT, Falcon, GLM-5, Bamba, Falcon-H1 and ZAYA set `Layer.returns_tuple = True`. `layer_output` is the tensor either way; `skip_layers` packs the replacement the way the block would have. See [families.md](families.md#tuple-blocks).
 
 ## Gotchas
 

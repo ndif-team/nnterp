@@ -210,14 +210,8 @@ differences [below](#on-the-vllm-engine).
 Assignment reaches the model on every family. An in-place edit does too, except where the
 value is a split view of one fused tensor and torch refuses it as it does GPT-2's queries
 (`RuntimeError: Output 0 of Select is a view and is being modified inplace`): DBRX's and
-GPT-NeoX's queries and keys, CodeGen's on a checkpoint with one head per `mp_num` group of
-four (the tiny test checkpoint; every released CodeGen has more, and takes the edit),
-JetMoE's keys, and latent attention's shared rope key. Assign there, or edit under
-`torch.no_grad()`.
-
-CodeGen's are split views only where each of its four `mp_num` groups holds one head (the
-pinned tiny checkpoint, 4 heads); on the released checkpoints (16 heads and more) the head
-split copies, and an in-place edit lands.
+GPT-NeoX's queries and keys, JetMoE's keys, and latent attention's shared rope key. Assign
+there, or edit under `torch.no_grad()`.
 
 ### `rotate` and the positions it is given
 
@@ -816,10 +810,7 @@ values (and the pattern's key axis) are as long as the cache:
 The keys and values a decode step's attention receives are the cache's own tensors on
 most families, so an in-place edit of `attention_keys` or `attention_values` writes into the
 cache and every later step attends with it, while an assignment replaces the call's
-argument for that one forward. BLOOM, MPT and Falcon are the exception: a call with a cache
-serves the new tokens' keys and values (`[batch, num_kv_heads, 1, head_dim]` on a decode
-step, while the pattern spans the cache), which the forward then adds to the cache, so an
-assignment to them is stored in the cache too. Under latent attention (DeepSeek-V2/V3 and the families on
+argument for that one forward (BLOOM, MPT and Falcon differ: [generation.md](generation.md#gotchas)). Under latent attention (DeepSeek-V2/V3 and the families on
 their attention) the cache holds the compressed latent and the keys and values are expanded
 from it on every call, and Gemma-4 serves copies, so there an edit lasts one forward either
 way. To change what chosen heads read without touching the cache, call

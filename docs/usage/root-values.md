@@ -53,9 +53,8 @@ torch.allclose(logits, cap * torch.tanh(raw / cap))   # True
 
 `model.project_on_vocab(hidden)` follows the model's own path to its logits on any family:
 the softcap by default, and the family's own where the model does something else (Cohere
-multiplies by `logit_scale`, Granite divides by `logits_scaling`, OPT-350m, which has no
-final norm, applies `project_out` before the head), so `project_on_vocab` of the last block's
-`layer_output` equals `logits` everywhere ([methods.md](methods.md#project_on_vocabhidden)).
+multiplies by `logit_scale`, Granite divides by `logits_scaling`), so `project_on_vocab` of
+the last block's `layer_output` equals `logits` everywhere ([methods.md](methods.md#project_on_vocabhidden)).
 
 Assigning replaces the logits in the model's output, so `tracer.result.logits` is what you
 set:
@@ -71,15 +70,8 @@ with model.trace(prompt) as tracer:
 The embedding module's output, `[batch, seq, hidden_size]`: `model.embed_tokens.output` under
 its standard name. It includes whatever the embedding module does itself (Gemma's
 `sqrt(hidden_size)` scale is inside every Gemma family's `...TextScaledWordEmbedding`, XGLM's inside its
-scaled embedding) and nothing the model applies afterwards. After it, GPT-2, GPT-BigCode and
-GPT-Neo add their positional `wpe`, OPT and XGLM their `embed_positions`; BLOOM's
-`word_embeddings_layernorm` norms it; the Granite families, HyperCLOVA X and Falcon-H1 multiply
-it by `embedding_multiplier`, and AFMoE by `sqrt(hidden_size)` where `mup_enabled` (every Trinity
-checkpoint); ZAYA adds a bias, scales it and casts it to float32; DeepSeek-V4 copies it into
-`hc_mult` streams; and a vision-language wrapper writes the image features over the image
-tokens' rows. On `facebook/opt-350m` it is also narrower than the stream: the embedding is
-`word_embed_proj_dim` (512) wide, and `project_in` lifts it to `hidden_size` (1024) before the
-positions are added. So it is what enters the first block only where the model adds nothing;
+scaled embedding) and nothing the model applies after it (positions, a norm, a multiplier,
+image features). So it is what enters the first block only where the model adds nothing;
 `layers[0].input` is that tensor on every family. Assign to
 replace the module's output:
 

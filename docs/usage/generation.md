@@ -141,13 +141,12 @@ and treat that warning as a read-order error.
   prompt alone does: on GPT-2 (float32) a padded row's `layer_output` at block 5 matches
   the unpadded prompt's to 1.3e-5.
 - **The keys and values grow with the cache; the queries do not.** A head-wise
-  edit of `attention_keys` on a decode step touches the whole context (on BLOOM, MPT
-  and Falcon the new token only, below).
+  edit of `attention_keys` on a decode step touches the whole context.
 - **An in-place edit of `attention_keys` or `attention_values` stays in the cache.** On
   most families the attention receives the cache's own tensors, so the edit reaches every
   later step; an assignment replaces the argument of that one forward. On BLOOM, MPT and
-  Falcon a call with a cache serves the new tokens' keys and values, which the forward then
-  adds to the cache, so an assignment is stored in the cache too. Under latent
+  Falcon a cached call serves only the new tokens' keys and values, and an assignment to
+  them is stored in the cache. Under latent
   attention (DeepSeek-V2/V3) and on Gemma-4 an edit lasts one forward either way. To patch
   what chosen heads read on every step without touching the cache, use
   `self_attn.interface` ([attention-interior.md](attention-interior.md#calling-the-attention-function-again-interface),

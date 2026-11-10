@@ -212,39 +212,10 @@ is symmetric.
   local to the block it is made on; to patch what every borrower attends with, patch
   the source block's `k_proj` / `v_proj` output
   ([Borrowed keys and values](../reference/families.md#borrowed-keys-and-values)).
-- A patch of `layer_output` hands the later blocks the whole state only where the stream is
-  all they read from earlier blocks. Four families pass more, and there a patched stream
-  arrives with the patched-into run's side channel, so the patch looks weaker than it is:
-  - Gemma-4 E2B and E4B: every block also reads a per-layer input computed once from the token
-    ids before block 0 (the block's second argument, `layers[j].inputs[0][1]`), and the
-    KV-sharing blocks attend with keys and values a source block computed from its own input.
-    A `layer_output` patch at block `i` changes neither the later per-layer inputs nor, for `i`
-    at or past the source block, the borrowed keys and values. On gemma-4-E2B, one prompt's
-    `layer_output` at block 17 written into another's run leaves the logits a KL of 0.45 from
-    the source run's, against 13.8 between the two prompts. For a whole-state patch, patch
-    those too: the per-layer input of every later block, and each borrower's
-    `attention_keys` / `attention_values` (or the source block's `k_proj` / `v_proj` output);
-    with both, the patch at block 17 gives the source run's logits exactly.
-  - DeepSeek-V4: the first `num_hash_layers` blocks (3 on the released configs) pick their
-    experts by token id (`hash_moe`), so a patch before the last of them leaves the hash blocks after it
-    routing by the patched-into run's ids.
-  - GLM-5.2 and GLM-5.3 (`indexer_types` with `shared` blocks): a `shared` block attends with
-    the selection the last `full` block before it computed from its own input, handed on as the
-    second element of each block's output. On prompts longer than `index_topk` (2048) a
-    `layer_output` patch leaves that selection the patched-into run's.
-  - ZAYA: each block hands its router state to the next as the second element of its output,
-    and the next router adds it to its own input.
-
-  On GLM-5 and ZAYA patch the block's whole output, the stream and the second element, from a
-  run of the same length:
-
-  ```python
-  with model.trace(clean):
-      state = model.layers[i].output.save()     # (hidden_states, the second element)
-  with model.trace(corrupt):
-      model.layers[i].output = state
-      logits = model.logits.save()
-  ```
+- A `layer_output` patch is not the whole state where blocks pass more forward: Gemma-4
+  E2B/E4B (per-layer inputs, shared keys and values), DeepSeek-V4 (hash-routed blocks read the
+  token ids), GLM-5 and ZAYA (the block's second output). On GLM-5 and ZAYA patch
+  `layers[i].output` whole; [families.md](../reference/families.md) has the others.
 - On Granite (and GraniteMoE, Granite-SWA, HyperCLOVA X, ZAYA) a patch of
   `attention_output` or `mlp_output` at one position moves the other positions by
   rounding; in bf16 that can be a visible fraction of a small patch's effect, so load in

@@ -77,22 +77,10 @@ experts module, like `mlp.intermediate_size`. `Moe.SCORING` says what the logits
 | `"hash"` / the config's `scoring_func` | DeepSeek-V4, per block: the token id picks the experts on a `hash_moe` block; elsewhere `scoring_func` (`"sqrtsoftplus"`) per expert | DeepSeek-V4 |
 
 `SCORING` names the function, not everything between the logits and `expert_weights`.
-Recomputing the weights from `router_logits` also needs the family's normalization of the
-top-k and any factor after it, so what a token's weights add up to differs by family (the
-numbers are the released configs'):
-
-| a token's `expert_weights` sum to | how | families |
-| --- | --- | --- |
-| 1 | the top-k renormalized, or a softmax over the top-k logits | Mixtral, Qwen3-MoE and Qwen3-Next (`norm_topk_prob`, on in their releases), Qwen3-VL-MoE, Qwen3.5-MoE, Hunyuan, ERNIE, MiniMax-M2, DBRX (p-norm, `moe_normalize_expert_weights` 1), JetMoE, GPT-OSS, GraniteMoE (-Shared, -Hybrid, -SWA); Laguna, whose factor comes after the sum (`routed_output` is the experts' sum times `moe_routed_scaling_factor`, 2.5 on Laguna-XS-2.1) |
-| under 1 | the softmax's top-k entries, not renormalized | OLMoE and Qwen1.5-MoE (`norm_topk_prob` off; 0.33 to 0.77 on one block of OLMoE-1B-7B), Jamba, ZAYA (a softmax over the experts and the skip class; a skipped slot weighs 0), FlexOlmo (`norm_topk_prob` off; its releases route every token to every expert, so there the weights are the whole softmax and sum to one); DeepSeek-V2 multiplies them by `routed_scaling_factor` (1.0 on V2-Lite, 16 on V2, V2-Chat and V2.5), so its sums are under that factor |
-| `routed_scaling_factor` | the top-k sigmoids (DeepSeek-V4: its `scoring_func`) renormalized, then times the factor | DeepSeek-V3 and V3.2 (2.5), Kimi K2 (2.827 on Kimi-K2.5), Moonlight (2.446), GLM-4.5 and GLM-4.6 (2.5), GLM-4.5-Air (1.0), GLM-4.7-Flash (1.8), GLM-5 (2.5), dots.llm1 (2.5), Solar Open (1.0), MiMo-V2-Flash (1.0), Kimi-Linear (2.446), Nemotron-H (2.5 on Nemotron-3-Nano-30B-A3B, 5.0 on Nemotron-3-Super-120B-A12B), DeepSeek-V4 (1.5 on DeepSeek-V4-Flash, hash blocks included); AFMoE the same with `route_scale` (2.826 on Trinity-Nano and Trinity-Mini) |
-| 1 to 2 | each slot's own masked softmax, the slots not renormalized together | Phi-3.5-MoE |
-| any value | renormalized to 1, then each slot times its expert's learned `per_expert_scale` | Gemma-4 (26B-A4B) |
-
-Llama 4 has no `expert_weights` (each expert's input is scaled by a dense sigmoid score),
-and Doge's mixture serves none of the six values. Read `expert_weights` rather than
-recomputing it where you can, and divide a token's weights by their sum before comparing
-how sharply two families route.
+What a token's weights sum to depends on the router: 1 where it renormalizes the top-k
+(Mixtral, Qwen3-MoE), less where it does not (OLMoE, Qwen1.5-MoE), `routed_scaling_factor`
+where it scales after (DeepSeek-V3, GLM-4.5). Read `expert_weights` rather than recomputing it,
+and divide by the sum before comparing families.
 
 ## Recipes
 
@@ -225,7 +213,7 @@ An assignment lands too, and under several invokes it reaches that invoke only.
 | DeepSeek-V4 | On a `hash_moe` block the token ids pick the experts (`tid2eid[input_ids]`): writing `router_logits` changes `expert_weights`, not `expert_indices`. `SCORING` is per block. |
 | Laguna | `router_logits` is before the router's tanh softcap; `routed_output` is the experts' sum times `routed_scaling_factor`, so `expert_outputs.sum(2) * routed_scaling_factor == routed_output`. |
 | Qwen2-MoE, Qwen3-Next, Qwen3.5-MoE | `shared_expert_output` is the shared expert's output times its sigmoid gate, the product the mixture adds; `moe.shared_experts.output` is the ungated one. |
-| GraniteMoE, -SWA, -Shared, -Hybrid | `mlp_output` is a scaled term the block adds: the routed mixture's output times `residual_multiplier` (0.22 on granite-3.0-1b-a400m) on GraniteMoE and -SWA, the routed mixture plus the shared expert times it on -Shared and -Hybrid. `expert_outputs`, `routed_output` and `shared_expert_output` are unscaled, about 4.5 times what reaches the stream there. Multiply by `model.config.residual_multiplier` to compare them with `mlp_output` or another family's experts. On GraniteMoE-SWA with `shared_intermediate_size > 0` (granite-swash-3b-a600m) the block also adds its own `shared_mlp`'s output times the multiplier: `mlp_output` leaves that term out, `shared_expert_output` reports `"this mixture has no shared expert"`, and `layer_input + attention_output + mlp_output` misses `layer_output` by it. |
+| GraniteMoE, -SWA, -Shared, -Hybrid | `mlp_output` is a scaled term the block adds: the routed mixture's output times `residual_multiplier` (0.22 on granite-3.0-1b-a400m) on GraniteMoE and -SWA, the routed mixture plus the shared expert times it on -Shared and -Hybrid. `expert_outputs`, `routed_output` and `shared_expert_output` are unscaled, about 4.5 times what reaches the stream there. Multiply by `model.config.residual_multiplier` to compare them with `mlp_output` or another family's experts. |
 | Doge | Its cross-domain mixture (`is_moe`) routes by product keys over embedding experts: `router_gate` gives two sets of product-key logits per token, not one logit per expert, and the experts are embedding rows, so every mixture value is unavailable. The routing views `router_gate`'s output as `(2, batch * seq, -1)`, which takes each token's two sets from other rows of the flattened batch, so a prompt's outputs depend on its length and on the other prompts in the trace: trace clean and corrupt prompts separately; `mlp_output` is served from transformers 5.18, before which the block passes the mixture's tuple to dropout and the forward fails. |
 
 `model.support()` lists the six values under `mlp.`; on a family with dense blocks beside

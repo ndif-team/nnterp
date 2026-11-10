@@ -84,26 +84,13 @@ Skipping needs the block's `input` to be read, so `skip_layers` reads it; a seco
 `layers[start].input` after the call is out of order. Read `layers[start - 1].layer_output`
 before the call instead, as above.
 
-Two families do something to the stream outside the blocks' terms, and a skip does not remove
-only the terms there:
+On two families a skip does not remove only the blocks' terms:
 
 - **Gemma-4** ends each block with `hidden_states *= layer_scalar`, which scales the incoming
-  stream as well as the block's terms, so a skipped block also drops that rescaling (`layer_scalar`
-  is 0.005 to 0.99 on the released weights). To remove only the block's terms, hand on the
-  stream times the block's scalar, which equals zeroing `attention_output`, `mlp_output` and
-  `per_layer_output`:
-
-  ```python
-  with model.trace(prompt):
-      layer = model.layers[i]
-      layer.skip_with(layer.layer_input * layer._module.layer_scalar)
-      logits = model.logits.save()
-  ```
-- **Qwen3-VL** (and Qwen3-VL-MoE), with an image in the prompt: the text model adds the
-  DeepStack features at the image positions after each of the first blocks whether the block ran
-  or was skipped, so `layers[end + 1].input` is the stream entering `start` plus the skipped
-  blocks' `deepstack_output` there. Zero `layers[k].deepstack_output` for the skipped `k` to
-  skip those too.
+  stream too; `layers[i].skip_with(layers[i].layer_input * layers[i]._module.layer_scalar)`
+  removes the block's terms alone.
+- **Qwen3-VL** (and Qwen3-VL-MoE), with an image: the skipped blocks' `deepstack_output` is
+  still added at the image positions; zero `layers[k].deepstack_output` to skip it too.
 
 ## `steer(layers, vector, factor=1.0, token_positions=None, batch_index=None)`
 
@@ -141,9 +128,8 @@ defines its own `project_on_vocab` (a `StandardizedCapability`, bound in the roo
 Cohere multiplies by `config.logit_scale` (on `CohereForCausalLM` and `Cohere2ForCausalLM`;
 the Aya Vision and Cohere2-Vision wrappers return the head's output unscaled, and the lens
 follows), Granite divides by `config.logits_scaling`, ZAYA casts its float32 stream to the
-final norm's dtype first, and OPT applies the decoder's final norm and `project_out` where it
-has them, so on `facebook/opt-350m`, which has no final norm, the lens is
-`lm_head(project_out(hidden))`. Applied to the last block's `layer_output` it equals `logits`
+final norm's dtype first, and OPT applies `project_out` where the decoder has it (OPT-350m,
+which has no final norm). Applied to the last block's `layer_output` it equals `logits`
 exactly:
 
 ```python
@@ -176,7 +162,7 @@ take it as it is:
   (and so to their mean); a `[streams, hidden_size]` vector steers each stream by its own row.
   Each sublayer and the readout (`hc_head`) read a weighted sum of the streams with weights that
   need not sum to one, so a vector added to every stream reaches them multiplied by that sum
-  (between 0 and `hc_mult`; about 2 at block 5 of the pinned tiny checkpoint): a factor tuned on a
+  (between 0 and `hc_mult`): a factor tuned on a
   one-stream family does not carry over. Scale it against the collapsed input the next sublayer
   reads (`layers[i + 1].attn_hc.output[2]`).
 - **`project_on_vocab`** is the family's: it collapses the streams with the model's own
@@ -245,8 +231,7 @@ on saved tensors, is the plain form.
 - **`project_on_vocab` runs the model's own modules on the model's path**, so on a checkpoint
   whose head is tied, softcapped, scaled or preceded by a projection it is still exact; a
   hand-rolled `lm_head(hidden)` without the norm and the model's other steps is not the
-  model's prediction, and on OPT-350m it fails (`lm_head` reads `project_out`'s 512-wide
-  output, not the 1024-wide stream).
+  model's prediction.
 - **Top-k on a tiny random checkpoint is noise**; the shapes are what to check there.
 - **On DeepSeek-V4 a hand-rolled `lm_head(norm(layer_output))` returns `[batch, seq, streams,
   vocab]` without an error**: per-stream logits, none of which is the model's readout.

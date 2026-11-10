@@ -96,11 +96,6 @@ class Standardized:
 
         The residual stream entering block ``start`` (or ``skip_with``) is
         handed straight to block ``end + 1``; the skipped blocks do not run.
-        What the model does between blocks still happens: on Qwen3-VL with an
-        image the skipped blocks' ``deepstack_output`` is still added at the image
-        positions. On Gemma-4 a skip also drops the block's ``layer_scalar``,
-        which scales the incoming stream too; ``layers[i].skip_with(layer_input *
-        layer_scalar)`` removes the block's terms alone.
         Negative indices count from the end. Inside a trace::
 
             with model.trace(prompt):

@@ -114,13 +114,10 @@ class Layer(gpt2.Layer):
         return value
 ```
 
-On GPT-2 tiny this reads `layer.input + attention_output` exactly. Assigning a module's
-input swaps in the first argument with the call's other arguments intact, which reaches that
-module only: the block has already bound the same tensor to `residual`, which the add after
-the MLP reads. `in_place=True` copies an assignment into the held tensor instead, so the
-norm and `residual` both see it, as the shipped `layer_mid` does
+On GPT-2 tiny this reads `layer.input + attention_output` exactly; `in_place=True` copies an
+assignment into the tensor the block also holds as `residual`
 ([../developing/eproperty-internals.md](../developing/eproperty-internals.md#in_place-a-tensor-the-forward-holds-under-two-names)).
-A value at a module's output needs no flag. The pair, for a stub that
+The pair, for a stub that
 needs a keyword argument, is an `inputs` path: the root's `input_ids` is
 `EProperty(key="inputs")` with a stub that takes `kwargs["input_ids"]` and a postprocess
 that puts it back.

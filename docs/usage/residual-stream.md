@@ -35,9 +35,8 @@ add on Falcon-H1), a one-sublayer block (Mamba, Nemotron-H) has its one term, an
 XGLM, which have no MLP module, add `layers[i].fc2.output`. The families whose blocks scale
 the stream or carry several streams have a formula of their own
 ([below](#where-the-families-differ): Gemma-4, Doge, ZAYA, DeepSeek-V4). On GraniteMoE-SWA with
-a shared expert (granite-swash-3b-a600m) the identity misses a term: `mlp_output` is the routed
-mixture times `residual_multiplier` and leaves out the block's `shared_mlp`, which the block adds
-beside it ([mixture-of-experts](mixture-of-experts.md)).
+a shared expert (granite-swash-3b-a600m) `mlp_output` leaves out the `shared_mlp` the block adds
+beside the experts, so the identity misses that term.
 
 `layers[i].layer_input` is the same tensor as `layers[i].input` under a standard name: the
 stream entering the block. On the vLLM engine, where a block is not called with the stream,
@@ -47,7 +46,7 @@ Raw nnsight `.output` on the same modules does not have that meaning everywhere:
 may return a tuple, an attention module returns `(attn_output, attn_weights)`, a sandwich
 block adds a norm's output rather than the module's, and some modules add the residual
 inside. The three values put the same thing at the same name on every family, and the
-per-family test suite checks the identity on each family's pinned checkpoints.
+per-family test suite checks the identity on each.
 
 ## Canonical pattern
 
@@ -144,8 +143,7 @@ input or output of one of its modules, and each a standard value on the block:
 | `layers[i].mlp_input` | `mlp.input` | what the MLP is called with; `mlp_norm_output` where nothing sits between |
 
 After the last block the model has two more, on the root: `final_norm_output` (`norm.output`,
-the stream the head projects; unavailable on OPT-350m, which has no final norm and projects
-`project_out`'s output) and `lm_head_output` (`lm_head.output`, the head's logits before
+the stream the head projects) and `lm_head_output` (`lm_head.output`, the head's logits before
 a softcap or scale; `logits` is the model's own output). All are `Residual` but
 `lm_head_output`, which is `Logits`; all take assignment and in-place edits (`layer_mid`'s
 assignment is itself an in-place write, [below](#writing-layer_mid)).
@@ -162,43 +160,22 @@ with model.trace(prompt):
 ### Writing `layer_mid`
 
 A write to `layer_mid`, assigned or in place, replaces the stream between the sublayers: the
-MLP's norm reads the new value and the block adds the MLP's output to it. The block holds that
-tensor under two names (it binds it to `residual` before it calls the MLP's norm), so an
-assignment is copied into it, the same write as `layer_mid[:] = new`:
+MLP's norm reads it and the block adds the MLP's output to it. The block holds that tensor
+twice (as the norm's argument and as `residual`), so an assignment is copied into it, the same
+write as `layer_mid[:] = new`. Like any in-place write it changes a read of `layer_mid` saved
+earlier in the trace, and a replacement computed from such a read by an operation that keeps
+its input for the backward pass (a learned scale, a rotation, a trainable SAE) fails in
+backward: start from `block.layer_mid.clone()`. A sum (`layer_mid + v`) needs no clone.
 
 ```python
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
-block = model.layers[5]
-v = torch.randn(model.hidden_size)
+block, v = model.layers[5], torch.randn(model.hidden_size)
 
-with model.trace(prompt):
-    new = (block.layer_mid + v).save()
-    block.layer_mid = new                             # the MLP's norm reads it, the block adds the MLP to it
-    mlp = block.mlp.mlp_output.save()
-    out = block.layer_output.save()
-
-torch.testing.assert_close(out, new + mlp)
-```
-
-Being an in-place write, it changes a read of `layer_mid` saved earlier in the same trace;
-clone a read you mean to keep:
-
-```python
-with model.trace(prompt):
-    read = block.layer_mid.save()                     # the live tensor
-    block.layer_mid = read * 0                        # copied into it: read.abs().max() is 0.0 after the trace
 with model.trace(prompt):
     read = block.layer_mid.clone().save()             # a copy keeps the stream as read
-    block.layer_mid = read * 0
+    block.layer_mid = read + v                        # the MLP's norm reads it, the block adds the MLP to it
+    out = block.layer_output.save()                   # read + v + mlp_output
 ```
-
-For the same reason a replacement computed from a read by an operation that keeps its input for
-the backward pass (a learned scale `alpha * read`, a rotation `read @ R`, an SAE's encoder with
-trainable weights) must start from `block.layer_mid.clone()` if gradients are to flow through it;
-otherwise the backward pass fails with torch's "modified by an inplace operation". A sum
-(`block.layer_mid + v`) keeps nothing and needs no clone. Two invokes can each write their own
-rows. On ZAYA, where the norm reads a copy cast to its own dtype, `layer_mid` is the float32
-stream itself ([Where the families differ](#where-the-families-differ)).
 
 They are keyed on the aliased norms, so they describe the pre-norm block; the per-family
 suite checks `layer_mid == layer_input + attention_output` and the norm outputs against the

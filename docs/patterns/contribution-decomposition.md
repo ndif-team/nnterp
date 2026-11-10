@@ -273,26 +273,6 @@ of every later block. Multiply each term by that vector before the unembedding. 
 are the same with `residual_scale`, plus a `residual_bias` added to the stream before each scale,
 which enters the sum as one more term per merge ([residual-stream](../usage/residual-stream.md#where-the-families-differ)).
 
-### GraniteMoE-SWA with a shared expert
-
-Where the config sets `shared_intermediate_size` (granite-swash-3b-a600m, 1280), every block
-runs a `shared_mlp` beside the mixture and adds both, times `residual_multiplier`. The family's
-`mlp_output` is the routed mixture's term alone, and `shared_expert_output` reports `"this
-mixture has no shared expert"`, so the plain sum misses the shared expert's term. Add it from the
-block's own module:
-
-```python
-layer = model.layers[i]
-with model.trace(prompt):
-    x = layer.input.save()
-    attn = layer.self_attn.attention_output.save()
-    mlp = layer.mlp.mlp_output.save()
-    shared = layer.shared_mlp.output.save()
-    out = layer.layer_output.save()
-
-torch.testing.assert_close(x + attn + mlp + shared * model.config.residual_multiplier, out)
-```
-
 ### DeepSeek-V4: parallel streams
 
 `layer_output` is `[batch, seq, streams, hidden_size]` and each sublayer's output is weighted into

@@ -343,8 +343,7 @@ def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> 
 ```
 
 Cohere's multiplies by `logit_scale` only on the causal-LM classes, since its vision
-wrappers never scale; Cohere-2 imports it. OPT's applies the decoder's final norm and
-`project_out` each where the decoder has it (OPT-350m has the projection and no norm). The suite's
+wrappers never scale; Cohere-2 imports it. The suite's
 `test_logits_are_the_models_output` and `test_project_on_vocab_is_the_logit_lens` both check
 `project_on_vocab(layers[-1].layer_output) == logits`, so a missing or wrong one fails there.
 

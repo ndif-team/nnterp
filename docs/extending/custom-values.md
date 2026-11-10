@@ -119,9 +119,7 @@ does, through `interface_reason`.
   second norm; on the block, `EProperty("post_attention_layernorm.input", ...)` is the
   residual stream after the attention sublayer (verified: equal to
   `layer.input + attention_output`). In-place edits and assignments on either reach the
-  model; the block also holds that stream as `residual`, so a value there that should
-  replace the stream sets `in_place=True` (an assignment is then copied into the tensor;
-  a plain swap reaches the norm only).
+  model; set `in_place=True` on a value there that should replace the stream.
 - **An operation inside the forward.** `source` drills into the current module's forward,
   and again into a call the forward makes; the segment after it names the operation.
   `source.attention_interface_1.source.nn_functional_softmax_0.output` is the softmax

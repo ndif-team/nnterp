@@ -294,18 +294,9 @@ module input set it; a value at a module's *output* needs no flag, since
 the forward binds a module's return only after the swap (ZAYA's
 `layer_mid`, the attention merge's output).
 
-It is the in-place write it looks like, with its two consequences: a read of
-the value saved earlier in the trace holds the new value afterwards, and a
-value computed from that read by an operation that keeps its input for the
-backward pass (a learned scale or rotation) makes the backward pass fail
-with torch's "modified by an inplace operation"; computing it from
-`read.clone()` avoids both. The alternative, keying the value on the
-block's own binding (`source.hidden_states_1.output` on Llama, read and
-swapped before `residual` is bound), has neither consequence, but pins one
-operation name per family (`hidden_states_0`, `_1` or `_2`, `dropout_add_0`,
-`bias_dropout_add_0`, a module call on BLOOM and ZAYA, a child module's
-forward on DBRX) that a transformers release can move silently, and needs
-every block's forward instrumented at build (`Standard.sourced`).
+It is the in-place write it looks like, with the consequences for an earlier
+read and for gradients that [residual-stream](../usage/residual-stream.md#writing-layer_mid)
+gives.
 
 On vLLM (`Flat`) a read is already a private copy, so neither consequence
 applies; `in_place` makes the hand-back of an edited copy and an

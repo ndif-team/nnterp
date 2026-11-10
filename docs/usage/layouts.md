@@ -329,8 +329,8 @@ On the tiny checkpoint the root says `num_heads=8`, `num_kv_heads=4`, and the mi
 - **The names live in `nnterp.components`, not `nnterp`**: `from nnterp.components import Residual`;
   the root's three (`Logits`, `NextTokenProbs`, `Tokens`) only in `nnterp.standardized`.
 - **Read one interior value per trace when in doubt.** The five interior values bind at
-  different points of the forward on the off-interface families (Falcon: values before
-  queries and keys).
+  different points of the forward on the off-interface families (Falcon: the keys and
+  values after the queries where the call has a cache, the values first where it has none).
 
 ## Related
 

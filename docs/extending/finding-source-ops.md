@@ -143,7 +143,8 @@ separating the call from the operation inside it:
   and `.output` are the same value.
 
 Families use both kinds: MPT reads its queries at the `query_states_0` binding, Falcon
-its values at `value_layer_0` and its head outputs at the `attn_output_1` binding;
+its values at `value_layer_0` (on a call without a cache) and its head outputs at the
+`attn_output_1` binding;
 BLOOM reads its `dropout_add_0` call's input.
 
 ## Picking the operation
@@ -162,7 +163,10 @@ BLOOM reads its `dropout_add_0` call's input.
   call's arguments, GPT-J's `self__attn_0` arguments, BLOOM's `self__reshape_0` returns,
   Falcon's `apply_rotary_pos_emb_0` returns (its `query_layer_0` / `key_layer_0` bindings
   with alibi, where no rotary runs). Take them after the rotary embedding where there is
-  one, before `repeat_kv` so the head axis is `num_kv_heads` wide.
+  one, before `repeat_kv` so the head axis is `num_kv_heads` wide, and the keys and values
+  after the cache update where the forward makes it itself: BLOOM's, MPT's and Falcon's
+  keys and values are the `update` call's return where the call has a cache, which
+  `nnterp.components.by_cache` decides per call.
 - **Queries and keys before the rotary** are what the rotary step receives: the shared
   `apply_rotary_pos_emb_0` call's first two arguments (`nnterp.components.ROTARY`), else the
   binding the forward slices or splits them from (Phi's `query_states_1` after its
@@ -203,7 +207,7 @@ in that order; reading `attention_interface_1.inputs` after an operation inside 
 raises `OutOfOrderError` on `...attention_interface_1.input.i0`. An `EProperty` drills
 at every read, so the same rule governs two values read in one trace: `attention_queries`
 (the call's inputs) before `attention_probabilities` (inside the call), and on Falcon
-`attention_values` (the `value_layer_0` binding) before the rotary's returns. The family
+the rotary's returns (the queries) before the cache update's (the keys and values). The family
 suite reads interior values one per trace for this reason.
 
 ## Names move with transformers

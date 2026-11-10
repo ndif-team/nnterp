@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from transformers.models.bloom.modeling_bloom import BloomAttention, BloomBlock, BloomMLP
 
-from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, projection_weight
+from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, by_cache, projection_weight
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -37,6 +37,13 @@ class Layer(Layer):
     returns_tuple = True
 
 
+#: Where the queries, keys and values are, by whether the call has a cache: the keys and values are
+#: ``layer_past.update``'s return where it has one, else ``_reshape``'s; the queries are ``_reshape``'s either way.
+QUERIES = by_cache(("source.self__reshape_0.output", 0), ("source.self__reshape_0.output", 0), "layer_past")
+KEYS = by_cache(("source.layer_past_update_0.output", 0), ("source.self__reshape_0.output", 1), "layer_past")
+VALUES = by_cache(("source.layer_past_update_0.output", 1), ("source.self__reshape_0.output", 2), "layer_past")
+
+
 class Attention(Attention):
     """BLOOM's attention adds the residual inside: the contribution is what enters ``dropout_add``."""
 
@@ -44,20 +51,27 @@ class Attention(Attention):
         return "no rotary embedding: BLOOM biases its scores with ALiBi"
 
     # ``_reshape`` splits the fused projection into ``(query, key, value)``,
-    # heads first (the keys are transposed for the score matmul only later);
-    # the scores are the softmax's input after the mask; the head outputs are
-    # the ``bmm`` result, ``[batch * num_heads, seq, head_dim]``.
+    # heads first (the keys are transposed for the score matmul only later).
+    # The forward then updates the cache itself, ``layer_past.update(key,
+    # value)``, and computes with what that returns, every position so far, so
+    # the keys and values are the update's return where the call has a cache
+    # and ``_reshape``'s where it has none (`by_cache`; the queries ask too, so
+    # reading them first leaves the keys able to). The scores are the
+    # softmax's input after the mask; the head outputs are the ``bmm`` result,
+    # ``[batch * num_heads, seq, head_dim]``.
 
-    @EProperty("source.self__reshape_0.output", select=0, description=Attention.attention_queries.description)
+    @EProperty(QUERIES[0], select=QUERIES[1], description=Attention.attention_queries.description)
     def attention_queries(self, value) -> Queries:
         return value
 
-    @EProperty("source.self__reshape_0.output", select=1, description=Attention.attention_keys.description)
+    @EProperty(KEYS[0], select=KEYS[1], description=Attention.attention_keys.description)
     def attention_keys(self, value) -> Keys:
+        """The keys the attention computes with: the cache's, every position so far, where the call has a cache."""
         return value
 
-    @EProperty("source.self__reshape_0.output", select=2, description=Attention.attention_values.description)
+    @EProperty(VALUES[0], select=VALUES[1], description=Attention.attention_values.description)
     def attention_values(self, value) -> Values:
+        """The values the attention computes with: the cache's, every position so far, where the call has a cache."""
         return value
 
     @EProperty("source.F_softmax_0.input", description=Attention.attention_scores.description)

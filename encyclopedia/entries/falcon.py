@@ -208,20 +208,24 @@ rows = fused.view(*fused.shape[:2], model.num_heads + 2, model.head_dim)    # th
 torch.testing.assert_close(rows[:, :, -1:].transpose(1, 2), v)
 ```
 
-## Without ALiBi, read the values before the queries and keys
+## The keys and values are the cache update's, after the queries
 
-The attention does its own arithmetic. On the rotary checkpoints the queries and keys are the two
-returns of the rotary embedding, and the values are bound before it, so inside one trace read
-`attention_values` first. Asking for the queries or keys first raises `OutOfOrderError` naming
-`value_layer_0`.
+The attention does its own arithmetic and updates the cache itself. On the rotary checkpoints the
+queries are the rotary embedding's first return; where the call has a cache (every call but
+`use_cache=False`) the keys and values are what `layer_past.update` returns, every position so
+far, so on a decode step of `generate` they span the prompt and the steps, as on any family.
+Inside one trace read the queries first:
 
 ```python
 attn = model.layers[1].self_attn
 with model.trace(prompt):
-    v = attn.attention_values.save()       # binds first
     q = attn.attention_queries.save()
-    k = attn.attention_keys.save()
+    k = attn.attention_keys.save()         # the cache update's return
+    v = attn.attention_values.save()
 ```
+
+Without a cache they are the new tokens' own: the rotary's second return and the `value_layer`
+binding, which comes before the rotary, so there read `attention_values` first.
 
 Rotary turns the whole head in `rotate_half` pairs, with `rope_theta` 10000 on 7B and 500042 on
 11B. The pattern is the softmax's output (no dropout follows it), and the head outputs are the

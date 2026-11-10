@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 from transformers.models.mpt.modeling_mpt import MptAttention, MptBlock, MptMLP
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, projection_weight, seq_first,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, by_cache, projection_weight, seq_first,
 )
 
 if TYPE_CHECKING:
@@ -39,6 +39,13 @@ class Layer(Layer):
     returns_tuple = True
 
 
+#: Where the queries, keys and values are, by whether the call has a cache: the keys and values are
+#: ``past_key_values.update``'s return where it has one, else the reshaped bindings; the queries are their binding.
+QUERIES = by_cache(("source.query_states_0.output", None), ("source.query_states_0.output", None))
+KEYS = by_cache(("source.past_key_values_update_0.output", 0), ("source.key_states_0.output", None))
+VALUES = by_cache(("source.past_key_values_update_0.output", 1), ("source.value_states_0.output", None))
+
+
 class Attention(Attention):
     """MPT's attention: the residual is added in the block; the pattern is its own dropout."""
 
@@ -46,20 +53,26 @@ class Attention(Attention):
         return "no rotary embedding: MPT biases its scores with ALiBi"
 
     # The three ``*_states`` bindings are the projections reshaped heads first
-    # (no grouped-query attention); the scores are the softmax's input after
-    # the mask, upcast to float32; the head outputs are the second matmul,
-    # heads first.
+    # (no grouped-query attention). The forward then updates the cache itself,
+    # ``past_key_values.update(key_states, value_states)``, and computes with
+    # what that returns, every position so far, so the keys and values are the
+    # update's return where the call has a cache and the bindings where it has
+    # none (`by_cache`; the queries ask too, so reading them first leaves the
+    # keys able to). The scores are the softmax's input after the mask,
+    # upcast to float32; the head outputs are the second matmul, heads first.
 
-    @EProperty("source.query_states_0.output", description=Attention.attention_queries.description)
+    @EProperty(QUERIES[0], select=QUERIES[1], description=Attention.attention_queries.description)
     def attention_queries(self, value) -> Queries:
         return value
 
-    @EProperty("source.key_states_0.output", description=Attention.attention_keys.description)
+    @EProperty(KEYS[0], select=KEYS[1], description=Attention.attention_keys.description)
     def attention_keys(self, value) -> Keys:
+        """The keys the attention computes with: the cache's, every position so far, where the call has a cache."""
         return value
 
-    @EProperty("source.value_states_0.output", description=Attention.attention_values.description)
+    @EProperty(VALUES[0], select=VALUES[1], description=Attention.attention_values.description)
     def attention_values(self, value) -> Values:
+        """The values the attention computes with: the cache's, every position so far, where the call has a cache."""
         return value
 
     @EProperty("source.nn_functional_softmax_0.input", description=Attention.attention_scores.description)

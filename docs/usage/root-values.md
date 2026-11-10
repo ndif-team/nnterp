@@ -49,10 +49,11 @@ torch.equal(logits, raw)                          # False on Gemma-2, True on GP
 torch.allclose(logits, cap * torch.tanh(raw / cap))   # True
 ```
 
-`model.project_on_vocab(hidden)` ends with that step on any family: the softcap by default,
-and the family's own where the model does something else after the head (Cohere multiplies
-by `logit_scale`, Granite divides by `logits_scaling`), so `project_on_vocab` of the last
-block's `layer_output` equals `logits` everywhere ([methods.md](methods.md#project_on_vocabhidden)).
+`model.project_on_vocab(hidden)` follows the model's own path to its logits on any family:
+the softcap by default, and the family's own where the model does something else (Cohere
+multiplies by `logit_scale`, Granite divides by `logits_scaling`, OPT-350m, which has no
+final norm, applies `project_out` before the head), so `project_on_vocab` of the last block's
+`layer_output` equals `logits` everywhere ([methods.md](methods.md#project_on_vocabhidden)).
 
 Assigning replaces the logits in the model's output, so `tracer.result.logits` is what you
 set:

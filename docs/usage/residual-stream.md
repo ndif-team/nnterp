@@ -135,7 +135,8 @@ input or output of one of its modules, and each a standard value on the block:
 | `layers[i].mlp_input` | `mlp.input` | what the MLP is called with; `mlp_norm_output` where nothing sits between |
 
 After the last block the model has two more, on the root: `final_norm_output` (`norm.output`,
-the stream the head projects) and `lm_head_output` (`lm_head.output`, the head's logits before
+the stream the head projects; unavailable on OPT-350m, which has no final norm and projects
+`project_out`'s output) and `lm_head_output` (`lm_head.output`, the head's logits before
 a softcap or scale; `logits` is the model's own output). All are `Residual` but
 `lm_head_output`, which is `Logits`; all take assignment and in-place edits.
 

@@ -90,6 +90,10 @@ class Layer(Layer):
 
     returns_tuple = True
 
+    def skip_with(self, hidden):
+        """Skip this block, handing on ``hidden`` and the router state the block received, which the next block's router reads."""
+        self.skip((hidden, self.inputs[0][1]))
+
 
 class Attention(Attention):
     """ZAYA's attention: the shared eager forward; the block adds its output shifted and scaled by ``post_attention_residual_scale``."""

@@ -68,8 +68,12 @@ makes block 1 start from zeros.
 Each skipped block gets `Layer.skip_with(hidden)`, which calls nnsight's `.skip()` with
 `hidden` packed the way that family's block returns it: the tensor alone, or `(hidden, None)`
 on a family whose `Layer.returns_tuple` is `True` (GPT-J, GPT-Neo, BLOOM, MPT, Falcon), since the
-second element is the attention weights nothing downstream reads. Call `skip_with` directly
-to skip one block with a stream of your own:
+second element is the attention weights nothing downstream reads. Where the second element is
+state the next block reads, a skipped block hands on the state it received, as it hands on the
+stream: ZAYA's router state, and GLM-5's key selection, so a shared block after the span reuses
+the selection of the last full block before it (a span from block 0 has none to hand on, and a
+shared block after it raises). Call `skip_with` directly to skip one block with a stream of your
+own:
 
 ```python
 with model.trace(prompt):

@@ -78,7 +78,9 @@ class Layer(Standard):
         The block does not run; ``hidden`` takes the place of its
         ``layer_output``, packed the way the block would have returned it (a
         tuple family gets ``(hidden, None)``: the second element is the
-        attention weights nothing downstream reads). Call it inside a trace,
+        attention weights nothing downstream reads; a family whose second
+        element is state the next block reads, ZAYA's and GLM-5's, overrides
+        this to hand on the state the block received). Call it inside a trace,
         before the block runs.
         """
         self.skip((hidden, None) if self.returns_tuple else hidden)

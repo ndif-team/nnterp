@@ -155,7 +155,7 @@ The decoder block. `Layer.returns_tuple` (class attribute, default `False`) says
 
 | Method | Signature | What |
 |---|---|---|
-| `skip_with` | `skip_with(hidden: Tensor) -> None` | Skip this block; `hidden` takes the place of its `layer_output`, as `(hidden, None)` when `returns_tuple`. Inside a trace, before the block runs. |
+| `skip_with` | `skip_with(hidden: Tensor) -> None` | Skip this block; `hidden` takes the place of its `layer_output`, as `(hidden, None)` when `returns_tuple`, or with the state the block received as the second element where the next block reads it (ZAYA, GLM-5). Inside a trace, before the block runs. |
 | `attention_input_gain` | property, `Tensor` `[hidden_size]` | The per-channel gain between the stream and what the attention reads: the gain of the norm `attention_norm_output` is read at (`weight`; `1 + weight` on Gemma), measured by calling it on `+-256` in alternating channels (exact without a bias); ones on a post-norm block (`attention_norm_output`'s reason is `POST_NORM_ATTENTION`). In the norm weight's dtype and device. Outside a trace or inside one; `Unavailable` with `attention_norm_output`'s other reasons, and on `StandardizedVLLM`. [usage/attention-interior](../usage/attention-interior.md#the-weights-per-head-value_weight-output_weight-attention_input_gain) |
 
 Three families serve block values of their own on their `Layer`, for the terms their block adds beyond the two contributions:

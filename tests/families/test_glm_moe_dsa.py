@@ -7,7 +7,7 @@ import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT, random_weights
 
 from nnterp import StandardizedTransformer
 from nnterp.families import glm_moe_dsa
@@ -148,8 +148,21 @@ class TestGlmMoeDsaShared:
             torch.testing.assert_close(inp + attn + mlp, out)
 
     def test_skipping_into_a_shared_block_is_refused(self, model):
-        """A skipped full block selects nothing, and the shared block after it has no selection to reuse."""
+        """A span from block 0 has no selection to hand on, and the shared block after it has none to reuse."""
         with pytest.raises(Exception, match="Shared DSA layers require top-k indices"):
             with model.trace(PROMPT):
                 model.skip_layers(0, 0)
                 model.logits.save()
+
+
+
+def test_a_skipped_block_hands_on_the_selection_it_received():
+    """Blocks ``full, shared, shared``: skipping block 1 hands block 2 block 0's selection, which it reuses (random weights)."""
+    model = random_weights(REPO, num_hidden_layers=3, index_topk=2, indexer_types=["full", "shared", "shared"],
+                           layer_types=["indexed_attention"] * 3, mlp_layer_types=["sparse", "dense", "dense"])
+    with model.trace(PROMPT):
+        selected = model.layers[0].self_attn.indexer.output.save()
+        model.skip_layers(1, 1)
+        reused = model.layers[2].self_attn.output[2].save()
+        model.logits.save()
+    assert torch.equal(reused, selected)

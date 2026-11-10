@@ -5,7 +5,7 @@ import os
 import tempfile
 
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT, random_weights
 
 from nnterp.families import zaya
 
@@ -125,3 +125,13 @@ class TestZayaMerged(FamilySuite):
             mid = layer.post_attention_layernorm.input.save()
         assert torch.equal(kept, torch.zeros_like(kept))
         torch.testing.assert_close(mid, (x + merge.residual_bias) * merge.residual_scale)
+
+
+def test_skip_layers_hands_on_the_router_state():
+    """A skipped block hands the next block the router state it received, as it hands on the stream (three random blocks)."""
+    model = random_weights(REPO, num_hidden_layers=3, layer_types=["hybrid"] * 3)
+    with model.trace(PROMPT):
+        carried = model.layers[0].output[1].save()
+        model.skip_layers(1, 1)
+        received = model.layers[2].inputs[0][1].save()
+    assert received is not None and torch.equal(received, carried)

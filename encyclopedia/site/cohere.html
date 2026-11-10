@@ -575,9 +575,11 @@ contributions are the two modules' outputs and the base holds. There is no
 <code>post_attention_layernorm</code>. The attention runs the shared interface, after
 an optional per-head <code>q_norm</code> / <code>k_norm</code> (<code>use_qk_norm</code>) and an
 interleaved rotary.</p>
-<p>The model multiplies the head's output by <code>config.logit_scale</code> to make the
-logits, so the family defines <code>project_on_vocab</code> with that step, and the
-logit lens on the last block equals <code>logits</code>.</p>
+<p><code>CohereForCausalLM</code> multiplies the head's output by <code>config.logit_scale</code> to
+make the logits, so the family defines <code>project_on_vocab</code> with that step, and
+the logit lens on the last block equals <code>logits</code>. The Aya Vision and
+Cohere2-Vision wrappers never scale, so the lens scales only on the causal-LM
+classes.</p>
 <p>Aya Vision 32B (<code>aya_vision</code> with a <code>cohere</code> text config) loads through this
 family. It binds no tower keys, so that load has no <code>vision</code> or <code>projector</code>.</p></div>
     <aside class="quirk-list">
@@ -595,7 +597,7 @@ family. It binds no tower keys, so that load has no <code>vision</code> or <code
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">unsloth/c4ai-command-r-08-2024</span></span>
+    <span class="mono">built 2026-11-09 · nnterp 2.0.0rc2.dev63+g452042047 · transformers 5.21.0 · reference <span id="colophon-reference">unsloth/c4ai-command-r-08-2024</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

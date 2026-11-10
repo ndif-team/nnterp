@@ -51,6 +51,9 @@ Where a block scales, gates or splits its stream, or has no MLP module,
 [families.md](docs/reference/families.md#quirks-by-theme) gives its formula. Values can be
 read, edited in place, or assigned.
 
+The [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/) has a page per family: the
+block drawn with nnterp's names, where each value is read, and what to know before tracing it.
+
 **Ask before you trace.** Not every checkpoint has every value. `model.support()` says what
 this one has and, for anything missing, why; reading a missing value raises
 `nnterp.Unavailable` with the same reason.

@@ -24,7 +24,7 @@ the matching skill changes too.
 ## How to use this file
 
 1. Find the user's intent in **"By task"** and follow the link.
-2. If the request is about one model family, check **[docs/reference/families.md](docs/reference/families.md)** for its quirks. The page is too long to read whole: grep for the family's rows (`` grep -n '`<model_type>`' docs/reference/families.md ``).
+2. If the request is about one model family, check **[docs/reference/families.md](docs/reference/families.md)** for its quirks. The page is too long to read whole: grep for the family's rows (`` grep -n '`<model_type>`' docs/reference/families.md ``). The [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/) has a page per family (`<model_type>.html`): the block drawn with these names and where each value is read.
 3. If a value is missing or raises `Unavailable`, read **[docs/usage/availability.md](docs/usage/availability.md)**.
 4. The **inline cheat-sheet** at the bottom lists the mistakes agents make most; internalize it before writing nnterp code.
 

@@ -79,7 +79,7 @@ class Layer(Layer):
     read there; there is no ``mlp`` module, so ``mlp_input`` does not exist.
     """
 
-    @EProperty("final_layer_norm.input", description="The residual stream after the attention add")
+    @EProperty("final_layer_norm.input", description="The residual stream after the attention add", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 

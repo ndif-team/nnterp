@@ -138,7 +138,8 @@ After the last block the model has two more, on the root: `final_norm_output` (`
 the stream the head projects; unavailable on OPT-350m, which has no final norm and projects
 `project_out`'s output) and `lm_head_output` (`lm_head.output`, the head's logits before
 a softcap or scale; `logits` is the model's own output). All are `Residual` but
-`lm_head_output`, which is `Logits`; all take assignment and in-place edits.
+`lm_head_output`, which is `Logits`; all take assignment and in-place edits (`layer_mid`'s
+assignment is itself an in-place write, [below](#writing-layer_mid)).
 
 ```python
 with model.trace(prompt):
@@ -148,6 +149,47 @@ with model.trace(prompt):
     block.mlp_input[:, -1] = 0                        # the MLP sees nothing at the last position
     head = model.lm_head_output.save()
 ```
+
+### Writing `layer_mid`
+
+A write to `layer_mid`, assigned or in place, replaces the stream between the sublayers: the
+MLP's norm reads the new value and the block adds the MLP's output to it. The block holds that
+tensor under two names (it binds it to `residual` before it calls the MLP's norm), so an
+assignment is copied into it, the same write as `layer_mid[:] = new`:
+
+```python
+model = StandardizedTransformer("openai-community/gpt2", dispatch=True)
+block = model.layers[5]
+v = torch.randn(model.hidden_size)
+
+with model.trace(prompt):
+    new = (block.layer_mid + v).save()
+    block.layer_mid = new                             # the MLP's norm reads it, the block adds the MLP to it
+    mlp = block.mlp.mlp_output.save()
+    out = block.layer_output.save()
+
+torch.testing.assert_close(out, new + mlp)
+```
+
+Being an in-place write, it changes a read of `layer_mid` saved earlier in the same trace;
+clone a read you mean to keep:
+
+```python
+with model.trace(prompt):
+    read = block.layer_mid.save()                     # the live tensor
+    block.layer_mid = read * 0                        # copied into it: read.abs().max() is 0.0 after the trace
+with model.trace(prompt):
+    read = block.layer_mid.clone().save()             # a copy keeps the stream as read
+    block.layer_mid = read * 0
+```
+
+For the same reason a replacement computed from a read by an operation that keeps its input for
+the backward pass (a learned scale `alpha * read`, a rotation `read @ R`, an SAE's encoder with
+trainable weights) must start from `block.layer_mid.clone()` if gradients are to flow through it;
+otherwise the backward pass fails with torch's "modified by an inplace operation". A sum
+(`block.layer_mid + v`) keeps nothing and needs no clone. Two invokes can each write their own
+rows. On ZAYA, where the norm reads a copy cast to its own dtype, `layer_mid` is the float32
+stream itself ([Where the families differ](#where-the-families-differ)).
 
 They are keyed on the aliased norms, so they describe the pre-norm block; the per-family
 suite checks `layer_mid == layer_input + attention_output` and the norm outputs against the
@@ -345,7 +387,11 @@ that assignment and in-place edits carry back into the module's output as on Gra
 the stream's term uses `layers[i].post_attention_residual_scale._module` and
 `.post_mlp_residual_scale._module`. On both, the plain identity holds only at the
 parameters' initial values; `tests/families/test_doge.py` and `test_zaya.py` check the
-gated forms on copies with the parameters moved.
+gated forms on copies with the parameters moved. ZAYA's stream is float32 whatever the load
+dtype, and its MLP's norm is called with a copy cast to the norm's dtype, so its `layer_mid` is
+the attention merge's output (`post_attention_residual_scale.output`), the float32 stream the
+block carries past the MLP, rather than the norm's input: float32 under a bfloat16 load too, and
+a write to it, assigned or in place, reaches both the norm and the merge after the MLP.
 
 **DeepSeek-V4: parallel streams.** The residual between DeepSeek-V4's blocks is `hc_mult`
 parallel copies of the stream, `[batch, seq, streams, hidden_size]` (the model copies the

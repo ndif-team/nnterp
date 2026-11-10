@@ -155,6 +155,22 @@ that.
 
 ## In-place edits
 
+**A swap at a module's input reaches that module only.** When the forward
+binds the tensor under another name before the call (a block's
+`residual = hidden_states` before `post_attention_layernorm(hidden_states)`),
+assigning the module's input hands the module a new tensor and leaves the
+other name on the old one. On Llama-3.2-1B, swapping prompt B's stream in
+at block 8's `post_attention_layernorm.input` during prompt A's run patches
+the MLP's input only: the KL to B's logits falls from 9.62 to 8.5 nats,
+where writing into the held tensor takes it to 0. Under two or
+more invokes nnsight splices every swap into a new batch tensor, so a later
+invoke's in-place edit misses the other name too. A value at such a location
+sets `in_place=True`, which copies an assignment into the held tensor and
+swaps nothing ([eproperty-internals.md](eproperty-internals.md#in_place-a-tensor-the-forward-holds-under-two-names));
+`tests/families/suite.py`'s `test_assigning_layer_mid_replaces_the_stream`
+holds it on every family. A module's *output* has no such trap: the forward
+binds the return after the swap.
+
 **GPT-2 (and MPT) queries, keys and values are split views.** torch
 refuses `attention_queries[:, 0] = 0` ("Output 0 of Select is a view and is
 being modified inplace"); assign a new tensor instead

@@ -38,6 +38,7 @@ BLOCK = {
             "kind": "attention",
             "label": "Attention",
             "pre_norm": "input_layernorm",
+            "merge": "post_attention_residual_scale",
             "contribution": "attention_output",
             "interior": [
                 "attention_queries", "attention_keys", "attention_values",
@@ -133,10 +134,12 @@ merges and 13.2 on the mixture's. The biases are at most 1.15 in size and averag
 ## The stream is float32 whatever the load
 
 The model casts the embedding to float32 after its shift and scale, and each merge adds a float32
-stream, so `layers[i].input` and `layer_output` are float32 under a bfloat16 load, while
-`token_embeddings`, `attention_output`, `mlp_output` and `logits` keep the load's dtype.
+stream, so `layers[i].input`, `layer_mid` and `layer_output` are float32 under a bfloat16 load,
+while `token_embeddings`, `attention_output`, `mlp_output` and `logits` keep the load's dtype.
 `input_layernorm`, `post_attention_layernorm` and the final norm cast the stream to their weight's
-dtype before they norm it.
+dtype before they norm it, so `layer_mid` is read at the attention merge's output
+(`post_attention_residual_scale.output`), the stream the block carries past the MLP, not at
+`post_attention_layernorm`'s input, which is a cast copy under a bfloat16 load.
 
 ## Queries and keys are convolved, normed to √`head_dim` and the keys scaled
 

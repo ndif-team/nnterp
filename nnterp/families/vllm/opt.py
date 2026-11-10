@@ -77,7 +77,7 @@ class Layer(Layer):
         return value
 
     @Flat(lambda block: "final_layer_norm.input" if norms_before(block) else "input_layernorm.output",
-          description="The residual stream after the attention add, [1, tokens, hidden_size]")
+          description="The residual stream after the attention add, [1, tokens, hidden_size]", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 

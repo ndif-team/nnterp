@@ -109,13 +109,18 @@ rule, so a stub on one receives the tensor:
 
 ```python
 class Layer(gpt2.Layer):
-    @EProperty("post_attention_layernorm.input", description="The residual stream after the attention sublayer")
+    @EProperty("post_attention_layernorm.input", description="The residual stream after the attention sublayer", in_place=True)
     def mid_stream(self, value) -> Residual:
         return value
 ```
 
-On GPT-2 tiny this reads `layer.input + attention_output` exactly, and assigning it swaps
-in the first argument with the call's other arguments intact. The pair, for a stub that
+On GPT-2 tiny this reads `layer.input + attention_output` exactly. Assigning a module's
+input swaps in the first argument with the call's other arguments intact, which reaches that
+module only: the block has already bound the same tensor to `residual`, which the add after
+the MLP reads. `in_place=True` copies an assignment into the held tensor instead, so the
+norm and `residual` both see it, as the shipped `layer_mid` does
+([../developing/eproperty-internals.md](../developing/eproperty-internals.md#in_place-a-tensor-the-forward-holds-under-two-names)).
+A value at a module's output needs no flag. The pair, for a stub that
 needs a keyword argument, is an `inputs` path: the root's `input_ids` is
 `EProperty(key="inputs")` with a stub that takes `kwargs["input_ids"]` and a postprocess
 that puts it back.

@@ -898,9 +898,9 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         named = [h for h in block_hosts if h in hosts]
         assert sorted(named) == sorted(specs[k]["host"] for k in shape if not is_native(specs[k])), \
             f"{owner}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
-        # every norm drawn on a block is one of its children, by native name or alias
+        # every norm drawn on a block, and a merge named, is one of its children, by native name or alias
         for k in shape:
-            for where in ("pre_norm", "post_norm", "stream_norm"):
+            for where in ("pre_norm", "post_norm", "stream_norm", "merge"):
                 norm_name = specs[k].get(where)
                 assert not norm_name or "block_children" not in info or norm_name in info["block_children"][i], \
                     f"{owner}: BLOCK's {keys[k]!r} names {where} {norm_name!r}; block {i} has no such module"
@@ -970,6 +970,8 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             sub["part_order"] = spec["part_order"]
         if key != host:
             sub["key"] = key
+        if spec.get("merge"):
+            sub["merge"] = spec["merge"]
         if spec.get("parallel_with_next"):
             sub["parallel_with_next"] = True
         if native:
@@ -1141,6 +1143,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
             # the stream between the sublayers, where the block serves it (layer_mid): its segment is that value's
             at = ((streams.get("mid") or f"{nxt['hc']}.input") if streams else f"{subs[k]['stream_norm']}.output" if subs[k].get("stream_norm")
+                  else f"{subs[k]['merge']}.output" if subs[k].get("merge")
                   else f"{nxt['pre_norm']}.input" if nxt["pre_norm"] else f"{nxt['host']}.input")
             mid_row = boundary(("layer_mid",), at, [i for i, drawn_shape in enumerate(shape_of) if drawn_shape == shape])
             if mid_row:

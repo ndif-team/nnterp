@@ -212,15 +212,24 @@ class Layer(Standard):
         """
         return value
 
-    @EProperty("post_attention_layernorm.input", description="The residual stream after the attention add", unavailable=partial(absent, name="post_attention_layernorm"))
+    @EProperty("post_attention_layernorm.input", description="The residual stream after the attention add", unavailable=partial(absent, name="post_attention_layernorm"), in_place=True)
     def layer_mid(self, value: torch.Tensor) -> Residual:
         """The residual stream between the two sublayers, ``[batch, seq, hidden_size]``.
 
         What the MLP's pre-norm is called with: ``layer_input +
         attention_output`` on a pre-norm block, where it is read as
         ``post_attention_layernorm.input``. A parallel block has no such
-        stream, and marks this unavailable. In-place edits and assignment reach
-        the model.
+        stream, and marks this unavailable.
+
+        A write replaces the stream: the MLP's norm reads it and the block
+        adds the MLP's output to it. The block holds this tensor twice, as
+        the norm's argument and as ``residual``, so an assignment is copied
+        into it in place (``in_place``), the same write as
+        ``layer_mid[:] = new``. Like any in-place write, it changes a read of
+        ``layer_mid`` saved earlier in the trace, and a replacement computed
+        from such a read by an operation that keeps its input for the
+        backward pass (a learned scale or rotation) has to be computed from
+        ``layer_mid.clone()`` for gradients to flow.
         """
         return value
 

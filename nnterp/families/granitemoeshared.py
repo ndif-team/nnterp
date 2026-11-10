@@ -64,6 +64,17 @@ class Layer(Layer):
 
     sourced = True
 
+    @EProperty("mlp.input", description="What the MLP is called with", in_place=True)
+    def mlp_input(self, value) -> Residual:
+        """The mixture's first argument, which the shared expert is called with too.
+
+        The block calls ``block_sparse_moe(h)`` and ``shared_mlp(h)`` on one
+        tensor, and ``mlp_output`` is both experts' sum, so an assignment is
+        copied into ``h`` (``in_place``) and both experts read it; a swap
+        would reach the mixture only.
+        """
+        return value
+
 
 class Attention(GraniteAttention):
     """GraniteMoE-Shared's attention: Granite's, the block adds its output times ``residual_multiplier``."""

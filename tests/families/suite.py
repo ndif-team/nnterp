@@ -656,6 +656,29 @@ class FamilySuite:
         for got, want in zip(grads["assign"], grads["in place"]):
             torch.testing.assert_close(got, want)
 
+    def test_assigning_mlp_input_reaches_the_whole_feed_forward(self, model):
+        """An assignment to ``mlp_input`` is what an in-place write does: every module of the feed-forward that reads
+        the tensor reads the new value (GraniteMoE-Shared's and -Hybrid's shared expert beside the mixture). Not on a
+        post-norm block, where ``mlp_input`` is the stream itself: an in-place write moves the stream there, and an
+        assignment what the MLP is called with, as the name says (``layer_mid`` writes the stream)."""
+        support = [model.support(layer=i) for i in range(model.num_layers)]
+        served = [i for i, s in enumerate(support) if s["mlp_input"] is None and "post-norm" not in (s["mlp_norm_output"] or "")]
+        if not served:
+            pytest.skip("no block serves mlp_input before a norm")
+        layer = model.layers[served[0]]
+        with model.trace(PROMPT):
+            value = layer.mlp_input.clone().save()
+        new = value * 0.5 + 0.1
+        written = {}
+        for form in ("assign", "in place"):
+            with model.trace(PROMPT):
+                if form == "assign":
+                    layer.mlp_input = new
+                else:
+                    layer.mlp_input[:] = new
+                written[form] = layer.layer_output.save()
+        assert torch.equal(written["assign"], written["in place"]), "the assignment reached only part of the feed-forward"
+
     # -- the attention pattern --------------------------------------------------
 
     def test_probabilities_are_a_pattern(self, model):

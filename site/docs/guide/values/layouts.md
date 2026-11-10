@@ -81,7 +81,7 @@ Under grouped-query attention the keys and values are read before `repeat_kv`, s
 
 ## The exceptions
 
-On three families one value has a layout of its own. On DeepSeek-V4 `layer_output` (and `layer_input`) is `Streams`, `[batch, seq, streams, hidden_size]`, because the block carries parallel copies of the residual stream; the contributions stay `Residual`, and code written for `Residual` runs on a `Streams` value without an error and answers per stream. On Kimi-Linear `linear_attn.decays` is `ChannelGates`, `[batch, seq, heads, key_dim]`, one decay per key channel instead of the `Gates` `[batch, seq, heads]` of the other DeltaNet families. On OPT `layer_mid` is `FlatResidual`, `[tokens, hidden_size]`, the stream with batch and sequence flattened as its block holds it around the feed-forward path.
+On three families one value has a layout of its own. On DeepSeek-V4 `layer_output` (and `layer_input` and `layer_mid`) is `Streams`, `[batch, seq, streams, hidden_size]`, because the block carries parallel copies of the residual stream; the contributions and what each sublayer is called with (`attention_norm_output`, `mlp_norm_output`, `mlp_input`) stay `Residual`, and code written for `Residual` runs on a `Streams` value without an error and answers per stream. On Kimi-Linear `linear_attn.decays` is `ChannelGates`, `[batch, seq, heads, key_dim]`, one decay per key channel instead of the `Gates` `[batch, seq, heads]` of the other DeltaNet families. On OPT `layer_mid` is `FlatResidual`, `[tokens, hidden_size]`, the stream with batch and sequence flattened as its block holds it around the feed-forward path.
 
 ```python
 from nnterp.components import ChannelGates, FlatResidual, Streams

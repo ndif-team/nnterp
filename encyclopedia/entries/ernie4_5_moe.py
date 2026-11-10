@@ -22,11 +22,6 @@ QUIRKS = [
     {"slug": "dense-first-blocks", "when": lambda config: config.moe_layer_start_index > 0},
 ]
 
-#: The smallest checkpoint has 21B parameters: nothing here ran on real weights. Every identity, shape, read
-#: order and snippet ran on the pinned tiny checkpoint, loaded with moe_layer_start_index 1 for the dense-block
-#: claims and with a correction bias written by hand for the bias claims. Sizes and block layouts are the Hub
-#: configs', read on meta builds.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

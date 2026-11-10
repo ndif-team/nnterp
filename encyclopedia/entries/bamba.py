@@ -18,9 +18,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 198}
 QUIRKS = ["hybrid", "mamba2", "partial-rotary"]
 
-#: Every checkpoint is 9B, so no real weights were run: the shapes and identities below are from the pinned
-#: tiny checkpoint (routed, float32, CPU), the sizes from the checkpoints' configs.
-
 #: The sublayers in forward order. A block draws the mixer it has (``linear_attn`` or ``self_attn``);
 #: every block has the same MLP.
 BLOCK = {

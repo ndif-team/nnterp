@@ -24,11 +24,6 @@ QUIRKS = [
      "when": lambda config: config.sliding_window is not None and config.sliding_window < config.max_position_embeddings},
 ]
 
-#: Every checkpoint is above 3B parameters, so nothing here ran on real weights: shapes, the routing arithmetic
-#: and the snippets are from the pinned tiny checkpoint (16 experts, top 2) and a copy of it with
-#: attention_bias and lm_head_bias set; the rotary from transformers' rotary module built on the reference
-#: config; every size from the configs.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

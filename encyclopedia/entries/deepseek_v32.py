@@ -17,11 +17,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 328}
 QUIRKS = ["latent-attention", "sparse-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
-#: Shapes, identities, read orders, the rotary order, the selection and the routing were run on the pinned tiny
-#: checkpoint (block 0 dense, block 1 a mixture of 8 experts, top 2; queries, keys and values 128 wide;
-#: index_topk 2048) on CPU. Sizes, scales, the indexer layout, the routing settings and the tokenizer are the Hub
-#: configs' and tokenizer's, read on meta builds; no real weights were run (no checkpoint of the family is small enough).
-
 #: The sublayers in forward order; a block draws the MLP its ``mlp`` is (dense on blocks 0-2, a mixture after).
 BLOCK = {
     "topology": "sequential",

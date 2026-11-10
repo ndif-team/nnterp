@@ -58,9 +58,10 @@ STRIP: dict[str, str] = {}
 NOTES = """
 ## The prompt's first token is an attention sink
 
-The tokenizer adds no beginning-of-sequence token, so whatever token sits at position 0 takes most
-of the attention and carries a stream norm far above the other positions'. Leave position 0 out of
-probes and activation means, or prepend `<|endoftext|>` to move the sink onto that token.
+The tokenizer adds no beginning-of-sequence token, so the prompt's first token takes most of the
+attention, its stream has a norm many times the other positions' and a probe or lens there reads the
+sink, not the word. Leave position 0 out of activation statistics and steering-vector norms, or prepend
+`<|endoftext|>`, which takes the sink and leaves the first word its own position.
 
 ## The chat template ends where a reasoning trace starts
 

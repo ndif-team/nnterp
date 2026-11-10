@@ -12,9 +12,7 @@ PINNED = "hf-tiny-v2/tiny-random-HyperCLOVAXForCausalLM"
 CHECKPOINTS = ["naver-hyperclovax/HyperCLOVAX-SEED-Think-14B", "naver-hyperclovax/HyperCLOVAX-SEED-Think-32B"]
 
 #: The vision-language wrapper of this family, keyed by the wrapper's config.model_type. Its vision encoder is the
-#: Qwen ViT (encyclopedia/vision/qwen_vit.py). Shapes, orders and identities were checked on the pinned tiny wrapper
-#: under transformers 5.19 (float32, eager, its processor set to the model as tests/families/test_hyperclovax.py
-#: does); the sizes are Think-32B's config.
+#: Qwen ViT (encyclopedia/vision/qwen_vit.py).
 WRAPPERS = {
     "hyperclovax_vision_v2": {
         "title": "HyperCLOVA X Vision V2",
@@ -41,11 +39,6 @@ QUIRKS = [
     {"slug": "embedding-multiplier", "when": lambda config: config.embedding_multiplier != 1.0},
     {"slug": "scaled-logits", "when": lambda config: config.logits_scaling != 1.0},
 ]
-
-#: No checkpoint of this family is small enough to run here: the identities, read orders and the write
-#: round trip were checked on the pinned tiny checkpoint and on the suite's copy of it with
-#: residual_multiplier 0.22, logits_scaling 4 and embedding_multiplier 3, in float32 and bfloat16; the
-#: numbers for Think-14B come from its config.
 
 _ATTENTION = {
     "host": "self_attn",
@@ -108,5 +101,5 @@ are identities and the block is Llama's.
 
 `model.logits` is `lm_head.output` times `logits_scaling` (0.125 on Think-14B), and
 `project_on_vocab` multiplies too. A softmax over `lm_head.output`, or a lens written by hand as
-`lm_head(norm(h))`, runs at an eighth of the model's temperature.
+`lm_head(norm(h))`, is sharper than the model's own distribution.
 """

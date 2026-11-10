@@ -16,11 +16,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 337}
 QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
-#: Every number on this page comes from the reference's config or a run on the pinned tiny checkpoint;
-#: none has been checked on real weights, which are not cached (about a trillion parameters). The
-#: loading snippet in the notes runs the module path of tests/families/test_kimi_k2.py
-#: (test_a_text_only_checkpoint_loads_from_its_module) on a model built from the pinned config, not from_pretrained.
-
 
 def load(checkpoint, **kwargs):
     """The page's model: transformers' ``DeepseekV3ForCausalLM`` built on the meta device from the
@@ -101,8 +96,9 @@ and pass the module to `StandardizedTransformer` with the checkpoint's tokenizer
 
 ## The expert weights sum to `routed_scaling_factor`
 
-The router picks experts by their sigmoid plus a selection bias, so the top `router_logits` are not
-always the chosen experts. `expert_weights` are the chosen sigmoids without the bias, renormalized
-and multiplied by `routed_scaling_factor` (2.827), so they sum to it at every token. Every token also
-runs through a shared expert, and `mlp_output` is `routed_output + shared_expert_output`.
+The router picks experts by the sigmoid of `router_logits` plus a selection bias, so the top
+`router_logits` are not always the chosen experts. `expert_weights` are the chosen sigmoids without the
+bias, renormalized and multiplied by `routed_scaling_factor` (2.827), so they sum to it at every token.
+Every token also runs through a shared expert, and `mlp_output` is
+`routed_output + shared_expert_output`.
 """

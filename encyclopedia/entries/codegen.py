@@ -50,7 +50,7 @@ BLOCK = {
 
 #: Notes on the model-level strip, by node.
 STRIP = {
-    "head": "lm_head has a bias.",
+    "head": "lm_head has a bias, which project_on_vocab applies.",
 }
 
 NOTES = """

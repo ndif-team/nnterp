@@ -19,10 +19,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 95}
 QUIRKS = ["layernorm"]
 
-#: Shapes, identities and read places are from the pinned tiny checkpoint (float32, CPU); the clip_qkv
-#: trap also from the tiny loaded with clip_qkv=0.05. Real numbers are from allenai/OLMo-1B-0724-hf in
-#: float32 on CPU, over four prompts of prose and Python; sizes and clip_qkv values from the configs.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

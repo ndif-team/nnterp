@@ -57,7 +57,7 @@ BLOCK = {
 STRIP: dict[str, str] = {}
 
 NOTES = """
-## `query_key_value` is laid out head by head
+## `query_key_value` is laid out per head
 
 The fused projection's output is `[num_heads, 3, head_dim]` on its last axis: head `h`'s query, key
 and value are three consecutive `head_dim` blocks, not thirds of the width, and the weight's rows

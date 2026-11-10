@@ -20,10 +20,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 90}
 QUIRKS = ["layernorm", "mixture-of-experts"]
 
-#: The real checkpoints are 132B parameters: nothing here ran on real weights. Every identity and shape in
-#: the notes, and every snippet, ran on the pinned tiny checkpoint in float32 (2 blocks, 16 experts, top 4);
-#: the sizes are the re-uploads' configs.
-
 
 def load(checkpoint, **kwargs):
     """The page's model, built on the meta device from the checkpoint's config with the pinned checkpoint's

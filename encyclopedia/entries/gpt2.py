@@ -70,8 +70,7 @@ by default.
 
 TransformerLens' default `HookedTransformer.from_pretrained` centers every weight that writes to the
 stream, so its `hook_resid_pre`, and the `gpt2-small-res-jb` SAEs trained on it, see
-`layers[i].input` minus its mean over the hidden axis. Subtract that mean before encoding. Fed the raw stream, block 8's
-SAE leaves 250% of the variance unexplained, against 15% on the centered one.
+`layers[i].input` minus its mean over the hidden axis. Subtract that mean before encoding.
 
 ## The Stanford CRFM checkpoints need a different load for the attention interior
 

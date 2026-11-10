@@ -22,12 +22,6 @@ QUIRKS = [
     "mixture-of-experts", "dense-first-blocks",
 ]
 
-#: The smallest checkpoint, Trinity Nano, has about 6B parameters, so nothing here ran on real weights. Every
-#: identity, shape, read order and snippet ran on the pinned tiny checkpoint (block 0 sliding and dense,
-#: block 1 full and a mixture of 4 experts, top 2, two shared experts' width), with the config overridden at
-#: load where a note says so (mup_enabled, sliding_window, a hand-written expert_bias). Sizes, scales and
-#: block layouts are the Hub configs', read on meta builds.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

@@ -22,10 +22,6 @@ QUIRKS = [
     {"slug": "nope-blocks", "when": lambda config: not (config.rope_parameters or {}).get("rope_theta")},
 ]
 
-#: Every checkpoint is 7B, so no real weights were run: shapes, identities and read places are from the
-#: pinned tiny checkpoint with the released config's rope_theta null and linear_allow_neg_eigval written in
-#: (tests/families/test_olmo_hybrid.py's copy), routed, float32, CPU; sizes from the checkpoints' configs.
-
 #: The two block classes put the same native norm in two roles and the one MLP in two places: on a DeltaNet
 #: block post_attention_layernorm is the MLP's pre-norm, on an attention block the attention's post-norm,
 #: and the MLP is pre-normed on one and post-normed on the other. Each sublayer's `block` key names the

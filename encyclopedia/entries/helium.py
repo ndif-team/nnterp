@@ -15,9 +15,6 @@ CHECKPOINTS = ["kyutai/helium-1-preview-2b"]
 PALETTE = {"hue": 250}
 QUIRKS = ["interleaved-rotary"]
 
-#: Real values in the notes were measured on helium-1-preview-2b on a GPU, in bfloat16 unless the note says
-#: float32; shapes, identities and the rotary recomputed exactly ran on the pinned tiny checkpoint.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

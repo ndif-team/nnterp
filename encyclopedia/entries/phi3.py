@@ -25,10 +25,6 @@ QUIRKS = [
     {"slug": "partial-rotary", "when": lambda config: config.rope_parameters.get("partial_rotary_factor", 1.0) < 1.0},
 ]
 
-#: No checkpoint of this family is 3B parameters or fewer, so nothing here ran on real weights: shapes, splits
-#: and identities are from the pinned tiny checkpoint, the rotary from transformers' rotary module built on each
-#: checkpoint's config, and every size from the configs.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

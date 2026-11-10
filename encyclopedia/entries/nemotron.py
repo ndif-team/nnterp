@@ -51,9 +51,9 @@ BLOCK = {
 STRIP: dict[str, str] = {}
 
 NOTES = """
-## Position 0 and one or two other tokens carry very large norms
+## Position 0 and one or two other tokens are attention sinks
 
-The tokenizer adds no beginning-of-sequence token, so the prompt's first token, and on most prompts
-one or two later tokens, carry norms far above the rest and draw most of the attention. Leave them out
-before averaging activations for steering vectors, mean ablation or probes.
+The tokenizer adds no beginning-of-sequence token, so the prompt's first token, and on most prompts one
+or two later tokens, take most of the attention and have norms many times the other positions'. Leave
+them out of activation statistics and steering-vector norms.
 """

@@ -21,9 +21,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 8}
 QUIRKS = ["hybrid", "mamba1", "nope-blocks", "mixture-of-experts", "unnormalized-routing"]
 
-#: No real weights were run: shapes and identities are from the pinned tiny checkpoint (routed, float32,
-#: CPU), sizes and periods from the checkpoints' configs, routing from transformers' JambaSparseMoeBlock.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -56,7 +53,7 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "post_attention_layernorm",
-            "pre_norm_note": "Native pre_ff_layernorm, the MLP's input norm.",
+            "pre_norm_note": "The MLP's input norm, native name pre_ff_layernorm.",
             "contribution": "mlp_output",
             "detail": "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}",
         },
@@ -65,7 +62,7 @@ BLOCK = {
             "kind": "moe",
             "label": "MoE",
             "pre_norm": "post_attention_layernorm",
-            "pre_norm_note": "Native pre_ff_layernorm, the MLP's input norm.",
+            "pre_norm_note": "The MLP's input norm, native name pre_ff_layernorm.",
             "contribution": "mlp_output",
             "interior": ["router_logits", "expert_weights", "expert_indices", "expert_outputs", "routed_output"],
             "detail": "{num_experts} experts × {intermediate_size}, top {top_k}",

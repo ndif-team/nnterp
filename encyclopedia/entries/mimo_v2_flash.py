@@ -18,11 +18,6 @@ QUIRKS = [
     "dense-first-blocks",
 ]
 
-#: The checkpoints have 309B parameters: nothing here ran on real weights. Every identity, shape and snippet ran on
-#: the pinned tiny checkpoint (block 0 full and dense, block 1 sliding and a mixture of 4 experts, top 2; queries and
-#: keys 8 wide, values 16; float32); the sizes, the block layout and the rotary widths are the Hub configs', read on
-#: meta builds.
-
 #: The sublayers in forward order; a block draws the MLP its ``mlp`` is (dense on block 0, a mixture after).
 BLOCK = {
     "topology": "sequential",

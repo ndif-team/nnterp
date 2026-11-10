@@ -18,10 +18,6 @@ QUIRKS = [
     {"slug": "partial-rotary", "when": lambda config: (config.rope_parameters or {}).get("partial_rotary_factor", 1.0) < 1.0},
 ]
 
-#: The checkpoints have 230B parameters: nothing here ran on real weights. Every identity, shape and snippet ran on
-#: the pinned tiny checkpoint (2 blocks, 8 experts, top 2; float32, eager); the sizes are the Hub configs', read on
-#: meta builds, and the routing arithmetic is transformers' MiniMaxM2TopKRouter.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

@@ -16,9 +16,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 359}
 QUIRKS = ["mamba1"]
 
-#: Every real-value number below was run on mamba-130m-hf (and, where it says so, mamba-370m-hf),
-#: routed to the torch kernels, in float32, the checkpoints' dtype; the kernel comparison ran on an RTX A6000.
-
 #: One sublayer: the mixer. Its chips are in the order the scan meets them on a prompt.
 BLOCK = {
     "topology": "sequential",
@@ -28,7 +25,7 @@ BLOCK = {
             "kind": "mixer",
             "label": "Selective scan",
             "pre_norm": "input_layernorm",
-            "pre_norm_note": "Natively layers[i].norm; model.norm is the final norm_f.",
+            "pre_norm_note": "Native name norm, the block's own; model.norm is the final norm_f.",
             "contribution": "attention_output",
             "interior": [
                 "state_input", "attention_values", "betas", "decays", "attention_keys", "attention_queries",
@@ -57,8 +54,9 @@ A channel's term in `attention_output` is `out_proj` applied to `y * silu(z)`, s
 
 ## `C` and `B` are shared by every channel
 
-`attention_queries` (`C`) and `attention_keys` (`B`) are one vector per token, `[batch, seq, 1,
-state_size]`, read by every channel of the mixer, so an edit to either reaches all of them.
+`attention_queries` (`C`) and `attention_keys` (`B`) are one vector per token,
+`[batch, seq, 1, state_size]`, read by every channel of the mixer, so an edit to either reaches all of
+them.
 
 ## The pattern is rebuilt from the scan's values
 

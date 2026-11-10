@@ -6,8 +6,7 @@ TITLE = "Laguna XS / Laguna S / Laguna M"
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "poolside/Laguna-XS-2.1"
-#: The tiny checkpoint the test suite builds the page from (two heads on both blocks; the suite's second copy,
-#: with two and four, is what the per-block notes ran on).
+#: The tiny checkpoint the test suite builds the page from (two heads on both blocks).
 PINNED = "hf-tiny-v2/tiny-random-LagunaForCausalLM"
 #: The FP8, INT4 and NVFP4 copies and the DFlash drafters (DFlashLagunaForCausalLM) are left out.
 CHECKPOINTS = [
@@ -28,11 +27,6 @@ QUIRKS = [
         p.get("partial_rotary_factor", 1.0) < 1.0 for p in config.rope_parameters.values())},
     "mixture-of-experts", "dense-first-blocks",
 ]
-
-#: The smallest checkpoint has 33B parameters: nothing here ran on real weights. Every identity, shape and snippet
-#: ran on tests/families/test_laguna.py's copy of the pinned tiny checkpoint with 2 and 4 query heads (block 0 full
-#: and dense, block 1 sliding and a mixture of 8 experts, top 2; float32, eager); the sizes, block layouts and rotary
-#: settings are the Hub configs', read on meta builds.
 
 #: The sublayers in forward order; a block draws the MLP its ``mlp`` is (dense on the first blocks, a mixture after).
 BLOCK = {

@@ -20,11 +20,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 322}
 QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
-#: Shapes, identities and read orders were run on the pinned tiny checkpoint and on a random model built
-#: from DeepSeek-V2-Lite's config with smaller widths (q_lora_rank null, queries and keys 24 wide, values
-#: 16), whose dense block 0 the pinned tiny lacks. Sizes, scales and routing settings are the Hub configs',
-#: read on meta builds; no real weights were run (the smallest checkpoint, V2-Lite, has 16B parameters).
-
 #: The sublayers in forward order; a block draws the MLP its ``mlp`` is (dense on block 0, a mixture after).
 BLOCK = {
     "topology": "sequential",

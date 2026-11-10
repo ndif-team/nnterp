@@ -18,11 +18,6 @@ QUIRKS = [
     {"slug": "dense-first-blocks", "when": lambda config: config.first_k_dense_replace > 0},
 ]
 
-#: Both checkpoints have 142B parameters: nothing here ran on real weights. Every identity, shape, read order and
-#: snippet ran on the pinned tiny checkpoint loaded with the real routing settings (first_k_dense_replace 1,
-#: num_experts_per_tok 2, norm_topk_prob true, routed_scaling_factor 2.5) and, for the bias claims, a selection
-#: bias written by hand. Sizes and routing settings are the Hub configs', read on meta builds.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

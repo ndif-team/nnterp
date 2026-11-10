@@ -37,8 +37,6 @@ def load(checkpoint, **kwargs):
 PALETTE = {"hue": 211}
 QUIRKS = ["scaled-residual-adds", "mixture-of-experts", "embedding-multiplier", "scaled-logits"]
 
-#: Numbers in the notes come from the reference's weights (float32 on an RTX A6000) unless they name
-#: granite-3.1-3b-a800m-base; the snippets ran on both and on the pinned tiny checkpoint (block 1 for 5 and 20).
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -102,7 +100,7 @@ expert-usage counts and ablation sweeps.
 ## The logits are divided by `logits_scaling`, and the embeddings multiplied
 
 `model.logits` is `lm_head.output / logits_scaling` and `project_on_vocab` divides too, so a softmax
-over `lm_head.output` runs at a sixth of the model's temperature. `layers[0].input` is
+over `lm_head.output` is sharper than the model's own distribution. `layers[0].input` is
 `token_embeddings` times `embedding_multiplier`, and embeddings passed as `inputs_embeds` are
 multiplied too, so to set what block 0 reads, edit `layers[0].input`.
 """

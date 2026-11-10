@@ -102,7 +102,7 @@ n   = input_layernorm(x)            # stablelm-2-12b (use_parallel_residual)
 out = x + self_attn(n) + mlp(n)
 ```
 
-On `stablelm-2-12b` both sublayers read the same normed input, so ablating or patching a block's
+On `stablelm-2-12b` both sublayers read the one norm's output, so ablating or patching a block's
 attention leaves that block's MLP unchanged, and the block has no `layer_mid`. The 1.6B and 3B
 blocks are sequential, so check `model.config.use_parallel_residual` before reusing a recipe across
 sizes.

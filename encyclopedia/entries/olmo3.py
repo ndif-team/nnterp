@@ -20,11 +20,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 101}
 QUIRKS = ["post-norms", "qk-norm", "sliding-window"]
 
-#: Every checkpoint is 7B or 32B, so no real weights were run: shapes, identities, masks and read places are
-#: from the pinned tiny checkpoint as tests/families/test_olmo3.py rewrites it (float32, CPU; the window
-#: check loads it with sliding_window=3); the rotary scaling per block type from a meta build of
-#: Olmo-3-1025-7B; sizes, layer_types and rope parameters from the checkpoints' configs.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

@@ -14,10 +14,6 @@ CHECKPOINTS = ["upstage/Solar-Open-100B"]
 PALETTE = {"hue": 278}
 QUIRKS = ["mixture-of-experts"]
 
-#: Every number in the notes is Solar-Open-100B's config or a value transformers computes from it; no real
-#: weights were run (about 100B parameters). The snippets ran on the pinned tiny checkpoint (4 experts, top 2),
-#: with its e_score_correction_bias moved off zero for the router check.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

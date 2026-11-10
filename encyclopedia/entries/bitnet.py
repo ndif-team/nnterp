@@ -13,10 +13,6 @@ CHECKPOINTS = ["microsoft/bitnet-b1.58-2B-4T", "microsoft/bitnet-b1.58-2B-4T-bf1
 PALETTE = {"hue": 253}
 QUIRKS = ["quantized-linears", "sub-norms", "squared-relu"]
 
-#: Real values in the notes were measured on bitnet-b1.58-2B-4T-bf16 in bfloat16 on a GPU (its weights load as
-#: bfloat16 and are ternarized in every forward); shapes, identities and read orders also ran on the pinned tiny
-#: checkpoint, whose projections are plain nn.Linear and whose hidden_act is gelu.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

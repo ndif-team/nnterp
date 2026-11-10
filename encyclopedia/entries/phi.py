@@ -13,9 +13,6 @@ CHECKPOINTS = ["microsoft/phi-1", "microsoft/phi-1_5", "microsoft/phi-2"]
 PALETTE = {"hue": 137}
 QUIRKS = ["parallel-blocks", "partial-rotary", "qkv-bias", "layernorm"]
 
-#: Every real value in the notes was measured on microsoft/phi-2 (bfloat16 on CPU unless the note says float16,
-#: which ran on a GPU) and, where named, microsoft/phi-1_5; the snippets also ran on the pinned tiny checkpoint.
-
 #: What the visualization draws: one input_layernorm feeds both sublayers; the schema draws a pre-norm per
 #: sublayer, so it appears twice, as one node.
 BLOCK = {
@@ -59,7 +56,7 @@ h   = input_layernorm(x)
 out = self_attn(h) + mlp(h) + x
 ```
 
-Both sublayers read the same normed input, so ablating or patching a block's attention leaves that
+Both sublayers read the one norm's output, so ablating or patching a block's attention leaves that
 block's MLP unchanged. The first MLP to read block `i`'s attention is block `i + 1`'s.
 
 ## Load phi-2 in bfloat16 or float32 for the attention interior
@@ -71,6 +68,6 @@ overflow in the last blocks, so every logit is NaN. The default `sdpa` load in f
 ## The prompt's first token carries one very large entry
 
 The tokenizer adds no beginning-of-sequence token, and the stream at the prompt's first token has a
-single dimension far larger than any entry elsewhere. Leave position 0 out of norms and means over
-positions, or read it on its own.
+single dimension far larger than any entry elsewhere. Leave position 0 out of activation statistics and
+steering-vector norms, or read it on its own.
 """

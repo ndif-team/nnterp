@@ -22,9 +22,6 @@ QUIRKS = [
     "interleaved-rotary",
 ]
 
-#: Every claim in the notes was checked on the pinned tiny checkpoint (shapes, identities, the rotary
-#: recomputed exactly) or read off the listed checkpoints' configs and tokenizers; no real weights were run.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -68,9 +65,8 @@ out = h + post_mlp_layernorm(mlp(post_attention_layernorm(h)))
 block adds. RMSNorm is scale-invariant, so halving `mlp.output` does almost nothing to the stream.
 Scale, steer and decompose through `attention_output` and `mlp_output`.
 
-## The tokenizer prepends nothing
+## On GLM-Z1-9B-0414 the chat template ends where a reasoning trace starts
 
-A raw prompt starts at position 0 with its first token, without the `[gMASK]<sop>` the chat template
-writes, so the sink that trained models form at position 0 falls on that token. On GLM-Z1-9B-0414
-the generation prompt ends in `<think>`, so the next token starts a reasoning trace, not the answer.
+With `add_generation_prompt=True` the template ends the prompt with `<think>`, so a next-token metric
+there measures the start of a reasoning trace, not the answer.
 """

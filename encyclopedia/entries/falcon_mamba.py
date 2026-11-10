@@ -16,9 +16,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 5}
 QUIRKS = ["mamba1"]
 
-#: Every checkpoint is 7B: shapes and identities below were checked on the pinned tiny checkpoint, sizes are read
-#: from the released configs and a meta build of falcon-mamba-7b; no real-weight number is given.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

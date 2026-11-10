@@ -16,10 +16,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 285}
 QUIRKS = ["qkv-bias", "mixture-of-experts", "unnormalized-routing"]
 
-#: Every number in the notes comes from a checkpoint's config or tokenizer; the shapes, identities, read
-#: orders and snippets were run on the pinned tiny checkpoint (4 experts, top 2, 2 blocks), in float32 and
-#: bfloat16. No real weights were run: the smallest checkpoint has 14B parameters.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

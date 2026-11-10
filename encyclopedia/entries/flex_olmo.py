@@ -17,11 +17,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 107}
 QUIRKS = ["post-norms", "qk-norm", "mixture-of-experts"]
 
-#: Every checkpoint is 2x7B or 7x7B, so no real weights were run: shapes, identities and the routing edits
-#: are from the pinned tiny checkpoint (8 experts, top 2; float32, CPU), the every-expert routing also from
-#: the tiny loaded with num_experts_per_tok=8; sizes, expert counts and norm_topk_prob from the checkpoints'
-#: configs; the experts' training data from the model cards.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -73,9 +68,4 @@ of the experts' directions, not the size of the term. Scale `mlp_output` to scal
 whole softmax and `expert_indices` lists every expert, ordered by weight. Counting how often an expert
 is chosen tells nothing; compare its weights. Zeroing an expert's weight and setting its
 `router_logits` entry to `-inf` give the same `mlp_output`.
-
-## The tokenizer adds no beginning-of-sequence token
-
-The sink that trained models form at position 0 falls on the prompt's first token. Leave position 0
-out of activation statistics and steering-vector norms.
 """

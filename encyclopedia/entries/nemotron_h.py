@@ -214,10 +214,9 @@ as `config.layer_types` lists, and has no attribute under the other names. Choos
 
 ## The prompt's first token carries a very large norm
 
-The tokenizer prepends nothing, so position 0 is the prompt's own first token. On Nano-4B block 6's
-Mamba-2 mixer writes a vector there over a hundred times the norm it writes elsewhere, and the
-attention blocks put most of their attention on it. Leave position 0 out of activation means and
-steering-vector norms.
+The tokenizer adds no beginning-of-sequence token, and an early Mamba-2 mixer writes a vector at the
+prompt's first token many times the norm it writes elsewhere, on which the attention blocks put most of
+their attention. Leave position 0 out of activation statistics and steering-vector norms.
 
 ## The expert weights sum to `routed_scaling_factor`
 

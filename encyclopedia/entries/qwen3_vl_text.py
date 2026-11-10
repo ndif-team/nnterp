@@ -17,8 +17,6 @@ CHECKPOINTS = [
 
 #: The vision-language wrapper every checkpoint above is, keyed by its config.model_type. The vision encoder comes from
 #: the checkpoint's vision_config.model_type (encyclopedia/vision/qwen_vit.py); what a config does not say is here.
-#: Shapes and identities were checked on the pinned tiny wrapper (and on a copy with five text blocks, for the blocks
-#: past the taps); the numbers are from docs/usage/vision.md, on Qwen3-VL-4B-Instruct.
 WRAPPERS = {
     "qwen3_vl": {
         "title": "Qwen3-VL",
@@ -91,8 +89,8 @@ x'  = out + deepstack_output[k] at the image tokens    # after blocks 0, 1 and 2
 ```
 
 On an image prompt `layer_output` of blocks 0 to 2 is not what the next block reads, so patching block
-`k`'s `layer_output` into block `k + 1`'s input drops the DeepStack add. Zeroing `vision.image_features` alone leaves the image in the stream;
-zero `layers[k].deepstack_output` on blocks 0 to 2 as well.
+`k`'s `layer_output` into block `k + 1`'s input drops the DeepStack add. Zeroing `vision.image_features`
+alone leaves the image in the stream; zero `layers[k].deepstack_output` on blocks 0 to 2 as well.
 
 ## The Thinking template ends where a reasoning trace starts
 

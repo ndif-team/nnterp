@@ -99,10 +99,10 @@ than the input's part of the query on every block. A query-key analysis from the
 most of each query, and zeroing the attention's input leaves it writing `o_proj` of the value bias at
 every position. To remove the attention, ablate `attention_output`.
 
-## The prompt's first token becomes the attention sink
+## The prompt's first token is an attention sink
 
-The tokenizer prepends nothing, so through most blocks the prompt's first token draws much of the
-attention, carries a norm far above the other positions' and holds nothing of the word. Leave position 0
-out of means, probes and steering-vector norms, or prepend `<|endoftext|>`, which takes the sink and
-leaves the first word its own position.
+The tokenizer adds no beginning-of-sequence token, so the prompt's first token takes most of the
+attention, its stream has a norm many times the other positions' and a probe or lens there reads the
+sink, not the word. Leave position 0 out of activation statistics and steering-vector norms, or prepend
+`<|endoftext|>`, which takes the sink and leaves the first word its own position.
 """

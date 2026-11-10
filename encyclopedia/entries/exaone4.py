@@ -67,9 +67,4 @@ out = h + post_feedforward_layernorm(mlp(h))
 block adds. The norm undoes a scale of the module's output, except in the first blocks of 1.2B, where
 that output is small next to the norm's `eps`. Scale, steer and decompose through `attention_output`
 and `mlp_output`.
-
-## The tokenizer adds no beginning-of-sequence token
-
-The sink that trained models form at position 0 falls on the prompt's first token. Leave position 0
-out of activation statistics and steering-vector norms.
 """

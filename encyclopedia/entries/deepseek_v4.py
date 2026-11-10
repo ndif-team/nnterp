@@ -23,12 +23,6 @@ QUIRKS = [
     "mixture-of-experts", "hash-routing",
 ]
 
-#: Shapes, the block's formula, the stream mean, the readout, the key axis of each block type, the selection and the
-#: routing (both routers) were run on the pinned tiny checkpoint in float32 on CPU (7 blocks: 2 sliding, then
-#: compressed-sparse and heavily-compressed alternating; 3 hash blocks; 4 streams; heads 128 wide). Sizes, block
-#: types, scales and routing settings are the Hub configs', read on meta builds; no real weights were run (no
-#: checkpoint of the family is small enough).
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

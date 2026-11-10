@@ -19,9 +19,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 26}
 QUIRKS = ["qk-norm"]
 
-#: Every real value in the notes was measured on Hunyuan-0.5B-Pretrain in float32 on a GPU unless the note
-#: says bfloat16; shapes, identities and read orders also ran on the pinned tiny checkpoint.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -61,8 +58,8 @@ and `attention_keys` are read after them. The norm undoes a rescaling of a head'
 
 ## The prompt's first token is an attention sink
 
-The tokenizer adds no beginning-of-sequence token to a plain prompt, so its first token takes most
-of the attention and its stream grows far larger than the other positions'; the chat templates begin
-with a BOS token, which then sits at position 0. Leave position 0 out of activation averages for
-steering vectors, mean ablation or probes.
+The tokenizer adds no beginning-of-sequence token to a plain prompt, so its first token takes most of
+the attention and its stream has a norm many times the other positions'; a chat template puts its
+beginning-of-sequence token there instead. Leave position 0 out of activation statistics and
+steering-vector norms.
 """

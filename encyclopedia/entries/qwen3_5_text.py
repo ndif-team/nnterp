@@ -38,9 +38,6 @@ model only through `vision.image_features`.
 PALETTE = {"hue": 310}
 QUIRKS = ["hybrid", "gated-query", "qk-norm", "partial-rotary", "gain-norm", "multimodal-rotary"]
 
-#: Real-value numbers below come from runs on Qwen3.5-0.8B (float32) and Qwen3.5-9B (bfloat16), with
-#: transformers' pure-torch DeltaNet kernels (flash-linear-attention and causal-conv1d not installed).
-
 #: The sublayers in forward order. A block draws the mixer it has (``linear_attn`` or ``self_attn``);
 #: every block has the dense MLP.
 BLOCK = {
@@ -99,9 +96,10 @@ the stream scaled far down, head by head. Attribute and patch heads at `attentio
 
 ## The DeltaNet's queries and keys are copied per value head on 4B and larger
 
-On 4B, 9B and 27B the 16 key heads' queries and keys are repeated up to the value heads before the
-kernel, so `attention_queries` and `attention_keys` are `num_v_heads` wide, each key head copied into
-consecutive heads. An edit to one copy reaches only its own value head.
+On 4B, 9B and 27B the mixer repeats each key head's query and key up to the value heads before the
+kernel, so `attention_queries` and `attention_keys` have one head per value head, each key head copied
+into consecutive heads. An edit to one copy reaches only its own value head; edit every copy to change
+the key head.
 
 ## Prepending `<|endoftext|>` changes the predictions
 

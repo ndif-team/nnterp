@@ -18,10 +18,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 298}
 QUIRKS = ["qk-norm", "mixture-of-experts"]
 
-#: Every number in the notes comes from a checkpoint's config or tokenizer; the shapes, identities and
-#: snippets were run on the pinned tiny checkpoint (4 experts, top 2, 2 blocks), in float32 and bfloat16.
-#: No real weights were run: the smallest checkpoint has 30B parameters.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -59,7 +55,7 @@ NOTES = """
 ## The chat template ends where a reasoning trace starts
 
 On 30B-A3B, 30B-A3B-Base and 235B-A22B `add_generation_prompt=True` ends the prompt at
-`<|im_start|>assistant\\n`, where the model opens a `<think>` block, so a next-token metric there
+`<|im_start|>assistant\\n` and the next token is `<think>`, so a next-token metric there
 measures the start of a reasoning trace. Pass `enable_thinking=False`, which appends an empty
 thinking block, to put the answer next. The Thinking-2507 templates ignore the flag and always open
 the block; the Instruct-2507 and Coder templates have none.

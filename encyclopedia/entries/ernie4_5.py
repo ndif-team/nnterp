@@ -13,9 +13,6 @@ CHECKPOINTS = ["baidu/ERNIE-4.5-0.3B-Base-PT", "baidu/ERNIE-4.5-0.3B-PT"]
 PALETTE = {"hue": 186}
 QUIRKS = ["interleaved-rotary"]
 
-#: Shapes, identities and the rotary layout ran on the pinned tiny checkpoint and on ERNIE-4.5-0.3B-Base-PT in
-#: float32 on a GPU; the norm gains are 0.3B-Base's. Every snippet ran on both.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

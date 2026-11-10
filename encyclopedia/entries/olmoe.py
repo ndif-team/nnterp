@@ -17,9 +17,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 104}
 QUIRKS = ["qk-norm", "mixture-of-experts", "unnormalized-routing"]
 
-#: Every real value in the notes was measured on OLMoE-1B-7B-0924 (bf16 as stored unless the note says
-#: float32) on a GPU; the snippets also ran on the pinned tiny checkpoint (4 experts, top 2).
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

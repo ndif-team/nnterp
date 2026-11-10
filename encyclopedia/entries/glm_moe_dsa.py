@@ -17,12 +17,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 128}
 QUIRKS = ["latent-attention", "sparse-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
-#: Shapes, identities, read orders, the rotary order, the selection and the routing were run on the pinned tiny
-#: checkpoint (block 0 a mixture of 8 experts, top 2, block 1 dense; queries, keys and values 128 wide;
-#: index_topk 2048) and on the suite's copy with index_topk 2. Sizes, scales, the indexer layout, the routing
-#: settings and the tokenizer are the Hub configs', meta builds and tokenizers; no real weights were run
-#: (no checkpoint of the family is small enough).
-
 #: The sublayers in forward order; a block draws the MLP its ``mlp`` is (dense on blocks 0-2, a mixture after).
 BLOCK = {
     "topology": "sequential",
@@ -73,13 +67,9 @@ are `model.qk_head_dim` wide and values `model.head_dim`.
 
 ## The expert weights sum to `routed_scaling_factor`
 
-The router picks the top 8 experts by sigmoid score plus `router.e_score_correction_bias`. The bias
-decides the choice only. `expert_weights` are the chosen sigmoids without it, renormalized and
-multiplied by `routed_scaling_factor`, so a token's weights sum to 2.5. A shared expert runs on every
-token inside `mlp_output`, which is `routed_output + shared_expert_output`.
-
-## The tokenizer adds no beginning-of-sequence token
-
-The sink that trained models form at position 0 falls on the prompt's first token. Leave position 0
-out of activation statistics and steering-vector norms.
+The router picks experts by the sigmoid of `router_logits` plus a selection bias,
+`router.e_score_correction_bias`, so the top `router_logits` are not always the chosen experts.
+`expert_weights` are the chosen sigmoids without the bias, renormalized and multiplied by
+`routed_scaling_factor`, so a token's weights sum to 2.5. A shared expert runs on every token inside
+`mlp_output`, which is `routed_output + shared_expert_output`.
 """

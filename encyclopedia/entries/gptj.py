@@ -51,7 +51,7 @@ BLOCK = {
 
 #: Notes on the model-level strip, by node.
 STRIP = {
-    "head": "lm_head adds a bias.",
+    "head": "lm_head has a bias, which project_on_vocab applies.",
 }
 
 NOTES = """
@@ -62,8 +62,6 @@ h   = input_layernorm(x)
 out = self_attn(h) + mlp(h) + x
 ```
 
-Both sublayers read the same normed block input, so ablating or patching a block's attention leaves
-that block's MLP unchanged, and the first MLP to read block `i`'s attention is block `i + 1`'s.
-`self_attn.input` and `mlp.input` are one tensor, so an in-place edit of `self_attn.input` reaches
-the MLP too.
+Both sublayers read the one norm's output, so ablating or patching a block's attention leaves that
+block's MLP unchanged. The first MLP to read block `i`'s attention is block `i + 1`'s.
 """

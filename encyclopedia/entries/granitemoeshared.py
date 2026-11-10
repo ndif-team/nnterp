@@ -13,9 +13,6 @@ CHECKPOINTS = ["ibm-research/moe-7b-1b-active-shared-experts"]
 PALETTE = {"hue": 217}
 QUIRKS = ["scaled-residual-adds", "mixture-of-experts", "embedding-multiplier", "scaled-logits"]
 
-#: No public checkpoint of this family is small enough to run here (the one release is 7B), so the notes' shapes,
-#: identities and snippets come from the pinned tiny checkpoint and a copy of it with Granite's multipliers away
-#: from 1.0, and their numbers from the reference's config.
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

@@ -138,8 +138,7 @@ so a saved `mlp.output` reads the sum of the two. `mlp_output` is the MLP's cont
 
 transformers builds the ALiBi bias into the attention mask, and the eager path adds it to the scores
 again, so `attention_scores` carry it twice where the default sdpa load adds it once. An eager load,
-which the attention interior needs, runs a different model: on `falcon-rw-1b` in float32 the two
-loads' logits differ by up to about 1.5.
+which the attention interior needs, runs a different model.
 
 ## On 11B, 40B and 180B the keys and values are copied per query head
 

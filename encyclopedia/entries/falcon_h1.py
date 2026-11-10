@@ -22,7 +22,7 @@ CHECKPOINTS = [
 PALETTE = {"hue": 14}
 QUIRKS = ["parallel-mixers", "mamba2", "scaled-residual-adds", "embedding-multiplier", "scaled-logits"]
 
-NORM_NOTE = "One norm, drawn on both mixers' rows: both read its output."
+NORM_NOTE = "Both mixers read this one norm's output, the same tensor."
 
 #: The block in forward order: the Mamba-2 mixer and the attention both read input_layernorm's output and join the
 #: stream at one add, then the MLP reads the stream after that add. `parallel_with_next` marks the mixer as the
@@ -62,7 +62,7 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "post_attention_layernorm",
-            "pre_norm_note": "Native pre_ff_layernorm, the MLP's input norm.",
+            "pre_norm_note": "The MLP's input norm, native name pre_ff_layernorm.",
             "contribution": "mlp_output",
             "detail": "{hidden_size} → {intermediate_size} → {hidden_size}, gated {hidden_act}",
         },
@@ -92,6 +92,6 @@ through the two `attention_output` values.
 ## The prompt's first token is an attention sink
 
 The tokenizer adds no beginning-of-sequence token, so the prompt's first token takes much of the
-attention, and in the middle blocks its stream has a norm many times the other positions'. Leave
+attention and, in the middle blocks, its stream has a norm many times the other positions'. Leave
 position 0 out of activation statistics and steering-vector norms.
 """

@@ -18,11 +18,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 325}
 QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
-#: Shapes, identities, read orders and the routing were run on the suite's copy of the pinned tiny checkpoint
-#: (block 0 dense, block 1 a mixture of 4 experts, top 2; queries and keys 192 wide, values 128), with a
-#: selection bias written by hand for the bias claims. Sizes, scales and routing settings are the Hub
-#: configs', read on meta builds; no real weights were run (the smallest checkpoint, Moonlight, has 16B).
-
 #: The sublayers in forward order; a block draws the MLP its ``mlp`` is (dense on blocks 0-2, a mixture after).
 BLOCK = {
     "topology": "sequential",

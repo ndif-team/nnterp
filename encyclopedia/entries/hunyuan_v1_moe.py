@@ -14,10 +14,6 @@ CHECKPOINTS = ["tencent/Hunyuan-A13B-Instruct", "tencent/Hunyuan-A13B-Pretrain"]
 PALETTE = {"hue": 29}
 QUIRKS = ["qk-norm", "mixture-of-experts"]
 
-#: No checkpoint of this family is small enough to run here (A13B has 80B parameters): the shapes, identities,
-#: dtypes and read orders in the notes were checked on the pinned tiny checkpoint (8 experts, top 2) in
-#: float32 and bfloat16; the sizes come from A13B's config and its stored weights' metadata.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

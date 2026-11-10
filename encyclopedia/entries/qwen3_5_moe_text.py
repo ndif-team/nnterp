@@ -17,7 +17,6 @@ CHECKPOINTS = [
 
 #: The vision-language wrapper every checkpoint above is, keyed by its config.model_type. The vision encoder comes from
 #: the checkpoint's vision_config.model_type (encyclopedia/vision/qwen_vit.py); what a config does not say is here.
-#: Shapes and identities were checked on the pinned tiny wrapper; the sizes are the checkpoints' configs.
 WRAPPERS = {
     "qwen3_5_moe": {
         "title": "Qwen3.5-MoE",
@@ -31,9 +30,6 @@ WRAPPERS = {
 #: Set by hues.py (lineage: Qwen).
 PALETTE = {"hue": 313}
 QUIRKS = ["hybrid", "gated-query", "mixture-of-experts", "qk-norm", "partial-rotary", "gain-norm", "multimodal-rotary"]
-
-#: No checkpoint of this family is under 3B parameters, so no real-weight run backs the notes: shapes, identities and
-#: read orders are from the pinned tiny checkpoint (as the text model and as the wrapper), sizes from the configs.
 
 #: The sublayers in forward order. A block draws the mixer it has (``linear_attn`` or ``self_attn``);
 #: every block has the mixture.
@@ -97,10 +93,10 @@ one scalar per token. `shared_expert_output` is that product, the term the mixtu
 `routed_output`; `shared_experts.output` is the expert's output before the gate. Measure or patch the
 shared expert's contribution at `shared_expert_output`.
 
-## The DeltaNet's queries and keys are served once per value head
+## The DeltaNet's queries and keys are copied per value head
 
-The mixer has fewer key heads than value heads, and it repeats the queries and keys up to the value
-heads before the kernel, so `attention_queries` and `attention_keys` are `num_v_heads` wide, adjacent
-heads being copies of one key head (`repeat_interleave`). An edit to one copy reaches only its value
-head; edit every copy of a key head to change it.
+The mixer repeats each key head's query and key up to the value heads before the kernel, so
+`attention_queries` and `attention_keys` have one head per value head, each key head copied into
+consecutive heads. An edit to one copy reaches only its own value head; edit every copy to change the
+key head.
 """

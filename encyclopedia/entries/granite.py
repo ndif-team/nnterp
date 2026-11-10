@@ -73,8 +73,8 @@ out = h + mlp(post_attention_layernorm(h)) * residual_multiplier
 ```
 
 `attention_output` and `mlp_output` are the modules' outputs times `residual_multiplier`, the tensors
-the block adds; decompose, attribute and steer through them. In bfloat16 a write to either rounds
-every position; load in float32 for small edits. On Granite 4.2 the embedding, residual and logit
+the block adds; decompose, attribute and steer through them. In bfloat16 a write to either
+contribution moves the other positions by rounding; load in float32 for small edits. On Granite 4.2 the embedding, residual and logit
 multipliers are 1.
 
 ## The logits are divided by `logits_scaling`, and the embeddings multiplied
@@ -87,6 +87,6 @@ multiplied too, so to set what block 0 reads, edit `layers[0].input`.
 ## The prompt's first token is an attention sink
 
 The tokenizer adds no beginning-of-sequence token, so the prompt's first token takes most of the
-attention and its stream grows far larger than the other positions'. Leave position 0 out of
-activation averages for steering vectors, mean ablation or probes.
+attention and its stream has a norm many times the other positions'. Leave position 0 out of activation
+statistics and steering-vector norms.
 """

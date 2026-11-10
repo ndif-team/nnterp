@@ -13,9 +13,6 @@ CHECKPOINTS = ["ibm-granite/granite-swash-3b-a600m"]
 PALETTE = {"hue": 214}
 QUIRKS = ["scaled-residual-adds", "sliding-window", "sink-scaled-heads", "mixture-of-experts", "embedding-multiplier", "scaled-logits"]
 
-#: Numbers in the notes come from granite-swash-3b-a600m's weights in bfloat16 on an RTX A6000 unless they say
-#: float32; the snippets also ran on the pinned tiny checkpoint and on a copy of it with Granite's multipliers away
-#: from 1.0 and a shared expert (shared_intermediate_size 16).
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

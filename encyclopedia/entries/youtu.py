@@ -14,10 +14,6 @@ CHECKPOINTS = ["tencent/Youtu-LLM-2B-Base", "tencent/Youtu-LLM-2B"]
 PALETTE = {"hue": 334}
 QUIRKS = ["latent-attention", "interleaved-rotary"]
 
-#: Shapes, identities and the rotary order were run on the pinned tiny checkpoint (queries and keys 64 wide,
-#: values 32). Sizes, the scale, tied weights and the tokenizer are the 2B checkpoints', read off their
-#: configs, meta builds and tokenizers; no real weights were run.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

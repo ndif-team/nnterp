@@ -23,10 +23,6 @@ QUIRKS = [
     "partial-rotary",
 ]
 
-#: Every claim in the notes was checked on the pinned tiny checkpoint (4 experts, top 2, block 0 dense),
-#: on a copy of its config with head_dim 8 for the rotary, or read off the listed checkpoints' configs and
-#: tokenizers; no real weights were run.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -70,15 +66,14 @@ STRIP: dict[str, str] = {}
 NOTES = """
 ## The expert weights sum to `routed_scaling_factor`
 
-The router picks the top 8 experts by sigmoid score plus `router.e_score_correction_bias`. The bias
-decides the choice only. `expert_weights` are the chosen sigmoids without it, renormalized and
-multiplied by `routed_scaling_factor`, so a token's weights sum to 2.5 on GLM-4.5, 4.6 and 4.7 and
-to 1.0 on Air. A shared expert runs on every token inside `mlp_output`, which is
-`routed_output + shared_expert_output`.
+The router picks experts by the sigmoid of `router_logits` plus a selection bias,
+`router.e_score_correction_bias`, so the top `router_logits` are not always the chosen experts.
+`expert_weights` are the chosen sigmoids without the bias, renormalized and multiplied by
+`routed_scaling_factor`, so a token's weights sum to 2.5 on GLM-4.5, 4.6 and 4.7 and to 1.0 on Air. A
+shared expert runs on every token inside `mlp_output`, which is `routed_output + shared_expert_output`.
 
-## The tokenizer prepends nothing
+## On GLM-4.7 the chat template ends where a reasoning trace starts
 
-A raw prompt starts at position 0 with its first token, without the `[gMASK]<sop>` the chat template
-writes, so the sink that trained models form at position 0 falls on that token. On GLM-4.7 the
-generation prompt ends in `<think>`, so the next token starts a reasoning trace, not the answer.
+With `add_generation_prompt=True` the template ends the prompt with `<think>`, so a next-token metric
+there measures the start of a reasoning trace, not the answer.
 """

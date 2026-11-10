@@ -13,9 +13,6 @@ CHECKPOINTS = ["moonshotai/Kimi-Linear-48B-A3B-Base", "moonshotai/Kimi-Linear-48
 PALETTE = {"hue": 340}
 QUIRKS = ["hybrid", "latent-attention", "nope-blocks", "mixture-of-experts", "dense-first-blocks"]
 
-#: Every number on this page comes from the reference's config or a run on the pinned tiny checkpoint;
-#: none has been checked on real weights, which are not cached (48B parameters).
-
 
 def load(checkpoint, **kwargs):
     """The page's model, built on the meta device. The reference's tokenizer loads through its remote
@@ -96,8 +93,14 @@ transformers names both mixers `self_attn`. nnterp names the KDA mixer `linear_a
 
 ## The expert weights sum to `routed_scaling_factor`
 
-The router picks experts by their sigmoid plus a selection bias, so the top `router_logits` are not
-always the chosen experts. `expert_weights` are the chosen sigmoids without the bias, renormalized
-and multiplied by `routed_scaling_factor` (2.446), so they sum to it at every token. Every token also
-runs through a shared expert, and `mlp_output` is `routed_output + shared_expert_output`.
+The router picks experts by the sigmoid of `router_logits` plus a selection bias, so the top
+`router_logits` are not always the chosen experts. `expert_weights` are the chosen sigmoids without the
+bias, renormalized and multiplied by `routed_scaling_factor` (2.446), so they sum to it at every token.
+Every token also runs through a shared expert, and `mlp_output` is
+`routed_output + shared_expert_output`.
+
+## `config.head_dim` is a width no value has
+
+The checkpoints' config sets `head_dim` to 72, `hidden_size / num_attention_heads`, the width of no
+served value. `model.head_dim` is `v_head_dim`, 128, the width of `attention_values`.
 """

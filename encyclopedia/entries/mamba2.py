@@ -23,9 +23,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 2}
 QUIRKS = ["mamba2", "one-sublayer-blocks"]
 
-#: Every real-value number below was run on mamba2-130m-hf, routed to the torch kernels, in float32 on an RTX A6000
-#: unless it says bfloat16.
-
 #: One sublayer: the mixer. Its chips are the SSD values, as the nemotron_h page draws them.
 BLOCK = {
     "topology": "sequential",

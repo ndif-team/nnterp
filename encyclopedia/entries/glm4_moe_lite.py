@@ -14,11 +14,6 @@ CHECKPOINTS = ["zai-org/GLM-4.7-Flash"]
 PALETTE = {"hue": 125}
 QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
 
-#: Shapes, identities, read orders, the rotary order and the routing were run on the pinned tiny checkpoint
-#: (block 0 dense, block 1 a mixture of 8 experts, top 2; queries, keys and values 128 wide). Sizes, scales,
-#: the routing settings and the tokenizer are GLM-4.7-Flash's, read off its config, a meta build and its
-#: tokenizer; no real weights were run (the checkpoint has 30B parameters).
-
 #: The sublayers in forward order; a block draws the MLP its ``mlp`` is (dense on block 0, a mixture after).
 BLOCK = {
     "topology": "sequential",
@@ -69,13 +64,9 @@ are `model.qk_head_dim` wide and values `model.head_dim`.
 
 ## The expert weights sum to `routed_scaling_factor`
 
-The router picks the top 4 experts by sigmoid score plus `router.e_score_correction_bias`. The bias
-decides the choice only. `expert_weights` are the chosen sigmoids without it, renormalized and
-multiplied by `routed_scaling_factor`, so a token's weights sum to 1.8. A shared expert runs on every
-token inside `mlp_output`, which is `routed_output + shared_expert_output`.
-
-## The tokenizer adds no beginning-of-sequence token
-
-The sink that trained models form at position 0 falls on the prompt's first token. Leave position 0
-out of activation statistics and steering-vector norms.
+The router picks experts by the sigmoid of `router_logits` plus a selection bias,
+`router.e_score_correction_bias`, so the top `router_logits` are not always the chosen experts.
+`expert_weights` are the chosen sigmoids without the bias, renormalized and multiplied by
+`routed_scaling_factor`, so a token's weights sum to 1.8. A shared expert runs on every token inside
+`mlp_output`, which is `routed_output + shared_expert_output`.
 """

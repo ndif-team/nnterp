@@ -14,10 +14,6 @@ CHECKPOINTS = ["openai/gpt-oss-20b", "openai/gpt-oss-120b"]
 PALETTE = {"hue": 148}
 QUIRKS = ["attention-sink", "sliding-window", "mixture-of-experts", "qkv-bias"]
 
-#: The real checkpoints are 21B and 117B parameters: nothing here ran on real weights. Every identity and
-#: shape in the notes, and every snippet, ran on the pinned tiny checkpoint (2 blocks, 32 experts, top 4);
-#: the sizes are the 20b and 120b configs'.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

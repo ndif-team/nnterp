@@ -17,9 +17,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 307}
 QUIRKS = ["hybrid", "gated-query", "mixture-of-experts", "qk-norm", "partial-rotary", "gain-norm"]
 
-#: No checkpoint of this family is under 3B parameters, so no real-weight run backs the notes: shapes, identities and
-#: read orders are from the pinned tiny checkpoint, sizes from the configs.
-
 #: The sublayers in forward order. A block draws the mixer it has (``linear_attn`` or ``self_attn``); every block of
 #: every checkpoint, and of the pinned tiny, has the mixture.
 BLOCK = {
@@ -69,22 +66,25 @@ BLOCK = {
 STRIP: dict[str, str] = {}
 
 NOTES = """
-## The shared expert is gated per token
+## The shared expert is gated by a sigmoid
 
 ```
 h   = x + mixer(input_layernorm(x))       # linear_attn, or self_attn on every fourth block
-m   = post_attention_layernorm(h)
-out = h + routed_experts(m) + sigmoid(shared_expert_gate(m)) * shared_experts(m)
+y   = post_attention_layernorm(h)
+out = h + experts(y, router(y)) + sigmoid(shared_expert_gate(y)) * shared_experts(y)
 ```
 
-`shared_expert_output` is the gated product, the term the mixture adds, and `shared_experts.output`
-is the expert before its gate. Ablate or patch the shared expert at `shared_expert_output`.
+Every token runs through the shared expert, and the mixture multiplies its output by a sigmoid gate, one
+scalar per token. `shared_expert_output` is that product, the term the mixture adds beside
+`routed_output`; `shared_experts.output` is the expert's output before the gate. Measure or patch the
+shared expert's contribution at `shared_expert_output`.
 
 ## The DeltaNet's queries and keys are copied per value head
 
-The 16 key heads' queries and keys are repeated up to the 32 value heads before the kernel, so
-`attention_queries` and `attention_keys` are 32 heads wide and heads `2j` and `2j + 1` are copies of
-key head `j`. An edit to one copy reaches only its own value head.
+The mixer repeats each key head's query and key up to the value heads before the kernel, so
+`attention_queries` and `attention_keys` have one head per value head, each key head copied into
+consecutive heads. An edit to one copy reaches only its own value head; edit every copy to change the
+key head.
 
 ## The Thinking template ends where a reasoning trace starts
 

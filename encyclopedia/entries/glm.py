@@ -20,9 +20,6 @@ QUIRKS = [
     "interleaved-rotary",
 ]
 
-#: Every claim in the notes was checked on the pinned tiny checkpoint (shapes, identities, the rotary
-#: recomputed exactly) or read off the listed checkpoints' configs and tokenizers; no real weights were run.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [
@@ -45,7 +42,7 @@ BLOCK = {
             "pre_norm": "post_attention_layernorm",
             "contribution": "mlp_output",
             "detail": "fused gate_up_proj: {hidden_size} → 2 × {intermediate_size} → {hidden_size}, {hidden_act}",
-            "pre_norm_note": "The MLP's input norm, as on Llama.",
+            "pre_norm_note": "The MLP's input norm, named for its place after the attention's add.",
         },
     ],
 }

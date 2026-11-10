@@ -16,10 +16,6 @@ CHECKPOINTS = ["jetmoe/jetmoe-8b", "jetmoe/jetmoe-8b-sft"]
 PALETTE = {"hue": 133}
 QUIRKS = ["attention-experts", "mixture-of-experts"]
 
-#: The real checkpoints are 8B parameters: nothing here ran on real weights. Every identity and shape in
-#: the notes, and every snippet, ran on the pinned tiny checkpoint (2 blocks, 4 experts, top 2, 2 key/value
-#: heads); the sizes are jetmoe-8b's config.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

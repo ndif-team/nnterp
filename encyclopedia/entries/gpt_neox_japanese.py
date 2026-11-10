@@ -51,6 +51,6 @@ NOTES = """
 ## The prompt's first token is an attention sink
 
 The tokenizer adds no beginning-of-sequence token, so the prompt's first token takes most of the
-attention and its stream grows far larger than the other positions'. Leave position 0 out of
-activation statistics and of the norms you scale a steering vector by.
+attention and its stream has a norm many times the other positions'. Leave position 0 out of activation
+statistics and steering-vector norms.
 """

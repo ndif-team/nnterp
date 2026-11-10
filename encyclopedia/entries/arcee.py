@@ -16,11 +16,6 @@ CHECKPOINTS = [
 PALETTE = {"hue": 235}
 QUIRKS = ["squared-relu"]
 
-#: Every checkpoint is 4.5B parameters, above the size a real run here allows, so no real weights were run:
-#: shapes, identities and the activation ran on the pinned tiny checkpoint (whose hidden_act is gelu; the
-#: activation note loads it with hidden_act="relu2"), the activation class on a meta build of AFM-4.5B-Base,
-#: and the rest is read off the configs and tokenizers.
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

@@ -21,10 +21,6 @@ QUIRKS = [
     "sliding-window", "mixture-of-experts", "unnormalized-routing",
 ]
 
-#: The real numbers in the notes are ZAYA1-8B's parameters, read from its safetensors (and ZAYA1-74B-preview's
-#: balancing_biases and qk_norm.temp); no ZAYA1 checkpoint was run (the smallest has 8B parameters). Every snippet
-#: ran on the pinned tiny checkpoint with its merges moved off their initial values (tests/families/test_zaya.py).
-
 BLOCK = {
     "topology": "sequential",
     "sublayers": [

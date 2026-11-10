@@ -207,9 +207,11 @@ differences [below](#on-the-vllm-engine).
 
 Assignment reaches the model on every family. An in-place edit does too, except where the
 value is a split view of one fused tensor and torch refuses it as it does GPT-2's queries
-(`RuntimeError: Output 0 of Select is a view and is being modified inplace`): CodeGen's,
-DBRX's and GPT-NeoX's queries and keys, JetMoE's keys, and latent attention's shared rope
-key. Assign there, or edit under `torch.no_grad()`.
+(`RuntimeError: Output 0 of Select is a view and is being modified inplace`): DBRX's and
+GPT-NeoX's queries and keys, CodeGen's on a checkpoint with one head per `mp_num` group of
+four (the tiny test checkpoint; every released CodeGen has more, and takes the edit),
+JetMoE's keys, and latent attention's shared rope key. Assign there, or edit under
+`torch.no_grad()`.
 
 ### `rotate` and the positions it is given
 

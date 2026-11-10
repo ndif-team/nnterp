@@ -81,7 +81,7 @@ BLOCK = {
                 "attention_scores", "attention_probabilities", "attention_head_outputs",
             ],
             "detail": "{num_heads} query heads over {num_kv_heads} key/value heads, head_dim {head_dim}; "
-                      "scores softcapped at {attn_logit_softcapping} under eager",
+                      "scores softcapped at {attn_logit_softcapping}",
             "variants": {
                 "sliding_attention": "sliding window of {sliding_window} tokens",
                 "full_attention": "full causal attention",

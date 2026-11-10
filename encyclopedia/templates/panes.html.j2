@@ -168,8 +168,8 @@ The slider picks a block, each tick's color gives its block's shape, and the dia
   <div class="prose">
     <h2>The {{ c.tower.title }} vision encoder</h2>
     {{ c.tower.notes }}
-    <h2>{{ c.tower.wrapper }}</h2>
-    {{ c.tower.wrapper_notes }}
+    {% if c.tower.wrapper_notes %}<h2>{{ c.tower.wrapper }}</h2>
+    {{ c.tower.wrapper_notes }}{% endif %}
   </div>
   {% if c.vision_quirks %}
   <aside class="quirk-list">

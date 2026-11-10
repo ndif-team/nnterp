@@ -217,9 +217,9 @@ Use them when one trace reads or edits values at several sites in an order the c
 decides: a helper that takes a list of `(value, block)` sites, a sweep that patches several
 values per block, a port of code that hooked modules in its own order. Sort the sites by
 `rank` before the trace and issue them in that order, instead of keeping a hand-written
-table of what comes first; that table differs per family (Falcon's keys and values come after
-its queries where the call has a key/value cache and its values first where it has none, and
-a mixture's shared expert runs first on some families and last on others). When a plain trace raises `OutOfOrderError`, or a list read under `tracer.iter`
+table of what comes first; that table differs per family (on Falcon without alibi the values
+come before the queries, and a mixture's shared expert runs first on some families and last
+on others). When a plain trace raises `OutOfOrderError`, or a list read under `tracer.iter`
 comes back shifted by one step ([generation](generation.md#read-order-within-a-step)),
 compare the ranks of the reads involved.
 

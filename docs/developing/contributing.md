@@ -172,7 +172,7 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
   `Address.order` becomes `model.order()` / `model.rank(name, layer)`, read
   off one probe run per model and block shape (`nnterp/order.py`: a `scan` on
   a model not yet dispatched, a `trace` on a dispatched one), so a
-  family's quirk (Falcon's keys and values after its queries) is in the ranks
+  family's quirk (Falcon's values before its queries) is in the ranks
   without anyone writing it down (§2a "Forward-order"). The probe runs on
   `StandardizedTransformer`; `StandardizedVLLM` answers from a weightless
   `StandardizedTransformer` of the same checkpoint.

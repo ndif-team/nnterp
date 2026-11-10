@@ -216,12 +216,10 @@ exists.
   for the queries, `select=1` keys, `select=2` values.
 - `output` with `select=i` is one element of a returned tuple. BLOOM's `_reshape`
   returns `(query, key, value)`, so its family reads
-  `EProperty("source.self__reshape_0.output", select=0)` for the queries; its forward
-  then updates the cache, `layer_past.update(key, value)`, which returns every position's
-  keys and values, and the keys and values are that call's `select=0` and `select=1`
-  where the call has a cache, `_reshape`'s `select=1` and `select=2` where it has none
-  (`nnterp.components.by_cache` gives the key and the select). Falcon's queries and keys
-  are `apply_rotary_pos_emb_0`'s two returns where it has none.
+  `EProperty("source.self__reshape_0.output", select=0)` for the queries and
+  `select=1`, `select=2` for the rest; Falcon's queries and keys are
+  `apply_rotary_pos_emb_0`'s two returns, and its values the `value_layer_0` binding just
+  before it.
 
 The element handed back is the object the call holds, so in-place edits reach the model;
 a transform is there for a value whose stub returns a copy.

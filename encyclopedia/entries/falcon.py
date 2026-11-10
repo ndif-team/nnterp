@@ -208,24 +208,20 @@ rows = fused.view(*fused.shape[:2], model.num_heads + 2, model.head_dim)    # th
 torch.testing.assert_close(rows[:, :, -1:].transpose(1, 2), v)
 ```
 
-## The keys and values are the cache update's, after the queries
+## Without ALiBi, read the values before the queries and keys
 
-The attention does its own arithmetic and updates the cache itself. On the rotary checkpoints the
-queries are the rotary embedding's first return; where the call has a cache (every call but
-`use_cache=False`) the keys and values are what `layer_past.update` returns, every position so
-far, so on a decode step of `generate` they span the prompt and the steps, as on any family.
-Inside one trace read the queries first:
+The attention does its own arithmetic. On the rotary checkpoints the queries and keys are the two
+returns of the rotary embedding, and the values are bound before it, so inside one trace read
+`attention_values` first. Asking for the queries or keys first raises `OutOfOrderError` naming
+`value_layer_0`.
 
 ```python
 attn = model.layers[1].self_attn
 with model.trace(prompt):
+    v = attn.attention_values.save()       # binds first
     q = attn.attention_queries.save()
-    k = attn.attention_keys.save()         # the cache update's return
-    v = attn.attention_values.save()
+    k = attn.attention_keys.save()
 ```
-
-Without a cache they are the new tokens' own: the rotary's second return and the `value_layer`
-binding, which comes before the rotary, so there read `attention_values` first.
 
 Rotary turns the whole head in `rotate_half` pairs, with `rope_theta` 10000 on 7B and 500042 on
 11B. The pattern is the softmax's output (no dropout follows it), and the head outputs are the
@@ -250,9 +246,8 @@ model = StandardizedTransformer("tiiuae/falcon-7b", attn_implementation="eager")
   per key/value head on 40B.
 - Falcon-RW (`tiiuae/falcon-rw-1b`, `falcon-rw-7b`) is sequential, with `input_layernorm` and
   `post_attention_layernorm`, biased projections, and ALiBi in place of rotary. Its fused
-  projection is laid out by head, `[q_h | k_h | v_h]`. With ALiBi read the queries first, then
-  the keys and values (the cache update's return, or without a cache the `key_layer` and
-  `value_layer` bindings, in that order); values first raises `OutOfOrderError` naming
+  projection is laid out by head, `[q_h | k_h | v_h]`. With ALiBi the read order is the forward's:
+  queries, then keys, then values; values first raises `OutOfOrderError` naming
   `query_layer_0`. The head outputs are read once `_merge_heads` has merged them, since the
   product before it is flattened over batch and heads.
 - On an ALiBi checkpoint the eager attention adds the bias twice: transformers builds it into the

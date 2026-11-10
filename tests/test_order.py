@@ -71,15 +71,15 @@ def test_a_name_that_is_no_value(llama):
         llama.rank("self_attn.nothing", 0)
 
 
-def test_falcon_keys_and_values_come_after_the_rotary():
-    """With a cache, which the probe's call has, Falcon's keys and values are the cache update's return, after the rotary."""
+def test_falcon_values_come_before_queries_and_keys():
     model = StandardizedTransformer("Rocketknight1/tiny-random-falcon-7b", attn_implementation="eager")
     order = model.order(0)
-    # The rotary's arguments and returns: the queries and keys before it, then the rotated queries, then the update's.
-    assert order["layer_input"] < order["self_attn.attention_queries_prerope"] == order["self_attn.attention_keys_prerope"]
+    assert order["self_attn.attention_values"] < order["self_attn.attention_queries"] == order["self_attn.attention_keys"]
+    # The rotary's arguments and returns: the queries and keys before it, then the rotated ones.
+    assert order["self_attn.attention_values"] < order["self_attn.attention_queries_prerope"] == order["self_attn.attention_keys_prerope"]
     assert order["self_attn.attention_keys_prerope"] < order["self_attn.attention_queries"]
-    assert order["self_attn.attention_queries"] < order["self_attn.attention_keys"] == order["self_attn.attention_values"]
-    assert model.rank("self_attn.attention_queries", 0) < model.rank("self_attn.attention_values", 0)
+    assert order["layer_input"] < order["self_attn.attention_values"]
+    assert model.rank("self_attn.attention_values", 0) < model.rank("self_attn.attention_queries", 0)
 
 
 def test_hybrid_orders_per_block_shape():

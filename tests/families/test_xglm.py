@@ -17,6 +17,15 @@ class TestXGLM(FamilySuite):
     MLP_NORM = "final_layer_norm"            # the block's own, native name
     EXPECTED_UNAVAILABLE = {**NO_ROTARY, "mlp_input": "no mlp module", "self_attn.interface": OWN_ARITHMETIC}
 
+    def test_interior_per_invoke(self, model):
+        """The queries, scores, pattern and head outputs are read where the batch leads; the keys and values are not (below)."""
+        super().test_interior_per_invoke(model, values=("attention_queries", "attention_scores", "attention_probabilities", "attention_head_outputs"))
+
+    @pytest.mark.parametrize("name", ["attention_keys", "attention_values"])
+    @pytest.mark.xfail(strict=True, reason="the keys and values are served off the [batch * num_heads, ...] tensors after the cache update, which nnsight narrows to no invoke: each invoke reads the whole batch")
+    def test_keys_and_values_per_invoke(self, model, name):
+        super().test_interior_per_invoke(model, values=(name,))
+
     def test_no_mlp_module(self, model):
         """No block has an MLP module, so `support()` lists no ``mlp`` value at all."""
         assert not hasattr(model.layers[0], "mlp")

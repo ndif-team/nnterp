@@ -56,7 +56,7 @@ from pygments.lexers import PythonLexer  # noqa: E402
 import nnterp  # noqa: E402  (import nnterp before any transformers.models module)
 from nnterp import StandardizedTransformer, Unavailable  # noqa: E402
 from nnterp.components import Layer, Moe, RecurrentMixer, Residual, Standard  # noqa: E402
-from nnterp.components.attention import CACHE_CASES, attention_call  # noqa: E402
+from nnterp.components.attention import attention_call  # noqa: E402
 from nnterp.components.eproperty import DerivedEProperty, layout_name  # noqa: E402
 from nnterp.components.moe import SHARED_NAMES  # noqa: E402
 from nnterp.components.standard import values as class_values  # noqa: E402
@@ -245,14 +245,6 @@ def value_rows(host: Any, expr: str, peers: list[tuple[int, Any]] | None = None)
         if isinstance(value, DerivedEProperty):
             # computed at the read from other values (a Mamba-1 mixer's betas, the state after every token)
             where = "computed from other values read in the same call"
-        elif getattr(getattr(value, "locate", None), "by_cache", False):
-            # a key the call decides by whether it has a key/value cache (`by_cache`: the keys and values of an
-            # attention that updates the cache in its own forward): each case's location, once where they agree
-            cases = [((value.locate(host, cache=c), select(host, cache=c) if callable(select) else select), phrase)
-                     for c, phrase in CACHE_CASES]
-            (key, select), _ = cases[0]
-            if cases[0][0] != cases[1][0]:
-                where = "; ".join(f"{humanize_key(*at)} {phrase}" for at, phrase in cases)
         elif getattr(value, "locate", None) is not None and not isinstance(host, RecurrentMixer):
             # a key function of the checkpoint: the tower's scatter (image_features, wherever the family keys it), a
             # config's branch (Falcon's alibi, its 40B norms), the block (OLMo-Hybrid's post-norm blocks). It is

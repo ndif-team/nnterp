@@ -30,6 +30,15 @@ holds on a sequential block and a parallel block alike:
 layers[i].input + attention_output + mlp_output == layers[i].layer_output
 ```
 
+A recurrent mixer's `linear_attn.attention_output` takes the attention's place (both mixers
+add on Falcon-H1), a one-sublayer block (Mamba, Nemotron-H) has its one term, and OPT and
+XGLM, which have no MLP module, add `layers[i].fc2.output`. The families whose blocks scale
+the stream or carry several streams have a formula of their own
+([below](#where-the-families-differ): Gemma-4, Doge, ZAYA, DeepSeek-V4). On GraniteMoE-SWA with
+a shared expert (granite-swash-3b-a600m) the identity misses a term: `mlp_output` is the routed
+mixture times `residual_multiplier` and leaves out the block's `shared_mlp`, which the block adds
+beside it ([mixture-of-experts](mixture-of-experts.md)).
+
 `layers[i].layer_input` is the same tensor as `layers[i].input` under a standard name: the
 stream entering the block. On the vLLM engine, where a block is not called with the stream,
 it is the only spelling that works ([vllm](vllm.md)).
@@ -38,7 +47,7 @@ Raw nnsight `.output` on the same modules does not have that meaning everywhere:
 may return a tuple, an attention module returns `(attn_output, attn_weights)`, a sandwich
 block adds a norm's output rather than the module's, and some modules add the residual
 inside. The three values put the same thing at the same name on every family, and the
-per-family test suite checks the identity on each.
+per-family test suite checks the identity on each family's pinned checkpoints.
 
 ## Canonical pattern
 
@@ -137,7 +146,13 @@ input or output of one of its modules, and each a standard value on the block:
 After the last block the model has two more, on the root: `final_norm_output` (`norm.output`,
 the stream the head projects) and `lm_head_output` (`lm_head.output`, the head's logits before
 a softcap or scale; `logits` is the model's own output). All are `Residual` but
-`lm_head_output`, which is `Logits`; all take assignment and in-place edits.
+`lm_head_output`, which is `Logits`; all take assignment and in-place edits. Each is the input
+or output of one call, and an assignment replaces it for that call: `layer_mid` is the pre-MLP
+norm's input (the MLP's, on a post-norm block), and the block binds that stream to its residual
+before the call (Llama's `residual = hidden_states`; Gemma's sandwich and OLMo-2's post-norm block
+the same), so an assignment changes what the MLP reads while the residual add keeps the old
+stream: `layer_output` becomes `old layer_mid + mlp_output`. An in-place edit
+(`layer_mid[:] = ...`, `+=`) changes the one tensor both hold, so it moves the stream.
 
 ```python
 with model.trace(prompt):
@@ -152,7 +167,11 @@ They are keyed on the aliased norms, so they describe the pre-norm block; the pe
 suite checks `layer_mid == layer_input + attention_output` and the norm outputs against the
 sublayers' inputs wherever a family serves them. A block built otherwise has its family
 point a value at its own module or mark it unavailable with the reason: a parallel block
-(GPT-J, GPT-NeoX with `use_parallel_residual`) has no stream between the sublayers, a
+(GPT-J, GPT-NeoX with `use_parallel_residual`) has no stream between the sublayers, and where
+one norm feeds both sublayers (GPT-J, CodeGen, Phi, Cohere, Falcon-7B, StableLM with
+`use_parallel_residual`) `mlp_norm_output` is that norm's output, the tensor `attention_norm_output`
+is: it is read before the attention, a write to either reaches both sublayers, and `mlp_input`,
+the MLP's own argument, is the place to edit what the MLP alone reads; a
 sandwich block (Gemma-2/3/4, and Gemma-4's vision blocks) norms the MLP's input in
 `pre_feedforward_layernorm`, a post-norm block (OLMo-2) has no pre-norm outputs and its
 `layer_mid` is `mlp.input`. A state-space block (Mamba, Mamba-2) is a norm and one mixer:
@@ -194,11 +213,14 @@ Three shapes of block put the contribution somewhere other than the module's own
 and the family's `Attention` or `Mlp` subclass points the value at the right place, so the
 name means the same thing everywhere. Contrast each with the raw `.output`:
 
-**Sandwich norms (Gemma-2, Gemma-3, Gemma-4, OLMo-2, OLMo-3, EXAONE-4, FlexOlmo).** The block adds
+**Sandwich norms (Gemma-2, Gemma-3, Gemma-4, GLM-4, AFMoE, HyperCLOVA X with `use_post_norm`;
+OLMo-2, OLMo-3, EXAONE-4, FlexOlmo and OLMo-Hybrid's attention blocks, which have no pre-norm).** The block adds
 `post_attention_layernorm(attn(...))` and `post_feedforward_layernorm(mlp(...))`. What
 reaches the residual stream is the post-norm's output, so `attention_output` is
 `post_attention_layernorm.output` and `mlp_output` is `post_feedforward_layernorm.output`
-(an `EProperty` keyed `"../post_attention_layernorm.output"`, the sibling norm):
+(an `EProperty` keyed `"../post_attention_layernorm.output"`, the sibling norm). GLM-4 names
+them `post_self_attn_layernorm` and `post_mlp_layernorm`, AFMoE's MLP norm is `post_mlp_layernorm`,
+and HyperCLOVA X's `post_norm1` / `post_norm2` outputs are served times `residual_multiplier`:
 
 ```python
 model = StandardizedTransformer("google/gemma-2-2b", dispatch=True)
@@ -324,6 +346,14 @@ blocks with that in mind; nnterp computes nothing for it. On a mixture-of-expert
 then their sum, and `mlp_output` is that last norm's output, while `mlp.output` is the dense
 MLP alone.
 
+On E2B and E4B `layer_output` is not all that later blocks read from earlier ones: every block
+also reads its per-layer input (the block's second argument, `layers[i].inputs[0][1]`, computed
+once from the token ids before block 0), and the KV-sharing blocks attend with the keys and
+values of a source block (13 and 14 on E2B). A write to `layer_output` never reaches the
+per-layer inputs, and reaches the borrowed keys and values only from a block before the source
+block, so a stream patched in from another prompt is not the whole state
+([activation-patching](../patterns/activation-patching.md#gotchas)).
+
 **Doge and ZAYA: the stream is rescaled too.** Two families scale the residual the block
 carries, not only what it adds, so the identity carries the block's parameters as Gemma-4's
 carries its scalar. Doge gates the stream per channel and adds the modules' outputs
@@ -390,6 +420,12 @@ stream space. The plain `input + attention_output + mlp_output` is not the outpu
 adds `[batch, seq, hidden_size]` to `[batch, seq, streams, hidden_size]`, which raises a shape error
 at most prompt lengths and broadcasts silently into a wrong tensor when the prompt is one
 token or exactly `hc_mult` tokens long.
+
+Besides the streams, the first `num_hash_layers` blocks (3 on the released configs) read the
+token ids: their mixtures pick the experts by token id (`hash_moe`). A write to `layer_output` before
+the last of them leaves the hash blocks after it routing by the run's own ids, so a stream
+patched in from another prompt there is not the whole state the later blocks read
+([activation-patching](../patterns/activation-patching.md#gotchas)).
 
 ## Gotchas
 

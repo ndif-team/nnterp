@@ -104,6 +104,14 @@ Negative indices count from the end. A skip must cover every row of a forward, s
 this goes in a trace of its own rather than in one invoke of a batched trace (see
 Gotchas).
 
+A skip removes the block, which is more than its terms on two families. Gemma-4 ends each
+block by scaling the whole stream by `layer_scalar` (0.005 to 0.99 on the released
+weights), so a skip also drops that rescaling; to remove only the terms, hand on the stream
+times the scalar (`layers[i].skip_with(layers[i].layer_input * layers[i]._module.layer_scalar)`),
+or zero `attention_output`, `mlp_output` and `per_layer_output`. On Qwen3-VL with an image, the
+skipped blocks' `deepstack_output` is still added at the image positions
+([methods](../usage/methods.md#skip_layersstart-end-skip_withnone)).
+
 ### One head
 
 The per-head outputs before the output projection are

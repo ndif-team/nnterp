@@ -80,6 +80,27 @@ Skipping needs the block's `input` to be read, so `skip_layers` reads it; a seco
 `layers[start].input` after the call is out of order. Read `layers[start - 1].layer_output`
 before the call instead, as above.
 
+Two families do something to the stream outside the blocks' terms, and a skip does not remove
+only the terms there:
+
+- **Gemma-4** ends each block with `hidden_states *= layer_scalar`, which scales the incoming
+  stream as well as the block's terms, so a skipped block also drops that rescaling (`layer_scalar`
+  is 0.005 to 0.99 on the released weights). To remove only the block's terms, hand on the
+  stream times the block's scalar, which equals zeroing `attention_output`, `mlp_output` and
+  `per_layer_output`:
+
+  ```python
+  with model.trace(prompt):
+      layer = model.layers[i]
+      layer.skip_with(layer.layer_input * layer._module.layer_scalar)
+      logits = model.logits.save()
+  ```
+- **Qwen3-VL** (and Qwen3-VL-MoE), with an image in the prompt: the text model adds the
+  DeepStack features at the image positions after each of the first blocks whether the block ran
+  or was skipped, so `layers[end + 1].input` is the stream entering `start` plus the skipped
+  blocks' `deepstack_output` there. Zero `layers[k].deepstack_output` for the skipped `k` to
+  skip those too.
+
 ## `steer(layers, vector, factor=1.0, token_positions=None, batch_index=None)`
 
 Adds `factor * vector` to `layer_output` of each block in `layers`, in place, so it reaches
@@ -144,6 +165,11 @@ take it as it is:
 - **`steer`** adds in place on `layer_output[rows, cols]`, `[..., streams, hidden_size]`: a
   `[hidden_size]` vector broadcasts over the streams, adding `factor * vector` to every stream
   (and so to their mean); a `[streams, hidden_size]` vector steers each stream by its own row.
+  Each sublayer and the readout (`hc_head`) read a weighted sum of the streams with weights that
+  need not sum to one, so a vector added to every stream reaches them multiplied by that sum
+  (between 0 and `hc_mult`; about 2 at block 5 of the pinned tiny checkpoint): a factor tuned on a
+  one-stream family does not carry over. Scale it against the collapsed input the next sublayer
+  reads (`layers[i + 1].attn_hc.output[2]`).
 - **`project_on_vocab`** is the family's: it collapses the streams with the model's own
   `hc_head` (a learned, content-dependent weighting), then `norm` and `lm_head`, which is
   how the model makes its logits, so on the last block it equals `logits` exactly. It

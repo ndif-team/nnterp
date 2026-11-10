@@ -206,6 +206,7 @@ the heads:
 | families | what `per_head.sum(2)` equals |
 | --- | --- |
 | Granite, GraniteMoE(-Shared, -Hybrid), Granite-SWA, GraniteMoE-SWA | `projection.output`; `attention_output` is that times `config.residual_multiplier` (0.22 on granite-3.0-1b-a400m) |
+| Falcon-H1 | `projection.output`; `attention_output` is that times `config.attention_out_multiplier` (0.0375 on the pinned tiny checkpoint, 1.0 on Falcon-H1-Tiny-90M); the MLP's output likewise reaches the stream times `mlp_multipliers[1]`, so a split of `mlp_neurons` through `down_proj` is `mlp_output` divided by it |
 | the post-norm families: Gemma-2/3/4, OLMo-2/3, EXAONE-4, FlexOlmo, GLM-4, OLMo-Hybrid's attention blocks; HyperCLOVA X (its post-norm, then `residual_multiplier`) | `projection.output`, the pre-norm output; the norm is not linear, so the split is of that, not of the contribution |
 | Qwen3-Next, Qwen3.5, Qwen3.5-MoE (a sigmoid gate from `q_proj`), Laguna (a softplus gate, `g_proj`), AFMoE (a sigmoid gate, `gate_proj`, then a post-norm) | neither: the gate multiplies the heads after `attention_head_outputs`. Split `attention_premix` instead, the gated heads the projection reads; its per-head sum is `projection.output` |
 | BitNet (`attn_sub_norm` before `o_proj`) | neither: the norm mixes the heads, so `attention_premix` is a split of the normed tensor |
@@ -271,6 +272,26 @@ every gate after it: block `i`'s `attention_output` is multiplied by its own
 of every later block. Multiply each term by that vector before the unembedding. ZAYA's merges
 are the same with `residual_scale`, plus a `residual_bias` added to the stream before each scale,
 which enters the sum as one more term per merge ([residual-stream](../usage/residual-stream.md#where-the-families-differ)).
+
+### GraniteMoE-SWA with a shared expert
+
+Where the config sets `shared_intermediate_size` (granite-swash-3b-a600m, 1280), every block
+runs a `shared_mlp` beside the mixture and adds both, times `residual_multiplier`. The family's
+`mlp_output` is the routed mixture's term alone, and `shared_expert_output` reports `"this
+mixture has no shared expert"`, so the plain sum misses the shared expert's term. Add it from the
+block's own module:
+
+```python
+layer = model.layers[i]
+with model.trace(prompt):
+    x = layer.input.save()
+    attn = layer.self_attn.attention_output.save()
+    mlp = layer.mlp.mlp_output.save()
+    shared = layer.shared_mlp.output.save()
+    out = layer.layer_output.save()
+
+torch.testing.assert_close(x + attn + mlp + shared * model.config.residual_multiplier, out)
+```
 
 ### DeepSeek-V4: parallel streams
 

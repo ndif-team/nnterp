@@ -121,9 +121,9 @@ class Attention(Attention):
 
     def value_weight(self, kv_head):
         raise Unavailable(
-            f"{self.path}.value_weight is not available: compressed convolutional attention: half of each value head "
-            "is the previous token's projection (v_proj_delayed), so no slice of one projection maps a position's input "
-            "to its values"
+            f"{self.path}.value_weight is not available: compressed convolutional attention: the first half of the "
+            "key/value heads are v_proj_current's projection of a position's input and the second half v_proj_delayed's "
+            "projection of the previous position's input"
         )
 
     @EProperty(key="output", description="What the attention adds to the residual stream: its output plus the merge's hidden_states_bias, times its hidden_states_scale")

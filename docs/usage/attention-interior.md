@@ -378,8 +378,9 @@ before `o_proj`) a head's OV map is not its whole map; see the table under
 **Where they are refused.** `value_weight` alone is refused on latent attention
 (DeepSeek-V2/V3/V3.2, Kimi-K2/K2.5, GLM-5, GLM-4.7-Flash, Youtu, Kimi-Linear's attention blocks:
 the values come out of a low-rank latent), Gemma-4 (`v_norm` normalizes each head's values after
-the projection) and ZAYA (half of each value head is the previous token's projection); their
-output projection is a plain `o_proj`, so `output_weight` is served. Both are refused, with the
+the projection) and ZAYA (the first half of the value heads are `v_proj_current`'s projection of
+the position's input, the second half `v_proj_delayed`'s of the previous position's); their output
+projection is a plain `o_proj`, so `output_weight` is served. Both are refused, with the
 one reason `self_attn.no_head_weights()` gives, on DeepSeek-V4 (keys and values one normed
 projection, a low-rank output projection), JetMoE (a mixture of attention heads, each expert with
 its own output projection), the default family, a vision tower's attention, a model split

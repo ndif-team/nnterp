@@ -56,7 +56,7 @@ sum to one and are lower-triangular.
 | `attention_queries` | the queries entering the attention interface, after the query projection and, where the family has one, after the rotary embedding | `Queries`: `batch num_heads seq qk_head_dim` |
 | `attention_keys` | the keys entering the interface, after RoPE and before `repeat_kv`, so the head axis is `num_kv_heads` wide under grouped-query attention | `Keys`: `batch num_kv_heads seq qk_head_dim` |
 | `attention_values` | the values entering the interface, before `repeat_kv` | `Values`: `batch num_kv_heads seq head_dim` |
-| `attention_scores` | the scaled, masked scores that enter the softmax | `Pattern`: `batch num_heads query key` |
+| `attention_scores` | the scaled, masked scores that enter the softmax, after the attention softcap where the family has one (Gemma-2's `50 * tanh(x / 50)`; VaultGemma where its config sets `attn_logit_softcapping`) | `Pattern`: `batch num_heads query key` |
 | `attention_probabilities` | the pattern the values are mixed with: the dropout's output after the softmax, in the model dtype, an attention sink's column already dropped | `Pattern`: `batch num_heads query key` |
 | `attention_head_outputs` | what the interface returns, each head's mix of the values, before the reshape to `[batch, seq, hidden_size]` and the output projection | `HeadOutputs`: `batch seq num_heads head_dim` |
 
@@ -211,6 +211,10 @@ value is a split view of one fused tensor and torch refuses it as it does GPT-2'
 DBRX's and GPT-NeoX's queries and keys, JetMoE's keys, and latent attention's shared rope
 key. Assign there, or edit under `torch.no_grad()`.
 
+CodeGen's are split views only where each of its four `mp_num` groups holds one head (the
+pinned tiny checkpoint, 4 heads); on the released checkpoints (16 heads and more) the head
+split copies, and an in-place edit lands.
+
 ### `rotate` and the positions it is given
 
 A rope scaling that adapts to the sequence (`dynamic`, Phi-3's `longrope`) picks its
@@ -221,6 +225,25 @@ sequence and index the result to match a long prompt. Under `generate` the keys 
 rotary on decode step `k` of `tracer.iter` (step 0 is the prompt) are the new token's
 only, at position `n + k - 1` for a prompt of `n` tokens: `attn.rotate(keys, [n + k - 1])`
 is the last row of that step's `attention_keys`.
+
+On an M-RoPE family (Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3-VL-MoE, Qwen3.5, Qwen3.5-MoE) a
+prompt with an image breaks the link between a token's index and its position: the wrapper
+gives the image tokens grid positions in three rows (temporal, height, width), and the text
+after an image resumes at the image's largest position plus one. Token indices then rotate
+wrongly from the image on, and so does `n + k - 1` on a decode step. Pass the positions the
+model passes, the rotary module's second argument, `[3, batch, seq]`, which `rotate` takes as
+they are (on a text-only prompt the three rows are equal and token indices are right):
+
+```python
+with model.trace(prompt, images=[image]):
+    positions = model.layers.parent.rotary_emb.inputs[0][1].save()   # [3, batch, seq]
+    queries = attn.attention_queries_prerope.save()
+    rotated = attn.attention_queries.save()
+
+torch.equal(attn.rotate(queries, positions), rotated)                # True
+```
+
+Under `generate`, read the same input inside the step for a decode step's position.
 
 On a model split tensor-parallel the two values are gathered along their head axis as the
 queries and keys are ([Across GPUs](#across-gpus)), so every rank reads and writes them

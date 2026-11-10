@@ -106,7 +106,8 @@ The share is small on most blocks. On a code prompt its median over heads and qu
 block 0 and between 0.05 and 0.37 in every other block, and its largest value in a block is 0.67
 to 1.00: most queries of most heads write a fraction of what the pattern alone would give. A pattern read as "how much
 this head moves from token j" is `probs * share[..., None]`. An edit to the pattern does not change
-the share, which is computed from the scores; to set what a head writes, edit
+the share, which is computed from the scores; an edit to `attention_scores`, read before both,
+moves the pattern and the share together. To set what a head writes, edit
 `attention_head_outputs`.
 
 ## Eager is the default

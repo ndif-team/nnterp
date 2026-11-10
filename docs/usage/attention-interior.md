@@ -651,7 +651,8 @@ pattern_again = combined.softmax(-1)[..., :-1]                        # equals a
 Granite-SWA's sink is not in the pattern. Its rows sum to one and `softmax(scores)`
 reproduces them; the sink scales each head's output after the values are mixed, so
 `attention_head_outputs` carries it and forcing the pattern does not set what a head
-writes ([families.md](../reference/families.md#attention-sink)).
+writes. The scale is computed from the scores, which are read before it, so a write to
+`attention_scores` moves the pattern and the scale together ([families.md](../reference/families.md#attention-sink)).
 
 ### DeepSeek: multi-head latent attention
 

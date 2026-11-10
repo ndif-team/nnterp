@@ -3,7 +3,7 @@
 import test_granite
 import torch
 from suite import FamilySuite, LLAMA_ROWS
-from test_granite_swa import sink_scaled_head_outputs
+from test_granite_swa import sink_scaled_head_outputs, written_scores_and_head_outputs
 
 from nnterp.families import granitemoe_swa
 
@@ -20,6 +20,12 @@ class TestGraniteMoeSWA(FamilySuite):
         for layer in model.layers:
             expected, heads, probs = sink_scaled_head_outputs(model, layer)
             torch.testing.assert_close(probs.sum(-1), torch.ones_like(probs.sum(-1)))
+            torch.testing.assert_close(heads, expected)
+
+    def test_written_scores_reach_the_share(self, model):
+        """The share is computed from the scores, so a write to them moves it with the pattern."""
+        for layer in model.layers:
+            expected, heads = written_scores_and_head_outputs(model, layer)
             torch.testing.assert_close(heads, expected)
 
 

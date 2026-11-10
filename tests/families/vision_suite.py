@@ -538,20 +538,20 @@ class PixtralSuite(VisionSuite):
             model.vision.image_size
 
 
-def wrapper_of(text_repo, config_class, vision_config, **load):
+def wrapper_of(text_repo, config_class, vision_config, text_overrides=None, **load):
     """A multimodal wrapper around a text family's tiny checkpoint config, random weights, loaded as a module.
 
     For a family whose wrapper has no tiny checkpoint: the wrapper (the class
     ``AutoModelForImageTextToText`` maps ``config_class`` to) is built from the tiny
-    text config and a small ``vision_config`` (an ``out_hidden_size`` of ``None``
-    takes the text width), and handed to `StandardizedTransformer` with the text
-    checkpoint's tokenizer, so the task is text generation and the tree is the
-    wrapper's.
+    text config, with ``text_overrides`` set on it, and a small ``vision_config`` (an
+    ``out_hidden_size`` of ``None`` takes the text width), and handed to
+    `StandardizedTransformer` with the text checkpoint's tokenizer, so the task is
+    text generation and the tree is the wrapper's.
     """
     import transformers
     from transformers import AutoConfig, AutoModelForImageTextToText, AutoTokenizer
 
-    text = AutoConfig.from_pretrained(text_repo)
+    text = AutoConfig.from_pretrained(text_repo, **(text_overrides or {}))
     if "out_hidden_size" in vision_config and vision_config["out_hidden_size"] is None:  # a merger projecting onto the text width
         vision_config = {**vision_config, "out_hidden_size": text.hidden_size}
     config = getattr(transformers, config_class)(text_config=text.to_dict(), vision_config=vision_config)
@@ -605,3 +605,13 @@ class WrapperSuite:
             logits = model.logits.save()
         torch.testing.assert_close(stream + sum(parts), out)
         assert logits.shape[-1] == model.vocab_size
+
+    def test_project_on_vocab_is_the_logit_lens(self, model):
+        """The lens follows the wrapper's own path to its logits, which can differ from the text model's class (a
+        wrapper that drops the text model's scale or softcap), and reads any block."""
+        with model.trace(self.text_input(model)):
+            mid = model.layers[model.num_layers // 2].layer_output.save()
+            last = model.layers[-1].layer_output.save()
+            logits = model.logits.save()
+        torch.testing.assert_close(model.project_on_vocab(last), logits)
+        assert model.project_on_vocab(mid).shape == logits.shape

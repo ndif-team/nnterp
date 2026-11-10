@@ -49,9 +49,29 @@ def _post_norm_checkpoint(repo="hf-internal-testing/tiny-random-OPTForCausalLM")
     return patched
 
 
+def _projected_checkpoint(do_layer_norm_before, repo="hf-internal-testing/tiny-random-OPTForCausalLM"):
+    """The tiny config with ``word_embed_proj_dim`` half of ``hidden_size``, saved with random weights: transformers
+    builds ``project_in`` / ``project_out`` around the stack, as on OPT-350m (512 <-> 1024), and the embedding and
+    the head are the narrower width."""
+    from transformers import AutoConfig, OPTForCausalLM
+
+    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    patched = tempfile.mkdtemp(prefix="opt-projected-")
+    for name in os.listdir(snapshot):
+        if name != "config.json" and not name.endswith((".safetensors", ".bin")):
+            os.symlink(os.path.realpath(os.path.join(snapshot, name)), os.path.join(patched, name))
+    config = AutoConfig.from_pretrained(snapshot)
+    config.do_layer_norm_before = do_layer_norm_before
+    config.word_embed_proj_dim = config.hidden_size // 2
+    torch.manual_seed(0)
+    OPTForCausalLM(config).save_pretrained(patched)
+    return patched
+
+
 class TestOPTPostNorm(TestOPT):
-    """OPT-350m's layout: the norms follow the adds, so the sublayers read the stream itself, the identity does not
-    hold, and transformers builds no final norm (no ``norm``, so no ``final_norm_output`` and no logit lens)."""
+    """The norms follow the adds (OPT-350m's ``do_layer_norm_before`` false), so the sublayers read the stream itself,
+    the identity does not hold, and transformers builds no final norm: no ``norm`` and no ``final_norm_output``, and
+    the logit lens is ``lm_head`` alone."""
 
     REPO = _post_norm_checkpoint()
     NATIVE = {k: v for k, v in TestOPT.NATIVE.items() if k != "norm"}
@@ -69,19 +89,13 @@ class TestOPTPostNorm(TestOPT):
     def test_trace_through_standard_names(self, model):
         pytest.skip("no final norm on this layout")
 
-    def test_skip_layers_hands_the_stream_straight_through(self, model):
-        pytest.skip("no final norm on this layout, so no logit lens to check the skip against")
-
-    def test_project_on_vocab_is_the_logit_lens(self, model):
+    def test_no_norm_module(self, model):
+        """With no final norm, ``norm`` is a module the model lacks: reading it raises as for any, and `support` names the
+        value read there as unavailable; the lens reads the stream without it."""
+        assert model.model.decoder.final_layer_norm is None
         with pytest.raises(AttributeError, match="norm"):
-            model.project_on_vocab(torch.zeros(1, 1, model.hidden_size))
-
-    def test_logits_are_the_models_output(self, model):
-        """The lens half of the base test needs the final norm this layout lacks."""
-        with model.trace(PROMPT):
-            logits = model.logits.save()
-            result = model.output.logits.save()
-        assert torch.equal(logits, result) and logits.shape[-1] == model.vocab_size
+            model.norm
+        assert model.support()["final_norm_output"] == "no norm module on this model"
 
     def test_layer_mid_is_the_normed_sum(self, model):
         assert not model.config.do_layer_norm_before
@@ -89,3 +103,37 @@ class TestOPTPostNorm(TestOPT):
             mid = model.layers[0].layer_mid.save()
             raw = model.layers[0].self_attn_layer_norm.output.save()
         assert torch.equal(mid, raw.reshape(-1, raw.shape[-1]))
+
+
+class ProjectedLayout:
+    """``project_in`` / ``project_out`` around the stack: ``token_embeddings`` is the embedding's output, before
+    ``project_in``, so it is ``word_embed_proj_dim`` wide, not the ``hidden_size`` its ``Residual`` layout names."""
+
+    def test_token_embeddings_are_the_embedding_output(self, model):
+        pytest.skip("token_embeddings is word_embed_proj_dim wide on this layout, not hidden_size")
+
+    def test_values_match_their_annotations(self, model):
+        pytest.skip("token_embeddings is word_embed_proj_dim wide on this layout, not the hidden_size of its Residual layout")
+
+    def test_lens_reads_project_out(self, model):
+        """The lens is the decoder's own path: ``project_out`` after any final norm, then ``lm_head``."""
+        decoder = model.model.decoder
+        with model.trace(PROMPT):
+            resid = model.layers[-1].layer_output.save()
+            logits = model.logits.save()
+        normed = resid if decoder.final_layer_norm is None else decoder.final_layer_norm(resid)
+        torch.testing.assert_close(model.project_on_vocab(resid), model.lm_head(decoder.project_out(normed)))
+        torch.testing.assert_close(model.project_on_vocab(resid), logits)
+
+
+class TestOPT350mLayout(ProjectedLayout, TestOPTPostNorm):
+    """OPT-350m's whole layout: post-norm blocks, no final norm, and ``project_in`` / ``project_out`` between the
+    embedding width and the stream's. The decoder makes its logits as ``lm_head(project_out(h))``, so the lens does."""
+
+    REPO = _projected_checkpoint(do_layer_norm_before=False)
+
+
+class TestOPTProjected(ProjectedLayout, TestOPT):
+    """A pre-norm OPT with ``project_out``: the decoder norms the stream, projects it, and the head reads that."""
+
+    REPO = _projected_checkpoint(do_layer_norm_before=True)

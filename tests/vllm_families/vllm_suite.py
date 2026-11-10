@@ -140,8 +140,10 @@ def transformers_values(repo, skip, load=None):
                 read = nnsight.save({i: value_of(hf.layers[i], name).cpu() for i in served})
             for i in served:
                 layers[i][name] = read[i]
-    with hf.trace(torch.tensor([ids])):
-        final_norm = hf.final_norm_output.cpu().save()
+    final_norm = None  # a checkpoint with no final norm (OPT-350m) has no final_norm_output
+    if support["final_norm_output"] is None:
+        with hf.trace(torch.tensor([ids])):
+            final_norm = hf.final_norm_output.cpu().save()
     scale = layers[middle]["layer_output"].norm(dim=-1).mean().item()
     with hf.trace(torch.tensor([ids])):
         hf.steer(middle, vector, factor=scale)
@@ -258,7 +260,7 @@ class VLLMFamilySuite:
         unavailable = {name for name, reason in support.items() if reason}
         assert unavailable == self.UNAVAILABLE
         for name in ("layer_input", "layer_output", "self_attn.attention_output", "mlp.mlp_output", "final_norm_output", *(f"self_attn.{name}" for name in self.SERVED)):
-            assert support[name] is None, name
+            assert name in self.UNAVAILABLE or support[name] is None, name
 
     def test_order_and_rank_are_transformers(self, model, reference):
         """`order` and `rank` are the transformers model's ranks for every value both engines serve, on the root and
@@ -358,10 +360,13 @@ class VLLMFamilySuite:
                     continue  # transformers does not serve it on this checkpoint
                 close(value, want.reshape(value.shape), tolerance, f"layers[{i}].{name}")  # OPT's transformers rows are flat
                 compared += 1
-        with self.run(model, reference):
-            norm = model.final_norm_output.cpu().save()
-        assert norm.shape == (1, tokens, model.hidden_size)
-        close(norm, reference["final_norm"], self.MODULE_TOLERANCE.get("final_norm_output", self.TOLERANCE), "final_norm_output")
+        if reference["final_norm"] is None:
+            assert model.support()["final_norm_output"] == "no norm module on this model"
+        else:
+            with self.run(model, reference):
+                norm = model.final_norm_output.cpu().save()
+            assert norm.shape == (1, tokens, model.hidden_size)
+            close(norm, reference["final_norm"], self.MODULE_TOLERANCE.get("final_norm_output", self.TOLERANCE), "final_norm_output")
         assert compared, "no module boundary served on both engines"
 
     @pytest.mark.parametrize("name", (*MODULE_VALUES, "final_norm_output"))

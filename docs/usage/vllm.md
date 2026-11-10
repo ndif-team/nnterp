@@ -346,6 +346,15 @@ on a sandwich block (`gemma2`, `gemma3_text`, `afmoe`) the MLP's pre-norm is
 `[1, tokens, hidden_size]` on this engine, where transformers serves the flat rows OPT holds
 there (`FlatResidual`).
 
+A write to `layer_mid`, assigned or in place, replaces the stream between the sublayers on
+every block, as on transformers: the MLP's norm reads it and the block adds the MLP's output to
+it. On a fused block the edit goes back on `hidden_states`, which the norm adds to `residual`
+and returns; a block called with the stream (GPT-2, BLOOM, MPT, OPT, the post-norm families,
+every family on the transformers backend) binds it to `residual` before it calls the MLP's norm,
+so the write is copied into the rows the block holds rather than swapped in (`in_place`). The
+read stays a private copy, so a read saved before the write keeps what it read, unlike on
+transformers.
+
 ### What is unavailable
 
 ```python

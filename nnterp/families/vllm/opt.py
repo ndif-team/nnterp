@@ -62,7 +62,7 @@ class Layer(Layer):
     as every value on vLLM is.
     """
 
-    @Flat("final_layer_norm.input", description="The residual stream after the attention add, [1, tokens, hidden_size]")
+    @Flat("final_layer_norm.input", description="The residual stream after the attention add, [1, tokens, hidden_size]", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 

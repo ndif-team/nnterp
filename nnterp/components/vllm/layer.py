@@ -76,7 +76,7 @@ class Layer(standard.Layer):
     def attention_norm_output(self, value: torch.Tensor) -> Residual:
         return value
 
-    @Flat("post_attention_layernorm.input", batch=on_transformers_backend, unavailable=partial(absent, name="post_attention_layernorm"), description="The residual stream after the attention add, [1, tokens, hidden_size]")
+    @Flat("post_attention_layernorm.input", batch=on_transformers_backend, unavailable=partial(absent, name="post_attention_layernorm"), description="The residual stream after the attention add, [1, tokens, hidden_size]", in_place=True)
     def layer_mid(self, value: torch.Tensor) -> Residual:
         return value
 

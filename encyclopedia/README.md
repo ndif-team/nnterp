@@ -272,6 +272,9 @@ The entry states facts about a family, and each one has a source. Before writing
        add, `final_layer_norm` after the MLP path's, whose output is `layer_output`). It is drawn on the
        stream line under the `⊕`; the next sublayer reads its output. Such a block's identity is not a
        sum, so give `identity`;
+     - `merge`: optional, the native name of a module that is this sublayer's add, whose output is the
+       stream after it (ZAYA's `post_attention_residual_scale`); `layer_mid` is looked for there rather
+       than at the next sublayer's pre-norm input. Nothing more is drawn for it;
      - `parallel_with_next`: optional, `True` on a sublayer of a `"sequential"` block that reads the
        same stream point as the sublayer after it, the two joining the stream at one add (Falcon-H1's
        Mamba-2 mixer and attention, then the MLP). The pair is drawn side by side with one `⊕`, the

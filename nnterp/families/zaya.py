@@ -90,6 +90,17 @@ class Layer(Layer):
 
     returns_tuple = True
 
+    @EProperty("post_attention_residual_scale.output", description="The residual stream after the attention's merge")
+    def layer_mid(self, value) -> Residual:
+        """The stream between the sublayers: the attention's merge's output, float32 whatever the load dtype.
+
+        The block binds it as ``residual`` and calls the MLP's norm on a copy
+        cast to the norm's dtype (bfloat16 on a bfloat16 load), so the norm's
+        input is not the stream there. This is the stream itself: a write,
+        assigned or in place, reaches the norm and the merge after the MLP.
+        """
+        return value
+
 
 class Attention(Attention):
     """ZAYA's attention: the shared eager forward; the block adds its output shifted and scaled by ``post_attention_residual_scale``."""

@@ -23,7 +23,12 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 205}
-QUIRKS = ["scaled-residual-adds", "embedding-multiplier", "scaled-logits"]
+QUIRKS = [
+    # every multiplier is 1.0 on Granite 4.2
+    {"slug": "scaled-residual-adds", "when": lambda config: config.residual_multiplier != 1.0},
+    {"slug": "embedding-multiplier", "when": lambda config: config.embedding_multiplier != 1.0},
+    {"slug": "scaled-logits", "when": lambda config: config.logits_scaling != 1.0},
+]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.

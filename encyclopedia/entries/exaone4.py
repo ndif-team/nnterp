@@ -15,7 +15,14 @@ CHECKPOINTS = [
 
 #: Set by hues.py (no kin, in a gap between lineages).
 PALETTE = {"hue": 182}
-QUIRKS = ["post-norms", "qk-norm", "sliding-window", "nope-blocks"]
+QUIRKS = [
+    "post-norms", "qk-norm",
+    # 32B: three sliding blocks, then a full one without rotary; 1.2B sets no sliding_window and rotates on every block
+    {"slug": "sliding-window",
+     "when": lambda config: config.sliding_window is not None and "sliding_attention" in config.layer_types},
+    {"slug": "nope-blocks",
+     "when": lambda config: config.sliding_window is not None and "full_attention" in config.layer_types},
+]
 
 #: What the visualization draws: the sublayers in forward order, each with its norms,
 #: the standard value that is its contribution, and the values read inside it.

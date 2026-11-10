@@ -23,8 +23,15 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Granite).
 PALETTE = {"hue": 201}
-QUIRKS = ["scaled-residual-adds", "hybrid", "mamba2", "nope-blocks", "mixture-of-experts", "embedding-multiplier",
-          "scaled-logits"]
+QUIRKS = [
+    "scaled-residual-adds",
+    # the H models; the non-H 350M, 1B and Micro are attention with rotary on every block
+    {"slug": "hybrid", "when": lambda config: "linear_attention" in config.layer_types},
+    {"slug": "mamba2", "when": lambda config: "linear_attention" in config.layer_types},
+    {"slug": "nope-blocks", "when": lambda config: config.position_embedding_type != "rope"},
+    {"slug": "mixture-of-experts", "when": lambda config: config.num_local_experts > 0},  # H-Tiny, H-Small, the Tiny previews
+    "embedding-multiplier", "scaled-logits",
+]
 
 BLOCK = {
     "topology": "sequential",

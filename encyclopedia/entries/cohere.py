@@ -22,7 +22,11 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: Cohere).
 PALETTE = {"hue": 174}
-QUIRKS = ["parallel-blocks", "layernorm", "interleaved-rotary", "qk-norm", "scaled-logits"]
+QUIRKS = [
+    "parallel-blocks", "layernorm", "interleaved-rotary",
+    {"slug": "qk-norm", "when": lambda config: config.use_qk_norm},  # Command R+
+    "scaled-logits",
+]
 
 #: What the visualization draws: one input_layernorm whose output both sublayers read (drawn once per branch,
 #: one node), no post-norms; the two contributions join the stream in one add.

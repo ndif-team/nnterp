@@ -18,7 +18,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: DeepSeek).
 PALETTE = {"hue": 322}
-QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
+QUIRKS = ["latent-attention", "interleaved-rotary", "mixture-of-experts", "unnormalized-routing", "dense-first-blocks"]
 
 #: The sublayers in forward order; a block draws the MLP its ``mlp`` is (dense on block 0, a mixture after).
 BLOCK = {
@@ -76,10 +76,8 @@ Every checkpoint extends its context with YaRN, and the attention multiplies the
 `qk_head_dim ** -0.5` times a factor set by `mscale_all_dim`. Recompute `attention_scores` from the
 queries and keys with `self_attn.scaling`.
 
-## The expert weights are not renormalized
+## The 236B models choose experts from a token's best groups
 
-`expert_weights` are the chosen experts' softmax probabilities times `routed_scaling_factor`, so on
-the Lite models, where the factor is 1, a token's weights sum to less than one, and on the 236B
-models they are the probabilities times 16. The 236B models also take a token's experts only from
-its best `topk_group` groups, so the top `router_logits` are not always the chosen experts.
+They take a token's experts only from its best `topk_group` groups, so the top `router_logits` are not
+always the chosen experts.
 """

@@ -23,7 +23,7 @@ CHECKPOINTS = [
 
 #: Set by hues.py (lineage: GPT-NeoX).
 PALETTE = {"hue": 63}
-QUIRKS = ["parallel-blocks", "partial-rotary"]
+QUIRKS = ["parallel-blocks", "partial-rotary", "layernorm"]
 
 #: What the visualization draws: Pythia's parallel block, two pre-norms of the block input,
 #: no post-norms; the two contributions join the stream in one add.

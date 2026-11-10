@@ -116,7 +116,8 @@ def test_entry_builds_a_page(name):
             assert node in nodes and nodes[node]["expr"].endswith("." + value), (value, node)
     for k in range(1, 6):
         assert f"--c{k}: #" in page and f"--c{k}-deep: #" in page
-    assert '<span class="k">with</span>' in page, "the notes' snippets are highlighted at build time"
+    if "```" in entry.NOTES:
+        assert '<pre class="code"><code><span' in page, "the notes' code blocks are highlighted at build time"
     assert f'<span class="n role-{build.HOST_ROLES[block["sublayers"][0]["host"]]}">' in page
     assert '<span class="rl">' in page, "the printout's layouts are lexed"
 

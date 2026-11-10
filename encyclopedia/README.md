@@ -461,50 +461,37 @@ out). `vision.resolve` turns either form into one dict, so the build reads both 
 
 ### The notes
 
-What someone needs to know before running an experiment on this family, that the tables above do
-not already say. Cover, where the family has something to say:
+A note is there because a standard experiment on this family (a logit lens, activation patching, an
+ablation, steering, reading attention patterns or a mixture's routing) gives a wrong or surprising
+result without it. Anything else stays out. A family with a plain block may have one note, or none.
 
-- **The block, in order**: the forward as two or three lines of pseudo-code in a fenced block, and
-  any trap in the native names.
-- **The contributions**: what `attention_output` and `mlp_output` are on this family (the module's
-  output, a post-norm's, a pre-residual tensor, a scaled copy), with the identity as a snippet, and
-  what that means for ablation, steering and attribution.
-- **Loading**: what needs `attn_implementation="eager"` and why; whether the default load runs a
-  different computation than the eager one; kernels to route on a recurrent mixer.
-- **Attention**: grouped-query heads and what an edit to a key/value head reaches, the query scale,
-  masks and windows, softcaps, sinks, anything read at an unusual place.
-- **The readout**: what `logits` is relative to `lm_head.output`, what `project_on_vocab` applies,
-  the final norm's gain, tied weights.
-- **The embeddings**: scaling, position embeddings, whether `token_embeddings` equals
-  `layers[0].input`.
-- **The family's own machinery**: the router and experts of a mixture, a recurrent state, parallel
-  streams, borrowed keys and values, read-order traps.
-- **Resources**: sparse autoencoders or other published interpretability artefacts trained on the
-  family's checkpoints, and which nnterp value their hook point is.
+What clears that bar, where it is true of the family:
+
+- a contribution that is not the module's plain output: a post-norm's output, a scaled or gated copy,
+  a parallel block whose MLP does not read the attention, a residual multiplier;
+- a readout that needs more than the final norm and the head, or logits that are scaled or capped;
+- embeddings that are scaled, or are not the first block's input;
+- attention that changes how a pattern or a head edit is read: grouped-query heads, a sink, a
+  softcap, windows;
+- a mixture whose weights do not sum to one, or a shared expert outside `mlp_output`;
+- a value a reader would expect that is unavailable or means something else here, and what to use;
+- a load option that changes the computation.
+
+What does not: rounding and bit-exactness, read orders and in-place mechanics, config branches no
+released checkpoint takes, facts about the pinned tiny checkpoint, anything the diagram, the ledgers
+or the family's docstring already show, and anything that holds on every family (that is in `docs/`).
 
 Rules:
 
-- Present tense, factual, this family's own facts. No history, no comparisons of quality, no advice
-  that holds for every family (that is in `docs/`).
-- Every claim is checked against the family module, its test file, the transformers source or a run.
-  Shapes, identities and read orders can be checked on the pinned tiny checkpoint; anything about
-  real values (norm scales, sinks, what a scaling does, SAE reconstruction) is checked on the
-  reference checkpoint or another real one whose weights are cached, because a tiny random
-  checkpoint can contradict a true claim (its activations sit below a norm's `eps`, its random norms
-  coincide). A number is one the reference config or a run gives; say which checkpoint it is for
-  when sizes differ (`48.0 on 2B`).
-- A behaviour that holds on every family is not a family fact: generic nnterp advice is in `docs/`,
-  and an nnsight bug is reported, not written into the notes as a trap (a read that fails only on the
-  first trace of a fresh model is one).
-- `##` headings, one per topic, each a statement where possible ("The contributions are the
-  post-norms' outputs"). Paragraphs of two to five sentences.
-- Snippets are short and use the standard names; they are highlighted at build time and each nnterp
-  name takes its role's colour, so write `model.layers[i].self_attn.attention_output`, not an alias
-  of your own. They are illustrative and are not executed, so they must be right as written: run
-  each once against the reference checkpoint, and against the pinned one where it can (a pinned
-  checkpoint has two or a few blocks, so index `layers[1]`, not `layers[8]`). Inside one trace,
-  reads come in forward order: `mlp.output` before `mlp_output` on a post-norm family,
-  `lm_head.output` before `logits`; one edit per trace when the text contrasts two edits.
+- One `##` heading per note, a statement of the fact ("The MLP does not read the attention"), then
+  one to three sentences: what is true, and what it means for an experiment.
+- Present tense, plain words, each fact once. No history, no comparisons of quality.
+- A forward of two to four lines of pseudo-code in a fenced block where the block is unusual. No
+  other code.
+- Every claim is checked against the family module, the transformers source or a run on a real
+  checkpoint: a tiny random checkpoint can contradict a true claim.
+- A number only where the reader needs it (a softcap, a multiplier); say which checkpoint when sizes
+  differ.
 - Inline code for every name, path and config key. Lists rather than Markdown tables: a table
   overflows the page at phone width.
 
@@ -531,7 +518,7 @@ Add `#ckpt=<repo id>` to the URL to render it on another checkpoint, and render 
 - the slider's variants match `config.layer_types`;
 - the values that carry a `⚠` are the ones that need a non-default load or a call before the trace, the
   ones that read `nowhere` are the ones the checkpoint does not have, and no value is missing from the ledgers;
-- the notes' code blocks are highlighted and nothing overflows the page at either width;
+- nothing overflows the page at either width;
 - on a vision-language checkpoint, the vision encoder's block reads in forward order, the image's path has a
   norm node only where the vision encoder has `vision.norm`, and the vision encoder's ledgers, sizes and Vision notes
   are there.

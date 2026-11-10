@@ -275,6 +275,20 @@ def normalized(norm, x, gain):
     return gain.double() * x / (x.pow(2).mean(-1, keepdim=True) + eps).sqrt() + offset
 
 
+def cached_positions(model, block, n: int) -> int:
+    """How many of an ``n``-token prompt's positions a decode step's cache holds at ``block``: all ``n``, or on a block
+    whose cache layer slides (transformers' ``DynamicSlidingWindowLayer``) the last ``sliding_window - 1``."""
+    from transformers import DynamicCache
+
+    index = next(i for i, layer in enumerate(model.layers) if layer is block)
+    try:
+        layer = DynamicCache(config=model.config.get_text_config()).layers[index]
+    except Exception:  # a family with a cache of its own
+        return n
+    window = getattr(layer, "sliding_window", None)
+    return n if window is None else min(n, window - 1)
+
+
 def expert_by_hand(host, x: torch.Tensor, expert: int, weight: torch.Tensor) -> torch.Tensor:
     """``weight * expert(x)`` for one token ``x`` ``[hidden_size]``, computed outside the model.
 
@@ -336,6 +350,9 @@ class FamilySuite:
     #: ``layer_mid == layer_input + the mixers' contributions``: false where a gate scales the stream the block carries (Doge) or a
     #: merge rescales the stream as well as what is added (ZAYA).
     MID_IDENTITY = True
+    #: One invoke's activations reach another invoke's outputs: true where the forward mixes the batch's rows (Doge's
+    #: cross-domain mixture routes each token by product keys taken from other rows of the flattened batch).
+    ROWS_MIX = False
     #: ``attention_premix`` is ``attention_head_outputs``: false where a gate or a norm sits between the heads and the output projection.
     PREMIX_IS_HEAD_OUTPUTS = True
     #: ``mlp_neurons`` is ``mlp_activation * up_proj.output`` on a gated MLP, ``mlp_activation`` on a plain one.
@@ -726,8 +743,9 @@ class FamilySuite:
             out = layer.layer_output.save()
 
         def plain(out, mid, added):
-            """``out == mid + added`` to 16 units of the block's dtype at its scale."""
-            if added is None:
+            """``out == mid + added`` to 16 units of the block's dtype at its scale; not where the MLP's output is not the
+            stream's shape (DeepSeek-V4's parallel streams take it through ``mlp_post``)."""
+            if added is None or added.shape != out.shape:
                 return False
             eps = torch.finfo(out.dtype).eps
             error = (out.double() - mid.double().reshape(out.shape) - added.double()).abs().max().item()
@@ -755,7 +773,7 @@ class FamilySuite:
         if sums_plainly:
             assert plain(result, new, part), "layer_output is not the assigned stream plus the MLP's output"
 
-        if mid.dim() == 3:  # two invokes, both writing; OPT's flattened rows are not split by invoke
+        if mid.dim() >= 3:  # two invokes, both writing; OPT's flattened rows are not split by invoke
             ids = model.tokenizer(PROMPT).input_ids  # token ids: a wrapper's processor may refuse to batch text alone
             batched = {}
             for form in ("assign", "in place"):
@@ -855,8 +873,9 @@ class FamilySuite:
                     assert torch.allclose(sums, torch.ones_like(sums), atol=8 * torch.finfo(probs.dtype).eps, rtol=0)
 
     def test_keys_and_values_under_generate_are_the_cache(self, model):
-        """On a decode step the keys and values are every position so far, what the attention computes with, and the
-        prompt's rows are what the prompt's call served: the cache's, on a family that updates it in its own forward too."""
+        """On a decode step the keys and values are every position the cache holds plus the step's, what the attention
+        computes with, and the prompt's rows are what the prompt's call served: the cache's, on a family that updates it
+        in its own forward too. A sliding-window block's cache holds the prompt's last ``window - 1`` positions."""
         block = self.attn_block(model)
         unavailable = block.self_attn.support()
         names = [name for name in ("attention_keys", "attention_values") if not unavailable.get(name)]
@@ -868,9 +887,10 @@ class FamilySuite:
                 for name in names:
                     read[name].append(getattr(block.self_attn, name).save())
         n = len(model.tokenizer(PROMPT).input_ids)
+        kept = cached_positions(model, block, n)
         for name, (prompt, step) in read.items():
-            assert prompt.shape[-2] == n and step.shape[-2] == n + 1, (name, tuple(prompt.shape), tuple(step.shape))
-            torch.testing.assert_close(step[..., :n, :], prompt, msg=name)
+            assert prompt.shape[-2] == n and step.shape[-2] == kept + 1, (name, tuple(prompt.shape), tuple(step.shape))
+            torch.testing.assert_close(step[..., :kept, :], prompt[..., n - kept:, :], msg=name)
 
     def test_assigned_keys_stay_out_of_the_cache(self, model):
         """An assignment replaces the keys of that one call: the next step's cache holds the keys the model computed."""
@@ -888,8 +908,9 @@ class FamilySuite:
                     read.append(block.self_attn.attention_keys)
             runs.append(read)
         (_, clean), (edited, after) = runs
-        assert not edited.any() and after.shape[-2] == n + 1
-        torch.testing.assert_close(after[..., :n, :], clean[..., :n, :])
+        kept = cached_positions(model, block, n)
+        assert not edited.any() and after.shape[-2] == kept + 1
+        torch.testing.assert_close(after[..., :kept, :], clean[..., :kept, :])
 
     def test_keys_and_values_without_a_cache(self, model):
         """``use_cache=False``: the keys and values are the call's own, the same a call with a cache computes with on a prompt."""
@@ -943,7 +964,8 @@ class FamilySuite:
 
     def test_interior_per_invoke(self, model):
         """Every interior value, under two invokes of one trace: each invoke reads its own row, as one invoke of both
-        does, and an assignment in the first leaves the second's logits as they were."""
+        does, and an assignment in the first leaves the second's logits as they were (not where the forward mixes the
+        batch's rows, `ROWS_MIX`)."""
         attn = self.attn_block(model).self_attn
         unavailable = attn.support()
         names = [name for name in INTERIOR + ("attention_probabilities",) if not unavailable.get(name)]
@@ -972,7 +994,8 @@ class FamilySuite:
                     setattr(attn, name, getattr(attn, name) * 0)
                 with tracer.invoke(prompts[1]):
                     other = model.logits.save()
-            torch.testing.assert_close(other, clean, msg=name)
+            if not self.ROWS_MIX:
+                torch.testing.assert_close(other, clean, msg=name)
 
     def test_written_pattern_moves_the_logits(self, model):
         """A read can be causally inert (weights a mixer merely returns); only a write tells."""

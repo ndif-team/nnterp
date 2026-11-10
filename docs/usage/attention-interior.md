@@ -284,7 +284,7 @@ Four accessors read a head's weights off the modules, outside a trace or inside 
 | `self_attn.value_weight(kv)` | key/value head `kv`'s slice of the value projection: what maps the attention's input to that head's values | `[head_dim, hidden_size]` |
 | `self_attn.output_weight(j)` | head `j`'s slice of the output projection: what maps its output (its slice of `attention_premix`) to the projection's output | `[hidden_size, head_dim]` |
 | `layers[i].attention_input_gain` | the per-channel gain between the stream and what the attention reads: the pre-attention norm's gain, ones on a post-norm block | `[hidden_size]` |
-| `layers[i].attention_output_gain` | the per-channel gain between the output projection's output and what the block adds to the stream: the post-attention norm's gain, ones where the block adds the output unnormed | `[hidden_size]` |
+| `layers[i].attention_output_gain` | the per-channel gain between the output projection's output and what the block adds to the stream: the post-attention norm's gain, ones where the block adds the output unnormed (a scalar multiplier after it, Granite's `residual_multiplier`, is not in it) | `[hidden_size]` |
 
 Use them for anything that multiplies a head's weights rather than reading its activations:
 an OV circuit (`output_weight(j) @ value_weight(kv)`), direct logit attribution per head (head

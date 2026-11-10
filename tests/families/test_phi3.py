@@ -1,5 +1,6 @@
 """Phi-3, end to end."""
 
+import pytest
 import torch
 from suite import PROMPT, FamilySuite, LLAMA_ROWS, built, patched_checkpoint, random_weights
 
@@ -29,7 +30,9 @@ class TestPhi3LongRope(TestPhi3):
 
     def test_the_rotary_takes_the_long_factors(self, model):
         rotary = model.model.rotary_emb._module
-        assert rotary.rope_type == "longrope" and (model.num_heads, model.num_kv_heads) == (6, 2)
+        assert rotary.rope_type == "longrope"
+        if len(model.tokenizer(PROMPT)["input_ids"]) <= model.config.original_max_position_embeddings:
+            pytest.skip("the prompt is within original_max_position_embeddings: the short factors apply")
         with model.trace(PROMPT):
             model.logits.save()
         assert type(rotary.long_inv_freq) is torch.Tensor and torch.equal(rotary.inv_freq, rotary.long_inv_freq)

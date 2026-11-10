@@ -113,6 +113,7 @@ class TestDogeMoe(FamilySuite):
     FAMILY = doge
     NATIVE = LLAMA_ROWS
     MID_IDENTITY = False                     # the residual gates scale the stream the block carries
+    ROWS_MIX = True                          # the mixture routes each token by product keys from other rows of the batch
     EXPECTED_UNAVAILABLE = {"mlp.mlp_activation": "", "mlp.mlp_neurons": ""}  # the mixture's interior: no one activation
 
     def test_contribution_identity(self, model):

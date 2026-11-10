@@ -84,53 +84,15 @@ states[valid]                           # the image's merged patches
 """,
         },
         "notes": """
-## `image_features` is the projector's output without the padded rows
+## The projector reads `vision.tower_output`, padded rows included
 
-`model.projector` is `embed_vision.multimodal_embedder`, and it receives `vision.tower_output`
-itself: `projector.input` is `[images, 280, mm_embed_dim]`, padded rows included. The wrapper
-keeps the rows where `image_position_ids` is not `(-1, -1)` and scatters them, so
-`vision.image_features == projector.output[valid]`, and
-`layers[0].input[vision.image_token_mask] == vision.image_features` holds exactly. On the pinned
-tiny wrapper:
+The wrapper scatters only the image's rows of the projector's output, so a write to `tower_output`
+at an image's rows reaches the text model and at the padded rows reaches nothing.
 
-```python
-valid = (encoding["image_position_ids"] != -1).all(-1)
+## An image's tokens attend to each other in both directions
 
-with model.trace(dict(encoding)):
-    mask = model.vision.image_token_mask.save()
-    projected = model.projector.output.save()
-    features = model.vision.image_features.save()
-    first = model.layers[0].input.save()
-
-torch.equal(projected[valid], features)   # True
-torch.equal(first[mask], features)        # True: the scatter
-```
-
-A write to `tower_output` at an image's rows reaches the text model; at the padded rows it
-reaches nothing.
-
-## One image token per merged patch
-
-An image is as many image tokens as it has merged patches, at most 280. With
-`google/gemma-4-12B`'s processor a square image, 224 × 224 or 2000 × 2000, is 256 image tokens,
-a 1024 × 768 image 266 and a 96 × 48 image 253. Assign one image's features into another's run
-only when the two give the same count.
-
-## Image tokens attend to each other
-
-12B's text config sets `use_bidirectional_attention` to `"vision"`: an image's tokens attend to
-every token of the same image, before and after them, within the window on a sliding block. The
-wrapper builds that mask from the processor's `mm_token_type_ids`, so pass the whole encoding
-(`model.trace(prompt, images=[image])` does). Unlike Gemma 4's 26B-A4B and 31B, the full
-blocks get the same bidirectional image blocks as the sliding ones. The first step of `generate`
-builds the same masks as a trace (with the default dynamic cache), and the steps after it attend
-causally.
-
-## The base checkpoint has no chat template
-
-`google/gemma-4-12B` ships no chat template: put the processor's image token in the prompt
-yourself, `f"{model.processor.image_token} What is this?"`. Audio enters through
-`model.model.embed_audio`, another embedder without blocks, which keeps its native name.
+An image's tokens attend to every token of the same image, later ones included, on the full blocks
+and within the window on the sliding ones.
 """,
     },
 }
@@ -166,8 +128,7 @@ BLOCK = {
                 "sliding_attention": "{sliding_window}-token window, head_dim {head_dim}",
                 "full_attention": "full causal, wide heads, ¼ rotary",
             },
-            "post_norm_note": "As on Gemma 2, 3 and 4, this norm follows the attention. On Llama the same name is the norm before the MLP. "
-                              "layer_mid is the stream after this norm's output is added, which the MLP's pre-norm reads.",
+            "post_norm_note": "Follows the attention here; on Llama the same name is the MLP's pre-norm.",
         },
         {
             "host": "mlp",
@@ -180,111 +141,27 @@ BLOCK = {
         },
     ],
     "identity": "(layers[i].input + self_attn.attention_output + mlp.mlp_output) * layer_scalar == layer_output",
-    "identity_note": "layer_scalar is layers[i]._module.layer_scalar, a per-block buffer. Exact in float32 on the pinned checkpoint.",
+    "identity_note": "layer_scalar is the per-block buffer layers[i]._module.layer_scalar.",
 }
 
 #: Notes on the model-level strip, by node.
 STRIP = {
-    "embed": "embed_tokens multiplies its lookup by √hidden_size, cast to the weight's dtype (61.97 on 12B, 62.0 in bfloat16), "
-             "so token_embeddings is the scaled tensor and equals layers[0].input at every text position.",
-    "layers": "Each block ends by multiplying its sum by layer_scalar (0.005 at block 11 on 12B), so a block's terms reach "
-              "the last stream multiplied by every scalar from there on.",
-    "norm": "Gemma4UnifiedRMSNorm multiplies by norm.weight itself, not 1 + weight.",
-    "head": "lm_head shares its weight with embed_tokens on 12B (tie_word_embeddings).",
-    "logits": "final_logit_softcapping is 30 on 12B: logits is 30 · tanh(lm_head.output / 30), and project_on_vocab applies the cap.",
+    "embed": "Scaled by √hidden_size inside the embedding module, so token_embeddings equals layers[0].input on text.",
+    "layers": "Each block multiplies its whole sum, the incoming stream included, by its layer_scalar.",
+    "logits": "logits = 30 · tanh(lm_head.output / 30), which project_on_vocab applies too.",
 }
 
 NOTES = """
-## The block, in order
+## Each block scales its whole sum by `layer_scalar`
 
 ```
-a   = input_layernorm(x)
-q   = rope(q_norm(q_proj(a)))         # per head
-k   = rope(k_norm(k_proj(a)))         # per head
-v   = v_norm(v_proj(a))               # per head, no gain; k_proj(a) on 12B's full blocks
-h   = x + post_attention_layernorm(o_proj(attend(q, k, v)))      # no 1/√d
+h   = x + post_attention_layernorm(self_attn(input_layernorm(x)))
 h   = h + post_feedforward_layernorm(mlp(pre_feedforward_layernorm(h)))
 out = h * layer_scalar
 ```
 
-Four RMSNorms around the sublayers and three inside the attention. `post_attention_layernorm`
-follows the attention; the MLP's input norm is `pre_feedforward_layernorm`. The block has no
-per-layer branch and no mixture of experts: `per_layer_output` and the mixture's values are not
-values of this family. `layer_scalar` is a buffer, `layers[i]._module.layer_scalar`, applied in
-place.
-
-## The block's sum is scaled; its terms are served unscaled
-
-`attention_output` and `mlp_output` are the post-norms' outputs, before `layer_scalar`. The
-identity is exact in float32 on the pinned checkpoint:
-
-```python
-with model.trace(prompt):
-    x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()
-    mlp = model.layers[1].mlp.mlp_output.save()
-    out = model.layers[1].layer_output.save()
-
-scalar = model.layers[1]._module.layer_scalar
-torch.testing.assert_close((x + attn + mlp) * scalar, out)
-```
-
-A vector added to `mlp_output` reaches `layer_output` multiplied by the block's scalar; one added
-to `layer_output` does not. Block `i`'s terms reach the last stream multiplied by its own scalar
-and every later one, so direct logit attribution weights each term by that product first. The
-scalars are far from one on 12B: block 11's is 0.005.
-
-## Queries, keys and values are normed, and the scores are not scaled
-
-`q_norm` and `k_norm` norm each head before the rotary; `v_norm` norms each value head with no
-gain, so every head of `attention_values` has RMS 1. The attention's `scaling` is 1.0: the scores
-are `q · k` with no `1/√head_dim`, and the norms' gains set the temperature. `attention_queries`
-and `attention_keys` are read after their norms and the rotary.
-
-## Full blocks take their values from the key projection
-
-12B sets `attention_k_eq_v`: its full blocks have no `v_proj`, and their values are
-`v_norm(k_proj(a))`, the keys' projection before `k_norm` and the rotary. An edit to a full
-block's `k_proj` output moves its keys and its values at once; `attention_keys` and
-`attention_values` are served apart and edit apart. Each full block has one key/value head for
-its 16 query heads, so an edit to a full block's `attention_keys` or `attention_values` reaches
-all 16; a sliding block has 8, each serving two.
-
-## Sliding and full blocks differ in width and rotary
-
-`config.layer_types` makes every sixth block full on 12B (5, 11, ..., 47), the last block among
-them; the window is 1024 tokens. Full blocks have 512-wide heads and one key/value head; sliding
-blocks 256-wide heads and 8. The root's sizes are the sliding blocks'; each block's own are on its
-attention:
-
-```python
-model.head_dim, model.layers[5].self_attn.head_dim        # 256, 512 on 12B
-model.num_kv_heads, model.layers[5].self_attn.num_kv_heads  # 8, 1 on 12B
-```
-
-Sliding blocks rotate all 256 dimensions with base 10,000. Full blocks use proportional rotary
-(`partial_rotary_factor` 0.25, base 1,000,000): only a quarter of each head turns, at frequencies
-spaced over the whole head; the other dimensions carry no position.
-
-## The family serves borrowed keys and values; 12B borrows none
-
-The attention is Gemma 4's: on a config with `num_kv_shared_layers` above 0 the last blocks attend
-with an earlier block's keys and values, served as a copy private to the block. 12B sets
-`num_kv_shared_layers` to 0, so every block computes its own. The pinned checkpoint sets 2: its
-blocks 2 and 3 attend with blocks 0's and 1's keys.
-
-## The readout is softcapped, and the norm gain is the weight
-
-`logits` is `30 · tanh(lm_head.output / 30)` on 12B; `project_on_vocab` applies the final norm,
-`lm_head` and the cap, so a lens at the last block reproduces `logits`. The vocabulary is 262,144
-tokens and `lm_head` is `embed_tokens`' weight. `Gemma4UnifiedRMSNorm` multiplies by `weight`,
-not `1 + weight`: folding the final norm into `lm_head` uses `model.norm._module.weight` as it is.
-
-## Every checkpoint is a multimodal wrapper
-
-The released repos are `gemma4_unified` checkpoints: the text-generation task builds
-`Gemma4UnifiedForConditionalGeneration`, nnterp picks this family from `config.text_config`, and
-the text stack sits under `model.model.language_model` with `lm_head` at the root.
-`Gemma4UnifiedForCausalLM` is built only from a `gemma4_unified_text` config, as the suite's tiny
-checkpoint is.
+`attention_output` and `mlp_output` are the post-norms' outputs, before the scalar, and the scalars
+are far from one on 12B. A term's weight in the last stream is the product of its own block's scalar
+and every later one, so direct logit attribution multiplies each term by that product first, and a
+vector added to `mlp_output` reaches `layer_output` scaled by the block's scalar.
 """

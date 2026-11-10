@@ -90,16 +90,14 @@ out = h + mlp(post_attention_layernorm(h)) * residual_multiplier
 `attention_output` and `mlp_output` are the modules' outputs times `residual_multiplier`, the tensors
 the block adds. `expert_outputs` and `routed_output` are read inside the mixture, before the
 multiplier, so one expert's term in the stream is its `expert_outputs` slot times
-`residual_multiplier`.
+`residual_multiplier`. In bfloat16 a write to either contribution moves the other positions by
+rounding; load in float32 for small edits.
 
-## The first token's expert writes a vector of norm in the thousands
+## The first token routes mostly to one expert
 
-The tokenizer adds no beginning-of-sequence token, and the prompt's first token, whatever it is, is
-routed mostly to one expert that writes a vector hundreds of times the norm of the stream elsewhere
-(block 5's expert 4 on granite-3.0-1b-a400m, block 3's expert 11 on granite-3.1-3b-a800m). Leave
-position 0 out of expert-usage counts and ablation sweeps. On granite-3.0-1b-a400m, ablating that
-expert everywhere lowers a factual answer's log-probability by 9.4 nats by removing the first token's
-vector; with position 0 left out, no expert moves it by more than 1.5.
+The tokenizer adds no beginning-of-sequence token, and the prompt's first token routes mostly to one
+expert whose output is far larger than the stream at the other positions. Leave position 0 out of
+expert-usage counts and ablation sweeps.
 
 ## The logits are divided by `logits_scaling`, and the embeddings multiplied
 
@@ -107,11 +105,4 @@ vector; with position 0 left out, no expert moves it by more than 1.5.
 over `lm_head.output` runs at a sixth of the model's temperature. `layers[0].input` is
 `token_embeddings` times `embedding_multiplier`, and embeddings passed as `inputs_embeds` are
 multiplied too, so to set what block 0 reads, edit `layers[0].input`.
-
-## In bfloat16 an edit at one position moves the others
-
-A write to `mlp_output` or `attention_output` reaches the model divided by `residual_multiplier` over
-the whole tensor, which rounds every position in bfloat16. An edit that changes the token's routing in
-a later mixture also changes how the other tokens' expert outputs round, which can move them more
-than the edit moves the edited token. Load in float32 for small edits.
 """

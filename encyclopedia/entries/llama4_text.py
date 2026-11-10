@@ -107,49 +107,10 @@ shuffled.shape[1]                  # 144 on Scout: 576 / 4
 """,
         },
         "notes": """
-## The projector reads the adapter's output, flattened over the tiles
+## The projector reads 144 rows per tile
 
-`model.multi_modal_projector` (the `projector`) is one linear, 4096 to the text model's 5120,
-without a bias. Its input is `vision.vision_adapter`'s output flattened over the tiles,
-`[tiles × 144, 4096]`, so `projector.input` has a quarter as many rows per tile as the tile has
-patches. `vision.image_features` is `model.projector.output`, and
-`layers[0].input[vision.image_token_mask] == vision.image_features` holds exactly. On the pinned
-tiny checkpoint:
-
-```python
-with model.trace(prompt, images=[image]):
-    mask = model.vision.image_token_mask.save()
-    shuffled = model.vision.vision_adapter.output.save()
-    fed = model.projector.input.save()
-    features = model.vision.image_features.save()
-    first = model.layers[0].input.save()
-
-torch.equal(fed, shuffled.flatten(0, 1))     # True: the adapter's rows, tile after tile
-torch.equal(first[mask], features)           # True: the scatter
-```
-
-A write to `vision.tower_output` at the patch rows reaches the adapter and the text model.
-
-## 144 image tokens per tile
-
-`config.image_token_index` is `<|patch|>`: the processor writes 144 of them per tile, with
-`<|tile_x_separator|>` and `<|tile_y_separator|>` between tiles and the global tile's 144 last,
-and `vision.image_token_mask` marks the `<|patch|>` positions only. A 64 × 64 image is one tile
-and 144 image tokens; a 900 × 500 image is a 2 × 3 grid plus the global tile, 7 rows of the
-vision encoder's batch and 1008 image tokens. The count depends on the image's shape: assign one
-image's features into another's run only when the two give the same count.
-
-## The wrapper's own forward scatters
-
-`Llama4ForConditionalGeneration` has no inner model: its own `forward` runs the vision encoder,
-the projector and `inputs_embeds.masked_scatter`, and `vision.image_features` is read at that
-scatter on the root. The text model is `model.language_model`, with `lm_head` under it.
-
-## Load in bfloat16
-
-The image processor returns bfloat16 pixels, and a float32 vision encoder refuses them
-(`expected m1 and m2 to have the same dtype`). Load with `dtype=torch.bfloat16`, or build the
-encoding with `model.processor` and cast `pixel_values` to the model's dtype before the trace.
+`projector.input` is `vision.vision_adapter`'s output flattened over the tiles, so an image's count of
+image tokens depends on how many tiles the processor cuts it into.
 """,
     },
 }
@@ -195,7 +156,7 @@ BLOCK = {
             "pre_norm": "post_attention_layernorm",
             "contribution": "mlp_output",
             "detail": "SwiGLU: {hidden_size} → {intermediate_size_mlp} → {hidden_size}",
-            "pre_norm_note": "The MLP's input norm, as on Llama.",
+            "pre_norm_note": "The MLP's input norm, named for its place after the attention's add.",
         },
         {
             "host": "mlp",
@@ -205,143 +166,23 @@ BLOCK = {
             "contribution": "mlp_output",
             "interior": ["router_logits", "expert_indices", "routed_output", "shared_expert_output"],
             "detail": "{num_experts} experts + shared, top {top_k}",
-            "pre_norm_note": "The mixture's input norm, as on Llama: the router, every expert and the shared expert read its output.",
+            "pre_norm_note": "The mixture's input norm, named for its place after the attention's add.",
         },
     ],
-    "identity_note": "Exact on every block of the pinned tiny checkpoint, dense and mixture. mlp_output is the block's "
-                     ".view(residual.shape) of the feed-forward's output, which a mixture returns flattened to [batch * seq, hidden_size].",
 }
 
-#: Notes on the model-level strip, by node.
-STRIP = {
-    "embed": "A plain lookup with no scale: on a prompt without an image, token_embeddings equals layers[0].input.",
-    "layers": "Every fourth block (3, 7, ..., 47) is a NoPE block attending over the whole context; the others rotate "
-              "queries and keys and attend within chunks of 8192 tokens. Scout has a mixture of experts on every block, "
-              "Maverick on the odd ones.",
-    "norm": "Llama4TextRMSNorm, the gain norm.weight itself, eps 1e-5; project_on_vocab applies it.",
-    "head": "lm_head has its own weight on Scout and Maverick (tie_word_embeddings false); logits is lm_head.output.",
-}
+#: Notes on the model-level strip, by node: none, since nothing happens at the embeddings, the final norm or the head.
+STRIP: dict[str, str] = {}
 
 NOTES = """
-## The block, in order
+## The router scales the expert's input, not its output
 
 ```
-h   = x + self_attn(input_layernorm(x))               # rotary + L2 qk-norm, or NoPE
-f   = feed_forward(post_attention_layernorm(h))       # dense, or (out, router_logits)
-out = h + f.view(h.shape)
+s   = sigmoid(top_1(router_logits))       # 0 for every expert but the chosen one
+out = shared_expert(x) + experts(x * s)
 ```
 
-Llama's pre-norm block with the feed-forward named `feed_forward`, which nnterp calls `mlp`;
-`post_attention_layernorm` is the MLP's input norm. Nothing norms a sublayer's output, and the
-identity is the plain sum on dense and mixture blocks alike, exact on the pinned tiny checkpoint:
-
-```python
-with model.trace(prompt):
-    x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()
-    mlp = model.layers[1].mlp.mlp_output.save()
-    out = model.layers[1].layer_output.save()
-
-torch.equal(x + attn + mlp, out)    # True
-```
-
-## `mlp_output` is the block's view, not the module's output
-
-A mixture returns `(out, router_logits)` with `out` flattened to `[batch * seq, hidden_size]`, and the
-block views it back into the residual's shape before the add. `mlp_output` is read at that view,
-`[batch, seq, hidden_size]` on every block, and an in-place edit of it lands on the mixture's own output
-tensor; `layers[i].mlp.output[0]` is the flat tensor. The view is an operation of the block's
-forward, read after the attention has returned, so nnterp builds the block's `.source` when it
-loads the model.
-
-## Dense and mixture blocks interleave
-
-`interleave_moe_layer_step` places the mixtures (`config.moe_layers`): 1 on Scout, so all 48
-blocks are a `Moe`, and 2 on Maverick, so blocks 1, 3, ..., 47 are a `Moe` and the even blocks a dense
-`Mlp`. The widths are spelled the other way round from most families: the config's
-`intermediate_size` (8192) is each expert's and the shared expert's, and `intermediate_size_mlp`
-(16384) is the dense MLP's, which `model.intermediate_size` reports. On Scout no block uses that
-width. On a dense block every mixture value is missing, with the reason saying so.
-
-## The router takes a sigmoid over the top-1 logit
-
-`num_experts_per_tok` is 1 on both: Scout routes over 16 experts, Maverick over 128, and every
-mixture also runs its shared expert on every token. The router keeps the largest logit, sets the
-others to `-inf` and takes a sigmoid (`SCORING` `"sigmoid"`), so a token's score is between 0 and 1
-for its expert and 0 for the rest. Each expert's *input* is multiplied by its score, every expert
-runs on every token, and the routed sum is added in place to the shared expert's output. nnterp
-serves `router_logits` (the router's projection, `[batch, seq, num_experts]`), `expert_indices` (its
-top 1), `routed_output` (the sum over experts) and `shared_expert_output` (a copy, whose edits are
-carried back). `expert_weights` and `expert_outputs` are unavailable, because the mixture has no
-per-slot weight or per-slot output to read.
-
-```python
-moe = model.layers[1].mlp
-with model.trace(prompt):
-    logits = moe.router_logits.save()
-    idx = moe.expert_indices.save()             # [batch, seq, 1]
-    shared = moe.shared_expert_output.save()
-    routed = moe.routed_output.save()
-    contribution = moe.mlp_output.save()
-
-torch.equal(logits.topk(moe.top_k, dim=-1).indices, idx)   # True
-torch.testing.assert_close(shared + routed, contribution)
-```
-
-## Steer the routing at `router_logits`
-
-`expert_indices` and the scores are both computed from `router_logits`, so a write there moves
-both. Setting expert `e`'s logit to `-inf` sends the tokens that chose it to their second choice,
-and `mlp_output` changes on exactly those tokens; setting it high sends every token to `e`.
-`moe.routed_output[:] = 0` leaves the shared expert's output as the block's whole `mlp_output`, and
-`moe.shared_expert_output[:] = 0` leaves the routed sum.
-
-```python
-with model.trace(prompt):
-    moe.router_logits[..., e] = float("-inf")   # e's tokens go to their next expert
-    rerouted = moe.mlp_output.save()
-```
-
-## Every fourth block has no rotary and tunes its queries
-
-`no_rope_layers` (built from `no_rope_layer_interval` 4) makes blocks 3, 7, ..., 47 NoPE blocks:
-no rotary embedding and no query/key norm, and full causal attention (`layer_types`
-`full_attention`). On them `attn_temperature_tuning` multiplies the queries by
-`1 + attn_scale · log(1 + floor((position + 1) / floor_scale))`, with `attn_scale` 0.1 and
-`floor_scale` 8192 on both, so the factor is exactly 1 for the first 8191 positions and steps up
-by 0.069 at 8191. The other blocks (`chunked_attention`) rotate queries and keys and attend only
-within their chunk of `attention_chunk_size` 8192 tokens, so their pattern is zero across chunk
-boundaries. `attention_queries` and `attention_keys` are read after the rotary, the norm and the
-temperature: on a NoPE block of a prompt of at most 8191 tokens, `attention_queries` is
-`q_proj`'s output split into heads.
-
-## Scout norms each query and key head to RMS 1
-
-Where `use_qk_norm` is true, a rotary block divides each query and key head by its RMS after the
-rotary (`qk_norm`, a `Llama4TextL2Norm`: an RMS norm with no weight, not a unit-length L2 norm), so
-every head of `attention_queries` and `attention_keys` has RMS 1. One module serves both, and NoPE
-blocks have none. Scout sets `use_qk_norm`; Maverick does not, and its blocks have no `qk_norm`. The scores are scaled by
-`1/√head_dim` on every block. Both have 40 query heads over 8 key/value heads of 128, so an edit
-to one head of `attention_keys` or `attention_values` reaches 5 query heads.
-
-## Rotary and context
-
-Scout rotates with `rope_theta` 500,000 under `llama3` scaling (`factor` 16 over an original 8192
-positions); Maverick with the same base, unscaled. `max_position_embeddings` is 262,144 on both base
-checkpoints, 10,485,760 on Scout-Instruct and 1,048,576 on Maverick-Instruct. NoPE blocks carry no position: only the causal mask orders
-the tokens there.
-
-## The readout
-
-`logits` is `lm_head.output`, with no cap or scale, and `lm_head` is its own weight on both
-checkpoints (`tie_word_embeddings` false). The vocabulary is 202,048 tokens. The final norm is an
-RMSNorm whose gain is `norm.weight` itself; `project_on_vocab` applies it and `lm_head`.
-
-## Every checkpoint is a multimodal wrapper
-
-The published repos are `llama4` checkpoints with a `llama4_text` `text_config`. The
-text-generation task builds `Llama4ForCausalLM` from the text config, reading its weights out of the
-wrapper checkpoint and leaving the vision encoder's unused; `task="image-text-to-text"` builds
-`Llama4ForConditionalGeneration` with its processor, the text model under `language_model`. The
-standard names are the same under both loads.
+Each token's one expert reads the token's input times its sigmoid score, so `expert_weights` and
+`expert_outputs` are unavailable, and `mlp_output` is `shared_expert_output + routed_output`. Steer the
+routing at `router_logits`, where an expert's logit at `-inf` sends its tokens to their next choice.
 """

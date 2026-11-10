@@ -118,54 +118,15 @@ the vision encoder.
 """,
         },
         "notes": """
-## `embed_vision` projects the pooled soft tokens
+## The projector reads the pooler's soft tokens
 
-`model.embed_vision` (the `projector`) receives the pooler's soft tokens, not `tower_output`:
-`model.projector.input` is `[soft_tokens, vision_hidden_size]`, flat over the images. It norms them
-without a gain (`embedding_pre_projection_norm`) and projects them to the text model's width
-(`embedding_projection`); `vision.image_features` is `model.projector.output`, and
-`layers[0].input[vision.image_token_mask] == vision.image_features` holds exactly. On the pinned
-tiny checkpoint:
-
-```python
-with model.trace(prompt, images=[image]):
-    mask = model.vision.image_token_mask.save()
-    out = model.vision.tower_output.save()
-    fed = model.projector.input.save()
-    features = model.vision.image_features.save()
-    first = model.layers[0].input.save()
-
-out.shape[1], fed.shape[0]               # 2520 rows, 256 soft tokens
-torch.equal(first[mask], features)       # True: the scatter
-```
-
-## 256 image tokens for a square image
-
-On `google/gemma-4-E2B` a 224 × 224 image is 2304 patches and 216 padded rows: under eager every
-vision encoder block's pattern is `(1, 12, 2520, 2520)`, and the text model receives 256 image tokens,
-`vision.image_features` `(256, 1536)`. The trace ran under `torch.no_grad()` in bfloat16 and peaked
-at 11 GB. An image of another shape gets another grid in the same 2520 rows (a 96 × 48 image is 2277
-patches and 253 image tokens), so the count of image tokens depends on the image: assign one
-image's features into another's run only when the two give the same count.
+`embed_vision` reads the soft tokens the vision encoder's pooler averages from `tower_output`, not
+`tower_output` itself.
 
 ## On 26B-A4B and 31B an image's tokens attend to each other on the sliding blocks
 
-26B-A4B and 31B set `use_bidirectional_attention` to `"vision"`: on a sliding block an image's
-tokens attend to every token of the same image, before and after them, within the window; the
-full blocks stay causal. The wrapper builds that mask from the processor's `mm_token_type_ids`,
-so pass the whole encoding (`model.trace(prompt, images=[image])` does). E2B and E4B leave the
-setting unset and run causal masks throughout.
-
-## The base checkpoints have no chat template
-
-`google/gemma-4-E2B` ships no chat template: put the processor's image token in the prompt
-yourself, `f"{model.processor.image_token} What is this?"`.
-
-## The audio side keeps its native names
-
-E2B and E4B also carry an audio encoder. `model.model.audio_tower` and `model.model.embed_audio`
-keep their native names, and an audio prompt, `model.trace(prompt, audio=[waveform])`, runs under
-the same load.
+On a sliding block an image's tokens attend to every token of the same image within the window,
+later ones included; the full blocks stay causal. E2B and E4B are causal throughout.
 """,
     },
 }
@@ -207,8 +168,7 @@ BLOCK = {
                 "sliding_attention": "{sliding_window}-token window, head_dim {head_dim}",
                 "full_attention": "full causal, wide heads, ¼ rotary",
             },
-            "post_norm_note": "As on Gemma 2 and 3, this norm follows the attention. On Llama the same name is the norm before the MLP. "
-                              "layer_mid is the stream after this norm's output is added, which the MLP's pre-norm reads.",
+            "post_norm_note": "Follows the attention here; on Llama the same name is the MLP's pre-norm.",
         },
         {
             "host": "mlp",
@@ -228,233 +188,53 @@ BLOCK = {
             "contribution": "mlp_output",
             "interior": ["router_logits", "expert_weights", "expert_indices", "expert_outputs", "routed_output"],
             "detail": "dense MLP + {num_experts} experts, top {top_k}",
-            "pre_norm_note": "On a mixture block this norm feeds the dense MLP only: the router reads the stream before it, "
-                             "and the experts read pre_feedforward_layernorm_2's output of that stream.",
-            "post_norm_note": "On a mixture block this norm takes the sum post_feedforward_layernorm_1(mlp.output) + "
-                              "post_feedforward_layernorm_2(routed_output); mlp.output is shared_expert_output.",
+            "pre_norm_note": "Feeds the dense MLP only; the router and the experts read the same stream through norms of their own.",
+            "post_norm_note": "Norms post_feedforward_layernorm_1(mlp.output) + post_feedforward_layernorm_2(routed_output); "
+                              "mlp.output is shared_expert_output.",
         },
     ],
     "identity": "(layers[i].input + self_attn.attention_output + mlp.mlp_output + per_layer_output) * layer_scalar == layer_output",
-    "identity_note": "layer_scalar is layers[i]._module.layer_scalar, a per-block buffer; per_layer_output is the block's own value. "
-                     "Exact in float32 on every E2B block. 26B-A4B and 31B have no per-layer embeddings, and the term drops out.",
+    "identity_note": "layer_scalar is the per-block buffer layers[i]._module.layer_scalar; per_layer_output exists on E2B and E4B only.",
 }
 
 #: Notes on the model-level strip, by node.
 STRIP = {
-    "embed": "embed_tokens multiplies its lookup by √hidden_size, cast to the weight's dtype (39.19 on E2B, 39.25 in bfloat16), "
-             "so token_embeddings is the scaled tensor and equals layers[0].input. E2B and E4B also look each token up in "
-             "embed_tokens_per_layer, which feeds per_layer_output.",
-    "layers": "Each block ends by multiplying its sum, the incoming stream included, by layer_scalar (0.019 to 0.88 on E2B), "
-              "so a block's terms reach the last stream multiplied by its own scalar and every later one.",
-    "norm": "Gemma4RMSNorm multiplies by norm.weight itself, not 1 + weight; the final norm's weights average 14.2 on E2B (maximum 118.5).",
-    "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings).",
-    "logits": "final_logit_softcapping is 30 on every released size: logits is 30 · tanh(lm_head.output / 30), and project_on_vocab applies the cap.",
+    "embed": "Scaled by √hidden_size inside the embedding module, so token_embeddings equals layers[0].input on text. "
+             "E2B and E4B also look each token up in embed_tokens_per_layer, which feeds per_layer_output.",
+    "layers": "Each block multiplies its whole sum, the incoming stream included, by its layer_scalar.",
+    "logits": "logits = 30 · tanh(lm_head.output / 30), which project_on_vocab applies too.",
 }
 
 NOTES = """
-## The block, in order
+## Each block scales its whole sum by `layer_scalar`
 
 ```
-a   = input_layernorm(x)
-q   = rope(q_norm(q_proj(a)))         # per head
-k   = rope(k_norm(k_proj(a)))         # per head; borrowed on the last blocks
-v   = v_norm(v_proj(a))               # per head, no gain; k_proj(a) on 26B-A4B's and 31B's full blocks
-h   = x + post_attention_layernorm(o_proj(attend(q, k, v)))      # no 1/√d
+h   = x + post_attention_layernorm(self_attn(input_layernorm(x)))
 h   = h + post_feedforward_layernorm(mlp(pre_feedforward_layernorm(h)))
-p   = per_layer_projection(gelu(per_layer_input_gate(h)) * per_layer_input)
-h   = h + post_per_layer_input_norm(p)
+h   = h + per_layer_output                # E2B and E4B
 out = h * layer_scalar
 ```
 
-Four RMSNorms around the sublayers as on Gemma 2 and 3, a fifth after the per-layer branch on E2B
-and E4B, and three inside the attention (only `q_norm` on a block that borrows keys and values).
-A mixture block on 26B-A4B adds three more around the experts. `post_attention_layernorm` follows the attention; the MLP's input
-norm is `pre_feedforward_layernorm`. The per-layer branch has no module of its own: its three
-modules are children of the block, and `per_layer_output` is a value of `layers[i]`.
-`layer_scalar` is a buffer, `layers[i]._module.layer_scalar`, applied in place.
+`attention_output`, `mlp_output` and `per_layer_output` are the post-norms' outputs, before the
+scalar, and on E2B every scalar is below one. A term's weight in the last stream is the product of
+its own block's scalar and every later one, so direct logit attribution multiplies each term by that
+product first, and a vector added to `mlp_output` reaches `layer_output` scaled by the block's scalar.
 
-## The block's sum is scaled; its terms are served unscaled
+## Patching `token_embeddings` does not swap the token on E2B and E4B
 
-`attention_output`, `mlp_output` and `per_layer_output` are the post-norms' outputs, before
-`layer_scalar`. The identity is exact in float32 on every E2B block:
+Each block's per-layer input is a table lookup by token id plus a projection of `token_embeddings`,
+so writing another token's embedding into `token_embeddings` changes only the projected half. To swap
+a token, also patch `model.model.language_model.embed_tokens_per_layer.output` at that position.
 
-```python
-with model.trace(prompt):
-    x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()
-    mlp = model.layers[1].mlp.mlp_output.save()
-    ple = model.layers[1].per_layer_output.save()
-    out = model.layers[1].layer_output.save()
+## Borrowed keys and values are copies
 
-scalar = model.layers[1]._module.layer_scalar
-torch.testing.assert_close((x + attn + mlp + ple) * scalar, out)
-```
+On E2B and E4B the last blocks attend with an earlier block's keys and values, served to each
+borrowing block as its own copy. An edit to the source block's `attention_keys` or `attention_values`
+reaches only that block; an edit to its `k_proj` output reaches every block that borrows from it.
 
-No scalar is 1 on E2B: they run from 0.019 (block 0) to 0.88 (block 30), with 0.074 and 0.049 at
-blocks 13 and 14 and 0.16 at the last block. A vector added to `mlp_output` reaches `layer_output`
-multiplied by the block's scalar; one added to `layer_output` does not.
+## On 26B-A4B the dense MLP runs beside the experts
 
-## A term's weight in the last stream is the product of the scalars from its block on
-
-Block `i`'s terms are multiplied by its own scalar and by every later one; the embeddings by all
-of them. In float32 the last block's output is that weighted sum:
-
-```python
-scalars = torch.cat([layer._module.layer_scalar for layer in model.layers])
-weight = scalars.flip(0).cumprod(0).flip(0)
-
-added = []
-with model.trace(prompt):
-    emb = model.token_embeddings.save()
-    for layer in model.layers:
-        attn = layer.self_attn.attention_output
-        added.append((attn + layer.mlp.mlp_output + layer.per_layer_output).save())
-    final = model.layers[-1].layer_output.save()
-
-total = weight[0] * emb + sum(w * a for w, a in zip(weight, added))
-torch.testing.assert_close(total, final)
-```
-
-On E2B the weights are 1.9e-13 for block 0 (and the embeddings), 1.8e-6 for block 14, 1.2e-3 for
-block 20, 0.06 for block 30 and 0.16 for block 34. The final norm divides out the common scale,
-so only the ratios count: block 34's terms outweigh block 0's by about 10¹². At the last position
-of a 9-token prompt, block 0's `attention_output` has norm 1476 and block 34's `mlp_output` 122;
-weighted, they are 2.8e-10 and 20 in a last stream of norm 28. Direct logit attribution multiplies
-each term by its weight first; the early blocks act on the logits only through the blocks that
-read the stream after them.
-
-## Per-layer embeddings add a third term
-
-E2B and E4B (`hidden_size_per_layer_input` 256) give every block a 256-wide input of its own.
-The model looks each token up in `model.model.language_model.embed_tokens_per_layer`
-(`[262144, 35 × 256]` on E2B, scaled by 16: 2.35B of the language model's 4.63B parameters), adds
-a normed projection of `token_embeddings`, and scales the sum by 2^-1/2; block `i` receives slice
-`i` as its second argument, `model.layers[i].inputs[0][1]` (`[batch, seq, 256]`). The block gates
-it by `gelu(per_layer_input_gate(h))`, projects it to the hidden size and norms it:
-`per_layer_output`. The model depends on it: zeroing it on every block takes p(" Paris") after
-"The Eiffel Tower is in the city of" from 0.91 to 6e-10 on E2B.
-
-```python
-with model.trace(prompt):
-    for layer in model.layers:
-        layer.per_layer_output[:] = 0
-    logits = model.logits.save()
-```
-
-## Patching `token_embeddings` does not swap the token
-
-The per-layer table is looked up by token id, not from `token_embeddings`, so writing another
-token's embedding into `token_embeddings` changes only the projected half of every block's
-per-layer input. On E2B, putting " Rome"'s embedding in place of " Paris"'s at the end of "The
-capital of France is Paris" leaves a KL of 0.51 to the " Rome" run. Patching the table's output
-as well reproduces that run exactly:
-
-```python
-with model.trace(rome):
-    emb = model.token_embeddings.save()
-    table = model.model.language_model.embed_tokens_per_layer.output.save()
-
-with model.trace(paris):
-    model.token_embeddings[:, -1] = emb[:, -1]
-    model.model.language_model.embed_tokens_per_layer.output[:, -1] = table[:, -1]
-    logits = model.logits.save()
-```
-
-## Queries, keys and values are normed, and the scores are not scaled
-
-`q_norm` and `k_norm` norm each head before the rotary; `v_norm` norms each value head with no
-gain, so every head of `attention_values` has RMS 1. The attention's `scaling` is 1.0: the scores
-are `q · k` with no `1/√head_dim`, and the norms' gains set the temperature. `attention_queries`
-and `attention_keys` are read after their norms and the rotary; `q_norm.output` is the normed
-queries before it. E2B has one key/value head for its 8 query heads, so an edit to
-`attention_keys` or `attention_values` reaches all 8; E4B has two, each serving 4.
-
-## Sliding and full blocks differ in width and rotary
-
-`config.layer_types` makes every fifth block full on E2B (4, 9, ..., 34) and every sixth on E4B,
-26B-A4B and 31B; the last block is full on all four. The window is 512 tokens on E2B and E4B (a
-query attends to itself and the 511 before it) and 1024 on 26B-A4B and 31B. Full blocks have
-512-wide heads against the sliding blocks' 256, on every size; 26B-A4B and 31B also give them
-fewer key/value heads (2 against 8, 4 against 16). The root's sizes are the sliding blocks'; each
-block's own are on its attention and MLP:
-
-```python
-model.head_dim, model.layers[4].self_attn.head_dim        # 256, 512 on E2B
-model.layers[4].self_attn.num_heads                       # 8: the same on every block
-model.layers[20].mlp.intermediate_size                    # 12288 on E2B; 6144 at the root
-```
-
-Sliding blocks rotate all 256 dimensions with base 10,000. Full blocks use proportional rotary:
-only dimensions 0 to 63 and 256 to 319 of the 512 turn, at frequencies spaced over the whole head
-with base 1,000,000 (the slowest has a wavelength of 188 tokens); the other 384 carry no position.
-
-## 26B-A4B and 31B take the full blocks' values from the key projection
-
-26B-A4B and 31B set `attention_k_eq_v`: their full blocks have no `v_proj`, and their values are
-`v_norm(k_proj(a))`, the keys' projection before `k_norm` and the rotary. An edit to a full
-block's `k_proj` output moves its keys and its values at once; `attention_keys` and
-`attention_values` are served apart and edit apart. The sliding blocks, and every block on E2B
-and E4B, have their own `v_proj`.
-
-## Blocks 15 to 34 attend with borrowed keys and values on E2B
-
-The last `num_kv_shared_layers` blocks (20 of 35 on E2B, 18 of 42 on E4B, none on 26B-A4B and
-31B) have no `k_proj`, `v_proj`, `k_norm` or `v_norm`. On E2B the sliding ones attend with block
-13's keys and values and the full ones with block 14's. Their `attention_keys` are block 13's or
-14's, as a copy private to the block: zeroing block 13's leaves block 20's as they were, while an
-edit of block 13's `k_proj` output reaches every sliding block that borrows from it.
-
-```python
-with model.trace(prompt):
-    source = model.layers[13].self_attn.attention_keys.save()
-    borrowed = model.layers[20].self_attn.attention_keys.save()
-
-assert torch.equal(source, borrowed)
-```
-
-`skip_layers` over block 13 or 14 leaves the borrowers nothing to read and fails with a `KeyError`
-inside transformers.
-
-## Eager and sdpa compute the same attention
-
-Gemma 4 has no attention softcap, and the scale is 1.0 under every implementation. On E2B in
-float32 a default (`sdpa`) load's logits are within 2.1e-5 of an eager load's on a 9-token prompt
-and 3.5e-5 on an 881-token one. `attn_implementation="eager"` is needed only for the values read
-inside the attention function (the ones marked `⚠`).
-
-## The readout is softcapped, and the norm gain is the weight
-
-`logits` is `30 · tanh(lm_head.output / 30)` on every released size; `project_on_vocab` applies the
-final norm, `lm_head` and the cap, so a lens at the last block reproduces `logits`. The
-vocabulary is 262,144 tokens on every size, and `lm_head` is `embed_tokens`' weight. Unlike Gemma 2
-and 3, `Gemma4RMSNorm` multiplies by `weight`, not `1 + weight`: folding the final norm into
-`lm_head` uses `model.norm._module.weight` as it is (mean 14.2 on E2B, maximum 118.5).
-
-## Every checkpoint is a multimodal wrapper
-
-The released repos are `gemma4` checkpoints: the text-generation task builds
-`Gemma4ForConditionalGeneration` (vision and audio towers on E2B and E4B, vision only on 26B-A4B
-and 31B), nnterp picks this family from `config.text_config`, and the text stack sits under
-`model.model.language_model` with `lm_head` at the root. `Gemma4ForCausalLM` is built only from a
-`gemma4_text` config, as the suite's tiny checkpoint is. `google/gemma-4-12B` is a
-`gemma4_unified` checkpoint and loads as `gemma4_unified_text`: the same block without per-layer
-embeddings or a mixture of experts.
-
-## 26B-A4B runs a mixture of experts beside the dense MLP
-
-Under `enable_moe_block` every block runs 128 experts, 8 per token and each 704 wide, beside the
-2112-wide dense MLP. The router reads the stream after the attention add, through its own norm
-without gain, scales it by `router.scale` and `hidden_size ** -0.5`, takes a softmax over the 128
-experts and keeps the top 8, renormalised to sum to one and then multiplied by `per_expert_scale`:
-`expert_weights` are those products. The experts read `pre_feedforward_layernorm_2` of the same
-stream. `shared_expert_output` is the dense MLP's output, `mlp.output`, and the two meet in
-three norms:
-
-```
-mlp_output = post_feedforward_layernorm(
-    post_feedforward_layernorm_1(shared_expert_output)
-    + post_feedforward_layernorm_2(routed_output))
-```
-
-On E2B, E4B and 31B every mixture value is unavailable.
+`mlp.output` is the dense MLP's, served as `shared_expert_output`, and `mlp_output` norms it together
+with `routed_output`. `expert_weights` are the top-8 softmax entries renormalized to sum to one, then
+multiplied by the learned `per_expert_scale`.
 """

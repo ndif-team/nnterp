@@ -49,147 +49,28 @@ BLOCK = {
     ],
 }
 
-STRIP = {
-    "embed": "A plain lookup: token_embeddings equals layers[0].input. The tokenizer prepends <s> (id 1).",
-    "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings).",
-}
+#: Notes on the model-level strip, by node: none, since nothing happens at the embeddings, the final norm or the head.
+STRIP: dict[str, str] = {}
 
 NOTES = """
-## The block, in order
+## A query head is a routing slot, not an expert
 
-```
-h   = x + self_attention(input_layernorm(x))   # 2 of 8 attention experts per token
-out = h + mlp(post_attention_layernorm(h))     # 2 of 8 MLP experts per token, + bias
-```
+Each chosen attention expert projects the token's queries for `num_kv_heads` heads, so query head
+`h` belongs to slot `h // num_kv_heads`, and the expert behind it changes from token to token.
+nnterp serves no routing values for the attention. Its router logits are
+`self_attn.experts.router.layer.output`, flat over tokens, and their top `top_k` give each slot's
+expert in order. To ablate attention expert `e`, zero `attention_head_outputs` in the slots that
+chose it.
 
-Llama's pre-norm block, with the attention under `self_attention`, aliased `self_attn`. Both
-sublayers are mixtures with routers of their own. The attention returns
-`(attn_output, attn_weights, router_logits)` and `attention_output` is the first element; the
-block returns a tensor, and the identity is the plain sum:
+## `attention_keys` holds one copy of the keys per slot
 
-```python
-with model.trace(prompt):
-    x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()
-    mlp = model.layers[1].mlp.mlp_output.save()
-    out = model.layers[1].layer_output.save()
+The shared keys and values are tiled to every query head, so `attention_keys` and
+`attention_values` have `num_heads` heads, `top_k` copies of `num_kv_heads`. An edit to one head
+reaches only its slot's queries. Edit key/value head `j` at every copy (`j`, `j + num_kv_heads`), or
+at `kv_proj.output`, to reach every query that reads it.
 
-torch.testing.assert_close(x + attn + mlp, out)
-```
+## Both mixtures add a bias after the experts
 
-## The attention is a mixture of experts
-
-`self_attn.experts` holds 8 attention experts, each a query projection (`experts.input_linear`,
-`hidden_size → num_kv_heads × head_dim`) and an output projection (`experts.output_linear`, back to
-`hidden_size`); there is no `q_proj` or `o_proj`. Per token, `experts.router` takes the top 2 of 8
-logits and a softmax over those 2. Each chosen expert projects the token's queries for 16 heads,
-so a token has 2 × 16 = 32 query heads (`num_heads`), and slot `s` holds heads `16 s` to `16 s + 15`.
-Keys and values come from one shared `kv_proj`, 16 heads of 128, and are tiled (`repeat`, not
-interleaved) to all 32 heads: head `h` is slot `h // 16` over key/value head `h % 16`.
-
-`attention_output` is the gated sum of the chosen experts' output projections, each over its
-slot's 16 head outputs, plus the mixture's bias `experts.bias`. nnterp serves no standard value
-for the attention's routing. Its logits are `experts.router.layer.output`, flat over tokens
-(`[batch × seq, num_local_experts]`); the third element of `self_attn.output` holds them in float32:
-
-```python
-attn = model.layers[1].self_attn
-with model.trace(prompt):
-    logits = attn.experts.router.layer.output.save()   # [batch * seq, num_experts]
-with model.trace(prompt):
-    heads = attn.attention_head_outputs.save()         # [batch, seq, num_heads, head_dim]
-    out = attn.attention_output.save()
-
-k, kv = model.config.num_experts_per_tok, model.num_kv_heads
-top = logits.topk(k, dim=-1)
-gates, idx = top.values.softmax(-1), top.indices      # [batch * seq, k]
-experts = attn._module.experts
-W = experts.output_linear.weight[idx]                 # each slot's expert
-slots = heads.reshape(-1, k, kv * model.head_dim, 1)  # each slot's 16 heads
-terms = (W @ slots).squeeze(-1)                       # [batch * seq, k, hidden_size]
-manual = (gates[..., None] * terms).sum(1) + experts.bias
-torch.testing.assert_close(manual.view_as(out), out)
-```
-
-`attention_keys` and `attention_values` have `num_heads` heads, two copies of the 16. Each copy is
-its own slice of the tensor, so an edit to head `h` of `attention_keys` reaches slot `h // 16`'s
-queries only; edit key/value head `j` at heads `j` and `j + 16`, or edit `kv_proj.output`, to reach every
-query that reads it. The expert behind a query head changes from token to token, so a query head
-index names a slot, not an expert.
-
-## Ablating an attention expert
-
-Zeroing the head outputs of the slots that chose expert `e` removes exactly that expert's term
-from `attention_output` at those tokens, since its output projection has no bias; the other
-slot's term and `experts.bias` stay. `attention_output` changes on exactly the tokens whose
-attention router chose `e`:
-
-```python
-attn, e = model.layers[1].self_attn, 3
-k, kv = model.config.num_experts_per_tok, model.num_kv_heads
-with model.trace(prompt):
-    logits = attn.experts.router.layer.output.save()
-    clean = attn.attention_output.save()
-idx = logits.topk(k, dim=-1).indices.view(*clean.shape[:2], k)   # [batch, seq, k]
-with model.trace(prompt):
-    for s in range(k):
-        attn.attention_head_outputs[:, :, s * kv:(s + 1) * kv][idx[:, :, s] == e] = 0
-    ablated = attn.attention_output.save()
-
-changed = (ablated != clean).any(-1)
-assert torch.equal(changed, (idx == e).any(-1))
-```
-
-## Loading: eager for the attention interior
-
-The attention runs on transformers' shared interface: the six interior values need
-`attn_implementation="eager"`, and the default `sdpa` load computes the same attention without
-them. The head width is `kv_channels` (128), so `head_dim` is 128 while `hidden_size / num_heads`
-is 64: the 32 query heads are 4096 wide in all, twice the stream.
-
-## The MLP: a top-2 softmax router, a bias, and a read order
-
-The MLP's router (`mlp.router`) takes the top 2 of its 8 logits (`mlp.router.layer.output`) and a
-softmax over those 2, so `expert_weights` sum to one. It then sorts the slots by expert and the
-mixture runs `input_linear` (gate and up, `2 × intermediate_size` wide, the first half through
-SiLU) and `output_linear` over the sorted slots, so `expert_outputs` is unavailable.
-`expert_indices` and `expert_weights` are read before the sort, in token order, and
-`routed_output` is the routed sum before the mixture adds its bias:
-
-```python
-moe = model.layers[1].mlp
-with model.trace(prompt):
-    routed = moe.routed_output.save()
-    out = moe.mlp_output.save()
-
-torch.testing.assert_close(out - routed, moe._module.bias.expand_as(out))
-```
-
-The router computes the indices before the weights, so a trace reads `router_logits`, then
-`expert_indices`, then `expert_weights`. An ablation reads the indices first:
-
-```python
-moe, e = model.layers[1].mlp, 3
-with model.trace(prompt):
-    idx = moe.expert_indices.save()
-    clean = moe.mlp_output.save()
-with model.trace(prompt):
-    hit = moe.expert_indices == e                              # indices first
-    moe.expert_weights = moe.expert_weights.masked_fill(hit, 0)
-    ablated = moe.mlp_output.save()
-
-changed = (ablated != clean).any(-1)
-assert torch.equal(changed, (idx == e).any(-1))            # only the tokens that chose e
-```
-
-A rerouted index must not repeat the expert of the token's other slot. The router counts each
-expert once per token but sorts every slot, so the sizes it splits the sorted slots by no longer
-add up, and the mixture raises `RuntimeError` in `split_with_sizes`. Reroute to an expert the token
-does not use.
-
-## The readout and the tokenizer
-
-`logits` is `lm_head.output`, with no cap or scale, and `project_on_vocab` on the last block's
-`layer_output` equals `logits`. `lm_head` and `embed_tokens` share one weight. The
-tokenizer prepends `<s>` (id 1), so `model.input_ids` starts with it.
+`mlp_output` is `routed_output` plus the mixture's `bias`, and `attention_output` is the experts'
+gated sum plus `self_attn.experts.bias`. Ablating every expert leaves the bias in the stream.
 """

@@ -44,79 +44,13 @@ BLOCK = {
     ],
 }
 
-STRIP = {
-    "embed": "A plain lookup: token_embeddings equals layers[0].input. The tokenizer prepends nothing.",
-    "head": "lm_head is embed_tokens' weight (tie_word_embeddings is true); logits is lm_head.output.",
-}
+#: Notes on the model-level strip, by node: none, since nothing happens at the embeddings, the final norm or the head.
+STRIP: dict[str, str] = {}
 
 NOTES = """
-## The block, in order
+## The rotary key is one vector copied into every head
 
-```
-h   = x + self_attn(input_layernorm(x))      # multi-head latent attention
-out = h + mlp(post_attention_layernorm(h))   # a dense gated MLP on every block
-```
-
-Llama's pre-norm block and Llama's names. The block adds each sublayer's output to the stream and
-returns a tensor, so the identity is the plain sum:
-
-```python
-with model.trace(prompt):
-    x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()
-    mlp = model.layers[1].mlp.mlp_output.save()
-    out = model.layers[1].layer_output.save()
-
-torch.testing.assert_close(x + attn + mlp, out)
-```
-
-## Latent attention: queries and keys are wider than values
-
-`attention_queries` and `attention_keys` are `qk_head_dim` wide (`qk_nope_head_dim +
-qk_rope_head_dim`, 128 + 64 = 192), `attention_values` and `attention_head_outputs` `head_dim`
-(`v_head_dim`, 128). transformers sets the config's `head_dim` to `qk_rope_head_dim` (64), which
-no served value has. Queries go through a compressed rank (`q_lora_rank` 1536: `q_a_proj`,
-`q_a_layernorm` and `q_b_proj`, with no `q_proj` module). The scores are scaled by
-`qk_head_dim ** -0.5` (`self_attn.scaling`, 0.0722): the checkpoints have no YaRN scaling.
-
-Keys and values are expanded from one latent per token (`kv_lora_rank` 512) for every head, so
-`attention_keys` has `num_heads` (16) heads, and the last 64 dimensions of every head's key are one
-shared rotary key. The attention interior needs `attn_implementation="eager"`.
-
-```python
-attn = model.layers[1].self_attn
-with model.trace(prompt):
-    q = attn.attention_queries.save()          # [1, 16, seq, 192]
-    k = attn.attention_keys.save()             # [1, 16, seq, 192]
-    v = attn.attention_values.save()           # [1, 16, seq, 128]
-
-assert torch.equal(k[:, 0, :, -64:], k[:, 1, :, -64:])   # one rotary key
-```
-
-An edit to one head's last 64 key dimensions reaches that head only: the expansion has already
-copied the rotary key into every head when `attention_keys` is read.
-
-## The rotary part is served de-interleaved
-
-`rope_interleave` is true: the attention rotates pair (2i, 2i + 1) of the projection into
-dimensions i and i + 32 of the rotary part. `attention_queries[..., -64:]` and
-`attention_keys[..., -64:]` are in that rotate-half order, not the order of `q_b_proj`'s output:
-at position 0, where rotary is the identity, the served rotary part is the projection's even
-dimensions followed by its odd ones.
-
-```python
-with model.trace(prompt):
-    proj = attn.q_b_proj.output.save()
-with model.trace(prompt):
-    q = attn.attention_queries.save()
-
-rope = proj.view(1, -1, model.num_heads, model.qk_head_dim)[0, 0, 0, -64:]
-torch.testing.assert_close(q[0, 0, 0, -64:], torch.cat([rope[0::2], rope[1::2]]))
-```
-
-## The readout is tied
-
-`lm_head.weight` is `embed_tokens.weight`, so a direction read off the unembedding is also the
-embedding's: a write to one weight changes both. `logits` is `lm_head.output`, with no softcap
-or scale, and `project_on_vocab` applies `norm` and then the tied head.
+The last `qk_rope_head_dim` dimensions of every head's `attention_keys` are the same rotary key,
+computed once per token and copied into each head before nnterp reads it. An edit to one head's copy
+reaches that head only.
 """

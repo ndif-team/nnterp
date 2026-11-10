@@ -61,139 +61,36 @@ BLOCK = {
             "pre_norm": "post_attention_layernorm",
             "contribution": "mlp_output",
             "detail": "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}",
-            "pre_norm_note": "The MLP's input norm, as on Llama. It reads the stream after input_residual has "
-                             "scaled it and the attention has added to it.",
+            "pre_norm_note": "The MLP's input norm, named for its place after the attention's add.",
         },
     ],
     "identity": "post_attention_residual * (input_residual * layers[i].input + self_attn.attention_output) "
                 "+ mlp.mlp_output == layer_output",
-    "identity_note": "input_residual and post_attention_residual are layers[i]._module's own [hidden_size] parameters, "
-                     "ones at initialization. Exact in float32 on every Doge-260M block.",
+    "identity_note": "input_residual and post_attention_residual are the block's own [hidden_size] parameters, on "
+                     "layers[i]._module.",
 }
 
-STRIP = {
-    "embed": "A plain lookup: token_embeddings equals layers[0].input.",
-    "layers": "Each block multiplies the stream by its two gates before adding to it, so a block's terms reach the "
-              "last stream multiplied, channel by channel, by every later gate.",
-    "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings) on every listed checkpoint.",
-}
+#: Notes on the model-level strip, by node: none, since nothing happens at the embeddings, the final norm or the head.
+STRIP: dict[str, str] = {}
 
 NOTES = """
-## The block, in order
+## The block scales the stream, not what it adds
 
 ```
 h   = input_residual * x + self_attn(input_layernorm(x))
 out = post_attention_residual * h + mlp(post_attention_layernorm(h))
 ```
 
-`input_residual` and `post_attention_residual` are `[hidden_size]` parameters of the block. They
-multiply the stream the block carries, not what the sublayers add: `attention_output` is `o_proj`'s
-output and `mlp_output` the MLP's, unscaled.
+The gates are per-channel parameters of the block, below one almost everywhere on Doge-260M, so a
+term added at block `i` reaches the logits multiplied, channel by channel, by every later gate. A
+direct logit attribution has to include them. Zeroing `attention_output` does not leave the block's
+input in place, since the stream still goes on as `input_residual * x`. On Doge-260M the last block's
+`post_attention_residual` nearly zeroes the stream's one massive channel, so a steer along that
+channel is erased before the final norm.
 
-## The stream is gated, so the identity carries the gates
+## A write to `attention_values` does not move the dynamic mask
 
-The plain sum `layers[i].input + attention_output + mlp_output` does not give `layer_output`; the
-identity multiplies the stream by each gate where the block does. It is exact in float32 on every
-Doge-260M block:
-
-```python
-with model.trace(prompt):
-    x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()
-    mlp = model.layers[1].mlp.mlp_output.save()
-    out = model.layers[1].layer_output.save()
-
-block = model.layers[1]._module
-h = block.input_residual * x + attn
-torch.testing.assert_close(block.post_attention_residual * h + mlp, out)
-```
-
-On Doge-260M the gates are below one almost everywhere: `input_residual` averages 0.73 to 0.94 per
-block (its few negative entries, 0.09% of them, are on block 0), and `post_attention_residual` 0.87 to
-0.96. A term added at block `i` therefore reaches the last block's output multiplied by every later
-gate, channel by channel, which a direct attribution to the logits has to include. Zeroing
-`attention_output` does not leave the block's input in place: the stream still goes on as
-`input_residual * x`.
-
-## The last block erases a massive channel
-
-On Doge-260M channel 524 of the stream is a massive activation: at the last block's input it holds
-57,662 at the first position and 5,000 to 6,700 at the others, at least 85% of the stream's squared
-norm at every position of a 30-token prompt. The last block's
-`post_attention_residual` is 0.0008 on that channel and at least 0.72 on every other, so the block
-removes it before the final norm. Steering or patching that adds to channel 524 is erased the same
-way at the last block.
-
-## The dynamic mask is a bias per key, computed from the values
-
-Each attention projects its values through `dt_proj` to one number per key and key/value head, and
-adds `exp(A * softplus(dt))` to every query's score for that key. `A` is a per-head parameter, so a
-head with `A > 0` raises the keys `dt_proj` picks out and a head with `A < 0` lowers them.
-`attention_scores` carry the bias, and it can be rebuilt from `attention_values`:
-
-```python
-import torch.nn.functional as F
-
-attn = model.layers[1].self_attn
-with model.trace(prompt):
-    values = attn.attention_values.save()          # [batch, num_kv_heads, seq, head_dim]
-    scores = attn.attention_scores.save()          # [batch, num_heads, query, key]
-
-module = attn._module
-v = values.transpose(1, 2).flatten(2)              # [batch, seq, num_kv_heads * head_dim]
-dt = F.softplus(module.dt_proj(v))                 # [batch, seq, num_kv_heads]
-bias = torch.exp(module.A * dt).transpose(1, 2)    # [batch, num_kv_heads, key]
-```
-
-On Doge-260M `A` ranges from −0.29 to 0.29 and the bias from 0 to 8.4. Removing it from the scores
-moves 0.02 to 0.47 of each pattern row's mass, averaged per block, on a 30-token prompt; at block 10
-the mass on the first token, averaged over heads and queries, is 0.65 with the bias and 0.34 without it. The pinned tiny checkpoint has
-`A` at zero, where the bias is 1 on every key and the pattern is unchanged.
-
-The bias is computed from the values before the attention call that `attention_values` is an
-argument of, so a write to `attention_values` changes what the pattern mixes and not the bias:
-on Doge-20M, tripling block 0's values in place leaves `attention_scores` bit-identical, where
-the bias of the tripled values differs by up to 0.22. `self_attn.interface` reuses the run's own
-mask, bias included. To move a key's bias with its value, write `attention_scores`, or the values
-before `dt_proj` (`self_attn.v_proj.output`).
-
-## Past `keep_window_size` keys, the bias drops keys
-
-When the prompt has more than `keep_window_size` keys (1024 on Doge-260M, 2048 on Doge-20M, 4096 on
-Doge-40M), each query keeps the `keep_window_size` keys it can see with the largest bias and masks
-the rest. The choice reads the bias alone, not the query's score. A dropped key has the dtype's minimum in `attention_scores` and zero in
-`attention_probabilities`. Below that length, every causal key is kept.
-
-## Loading
-
-The attention interior needs `attn_implementation="eager"`. The default `sdpa` load adds the same
-bias and the causal mask: on Doge-260M in float32 the two loads' logits agree to 1.2e-5. Doge-20M,
-Doge-40M and Doge-260M load in transformers. In the Instruct checkpoints and in
-Doge-60M, -160M and -320M, `A` and `dt_proj` are twice `num_key_value_heads` wide and the attention has
-no `q_norm` or `k_norm`, so transformers' `DogeForCausalLM` does not load them (they are greyed out in
-the selector). Doge-260M's tokenizer prepends `<|begin_of_text|>` (id 128000).
-
-## The cross-domain mixture
-
-On the `is_moe` checkpoints `mlp` is `DogeCDMoE`: a dense SwiGLU MLP of `intermediate_size` plus
-`num_experts` one-neuron experts (rows of `down_embed` and `up_embed`) that `router_gate` retrieves
-by product keys, `num_experts_per_tok` per token. It returns `(hidden_states, router_logits)`, and the
-block adds the hidden states. nnterp serves `mlp_output`, the dense MLP's output plus the routed
-experts', and reports every mixture value unavailable: `router_gate`'s output is the product keys'
-logits, two sets of `floor(sqrt(num_experts))` per token, not one logit per expert, and the experts are
-rows of an embedding, not modules.
-
-The routing mixes positions. `router_gate(x).view(2, batch * seq, -1)` splits the logits of the
-flattened tokens into two halves across the tokens instead of within each token, so a token's
-experts are chosen from other tokens' logits. A prompt's outputs then depend on its length and on
-the other prompts in the batch: on Doge-40M-MoE a 19-token prompt's logits move by up to 1.18 when
-a second prompt runs in another invoke of the same trace, and its first 6 tokens traced alone give
-logits up to 1.22 from the same positions inside the whole prompt (Doge-20M, dense: 0 and 0). Trace
-the clean and the corrupt prompt of a patching experiment in separate traces, and do not read a
-truncated prompt as the prefix of the full one.
-
-## The readout
-
-`logits` is `lm_head.output`, with no cap or scale, and `lm_head` shares its weight with
-`embed_tokens` on every listed checkpoint.
+The bias each key adds to the scores is computed from the values before the attention call, so a
+write to `attention_values` changes what the pattern mixes and leaves the bias as it was. To move a
+key's bias with its value, write `self_attn.v_proj.output`.
 """

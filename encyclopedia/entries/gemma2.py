@@ -119,13 +119,6 @@ out = h + post_feedforward_layernorm(mlp(pre_feedforward_layernorm(h)))
 block adds. RMSNorm is scale-invariant, so halving `mlp.output` does nothing to the stream. Scale,
 steer and decompose through `attention_output` and `mlp_output`.
 
-## Only the eager attention applies the score softcap
-
-Gemma 2 caps its attention scores with a tanh (`attn_logit_softcapping`), which sdpa cannot do. On
-transformers before 5.21 a default load runs sdpa and drops the cap, so load with
-`attn_implementation="eager"`, the faithful forward on every release. `attention_scores` are read
-after the cap.
-
 ## The logits are softcapped
 
 `model.logits` is `30 · tanh(lm_head.output / 30)` and `project_on_vocab` applies the cap, so a lens

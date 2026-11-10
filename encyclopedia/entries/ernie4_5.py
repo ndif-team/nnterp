@@ -42,73 +42,7 @@ BLOCK = {
     ],
 }
 
-STRIP = {
-    "embed": "A plain lookup: token_embeddings equals layers[0].input. The tokenizer prepends nothing; <s> (id 1) is "
-             "its BOS, and a prompt starts with it only when it is written.",
-    "norm": "A plain RMSNorm, eps 1e-5: the gain is norm.weight (-0.18 to 13.19, mean 6.29 on 0.3B-Base). "
-            "project_on_vocab applies it.",
-    "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings is true on 0.3B). logits is lm_head.output.",
-}
+#: Notes on the model-level strip, by node: none, since nothing happens at the embeddings, the final norm or the head.
+STRIP: dict[str, str] = {}
 
-NOTES = """
-## The block, in order
-
-```
-h   = x + self_attn(input_layernorm(x))
-out = h + mlp(post_attention_layernorm(h))
-```
-
-Llama's pre-norm block and Llama's names. Nothing norms a sublayer's output, so
-`attention_output` is `o_proj`'s output and `mlp_output` the MLP's, and the identity is the
-plain sum:
-
-```python
-with model.trace(prompt):
-    x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()
-    mlp = model.layers[1].mlp.mlp_output.save()
-    out = model.layers[1].layer_output.save()
-
-torch.testing.assert_close(x + attn + mlp, out)
-```
-
-No projection has a bias (`use_bias` is false).
-
-## The heads are wider than the stream
-
-0.3B has `hidden_size` 1024 and 16 query heads of `head_dim` 128, so `q_proj` maps 1024 to 2048 and
-`o_proj` 2048 back to 1024. The 16 query heads share 2 key/value heads, 8 to each: an edit to key
-head 0 at `attention_keys` reaches query heads 0 to 7. The attention interior needs
-`attn_implementation="eager"`.
-
-## Rotary turns adjacent pairs
-
-The rotary embedding rotates dimensions (2i, 2i + 1) of each query and key head together, at
-frequency `rope_theta ** (-2i / head_dim)` (`rope_theta` 500000), where Llama's rotates i with
-i + 64. The served queries and keys keep the projection's order: at position 0 `attention_queries`
-is `q_proj`'s output split into heads, and at position 1 dimensions 0 and 1 are that pair turned
-by one radian:
-
-```python
-attn = model.layers[1].self_attn
-with model.trace(prompt):
-    proj = attn.q_proj.output.save()
-with model.trace(prompt):
-    q = attn.attention_queries.save()          # [batch, num_heads, seq, head_dim]
-
-p = proj.view(1, -1, model.num_heads, model.head_dim)
-torch.testing.assert_close(q[0, :, 0], p[0, 0])
-c, s = math.cos(1.0), math.sin(1.0)
-a, b = p[0, 1, 0, 0], p[0, 1, 0, 1]
-torch.testing.assert_close(q[0, 0, 1, :2], torch.stack([a * c - b * s, b * c + a * s]))
-```
-
-A probe or a patch that splits a head into a rotating half and its partner, as a rotate-half
-layout would, pairs the wrong dimensions here.
-
-## The readout
-
-`logits` is `lm_head.output`, with no cap or scale, and `project_on_vocab` on the last block's
-`layer_output` equals `logits`. On 0.3B `lm_head` is `embed_tokens`'s matrix
-(`tie_word_embeddings`).
-"""
+NOTES = ""

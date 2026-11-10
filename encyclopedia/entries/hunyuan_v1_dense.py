@@ -42,120 +42,27 @@ BLOCK = {
             "kind": "mlp",
             "label": "MLP",
             "pre_norm": "post_attention_layernorm",
-            "pre_norm_note": "Named for its place on the stream, after the attention's add: it is the MLP's input norm.",
+            "pre_norm_note": "The MLP's input norm, named for its place after the attention's add.",
             "contribution": "mlp_output",
             "detail": "SwiGLU: {hidden_size} → {intermediate_size} → {hidden_size}, {hidden_act}",
         },
     ],
 }
 
-STRIP = {
-    "embed": "A plain lookup: token_embeddings equals layers[0].input. The tokenizer prepends no BOS.",
-    "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings) on every checkpoint; "
-            "logits is lm_head.output.",
-}
+STRIP: dict[str, str] = {}
 
 NOTES = """
-## The block, in order
+## Queries and keys are normed after the rotary
 
-```
-q, k = rope(q_proj(n), k_proj(n))                 # n = input_layernorm(x)
-q, k = query_layernorm(q), key_layernorm(k)       # per head, after the rotary
-h    = x + o_proj(attention(q, k, v_proj(n)))
-out  = h + mlp(post_attention_layernorm(h))
-```
+`query_layernorm` and `key_layernorm` norm each head's rotated query and key, and `attention_queries`
+and `attention_keys` are read after them. The norm undoes a rescaling of a head's slice of
+`q_proj.output` or `k_proj.output`, so scale or steer a head's query or key at `attention_queries` or
+`attention_keys`.
 
-Llama's pre-norm block and Llama's names, `post_attention_layernorm` included (the MLP's input
-norm). Nothing norms a sublayer's output, so `attention_output` is `o_proj`'s output and `mlp_output`
-the MLP's, and the identity is the plain sum, exact in bfloat16:
+## The prompt's first token is an attention sink
 
-```python
-with model.trace(prompt):
-    x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()
-    mlp = model.layers[1].mlp.mlp_output.save()
-    out = model.layers[1].layer_output.save()
-
-torch.testing.assert_close(x + attn + mlp, out)
-```
-
-## Each query and key head is normed after the rotary embedding
-
-`query_layernorm` and `key_layernorm` are RMSNorms `head_dim` wide (128 on every checkpoint), one gain
-vector shared by every head, applied to each head's rotated query and key. `attention_queries` and
-`attention_keys` are read after them: `attention_queries` equals `query_layernorm.output` exactly. The
-norm removes the length a head's query or key had before it, so the dot products' scale comes from
-the two gains (their means are 1.15 to 1.41 across the 24 blocks of 0.5B). On 0.5B, tripling head
-0's slice of `q_proj.output` at block 8 moves the logits by a few thousandths at most, while
-tripling head 0 at `attention_queries` sharpens its pattern from about 0.8 nats of entropy to
-about 0.02. Scale or steer a head's query or key where no norm follows:
-
-```python
-attn = model.layers[1].self_attn
-with model.trace(prompt):
-    attn.attention_queries[:, 0] *= 3        # head 0 attends more sharply
-    logits = model.logits.save()
-```
-
-Each head is normed on its own, so an edit to one head's slice of `q_proj.output` stays in that
-head.
-
-## Grouped-query attention, scaled by head_dim ** -0.5
-
-0.5B has 16 query heads over 8 key/value heads (1.8B 16 over 4, 4B and 7B 32 over 8).
-`attention_keys` and `attention_values` are read before `repeat_kv`, `[batch, 8, seq, 128]` on 0.5B,
-so an edit to key/value head `j` reaches query heads `2j` and `2j + 1`. The query scale is
-`head_dim ** -0.5`, and `attention_scores` are the scaled products with the causal mask added:
-
-```python
-attn = model.layers[1].self_attn
-with model.trace(prompt):
-    q = attn.attention_queries.save()
-    k = attn.attention_keys.save()
-    scores = attn.attention_scores.save()
-
-k = k.repeat_interleave(model.num_heads // model.num_kv_heads, dim=1)
-qk = q @ k.transpose(-1, -2) * model.head_dim ** -0.5
-causal = torch.ones_like(qk[0, 0], dtype=torch.bool).tril()
-torch.testing.assert_close(qk[..., causal], scores[..., causal])
-```
-
-The interior needs `attn_implementation="eager"`. A default load runs `sdpa`, which computes the
-same function: its logits differ from eager's by at most 3e-5.
-
-## The rotary base is raised by alpha at load
-
-`rope_scaling` is `{"type": "dynamic", "alpha": 1000.0}` with `rope_theta` 10000 on every checkpoint
-but the two translation models, whose `alpha` is 100000. The rotary embedding builds its frequencies
-once, from a base of `rope_theta * alpha ** (head_dim / (head_dim - 2))`: 1.116e7 at `alpha` 1000,
-1.2e9 at 100000. Code that recomputes the rotation takes that base, not `rope_theta`:
-
-```python
-rotary = model._module.model.rotary_emb
-base = 1 / rotary.inv_freq[1] ** (model.head_dim / 2)    # 1.116e7 on 0.5B
-```
-
-## Position 0 is a sink, and no BOS token is added
-
-The tokenizer prepends nothing to a plain prompt, so the first real token takes the role of a
-sink. On 0.5B its residual norm is 78 after blocks 8 and 16, against 0.6 to 1.5 at the other
-positions, and at block 16 every head puts 0.7 to 0.9 of its attention on it (test prompts). The
-chat templates start with the BOS token (`<｜hy_begin▁of▁sentence｜>` on 0.5B to 4B,
-`<|startoftext|>` on 7B), which then is position 0. Slice `[:, 1:]` before averaging activations for
+The tokenizer adds no beginning-of-sequence token to a plain prompt, so its first token takes most
+of the attention and its stream grows far larger than the other positions'; the chat templates begin
+with a BOS token, which then sits at position 0. Leave position 0 out of activation averages for
 steering vectors, mean ablation or probes.
-
-## The readout is plain, and the head is the embedding
-
-`logits` is `lm_head.output`, with no cap or scale, and `project_on_vocab` on the last block's
-`layer_output` equals `logits`. `lm_head` and `embed_tokens` are one parameter on every checkpoint
-(`tie_word_embeddings`), so an edit to `embed_tokens.weight` is an edit to the unembedding.
-`token_embeddings` equals `layers[0].input`.
-
-## What this family module covers
-
-The module serves every checkpoint whose config says `model_type` `hunyuan_v1_dense`: Hunyuan
-0.5B, 1.8B, 4B and 7B, base and instruct, the earlier 7B-Instruct-0124, and the translation models
-Hunyuan-MT-7B and MT-Chimera-7B. The 0.5B to 4B checkpoints share a 120818-token vocabulary, the
-7B ones about 128K. Hunyuan-A13B is `hunyuan_v1_moe`; `Hunyuan-7B-Pretrain-0124` says `model_type`
-`hunyuan` and loads only with its own remote code.
 """

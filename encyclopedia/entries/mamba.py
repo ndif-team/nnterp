@@ -94,7 +94,11 @@ With `mamba_ssm` installed transformers dispatches the scan and the decode step 
 kernels. On CPU every trace then fails inside the kernel, even one that reads only
 `layer_output` (`RuntimeError: Expected u.is_cuda() to be true`). On GPU, unrouted, `layer_output`,
 `attention_output` and `logits` read normally and every other `linear_attn` value raises
-`nnterp.Unavailable`. Route before the trace that reads the mixer's values. Routing still takes
+`nnterp.Unavailable`. Without `mamba_ssm` transformers reaches the pure-torch kernels through its
+dispatcher: the values at the call (`attention_queries`, `attention_keys`, `attention_values`,
+`betas`, `decays`, `state_input`) read unrouted, and `attention_head_outputs`, `state_output` and
+the per-token state, read inside the kernels' bodies, still need the routing. Route before the
+trace that reads the mixer's values, on every machine. Routing still takes
 effect after an unrouted trace (one that read only `layer_output`, one that failed on CPU, or one
 whose read was refused):
 

@@ -53,6 +53,30 @@ def _dispatch(bound: Any) -> dict[str, Any]:
     return inspect.getclosurevars(bound).nonlocals if getattr(bound, "__closure__", None) else {}
 
 
+#: Inside transformers' kernel dispatcher, the call to the kernel it picked (``implementation(*args, **kwargs)``).
+DISPATCHED = "implementation_0"
+
+
+def kernel_body(envoy: Envoy, call: str) -> str:
+    """The path into the body of the mixer's kernel call ``call``, for a key at a binding inside the kernel.
+
+    ``source.<call>.source`` where the forward calls the pure-torch kernel
+    itself (a routed name). Unrouted, the forward calls transformers' kernel
+    dispatcher, whose body calls the kernel it picked (`DISPATCHED`); where
+    that is the pure-torch function (`needs_torch_kernels` passes: no
+    optimized package installed), its body is one call further down,
+    ``source.<call>.source.implementation_0.source``. Decided on the call this
+    run drilled into, so it follows the function the forward actually calls.
+    Drills into ``call``, so it is read where the call's own values are, inside
+    the trace.
+    """
+    try:
+        getattr(getattr(envoy.source, call).source, DISPATCHED)
+    except AttributeError:
+        return f"source.{call}.source"
+    return f"source.{call}.source.{DISPATCHED}.source"
+
+
 def _torch_function(bound: Any) -> Callable:
     """The pure-torch kernel behind a module-level name: the dispatcher's ``torch_function``, or the name's own binding."""
     return _dispatch(bound).get("torch_function", bound)

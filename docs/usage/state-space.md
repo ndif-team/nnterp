@@ -288,6 +288,13 @@ two scan kernels are routed: the values are read at the scan call, so the
 short convolution's kernel (`causal_conv1d`, when installed) does not affect
 them.
 
+Without `mamba_ssm` nothing needs routing. transformers then binds both names to
+its kernel dispatcher, which calls the pure-torch functions, and the two values
+read inside a kernel's body (a decode step's `state_output`, at the update's
+new state, and `states`, at the chunk scan's boundaries) are read one call
+further down, inside the function the dispatcher calls; unrouted they equal a
+routed run's bit for bit.
+
 ## Gotchas
 
 - **A mixer's submodule and its kernel values do not mix in one trace.** Reading a

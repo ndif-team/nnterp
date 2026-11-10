@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import contextlib
 import copy
+from functools import partial
 from types import ModuleType
 from typing import Any
 
@@ -12,7 +13,7 @@ from nnsight.modeling.vllm import VLLM
 
 from . import families, order as forward_order
 from .components import EProperty, Residual, Unavailable, unavailable
-from .components.standard import values
+from .components.standard import absent, values
 from .components.vllm import Flat, argument, on_transformers_backend, project
 from .standardized import Logits, NextTokenProbs, Standardized, StandardizedCapability, StandardizedTransformer, Tokens
 
@@ -178,7 +179,10 @@ class StandardizedVLLM(Standardized, VLLM):
         """The embedding module's output, ``[1, tokens, hidden_size]``; what a family scales or adds positions to comes after."""
         return value
 
-    @Flat("norm.output", batch=on_transformers_backend, description="The residual stream after the final norm, what the head reads, [1, tokens, hidden_size]")
+    @Flat(
+        "norm.output", batch=on_transformers_backend, unavailable=partial(absent, name="norm", where="model"),
+        description="The residual stream after the final norm, what the head reads, [1, tokens, hidden_size]",
+    )
     def final_norm_output(self, value: torch.Tensor) -> Residual:
         """The final norm's output, ``[1, tokens, hidden_size]``: every position of the step, of which the engine projects the last.
 

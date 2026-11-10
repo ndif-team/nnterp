@@ -114,9 +114,9 @@ STRIP = {
     "layers": "Each block runs the attention, then final_layer_norm, fc1, activation_fn and fc2, all on the block: "
               "there is no mlp module, and layers[i].fc2.output is what the MLP path adds to the stream.",
     "norm": "final_layer_norm is a LayerNorm with a bias; project_on_vocab applies it. opt-350m has none, "
-            "so model.norm does not exist there.",
+            "so model.norm does not exist there and final_norm_output is unavailable.",
     "head": "lm_head has no bias and shares its weight with embed_tokens. Its output is logits, unchanged. "
-            "On opt-350m project_out maps the stream from 1024 to 512 before lm_head.",
+            "On opt-350m project_out maps the stream from 1024 to 512 before lm_head, and project_on_vocab applies it.",
 }
 
 NOTES = """
@@ -195,20 +195,24 @@ the add: the attention reads the raw stream, `self_attn_layer_norm` normalizes `
 attention_output`, and `layer_output` is the block's `final_layer_norm` output. The identity does not
 hold there: on `opt-350m`, `input + attention_output + fc2.output` misses `layer_output` by 4 to 140 in
 its largest coordinate, depending on the block, on a stream whose norm is 32. The decoder has no final norm, so `model.norm`
-does not exist and `project_on_vocab` raises `AttributeError`. The embedding is 512 wide:
+does not exist and `final_norm_output` is unavailable. The embedding is 512 wide:
 `project_in` maps `token_embeddings` to the stream's 1024 before the positions are added, and
-`project_out` maps the stream back to 512 for the tied `lm_head`. The logit lens there is
-`lm_head(project_out(x))`, on `opt-350m`:
+`project_out` maps the stream back to 512 for the tied `lm_head`. The decoder's own readout is
+`lm_head(project_out(x))`, and `project_on_vocab` is that on `opt-350m`:
 
 ```python
 with model.trace(prompt):
     last = model.layers[-1].layer_output.save()
     logits = model.logits.save()
 
-project_out = model.model.decoder.project_out._module
-lm_head = model.lm_head._module
-torch.equal(lm_head(project_out(last)), logits)             # True
+decoder = model.model.decoder
+torch.equal(model.project_on_vocab(last), model.lm_head(decoder.project_out(last)))   # True
+torch.equal(model.project_on_vocab(last), logits)                                     # True
 ```
+
+On a 174-token English passage the lens on `opt-350m` falls from 10.4 nats after block 0 to 3.1
+after block 23, every block below a uniform guess (10.8); on `opt-125m`, pre-norm, it is 26.0 after
+block 0 and above the uniform guess until block 5.
 
 ## The first position is a sink in one coordinate
 
@@ -221,8 +225,8 @@ Leave position 0 out of norms, steering scales and activation statistics.
 ## The readout: LayerNorm with a bias, tied weights
 
 `logits` is `lm_head.output` with nothing applied, and `project_on_vocab` is
-`lm_head(final_layer_norm(x))`, so a logit lens at the last block equals `logits` on every pre-norm
-size. `lm_head` has no bias and its weight is `embed_tokens.weight`, the same tensor, so an edit to the
+`lm_head(final_layer_norm(x))` on every size but `opt-350m`, where it is `lm_head(project_out(x))`,
+so a logit lens at the last block equals `logits` on every size. `lm_head` has no bias and its weight is `embed_tokens.weight`, the same tensor, so an edit to the
 embedding matrix is an edit to the unembedding.
 
 ## The family's checkpoints

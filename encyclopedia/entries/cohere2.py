@@ -171,7 +171,8 @@ STRIP = {
     "norm": "Cohere2LayerNorm: subtracts the mean, divides by the standard deviation and multiplies by a weight, "
             "with no bias, computed in float32.",
     "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings).",
-    "logits": "logits = lm_head.output × logit_scale (0.25 on Command R7B and Command A). project_on_vocab multiplies too.",
+    "logits": "On Command R7B and Command A logits = lm_head.output × logit_scale (0.25); the Aya Vision and Command A "
+              "Vision wrappers return lm_head.output unscaled. project_on_vocab follows each.",
 }
 
 NOTES = """
@@ -239,7 +240,8 @@ attention-interface call, so every interior value resolves on every block, under
 `lm_head` is the embedding matrix (`tie_word_embeddings`), and the model multiplies its output by
 `config.logit_scale`, 0.25 on Command R7B and Command A. `logits` is the scaled tensor and
 `lm_head.output` the unscaled one. The family imports Command R's `project_on_vocab` (the final
-norm, `lm_head`, the scale), so a logit lens on the last block equals `logits` exactly.
+norm, `lm_head`, the scale on `Cohere2ForCausalLM`), so a logit lens on the last block equals
+`logits` exactly. The vision wrappers below return the head's output unscaled.
 
 ```python
 with model.trace(prompt):
@@ -260,4 +262,8 @@ family from `config.text_config` and binds `embed_tokens`, `layers` and `norm` u
 `embed_tokens`, so at those positions `token_embeddings` is the placeholder token's embedding and
 `layers[0].input` holds the projected image features; at text positions the two are equal. `embed_tokens` runs before
 the vision encoder, so read `token_embeddings` before any `vision` value in a trace.
+`AyaVisionForConditionalGeneration` and `Cohere2VisionForConditionalGeneration` return `lm_head`'s output
+without `logit_scale`, though the text config carries one (0.25 on Aya Vision 8B): on them `logits`
+equals `lm_head.output`, and `project_on_vocab` is the final norm and `lm_head` with no scale, so the
+lens on the last block still equals `logits`.
 """

@@ -191,8 +191,9 @@ The entry states facts about a family, and each one has a source. Before writing
 
 1. **`MODEL_TYPE`**: the family's `model_type`, which is the entry's file name.
 2. **`TITLE`**, **`SUBTITLE`**: the family's public name (several model lines separated by ` / `,
-   `"Qwen2 / Qwen2.5"`, are shown stacked, one per line), and one sentence saying how this family
-   differs from a plain Llama block: what a person must know first. Present tense, no adjectives.
+   `"Qwen2 / Qwen2.5"`, are shown stacked, one per line), and one sentence saying what makes this
+   family unique: what sets it apart from most models. A family with nothing unusual says plainly what it is.
+   Present tense, no adjectives.
 3. **`REFERENCE`**: the public checkpoint the page opens on. Choose the one most used for
    interpretability (usually the smallest base model).
    **`CHECKPOINTS`**: the family's public checkpoints as Hub ids, the reference among them; each is a

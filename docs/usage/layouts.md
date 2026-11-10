@@ -1,6 +1,6 @@
 ---
 title: Layouts
-one_liner: "Every standard value has one axis layout on every family (four exceptions: `layer_output` and `layer_mid` are `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear, `layer_mid` and `mlp_norm_output` are `FlatResidual` on OPT, `attention_keys_prerope` is `SharedRopeKeys` under latent attention), one of thirty-eight named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
+one_liner: "Every standard value has one axis layout on every family (four exceptions: `layer_output` is `Streams` on DeepSeek-V4, `linear_attn.decays` is `ChannelGates` on Kimi-Linear, `layer_mid` and `mlp_norm_output` are `FlatResidual` on OPT, `attention_keys_prerope` is `SharedRopeKeys` under latent attention), one of thirty-eight named `jaxtyping` types defined beside the envoy that serves them (`Residual`, `Pattern`, `Keys`, ... from `nnterp.components`) you can read (`value.dims`), check (`isinstance(t, value.layout)`) and annotate your own values with."
 tags: [usage, layouts, shapes, jaxtyping, dims, axis_size, num_heads, num_kv_heads, hidden_size, Residual, Pattern, Streams, num_experts, top_k]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/reference/families.md, docs/usage/availability.md, docs/extending/custom-values.md]
 sources: [nnterp/components/eproperty.py, nnterp/components/standard.py, nnterp/components/moe.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/standardized.py, nnterp/components/__init__.py]
@@ -19,8 +19,8 @@ They are `jaxtyping` types composed from the axis names ([below](#axis-names-and
 and `value.dims` names its axes. Layouts differ between values, not between families:
 `attention_probabilities` is a `Pattern`, `[batch, num_heads, query, key]`, on GPT-2, Llama and
 BLOOM alike, and the per-family suite checks every value's axes against the model's sizes.
-One layout per value on every family, except `layer_output` and `layer_mid` on the hyper-connection
-families (DeepSeek-V4), whose residual is several parallel streams: there they are `Streams`,
+One layout per value on every family, except `layer_output` on the hyper-connection
+families (DeepSeek-V4), whose residual is several parallel streams: there it is `Streams`,
 `[batch, seq, streams, hidden_size]` ([below](#streams-on-deepseek-v4)), and `linear_attn.decays` on
 Kimi-Linear, whose Kimi Delta Attention decays each key channel of the state on its own:
 there it is `ChannelGates`, `[batch, seq, heads, key_dim]`; `layer_mid` and `mlp_norm_output`
@@ -71,7 +71,7 @@ The thirty-eight names, their axes, and the values that carry each:
 | --- | --- | --- |
 | `Residual` | `batch seq hidden_size` | `layer_input`, `layer_output`, `attention_output`, `mlp_output`, `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input`, `token_embeddings`, `final_norm_output` |
 | `FlatResidual` | `tokens hidden_size` | OPT's `layer_mid` and `mlp_norm_output`: the stream with batch and sequence flattened, as its block holds it around the feed-forward path |
-| `Streams` | `batch seq streams hidden_size` | `layer_input`, `layer_mid` and `layer_output` on a hyper-connection family (DeepSeek-V4), in place of `Residual` |
+| `Streams` | `batch seq streams hidden_size` | `layer_output` (and `layers[i].input`) on a hyper-connection family (DeepSeek-V4), in place of `Residual` |
 | `StreamWeights` | `batch seq streams` | a hyper-connection family's `attention_post`, `mlp_post` |
 | `StreamMixing` | `batch seq streams streams` | a hyper-connection family's `attention_comb`, `mlp_comb` |
 | `Logits` | `batch seq vocab_size` | `logits` |
@@ -257,8 +257,8 @@ model.layers[0].self_attn.qk_rope_head_dim                         # 64
 ## `Streams` on DeepSeek-V4
 
 DeepSeek-V4 carries `hc_mult` parallel copies of the residual stream between blocks, and
-`layer_output` is the block's own tensor, so its layout is `Streams`, not `Residual`; so are
-`layer_input` and `layer_mid`, the streams between the sublayers. The contributions and what
+`layer_output` is the block's own tensor, so its layout is `Streams`, not `Residual`; so is
+`layer_input`. The contributions and what
 each sublayer is called with (`attention_norm_output`, `mlp_norm_output`, `mlp_input`) stay
 `Residual`: each sublayer reads one weighted collapse of the streams and
 returns `[batch, seq, hidden_size]`, which the block writes into every stream with the weights

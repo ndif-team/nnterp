@@ -255,8 +255,7 @@ def test_a_wrapper_builds_its_vision_encoder(name, wrapper):
 def test_a_hyper_connection_block_draws_its_streams():
     """A BLOCK with ``streams`` gives the schema its stream count and, per sublayer, the hyper-connection module; the
     nodes name the block's mixing and weight values with their layouts, the collapse each pre-norm reads, the streams
-    between the sublayers (``layer_mid``, read at the key ``streams["mid"]`` names) and the readout on the strip. A
-    BLOCK without ``streams`` gets none of it."""
+    between the sublayers and the readout on the strip. A BLOCK without ``streams`` gets none of it."""
     entry = entries.load("deepseek_v4")
     page = build.build_page(entry, reference=pinned(entry))
     data = checkpoint_data(page)
@@ -268,9 +267,8 @@ def test_a_hyper_connection_block_draws_its_streams():
         assert (nodes[f"hc.{key}"]["expr"], nodes[f"hc.{key}"]["layout"]) == (f"model.layers[i].{comb}", "StreamMixing")
         assert (nodes[f"post.{key}"]["expr"], nodes[f"post.{key}"]["layout"]) == (f"model.layers[i].{post}", "StreamWeights")
         assert nodes[f"collapse.{key}"]["expr"] == f"model.layers[i].{norm}.input"
-    assert "stream.mid.0" not in nodes
-    assert nodes["stream.input"]["layout"] == nodes["boundary.layer_mid"]["layout"] == "Streams"
-    assert nodes["boundary.layer_mid"]["expr"] == "model.layers[i].layer_mid"
+    assert nodes["stream.input"]["layout"] == nodes["stream.mid.0"]["layout"] == "Streams"
+    assert nodes["stream.mid.0"]["expr"] == "model.layers[i].ffn_hc.input"
     assert nodes["plus"]["expr"] == entry.BLOCK["identity"]
     assert nodes["strip.readout"]["expr"] == "model.model.hc_head" and nodes["strip.readout"]["extra"] == entry.STRIP["readout"]
     assert 'data-node="strip.readout"' in page

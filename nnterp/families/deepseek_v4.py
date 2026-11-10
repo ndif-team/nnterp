@@ -19,8 +19,7 @@ matrix mixing the streams, consumed transposed. The block, per token::
 * **``layer_output`` is the block's own stream tensor**, under the `Streams`
   layout, and so is ``layers[i].input``; writes land natively, and
   ``skip_layers`` and ``steer`` work unchanged (a ``[hidden_size]`` steering vector
-  broadcasts over the streams). ``layer_mid`` is the streams between the
-  sublayers, ``h`` above, also `Streams`.
+  broadcasts over the streams). ``layer_mid``, ``h`` above, is not mapped.
 * **What each sublayer is called with** is one stream's width:
   ``attention_norm_output`` is ``input_layernorm(collapsed_a)``,
   ``mlp_norm_output`` and ``mlp_input`` are ``post_attention_layernorm(collapsed_f)``,
@@ -70,7 +69,7 @@ from transformers.models.deepseek_v4.modeling_deepseek_v4 import (
 
 from ..components import (
     Attention, EProperty, HeadOutputs, INTERFACE, Keys, Layer, Moe, Pattern, Queries, StreamMixing, StreamWeights, Streams, first_tensor, holding,
-    interface_reason, rewrap, rotary_reason,
+    interface_reason, rewrap, rotary_reason, unavailable,
 )
 
 if TYPE_CHECKING:
@@ -84,6 +83,9 @@ RENAME = {
 }
 
 
+STREAMS_BOUNDARY = "hyper-connection streams: the sublayers read a mix of the streams, not the stream; the streams between the sublayers are not mapped for this family yet"
+
+
 class Layer(Layer):
     """DeepSeek-V4's decoder block; returns the bare stream tensor, so the base holds, under the `Streams` layout.
 
@@ -94,19 +96,10 @@ class Layer(Layer):
     The inner boundaries: ``attention_norm_output``, ``mlp_norm_output`` and
     ``mlp_input`` are the base's, ``[batch, seq, hidden_size]``: what each
     sublayer is called with, its norm's output on the collapsed mix of the
-    streams. ``layer_mid`` is the streams between the sublayers, under the
-    `Streams` layout: the block's binding of ``attention_combᵀ · x +
-    attention_post ⊗ attention_output``, which ``ffn_hc`` and the block's own
-    mixing after the MLP both read, so a write reaches both. It is an
-    operation of the block's forward, read after the block has begun, so the
-    forward is instrumented at build (``sourced``).
+    streams.
     """
 
-    sourced = True
-
-    @EProperty("source.hidden_states_0.output", description="The residual streams between the two sublayers")
-    def layer_mid(self, value) -> Streams:
-        return value
+    layer_mid = unavailable(STREAMS_BOUNDARY)
 
 
     @EProperty(key="input", description="The residual streams entering the block")

@@ -43,8 +43,7 @@ class TestDeepseekV4(FamilySuite):
     LOAD_KWARGS = {"dtype": torch.float32}  # the norms are kept in float32; a bf16 forward fails on CPU inside transformers
     ATTENTION_SINK = True
     MLP_WIDTH_KEY = "moe_intermediate_size"
-    EXPECTED_UNAVAILABLE = {"self_attn.interface": OWN_ARITHMETIC, "self_attn.value_weight": "the values are the keys", "self_attn.output_weight": "the values are the keys"}
-    MID_IDENTITY = False  # layer_mid is the streams, attention_combᵀ·input + attention_post⊗attention_output (test_layer_mid_is_the_streams_between_the_sublayers)
+    EXPECTED_UNAVAILABLE = {"layer_mid": "hyper-connection streams", "self_attn.interface": OWN_ARITHMETIC, "self_attn.value_weight": "the values are the keys", "self_attn.output_weight": "the values are the keys"}
 
     def expected_values(self, model):
         return super().expected_values(model) | set(WEIGHTS)
@@ -71,34 +70,6 @@ class TestDeepseekV4(FamilySuite):
         for i, (x, post_a, _, attn, post_f, _, mlp, out) in enumerate(read_blocks(model)):
             total = x.mean(2) + post_a.mean(-1, keepdim=True) * attn + post_f.mean(-1, keepdim=True) * mlp
             torch.testing.assert_close(total, out.mean(2), rtol=1e-5, atol=1e-5, msg=f"layer {i}")
-
-    def test_layer_mid_is_the_streams_between_the_sublayers(self, model):
-        """``layer_mid`` is the block's binding of ``attention_combᵀ·input + attention_post⊗attention_output``: what
-        ``ffn_hc`` reads and what the block mixes again after the MLP, so both an assignment and an in-place edit reach
-        ``layer_output`` through both."""
-        layer = model.layers[1]
-        with model.trace(PROMPT):
-            x = layer.layer_input.save()
-            post_a, comb_a = layer.attention_post.save(), layer.attention_comb.save()
-            attn = layer.self_attn.attention_output.save()
-            mid = layer.layer_mid.save()
-            entering = layer.ffn_hc.input.save()
-        assert isinstance(mid, Streams) and torch.equal(mid, entering)
-        torch.testing.assert_close(mid, mixed(comb_a, x) + written(post_a, attn), rtol=0, atol=0)
-        delta = torch.zeros_like(mid)
-        delta[:, -1] = 1.0
-        for form in ("assign", "in place"):
-            with model.trace(PROMPT):
-                if form == "assign":
-                    layer.layer_mid = layer.layer_mid + delta
-                else:
-                    layer.layer_mid[:, -1] += 1.0
-                read = layer.ffn_hc.input.save()
-                post_f, comb_f = layer.mlp_post.save(), layer.mlp_comb.save()
-                mlp = layer.mlp.mlp_output.save()
-                out = layer.layer_output.save()
-            assert torch.equal(read, mid + delta), form
-            torch.testing.assert_close(out, mixed(comb_f, mid + delta) + written(post_f, mlp), msg=form)
 
     def test_attention_input_gain(self, model):
         """The attention reads ``gain * n(collapsed)``, ``collapsed`` the ``pre``-weighted mix of the streams that

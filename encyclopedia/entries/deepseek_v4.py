@@ -80,7 +80,6 @@ BLOCK = {
         "collapse": {"self_attn": "attention_comb", "mlp": "mlp_comb"},
         "post": {"self_attn": "attention_post", "mlp": "mlp_post"},
         "readout": "hc_head",
-        "mid": "source.hidden_states_0.output",
     },
 }
 
@@ -113,11 +112,9 @@ scaled per stream by `post`, and the streams themselves are mixed by `comb`, app
 stream `k` of the result is `Σ_j comb[j, k] · x_j`. Llama's norm names hold:
 `input_layernorm` before the attention, `post_attention_layernorm` before the mixture.
 
-The block's inner boundaries are served. `attention_norm_output` is `input_layernorm(xa)`, and
-`mlp_norm_output` and `mlp_input` are `post_attention_layernorm(xf)`: what each sublayer is called
-with, `[batch, seq, hidden_size]`. `layer_mid` is `h`, the streams between the sublayers
-(`Streams`), read at the block's own binding of it, so a write reaches both `ffn_hc` and the
-block's mixing after the MLP. `attention_input_gain` is `input_layernorm`'s weight, the gain
+`attention_norm_output` is `input_layernorm(xa)`, and `mlp_norm_output` and `mlp_input` are
+`post_attention_layernorm(xf)`: what each sublayer is called with, `[batch, seq, hidden_size]`.
+`layer_mid`, the streams between the sublayers, is unavailable. `attention_input_gain` is `input_layernorm`'s weight, the gain
 between `xa` and what the attention reads.
 
 ## `layer_output` is four streams

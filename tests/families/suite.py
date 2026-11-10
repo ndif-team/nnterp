@@ -728,9 +728,8 @@ class FamilySuite:
             out = layer.layer_output.save()
 
         def plain(out, mid, added):
-            """``out == mid + added`` to 16 units of the block's dtype at its scale; not where the MLP's output is not the
-            stream's shape (DeepSeek-V4's parallel streams take it through ``mlp_post``)."""
-            if added is None or added.shape != out.shape:
+            """``out == mid + added`` to 16 units of the block's dtype at its scale."""
+            if added is None:
                 return False
             eps = torch.finfo(out.dtype).eps
             error = (out.double() - mid.double().reshape(out.shape) - added.double()).abs().max().item()
@@ -758,7 +757,7 @@ class FamilySuite:
         if sums_plainly:
             assert plain(result, new, part), "layer_output is not the assigned stream plus the MLP's output"
 
-        if mid.dim() >= 3:  # two invokes, both writing; OPT's flattened rows are not split by invoke
+        if mid.dim() == 3:  # two invokes, both writing; OPT's flattened rows are not split by invoke
             ids = model.tokenizer(PROMPT).input_ids  # token ids: a wrapper's processor may refuse to batch text alone
             batched = {}
             for form in ("assign", "in place"):

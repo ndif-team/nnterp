@@ -286,6 +286,14 @@ with torch.no_grad():
     top = model.project_on_vocab(ov).topk(5).indices    # what head 3 writes for " Paris", through the unembedding
 ```
 
+On a BitNet load (`quant_method: bitnet`, transformers' `AutoBitLinear` or `BitLinear`) a
+projection applies a function of the weight it stores, and the accessors slice the weight it
+applies: the stored weight ternarized as every forward does it (`online`), times `weight_scale`
+(`offline`), or the unpacked codes over `weight_scale` (`BitLinear`), computed anew on each
+call. Such a layer also rounds its input to 8 bits per token, so there `value_weight(kv) @ x`
+gives the values to that rounding (a relative error of about 0.01 on
+`microsoft/bitnet-b1.58-2B-4T`; 0.002 with the input rounded as the layer rounds it).
+
 `value_weight(kv) @ x`, plus that head's slice of the projection's bias, is
 `attention_values[:, kv]` for what the attention is called with (`attention_norm_output`, or
 the stream itself on a post-norm block); `sum_j output_weight(j) @ attention_premix[:, t, j]`,

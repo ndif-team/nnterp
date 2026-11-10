@@ -471,7 +471,11 @@ forward. On the packed checkpoint they are stored ternary, four to a byte, with 
 of the rounded input by the ternarized weight exactly, and differs from
 <code>F.linear(input, weight)</code> by 2.4 times its own norm. An edit at a projection's input is rounded
 with the rest of the row, and a weight edit on the bf16 checkpoint is re-ternarized: adding
-<code>0.1 · mean|W|</code> to one <code>q_proj</code> weight at block 1 leaves the logits bit-identical. The page's
+<code>0.1 · mean|W|</code> to one <code>q_proj</code> weight at block 1 leaves the logits bit-identical.
+<code>self_attn.value_weight(kv)</code> and <code>output_weight(j)</code> slice the weight a projection applies,
+ternarized (times <code>weight_scale</code> on the packed checkpoint), not the one it stores; with the input
+rounded as the projection rounds it, <code>value_weight(kv)</code> reproduces <code>attention_values</code> to bfloat16
+rounding (a relative error of 0.002 at block 3 of either checkpoint). The page's
 printout comes from a meta build, where the projections are plain <code>Linear</code>: transformers replaces
 them with <code>AutoBitLinear</code> when the weights load.</p>
 <h2>The stream is large, and the input norms' gains small</h2>
@@ -517,7 +521,8 @@ interface and before <code>o_proj</code>, so <code>attention_head_outputs</code>
 norm; the MLP norms its gated product (<code>ffn_sub_norm</code>) before <code>down_proj</code>.
 The released checkpoints (<code>quant_method: bitnet</code>) load their projections as
 transformers' <code>AutoBitLinear</code>; a meta build and the pinned tiny show plain
-<code>nn.Linear</code>.</p></div>
+<code>nn.Linear</code>. <code>value_weight</code> and <code>output_weight</code> are the weights those
+layers apply, not the ones they store (<code>nnterp.components.attention.bitnet_weight</code>).</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
       <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/bitnet.py">nnterp/families/bitnet.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_bitnet.py">tests/families/test_bitnet.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
@@ -533,7 +538,7 @@ transformers' <code>AutoBitLinear</code>; a meta build and the pinned tiny show 
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">microsoft/bitnet-b1.58-2B-4T</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev63+g897918965 · transformers 5.21.0 · reference <span id="colophon-reference">microsoft/bitnet-b1.58-2B-4T</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

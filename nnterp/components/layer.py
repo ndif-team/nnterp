@@ -149,8 +149,11 @@ class Layer(Standard):
         What the MLP's pre-norm is called with: ``layer_input +
         attention_output`` on a pre-norm block, where it is read as
         ``post_attention_layernorm.input``. A parallel block has no such
-        stream, and marks this unavailable. In-place edits and assignment reach
-        the model.
+        stream, and marks this unavailable. An in-place edit changes the stream
+        itself; an assignment replaces the norm call's argument, and the block
+        has already bound the stream to its residual (``residual =
+        hidden_states``), so the MLP reads the assigned tensor while the
+        residual add keeps the old one.
         """
         return value
 

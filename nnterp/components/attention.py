@@ -413,6 +413,9 @@ class Attention(Standard):
     def attention_scores(self, value: torch.Tensor) -> Pattern:
         """The scaled, masked scores entering the softmax, ``[batch, num_heads, query, key]``.
 
+        Where the family softcaps the scores (Gemma-2, VaultGemma with ``attn_logit_softcapping``) they are read
+        after the cap, so an additive edit lands on capped scores.
+
         ``softmax(attention_scores)`` is ``attention_probabilities`` up to the
         dtype cast. Assign to replace them; in-place edits reach the model.
         """
@@ -503,7 +506,11 @@ class Attention(Standard):
                 `attention_queries_prerope` / `attention_keys_prerope` serve them.
             positions: Each row's absolute position, ``[seq]`` (a tensor or a
                 list), or ``[batch, seq]`` for an ``x`` of ``[batch, heads, seq,
-                qk_head_dim]`` whose prompts sit at different positions.
+                qk_head_dim]`` whose prompts sit at different positions. On an
+                M-RoPE family (the Qwen-VL text families, Qwen3.5) with an image in
+                the prompt, the model's own ``[3, batch, seq]`` positions (the
+                rotary module's second argument): a token's position there is not
+                its index from the image on.
 
         The rotary embedding module (its rope scaling included, and the
         block's layer type where sliding and full blocks rotate differently)

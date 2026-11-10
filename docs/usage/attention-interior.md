@@ -618,12 +618,15 @@ query head before the rotary embedding, so `attention_keys` and
 
 These seven do their own attention arithmetic too, and their families map the
 same six values onto it: GPT-J's, GPT-Neo's, CodeGen's and GPT-NeoX-Japanese's around
-their `_attn` calls, XGLM's on its projections, its cache update and the bindings around
-its two `bmm` calls, BLOOM's on its `_reshape` split, its cache update and its merge of the
+their `_attn` calls, XGLM's on its projections and the bindings around its two `bmm`
+calls, BLOOM's on its `_reshape` split, its cache update and its merge of the
 heads, MPT's on its `*_states` bindings, its cache update and second `matmul`. Where a
 forward flattens batch and heads together for a `bmm`, the value is read where the batch
 still leads, since nnsight narrows a tensor to an invoke's rows only then: each invoke of a
-trace reads and edits its own rows on all seven. The
+trace reads and edits its own rows on all seven, except XGLM's keys and values. Those are
+read at the `reshape` that flattens them after the cache update, the one operation that
+holds them with or without a cache, so under several invokes each invoke reads every
+invoke's keys and values, and an edit in one reaches them all. The
 head outputs are heads-first in those forwards and are served as a sequence-first view,
 so an in-place edit still lands. All seven load eager by default. BLOOM's, MPT's,
 CodeGen's, XGLM's and GPT-NeoX-Japanese's values do not check the implementation at all

@@ -702,12 +702,13 @@ class FamilySuite:
             torch.testing.assert_close(first[name][0], together[name][0], msg=name)
             torch.testing.assert_close(second[name][0], together[name][1], msg=name)
 
-    def test_interior_per_invoke(self, model):
+    def test_interior_per_invoke(self, model, values=INTERIOR + ("attention_probabilities",)):
         """Every interior value, under two invokes of one trace: each invoke reads its own row, as one invoke of both
-        does, and an assignment in the first leaves the second's logits as they were."""
+        does, and an assignment in the first leaves the second's logits as they were. A family test passes ``values`` to
+        check some of them only."""
         attn = self.attn_block(model).self_attn
         unavailable = attn.support()
-        names = [name for name in INTERIOR + ("attention_probabilities",) if not unavailable.get(name)]
+        names = [name for name in values if not unavailable.get(name)]
         if not names:
             pytest.skip("no attention interior on this checkpoint")
         ids = model.tokenizer(PROMPT).input_ids

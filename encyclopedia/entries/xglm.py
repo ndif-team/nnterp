@@ -133,9 +133,12 @@ XGLM has one attention implementation, so the interior values need no eager load
 The queries are scaled by `1/sqrt(head_dim)` as they are projected, so `attention_queries` is
 `q_proj`'s output times that scale. `attention_scores` is `attention_queries @
 attention_keys.transpose(-1, -2)` plus the mask, clamped below at the dtype's minimum. The `bmm` calls take
-`[batch * num_heads, ...]` tensors, which nnsight does not narrow to an invoke's rows, so every value is read
-where the forward still holds it batch first, or a view of it: an in-place edit reaches the model and stays in
-its invoke. Every head has its own keys and values.
+`[batch * num_heads, ...]` tensors, which nnsight does not narrow to an invoke's rows, so the queries, scores,
+pattern and head outputs are read where the forward still holds them batch first, or a view of it: an in-place
+edit reaches the model and stays in its invoke. The keys and values are read at the `reshape` that flattens
+them after the cache update, the one operation that holds them with or without a cache, viewed heads first:
+an in-place edit reaches the model, but under several invokes each invoke reads every invoke's keys and
+values, and an edit in one reaches them all. Every head has its own keys and values.
 
 ## Block 0 writes a large shared vector, and position 0 is a sink
 

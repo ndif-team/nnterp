@@ -14,8 +14,11 @@ returns a bare tensor. The attention does its own arithmetic whatever
 ``[batch * num_heads, seq, head_dim]`` for ``torch.bmm``, the mask added and clamped,
 softmax, dropout, ``bmm`` with the values; the interior needs no eager load. nnsight
 narrows a tensor to an invoke's rows only when its leading axis is the batch, so
-every interior value is read where the forward still holds it batch first, and
-each invoke of a trace reads and edits its own rows.
+the queries, scores, pattern and head outputs are read where the forward still
+holds them batch first, and each invoke of a trace reads and edits its own rows of
+them. The keys and values are read at the ``reshape`` that flattens them, after the
+cache update, the one operation that holds them with or without a cache: each
+invoke reads, and an edit reaches, the whole batch's.
 """
 
 from typing import TYPE_CHECKING
@@ -23,7 +26,7 @@ from typing import TYPE_CHECKING
 import torch
 from transformers.models.xglm.modeling_xglm import XGLMAttention, XGLMDecoderLayer
 
-from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, by_cache
+from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values
 
 if TYPE_CHECKING:
     from nnsight import Envoy
@@ -65,13 +68,6 @@ def _flat(value: torch.Tensor) -> torch.Tensor:
     return value.reshape(value.shape[0] * value.shape[1], *value.shape[2:])
 
 
-#: Where the queries, keys and values are, by whether the call has a cache (`by_cache`): the queries are the scaled
-#: projection's binding, the keys and values ``update``'s return where the call has a cache, else their bindings.
-QUERIES = by_cache(("source.query_states_0.output", None), ("source.query_states_0.output", None))
-KEYS = by_cache(("source.curr_past_key_values_update_0.output", 0), ("source.key_states_2.output", None))
-VALUES = by_cache(("source.curr_past_key_values_update_0.output", 1), ("source.value_states_2.output", None))
-
-
 class Layer(Layer):
     """XGLM's decoder block; returns a bare tensor, so the base holds.
 
@@ -97,17 +93,19 @@ class Attention(Attention):
 
     # The forward flattens queries, keys and values to ``[batch * num_heads,
     # ...]`` for ``bmm``, a layout nnsight cannot narrow to an invoke's rows, so
-    # each value is read where the forward still holds it batch first: the
-    # queries at the scaled projection (viewed heads first), the keys and values
-    # after the cache update, the update's return where the call has a cache
-    # (`by_cache`) and the reshaped bindings where it has none, the scores at the
-    # clamp of the masked scores (``attn_weights_2``), the pattern at the
-    # softmax's output viewed heads first (the dropout's output, flat, in
-    # training), the head outputs at the transpose before the merge. Every read is
-    # the tensor the forward holds, or a view of it, so in-place edits reach the
-    # model and each invoke reads and edits its own rows.
+    # the queries, scores, pattern and head outputs are read where the forward
+    # still holds them batch first: the queries at the scaled projection (viewed
+    # heads first), the scores at the clamp of the masked scores
+    # (``attn_weights_2``), the pattern at the softmax's output viewed heads
+    # first (the dropout's output, flat, in training), the head outputs at the
+    # transpose before the merge. The keys and values are the ``reshape`` calls
+    # that flatten them after the cache update, viewed back to heads first and
+    # reshaped back on a write: the update runs only where the call has a cache,
+    # and the ``reshape`` is the one operation after it that holds them either
+    # way, so each invoke reads the whole batch's. Every read is the tensor the
+    # forward holds, or a view of it, so in-place edits reach the model.
 
-    @EProperty(QUERIES[0], select=QUERIES[1], description="The queries entering attention, already scaled by 1/sqrt(head_dim)")
+    @EProperty("source.query_states_0.output", description="The queries entering attention, already scaled by 1/sqrt(head_dim)")
     def attention_queries(self, value) -> Queries:
         batch, seq, _ = value.shape
         return value.view(batch, seq, self._module.num_heads, -1).transpose(1, 2)
@@ -116,15 +114,21 @@ class Attention(Attention):
     def attention_queries(self, value):
         return value.transpose(1, 2).flatten(2)
 
-    @EProperty(KEYS[0], select=KEYS[1], description=Attention.attention_keys.description)
+    @EProperty("source.key_states_reshape_0.output", description=Attention.attention_keys.description)
     def attention_keys(self, value) -> Keys:
-        """The keys the attention computes with: the cache's, every position so far, where the call has a cache."""
-        return value
+        return _heads_first(self, value)
 
-    @EProperty(VALUES[0], select=VALUES[1], description=Attention.attention_values.description)
+    @attention_keys.postprocess
+    def attention_keys(self, value):
+        return _flat(value)
+
+    @EProperty("source.value_states_reshape_0.output", description=Attention.attention_values.description)
     def attention_values(self, value) -> Values:
-        """The values the attention computes with: the cache's, every position so far, where the call has a cache."""
-        return value
+        return _heads_first(self, value)
+
+    @attention_values.postprocess
+    def attention_values(self, value):
+        return _flat(value)
 
     @EProperty("source.attn_weights_2.output", description=Attention.attention_scores.description)
     def attention_scores(self, value) -> Pattern:

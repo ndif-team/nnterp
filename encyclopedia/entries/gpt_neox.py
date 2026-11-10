@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "gpt_neox"
 TITLE = "GPT-NeoX"
-SUBTITLE = (
-    "Pythia's block is parallel: attention and MLP each read their own LayerNorm of the block input, and the "
-    "block adds both at once, so a block's MLP never sees that block's attention."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "EleutherAI/pythia-70m-deduped"

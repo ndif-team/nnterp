@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "gpt_bigcode"
 TITLE = "StarCoder / SantaCoder"
-SUBTITLE = (
-    "GPT-2's sequential block with multi-query attention: one key head and one value head serve every "
-    "query head, and the queries, keys and values are cut from one fused c_attn projection."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "bigcode/gpt_bigcode-santacoder"

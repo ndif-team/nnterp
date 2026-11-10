@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "olmo3"
 TITLE = "OLMo 3 / OLMo 3.1"
-SUBTITLE = (
-    "OLMo-2's post-norm block: attention and MLP read the raw stream and the stream receives the post-norms' "
-    "outputs; three blocks in four attend over a 4096-token window with the plain rotary, and the fourth attends "
-    "over the whole prefix with a YaRN-scaled rotary."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "allenai/Olmo-3-1025-7B"

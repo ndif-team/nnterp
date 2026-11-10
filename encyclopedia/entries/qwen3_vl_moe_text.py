@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "qwen3_vl_moe_text"
 TITLE = "Qwen3-VL-MoE"
-SUBTITLE = (
-    "Qwen3's attention, queries and keys RMS-normed per head, under a multimodal rotary embedding, and a "
-    "mixture of 128 experts on every block; on an image prompt the text model adds vision features at the "
-    "image positions again after blocks 0, 1 and 2, outside the blocks."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen3-VL-30B-A3B-Instruct"

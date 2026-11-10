@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "glm_moe_dsa"
 TITLE = "GLM-5"
-SUBTITLE = (
-    "Latent attention over only the keys an indexer selects for each query, a selection each block returns "
-    "beside the stream for the next block to reuse, and a sigmoid-routed mixture with a shared expert after three dense blocks."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "zai-org/GLM-5"

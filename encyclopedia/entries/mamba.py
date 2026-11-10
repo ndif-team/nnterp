@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "mamba"
 TITLE = "Mamba"
-SUBTITLE = (
-    "No attention and no MLP: each block is one norm and a selective-scan mixer with a state per channel, and "
-    "reading inside the mixer needs mamba_ssm's CUDA kernels routed to transformers' torch functions."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "state-spaces/mamba-130m-hf"

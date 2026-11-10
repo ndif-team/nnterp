@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "granitemoeshared"
 TITLE = "GraniteMoE-Shared"
-SUBTITLE = (
-    "GraniteMoE's block with a dense shared expert beside the mixture: the block adds the sum of the two times "
-    "residual_multiplier, and mlp_output is that scaled sum, while mlp.output is the mixture's output alone."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ibm-research/moe-7b-1b-active-shared-experts"

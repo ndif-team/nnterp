@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "seed_oss"
 TITLE = "Seed-OSS"
-SUBTITLE = (
-    "Llama's block with a bias on the query, key and value projections, and query heads that together are "
-    "twice as wide as the stream."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ByteDance-Seed/Seed-OSS-36B-Base"

@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "gpt_neox_japanese"
 TITLE = "GPT-NeoX-Japanese"
-SUBTITLE = (
-    "GPT-NeoX's module names on a sequential block, where the last block's attention returns a separate bias "
-    "that the block adds and attention_output includes."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "abeja/gpt-neox-japanese-2.7b"

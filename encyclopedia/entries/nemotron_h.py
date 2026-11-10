@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "nemotron_h"
 TITLE = "Nemotron-H / Nemotron Nano\u00a02 / Nemotron 3"
-SUBTITLE = (
-    "Every block is one RMSNorm and one sublayer: a Mamba-2 mixer on about half the blocks, attention without "
-    "rotary on a few, and on the rest a squared-ReLU MLP or, on Nemotron 3's mixture checkpoints, a mixture of experts."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16"

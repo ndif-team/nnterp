@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "xglm"
 TITLE = "XGLM"
-SUBTITLE = (
-    "OPT's pre-norm block with no MLP module, so the MLP path's term is fc2.output; the embedding is scaled by "
-    "sqrt(d_model), and sinusoidal positions are added after it."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "facebook/xglm-564M"

@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "gpt_neo"
 TITLE = "GPT-Neo / TinyStories"
-SUBTITLE = (
-    "GPT-2's sequential block and learned position embedding; the attention sits one module down, inside an "
-    "attn wrapper, computes its own scores without scaling them, and on every other block masks keys outside "
-    "a local window."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "EleutherAI/gpt-neo-125m"

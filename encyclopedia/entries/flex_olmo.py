@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "flex_olmo"
 TITLE = "FlexOlmo"
-SUBTITLE = (
-    "OLMo-2's post-norm block with a mixture of experts for the MLP: the released checkpoints route every token "
-    "to every expert, weighted by a softmax over all of them, and the stream receives the post-norm of the "
-    "weighted sum."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "allenai/FlexOlmo-7x7B-1T"

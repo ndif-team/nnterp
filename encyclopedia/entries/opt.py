@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "opt"
 TITLE = "OPT"
-SUBTITLE = (
-    "A LayerNorm block with a learned position embedding offset by 2 and no MLP module: fc1, the activation and "
-    "fc2 sit on the block itself, and fc2.output is what the MLP path adds to the stream."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "facebook/opt-125m"

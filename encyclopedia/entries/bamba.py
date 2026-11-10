@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "bamba"
 TITLE = "Bamba"
-SUBTITLE = (
-    "Llama's pre-norm block whose mixer is a Mamba-2 state-space scan on all but three blocks and, on those "
-    "three, attention that rotates half of each head; the block returns a tuple."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ibm-ai-platform/Bamba-9B-v2"

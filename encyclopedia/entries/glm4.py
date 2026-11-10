@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "glm4"
 TITLE = "GLM-4-0414 / GLM-Z1"
-SUBTITLE = (
-    "GLM's block with a second norm after each sublayer, so the stream receives the post-norms' outputs; "
-    "post_attention_layernorm keeps Llama's meaning, the MLP's input norm."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "zai-org/GLM-4-9B-0414"

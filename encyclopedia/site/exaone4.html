@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>EXAONE 4.0 · nnterp encyclopedia</title>
-<meta name="description" content="Llama&#39;s tree with the norms moved after the sublayers: attention and MLP read the raw residual stream, what reaches the stream is a post-norm&#39;s output, queries and keys are RMS-normed per head, and on 32B three sliding-window blocks alternate with one full-attention block that applies no rotary.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%2395A7EA%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23C1A95D%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23D093C7%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23E39383%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%2357BFAF%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">exaone4</span></p>
     <h1 class="disp-title"><span class="line">EXAONE 4.0</span></h1>
-    <p class="subtitle">Llama&#39;s tree with the norms moved after the sublayers: attention and MLP read the raw residual stream, what reaches the stream is a post-norm&#39;s output, queries and keys are RMS-normed per head, and on 32B three sliding-window blocks alternate with one full-attention block that applies no rotary.</p>
     <div class="pane" data-pane="chips" data-ckpts="LGAI-EXAONE/EXAONE-4.0-1.2B LGAI-EXAONE/EXAONE-4.0-32B LGAI-EXAONE/EXAONE-4.0.1-32B"><div class="chips">
 <a class="chip" href="#notes" title="Every block, or some, norms each sublayer&#39;s output and not its input: the sublayer reads the raw stream, and the stream receives the post-norm&#39;s output.">Post-norms only</a><a class="chip" href="#notes" title="On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.">Query/key norms</a><a class="chip" href="#notes" title="Some blocks, or every block, attend only to a window of the latest positions. A config key sets its length (sliding_window, window_size), and where the config lists each block&#39;s type (layer_types, attention_layers), that list says which blocks.">Sliding window</a><a class="chip" href="#notes" title="Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart.">Blocks without rotary</a><a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a></div></div>
   </div>
@@ -850,7 +849,7 @@ way, so the values are the same on every block.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">LGAI-EXAONE/EXAONE-4.0-1.2B</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">LGAI-EXAONE/EXAONE-4.0-1.2B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

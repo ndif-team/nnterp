@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "smollm3"
 TITLE = "SmolLM3"
-SUBTITLE = (
-    "Llama's block in which every fourth attention applies no rotary embedding (NoPE): there queries and "
-    "keys are the projections as split, and only the causal mask orders the tokens."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "HuggingFaceTB/SmolLM3-3B-Base"

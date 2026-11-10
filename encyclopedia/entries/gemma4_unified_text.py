@@ -6,10 +6,6 @@ import tempfile
 
 MODEL_TYPE = "gemma4_unified_text"
 TITLE = "Gemma 4 unified"
-SUBTITLE = (
-    "A sandwich block whose sum is multiplied by a learned per-block scalar, with normed queries, keys and values, "
-    "and full blocks that take their values from the key projection."
-)
 
 #: The public checkpoint the page opens on (meta build: config, tokenizer and processor, no weights).
 REFERENCE = "google/gemma-4-12B"

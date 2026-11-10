@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "solar_open"
 TITLE = "Solar Open"
-SUBTITLE = (
-    "Llama's pre-norm block with a mixture of experts on every block: a sigmoid router whose correction bias "
-    "affects only which experts are chosen, and a shared expert that runs on every token."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "upstage/Solar-Open-100B"

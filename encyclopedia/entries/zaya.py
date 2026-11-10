@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "zaya"
 TITLE = "ZAYA1"
-SUBTITLE = (
-    "A pre-norm block that scales and shifts, per channel, both the sublayer's output and the stream at every add; "
-    "its queries and keys are mixed over tokens by a causal convolution, and its mixture runs one expert per token, "
-    "chosen beside a skip class by a router whose state carries from block to block."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Zyphra/ZAYA1-8B"

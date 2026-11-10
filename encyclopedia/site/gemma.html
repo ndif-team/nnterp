@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Gemma / PaliGemma · nnterp encyclopedia</title>
-<meta name="description" content="Llama&#39;s pre-norm block with a GeGLU MLP: the embeddings are multiplied by √hidden_size before block 0, every RMSNorm multiplies by 1 + weight, and the head is the embedding matrix.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%2370B2E5%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23D89D66%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23B79BDF%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23E090A5%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%2378BD8D%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">gemma</span></p>
     <h1 class="disp-title"><span class="line">Gemma</span><span class="line">PaliGemma</span></h1>
-    <p class="subtitle">Llama&#39;s pre-norm block with a GeGLU MLP: the embeddings are multiplied by √hidden_size before block 0, every RMSNorm multiplies by 1 + weight, and the head is the embedding matrix.</p>
     <div class="pane" data-pane="chips" data-ckpts="google/gemma-2b google/gemma-2b-it google/gemma-1.1-2b-it google/codegemma-2b"><div class="chips">
 <a class="chip" href="#notes" title="The embedding module multiplies its own output by the square root of the hidden size, so token_embeddings is the scaled tensor.">Scaled embeddings</a><a class="chip" href="#notes" title="The norms before and after each sublayer, and the final norm, multiply by (1 + weight), so the gain is 1 + norm.weight, not norm.weight.">1 + weight norm gain</a><a class="chip" href="#notes" title="One key/value head serves every query head (num_kv_heads is 1), so an edit to its keys or values reaches all of them.">Multi-query attention</a></div></div><div class="pane" data-pane="chips" data-ckpts="google/gemma-7b google/gemma-7b-it google/gemma-1.1-7b-it google/codegemma-7b" hidden><div class="chips">
 <a class="chip" href="#notes" title="The embedding module multiplies its own output by the square root of the hidden size, so token_embeddings is the scaled tensor.">Scaled embeddings</a><a class="chip" href="#notes" title="The norms before and after each sublayer, and the final norm, multiply by (1 + weight), so the gain is 1 + norm.weight, not norm.weight.">1 + weight norm gain</a></div></div><div class="pane" data-pane="chips" data-ckpts="google/paligemma-3b-pt-224 google/paligemma-3b-pt-448 google/paligemma-3b-pt-896 google/paligemma-3b-mix-224 google/paligemma-3b-mix-448" hidden><div class="chips">
@@ -1974,7 +1973,7 @@ an image: a text-only trace takes the tokenizer's encoding.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">google/gemma-2b</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">google/gemma-2b</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

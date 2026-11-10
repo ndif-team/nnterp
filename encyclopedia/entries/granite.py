@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "granite"
 TITLE = "Granite"
-SUBTITLE = (
-    "Llama's block with four config scalars around it: the embeddings are multiplied before block 0, "
-    "each sublayer's output is multiplied by residual_multiplier before it is added, the attention "
-    "scales its scores by attention_multiplier, and the logits are the head's output divided by logits_scaling."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ibm-granite/granite-3.0-2b-base"

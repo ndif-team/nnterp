@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "jamba"
 TITLE = "Jamba / Jamba 1.5–1.7 / Jamba2"
-SUBTITLE = (
-    "Llama's pre-norm block with one of two mixers, a Mamba-1 selective scan with RMS norms on its step, B and C "
-    "on most blocks and attention without rotary on one block in eight or fourteen, and, on every other block "
-    "of the larger checkpoints, a mixture of experts in place of the MLP."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ai21labs/Jamba-v0.1"

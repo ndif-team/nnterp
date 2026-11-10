@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "exaone4"
 TITLE = "EXAONE 4.0"
-SUBTITLE = (
-    "Llama's tree with the norms moved after the sublayers: attention and MLP read the raw residual stream, "
-    "what reaches the stream is a post-norm's output, queries and keys are RMS-normed per head, and on 32B "
-    "three sliding-window blocks alternate with one full-attention block that applies no rotary."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "LGAI-EXAONE/EXAONE-4.0-1.2B"

@@ -3,10 +3,6 @@ alternating, and a mixture of experts whose experts are clamped SwiGLUs with bia
 
 MODEL_TYPE = "gpt_oss"
 TITLE = "GPT-OSS"
-SUBTITLE = (
-    "Llama's pre-norm block with a mixture of experts on every block, sliding-window and full-attention blocks "
-    "in turn, and a learned sink logit per head in the softmax, so a pattern row sums to less than one."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "openai/gpt-oss-20b"

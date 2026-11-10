@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "codegen"
 TITLE = "CodeGen"
-SUBTITLE = (
-    "GPT-J's parallel block and adjacent-pair rotary, with the queries, values and keys cut from one "
-    "projection laid out as four groups of [q | v | k]."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Salesforce/codegen-350M-mono"

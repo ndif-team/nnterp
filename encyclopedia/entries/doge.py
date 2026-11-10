@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "doge"
 TITLE = "Doge"
-SUBTITLE = (
-    "Llama's pre-norm block whose residual stream is multiplied by a learned per-channel gate before each add, "
-    "and whose attention adds a learned bias per key, computed from the values, to the scores."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 #: Doge-260M is the largest dense checkpoint whose weights load in transformers.

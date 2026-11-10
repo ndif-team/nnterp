@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "qwen3_next"
 TITLE = "Qwen3-Next / Qwen3-Coder-Next"
-SUBTITLE = (
-    "Llama's pre-norm block with a gated DeltaNet mixer on three blocks in four, output-gated attention on the "
-    "fourth, and a mixture of 512 experts whose shared expert is scaled by a sigmoid gate per token; the mixer "
-    "fuses its projections per key head."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen3-Next-80B-A3B-Instruct"

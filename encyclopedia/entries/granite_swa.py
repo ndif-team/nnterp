@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "granite_swa"
 TITLE = "Granite Swash"
-SUBTITLE = (
-    "Granite's block and multipliers with sliding-window attention on most blocks and a learned sink per head "
-    "that scales each head's output after the softmax: the pattern's rows sum to one, and each head writes only a "
-    "share of what its pattern mixes."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ibm-granite/granite-swash-2b"

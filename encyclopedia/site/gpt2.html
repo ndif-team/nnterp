@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GPT-2 · nnterp encyclopedia</title>
-<meta name="description" content="Llama&#39;s sequential block with LayerNorm in place of RMSNorm, a learned position embedding added to the token embeddings before block 0, and queries, keys and values cut from one fused c_attn projection.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%239CB66F%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23B99BDE%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%2355BFB3%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%2373B1E6%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23E29480%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">gpt2</span></p>
     <h1 class="disp-title"><span class="line">GPT-2</span></h1>
-    <p class="subtitle">Llama&#39;s sequential block with LayerNorm in place of RMSNorm, a learned position embedding added to the token embeddings before block 0, and queries, keys and values cut from one fused c_attn projection.</p>
     <div class="pane" data-pane="chips" data-ckpts="openai-community/gpt2 openai-community/gpt2-medium openai-community/gpt2-large openai-community/gpt2-xl distilbert/distilgpt2 stanford-crfm/alias-gpt2-small-x21 stanford-crfm/battlestar-gpt2-small-x49 stanford-crfm/caprica-gpt2-small-x81 stanford-crfm/darkmatter-gpt2-small-x343 stanford-crfm/expanse-gpt2-small-x777 stanford-crfm/arwen-gpt2-medium-x21 stanford-crfm/beren-gpt2-medium-x49 stanford-crfm/celebrimbor-gpt2-medium-x81 stanford-crfm/durin-gpt2-medium-x343 stanford-crfm/eowyn-gpt2-medium-x777"><div class="chips">
 <a class="chip" href="#notes" title="A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input.">Position embeddings</a><a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a></div></div>
   </div>
@@ -1544,7 +1543,7 @@ none of the attention's interior values is available there.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev142+g946798f4e · transformers 5.21.0 · reference <span id="colophon-reference">openai-community/gpt2</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">openai-community/gpt2</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

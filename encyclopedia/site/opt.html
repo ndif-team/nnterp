@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OPT · nnterp encyclopedia</title>
-<meta name="description" content="A LayerNorm block with a learned position embedding offset by 2 and no MLP module: fc1, the activation and fc2 sit on the block itself, and fc2.output is what the MLP path adds to the stream.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%2365BF9F%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23DA91B6%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%235FB7DC%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23A7A1E7%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23CEA35F%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">opt</span></p>
     <h1 class="disp-title"><span class="line">OPT</span></h1>
-    <p class="subtitle">A LayerNorm block with a learned position embedding offset by 2 and no MLP module: fc1, the activation and fc2 sit on the block itself, and fc2.output is what the MLP path adds to the stream.</p>
     <div class="pane" data-pane="chips" data-ckpts="facebook/opt-125m facebook/opt-1.3b facebook/opt-2.7b facebook/opt-6.7b facebook/opt-13b facebook/opt-30b facebook/opt-66b"><div class="chips">
 <a class="chip" href="#notes" title="No mlp module: the block has no MLP sublayer, or spells it as fc1/fc2 on the block, so layers[i].mlp does not exist.">No MLP module</a><a class="chip" href="#notes" title="A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input.">Position embeddings</a><a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a><a class="chip" href="#notes" title="The query, key and value projections carry a bias, so each is W·x + b.">Biased q, k, v</a></div></div><div class="pane" data-pane="chips" data-ckpts="facebook/opt-350m" hidden><div class="chips">
 <a class="chip" href="#notes" title="No mlp module: the block has no MLP sublayer, or spells it as fc1/fc2 on the block, so layers[i].mlp does not exist.">No MLP module</a><a class="chip" href="#notes" title="A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input.">Position embeddings</a><a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a><a class="chip" href="#notes" title="The query, key and value projections carry a bias, so each is W·x + b.">Biased q, k, v</a><a class="chip" href="#notes" title="Each norm sits on the stream after its sublayer&#39;s residual add, so the next sublayer reads the normed stream and layer_output is a norm&#39;s output. The block&#39;s input plus its contributions is not layer_output.">Post-LN</a></div></div>
@@ -1133,7 +1132,7 @@ is unavailable ("no norm module on this model"). The decoder makes its logits as
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-09 · nnterp 2.0.0rc2.dev63+g452042047 · transformers 5.21.0 · reference <span id="colophon-reference">facebook/opt-125m</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">facebook/opt-125m</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

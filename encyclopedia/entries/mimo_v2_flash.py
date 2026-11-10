@@ -3,10 +3,6 @@ wider than values, and a sigmoid-routed mixture after a dense first block."""
 
 MODEL_TYPE = "mimo_v2_flash"
 TITLE = "MiMo-V2-Flash"
-SUBTITLE = (
-    "Llama's pre-norm block with queries and keys wider than values, sliding-window blocks that have a learned "
-    "sink and twice the full blocks' key/value heads, and a mixture of experts chosen by sigmoid scores plus a bias."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "XiaomiMiMo/MiMo-V2-Flash"

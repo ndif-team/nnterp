@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "deepseek_v3"
 TITLE = "DeepSeek-V3 / DeepSeek-R1 / Moonlight"
-SUBTITLE = (
-    "Latent attention with queries and keys wider than the values, and a mixture with a shared expert, "
-    "whose router chooses experts by sigmoid scores plus a selection bias and weights them without it."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "deepseek-ai/DeepSeek-V3"

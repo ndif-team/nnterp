@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mistral / Mistral Nemo / Mistral Small · nnterp encyclopedia</title>
-<meta name="description" content="Llama&#39;s pre-norm block with grouped-query attention; on Mistral-7B-v0.1 every block attends over a sliding window of the last 4096 positions, and from Nemo on the attention is narrower than the stream.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%23DA91B5%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%2364BFA0%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23DE9872%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23B0B063%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%2384ACEA%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">mistral</span></p>
     <h1 class="disp-title"><span class="line">Mistral</span><span class="line">Mistral Nemo</span><span class="line">Mistral Small</span></h1>
-    <p class="subtitle">Llama&#39;s pre-norm block with grouped-query attention; on Mistral-7B-v0.1 every block attends over a sliding window of the last 4096 positions, and from Nemo on the attention is narrower than the stream.</p>
     <div class="pane" data-pane="chips" data-ckpts="mistralai/Mistral-7B-v0.1"><div class="chips">
 <a class="chip" href="#notes" title="Some blocks, or every block, attend only to a window of the latest positions. A config key sets its length (sliding_window, window_size), and where the config lists each block&#39;s type (layer_types, attention_layers), that list says which blocks.">Sliding window</a><a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a></div></div><div class="pane" data-pane="chips" data-ckpts="mistralai/Mistral-7B-v0.3 mistralai/Mistral-7B-Instruct-v0.3 mistralai/Mistral-Nemo-Base-2407" hidden><div class="chips">
 <a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a></div></div><div class="pane" data-pane="chips" data-ckpts="mistralai/Mistral-Small-3.1-24B-Instruct-2503 mistralai/Mistral-Small-3.2-24B-Instruct-2506" hidden><div class="chips">
@@ -3017,7 +3016,7 @@ newline tokens, as the text model receives it. Pixtral-12B reads
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">mistralai/Mistral-7B-v0.1</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">mistralai/Mistral-7B-v0.1</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

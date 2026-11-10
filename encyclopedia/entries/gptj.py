@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "gptj"
 TITLE = "GPT-J"
-SUBTITLE = (
-    "A parallel block with one LayerNorm: ln_1's output is the input of both the attention and the MLP, "
-    "the block adds both to the stream at once, and rotary turns only the first rotary_dim dimensions "
-    "of each head, in adjacent pairs."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "EleutherAI/gpt-j-6b"

@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "qwen2_5_vl_text"
 TITLE = "Qwen2.5-VL"
-SUBTITLE = (
-    "Qwen2's block, biased q, k and v, with multimodal rotary embeddings: three position streams (time, row, column) "
-    "folded into one cos/sin before block 0, so an image token's position is its row and column in the image."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen2.5-VL-3B-Instruct"

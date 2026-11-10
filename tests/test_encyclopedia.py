@@ -371,7 +371,7 @@ def test_the_index_lists_every_vision_encoder_an_entry_resolves():
     shown = {tower["label"] for tower in build.index_model(cards)["towers"]}
     assert titles and shown == titles
     index = build.environment().get_template("index.html.j2").render(**build.index_model(
-        [{**card, "title": "x", "subtitle": "", "palette": build.site_palette(), "checkpoints": [], "quirks": [],
+        [{**card, "title": "x", "palette": build.site_palette(), "checkpoints": [], "quirks": [],
           "vllm": False, "architecture": "", "family_module": "", "wrappers": [],
           "tower_slugs": [build.tower_slug(t) for t in card["towers"]]} for card in cards]))
     for title in titles:
@@ -404,7 +404,7 @@ def test_every_entrys_org_is_in_the_cache():
 
 def test_the_index_has_org_filters_and_cards_carry_their_org():
     org = {"id": "meta-llama", "name": "Meta Llama", "avatar": "orgs/meta-llama.png"}
-    card = {"model_type": "llama", "title": "Llama", "subtitle": "", "org": org, "palette": build.site_palette(), "checkpoints": [],
+    card = {"model_type": "llama", "title": "Llama", "org": org, "palette": build.site_palette(), "checkpoints": [],
             "quirks": [], "vllm": False, "architecture": "", "family_module": "", "towers": [], "wrappers": [],
             "tower_slugs": []}
     index = build.environment().get_template("index.html.j2").render(**build.index_model([card]))
@@ -433,7 +433,7 @@ def test_every_page_has_its_palette_as_the_tab_icon():
     assert (Path(build.__file__).parent / "static" / "favicon.svg").read_text().strip() == svg
     family = build.palette(entries.load("llama"))
     assert family["icon"] != uri and all(f"fill='{fill}'" in unquote(family["icon"]) for fill in family["fills"])
-    card = {"model_type": "llama", "title": "Llama", "subtitle": "", "org": None, "palette": family, "checkpoints": [],
+    card = {"model_type": "llama", "title": "Llama", "org": None, "palette": family, "checkpoints": [],
             "quirks": [], "vllm": False, "architecture": "", "family_module": "", "towers": [], "wrappers": [], "tower_slugs": []}
     index = build.environment().get_template("index.html.j2").render(**build.index_model([card]))
     assert f'<link rel="icon" type="image/svg+xml" sizes="any" href="{uri}">' in index

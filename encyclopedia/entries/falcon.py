@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "falcon"
 TITLE = "Falcon"
-SUBTITLE = (
-    "A parallel block on every checkpoint but Falcon-RW: the block adds the attention's output into the MLP's "
-    "output tensor in place, so mlp_output is a copy taken as the MLP returns."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "tiiuae/falcon-7b"

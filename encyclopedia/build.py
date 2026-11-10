@@ -8,8 +8,8 @@ family module is imported, its reference checkpoint is built on the ``meta``
 device (config only, no weights), and the page reads ``support()`` under an
 eager load and under the default one, every standard value's key, layout and
 description, the sizes, the aliases and the native paths. What a person knows
-comes from ``entries/<model_type>.py``: the title and subtitle, the block schema
-the visualization draws, the quirk tags, the palette and the notes. The output
+comes from ``entries/<model_type>.py``: the title, the block schema the
+visualization draws, the quirk tags, the palette and the notes. The output
 is static HTML under ``site/``; ``static/`` is copied beside it.
 
 A page has one selector over the entry's checkpoints, and every part that
@@ -1762,7 +1762,6 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
         **info,
         "model_type": entry.MODEL_TYPE,
         "title": entry.TITLE,
-        "subtitle": entry.SUBTITLE,
         "org": hub.org(entry),
         "palette": palette(entry),
         "default": default,
@@ -1858,7 +1857,7 @@ def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path
         path.write_text(html)
         written.append(path)
         hub.save()
-        cards.append({**{k: model[k] for k in ("model_type", "title", "subtitle", "org", "palette", "checkpoints", "quirks", "vllm",
+        cards.append({**{k: model[k] for k in ("model_type", "title", "org", "palette", "checkpoints", "quirks", "vllm",
                                                 "architecture", "family_module", "towers", "wrappers")},
                       "tower_slugs": [tower_slug(t) for t in model["towers"]]})
         print(f"wrote {path.relative_to(HERE.parent)}")

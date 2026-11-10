@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mamba · nnterp encyclopedia</title>
-<meta name="description" content="No attention and no MLP: each block is one norm and a selective-scan mixer with a state per channel, and reading inside the mixer needs mamba_ssm&#39;s CUDA kernels routed to transformers&#39; torch functions.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%23C4A85D%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%2391A8EB%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%237DBD88%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%2351BCCD%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23DF90A9%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">mamba</span></p>
     <h1 class="disp-title"><span class="line">Mamba</span></h1>
-    <p class="subtitle">No attention and no MLP: each block is one norm and a selective-scan mixer with a state per channel, and reading inside the mixer needs mamba_ssm&#39;s CUDA kernels routed to transformers&#39; torch functions.</p>
     <div class="pane" data-pane="chips" data-ckpts="state-spaces/mamba-130m-hf state-spaces/mamba-370m-hf state-spaces/mamba-790m-hf state-spaces/mamba-1.4b-hf state-spaces/mamba-2.8b-hf"><div class="chips">
 <a class="chip" href="#notes" title="The recurrent mixer is Mamba-1&#39;s selective scan; nnterp serves its C, B and x as attention_queries, attention_keys and attention_values.">Selective scan (Mamba-1)</a></div></div>
   </div>
@@ -787,7 +786,7 @@ have nothing to read.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">state-spaces/mamba-130m-hf</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">state-spaces/mamba-130m-hf</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "starcoder2"
 TITLE = "StarCoder2"
-SUBTITLE = (
-    "Llama's block with LayerNorms, a bias on every projection, a two-matrix GELU MLP (c_fc, c_proj) "
-    "in place of SwiGLU, and a sliding window of 4096 positions on every block."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "bigcode/starcoder2-3b"

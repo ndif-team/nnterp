@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "falcon_mamba"
 TITLE = "Falcon-Mamba / Falcon3-Mamba"
-SUBTITLE = (
-    "Mamba's block, one norm and a selective-scan mixer, with no attention and no MLP; inside the mixer, "
-    "weightless RMS norms sit on B, C and the low-rank step input before the scan."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "tiiuae/falcon-mamba-7b"

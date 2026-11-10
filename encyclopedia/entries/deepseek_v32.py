@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "deepseek_v32"
 TITLE = "DeepSeek-V3.2"
-SUBTITLE = (
-    "Latent attention over only the 2048 keys a lightning indexer scores best for each query, and a mixture with a "
-    "shared expert that chooses experts by sigmoid score plus a selection bias and weights them without the bias."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "deepseek-ai/DeepSeek-V3.2"

@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "stablelm"
 TITLE = "StableLM 2 / StableLM-3B"
-SUBTITLE = (
-    "Llama's block with LayerNorms and rotary on the first quarter of each head; StableLM-2-12B "
-    "makes it parallel (use_parallel_residual) and norms each query and key head (qk_layernorm)."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "stabilityai/stablelm-2-1_6b"

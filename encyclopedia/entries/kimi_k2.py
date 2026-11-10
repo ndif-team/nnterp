@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "kimi_k2"
 TITLE = "Kimi K2"
-SUBTITLE = (
-    "DeepSeek-V3's architecture: latent attention with queries and keys wider than the values, "
-    "and a mixture of 384 experts plus a shared expert on every block but the first."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "moonshotai/Kimi-K2-Instruct"

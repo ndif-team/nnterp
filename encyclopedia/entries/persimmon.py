@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "persimmon"
 TITLE = "Persimmon"
-SUBTITLE = (
-    "Llama's sequential block with LayerNorms; the attention cuts queries, keys and values per head from one "
-    "fused projection and norms each query and key head before the rotary."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "adept/persimmon-8b-base"

@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "qwen2_moe"
 TITLE = "Qwen1.5-MoE / Qwen2-MoE"
-SUBTITLE = (
-    "Qwen2's attention, with biased q, k and v, and a mixture of experts on every block: the router's top-k "
-    "softmax weights are not renormalized, and a shared expert is added through a sigmoid gate of its own."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen1.5-MoE-A2.7B"

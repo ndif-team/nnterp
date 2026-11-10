@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "youtu"
 TITLE = "Youtu-LLM"
-SUBTITLE = (
-    "Llama's dense block with DeepSeek-V2's latent attention: queries and keys wider than values, "
-    "and every head's key and value expanded from one latent per token."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "tencent/Youtu-LLM-2B-Base"

@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "granitemoehybrid"
 TITLE = "Granite 4.0"
-SUBTITLE = (
-    "Granite's scaled block with a Mamba-2 mixer on most blocks and attention without rotary on a few (rotary "
-    "attention on every block of the non-H models), and a feed-forward of a shared MLP plus, on the mixture "
-    "checkpoints, routed experts, added as one scaled sum."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ibm-granite/granite-4.0-h-tiny-base"

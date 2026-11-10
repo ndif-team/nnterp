@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "hunyuan_v1_moe"
 TITLE = "Hunyuan-A13B"
-SUBTITLE = (
-    "Hunyuan's block, query and key heads RMS-normed after the rotary embedding, with a mixture on "
-    "every block: a shared expert that runs first, plus 8 of 64 routed experts whose weights are "
-    "renormalized to sum to one."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "tencent/Hunyuan-A13B-Instruct"

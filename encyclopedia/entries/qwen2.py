@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "qwen2"
 TITLE = "Qwen2 / Qwen2.5"
-SUBTITLE = (
-    "Llama's block with a bias on the query, key and value projections; Qwen's tokenizer "
-    "prepends no BOS, so position 0 is the text's first token and becomes the attention sink."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen2.5-0.5B"

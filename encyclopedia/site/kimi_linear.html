@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Kimi-Linear · nnterp encyclopedia</title>
-<meta name="description" content="Llama&#39;s pre-norm block with two kinds of mixer, Kimi Delta Attention on three blocks in four and latent attention without rotary on the rest, and a mixture of experts after a dense first block.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%23D3A062%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%2379B0E8%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%2396B874%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%2352BFB9%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23D692BF%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">kimi_linear</span></p>
     <h1 class="disp-title"><span class="line">Kimi-Linear</span></h1>
-    <p class="subtitle">Llama&#39;s pre-norm block with two kinds of mixer, Kimi Delta Attention on three blocks in four and latent attention without rotary on the rest, and a mixture of experts after a dense first block.</p>
     <div class="pane" data-pane="chips" data-ckpts="moonshotai/Kimi-Linear-48B-A3B-Base moonshotai/Kimi-Linear-48B-A3B-Instruct"><div class="chips">
 <a class="chip" href="#notes" title="Some blocks mix tokens with a recurrent mixer (layers[i].linear_attn), others with attention (layers[i].self_attn).">Hybrid</a><a class="chip" href="#notes" title="Keys and values are projected up from a small latent shared by the heads; queries and keys are qk_head_dim wide, values head_dim wide.">Latent attention</a><a class="chip" href="#notes" title="Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart.">Blocks without rotary</a><a class="chip" href="#notes" title="On every block or some, the MLP is a mixture of experts: layers[i].mlp serves router_logits, expert_weights, expert_indices and expert_outputs, though some families leave one or more of them unavailable.">Mixture of experts</a><a class="chip" href="#notes" title="The first blocks have a dense MLP and the rest a mixture of experts, so the mixture&#39;s values exist only from the first mixture block on.">Dense first blocks</a></div></div>
   </div>
@@ -2242,7 +2241,7 @@ experts and a shared expert). The attention sizes are DeepSeek-V2's.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">moonshotai/Kimi-Linear-48B-A3B-Instruct</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">moonshotai/Kimi-Linear-48B-A3B-Instruct</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

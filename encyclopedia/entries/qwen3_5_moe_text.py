@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "qwen3_5_moe_text"
 TITLE = "Qwen3.5-MoE / Qwen3.6-MoE"
-SUBTITLE = (
-    "Qwen3.5's hybrid block, a gated DeltaNet mixer on three blocks in four and output-gated attention on the "
-    "fourth, with a mixture of experts on every block whose shared expert is scaled by a sigmoid gate per token."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen3.5-35B-A3B-Base"

@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "mpt"
 TITLE = "MPT"
-SUBTITLE = (
-    "The block adds the attention to the stream, but the MLP adds the residual inside its own module, so "
-    "mlp_output is the tensor before that add; no projection or norm has a bias."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ybelkada/mpt-7b-bf16-sharded"

@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "gpt2"
 TITLE = "GPT-2"
-SUBTITLE = (
-    "Llama's sequential block with LayerNorm in place of RMSNorm, a learned position embedding added "
-    "to the token embeddings before block 0, and queries, keys and values cut from one fused c_attn projection."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "openai-community/gpt2"

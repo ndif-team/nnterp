@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "gemma4_text"
 TITLE = "Gemma 4"
-SUBTITLE = (
-    "A sandwich block with normed queries, keys and values, whose sum a learned per-block scalar multiplies; "
-    "on E2B and E4B per-layer embeddings add a third term and the last blocks borrow keys and values from earlier ones."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "google/gemma-4-E2B"

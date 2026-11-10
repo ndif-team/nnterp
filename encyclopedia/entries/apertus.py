@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "apertus"
 TITLE = "Apertus"
-SUBTITLE = (
-    "Llama's block with its norms named attention_layernorm and feedforward_layernorm, every query and key head "
-    "RMS-normed before the rotary embedding, and an MLP with no gate whose activation, xIELU, has two parameters "
-    "learned per block."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "swiss-ai/Apertus-8B-2509"

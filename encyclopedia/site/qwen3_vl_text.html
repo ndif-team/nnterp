@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Qwen3-VL · nnterp encyclopedia</title>
-<meta name="description" content="Qwen3&#39;s block, queries and keys RMS-normed per head, under a multimodal rotary embedding; on an image prompt the text model adds vision features at the image positions again after blocks 0, 1 and 2, outside the blocks.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%23E39384%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%2352BCCF%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23C2A95D%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%237ABD8A%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23B59CE0%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">qwen3_vl_text</span></p>
     <h1 class="disp-title"><span class="line">Qwen3-VL</span></h1>
-    <p class="subtitle">Qwen3&#39;s block, queries and keys RMS-normed per head, under a multimodal rotary embedding; on an image prompt the text model adds vision features at the image positions again after blocks 0, 1 and 2, outside the blocks.</p>
     <div class="pane" data-pane="chips" data-ckpts="Qwen/Qwen3-VL-2B-Instruct Qwen/Qwen3-VL-2B-Thinking Qwen/Qwen3-VL-4B-Instruct Qwen/Qwen3-VL-4B-Thinking Qwen/Qwen3-VL-8B-Instruct Qwen/Qwen3-VL-8B-Thinking Qwen/Qwen3-VL-32B-Instruct Qwen/Qwen3-VL-32B-Thinking"><div class="chips">
 <a class="chip" href="#notes" title="On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.">Query/key norms</a><a class="chip" href="#notes" title="M-RoPE: each token has three positions, temporal, height and width, which the rotary embedding combines into one rotation before the blocks. Text after an image resumes one past the image&#39;s largest position.">Multimodal rotary</a><a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a><a class="chip" href="#notes" title="Some checkpoints carry a vision encoder: model.vision, its blocks, the projector, and the image values where the image enters the text model.">Vision-language</a><a class="chip" href="#notes" title="Every image&#39;s tokens run in one row, [1, all tokens, vision_hidden_size]; the processor&#39;s per-image grid sizes split the row.">Packed vision encoder</a><a class="chip" href="#notes" title="The vision encoder takes images of any resolution, so vision.image_size raises Unavailable; each image&#39;s grid is in the processor&#39;s output.">Variable resolution</a><a class="chip" href="#notes" title="The projector merges each group of neighboring patches into one token, by pooling or by concatenating them (a pixel shuffle), so an image has fewer tokens than patches.">Pooled projector</a><a class="chip" href="#notes" title="Features from some vision encoder blocks are added to the text stream again at the image positions, after each of the text model&#39;s first blocks: layers[k].deepstack_output, added outside the block.">DeepStack</a></div></div>
   </div>
@@ -2602,7 +2601,7 @@ their native path, <code>vision.deepstack_merger_list[k]</code>.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">Qwen/Qwen3-VL-2B-Instruct</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">Qwen/Qwen3-VL-2B-Instruct</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

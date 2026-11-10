@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "glm4_moe_lite"
 TITLE = "GLM-4.7-Flash"
-SUBTITLE = (
-    "Latent attention, whose keys and values are expanded for every head from one latent per token, and after "
-    "a dense first block a mixture: 4 of 64 experts chosen by a sigmoid plus a selection bias, beside one shared expert."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "zai-org/GLM-4.7-Flash"

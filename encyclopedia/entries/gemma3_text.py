@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "gemma3_text"
 TITLE = "Gemma 3"
-SUBTITLE = (
-    "Llama's module tree with a sandwich block, so what reaches the residual stream is a post-norm's output; "
-    "queries and keys are normed per head before the rotary, and five sliding-window blocks precede each full one."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "google/gemma-3-1b-pt"

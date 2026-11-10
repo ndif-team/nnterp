@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "phi3"
 TITLE = "Phi-3 / Phi-3.5 / Phi-4"
-SUBTITLE = (
-    "Llama's block with two fused projections, qkv_proj holding the queries, keys and values as three slices and "
-    "gate_up_proj holding the gate and up projections as two halves; the 128k checkpoints rescale the rotary by "
-    "sequence length, and the 4k ones attend over a 2047-token window."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "microsoft/Phi-3-mini-4k-instruct"

@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Falcon-Mamba / Falcon3-Mamba · nnterp encyclopedia</title>
-<meta name="description" content="Mamba&#39;s block, one norm and a selective-scan mixer, with no attention and no MLP; inside the mixer, weightless RMS norms sit on B, C and the low-rank step input before the scan.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%23BEAA5E%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%2398A6EA%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%2375BE8F%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%2354BBD2%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23E190A2%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">falcon_mamba</span></p>
     <h1 class="disp-title"><span class="line">Falcon-Mamba</span><span class="line">Falcon3-Mamba</span></h1>
-    <p class="subtitle">Mamba&#39;s block, one norm and a selective-scan mixer, with no attention and no MLP; inside the mixer, weightless RMS norms sit on B, C and the low-rank step input before the scan.</p>
     <div class="pane" data-pane="chips" data-ckpts="tiiuae/falcon-mamba-7b tiiuae/falcon-mamba-7b-instruct tiiuae/falcon-mamba-7b-pre-decay tiiuae/Falcon3-Mamba-7B-Base tiiuae/Falcon3-Mamba-7B-Instruct"><div class="chips">
 <a class="chip" href="#notes" title="The recurrent mixer is Mamba-1&#39;s selective scan; nnterp serves its C, B and x as attention_queries, attention_keys and attention_values.">Selective scan (Mamba-1)</a></div></div>
   </div>
@@ -696,7 +695,7 @@ the same names, in Falcon-Mamba's own modeling module:
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">tiiuae/falcon-mamba-7b</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">tiiuae/falcon-mamba-7b</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

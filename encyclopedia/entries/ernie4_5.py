@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "ernie4_5"
 TITLE = "ERNIE 4.5"
-SUBTITLE = (
-    "Llama's pre-norm block whose rotary turns adjacent pairs of query and key dimensions, (2i, 2i + 1), "
-    "and whose grouped query heads are together wider than the residual stream."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "baidu/ERNIE-4.5-0.3B-Base-PT"

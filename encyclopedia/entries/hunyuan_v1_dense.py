@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "hunyuan_v1_dense"
 TITLE = "Hunyuan"
-SUBTITLE = (
-    "Llama's block with each query and key head RMS-normed after the rotary embedding "
-    "(query_layernorm, key_layernorm), so a head's query and key lengths are set by the norms' gains."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "tencent/Hunyuan-0.5B-Pretrain"

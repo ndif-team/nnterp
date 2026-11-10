@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Phi-3 / Phi-3.5 / Phi-4 · nnterp encyclopedia</title>
-<meta name="description" content="Llama&#39;s block with two fused projections, qkv_proj holding the queries, keys and values as three slices and gate_up_proj holding the gate and up projections as two halves; the 128k checkpoints rescale the rotary by sequence length, and the 4k ones attend over a 2047-token window.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%2361B7DE%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23DE9871%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%23AAA0E6%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23DB91B4%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%2389BB7E%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">phi3</span></p>
     <h1 class="disp-title"><span class="line">Phi-3</span><span class="line">Phi-3.5</span><span class="line">Phi-4</span></h1>
-    <p class="subtitle">Llama&#39;s block with two fused projections, qkv_proj holding the queries, keys and values as three slices and gate_up_proj holding the gate and up projections as two halves; the 128k checkpoints rescale the rotary by sequence length, and the 4k ones attend over a 2047-token window.</p>
     <div class="pane" data-pane="chips" data-ckpts="microsoft/Phi-3-mini-4k-instruct"><div class="chips">
 <a class="chip" href="#notes" title="Some blocks, or every block, attend only to a window of the latest positions. A config key sets its length (sliding_window, window_size), and where the config lists each block&#39;s type (layer_types, attention_layers), that list says which blocks.">Sliding window</a></div></div><div class="pane" data-pane="chips" data-ckpts="microsoft/Phi-3-mini-128k-instruct microsoft/Phi-3.5-mini-instruct" hidden><div class="chips">
 </div></div><div class="pane" data-pane="chips" data-ckpts="microsoft/Phi-3-medium-4k-instruct" hidden><div class="chips">
@@ -1049,7 +1048,7 @@ added in the block, attention through the shared eager forward. Queries, keys an
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">microsoft/Phi-3-mini-4k-instruct</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">microsoft/Phi-3-mini-4k-instruct</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

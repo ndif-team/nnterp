@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "gemma"
 TITLE = "Gemma / PaliGemma"
-SUBTITLE = (
-    "Llama's pre-norm block with a GeGLU MLP: the embeddings are multiplied by √hidden_size before block 0, "
-    "every RMSNorm multiplies by 1 + weight, and the head is the embedding matrix."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "google/gemma-2b"

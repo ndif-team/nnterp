@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "glm"
 TITLE = "GLM-4 / GLM-Edge"
-SUBTITLE = (
-    "Llama's block with a fused gate and up projection and a rotary embedding that turns adjacent pairs of "
-    "dimensions; on GLM-4-9B the rotary covers only the first half of each head, and the queries, keys and "
-    "values carry a bias."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "zai-org/glm-4-9b-hf"

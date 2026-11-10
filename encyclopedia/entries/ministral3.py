@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "ministral3"
 TITLE = "Ministral 3"
-SUBTITLE = (
-    "Llama's pre-norm block whose queries are multiplied, after the rotary embedding, by a factor that grows "
-    "with the position past 16384 tokens; every checkpoint is a vision-language model on the Pixtral encoder."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "mistralai/Ministral-3-3B-Base-2512"

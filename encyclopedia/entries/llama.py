@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "llama"
 TITLE = "Llama"
-SUBTITLE = (
-    "The reference block: one RMSNorm before each sublayer and none after, so what reaches the "
-    "residual stream is the attention's and the MLP's own output, with rotary positions applied to "
-    "queries and keys inside the attention."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "meta-llama/Llama-3.1-8B"

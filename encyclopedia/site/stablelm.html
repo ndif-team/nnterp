@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>StableLM 2 / StableLM-3B · nnterp encyclopedia</title>
-<meta name="description" content="Llama&#39;s block with LayerNorms and rotary on the first quarter of each head; StableLM-2-12B makes it parallel (use_parallel_residual) and norms each query and key head (qk_layernorm).">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%2370BE94%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23D592C0%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%2357BAD6%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%239DA4E9%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23D49F63%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">stablelm</span></p>
     <h1 class="disp-title"><span class="line">StableLM 2</span><span class="line">StableLM-3B</span></h1>
-    <p class="subtitle">Llama&#39;s block with LayerNorms and rotary on the first quarter of each head; StableLM-2-12B makes it parallel (use_parallel_residual) and norms each query and key head (qk_layernorm).</p>
     <div class="pane" data-pane="chips" data-ckpts="stabilityai/stablelm-2-1_6b stabilityai/stablelm-2-zephyr-1_6b"><div class="chips">
 <a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a><a class="chip" href="#notes" title="Rotary embeddings rotate only a leading fraction of each query and key head; the other dimensions carry no position.">Partial rotary</a><a class="chip" href="#notes" title="The query, key and value projections carry a bias, so each is W·x + b.">Biased q, k, v</a></div></div><div class="pane" data-pane="chips" data-ckpts="stabilityai/stablelm-2-12b" hidden><div class="chips">
 <a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a><a class="chip" href="#notes" title="Rotary embeddings rotate only a leading fraction of each query and key head; the other dimensions carry no position.">Partial rotary</a><a class="chip" href="#notes" title="Attention and MLP both read the block&#39;s input, through one shared norm or one each, and the block returns x + attn + mlp.">Parallel block</a><a class="chip" href="#notes" title="On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.">Query/key norms</a><a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a></div></div><div class="pane" data-pane="chips" data-ckpts="stabilityai/stablelm-3b-4e1t stabilityai/stablelm-zephyr-3b" hidden><div class="chips">
@@ -951,7 +950,7 @@ and StableLM-3B-4E1T are sequential with no q/k norms.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">stabilityai/stablelm-2-1_6b</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">stabilityai/stablelm-2-1_6b</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

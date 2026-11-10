@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "kimi_linear"
 TITLE = "Kimi-Linear"
-SUBTITLE = (
-    "Llama's pre-norm block with two kinds of mixer, Kimi Delta Attention on three blocks in four and "
-    "latent attention without rotary on the rest, and a mixture of experts after a dense first block."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "moonshotai/Kimi-Linear-48B-A3B-Instruct"

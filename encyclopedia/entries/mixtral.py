@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "mixtral"
 TITLE = "Mixtral"
-SUBTITLE = (
-    "Mistral's pre-norm block with a mixture of 8 SwiGLU experts in place of the MLP: each token goes to "
-    "2 of them, whose softmax weights are renormalized to sum to one, and no shared expert."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "mistralai/Mixtral-8x7B-v0.1"

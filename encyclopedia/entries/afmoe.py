@@ -3,11 +3,6 @@ blocks, then a sigmoid-routed mixture with a shared expert."""
 
 MODEL_TYPE = "afmoe"
 TITLE = "Trinity Nano / Trinity Mini / Trinity Large"
-SUBTITLE = (
-    "A sandwich block whose attention gates its heads with a sigmoid and applies rotary only on its "
-    "sliding-window blocks, and whose MLP is dense on the first blocks and a mixture with a shared expert after "
-    "them, its routed experts picked by sigmoid scores plus a selection bias."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "arcee-ai/Trinity-Nano-Base"

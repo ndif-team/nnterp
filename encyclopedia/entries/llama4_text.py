@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "llama4_text"
 TITLE = "Llama 4"
-SUBTITLE = (
-    "Llama's pre-norm block with a mixture of experts and a shared expert as the MLP (every block on Scout, every "
-    "other block on Maverick), routed by a sigmoid of the top-1 logit; every fourth block attends over the whole "
-    "context without rotary, and the others attend within fixed chunks."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "meta-llama/Llama-4-Scout-17B-16E"

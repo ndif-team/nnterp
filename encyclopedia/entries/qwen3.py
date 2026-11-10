@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "qwen3"
 TITLE = "Qwen3"
-SUBTITLE = (
-    "Llama's block with an RMSNorm on each query and key head before the rotary embedding, so a query's or "
-    "key's size comes from the norm's gain, not from the input's scale; there is no BOS, and position 0 "
-    "becomes the attention sink."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen3-0.6B"

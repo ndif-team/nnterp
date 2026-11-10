@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "deepseek_v2"
 TITLE = "DeepSeek-V2 / DeepSeek-Coder-V2"
-SUBTITLE = (
-    "Latent attention with queries and keys wider than the values and one rotary key shared by every head, "
-    "and a softmax-routed mixture with two shared experts on every block but the first."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "deepseek-ai/DeepSeek-V2-Lite"

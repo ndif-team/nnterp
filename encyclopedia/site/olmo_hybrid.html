@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OLMo-Hybrid · nnterp encyclopedia</title>
-<meta name="description" content="Two block classes that norm in opposite places: three blocks in four are pre-norm, with a gated DeltaNet mixer, and every fourth is OLMo-3&#39;s post-norm block, whose attention (without rotary on most checkpoints) and MLP read the raw stream and have their outputs normed before the stream receives them.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%234FBEC4%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23E39191%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%2386ACEA%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%23C796D2%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23AEB164%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">olmo_hybrid</span></p>
     <h1 class="disp-title"><span class="line">OLMo-Hybrid</span></h1>
-    <p class="subtitle">Two block classes that norm in opposite places: three blocks in four are pre-norm, with a gated DeltaNet mixer, and every fourth is OLMo-3&#39;s post-norm block, whose attention (without rotary on most checkpoints) and MLP read the raw stream and have their outputs normed before the stream receives them.</p>
     <div class="pane" data-pane="chips" data-ckpts="allenai/Olmo-Hybrid-7B allenai/Olmo-Hybrid-Instruct-SFT-7B allenai/Olmo-Hybrid-Instruct-DPO-7B"><div class="chips">
 <a class="chip" href="#notes" title="Some blocks mix tokens with a recurrent mixer (layers[i].linear_attn), others with attention (layers[i].self_attn).">Hybrid</a><a class="chip" href="#notes" title="Every block, or some, norms each sublayer&#39;s output and not its input: the sublayer reads the raw stream, and the stream receives the post-norm&#39;s output.">Post-norms only</a><a class="chip" href="#notes" title="On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.">Query/key norms</a><a class="chip" href="#notes" title="Some blocks, or all, apply no rotary embedding (NoPE). In those blocks attention_queries and attention_keys carry no position, and only the causal mask tells positions apart.">Blocks without rotary</a></div></div><div class="pane" data-pane="chips" data-ckpts="allenai/Olmo-Hybrid-Think-SFT-7B" hidden><div class="chips">
 <a class="chip" href="#notes" title="Some blocks mix tokens with a recurrent mixer (layers[i].linear_attn), others with attention (layers[i].self_attn).">Hybrid</a><a class="chip" href="#notes" title="Every block, or some, norms each sublayer&#39;s output and not its input: the sublayer reads the raw stream, and the stream receives the post-norm&#39;s output.">Post-norms only</a><a class="chip" href="#notes" title="On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.">Query/key norms</a></div></div>
@@ -3407,7 +3406,7 @@ before the kernel and lie in (0, 2).</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">allenai/Olmo-Hybrid-7B</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">allenai/Olmo-Hybrid-7B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

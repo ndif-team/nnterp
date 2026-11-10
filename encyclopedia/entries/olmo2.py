@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "olmo2"
 TITLE = "OLMo 2"
-SUBTITLE = (
-    "Llama's tree with the norms moved after the sublayers: attention and MLP read the raw residual stream, "
-    "what reaches the stream is a post-norm's output, and the queries and keys are RMS-normed across all heads "
-    "before the rotary embedding."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "allenai/OLMo-2-0425-1B"

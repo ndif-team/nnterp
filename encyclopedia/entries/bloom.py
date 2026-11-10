@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "bloom"
 TITLE = "BLOOM / BLOOMZ"
-SUBTITLE = (
-    "Each sublayer adds the residual inside its own module, so the contributions are the tensors before that "
-    "add; a LayerNorm sits between the embedding and block 0."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "bigscience/bloom-560m"

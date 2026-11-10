@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "phimoe"
 TITLE = "Phi-3.5-MoE"
-SUBTITLE = (
-    "Llama's tree with LayerNorms and biased projections, and on every block a mixture of 16 experts whose "
-    "router, sparsemixer, picks two experts in turn and gives each a weight of exactly 1 unless another logit "
-    "is within 2% of that expert's, so a token's two weights sum to up to 2."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "microsoft/Phi-3.5-MoE-instruct"

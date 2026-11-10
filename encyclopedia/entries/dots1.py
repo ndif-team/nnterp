@@ -3,11 +3,6 @@ sigmoid-routed mixture with a selection bias and two shared experts."""
 
 MODEL_TYPE = "dots1"
 TITLE = "dots.llm1"
-SUBTITLE = (
-    "Llama's pre-norm block with each query and key head RMS-normed, a dense MLP on block 0, and on every "
-    "block after it a mixture whose experts are chosen by a sigmoid plus a selection bias that the weights "
-    "leave out, beside a shared expert every token runs through."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "rednote-hilab/dots.llm1.base"

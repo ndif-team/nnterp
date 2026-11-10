@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "phi"
 TITLE = "Phi-1 / Phi-1.5 / Phi-2"
-SUBTITLE = (
-    "A parallel block, in which one LayerNorm feeds both the attention and the MLP and the block adds their outputs "
-    "at once, with a bias on every attention projection and on lm_head, and rotary on only 32 dimensions of each head."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "microsoft/phi-2"

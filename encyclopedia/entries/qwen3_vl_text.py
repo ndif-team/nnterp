@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "qwen3_vl_text"
 TITLE = "Qwen3-VL"
-SUBTITLE = (
-    "Qwen3's block, queries and keys RMS-normed per head, under a multimodal rotary embedding; on an image "
-    "prompt the text model adds vision features at the image positions again after blocks 0, 1 and 2, outside "
-    "the blocks."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen3-VL-2B-Instruct"

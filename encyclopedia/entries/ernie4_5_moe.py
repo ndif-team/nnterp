@@ -3,11 +3,6 @@ correction bias to the probabilities, and on 21B-A3B a shared expert that runs b
 
 MODEL_TYPE = "ernie4_5_moe"
 TITLE = "ERNIE 4.5 MoE"
-SUBTITLE = (
-    "Llama's pre-norm block with rotary on adjacent pairs of dimensions, a dense MLP on the first blocks and a "
-    "mixture after them, whose experts are chosen by a softmax plus a correction bias that the weights leave "
-    "out, renormalized to sum to one."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "baidu/ERNIE-4.5-21B-A3B-Base-PT"

@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "nemotron"
 TITLE = "Nemotron-4 / Minitron"
-SUBTITLE = (
-    "Llama's tree with Nemotron-4's block: the norms are LayerNorms with a bias whose gain is stored minus one, "
-    "the MLP has no gate and squares a ReLU, and rotary positions turn half of each query and key head."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "nvidia/Nemotron-Mini-4B-Instruct"

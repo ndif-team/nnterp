@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "olmo_hybrid"
 TITLE = "OLMo-Hybrid"
-SUBTITLE = (
-    "Two block classes that norm in opposite places: three blocks in four are pre-norm, with a gated DeltaNet "
-    "mixer, and every fourth is OLMo-3's post-norm block, whose attention (without rotary on most checkpoints) "
-    "and MLP read the raw stream and have their outputs normed before the stream receives them."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "allenai/Olmo-Hybrid-7B"

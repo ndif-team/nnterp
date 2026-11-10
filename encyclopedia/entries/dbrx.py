@@ -3,10 +3,6 @@ Wqkv, LayerNorms without bias, and a mixture of 16 experts on every block."""
 
 MODEL_TYPE = "dbrx"
 TITLE = "DBRX"
-SUBTITLE = (
-    "A pre-norm block whose attention sits with both norms inside norm_attn_norm, queries, keys and "
-    "values from one clamped Wqkv projection, and a mixture of 16 experts, 4 per token, on every block."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 #: Databricks' own repositories are not on the Hub; the page reads a re-upload's config.

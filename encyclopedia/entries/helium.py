@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "helium"
 TITLE = "Helium"
-SUBTITLE = (
-    "Llama's block, with one key/value head per query head and a rotary embedding that turns adjacent pairs of "
-    "dimensions (2i, 2i + 1) rather than i with i + head_dim / 2."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "kyutai/helium-1-preview-2b"

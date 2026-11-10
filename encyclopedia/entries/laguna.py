@@ -3,10 +3,6 @@ mixture with a shared expert after a dense first block."""
 
 MODEL_TYPE = "laguna"
 TITLE = "Laguna XS / Laguna S / Laguna M"
-SUBTITLE = (
-    "Llama's pre-norm block with a softplus gate on each head's output before o_proj, and after the first blocks "
-    "a sigmoid-routed mixture of experts beside a shared expert; on XS and S the blocks differ in query heads."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "poolside/Laguna-XS-2.1"

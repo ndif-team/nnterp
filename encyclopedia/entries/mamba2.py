@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "mamba2"
 TITLE = "Mamba-2"
-SUBTITLE = (
-    "No attention and no MLP: each block is one norm and a Mamba-2 (SSD) mixer whose heads each keep a "
-    "state matrix, with one scalar decay per head and token."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "AntonV/mamba2-130m-hf"

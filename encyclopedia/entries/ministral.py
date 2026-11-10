@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "ministral"
 TITLE = "Ministral"
-SUBTITLE = (
-    "Llama's pre-norm block with grouped-query attention, each block attending either over every earlier "
-    "position or over a sliding window, as config.layer_types says."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 #: Its config.json says `mistral`; AutoConfig reads a `mistral` config with `layer_types` as `ministral`.

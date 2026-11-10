@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "bitnet"
 TITLE = "BitNet b1.58"
-SUBTITLE = (
-    "Llama's tree whose projections run ternary weights on 8-bit inputs, whose sublayers each RMS-norm the "
-    "tensor entering their output projection (attn_sub_norm, ffn_sub_norm), and whose MLP gates with a "
-    "squared ReLU."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "microsoft/bitnet-b1.58-2B-4T"

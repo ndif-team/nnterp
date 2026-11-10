@@ -3,10 +3,6 @@ and an output projection over shared keys and values) and the MLP a mixture of e
 
 MODEL_TYPE = "jetmoe"
 TITLE = "JetMoE"
-SUBTITLE = (
-    "Llama's pre-norm block in which both sublayers are mixtures of experts: besides the MLP's, a router picks "
-    "attention experts per token, each with its own query and output projections over shared keys and values."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "jetmoe/jetmoe-8b"

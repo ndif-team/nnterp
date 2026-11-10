@@ -5,10 +5,6 @@ import tempfile
 
 MODEL_TYPE = "gemma2"
 TITLE = "Gemma 2 / PaliGemma 2"
-SUBTITLE = (
-    "Llama's module tree with a sandwich block: every sublayer is normed on the way in and on the way out, "
-    "so what reaches the residual stream is a post-norm's output, and the logits are softcapped."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "google/gemma-2-2b"

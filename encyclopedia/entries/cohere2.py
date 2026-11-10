@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "cohere2"
 TITLE = "Command R7B / Command A"
-SUBTITLE = (
-    "Command R's parallel block on one bias-free LayerNorm, with three sliding-window blocks to each full one; "
-    "only the sliding blocks apply rotary, and the logits are the head's output times logit_scale."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 #: Every CohereLabs repository is gated; this is an ungated copy of c4ai-command-r7b-12-2024 (its card names that base).

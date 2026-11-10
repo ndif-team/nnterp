@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "qwen3_moe"
 TITLE = "Qwen3-MoE"
-SUBTITLE = (
-    "Qwen3's attention, an RMSNorm on each query and key head, with a mixture of experts on every block "
-    "in place of the MLP: 8 experts per token, their softmax weights renormalized to sum to one, and no "
-    "shared expert."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen3-30B-A3B"

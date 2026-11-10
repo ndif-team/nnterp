@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "granitemoe_swa"
 TITLE = "Granite Swash MoE"
-SUBTITLE = (
-    "Granite Swash's sliding-window attention with its sink in GraniteMoE's scaled block, where a shared expert "
-    "runs beside the mixture of experts and mlp_output carries the mixture's term alone."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ibm-granite/granite-swash-3b-a600m"

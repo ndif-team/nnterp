@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "deepseek_v4"
 TITLE = "DeepSeek-V4"
-SUBTITLE = (
-    "Four parallel residual streams, which a learned matrix mixes around each sublayer while the sublayer reads one "
-    "weighted sum of them and writes into all four; multi-query attention over a sliding window plus compressed "
-    "keys; and a mixture of experts on every block."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "deepseek-ai/DeepSeek-V4-Flash"

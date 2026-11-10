@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "olmoe"
 TITLE = "OLMoE"
-SUBTITLE = (
-    "Llama's pre-norm block with queries and keys RMS-normed across all heads, and a mixture of 64 experts "
-    "on every block that weights a token's 8 experts by their softmax entries without renormalizing them, so "
-    "the 8 weights sum to less than one."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "allenai/OLMoE-1B-7B-0924"

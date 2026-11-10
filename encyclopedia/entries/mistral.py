@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "mistral"
 TITLE = "Mistral / Mistral Nemo / Mistral Small"
-SUBTITLE = (
-    "Llama's pre-norm block with grouped-query attention; on Mistral-7B-v0.1 every block attends over a "
-    "sliding window of the last 4096 positions, and from Nemo on the attention is narrower than the stream."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "mistralai/Mistral-7B-v0.1"

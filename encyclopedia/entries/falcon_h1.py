@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "falcon_h1"
 TITLE = "Falcon-H1"
-SUBTITLE = (
-    "Every block runs a Mamba-2 mixer and attention side by side on one normed input and adds both, each times "
-    "its own multiplier, then a gated MLP; the embeddings and the logits carry multipliers too."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "tiiuae/Falcon-H1-0.5B-Base"

@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "qwen3_5_text"
 TITLE = "Qwen3.5 / Qwen3.6"
-SUBTITLE = (
-    "Llama's pre-norm block with a gated DeltaNet mixer on three blocks in four and, on the fourth, "
-    "attention whose q_proj also yields a sigmoid gate on the heads' output; every RMSNorm but the "
-    "mixer's own multiplies by 1 + weight."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "Qwen/Qwen3.5-0.8B"

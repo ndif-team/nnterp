@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "cohere"
 TITLE = "Command R / Command R+"
-SUBTITLE = (
-    "A parallel block whose one LayerNorm, without a bias, feeds both the attention and the MLP; rotary turns "
-    "adjacent pairs of dimensions, Command R+ norms queries and keys per head, and the logits are the head's output times logit_scale."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 #: Every CohereLabs repository is gated; this is an ungated copy of c4ai-command-r-08-2024 (its card names that base).

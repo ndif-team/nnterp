@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "hyperclovax"
 TITLE = "HyperCLOVA X"
-SUBTITLE = (
-    "Llama's block with a norm after each sublayer (post_norm1, post_norm2) where use_post_norm is set, and four "
-    "config multipliers: on the embeddings, on each sublayer's contribution, on the attention scores (in place of "
-    "head_dim ** -0.5) and on the logits."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"

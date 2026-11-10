@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "granitemoe"
 TITLE = "GraniteMoE"
-SUBTITLE = (
-    "Granite's block with a mixture of experts for its MLP: the embeddings are multiplied before block 0, "
-    "each sublayer's output is multiplied by residual_multiplier before it is added, and the logits are "
-    "divided by logits_scaling, so mlp_output is the mixture's output times 0.22."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "ibm-granite/granite-3.0-1b-a400m-base"

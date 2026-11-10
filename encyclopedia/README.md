@@ -35,7 +35,7 @@ for what the cache does not hold and writes it back; commit the cache and any ne
 Every family page has the same sections in the same order. An entry fills them; it does not
 rearrange them.
 
-1. **Hero.** `family <model_type>`, the title, a one-sentence subtitle, the
+1. **Hero.** `family <model_type>`, the title, the
    quirk chips (each links to the notes; the quirks that hold on the shown checkpoint), five overlapping circles in the family's five colours, and
    under them the **checkpoint selector**: a button naming the shown checkpoint that opens a list of
    the entry's `CHECKPOINTS`, text checkpoints first, then the vision-language ones, each marked with
@@ -51,7 +51,7 @@ rearrange them.
    The page opens on `REFERENCE`; the choice is the URL hash, `#ckpt=<repo id>`, so
    a link opens the page on a checkpoint. Switching does not reload: every part that depends on the
    checkpoint is in the page and the script swaps it. On a vision-language checkpoint the chips add
-   `Vision-language` and the vision encoder's and the wrapper's slugs; the subtitle stays the family's.
+   `Vision-language` and the vision encoder's and the wrapper's slugs.
    Nothing else: no layer count, no vLLM or eager stamps.
    The selector is the page's list of checkpoints; the suite's pinned tiny checkpoints are not on the
    page.
@@ -139,7 +139,7 @@ rearrange them.
    family's `RENAME` lines for the vision encoder are not singled out.
 
 The index lists every family in `nnterp.families.known()`: a card with the family's circles, title,
-subtitle, quirks and vLLM support (whether `nnterp/families/vllm/<model_type>.py` exists) for each entry (the quirks that hold on any of its checkpoints; an eye and the
+quirks and vLLM support (whether `nnterp/families/vllm/<model_type>.py` exists) for each entry (the quirks that hold on any of its checkpoints; an eye and the
 vision encoders found, `CLIP · SigLIP`, and the `Vision-language` chip when any checkpoint has a vision encoder), a
 stub for each family not written yet, a search box (title, `model_type`, org, architecture, Hub ids,
 quirks, vision encoders, wrappers) and three filter rows, each a fold closed at first whose label opens it and
@@ -169,7 +169,7 @@ card carries its org's logo, the name on hover. The org is the author of the ent
   one of the vision encoder's `MODULE_CLASSES`.
 - **From the Hub**, by `hub.py`, cached in `hub_cache.json`: the org's display name and avatar, and
   each checkpoint's parameter count and creation date.
-- **From the entry**, `entries/<model_type>.py`: the title and subtitle, the checkpoints, the block
+- **From the entry**, `entries/<model_type>.py`: the title, the checkpoints, the block
   schema the diagram draws, the strip's notes, the quirk tags, the hue, the notes, and `WRAPPERS`.
 - **From a vision encoder module**, `vision/<tower>.py`: what holds on every host of a vision encoder.
 
@@ -190,10 +190,8 @@ The entry states facts about a family, and each one has a source. Before writing
 ### The fields
 
 1. **`MODEL_TYPE`**: the family's `model_type`, which is the entry's file name.
-2. **`TITLE`**, **`SUBTITLE`**: the family's public name (several model lines separated by ` / `,
-   `"Qwen2 / Qwen2.5"`, are shown stacked, one per line), and one sentence saying what makes this
-   family unique: what sets it apart from most models. A family with nothing unusual says plainly what it is.
-   Present tense, no adjectives.
+2. **`TITLE`**: the family's public name (several model lines separated by ` / `,
+   `"Qwen2 / Qwen2.5"`, are shown stacked, one per line).
 3. **`REFERENCE`**: the public checkpoint the page opens on. Choose the one most used for
    interpretability (usually the smallest base model).
    **`CHECKPOINTS`**: the family's public checkpoints as Hub ids, the reference among them; each is a

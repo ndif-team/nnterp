@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>GPT-Neo / TinyStories · nnterp encyclopedia</title>
-<meta name="description" content="GPT-2&#39;s sequential block and learned position embedding; the attention sits one module down, inside an attn wrapper, computes its own scores without scaling them, and on every other block masks keys outside a local window.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%2389BB7E%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23C796D2%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%234FBEC4%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%2386ACEA%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23DE9871%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">gpt_neo</span></p>
     <h1 class="disp-title"><span class="line">GPT-Neo</span><span class="line">TinyStories</span></h1>
-    <p class="subtitle">GPT-2&#39;s sequential block and learned position embedding; the attention sits one module down, inside an attn wrapper, computes its own scores without scaling them, and on every other block masks keys outside a local window.</p>
     <div class="pane" data-pane="chips" data-ckpts="EleutherAI/gpt-neo-125m EleutherAI/gpt-neo-1.3B EleutherAI/gpt-neo-2.7B roneneldan/TinyStories-1M roneneldan/TinyStories-3M roneneldan/TinyStories-8M roneneldan/TinyStories-28M roneneldan/TinyStories-33M roneneldan/TinyStories-1Layer-21M roneneldan/TinyStories-2Layers-33M roneneldan/TinyStories-Instruct-33M"><div class="chips">
 <a class="chip" href="#notes" title="Some blocks, or every block, attend only to a window of the latest positions. A config key sets its length (sliding_window, window_size), and where the config lists each block&#39;s type (layer_types, attention_layers), that list says which blocks.">Sliding window</a><a class="chip" href="#notes" title="A position embedding is added to the token embeddings before block 0, so token_embeddings is not layers[0].input.">Position embeddings</a><a class="chip" href="#notes" title="Every norm is a LayerNorm: it subtracts the mean before scaling, so adding a multiple of the all-ones vector to the stream changes nothing that the next sublayer or the logits see.">LayerNorm</a></div></div>
   </div>
@@ -1507,7 +1506,7 @@ standard name.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">EleutherAI/gpt-neo-125m</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">EleutherAI/gpt-neo-125m</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

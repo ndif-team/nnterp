@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Falcon-H1 · nnterp encyclopedia</title>
-<meta name="description" content="Every block runs a Mamba-2 mixer and attention side by side on one normed input and adds both, each times its own multiplier, then a gated MLP; the embeddings and the logits carry multipliers too.">
+<meta name="description" content="How each transformer family looks through nnterp's standard names and values.">
 <link rel="icon" type="image/svg+xml" href="static/favicon.svg">
 <link rel="icon" type="image/svg+xml" sizes="any" href="data:image/svg+xml,%3Csvg%20xmlns=%27http://www.w3.org/2000/svg%27%20viewBox=%270%200%2032%2032%27%3E%3Ccircle%20cx=%277.5%27%20cy=%2710.4%27%20r=%277.2%27%20fill=%27%23B5AE60%27/%3E%3Ccircle%20cx=%2718.2%27%20cy=%277.2%27%20r=%277.2%27%20fill=%27%23A3A2E8%27/%3E%3Ccircle%20cx=%2724.5%27%20cy=%2716.6%27%20r=%277.2%27%20fill=%27%236ABF9A%27/%3E%3Ccircle%20cx=%2713.8%27%20cy=%2721.6%27%20r=%277.2%27%20fill=%27%235BB8DA%27/%3E%3Ccircle%20cx=%2723.2%27%20cy=%2724.8%27%20r=%277.2%27%20fill=%27%23E29098%27/%3E%3C/svg%3E">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,7 +22,6 @@
   <div class="hero-text">
     <p class="micro-lg eyebrow">family <span class="mono">falcon_h1</span></p>
     <h1 class="disp-title"><span class="line">Falcon-H1</span></h1>
-    <p class="subtitle">Every block runs a Mamba-2 mixer and attention side by side on one normed input and adds both, each times its own multiplier, then a gated MLP; the embeddings and the logits carry multipliers too.</p>
     <div class="pane" data-pane="chips" data-ckpts="tiiuae/Falcon-H1-0.5B-Base tiiuae/Falcon-H1-0.5B-Instruct tiiuae/Falcon-H1-1.5B-Base tiiuae/Falcon-H1-1.5B-Instruct tiiuae/Falcon-H1-1.5B-Deep-Base tiiuae/Falcon-H1-1.5B-Deep-Instruct tiiuae/Falcon-H1-3B-Base tiiuae/Falcon-H1-3B-Instruct tiiuae/Falcon-H1-7B-Base tiiuae/Falcon-H1-7B-Instruct tiiuae/Falcon-H1-34B-Base tiiuae/Falcon-H1-34B-Instruct tiiuae/Falcon-H1R-7B tiiuae/Falcon-H1-Tiny-90M-Base tiiuae/Falcon-H1-Tiny-90M-Instruct"><div class="chips">
 <a class="chip" href="#notes" title="Attention and a recurrent mixer read the same normed input side by side and their outputs are summed before the MLP.">Parallel mixers</a><a class="chip" href="#notes" title="The recurrent mixer is Mamba-2&#39;s SSD state-space scan, run in chunks over a prompt; nnterp serves its C, B and x as attention_queries, attention_keys and attention_values.">State space (Mamba-2)</a><a class="chip" href="#notes" title="A multiplier sits on the residual adds: on a sublayer&#39;s output before it joins the stream, on the stream itself, or on the block&#39;s whole output.">Scaled residual adds</a><a class="chip" href="#notes" title="The model scales the embedding module&#39;s output before block 0, so token_embeddings is the unscaled tensor and layers[0].input the scaled one.">Embedding multiplier</a><a class="chip" href="#notes" title="The model multiplies or divides lm_head&#39;s output by a scale from the config, so logits is not lm_head&#39;s raw output.">Scaled logits</a><a class="chip" href="#notes" title="Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.">Grouped-query attention</a></div></div>
   </div>
@@ -1902,7 +1901,7 @@ false, and their <code>linear_attn.norm</code> is an identity. The block returns
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">tiiuae/Falcon-H1-0.5B-Base</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev147+g7507d863c · transformers 5.21.0 · reference <span id="colophon-reference">tiiuae/Falcon-H1-0.5B-Base</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

@@ -2,11 +2,6 @@
 
 MODEL_TYPE = "olmo"
 TITLE = "OLMo / OLMo 0424 / OLMo 0724"
-SUBTITLE = (
-    "Llama's pre-norm block with LayerNorm in place of RMSNorm, and every norm without weight or bias, so a "
-    "sublayer reads the stream standardized to mean 0 and variance 1, and the 0424 and 0724 base checkpoints "
-    "clamp queries, keys and values to ±8 inside the attention."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "allenai/OLMo-1B-hf"

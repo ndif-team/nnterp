@@ -3,10 +3,6 @@ on every block chosen by sigmoid scores plus a selection bias."""
 
 MODEL_TYPE = "minimax_m2"
 TITLE = "MiniMax-M2 / MiniMax-M2.1 / MiniMax-M2.5 / MiniMax-M2.7"
-SUBTITLE = (
-    "Llama's pre-norm block with one RMSNorm over all query heads and one over all key heads, and a mixture of "
-    "experts on every block, chosen by sigmoid scores plus a bias and weighted by the sigmoids without it."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "MiniMaxAI/MiniMax-M2"

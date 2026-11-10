@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "glm4_moe"
 TITLE = "GLM-4.5 / GLM-4.6 / GLM-4.7"
-SUBTITLE = (
-    "Llama's pre-norm block with rotary on half of each head and, after the first dense blocks, a mixture "
-    "whose sigmoid router picks 8 experts with a selection bias, beside one shared expert."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "zai-org/GLM-4.5-Air"

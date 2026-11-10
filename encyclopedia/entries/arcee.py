@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "arcee"
 TITLE = "Arcee AFM"
-SUBTITLE = (
-    "Llama's block whose MLP has no gate: up_proj, a squared ReLU and down_proj, so a neuron is exactly zero "
-    "wherever its pre-activation is negative."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "arcee-ai/AFM-4.5B-Base"

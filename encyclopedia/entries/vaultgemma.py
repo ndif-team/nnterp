@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "vaultgemma"
 TITLE = "VaultGemma"
-SUBTITLE = (
-    "Gemma 2's names on a pre-norm block: each sublayer is normed on the way in only, so what reaches the "
-    "residual stream is the module's own output, and the MLP's input norm is pre_feedforward_layernorm."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "google/vaultgemma-1b"

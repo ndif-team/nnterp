@@ -54,7 +54,7 @@ def _projected_checkpoint(do_layer_norm_before, repo="hf-internal-testing/tiny-r
     the head are the narrower width."""
     from transformers import AutoConfig, OPTForCausalLM
 
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="opt-projected-")
     for name in os.listdir(snapshot):
         if name != "config.json" and not name.endswith((".safetensors", ".bin")):
@@ -129,10 +129,10 @@ class TestOPT350mLayout(ProjectedLayout, TestOPTPostNorm):
     """OPT-350m's whole layout: post-norm blocks, no final norm, and ``project_in`` / ``project_out`` between the
     embedding width and the stream's. The decoder makes its logits as ``lm_head(project_out(h))``, so the lens does."""
 
-    REPO = _projected_checkpoint(do_layer_norm_before=False)
+    REPO = built(_projected_checkpoint, do_layer_norm_before=False)
 
 
 class TestOPTProjected(ProjectedLayout, TestOPT):
     """A pre-norm OPT with ``project_out``: the decoder norms the stream, projects it, and the head reads that."""
 
-    REPO = _projected_checkpoint(do_layer_norm_before=True)
+    REPO = built(_projected_checkpoint, do_layer_norm_before=True)

@@ -1,7 +1,7 @@
 """Phi-3, end to end."""
 
 import torch
-from suite import PROMPT, FamilySuite, LLAMA_ROWS, random_weights
+from suite import PROMPT, FamilySuite, LLAMA_ROWS, built, patched_checkpoint, random_weights
 
 from nnterp.families import phi3
 
@@ -10,6 +10,29 @@ class TestPhi3(FamilySuite):
     REPO = "katuni4ka/tiny-random-phi3"
     FAMILY = phi3
     NATIVE = LLAMA_ROWS
+
+
+class TestPhi3LongRope(TestPhi3):
+    """Phi-3-mini-128k's, Phi-3.5-mini's and Phi-4-mini's layout: a ``longrope`` rotary, partial rotary 0.75,
+    grouped-query attention (6 heads over 2 here, 24 over 8 on Phi-4-mini) and tied embeddings (Phi-4-mini). Its
+    ``original_max_position_embeddings`` is 2 (4096 on the releases), so every prompt here takes the long factors,
+    which the rotary computes on its first call and keeps. The tiny config with those set, weights drawn for it."""
+
+    REPO = built(
+        patched_checkpoint, TestPhi3.REPO, draw=True, num_attention_heads=6, num_key_value_heads=2, head_dim=8,
+        partial_rotary_factor=0.75, original_max_position_embeddings=2, max_position_embeddings=256, tie_word_embeddings=True,
+        rope_scaling=None, rope_parameters={
+            "rope_type": "longrope", "rope_theta": 10000.0, "partial_rotary_factor": 0.75, "original_max_position_embeddings": 2,
+            "short_factor": [1.0 + 0.1 * i for i in range(3)], "long_factor": [2.0 + 0.2 * i for i in range(3)],
+        },
+    )
+
+    def test_the_rotary_takes_the_long_factors(self, model):
+        rotary = model.model.rotary_emb._module
+        assert rotary.rope_type == "longrope" and (model.num_heads, model.num_kv_heads) == (6, 2)
+        with model.trace(PROMPT):
+            model.logits.save()
+        assert type(rotary.long_inv_freq) is torch.Tensor and torch.equal(rotary.inv_freq, rotary.long_inv_freq)
 
 
 def test_value_weight_under_grouped_query_attention():

@@ -1,6 +1,5 @@
 """Cohere 2 (Command-R7B), end to end: a parallel block, sliding layers with rotary, full layers without."""
 
-import glob
 import json
 import os
 import tempfile
@@ -8,7 +7,7 @@ import tempfile
 import pytest
 
 import torch
-from suite import NO_ROTARY, FamilySuite, PROMPT, rows
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows, built, cached_snapshot
 from vision_suite import VisionSuite, WrapperSuite, align_processor, siglip_rows, wrapper_of
 
 from nnterp.families import cohere, cohere2
@@ -45,7 +44,7 @@ class TestCohere2(FamilySuite):
 
 def _scaled_checkpoint(repo=TestCohere2.REPO, logit_scale=0.25):
     """The tiny checkpoint with Command-R7B's ``logit_scale`` (0.25); the tiny config's is 1.0. Only ``config.json`` is rewritten."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="cohere2-scaled-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -59,7 +58,7 @@ def _scaled_checkpoint(repo=TestCohere2.REPO, logit_scale=0.25):
 class TestCohere2Scaled(TestCohere2):
     """The same weights with a ``logit_scale`` away from 1.0: ``logits`` is the head's output times it, and so is the lens."""
 
-    REPO = _scaled_checkpoint()
+    REPO = built(_scaled_checkpoint)
 
     def test_logits_are_the_scaled_head_output(self, model):
         with model.trace(PROMPT):

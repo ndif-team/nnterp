@@ -1,11 +1,10 @@
 """Qwen2-MoE, end to end."""
 
-import glob
 import os
 import tempfile
 
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, built, cached_snapshot
 
 from nnterp.families import qwen2_moe
 
@@ -14,7 +13,7 @@ def _random_checkpoint(repo, **changes):
     """The tiny checkpoint's config with ``changes``, randomly initialised and saved (seeded, so every load is one model), with its tokenizer."""
     from transformers import AutoConfig, AutoModelForCausalLM
 
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="qwen2_moe-")
     config = AutoConfig.from_pretrained(snapshot)
     for name, value in changes.items():
@@ -37,7 +36,7 @@ class TestQwen2Moe(FamilySuite):
 class TestQwen2MoeMlpOnly(TestQwen2Moe):
     """``mlp_only_layers=[0]``: block 0 is a dense ``Qwen2MoeMLP`` (no released checkpoint), the others mixtures."""
 
-    REPO = _random_checkpoint(TestQwen2Moe.REPO, mlp_only_layers=[0])
+    REPO = built(_random_checkpoint, TestQwen2Moe.REPO, mlp_only_layers=[0])
 
     def test_the_dense_block_is_an_mlp(self, model):
         dense, mixture = model.layers[0].mlp, model.layers[1].mlp

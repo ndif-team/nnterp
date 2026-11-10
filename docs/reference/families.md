@@ -104,7 +104,7 @@ One row per family, keyed on `model_type`. Public ids are checkpoints of that `m
 | `mpt` | `nnterp.families.mpt` | `ybelkada/mpt-7b-bf16-sharded`, `anas-awadalla/mpt-7b` (copies of MPT-7B; `mosaicml/mpt-7b` is not on the Hub) | `hf-internal-testing/tiny-random-MptForCausalLM` |
 | `falcon` (7B layout) | `nnterp.families.falcon` | `tiiuae/falcon-7b` | `Rocketknight1/tiny-random-falcon-7b` |
 | `falcon` (40B layout, `new_decoder_architecture`) | `nnterp.families.falcon` | `tiiuae/falcon-40b`, `tiiuae/falcon-11B` (`num_ln_in_parallel_attn` 1: one `input_layernorm` feeds both sublayers, as on the 7B layout, with 8 key/value heads) | `Rocketknight1/tiny-random-falcon-40b` |
-| `falcon` (RW layout, `parallel_attn` false) | `nnterp.families.falcon` | `tiiuae/falcon-rw-1b`, `tiiuae/falcon-rw-7b` | `Rocketknight1/tiny-random-falcon-7b` with `parallel_attn` set false by the test (`TestFalconRW`; it keeps the 7B tiny's rotary and multi-query attention, where the released RW checkpoints set `alibi` and per-head keys and values) |
+| `falcon` (RW layout, `parallel_attn` false) | `nnterp.families.falcon` | `tiiuae/falcon-rw-1b`, `tiiuae/falcon-rw-7b` | `Rocketknight1/tiny-random-falcon-7b` with the RW layout written into its config by the test (`TestFalconRW`: `parallel_attn` false, `alibi`, per-head keys and values, biased projections; weights and biases drawn) |
 | `opt` | `nnterp.families.opt` | `facebook/opt-125m` | `hf-internal-testing/tiny-random-OPTForCausalLM` |
 | `xglm` | `nnterp.families.xglm` | `facebook/xglm-564M`, `facebook/xglm-7.5B` | `hf-internal-testing/tiny-random-XGLMForCausalLM` |
 | `qwen3_next` | `nnterp.families.qwen3_next` | `Qwen/Qwen3-Next-80B-A3B-Instruct` | `yujiepan/qwen3-next-moe-tiny-random` |

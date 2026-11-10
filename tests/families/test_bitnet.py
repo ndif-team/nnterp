@@ -1,13 +1,12 @@
 """BitNet b1.58, end to end."""
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, cached_snapshot
 
 from nnterp import StandardizedTransformer
 from nnterp.components.attention import bitnet_weight
@@ -28,7 +27,7 @@ def _quantized_checkpoint(mode: str) -> str:
     """The tiny checkpoint with the released checkpoints' ``quantization_config`` in its config: every projection loads as
     transformers' ``AutoBitLinear``, ``online`` (ternarized on every call, microsoft/bitnet-b1.58-2B-4T-bf16) or
     ``offline`` (the stored weight times ``weight_scale``, microsoft/bitnet-b1.58-2B-4T)."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{REPO.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(REPO)
     patched = tempfile.mkdtemp(prefix="bitnet-")
     for name in os.listdir(snapshot):
         if name != "config.json":

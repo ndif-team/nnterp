@@ -39,26 +39,25 @@ SmolVLM's processor needs `num2words`; neither is in an extra.
 ## Import order: `tests/conftest.py`
 
 It imports nnsight first and gives each xdist worker one torch thread.
-Test files that import a modeling class (`tests/test_base.py:6-7`,
-`tests/test_registry.py:70`) still write `from nnsight import
-TransformersModel` first for the reader; the conftest is what makes the
-order hold in every process pytest starts.
+A test file that imports a modeling class at its top (`tests/test_base.py`) still
+writes `from nnsight import TransformersModel` first for the reader; the
+conftest is what makes the order hold in every process pytest starts.
 
 ## `FamilySuite` (`tests/families/suite.py`)
 
 A family's test file subclasses `FamilySuite`, sets the class attributes,
 and inherits every method. Two class-scoped fixtures load the checkpoint
-once per class: `model` (`suite.py:88-92`), a `StandardizedTransformer` with
+once per class: `model` (`suite.py`), a `StandardizedTransformer` with
 `dispatch=True, attn_implementation="eager"` plus `LOAD_KWARGS`, and
-`raw_model` (`:93-97`), the same checkpoint as a plain `TransformersModel`.
+`raw_model`, the same checkpoint as a plain `TransformersModel`.
 
-### Class attributes (`suite.py:137-170`)
+### Class attributes (`FamilySuite`, `suite.py`)
 
 | attribute | meaning |
 |---|---|
 | `REPO` | the pinned tiny checkpoint |
 | `FAMILY` | the family module the checkpoint must resolve to |
-| `NATIVE` | standard path → native path, usually built by `rows(container, layers, embed, norm, attn=, mlp=, ln1=, ln2=)` (`:58-73`); `LLAMA_ROWS` (`:76`) is the Llama layout |
+| `NATIVE` | standard path → native path, usually built by `rows(container, layers, embed, norm, attn=, mlp=, ln1=, ln2=)`; `LLAMA_ROWS` is the Llama layout |
 | `EXPECTED_UNAVAILABLE` | `support()` key → a substring of the reason, for values this checkpoint lacks; a module no block has (OPT's `mlp`) is absent from `support()` rather than unavailable, so it is not listed here |
 | `REFUSES_IN_PLACE_QKV` | the queries come out of a multi-view op (`split`, `chunk`), so torch refuses an in-place edit of them (GPT-2, GPT-BigCode, MPT) |
 | `ATTENTION_SINK` | the pattern's rows sum to less than one (GPT-OSS) |
@@ -79,16 +78,16 @@ value before the rotary; the identity, HunYuan's and Llama 4's post-rotary norms
 tiling of the keys). `model_size(host, axis, name)` takes the value's name, so JetMoE's file
 says its keys before the rotary are `num_kv_heads` wide where `KV_HEADS_EXPANDED` holds for the rest.
 
-Helpers: `mixer(layer)` (`:40-43`) is `self_attn` or, on a linear
-block, `linear_attn`; `has_mlp(model)` (`:184-186`) reads `support()`;
+Helpers: `mixer(layer)` is `self_attn` or, on a linear
+block, `linear_attn`; `has_mlp(model)` reads `support()`;
 `attn_blocks(model)` is the blocks with softmax attention and `attn_block(model)` the first of them, skipping the test when there is none;
 `recurrent_mixer(family)` is the family's `RecurrentMixer` class from its `ENVOYS`;
-`expected_values(model)` (`:106-112`) adds the `linear_attn.*` names on a
-hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES`, `INTERIOR` and `LINEAR` (`:20-27`) are the value name sets.
+`expected_values(model)` adds the `linear_attn.*` names on a
+hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES`, `INTERIOR` and `LINEAR` are the value name sets.
 
 ### The test methods, by what they assert
 
-**Names** (`suite.py:115-155`)
+**Names** (`suite.py`)
 
 | method | asserts |
 |---|---|
@@ -99,7 +98,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_envoy_classes` | every block is exactly `FAMILY.Layer`, every softmax attention `FAMILY.Attention`, every MLP `FAMILY.Mlp` (or `FAMILY.Moe`), every mixer the `RecurrentMixer` subclass the family's `ENVOYS` keys, and each subclasses the component base |
 | `test_trace_through_standard_names` | a trace through `mixer(...).output`, `layers[-1].output`, `norm.output`, `lm_head.output` gives `hidden_size` / `vocab_size` widths |
 
-**Availability** (`:158-184`)
+**Availability**
 
 | method | asserts |
 |---|---|
@@ -107,7 +106,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_support_is_what_this_family_expects` | every key in `EXPECTED_UNAVAILABLE` is a non-empty per-block dict whose reasons contain the substring; every other key is `None` |
 | `test_support_matches_what_reads` | on block 0, an available name is an `EProperty` on the host's class; a missing module says `no ... module`; an unavailable value raises `Unavailable` matching the reason |
 
-**Boundary values** (`:188-269`)
+**Boundary values**
 
 | method | asserts |
 |---|---|
@@ -118,7 +117,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_renamed_model_equals_raw_model` | block 0's output and `lm_head.output` equal the raw `TransformersModel`'s |
 | `test_boundary_writes_land` | assigning `attention_output * 0`, `mlp_output * 0`, `layer_output * 0`, and zeroing `layer_output[:]` in place, each moves the logits |
 
-**The attention pattern** (`:273-332`)
+**The attention pattern**
 
 | method | asserts |
 |---|---|
@@ -127,7 +126,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_written_pattern_moves_the_logits` | assigning a random pattern and zeroing head 0 in place both move the logits (a read can be causally inert) |
 | `test_every_source_value_resolves_on_every_layer` | every available value on `FAMILY.Attention` whose path is inside a forward (`inside_forward()`) reads a tensor on every attention block, one trace per value |
 
-**The attention interior** (`:336-396`)
+**The attention interior**
 
 | method | asserts |
 |---|---|
@@ -149,7 +148,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 what every vision tower reports for the two values, which the suite expects on a wrapper's
 `vision.*` rows without a family saying so.
 
-**Methods over the values** (`:400-441`)
+**Methods over the values**
 
 | method | asserts |
 |---|---|
@@ -187,20 +186,20 @@ runs both tests on the tiny Llama under a throwaway LoRA on `v_proj` and `o_proj
 with the adapter enabled, disabled, merged, and disabled while merged, and checks the merged weight is
 `value_weight`'s bit for bit.
 
-**Layouts** (`:445-485`)
+**Layouts**
 
 | method | asserts |
 |---|---|
 | `test_values_match_their_annotations` | every value with a `layout`, on the root, a block, its attention, its MLP and one mixer, is an instance of its layout alias (`Residual`, `Pattern`, ... from `nnterp.components`) and each named axis matches `axis_sizes` (`hidden_size`, `num_heads`, `head_k_dim`, `streams` = the text config's `hc_mult` where it has one, ...); one value per trace; at least 11 checked |
 
-**The input** (`:489-514`)
+**The input**
 
 | method | asserts |
 |---|---|
 | `test_input_accessors` | `input_ids`, `input_size`, `attention_mask` are `[1, n]` for the prompt's `n` tokens, the mask all ones, `token_embeddings` `n` long, and the three names print in the repr |
 | `test_assigning_input_ids_runs_other_ids` | assigning another prompt's ids and mask reproduces that prompt's logits; assigning `input_size` raises `AttributeError` |
 
-**The root** (`:518-580`)
+**The root**
 
 | method | asserts |
 |---|---|
@@ -214,10 +213,12 @@ with the adapter enabled, disabled, merged, and disabled while merged, and check
 
 ## How a family file adds specifics
 
-Most files are the class attributes alone (`tests/families/test_gpt2.py:8-12`
-adds `REFUSES_IN_PLACE_QKV = True` and one test that flipping
-`reorder_and_upcast_attn` on the config makes the interface unavailable,
-`:14-22`). Two files show the two other things a family file does.
+Most files are the class attributes alone (`TestGPT2`,
+`tests/families/test_gpt2.py`, adds `REFUSES_IN_PLACE_QKV = True` and one
+test that flipping `reorder_and_upcast_attn` on the config makes the
+interface unavailable,
+`TestGPT2.test_reorder_and_upcast_makes_the_interface_unavailable`). Two
+files show the two other things a family file does.
 
 `tests/families/test_falcon.py` has **five classes for one family**: the 7B
 layout, the 7B layout with alibi, the 40B layout, and Falcon-RW's and Falcon-11B's
@@ -249,23 +250,27 @@ class TestFalcon40B(FamilySuite):                    # new_decoder_architecture
     MLP_NORM_BEFORE_ATTENTION = True
 ```
 
-(`test_falcon.py:14-89`). The three extra 7B tests pin what the family module
+(`test_falcon.py`). The extra 7B tests pin what the family module
 says: `mlp_output` is a copy equal to `mlp.output - attention_output`
-(`:20-26`), an in-place edit on the copy still moves the logits and the
-user's tensor stays what they made it (`:28-36`), and `attention_values` must
-be read before `attention_queries` in one trace (`:38-44`). The alibi class
+(`TestFalcon.test_mlp_output_is_a_copy_the_block_does_not_touch`), an
+in-place edit on the copy still moves the logits and the user's tensor
+stays what they made it
+(`TestFalcon.test_in_place_mlp_edit_reaches_the_model_through_the_transform`),
+and `attention_values` must be read before `attention_queries` in one trace
+(`TestFalcon.test_values_bind_before_the_rotary`). The alibi class
 runs the whole suite on the other attention branch: `_alibi_checkpoint()`
-(`:47-57`) symlinks the 7B snapshot's files into a temp dir and writes
+symlinks the 7B snapshot's files into a temp dir and writes
 `alibi: true` into its `config.json`, the way OLMo-3's test patches its
-checkpoint, and `test_alibi_branch` (`:68-73`) checks the pattern equals the
+checkpoint, and `test_alibi_branch` checks the pattern equals the
 `self_attention_dropout_0` output.
 
 `tests/families/test_olmo3.py` **patches a checkpoint**: the tiny OLMo-3
 checkpoint's flat `rope_parameters` does not parse for a model with
-`layer_types`, so `_patched_checkpoint()` (`test_olmo3.py:14-32`) symlinks
+`layer_types`, so `_patched_checkpoint()` (`test_olmo3.py`) symlinks
 the snapshot's files into a temp dir, rewrites only `config.json` into the
-per-layer-type form, and `REPO` is that directory (`:36`). The family itself needs nothing. Its own
-test checks the contribution is the post-attention norm's output (`:42-46`).
+per-layer-type form, and `REPO` is that directory. The family itself needs nothing. Its own
+test checks the contribution is the post-attention norm's output
+(`TestOlmo3.test_contributions_are_the_post_norms`).
 `tests/families/test_gemma4_text.py` patches weights, not only the config: the
 tiny text checkpoint's per-layer embedding table has 99 rows, so `_ple_checkpoint()`
 tiles it to the full vocabulary into a copy under the temp directory, written once
@@ -427,38 +432,52 @@ process (`test_head_weights_are_refused_on_a_split_model`). It skips below trans
 
 `tests/test_registry.py`: every module under `nnterp/families/` is
 named after its type, and there are at least 31
-(`:15-20`); `import nnterp` pulls in no `transformers.models.*.modeling_*`
-module and `lookup("gpt2")` imports only that family, checked in a
-subprocess (`:23-36`); an unknown `model_type` falls back to the default
-family with a warning (`:39-44`); `register` adds and overrides, and `lookup` returns it (`:44-51`);
-a preloaded `nn.Module` uses its own config (`:54-58`); a user `rename`
-merges over the family's (`:61-64`); a user `envoys` type key replaces the
-family's (`:67-77`); the remote key is `TransformersModel` (`:80-85`); a
+(`test_every_family_module_is_named_after_its_model_type`); `import nnterp`
+pulls in no `transformers.models.*.modeling_*` module and `lookup("gpt2")`
+imports only that family, checked in a subprocess (`test_import_is_lazy`);
+an unknown `model_type` falls back to the default family with a warning
+(`test_unknown_family_falls_back_to_the_default`); `register` adds and
+overrides, and `lookup` returns it
+(`test_register_adds_a_family_and_can_override`); a preloaded `nn.Module`
+uses its own config (`test_preloaded_module_uses_its_own_config`); a user
+`rename` merges over the family's (`test_user_rename_merges_over_family`); a
+user `envoys` type key replaces the family's
+(`test_user_envoys_merge_over_defaults`); the remote key is
+`TransformersModel` (`test_remote_key_names_the_plain_transformers_model`); a
 default load keeps the checkpoint's attention and `support()` names `eager`
-(`:88-92`); a family registered with only `RENAME` and `ENVOYS`
-answers `support()` with every block value (`:95-103`); a value on an
+(`test_default_load_keeps_the_checkpoints_attention`); a family registered
+with only `RENAME` and `ENVOYS` answers `support()` with every block value
+(`test_register_needs_only_names_and_envoys_for_support`); a value on an
 `Attention` subclass passed through `envoys=` is listed by `support()` and
 `support(layer=0)` as `self_attn.<name>`, and a load without it does not list
-it (`:106-118`); a family registered with `hidden_size=lambda model: 999`
-answers `model.hidden_size` with 999 while `num_heads` keeps the root's rule,
-and a plain load reads `config.hidden_size` (`:121-131`); assigning a size
-(`model.hidden_size = 5`) raises `AttributeError` naming `def hidden_size`
-(`:229-232`); `register(module)` with no types covers the type the module's
-`__name__` ends in (`:235-244`); `register(ns, "my_type", "my_other_type")`
-covers both (`:247-253`); `register(ns)` on a `SimpleNamespace` with no types
-raises `TypeError` and registers nothing (`:256-261`). `family=` takes a module
+it (`test_custom_value_through_envoys_is_in_support`); a family registered
+with `hidden_size=lambda model: 999` answers `model.hidden_size` with 999
+while `num_heads` keeps the root's rule, and a plain load reads
+`config.hidden_size` (`test_family_defines_a_size_instead_of_the_root`);
+assigning a size (`model.hidden_size = 5`) raises `AttributeError` naming
+`def hidden_size` (`test_sizes_are_read_only`); `register(module)` with no
+types covers the type the module's `__name__` ends in
+(`test_register_takes_the_type_from_a_modules_name`);
+`register(ns, "my_type", "my_other_type")` covers both
+(`test_register_takes_several_types`); `register(ns)` on a `SimpleNamespace`
+with no types raises `TypeError` and registers nothing
+(`test_register_without_a_name_or_types_raises`). `family=` takes a module
 imported from the user's path, aliases and size functions included
-(`:160-175`), and a `SimpleNamespace` with only `RENAME` and `ENVOYS` that
-loads and traces (`:178-189`); a namespace spread from `vars(llama)` with an
-extra alias and envoy class composes with `rename=` (`:192-213`); size and
-`project_on_vocab` functions on a passed family win (`:216-226`); none of them
+(`test_family_passed_as_a_module`), and a `SimpleNamespace` with only
+`RENAME` and `ENVOYS` that loads and traces
+(`test_family_passed_as_a_namespace`); a namespace spread from
+`vars(llama)` with an extra alias and envoy class composes with `rename=`
+(`test_family_extends_a_shipped_one`); size and `project_on_vocab` functions
+on a passed family win
+(`test_family_passed_overrides_a_size_and_project_on_vocab`); none of them
 touches `REGISTRY`.
 
 `tests/test_base.py`: the base `Layer` on a plain
 `TransformersModel` over GPT-J unwraps and rewraps a tuple block output
-(`:13-36`); an `unavailable(...)` marker is listed in the repr with its
-reason, reported by `support()` at both levels, raises `Unavailable` on read,
-and `hasattr` raises too (`:39-52`).
+(`test_tuple_block_unwrapped_and_rewrapped`); an `unavailable(...)` marker is
+listed in the repr with its reason, reported by `support()` at both levels,
+raises `Unavailable` on read, and `hasattr` raises too
+(`test_unavailable_marker_is_listed_and_raises`).
 
 `tests/test_prompt_utils.py` (GPT-2 with `tokenizer_kwargs`
 setting left padding and a pad token): `tokenizer_kwargs` are applied;
@@ -479,16 +498,20 @@ session collector agrees; `compute_next_token_probs` rows sum to one.
 
 - Names bound inside a `with model.trace(...)` block do not survive it;
   the suite pre-binds containers (`read = {}`, `saved = None`) outside the
-  block (`suite.py:198`, `:472`). A list first bound inside the block is
-  gone after it even when its elements are saved (`xs = [v.save() for ...]` and
-  `ys = []; ys.append(v.save())` both raise `NameError` after the block); bind it
-  before the block, or save the list itself (`nnsight.save([...])`).
+  block (`FamilySuite.test_every_value_reads_a_tensor_on_every_layer`,
+  `FamilySuite.test_values_match_their_annotations`, `suite.py`). A list first
+  bound inside the block is gone after it even when its elements are saved
+  (`xs = [v.save() for ...]` and `ys = []; ys.append(v.save())` both raise
+  `NameError` after the block); bind it before the block, or save the list
+  itself (`nnsight.save([...])`).
 - Reads in one trace follow the forward: the suite reads one interior value
-  per trace (`:327`, `:340`) because families bind them at different points.
+  per trace (`FamilySuite.test_every_source_value_resolves_on_every_layer`,
+  `FamilySuite._read_interior`, `suite.py`) because families bind them at
+  different points.
 - The class-scoped `model` fixture is shared by every test in the class;
   a test that needs another config loads a patched copy of the checkpoint as
-  its own class (`_alibi_checkpoint()`, `test_falcon.py:47-57`;
-  `_patched_checkpoint()`, `test_olmo3.py:14-32`) rather than mutating the
+  its own class (`_alibi_checkpoint()`, `test_falcon.py`;
+  `_patched_checkpoint()`, `test_olmo3.py`) rather than mutating the
   fixture's.
 - `route_delta_rule(..., "recurrent")` (`route_kernels(..., "torch")`) is
   process-wide; the hybrid tests load a second model after routing and restore

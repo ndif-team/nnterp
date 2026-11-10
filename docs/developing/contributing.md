@@ -16,9 +16,10 @@ steps from a branch to a passing suite.
 ## Canonical pattern
 
 A new family is one module and one test file. The module for a Llama-named
-checkpoint is three container keys, three empty subclasses and the type
+checkpoint is the container keys, three empty subclasses and the type
 keys (`nnterp/families/llama.py`); a family whose block differs overrides
-only the value that differs (`nnterp/families/gemma2.py:33-49`):
+only the value that differs (`Attention.attention_output`, `Mlp.mlp_output`,
+`nnterp/families/gemma2.py`):
 
 ```python
 """<Model> (``<Model>ForCausalLM``).
@@ -78,13 +79,13 @@ the ones that matter most here:
 - **Present tense.** The source and the docs describe what is; no "used
   to", no "fixed", no issue numbers, no TODO in prose. When code exists
   because something once broke, write the constraint, not the incident
-  (`nnterp/components/eproperty.py:116-118` says why a predicate's
-  `AttributeError` becomes a `RuntimeError`, not when it bit). The docs
-  describe nnterp in general: no machine, environment or path, no timings or
-  test counts from one run, no commit hash, no "verified on" stamp.
+  (`EProperty._check` in `nnterp/components/eproperty.py` says why a
+  predicate's `AttributeError` becomes a `RuntimeError`, not when it bit).
+  The docs describe nnterp in general: no machine, environment or path, no
+  timings or test counts from one run, no commit hash, no "verified on" stamp.
 - **Docstrings state the contract; comments say why.** A module docstring
-  teaches the family or the concept (`nnterp/families/falcon.py:1-11`,
-  `nnterp/components/recurrent.py:1-14`); a value's docstring says
+  teaches the family or the concept (`nnterp/families/falcon.py`,
+  `nnterp/components/recurrent.py`); a value's docstring says
   what the tensor is, its layout, and how writes behave; an inline comment
   names the failure mode averted or the alternative rejected. A comment that
   paraphrases the line under it is deleted.
@@ -97,10 +98,11 @@ the ones that matter most here:
   `support()` show.
 - **One family per module, named after `model_type`**
   (`gemma3_text.py` covers `gemma3_text`); the file name is its type, declared nowhere else.
-  The module *is* the registry entry (`nnterp/families/__init__.py:17-22`).
+  The module *is* the registry entry (`lookup`, `nnterp/families/__init__.py`).
 - **Families import their modeling module only inside the family module**,
   at the top of it, never from `nnterp/components` or `nnterp/standardized.py`,
-  so `import nnterp` loads no modeling code (`tests/test_registry.py:23-36`).
+  so `import nnterp` loads no modeling code (`test_import_is_lazy`,
+  `tests/test_registry.py`).
 - **Every value is annotated with a layout name** (`-> Residual`,
   `-> Pattern`, `-> Keys`), never an inline `Float[Tensor, "..."]`. Each name
   is defined in the file of the envoy that serves it (`Residual` in
@@ -138,8 +140,8 @@ the ones that matter most here:
    checkpoint that is offline-cached; prefer `hf-internal-testing/`,
    `trl-internal-testing/`, `yujiepan/` or `hf-tiny-v2/` repos. If the
    checkpoint's config does not parse on the transformers nnterp is developed on, patch
-   the config in the test file the way `tests/families/test_olmo3.py:14-32`
-   does.
+   the config in the test file the way `tests/families/test_olmo3.py`
+   (`_patched_checkpoint`) does.
 5. For a new value, add a method to `FamilySuite`, and expect it to run on
    every family: a value one family lacks is declared `unavailable(...)` in
    that family and listed in its `EXPECTED_UNAVAILABLE`.

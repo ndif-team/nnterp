@@ -58,7 +58,7 @@ rest of this page says which.
 ```
  checkpoint / nn.Module
         │
-        ▼  StandardizedTransformer.__init__                    nnterp/standardized.py:128-155
+        ▼  StandardizedTransformer.__init__                    nnterp/standardized.py
  ┌──────────────────────────────────────────────────────────────────────────────┐
  │ config = _read_config(repo_id, **kwargs)          AutoConfig, before any build │
  │ family = families.resolve(config)                   wrapper's type, else text's │
@@ -67,9 +67,9 @@ rest of this page says which.
  │ TransformersModel.__init__(repo_id, rename=..., envoys=..., task=text-generation)│
  └──────────────────────────────────────────────────────────────────────────────┘
         │
-        ▼  nnsight builds the envoy tree                        nnsight envoy.py:134-177
+        ▼  nnsight builds the envoy tree                        nnsight Envoy.__init__, envoy.py
    for each module: class = _resolve_envoy_class(module, path)   (type MRO, then path suffix)
-   after the children exist: _bind_aliases()                     (rename keys resolved per envoy)
+   after the children exist: aliasing.bind(envoy)                (rename keys resolved per envoy)
         │
         ▼  the tree the user sees
    model                        StandardizedTransformer  ── logits, token_embeddings, next_token_probs,
@@ -120,10 +120,10 @@ reference, the way a remote trace does. [usage/vllm](../usage/vllm.md).
 
 ## Data flow through `__init__`
 
-`StandardizedTransformer.__init__` (`nnterp/standardized.py:128-155`) runs in
+`StandardizedTransformer.__init__` (`nnterp/standardized.py`) runs in
 this order, and the order matters:
 
-1. **Config first.** `_read_config` (`standardized.py:245`) returns a
+1. **Config first.** `_read_config` (`standardized.py`) returns a
    ready module's own `config`, or `AutoConfig.from_pretrained(repo_id, ...)`
    with the kwargs that say where the checkpoint is (`cache_dir`, `revision`,
    `token`, `local_files_only`, ...), so it is looked for where the build will
@@ -136,17 +136,18 @@ this order, and the order matters:
    multimodal config nests the language model's config there.
 3. **Merge and hand to nnsight.** `rename={**self.family.RENAME, **(rename
    or {})}` and `envoys={**self._base_envoys(...), **self.family.ENVOYS,
-   **(envoys or {})}` (`standardized.py:146-151`). Later keys win: a user's
-   entry replaces the family's on the same key
-   (`tests/test_registry.py:61-77`). `_base_envoys`
-   (`standardized.py:157-166`) starts from nnsight's tensor-parallel envoys
-   when the load shards, because `TransformersModel` only *defaults*
-   `envoys` to `tp_envoys()` (nnsight `modeling/transformers.py:339-343`;
-   `modeling/tp/envoys.py:117`, `:131`): passing any map of our own would
-   otherwise drop them on a sharded load.
-4. **`task` defaults to `"text-generation"`** (`standardized.py:137`), and
-   `tokenizer_kwargs` become attributes on the loaded tokenizer
-   (`standardized.py:154-155`).
+   **(envoys or {})}` (`StandardizedTransformer.__init__`, `standardized.py`).
+   Later keys win: a user's entry replaces the family's on the same key
+   (`test_user_envoys_merge_over_defaults`, `tests/test_registry.py`).
+   `_base_envoys` (`standardized.py`) starts from nnsight's tensor-parallel
+   envoys when the load shards, because `TransformersModel` only *defaults*
+   `envoys` to `tp_envoys()` (nnsight `TransformersModel.__init__`,
+   `modeling/transformers.py`; `wants_tensor_parallel`,
+   `modeling/tp/envoys.py`): passing any map of our own would otherwise drop
+   them on a sharded load.
+4. **`task` defaults to `"text-generation"`**, and `tokenizer_kwargs` become
+   attributes on the loaded tokenizer (`StandardizedTransformer.__init__`,
+   `standardized.py`).
 
 ## What nnsight does with the two maps
 
@@ -155,62 +156,62 @@ The two facts nnterp's design rests on:
 
 - **The envoy class is chosen per module at construction.** `_wrap_envoy`
   calls `_resolve_envoy_class(module, child_path)` (nnsight
-  `envoy.py:224-230`), which tries the module's `type(...).__mro__` against
+  `envoy.py`), which tries the module's `type(...).__mro__` against
   the map's type keys first, then string keys as dotted *path suffixes*
-  (`envoy.py:349-370`, `_path_ends_with` `:372-377`). The path is the
-  **native** path (`model.transformer.h.0.attn`): aliases do not exist yet,
-  so a string key can never match an alias, and a type key always beats a
+  (`path_ends_with`, `aliasing.py`), on the native path
+  (`model.transformer.h.0.attn`) and then on each spelling of it under the
+  `rename` aliases (`spellings`, `aliasing.py`). A type key always beats a
   path key. This is why every family keys `ENVOYS` on transformers' module
-  types (`families/gpt2.py:61`) and why the README tells a user who wants to
+  types (`families/gpt2.py`) and why the README tells a user who wants to
   displace a family envoy to key on the type too.
 - **Aliases bind after the children exist, per envoy.** `Envoy.__init__`
-  wraps the children (`envoy.py:172-174`) and then calls `_bind_aliases()`
-  (`envoy.py:177`, body `:264-342`). Every envoy in the tree resolves every
-  `rename` key relative to itself with `self.get(path)`; a key that resolves
+  wraps the children (`envoy.py`) and then calls `bind`
+  (`aliasing.py`). Every envoy in the tree resolves every
+  `rename` key relative to itself (`named`, `aliasing.py`); a key that resolves
   binds each alias as a plain attribute pointing at the *same* envoy object
-  (`:341-342`, recorded in `_aliases`), a key that does not resolve is
-  skipped (`:299-301`), and an alias that would displace a child, an `Envoy`
-  attribute or a module attribute raises `ValueError` (`:317-339`). The
-  consequence nnterp relies on: a multi-component key (`"transformer.h"`)
-  resolves only from the root, which is what lifts `layers` to `model.layers`
-  (`families/gpt2.py:3-6`), while a single-component key (`"attn"`) resolves
-  in every block that has one. `test_no_inner_model_alias`
-  (`tests/families/suite.py:123-125`) checks that nothing binds at
-  `model.model`.
+  (recorded in `_aliases`), a key that does not resolve is skipped, and an
+  alias that would displace a child, an `Envoy` attribute or a module
+  attribute raises `ValueError`. The consequence nnterp relies on: a
+  multi-component key (`"transformer.h"`) resolves only from the root, which
+  is what lifts `layers` to `model.layers` (`RENAME`, `families/gpt2.py`),
+  while a single-component key (`"attn"`) resolves in every block that has
+  one. `test_no_inner_model_alias` (`tests/families/suite.py`) checks that
+  nothing binds at `model.model`.
 
 Because an alias is the same object, `model.layers[0].self_attn` *is* the
 `gpt2.Attention` envoy nnsight built for `transformer.h.0.attn`, and the
 descriptors on that class serve values at that module's native location.
 nnsight's repr shows aliases as `alias/native` labels and lists every
-eproperty that carries a `description` (`envoy.py:1066-1095`), which is how
-`support()`-visible values show up in `print(model)`.
+eproperty that carries a `description` (`Envoy.__repr__`, `envoy.py`), which
+is how `support()`-visible values show up in `print(model)`.
 
 ## Which layer owns what
 
 | layer | owns | must not know |
 |---|---|---|
 | `nnterp/families/<model_type>.py` | `RENAME` (native name → standard name); `Layer`/`Attention`/`Mlp`/`Moe`/`LinearAttention` subclasses that point a value at *this family's* op or sibling; `ENVOYS` keyed on transformers types; a module-level `def <size>(model)` for each root size *this family's* config spells its own way (`falcon.py`: `num_kv_heads`, `intermediate_size`; `deepseek_v2.py`: `head_dim`, `qk_head_dim`) | what a value means, how nnsight serves it; the plain rule for a size |
-| `nnterp/components/` | what each standard value **means** (`layer_output` is the residual stream leaving the block, `attention_output` the contribution, `attention_probabilities` the post-dropout pattern); how to read/write it (`EProperty` with a path for a key, `DerivedEProperty`); availability (`unavailable=`, `support`); the default op on transformers' shared interface (`INTERFACE`, `attention.py:28`) | any one family's module names or classes |
-| `nnterp/standardized.py` | the root values (`logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`); the methods (`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`); the sizes (`num_layers` … `intermediate_size`, `standardized.py:398-438`), each a `StandardizedProperty` (`:26-50`) holding the plain rule over the config and yielding on read to a same-named function in `model.family`; `support()` over the tree (`Standardized.support`, through `standard_children` and `blocks_support` in `nnterp/components/standard.py`: each block's `Standard` children under their standard names, each alias read off its own binding on the block, a mounted alias such as DBRX's `norm_attn_norm.attn` and a module another block owns (shared weights) included, so a value installed through `envoys=` is listed and a module no block has is not); the remote key (`:440-451`) | op names inside a forward; any one family's config keys |
+| `nnterp/components/` | what each standard value **means** (`layer_output` is the residual stream leaving the block, `attention_output` the contribution, `attention_probabilities` the post-dropout pattern); how to read/write it (`EProperty` with a path for a key, `DerivedEProperty`); availability (`unavailable=`, `support`); the default op on transformers' shared interface (`INTERFACE`, `attention.py`) | any one family's module names or classes |
+| `nnterp/standardized.py` | the root values (`logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`); the methods (`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`); the sizes (`num_layers` … `intermediate_size`, `standardized.py`), each a `StandardizedProperty` holding the plain rule over the config and yielding on read to a same-named function in `model.family`; `support()` over the tree (`Standardized.support`, through `standard_children` and `blocks_support` in `nnterp/components/standard.py`: each block's `Standard` children under their standard names, each alias read off its own binding on the block, a mounted alias such as DBRX's `norm_attn_norm.attn` and a module another block owns (shared weights) included, so a value installed through `envoys=` is listed and a module no block has is not); the remote key (`StandardizedTransformer._remoteable_class`) | op names inside a forward; any one family's config keys |
 
 Two examples of the boundary. Gemma-2's contribution is the post-attention
 norm's output: the *family* says so with an `EProperty` keyed
 `"../post_attention_layernorm.output"` on its `Attention`
-(`families/gemma2.py:30-36`), while the *component* only knows how to walk a
-path: `../` to the parent, a name to a child, `source` into a forward
-(`components/eproperty.py:162-191`). BLOOM's contribution is the first
-argument of `dropout_add`: the family names the op,
-`"source.dropout_add_0.input"` (`families/bloom.py:73-78`), the component
-drills to it and reads the call's first argument. A family that keeps transformers' shared
-path overrides nothing (`families/llama.py:22-31`: three empty subclasses)
-and its module is three dict entries plus the type keys. The sizes draw the
+(`Attention.attention_output`, `families/gemma2.py`), while the *component*
+only knows how to walk a path: `../` to the parent, a name to a child,
+`source` into a forward (`EProperty._resolve`, `components/eproperty.py`).
+BLOOM's contribution is the first argument of `dropout_add`: the family
+names the op, `"source.dropout_add_0.input"` (`Attention.attention_output`,
+`families/bloom.py`), the component drills to it and reads the call's first
+argument. A family that keeps transformers' shared path overrides nothing
+(`Layer`, `Attention`, `Mlp`, `families/llama.py`: three empty subclasses).
+The sizes draw the
 same line: the *root* holds the plain rule (`num_kv_heads` is
-`config.num_key_value_heads` or `num_heads`, `standardized.py:420-423`), and
+`config.num_key_value_heads` or `num_heads`, `standardized.py`), and
 Falcon, whose config says `num_kv_heads`, `multi_query` or neither, says so
 in a function of that name in its own module (`families/falcon.py`, the
-`sizes` section at its end); `StandardizedProperty.__get__` (`:43-47`)
+`sizes` section at its end); `StandardizedProperty.__get__`
 looks it up on `model.family` and calls it, or falls back to the rule;
-`__set__` (`:49-50`) refuses an assignment, so the family module is the only
+`__set__` refuses an assignment, so the family module is the only
 place a root size is said. A block's own sizes are plain properties of its
 `Attention` (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) and `Mlp`
 (`intermediate_size`), read off the module's attributes and projection shapes
@@ -220,21 +221,20 @@ family's subclass (`families/jetmoe.py`, `Mlp.intermediate_size`).
 
 ### The base envoys
 
-`Standard` (`components/standard.py:129-164`) is the `Envoy` subclass every
+`Standard` (`components/standard.py`) is the `Envoy` subclass every
 component derives from: `values()` collects the `EProperty`s of a class,
-base classes first (`:62-65`), `support()` maps each to its reason on
-this instance (`:67-69`), and `sourced` (`:50`, `False` here) is the flag a
-family sets to `True` on an envoy whose forward holds a value read after
-the call has started; `__init__` and `_update` (`:52-60`) then instrument
-that forward at build and again when real weights replace meta ones
-(Llama 4's `Layer`, for its `Mlp.mlp_output`). `Layer`
-(`components/layer.py`) adds `returns_tuple` (`:45`), `skip_with` (`:47-56`)
-and `layer_output` (`:58-77`, `first_tensor` in, `rewrap` out). `Attention`
-(`components/attention.py:63-225`) adds the contribution and the six
-interior values on `INTERFACE`; `off_interface` (`:87-89`) is the one method
-a family overrides to give another reason the interface does not run
-(`families/gpt2.py:50-53` for `reorder_and_upcast_attn`). `Mlp`
-(`components/mlp.py:14-51`) adds `mlp_output`. `Moe` (`components/moe.py`), an
+base classes first, `support()` maps each to its reason on this instance,
+and `sourced` (`False` here) is the flag a family sets to `True` on an
+envoy whose forward holds a value read after the call has started;
+`__init__` and `_update` then instrument that forward at build and again
+when real weights replace meta ones (Llama 4's `Layer`, for its
+`Mlp.mlp_output`). `Layer` (`components/layer.py`) adds `returns_tuple`,
+`skip_with` and `layer_output` (`first_tensor` in, `rewrap` out).
+`Attention` (`components/attention.py`) adds the contribution and the six
+interior values on `INTERFACE`; `off_interface` is the one method a family
+overrides to give another reason the interface does not run
+(`families/gpt2.py` for `reorder_and_upcast_attn`). `Mlp`
+(`components/mlp.py`) adds `mlp_output`. `Moe` (`components/moe.py`), an
 `Mlp`, adds a mixture of experts' six values, read where the model consumes them:
 `router_logits` at the router's logits op (`LOGITS`, `F_linear_0`), the routing pair
 as the experts module's arguments, `expert_outputs` inside transformers'
@@ -260,17 +260,19 @@ page, [recurrent-mixer-internals.md](recurrent-mixer-internals.md).
 
 `nnterp/families/__init__.py` is the whole registry, and it is lazy on
 purpose: `import nnterp` must import no transformers modeling module
-(`tests/test_registry.py:23-36` runs that in a subprocess).
+(`test_import_is_lazy` in `tests/test_registry.py` runs that in a subprocess).
 
 - `known()` (`families/__init__.py`) lists the package's modules with
   `pkgutil.iter_modules`, but `default`; that list is the set of shipped
-  families, and a module's name *is* its `model_type` (`test_registry.py:15-20`).
-- `lookup(model_type)` (`:48-70`) returns `REGISTRY[model_type]` when
+  families, and a module's name *is* its `model_type`
+  (`test_every_family_module_is_named_after_its_model_type`,
+  `test_registry.py`).
+- `lookup(model_type)` returns `REGISTRY[model_type]` when
   something was `register`ed, else `importlib.import_module(f"nnterp.families.{model_type}")`.
   A `ModuleNotFoundError` whose `.name` is that exact module means "no such
   family": `lookup` warns and returns `nnterp.families.default`; any other
   `ModuleNotFoundError` is a family module that itself failed to import, and
-  is re-raised as the real error (`:61-63`).
+  is re-raised as the real error.
 - `default` is a family like the others that `lookup` returns, with a warning, when
   neither of the above has the `model_type`. Its
   `RENAME` is the union of the shipped spellings, its `ENVOYS` are string keys
@@ -284,18 +286,19 @@ purpose: `import nnterp` must import no transformers modeling module
   interior; `attention_output`, `mlp_output` and `project_on_vocab` are
   `Unavailable` with one reason each, since what a sublayer adds and what
   follows the head are code a name does not show.
-- `register(family, *model_types)` (`:73-97`) writes each of `model_types`,
-  or with none the last component of `family.__name__`, into `REGISTRY`
-  (`:36`), which `lookup` consults first, so a module from outside the
-  package, or an override of a shipped one, needs no edit here
-  (`test_registry.py:44-51`, `:166-192`).
-- `__getattr__` (`:105-112`) makes `nnterp.families.qwen3_5_text` import on
-  first attribute access, and `__dir__` (`:115-116`) lists the shipped names so
-  tab completion works before anything is imported. `all_families()`
-  (`:100-102`) imports everything, for tooling and tests only.
+- `register(family, *model_types)` writes each of `model_types`, or with
+  none the last component of `family.__name__`, into `REGISTRY`, which
+  `lookup` consults first, so a module from outside the package, or an
+  override of a shipped one, needs no edit here
+  (`test_register_adds_a_family_and_can_override`,
+  `test_register_takes_the_type_from_a_modules_name`, `test_registry.py`).
+- `__getattr__` makes `nnterp.families.qwen3_5_text` import on first
+  attribute access, and `__dir__` lists the shipped names so tab completion
+  works before anything is imported. `all_families()` imports everything,
+  for tooling and tests only.
 
 A family module imports its transformers modeling module at the top
-(`families/gpt2.py:14`), so the modeling module loads exactly when the first
+(`families/gpt2.py`), so the modeling module loads exactly when the first
 checkpoint of that type is looked up, and never earlier.
 
 ## Where it lives
@@ -316,13 +319,15 @@ checkpoint of that type is looked up, and never earlier.
 
 - `envoys=` matches type before path (a path key matches the native path or
   any alias spelling of it); a family's type key can only be displaced by a
-  type key (nnsight `envoy.py:364-369`).
+  type key (nnsight `Envoy._resolve_envoy_class`, `envoy.py`).
 - The family is chosen from `config.model_type` *before* the model is built,
   so an already-loaded `nn.Module` is looked up by its own `config`
-  (`standardized.py:463-464`; `tests/test_registry.py:54-58`).
+  (`Standardized._read_config`, `standardized.py`;
+  `test_preloaded_module_uses_its_own_config`, `tests/test_registry.py`).
 - Passing `envoys=` of your own to a plain `TransformersModel` drops
   nnsight's tensor-parallel envoys; `StandardizedTransformer` starts from
-  them (`standardized.py:157-166`), so do the same in a subclass.
+  them (`StandardizedTransformer._base_envoys`, `standardized.py`), so do
+  the same in a subclass.
 - Reads inside one trace follow forward order, and a value inside a block
   (`attention_probabilities`) fires before the block's `layer_output`; the
   canonical example reads them in that order. Read out of order and the
@@ -330,8 +335,9 @@ checkpoint of that type is looked up, and never earlier.
   [gotchas.md](gotchas.md).
 - A size override is a function on the family *module*, looked up by name on
   `model.family` at read time; a family object passed to `register()` carries
-  it as an attribute (`tests/test_registry.py:121-131`), and a variant that
-  spreads a shipped family's dicts leaves the shipped functions behind.
+  it as an attribute (`test_family_defines_a_size_instead_of_the_root`,
+  `tests/test_registry.py`), and a variant that spreads a shipped family's
+  dicts leaves the shipped functions behind.
 
 ## Related
 

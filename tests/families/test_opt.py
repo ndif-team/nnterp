@@ -6,7 +6,7 @@ import tempfile
 
 import pytest
 import torch
-from suite import NO_ROTARY, FamilySuite, PROMPT, rows, cached_snapshot, built
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows, cached_snapshot, built, patched_checkpoint
 
 from nnterp.families import opt
 
@@ -45,25 +45,6 @@ def _post_norm_checkpoint(repo="hf-internal-testing/tiny-random-OPTForCausalLM")
     config = json.load(open(os.path.join(snapshot, "config.json")))
     config["do_layer_norm_before"] = False
     json.dump(config, open(os.path.join(patched, "config.json"), "w"))
-    return patched
-
-
-def _projected_checkpoint(do_layer_norm_before, repo="hf-internal-testing/tiny-random-OPTForCausalLM"):
-    """The tiny config with ``word_embed_proj_dim`` half of ``hidden_size``, saved with random weights: transformers
-    builds ``project_in`` / ``project_out`` around the stack, as on OPT-350m (512 <-> 1024), and the embedding and
-    the head are the narrower width."""
-    from transformers import AutoConfig, OPTForCausalLM
-
-    snapshot = cached_snapshot(repo)
-    patched = tempfile.mkdtemp(prefix="opt-projected-")
-    for name in os.listdir(snapshot):
-        if name != "config.json" and not name.endswith((".safetensors", ".bin")):
-            os.symlink(os.path.realpath(os.path.join(snapshot, name)), os.path.join(patched, name))
-    config = AutoConfig.from_pretrained(snapshot)
-    config.do_layer_norm_before = do_layer_norm_before
-    config.word_embed_proj_dim = config.hidden_size // 2
-    torch.manual_seed(0)
-    OPTForCausalLM(config).save_pretrained(patched)
     return patched
 
 
@@ -129,10 +110,10 @@ class TestOPT350mLayout(ProjectedLayout, TestOPTPostNorm):
     """OPT-350m's whole layout: post-norm blocks, no final norm, and ``project_in`` / ``project_out`` between the
     embedding width and the stream's. The decoder makes its logits as ``lm_head(project_out(h))``, so the lens does."""
 
-    REPO = built(_projected_checkpoint, do_layer_norm_before=False)
+    REPO = built(patched_checkpoint, TestOPT.REPO, draw=True, do_layer_norm_before=False, word_embed_proj_dim=8)  # half the stream
 
 
 class TestOPTProjected(ProjectedLayout, TestOPT):
     """A pre-norm OPT with ``project_out``: the decoder norms the stream, projects it, and the head reads that."""
 
-    REPO = built(_projected_checkpoint, do_layer_norm_before=True)
+    REPO = built(patched_checkpoint, TestOPT.REPO, draw=True, do_layer_norm_before=True, word_embed_proj_dim=8)

@@ -1,13 +1,9 @@
 """Cohere 2 (Command-R7B), end to end: a parallel block, sliding layers with rotary, full layers without."""
 
-import json
-import os
-import tempfile
-
 import pytest
 
 import torch
-from suite import NO_ROTARY, FamilySuite, PROMPT, rows, built, cached_snapshot
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows, built, patched_checkpoint
 from vision_suite import VisionSuite, WrapperSuite, align_processor, siglip_rows, wrapper_of
 
 from nnterp.families import cohere, cohere2
@@ -42,23 +38,10 @@ class TestCohere2(FamilySuite):
         assert model.family.project_on_vocab is cohere.project_on_vocab
 
 
-def _scaled_checkpoint(repo=TestCohere2.REPO, logit_scale=0.25):
-    """The tiny checkpoint with Command-R7B's ``logit_scale`` (0.25); the tiny config's is 1.0. Only ``config.json`` is rewritten."""
-    snapshot = cached_snapshot(repo)
-    patched = tempfile.mkdtemp(prefix="cohere2-scaled-")
-    for name in os.listdir(snapshot):
-        if name != "config.json":
-            os.symlink(os.path.realpath(os.path.join(snapshot, name)), os.path.join(patched, name))
-    config = json.load(open(os.path.join(snapshot, "config.json")))
-    config["logit_scale"] = logit_scale
-    json.dump(config, open(os.path.join(patched, "config.json"), "w"))
-    return patched
-
-
 class TestCohere2Scaled(TestCohere2):
     """The same weights with a ``logit_scale`` away from 1.0: ``logits`` is the head's output times it, and so is the lens."""
 
-    REPO = built(_scaled_checkpoint)
+    REPO = built(patched_checkpoint, TestCohere2.REPO, logit_scale=0.25)  # Command-R7B's; the tiny config's is 1.0
 
     def test_logits_are_the_scaled_head_output(self, model):
         with model.trace(PROMPT):

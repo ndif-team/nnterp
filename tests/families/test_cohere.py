@@ -5,8 +5,10 @@ import json
 import os
 import tempfile
 
+import pytest
 import torch
 from suite import FamilySuite, PROMPT, rows
+from vision_suite import WrapperSuite, wrapper_of
 
 from nnterp.families import cohere
 
@@ -54,3 +56,23 @@ class TestCohereQkNorm(FamilySuite):
 
     def test_the_norms_are_there(self, model):
         assert model.layers[0].self_attn._module.use_qk_norm
+
+
+class TestAyaVisionCohereWrapper(WrapperSuite):
+    """Aya Vision around a Cohere text model, Aya Vision 32B's layout, built from the tiny text checkpoint's config (no
+    tiny wrapper checkpoint exists): the text stack at ``model.language_model``. The text config's ``logit_scale`` is the
+    tiny's 0.125, which the wrapper never applies."""
+
+    FAMILY = cohere
+
+    @pytest.fixture(scope="class")
+    def model(self):
+        return wrapper_of(TestCohere.REPO, "AyaVisionConfig", dict(hidden_size=16, num_hidden_layers=1, num_attention_heads=2, intermediate_size=32))
+
+    def test_logits_are_the_unscaled_head_output(self, model):
+        """``AyaVisionForConditionalGeneration`` returns ``lm_head``'s output as it is, though its ``text_config`` sets a scale."""
+        with model.trace(PROMPT):
+            raw = model.lm_head_output.save()
+            logits = model.logits.save()
+        assert model.config.text_config.model_type == "cohere" and model.config.text_config.logit_scale == 0.125
+        assert torch.equal(logits, raw)

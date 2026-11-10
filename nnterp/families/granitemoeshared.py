@@ -14,7 +14,9 @@ mixture's output alone and ``layers[i].shared_mlp.output`` the shared expert's.
 The binding is in the block's forward, read after the block has started, so the
 family's `Layer` sets ``sourced``; the mixture keeps no config, so its `Mlp` reads
 the multiplier and whether the block has a shared expert off its parent block
-(``residual_multiplier``, ``shared``). The attention, ``embedding_multiplier`` and
+(``residual_multiplier``, ``shared``). The block calls both experts with the
+pre-MLP norm's output, so ``mlp_input`` is read there, not as the mixture's
+argument, and a write to it reaches both. The attention, ``embedding_multiplier`` and
 ``logits_scaling`` are as on Granite. The mixture is a `Moe` (GraniteMoE's routing);
 its ``shared_expert_output`` is the block's ``shared_mlp``'s output, unscaled, so
 ``routed_output + shared_expert_output == mlp_output / residual_multiplier``.
@@ -63,6 +65,17 @@ class Layer(Layer):
     """
 
     sourced = True
+
+    @EProperty("post_attention_layernorm.output", description="What the feed-forward is called with: the input of each of its modules", unavailable=Layer.mlp_norm_output.unavailable)
+    def mlp_input(self, value) -> Residual:
+        """What the feed-forward is called with, ``[batch, seq, hidden_size]``: the post-attention norm's output.
+
+        The block calls ``block_sparse_moe`` and then ``shared_mlp`` with this
+        one tensor, so it is read where the norm returns it, not as one module's
+        argument, and a write, in place or by assignment, reaches both (GraniteMoE-SWA's
+        and GraniteMoE-Hybrid's blocks share it). The same tensor as `mlp_norm_output`.
+        """
+        return value
 
 
 class Attention(GraniteAttention):

@@ -17,6 +17,24 @@ def scaled_mixture(self, model, host):
     return out / model.config.residual_multiplier
 
 
+def written_mlp_input_reaches(model, layer, first, second):
+    """Zero ``mlp_input``'s last row, in place and by assignment: both feed-forward modules, ``first`` then ``second`` in
+    the order the block calls them, receive the written tensor."""
+    for how in ("in place", "assigned"):
+        with model.trace(PROMPT):
+            if how == "in place":
+                layer.mlp_input[:, -1] = 0
+            else:
+                written = layer.mlp_input.clone()
+                written[:, -1] = 0
+                layer.mlp_input = written
+            first_in = first.input.save()
+            second_in = second.input.save()
+        for module, x in ((first, first_in), (second, second_in)):
+            assert torch.equal(x[:, -1], torch.zeros_like(x[:, -1])), (how, module.path)
+            assert x[:, :-1].abs().sum() > 0, (how, module.path)
+
+
 class TestGraniteMoeShared(FamilySuite):
     REPO = REPO
     FAMILY = granitemoeshared
@@ -29,6 +47,10 @@ class TestGraniteMoeShared(FamilySuite):
             shared = model.layers[0].shared_mlp.output.save()
             out = model.layers[0].mlp.mlp_output.save()
         assert torch.equal(out, moe + shared)
+
+    def test_mlp_input_reaches_the_mixture_and_the_shared_expert(self, model):
+        layer = model.layers[0]
+        written_mlp_input_reaches(model, layer, layer.mlp, layer.shared_mlp)
 
 
 class TestGraniteMoeSharedScaled(test_granite.TestGraniteScaled):

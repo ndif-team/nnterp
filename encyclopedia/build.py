@@ -1053,8 +1053,10 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                 f"A native module under its own name. Its output is what `{reads}` reads: "
                 f"`{base}.{reads}.input`.",
                 extra=spec.get("pre_norm_note"))
-        # what the sublayer is called with, where the block serves it (mlp_input): the edge into the box
-        called = boundary(("mlp_input",), f"{reads}.input", drawing)
+        # what the sublayer is called with, where the block serves it (mlp_input): the edge into the box; read at the
+        # pre-norm's output where the block calls more than one module with it (GraniteMoE-Shared's two experts)
+        called = boundary(("mlp_input",), f"{reads}.input", drawing) or (
+            spec.get("pre_norm") and boundary(("mlp_input",), f"{spec['pre_norm']}.output", drawing))
         if called:
             sub["input_node"] = f"boundary.{called['name']}"
             nodes[sub["input_node"]] = value_node(called, "the sublayer's input")

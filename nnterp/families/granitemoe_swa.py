@@ -26,6 +26,7 @@ from .granite import project_on_vocab  # noqa: F401  the logit lens divides by l
 from .granite_swa import Attention as GraniteSWAAttention
 from .granitemoe import Layer as GraniteMoeLayer
 from .granitemoe import Mlp as GraniteMoeMlp
+from .granitemoeshared import Layer as GraniteMoeSharedLayer
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -36,7 +37,14 @@ RENAME = {
 
 
 class Layer(GraniteMoeLayer):
-    """GraniteMoE SWA's decoder block: GraniteMoE's."""
+    """GraniteMoE SWA's decoder block: GraniteMoE's, with GraniteMoE-Shared's ``mlp_input``.
+
+    Where the block runs a ``shared_mlp`` it calls it and the mixture with the
+    pre-MLP norm's output, so ``mlp_input`` is read there and a write to it
+    reaches both.
+    """
+
+    mlp_input = GraniteMoeSharedLayer.mlp_input
 
 
 class Attention(GraniteSWAAttention):

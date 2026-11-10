@@ -25,7 +25,9 @@ without) times the multiplier, and the family's `Layer` sets ``sourced`` for
 it; the mixer and the shared expert, whose modules keep no config, read the
 multiplier (and the `Mlp` whether routed experts run) off their parent block. A write lands on the sum, replacing both experts' contribution.
 ``mlp.output`` is the shared expert's output alone and
-``layers[i].block_sparse_moe.output`` the routed experts'. The mixture's values
+``layers[i].block_sparse_moe.output`` the routed experts'; ``mlp_input`` is the
+pre-MLP norm's output, which both are called with, not ``mlp.input``, the
+shared expert's argument alone, so a write to it reaches both. The mixture's values
 live on ``mlp`` (a `Moe`), which reads ``block_sparse_moe``'s ``router`` and
 ``experts`` through its parent: ``shared_expert_output`` is ``mlp.output``
 and ``routed_output + shared_expert_output == mlp_output / residual_multiplier``. ``mlp.intermediate_size``
@@ -52,6 +54,7 @@ from ..components import (
 from .granite import Attention as GraniteAttention
 from .granite import project_on_vocab  # noqa: F401  the logit lens divides by logits_scaling, as Granite's
 from .granitemoe import residual_multiplier, scaled_back
+from .granitemoeshared import Layer as GraniteMoeSharedLayer
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -85,10 +88,15 @@ class Layer(Layer):
     The Mamba-2 mixer's and the shared expert's modules keep no config, so
     they read the multiplier off this block, and the `Mlp` reads whether
     routed experts run beside the shared one and, when they do, the mixture's
-    ``router`` and ``experts``, whose values it hosts.
+    ``router`` and ``experts``, whose values it hosts. With routed experts the
+    block calls them and the shared expert (``mlp``) with the pre-MLP norm's
+    output, so ``mlp_input`` is read there, as on GraniteMoE-Shared, and a
+    write to it reaches both.
     """
 
     sourced = True
+
+    mlp_input = GraniteMoeSharedLayer.mlp_input
 
 
 class Attention(GraniteAttention):

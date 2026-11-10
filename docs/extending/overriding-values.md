@@ -300,19 +300,13 @@ another fused kernel). A family with another reason overrides the method rather 
 each value:
 
 ```python
-# nnterp/components/vision.py
-class VisionAttention(Attention):
-    def off_interface(self) -> str | None:
-        return no_tower_run(self) or super().off_interface()
+# nnterp/families/gpt2.py
+class Attention(Attention):
+    def off_interface(self):
+        if self._module.config.reorder_and_upcast_attn:
+            return "this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path"
+        return super().off_interface()
 ```
-
-A forward that calls another function in the interface's place, with the same
-arguments and return, is not a reason: key the values at that call instead, with a key
-function (and a `select` function) where the config picks the call. GPT-2's
-`reorder_and_upcast_attn` checkpoints call `_upcast_and_reordered_attn(q, k, v, mask)`
-under eager, and `families/gpt2.py` keys the six values on whichever call the module's
-flag picks; `attention_call` evaluates those functions on the envoy, so `interface`
-finds the call too.
 
 `no_rotary()` is the same decision for the values before the rotary embedding and
 `Attention.rotate`: `None` on the base, a reason on a family without a rotary or on a block

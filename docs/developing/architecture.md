@@ -232,10 +232,7 @@ and `layer_output` (`:58-77`, `first_tensor` in, `rewrap` out). `Attention`
 (`components/attention.py:63-225`) adds the contribution and the six
 interior values on `INTERFACE`; `off_interface` (`:87-89`) is the one method
 a family overrides to give another reason the interface does not run
-(`components/vision.py`'s `VisionAttention`, for a tower no image reached). A
-family whose forward calls another function in the interface's place keys the
-values there instead (`families/gpt2.py`, GPT-2's own upcast call under
-`reorder_and_upcast_attn`). `Mlp`
+(`families/gpt2.py:50-53` for `reorder_and_upcast_attn`). `Mlp`
 (`components/mlp.py:14-51`) adds `mlp_output`. `Moe` (`components/moe.py`), an
 `Mlp`, adds a mixture of experts' six values, read where the model consumes them:
 `router_logits` at the router's logits op (`LOGITS`, `F_linear_0`), the routing pair

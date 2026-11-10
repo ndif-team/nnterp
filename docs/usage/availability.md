@@ -11,8 +11,9 @@ sources: [nnterp/standardized.py, nnterp/order.py, nnterp/components/standard.py
 ## What this is for
 
 Not every checkpoint has every standard value. OPT has no MLP module; a model loaded with
-`sdpa` never builds the attention pattern; a hybrid's linear blocks have no softmax and its
-per-token state needs a kernel switch. Every nnterp value can say when it is not there and why, and `support()`
+`sdpa` never builds the attention pattern; a GPT-2 checkpoint with `reorder_and_upcast_attn`
+leaves the shared attention path; a hybrid's linear blocks have no softmax and its per-token
+state needs a kernel switch. Every nnterp value can say when it is not there and why, and `support()`
 collects those reasons from the config alone, so a script can decide what to read before
 running anything.
 
@@ -128,6 +129,7 @@ outside the trace to pick blocks.
 | reason (exact prefix) | value(s) | when |
 | --- | --- | --- |
 | `read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'` | the attention interior on every interface family | loaded with any `attn_implementation` other than `"eager"` |
+| `this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path` | the GPT-2 interior | `config.reorder_and_upcast_attn` is set |
 | `The attention does its own arithmetic rather than transformers' shared attention interface; not mapped for this family yet` | an interior value a family has not mapped onto its own arithmetic | a family off the shared interface that marks it `unavailable(NOT_ON_INTERFACE)` |
 | `no self_attn module on this block` / `no linear_attn module on this block` / `no mlp module on this block` | every value of that module | some other block has the module and this one does not (a hybrid's blocks); a module no block has (OPT's `mlp`) has no key instead |
 | `no rotary embedding: ...` / `no rotary embedding on this block: ...` | `attention_queries_prerope`, `attention_keys_prerope` (and `self_attn.rotate` raises it) | the family has no rotary embedding (absolute or sinusoidal positions, ALiBi, none in the attention), or this block skips it (a NoPE block) ([attention-interior](attention-interior.md#before-the-rotary-embedding-attention_queries_prerope-attention_keys_prerope-rotate)) |
@@ -303,7 +305,7 @@ reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_outpu
   reason in `support()` is the `'sdpa'` one, and the fix is in the message.
 - **The repr lists a value whether or not this checkpoint has it.** Only a value a family
   marks `unavailable("...")` in its class body prints as `Unavailable: <reason>`; a
-  config-dependent reason (eager, a hybrid's block types) shows only in `support()`.
+  config-dependent reason (eager, `reorder_and_upcast_attn`) shows only in `support()`.
 - **A hybrid's `support()` is a long dict by design.** Each value is reported per block on
   the blocks that lack its module; read `support(layer=i)` for one block.
 

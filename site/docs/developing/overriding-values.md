@@ -125,16 +125,27 @@ class Layer(Layer):
     layer_mid = unavailable(PARALLEL)
 ```
 
-When the checkpoint decides, `unavailable=` takes a function of the envoy returning a reason or `None`. Every value the base `Attention` reads inside the shared attention forward takes `unavailable=interface_reason`, which calls the envoy's `off_interface()`. The default answer is `needs_eager`, the reason given when the model runs `sdpa`. A family with another reason overrides the method once rather than each value. A vision tower's attention adds the tower no image reached:
+When the checkpoint decides, `unavailable=` takes a function of the envoy returning a reason or `None`. Every value the base `Attention` reads inside the shared attention forward takes `unavailable=interface_reason`, which calls the envoy's `off_interface()`. The default answer is `needs_eager`, the reason given when the model runs `sdpa`. A family with another reason overrides the method once rather than each value. GPT-2's `reorder_and_upcast_attn` routes around the interface:
 
 ```python
-# nnterp/components/vision.py
-class VisionAttention(Attention):
-    def off_interface(self) -> str | None:
-        return no_tower_run(self) or super().off_interface()
+# nnterp/families/gpt2.py
+class Attention(Attention):
+    def off_interface(self):
+        if self._module.config.reorder_and_upcast_attn:
+            return "this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path"
+        return super().off_interface()
 ```
 
-A forward that calls another function in the interface's place, with the same arguments and return, is not a reason: the family keys the values at that call instead, with a key function where the config picks it. GPT-2's `reorder_and_upcast_attn` checkpoints call `_upcast_and_reordered_attn(q, k, v, mask)` under eager, and `nnterp/families/gpt2.py` keys the six values on whichever call the module's flag picks.
+```python
+from nnterp import StandardizedTransformer
+
+model = StandardizedTransformer("openai-community/gpt2", attn_implementation="eager")
+print(model.support()["self_attn.attention_scores"])
+# None
+model.config.reorder_and_upcast_attn = True
+print(model.support()["self_attn.attention_scores"][0])
+# this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path
+```
 
 A predicate must not raise `AttributeError`. The descriptor re-raises one as a `RuntimeError` naming the check, because a descriptor's `AttributeError` would otherwise come back as "no attribute" and hide the predicate's own bug.
 

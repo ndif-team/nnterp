@@ -91,15 +91,15 @@ Mistral, Qwen2/3, Gemma 1, OLMo 1 and Phi-3 are this file with the class names s
 (Phi-3 also aliases its `activation_fn`, and Mistral, Qwen2 and Gemma add their vision-language
 wrappers' names). SmolLM3 is the same plus a `no_rotary` for the blocks its `no_rope_layers`
 marks. `gpt2.py` shows every other part of the template in use:
-block-level aliases, key functions for a config flag that moves the attention
-to another call, and container keys anchored at the root:
+block-level aliases, a config flag that takes the attention off the shared
+interface, and container keys anchored at the root:
 
 ```python
 """GPT-2 (``GPT2LMHeadModel``)."""
 
 from transformers.models.gpt2.modeling_gpt2 import GPT2Attention, GPT2Block, GPT2MLP
 
-from ..components import INTERFACE, Attention, EProperty, Layer, Mlp, Queries, interface_reason
+from ..components import Attention, Layer, Mlp
 
 RENAME = {
     "transformer.wte": "embed_tokens",
@@ -115,41 +115,17 @@ class Layer(Layer):
     """GPT-2's decoder block; returns a bare tensor, so the base holds."""
 
 
-UPCAST = "self__upcast_and_reordered_attn_0"
-
-
-def upcast(attn) -> bool:
-    module = attn._module
-    return bool(module.reorder_and_upcast_attn) and module.config._attn_implementation == "eager"
-
-
-def at_call(rest: str):
-    def locate(attn) -> str:
-        return f"source.{UPCAST if upcast(attn) else INTERFACE}.{rest}"
-    return locate
-
-
-def argument(position: int):
-    def select(attn) -> int:
-        return position if upcast(attn) else position + 1  # the interface takes the module first
-    return select
-
-
 class Attention(Attention):
     """GPT-2's attention; the shared eager forward and the residual added in the block, so the base holds.
 
-    A checkpoint with ``reorder_and_upcast_attn`` calls GPT-2's own
-    ``_upcast_and_reordered_attn(query, key, value, attention_mask)`` under
-    eager in the interface's place; the interior is keyed on whichever call
-    the module's flag picks.
+    A checkpoint with ``reorder_and_upcast_attn`` takes GPT-2's own upcast
+    path instead, where nothing on the interface is reachable.
     """
 
-    @EProperty(at_call("inputs"), select=argument(0), description=Attention.attention_queries.description, unavailable=interface_reason)
-    def attention_queries(self, value) -> Queries:
-        return value
-
-    # ... the keys, values, scores and head outputs the same way; the pattern at the
-    # upcast call's own attn_dropout or the interface's functional dropout
+    def off_interface(self):
+        if self._module.config.reorder_and_upcast_attn:
+            return "this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path"
+        return super().off_interface()
 
 
 class Mlp(Mlp):
@@ -439,8 +415,7 @@ class TestLlama(FamilySuite):
     NATIVE = LLAMA_ROWS
 ```
 
-GPT-2's states one quirk, and runs the whole suite a second time on a config branch
-its tiny checkpoint does not take, by subclassing with `LOAD_KWARGS`:
+GPT-2's states one quirk and adds one family-specific test:
 
 ```python
 class TestGPT2(FamilySuite):
@@ -450,9 +425,14 @@ class TestGPT2(FamilySuite):
     REFUSES_IN_PLACE_QKV = True  # q/k/v are split views of one c_attn tensor
     EXPECTED_UNAVAILABLE = NO_ROTARY
 
-
-class TestGPT2Upcast(TestGPT2):
-    LOAD_KWARGS = {"reorder_and_upcast_attn": True, "scale_attn_by_inverse_layer_idx": True}
+    def test_reorder_and_upcast_makes_the_interface_unavailable(self, model):
+        config = model.layers[0].self_attn._module.config
+        config.reorder_and_upcast_attn = True
+        try:
+            support = model.support()
+            assert all("reorder_and_upcast_attn" in support[f"self_attn.{name}"][0] for name in ("attention_probabilities", "attention_queries"))
+        finally:
+            config.reorder_and_upcast_attn = False
 ```
 
 `rows(container, layers, embed, norm, attn="self_attn", mlp="mlp", ln1="input_layernorm", ln2="post_attention_layernorm")`

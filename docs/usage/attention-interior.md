@@ -89,8 +89,10 @@ served under any `attn_implementation`; on a plain attention it is the same tens
 `attention_head_outputs`, and on one with a gate or a norm between the heads and the
 projection (Qwen3-Next, Laguna) it is what comes after them. The projection is `o_proj`, a
 standard child name: a family that spells it `c_proj`, `dense`, `out_proj` or `wo` aliases it in
-its `RENAME`, so `model.layers[i].self_attn.o_proj` is the module on every family. In-place edits
-reach the model; assignment flattens the heads back.
+its `RENAME`, so `model.layers[i].self_attn.o_proj` is the module on every family. DeepSeek-V4's
+projection is two matrices, and `attention_premix` is the input of the first, `o_a_proj`, which
+takes the heads side by side in `o_groups` groups. In-place edits reach the model; assignment
+flattens the heads back.
 
 ```python
 with model.trace(prompt):
@@ -332,9 +334,10 @@ gain is to the bf16 rounding of its bias. They are detached, on the device of th
 of a stream `x` whose normalization `n` is `x / rms(x)` (centred first on a LayerNorm); on a
 post-norm block (OLMo-2/3, FlexOlmo, EXAONE-4, OLMo-Hybrid's attention blocks, OPT-350m) it
 reads the stream itself and the input gain is ones. `attention_input_gain` follows
-`attention_norm_output`: on a block where that is unavailable (DeepSeek-V4's hyper-connection
-streams, Nemotron-H's MLP blocks) it raises the same reason, and on a Mamba block it is the gain
-of the norm the mixer reads.
+`attention_norm_output`: on a block where that is unavailable (Nemotron-H's MLP blocks) it
+raises the same reason, on a Mamba block it is the gain of the norm the mixer reads, and on
+DeepSeek-V4 it is `input_layernorm`'s, whose `x` is the collapsed mix of the streams
+(`attn_hc.output[2]`), not a stream.
 
 What `output_weight` maps a head into is `o_proj`'s output, not yet the stream: a post-norm
 block (the families above) and a pre-norm block with a post-attention norm (Gemma-2/3/4, AFMoE,
@@ -518,8 +521,9 @@ its own mask.
 
 Which call it makes follows from where the family reads its queries, keys, values and head
 outputs: the one call that takes the first three and returns the last. That is
-transformers' shared interface call on most families, and the `_attn` method on GPT-J,
-GPT-Neo, CodeGen and GPT-NeoX-Japanese. `support()` reports `self_attn.interface`
+transformers' shared interface call on most families, the `_attn` method on GPT-J,
+GPT-Neo, CodeGen and GPT-NeoX-Japanese, and `_upcast_and_reordered_attn` on a GPT-2 checkpoint
+with `reorder_and_upcast_attn`. `support()` reports `self_attn.interface`
 unavailable where those values are (any `attn_implementation` but `"eager"`, with the same
 reason) and where no such call exists: BLOOM, MPT, Falcon and XGLM do their own arithmetic,
 DeepSeek-V4 rotates the interface's output back before its projection, the Qwen ViT and
@@ -579,10 +583,12 @@ tensor of the same shape. The scores, the pattern and the head outputs accept
 in-place edits on both (GPT-2's head outputs are a transposed view, which
 torch allows).
 
-A GPT-2 checkpoint with `reorder_and_upcast_attn` set takes GPT-2's own upcast
-attention path, where the shared interface never runs. All six values then
-report `this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own
-upcast attention path`; `attention_output` stays available.
+A GPT-2 checkpoint with `reorder_and_upcast_attn` set (the `stanford-crfm`
+GPT-2 checkpoints) takes GPT-2's own `_upcast_and_reordered_attn(query, key,
+value, attention_mask)` under eager in place of the shared interface. The six
+values and `interface` are read at that call, so they mean the same as on any
+GPT-2; the scores there are computed in float32 whatever the model's dtype,
+and the pattern is cast back to it.
 
 ### Grouped-query attention: two head widths
 
@@ -704,7 +710,7 @@ block and reads `attention_scores` at the same binding. Three things differ:
 - The interface's output keeps a rotation on each head's rotary slice (the values are the
   rotated keys), which the module rotates back before the grouped output projection;
   `attention_head_outputs` is that rotated-back tensor, what `o_a_proj` reads, not the
-  interface's output.
+  interface's output; `attention_premix`, read at `o_a_proj`'s input, is the same numbers.
 
 ### Gemma-4: borrowed keys and values, per-layer head sizes
 

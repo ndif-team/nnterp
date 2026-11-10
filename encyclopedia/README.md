@@ -308,7 +308,9 @@ The entry states facts about a family, and each one has a source. Before writing
      per host, the block's `StreamWeights` value its contribution enters the streams with
      (`{"self_attn": "attention_post", "mlp": "mlp_post"}`); and optionally `readout`, the native name
      of the module that collapses the last block's streams before the final norm (`"hc_head"`),
-     drawn on the strip. The hyper-connection box before each sublayer is the module its `collapse`
+     drawn on the strip, and `mid`, the key the block's `layer_mid` is read at where that is not the next
+     hyper-connection's input (`"source.hidden_states_0.output"`, the block's own binding of the streams
+     between the sublayers), so the segment between the sublayers is that value's. The hyper-connection box before each sublayer is the module its `collapse`
      value is read off (`attn_hc`). The block is sequential, with no `parallel_with_next` and no
      `stream_norm`; it is not a sum, so give `identity`. The build checks each value's layout and
      that `layer_output` is `Streams`.

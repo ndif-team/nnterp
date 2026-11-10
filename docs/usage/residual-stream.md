@@ -161,6 +161,8 @@ sandwich block (Gemma-2/3/4, and Gemma-4's vision blocks) norms the MLP's input 
 unavailable (`a state-space block: one sublayer, the mixer, ...`). Nemotron-H's blocks each hold
 one sublayer: the norm's output is `attention_norm_output` on a mixer block and `mlp_norm_output`
 (and `mlp_input`) on an MLP block, and `layer_mid` is unavailable (`a one-sublayer block: ...`).
+DeepSeek-V4's norms read a collapse of its parallel streams, and its `layer_mid` is the streams
+between the sublayers ([below](#where-the-families-differ)).
 A block without the module reports `no <module> module on this block` ([availability](availability.md)).
 Inside the sublayers, three more boundaries are standard values on the attention and the
 MLP, keyed on three standard child names the families alias in `RENAME` (`o_proj` for
@@ -360,6 +362,11 @@ the block's own formula, not a sum:
 h   = attention_combᵀ · input + attention_post ⊗ attention_output
 out = mlp_combᵀ · h + mlp_post ⊗ mlp_output                       # layer_output
 ```
+
+`layer_mid` is `h`, the streams between the sublayers (`Streams`), read at the block's own
+binding of it, so a write reaches both the MLP's hyper-connection and the mixing after the MLP.
+`attention_norm_output`, `mlp_norm_output` and `mlp_input` are what each sublayer is called
+with, its norm's output on the collapsed mix, `[batch, seq, hidden_size]`.
 
 ```python
 import torch

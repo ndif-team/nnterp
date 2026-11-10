@@ -170,7 +170,8 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
   the final norm keeps Llama's `norm`, not `ln_final` (§3 items 2-3).
 - **Forward order is measured, not tabled**: nnterp 1.x's hand-maintained
   `Address.order` becomes `model.order()` / `model.rank(name, layer)`, read
-  off one probe `scan` per model and block shape (`nnterp/order.py`), so a
+  off one probe run per model and block shape (`nnterp/order.py`: a `scan` on
+  a model not yet dispatched, a `trace` on a dispatched one), so a
   family's quirk (Falcon's values before its queries) is in the ranks
   without anyone writing it down (§2a "Forward-order"). The probe runs on
   `StandardizedTransformer`; `StandardizedVLLM` answers from a weightless
@@ -187,9 +188,9 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
 
 - **Load-time validation**: a causal check that a written pattern moves the
   logits, a refusal of heterogeneous layer classes (Mllama's cross-attention
-  blocks would be plain `Envoy`s with no `layer_output`), detection of
-  `reorder_and_upcast_attn` and of a sublayer that takes a `residual`
-  argument (§2a "Load-time validation", §4 items 9-11).
+  blocks would be plain `Envoy`s with no `layer_output`), detection of a
+  sublayer that takes a `residual` argument (§2a "Load-time validation",
+  §4 items 9-11).
 - **Interventions and display conveniences**: nnterp 1.x's `logit_lens`,
   `patchscope_lens`, `patchscope_generate`, `patch_object_attn_lens`,
   `TargetPrompt(Batch)`, `repeat_prompt`, `plot_topk_tokens`, `prompts_to_df`

@@ -32,7 +32,7 @@ Reads in one trace follow the forward, and families bind the interior values at 
 
 ## How a family file adds specifics
 
-Most files are the class attributes alone. `tests/families/test_gpt2.py` sets `REPO`, `FAMILY`, `NATIVE = rows("transformer", "h", "wte", "ln_f", attn="attn", ln1="ln_1", ln2="ln_2")` and `REFUSES_IN_PLACE_QKV = True`, and adds one test that flipping `reorder_and_upcast_attn` on the config makes the interface unavailable. `rows(container, layers, embed, norm, ...)` builds the standard-to-native map, and `LLAMA_ROWS` is the Llama layout.
+Most files are the class attributes alone. `tests/families/test_gpt2.py` sets `REPO`, `FAMILY`, `NATIVE = rows("transformer", "h", "wte", "ln_f", attn="attn", ln1="ln_1", ln2="ln_2")` and `REFUSES_IN_PLACE_QKV = True`, and a second class, `TestGPT2Upcast`, runs the whole suite again with `reorder_and_upcast_attn` in its `LOAD_KWARGS`, where the interior is read at GPT-2's own upcast call. `rows(container, layers, embed, norm, ...)` builds the standard-to-native map, and `LLAMA_ROWS` is the Llama layout.
 
 | attribute | states |
 |---|---|

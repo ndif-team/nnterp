@@ -219,10 +219,11 @@ with the adapter enabled, disabled, merged, and disabled while merged, and check
 
 ## How a family file adds specifics
 
-Most files are the class attributes alone (`tests/families/test_gpt2.py:8-12`
-adds `REFUSES_IN_PLACE_QKV = True` and one test that flipping
-`reorder_and_upcast_attn` on the config makes the interface unavailable,
-`:14-22`). Two files show the two other things a family file does.
+Most files are the class attributes alone (`tests/families/test_gpt2.py`
+adds `REFUSES_IN_PLACE_QKV = True`, and a second class, `TestGPT2Upcast`, that
+runs the whole suite again with `reorder_and_upcast_attn` in its
+`LOAD_KWARGS`, where the interior is read at GPT-2's own upcast call). Two
+files show the two other things a family file does.
 
 `tests/families/test_falcon.py` has **three classes for one family**: the 7B
 layout, the 7B layout with alibi, and the 40B layout:

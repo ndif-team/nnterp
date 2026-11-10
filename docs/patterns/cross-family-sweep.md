@@ -106,8 +106,8 @@ block, and `mixer_kl` has one per block because a DeltaNet mixer's contribution 
 every block has it or `{block: reason}` where some do not. Guard on it rather than
 on `hasattr`, which raises `nnterp.Unavailable` for an unavailable value. A module no
 block has (OPT's `mlp`) has no key, so read it with `.get`. The common reasons in a
-sweep: `no self_attn module` (a hybrid's linear blocks), `runs 'sdpa'; load with attn_implementation='eager'` (the interior on a
-non-eager load), and GPT-2's `reorder_and_upcast_attn`.
+sweep: `no self_attn module` (a hybrid's linear blocks) and `runs 'sdpa'; load with attn_implementation='eager'` (the interior on a
+non-eager load).
 
 **Hybrids.** A block has either `self_attn` or `linear_attn`. Decide which outside
 the trace: `getattr(envoy, name, None)` inside a trace can trip on served values,

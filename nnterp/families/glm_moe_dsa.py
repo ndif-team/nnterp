@@ -18,9 +18,10 @@ therefore travels between blocks: the attention returns
 ``(hidden_states, topk_indices)``, so ``returns_tuple`` is set; ``attention_output``
 and ``layer_output`` take the first element. The selection is
 ``self_attn.output[2]`` on every block (``self_attn.indexer.output`` on a full one);
-it has no standard name. ``skip_layers`` hands a skipped block's successor ``None`` for
-the selection, which a shared block refuses (transformers raises ``ValueError``), so
-skip up to a full block or to the end. Dense and mixture-of-experts MLPs follow
+it has no standard name. A skipped block hands on the selection it received, as it hands
+on the stream, so a shared block after ``skip_layers`` reuses the selection of the last
+full block before the span; a span that starts at block 0 has none to hand on, which a
+shared block after it refuses (transformers raises ``ValueError``). Dense and mixture-of-experts MLPs follow
 ``mlp_layer_types``. The sizes are DeepSeek-V2's.
 """
 
@@ -41,6 +42,10 @@ class Layer(Layer):
     """GLM-5's decoder block; returns ``(hidden_states, topk_indices)``, which the base unwraps."""
 
     returns_tuple = True
+
+    def skip_with(self, hidden):
+        """Skip this block, handing on ``hidden`` and the selection the block received, which a shared block after it reuses."""
+        self.skip((hidden, self.inputs[1].get("prev_topk_indices")))
 
 
 class Attention(Attention):

@@ -80,6 +80,7 @@ BLOCK = {
         "collapse": {"self_attn": "attention_comb", "mlp": "mlp_comb"},
         "post": {"self_attn": "attention_post", "mlp": "mlp_post"},
         "readout": "hc_head",
+        "mid": "source.hidden_states_0.output",
     },
 }
 
@@ -111,6 +112,13 @@ pre-norm reads it. The sublayer's `[batch, seq, hidden_size]` output goes into e
 scaled per stream by `post`, and the streams themselves are mixed by `comb`, applied transposed:
 stream `k` of the result is `Σ_j comb[j, k] · x_j`. Llama's norm names hold:
 `input_layernorm` before the attention, `post_attention_layernorm` before the mixture.
+
+The block's inner boundaries are served. `attention_norm_output` is `input_layernorm(xa)`, and
+`mlp_norm_output` and `mlp_input` are `post_attention_layernorm(xf)`: what each sublayer is called
+with, `[batch, seq, hidden_size]`. `layer_mid` is `h`, the streams between the sublayers
+(`Streams`), read at the block's own binding of it, so a write reaches both `ffn_hc` and the
+block's mixing after the MLP. `attention_input_gain` is `input_layernorm`'s weight, the gain
+between `xa` and what the attention reads.
 
 ## `layer_output` is four streams
 
@@ -194,7 +202,11 @@ and an assignment gives one a tensor of its own. Queries are normed per head wit
 dimensions of each head (`partial_rotary_factor` 0.125) in adjacent pairs. The values are the
 keys, so they carry the rotation too. The module rotates the attention's output back before the
 grouped output projection (`o_a_proj` over `o_groups` groups, 8 on Flash and 16 on Pro, then
-`o_b_proj`), and `attention_head_outputs` is that rotated-back tensor. A learned per-head sink
+`o_b_proj`), and `attention_head_outputs` is that rotated-back tensor. `o_a_proj` receives every
+head's output side by side, so `attention_premix` is its input split by head, the same numbers
+under any `attn_implementation`. A head's output weight is a product of a slice of each
+projection, not a slice of one, so `output_weight` (and `value_weight`, the values being the
+normed keys) is refused. A learned per-head sink
 (`self_attn.sinks`) joins the softmax, so pattern rows sum to less than one. transformers runs this
 family with eager attention only, so the default load already serves the interior values.
 

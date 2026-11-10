@@ -176,8 +176,9 @@ does not move with a gradient-based attribution.
 or `"shared"` (no `indexer`; it reuses the selection the block before it returned). Every block is full on
 GLM-5 and GLM-5.1. On GLM-5.2 and GLM-5.3, 21 blocks are full (0, 1, 2, then every fourth from 6)
 and the 57 others shared: blocks 7 to 9 attend with block 6's selection.
-`skip_layers` hands the block after a skipped range no selection, which a shared block refuses
-with a `ValueError`: skip up to a full block or to the end.
+A skipped block hands on the selection it received, so after `skip_layers` a shared block reuses
+the selection of the last full block before the range; a range that starts at block 0 has none to
+hand on, which a shared block after it refuses with a `ValueError`.
 
 ## The mixture: sigmoid scores, a selection bias, renormalized weights
 

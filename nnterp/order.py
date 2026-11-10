@@ -51,7 +51,7 @@ def probe(model: Any, targets: list[tuple[int | None, str, Any, Any]], run: Any,
           prompt: tuple[tuple, dict] = ((TEXT,), {})) -> list[tuple[int | None, str, Any]]:
     """``(layer, name, location)`` for each target, in the order the forward reached them.
 
-    One ``run`` (``model.scan``, meta tensors and no weights needed, or
+    One ``run`` (``model.scan``, fake tensors and no weights needed, or
     ``model.trace``) with one invoke for a prompt (`prompts`) and one empty
     invoke per value. Each empty invoke reads its value, which parks it until
     the forward reaches that value's location, then appends the location it
@@ -81,10 +81,15 @@ def compute(model: Any) -> dict[int, dict[str, int]]:
     One block of each shape (block class and the values it has) is probed, so a
     hybrid's linear- and softmax-attention blocks are each measured. A rank
     counts distinct locations in forward order: from 0 in each block, and once
-    across the root's two sides. A forward that cannot run on meta tensors
-    (one that branches on its data: Granite's ``torch.equal``, OPT's
-    data-dependent shapes, a grouped-mm mixture of experts in float32) is
-    probed with a `trace`, which loads the weights of a model not yet dispatched.
+    across the root's two sides. A model not yet dispatched is probed with a
+    `scan`, on its meta modules, so nothing loads; a forward that cannot run on
+    fake tensors (one that branches on its data: Granite's ``torch.equal``,
+    OPT's data-dependent shapes, a grouped-mm mixture of experts in float32) is
+    probed with a `trace`, which loads the weights. A dispatched model is
+    probed with a `trace` only: a scan would run its real modules on fake
+    tensors, and a module that caches what its forward computes keeps the
+    fake (a ``longrope`` rotary embedding's long frequencies, computed on the
+    first call and reused after), which breaks every later trace.
     A model loaded with its processor is probed with an image in the prompt
     (`prompts`), since a value an image gates (Qwen3-VL's ``deepstack_output``)
     is reached by no text-only forward; where that prompt cannot run, the
@@ -99,7 +104,7 @@ def compute(model: Any) -> dict[int, dict[str, int]]:
     for first, *_ in shapes.values():
         targets += [(first, name, host, prop) for name, host, prop in blocks[first]]
     seen, failed = None, None
-    for run in (model.scan, model.trace):
+    for run in (model.trace,) if model.dispatched else (model.scan, model.trace):
         for prompt in prompts(model):
             try:
                 seen = probe(model, targets, run, prompt)

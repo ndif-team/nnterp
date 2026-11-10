@@ -172,8 +172,9 @@ def patched_checkpoint(repo: str, draw: bool = False, init=None, **config) -> st
     checkpoint's own, linked, unless ``draw`` (the new layout changes their shapes) or ``init`` is given: then they
     are drawn for the new config with seed 0, ``init(model)`` (under ``torch.no_grad()``) sets what the branch needs
     and an initialization leaves degenerate (a router of zeros, a bias of zeros), and they are written. The
-    tokenizer and the other files are linked either way. The copy is written once per snapshot, change and
-    transformers release, and shared by the test processes (each builds its own and renames it into place).
+    tokenizer and the other files are linked either way. The copy is written once per snapshot, change, source of
+    this module and of ``init``'s, and transformers release, and shared by the test processes (each builds its own
+    and renames it into place).
     """
     import hashlib
     import inspect
@@ -187,7 +188,8 @@ def patched_checkpoint(repo: str, draw: bool = False, init=None, **config) -> st
 
     source = cached_snapshot(repo)
     draw = draw or init is not None
-    key = json.dumps([source, config, draw, init and inspect.getsource(init), transformers.__version__], sort_keys=True)
+    code = [open(__file__).read()] + ([inspect.getsource(inspect.getmodule(init))] if init else [])  # an edit rebuilds
+    key = json.dumps([source, config, draw, code, transformers.__version__], sort_keys=True)
     patched = os.path.join(tempfile.gettempdir(), f"nnterp-{repo.rsplit('/', 1)[-1]}-{hashlib.sha1(key.encode()).hexdigest()[:12]}")
     if os.path.isdir(patched):
         return patched

@@ -1262,11 +1262,14 @@ implementation.</p>
 <section class="frame section" id="source">
   <div class="topbar"><h2 class="disp-section">From the <em>family module</em></h2><span class="micro">04 · nnterp/families/falcon.py</span></div>
   <div class="grid-notes">
-    <div class="prose docstring"><p>Falcon (<code>FalconForCausalLM</code>): the 7B layout (parallel attention), with or without alibi, and the 40B layout.</p>
-<p><code>transformer.{word_embeddings, h[i].{input_layernorm, self_attention, mlp}, ln_f}</code> and <code>lm_head</code>. One norm feeds both sublayers and the block sums
+    <div class="prose docstring"><p>Falcon (<code>FalconForCausalLM</code>): the 7B layout (parallel attention), with or without alibi; the 40B layout; and the RW layout.</p>
+<p><code>transformer.{word_embeddings, h[i].{input_layernorm, self_attention, mlp}, ln_f}</code> and <code>lm_head</code>. On the 7B and 40B layouts the block is parallel and sums
 <code>x + attn + mlp</code>, but it does so by adding the attention output <em>into the
 MLP's output tensor in place</em>, so <code>mlp_output</code> reads a copy taken as the
-MLP returns, and a transform carries edits to it back into the model.</p>
+MLP returns (on every layout), and a transform carries edits to it back into the model. The RW
+layout (<code>parallel_attn</code> false: falcon-rw-1b and -7b, which also set <code>alibi</code>,
+per-head keys and values and biased projections) is a sequential pre-norm block
+with <code>post_attention_layernorm</code> before the MLP, so <code>layer_mid</code> is served there.</p>
 <p>The attention does its own arithmetic, and <code>config.alibi</code> picks one of two
 branches of it with different operations, so each interior value names its
 operation by that flag. Without alibi the queries and keys leave
@@ -1295,7 +1298,7 @@ sublayers, and 8 key/value heads serve its 32 query heads.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev61+g4d0b2fc95 · transformers 5.21.0 · reference <span id="colophon-reference">tiiuae/falcon-7b</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev112+g5e0a094 · transformers 5.21.0 · reference <span id="colophon-reference">tiiuae/falcon-7b</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

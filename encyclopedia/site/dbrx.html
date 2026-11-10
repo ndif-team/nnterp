@@ -553,7 +553,7 @@ residual after it, and the identity is the plain sum:</p>
 8 key/value heads of 128). The forward clamps the whole output to <code>[-clip_qkv, clip_qkv]</code>
 (<code>attn_config.clip_qkv</code>, 8) and then splits it, so <code>Wqkv.output</code> is before the clamp and
 <code>attention_queries</code>, <code>attention_keys</code> and <code>attention_values</code> after it (queries and keys also after
-rotary, <code>rope_theta</code> 500,000). Splitting the clamped output by those widths gives the values exactly:</p>
+the rotary, below). Splitting the clamped output by those widths gives the values exactly:</p>
 <pre class="code"><code><span class="n">attn</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n role-attention">self_attn</span>
 <span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
     <span class="n">qkv</span> <span class="o">=</span> <span class="n">attn</span><span class="o">.</span><span class="n">Wqkv</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>           <span class="c1"># before the clamp</span>
@@ -568,6 +568,15 @@ rotary, <code>rope_theta</code> 500,000). Splitting the clamped output by those 
 as ±8. Edit <code>attention_queries</code>, <code>attention_keys</code> or <code>attention_values</code> instead: no clamp follows
 them. Query head <code>h</code> reads key/value head <code>h // 6</code>: an edit to one key/value head reaches 6
 query heads. The output projection is <code>out_proj</code>, and no projection has a bias.</p>
+<h2>The rotary turns at <code>rope_theta</code> 10,000 unless the load passes the trained base</h2>
+<p>transformers builds DBRX's rotary embedding from <code>config.rope_parameters</code>, which the released
+configs leave at the default <code>rope_theta</code> of 10,000, and does not read <code>attn_config.rope_theta</code>
+(500,000, the base the checkpoints were trained with). A default load therefore rotates the queries
+and keys faster than the trained model: the slowest pair of channels 47 times faster. Passing the
+trained base at load builds the rotary at 500,000, and <code>self_attn.rotate</code> follows whichever rotary
+the model built:</p>
+<pre class="code"><code><span class="n role-stream">model</span> <span class="o">=</span> <span class="n">StandardizedTransformer</span><span class="p">(</span>
+    <span class="s2">&quot;Undi95/dbrx-base&quot;</span><span class="p">,</span> <span class="n">rope_parameters</span><span class="o">=</span><span class="p">{</span><span class="s2">&quot;rope_theta&quot;</span><span class="p">:</span> <span class="mf">500000.0</span><span class="p">,</span> <span class="s2">&quot;rope_type&quot;</span><span class="p">:</span> <span class="s2">&quot;default&quot;</span><span class="p">})</span></code></pre>
 <h2>Load with eager for the attention interior only</h2>
 <p>The attention runs on transformers' shared interface: the six interior values need
 <code>attn_implementation="eager"</code>, and the default <code>sdpa</code> load computes the same attention without
@@ -657,7 +666,7 @@ unavailable.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">Undi95/dbrx-base</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">Undi95/dbrx-base</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

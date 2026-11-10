@@ -136,7 +136,10 @@ The model casts the embedding to float32 after its shift and scale, and each mer
 stream, so `layers[i].input` and `layer_output` are float32 under a bfloat16 load, while
 `token_embeddings`, `attention_output`, `mlp_output` and `logits` keep the load's dtype.
 `input_layernorm`, `post_attention_layernorm` and the final norm cast the stream to their weight's
-dtype before they norm it.
+dtype before they norm it. `layer_mid` is `post_attention_layernorm`'s input, that cast: under a
+bfloat16 load it is a bfloat16 copy of the float32 stream between the merges, and a write to it,
+in place or by assignment, changes what the mixture's norm reads and not the stream the second
+merge adds to.
 
 ## Queries and keys are convolved, normed to √`head_dim` and the keys scaled
 
@@ -175,6 +178,19 @@ On ZAYA1-8B and ZAYA1-74B-preview `balancing_biases` is −1.0 on skip and above
 expert of every block, so in this forward the skip class never wins a slot: its softmax mass lowers
 the chosen expert's weight instead. The routing state carried to the next block means an edit to one
 block's routing input reaches every later block's router.
+
+It also means `layer_output` is not the whole state between blocks. A patch of `layer_output` from
+another run leaves this run's router state, so the later routers read the two runs mixed; patch
+the block's whole output, the stream and the router state, for a complete interchange between two
+prompts of one length:
+
+```python
+with model.trace(source):
+    state = model.layers[0].output.save()     # (hidden_states, prev_router_hidden_states)
+with model.trace(prompt):
+    model.layers[0].output = state
+    logits = model.logits.save()
+```
 
 ## Ablating an expert leaves the merge's bias
 

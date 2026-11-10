@@ -1085,7 +1085,14 @@ the next:</p>
 <p><code>model.logits</code> is <code>model.lm_head.output</code>: no cap and no scale, and <code>project_on_vocab</code> is
 <code>lm_head(norm(hidden))</code>. <code>lm_head</code> and <code>embed_tokens</code> are one matrix on v1.1-0.5B and its Instruct, and separate on
 every other checkpoint listed here. Apertus v1.5 (<code>apertus1p5</code>) is another architecture, a
-multimodal wrapper, and is not this family.</p></div>
+multimodal wrapper, and is not this family.</p>
+<p>On v1.1-0.5B a logit lens reads one massive channel until late. Over positions 1 onward, channel
+883 holds 44 to 79% of <code>layer_output</code>'s squared norm at blocks 0 to 10 and channel 146 holds 39 to
+84% at blocks 11 to 19; through the final norm (gain up to 7.2) one channel still holds 42 to 63%
+at blocks 0 to 9, so the lens's logits there are mostly that channel's column of the tied
+unembedding. On a 218-token English passage <code>project_on_vocab(layer_output)</code> scores 40 to 56 nats
+per token at blocks 0 to 9 (uniform is 11.8), 17 at block 13, 40 at block 16, and 2.55, the
+model's own, at block 19.</p></div>
     <aside class="quirk-list">
       <div class="pane" data-pane="quirk_list" data-ckpts="swiss-ai/Apertus-8B-2509 swiss-ai/Apertus-8B-Instruct-2509 swiss-ai/Apertus-70B-2509 swiss-ai/Apertus-70B-Instruct-2509 swiss-ai/Apertus-v1.1-0.5B swiss-ai/Apertus-v1.1-0.5B-Instruct swiss-ai/Apertus-v1.1-1.5B swiss-ai/Apertus-v1.1-1.5B-Instruct swiss-ai/Apertus-v1.1-4B swiss-ai/Apertus-v1.1-4B-Instruct"><p class="micro">quirks</p>
 <div class="quirk"><span class="chip">Query/key norms</span><p class="body-md">On every block or some, the attention norms its projected queries and keys (q_norm and k_norm on most families); attention_queries and attention_keys are read after the norms.</p></div><div class="quirk"><span class="chip">Learned activation</span><p class="body-md">The MLP&#39;s activation has parameters learned per block (xIELU&#39;s alpha_p and alpha_n), so the same pre-activation maps to different values on different blocks.</p></div><div class="quirk"><span class="chip">Grouped-query attention</span><p class="body-md">Several query heads share each key/value head (num_kv_heads is below num_heads), so an edit to one key/value head reaches every query head in its group. On most families attention_keys and attention_values are served before the repeat, num_kv_heads wide; the notes say where a family expands them first.</p></div></div>
@@ -1119,7 +1126,7 @@ the rotary embedding. The MLP has no gate: <code>down_proj(xielu(up_proj(x)))</c
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">swiss-ai/Apertus-8B-2509</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">swiss-ai/Apertus-8B-2509</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

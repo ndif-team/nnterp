@@ -34363,7 +34363,11 @@ Index one stream, or take the stream mean, which is the additive part of the blo
 <span class="n">last</span> <span class="o">=</span> <span class="n">out</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span>          <span class="c1"># the last position, the last stream: [1, hidden_size]</span>
 <span class="n">mean</span> <span class="o">=</span> <span class="n">out</span><span class="p">[:,</span> <span class="o">-</span><span class="mi">1</span><span class="p">]</span><span class="o">.</span><span class="n">mean</span><span class="p">(</span><span class="o">-</span><span class="mi">2</span><span class="p">)</span>     <span class="c1"># the last position, the stream mean: [1, hidden_size]</span></code></pre>
 <p>A write to <code>layer_output</code> lands natively; <code>steer</code> adds a <code>[hidden_size]</code> vector to every stream, and
-<code>skip_layers</code> passes the streams through.</p>
+<code>skip_layers</code> passes the streams through. A sublayer reads a weighted sum of the streams (one
+weight per stream, <code>sigmoid(...) + hc_eps</code>, computed from the streams), so a vector added to every
+stream reaches the next sublayer's input multiplied by the weights' sum: 2.09 at block 5 of the
+pinned tiny checkpoint, between 0 and 4 by construction. <code>hc_head</code> weighs the readout the same way,
+so a steering coefficient tuned on a one-stream family does not carry over.</p>
 <h2>The identity is the block's formula</h2>
 <p>The block is not a sum. The weights that put each contribution into the streams are the
 block's own values: <code>attention_post</code> and <code>mlp_post</code>, <code>[batch, seq, streams]</code> (<code>StreamWeights</code>,
@@ -34459,6 +34463,10 @@ the chosen experts' scores without the bias, renormalized to one and multiplied 
 <span class="n">scale</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">config</span><span class="o">.</span><span class="n">routed_scaling_factor</span>
 <span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">w</span><span class="p">,</span> <span class="n">chosen</span> <span class="o">/</span> <span class="n">chosen</span><span class="o">.</span><span class="n">sum</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">,</span> <span class="n">keepdim</span><span class="o">=</span><span class="kc">True</span><span class="p">)</span> <span class="o">*</span> <span class="n">scale</span><span class="p">)</span>
 <span class="n">torch</span><span class="o">.</span><span class="n">testing</span><span class="o">.</span><span class="n">assert_close</span><span class="p">(</span><span class="n">routed</span> <span class="o">+</span> <span class="n">shared</span><span class="p">,</span> <span class="n">out</span><span class="p">)</span></code></pre>
+<p>Within one forward the token ids are the one state a later block reads that <code>layer_output</code> does
+not carry: a patch of <code>layer_output</code> from another run at block 0 or 1 leaves the hash blocks after
+it routing by this run's ids (on the pinned tiny checkpoint the patched logits then miss the source
+run's by 0.009 and 0.006), and from block 2 on the patch is exact.</p>
 <p><code>moe.SCORING</code> is <code>"hash"</code> on a hash block and <code>"sqrtsoftplus"</code> on the others. Ablating an expert
 is zeroing the weight of every slot that chose it; its effect on the block is read on the streams,
 one stream or their mean:</p>
@@ -34543,7 +34551,7 @@ not <code>expert_indices</code>.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">deepseek-ai/DeepSeek-V4-Flash</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">deepseek-ai/DeepSeek-V4-Flash</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

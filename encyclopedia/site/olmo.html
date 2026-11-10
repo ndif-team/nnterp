@@ -1110,7 +1110,11 @@ tokens alone, and <code>&lt;|endoftext|&gt;</code> (id 50279) ends a text. The I
   <div class="grid-notes">
     <div class="prose docstring"><p>OLMo 1 (<code>OlmoForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block, attention through the shared eager forward.</p></div>
+added in the block, attention through the shared eager forward. Where the config sets <code>clip_qkv</code> (8.0 on
+OLMo-1B-0724-hf; unset on OLMo-1B-hf), the attention clamps the <code>q_proj</code>, <code>k_proj</code> and <code>v_proj</code> outputs to
+<code>±clip_qkv</code> in place, before the head split: <code>q_proj.output</code> reads the clamped tensor, an edit written there is
+clamped after it, the values before the rotary and the interface's are after the clamp, and <code>value_weight</code>
+reproduces <code>attention_values</code> only where the clamp does not bite.</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
       <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/olmo.py">nnterp/families/olmo.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_olmo.py">tests/families/test_olmo.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
@@ -1126,7 +1130,7 @@ added in the block, attention through the shared eager forward.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">allenai/OLMo-1B-hf</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">allenai/OLMo-1B-hf</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

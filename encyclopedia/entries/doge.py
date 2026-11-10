@@ -154,6 +154,13 @@ moves 0.02 to 0.47 of each pattern row's mass, averaged per block, on a 30-token
 the mass on the first token, averaged over heads and queries, is 0.65 with the bias and 0.34 without it. The pinned tiny checkpoint has
 `A` at zero, where the bias is 1 on every key and the pattern is unchanged.
 
+The bias is computed from the values before the attention call that `attention_values` is an
+argument of, so a write to `attention_values` changes what the pattern mixes and not the bias:
+on Doge-20M, tripling block 0's values in place leaves `attention_scores` bit-identical, where
+the bias of the tripled values differs by up to 0.22. `self_attn.interface` reuses the run's own
+mask, bias included. To move a key's bias with its value, write `attention_scores`, or the values
+before `dt_proj` (`self_attn.v_proj.output`).
+
 ## Past `keep_window_size` keys, the bias drops keys
 
 When the prompt has more than `keep_window_size` keys (1024 on Doge-260M, 2048 on Doge-20M, 4096 on
@@ -176,8 +183,18 @@ On the `is_moe` checkpoints `mlp` is `DogeCDMoE`: a dense SwiGLU MLP of `interme
 `num_experts` one-neuron experts (rows of `down_embed` and `up_embed`) that `router_gate` retrieves
 by product keys, `num_experts_per_tok` per token. It returns `(hidden_states, router_logits)`, and the
 block adds the hidden states. nnterp serves `mlp_output`, the dense MLP's output plus the routed
-experts', and reports every mixture value unavailable: the product-key routing has no router or experts
-module to read them at.
+experts', and reports every mixture value unavailable: `router_gate`'s output is the product keys'
+logits, two sets of `floor(sqrt(num_experts))` per token, not one logit per expert, and the experts are
+rows of an embedding, not modules.
+
+The routing mixes positions. `router_gate(x).view(2, batch * seq, -1)` splits the logits of the
+flattened tokens into two halves across the tokens instead of within each token, so a token's
+experts are chosen from other tokens' logits. A prompt's outputs then depend on its length and on
+the other prompts in the batch: on Doge-40M-MoE a 19-token prompt's logits move by up to 1.18 when
+a second prompt runs in another invoke of the same trace, and its first 6 tokens traced alone give
+logits up to 1.22 from the same positions inside the whole prompt (Doge-20M, dense: 0 and 0). Trace
+the clean and the corrupt prompt of a patching experiment in separate traces, and do not read a
+truncated prompt as the prefix of the full one.
 
 ## The readout
 

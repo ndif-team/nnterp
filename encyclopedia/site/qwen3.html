@@ -1910,7 +1910,8 @@ is <code>model.layers[i].layer_output</code>. Each <code>layer&lt;i&gt;.sae.pt</
   <div class="grid-notes">
     <div class="prose docstring"><p>Qwen3 (<code>Qwen3ForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block, attention through the shared eager forward. <code>q_norm</code> / <code>k_norm</code> sit inside the attention; <code>head_dim</code> is not <code>hidden // heads</code>.</p></div>
+added in the block, attention through the shared eager forward. <code>q_norm</code> / <code>k_norm</code> sit inside the attention; <code>head_dim</code> is the config's (128 on every size), which is not
+<code>hidden // heads</code> on 0.6B, 4B and 32B.</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
       <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/qwen3.py">nnterp/families/qwen3.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_qwen3.py">tests/families/test_qwen3.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
@@ -1926,7 +1927,7 @@ added in the block, attention through the shared eager forward. <code>q_norm</co
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">Qwen/Qwen3-0.6B</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">Qwen/Qwen3-0.6B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

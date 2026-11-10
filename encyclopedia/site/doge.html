@@ -565,13 +565,13 @@
   <div class="ledger-row" data-node="">
     <span class="mono-md name role-mlp">mlp_activation</span>
     <span class="hide-sm mono"><span class="dim">scalar</span></span>
-    <span class="body-md">Unavailable: routed experts; read per-expert via the Moe component</span>
+    <span class="body-md">Unavailable: the cross-domain mixture calls act_fn twice (on the retrieved experts&#39; scores, then on the dense gate) and down_proj reads the dense half alone, so neither value is the mixture&#39;s</span>
     <span class="hide-sm body-md where"><p>nowhere: the family does not serve it</p></span>
   </div>
   <div class="ledger-row" data-node="">
     <span class="mono-md name role-mlp">mlp_neurons</span>
     <span class="hide-sm mono"><span class="dim">scalar</span></span>
-    <span class="body-md">Unavailable: routed experts; read per-expert via the Moe component</span>
+    <span class="body-md">Unavailable: the cross-domain mixture calls act_fn twice (on the retrieved experts&#39; scores, then on the dense gate) and down_proj reads the dense half alone, so neither value is the mixture&#39;s</span>
     <span class="hide-sm body-md where"><p>nowhere: the family does not serve it</p></span>
   </div>
   <div class="ledger-row" data-node="contrib.mlp">
@@ -584,37 +584,37 @@
     <span class="mono-md name role-mlp">router_logits</span>
     <span class="hide-sm mono">RouterLogits <span class="dim">[batch seq num_experts]</span></span>
     <span class="body-md">The router&#39;s logits, one per expert, before the scoring</span>
-    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: no router or experts module to read the mixture values at</p></span>
+    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: router_gate gives two sets of product-key logits per token, not one logit per expert, and the experts are embedding rows, so no mixture value maps onto them</p></span>
   </div>
   <div class="ledger-row" data-node="">
     <span class="mono-md name role-mlp">expert_weights</span>
     <span class="hide-sm mono">ExpertWeights <span class="dim">[batch seq top_k]</span></span>
     <span class="body-md">The weight each selected expert&#39;s output is scaled by</span>
-    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: no router or experts module to read the mixture values at</p></span>
+    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: router_gate gives two sets of product-key logits per token, not one logit per expert, and the experts are embedding rows, so no mixture value maps onto them</p></span>
   </div>
   <div class="ledger-row" data-node="">
     <span class="mono-md name role-mlp">expert_indices</span>
     <span class="hide-sm mono">ExpertIndices <span class="dim">[batch seq top_k]</span></span>
     <span class="body-md">The expert each routing slot sends the token to</span>
-    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: no router or experts module to read the mixture values at</p></span>
+    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: router_gate gives two sets of product-key logits per token, not one logit per expert, and the experts are embedding rows, so no mixture value maps onto them</p></span>
   </div>
   <div class="ledger-row" data-node="">
     <span class="mono-md name role-mlp">expert_outputs</span>
     <span class="hide-sm mono">ExpertOutputs <span class="dim">[batch seq top_k hidden_size]</span></span>
     <span class="body-md">Each routing slot&#39;s weighted expert output</span>
-    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: no router or experts module to read the mixture values at</p></span>
+    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: router_gate gives two sets of product-key logits per token, not one logit per expert, and the experts are embedding rows, so no mixture value maps onto them</p></span>
   </div>
   <div class="ledger-row" data-node="">
     <span class="mono-md name role-mlp">routed_output</span>
     <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
     <span class="body-md">The routed experts&#39; combined output</span>
-    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: no router or experts module to read the mixture values at</p></span>
+    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: router_gate gives two sets of product-key logits per token, not one logit per expert, and the experts are embedding rows, so no mixture value maps onto them</p></span>
   </div>
   <div class="ledger-row" data-node="">
     <span class="mono-md name role-mlp">shared_expert_output</span>
     <span class="hide-sm mono">Residual <span class="dim">[batch seq hidden_size]</span></span>
     <span class="body-md">The shared expert&#39;s output</span>
-    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: no router or experts module to read the mixture values at</p></span>
+    <span class="hide-sm body-md where"><p>nowhere: DogeCDMoE routes by product keys over embedding experts: router_gate gives two sets of product-key logits per token, not one logit per expert, and the experts are embedding rows, so no mixture value maps onto them</p></span>
   </div>
 </div></div>
 
@@ -829,7 +829,7 @@
         <span class="rn">(router_gate)</span>: Linear<span class="rd">(in_features=256, out_features=64, bias=False)</span>
         <span class="rn">(down_embed)</span>: Embedding<span class="rd">(1024, 256)</span>
         <span class="rn">(up_embed)</span>: Embedding<span class="rd">(1024, 256)</span>
-        (mlp_activation): Unavailable: routed experts; read per-expert via the Moe component
+        (mlp_activation): Unavailable: the cross-domain mixture calls act_fn twice (on the retrieved experts&#x27; scores, then on the dense gate) and down_proj reads the dense half alone, so neither value is the mixture&#x27;s
         <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
         <span class="rn role-mlp">(router_logits)</span> -&gt; <span class="rl">RouterLogits</span> <span class="rd">[batch seq num_experts]</span>: <span class="rd">The router&#x27;s logits, one per expert, before the scoring</span>
         <span class="rn role-mlp">(expert_weights)</span> -&gt; <span class="rl">ExpertWeights</span> <span class="rd">[batch seq top_k]</span>: <span class="rd">The weight each selected expert&#x27;s output is scaled by</span>
@@ -895,7 +895,7 @@
         <span class="rn">(router_gate)</span>: Linear<span class="rd">(in_features=512, out_features=128, bias=False)</span>
         <span class="rn">(down_embed)</span>: Embedding<span class="rd">(4096, 512)</span>
         <span class="rn">(up_embed)</span>: Embedding<span class="rd">(4096, 512)</span>
-        (mlp_activation): Unavailable: routed experts; read per-expert via the Moe component
+        (mlp_activation): Unavailable: the cross-domain mixture calls act_fn twice (on the retrieved experts&#x27; scores, then on the dense gate) and down_proj reads the dense half alone, so neither value is the mixture&#x27;s
         <span class="rn role-mlp">(mlp_neurons)</span> -&gt; <span class="rl">Neurons</span> <span class="rd">[batch seq intermediate_size]</span>: <span class="rd">What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise</span>
         <span class="rn role-mlp">(router_logits)</span> -&gt; <span class="rl">RouterLogits</span> <span class="rd">[batch seq num_experts]</span>: <span class="rd">The router&#x27;s logits, one per expert, before the scoring</span>
         <span class="rn role-mlp">(expert_weights)</span> -&gt; <span class="rl">ExpertWeights</span> <span class="rd">[batch seq top_k]</span>: <span class="rd">The weight each selected expert&#x27;s output is scaled by</span>
@@ -1032,6 +1032,12 @@ head with <code>A &gt; 0</code> raises the keys <code>dt_proj</code> picks out a
 moves 0.02 to 0.47 of each pattern row's mass, averaged per block, on a 30-token prompt; at block 10
 the mass on the first token, averaged over heads and queries, is 0.65 with the bias and 0.34 without it. The pinned tiny checkpoint has
 <code>A</code> at zero, where the bias is 1 on every key and the pattern is unchanged.</p>
+<p>The bias is computed from the values before the attention call that <code>attention_values</code> is an
+argument of, so a write to <code>attention_values</code> changes what the pattern mixes and not the bias:
+on Doge-20M, tripling block 0's values in place leaves <code>attention_scores</code> bit-identical, where
+the bias of the tripled values differs by up to 0.22. <code>self_attn.interface</code> reuses the run's own
+mask, bias included. To move a key's bias with its value, write <code>attention_scores</code>, or the values
+before <code>dt_proj</code> (<code>self_attn.v_proj.output</code>).</p>
 <h2>Past <code>keep_window_size</code> keys, the bias drops keys</h2>
 <p>When the prompt has more than <code>keep_window_size</code> keys (1024 on Doge-260M, 2048 on Doge-20M, 4096 on
 Doge-40M), each query keeps the <code>keep_window_size</code> keys it can see with the largest bias and masks
@@ -1049,8 +1055,17 @@ the selector). Doge-260M's tokenizer prepends <code>&lt;|begin_of_text|&gt;</cod
 <code>num_experts</code> one-neuron experts (rows of <code>down_embed</code> and <code>up_embed</code>) that <code>router_gate</code> retrieves
 by product keys, <code>num_experts_per_tok</code> per token. It returns <code>(hidden_states, router_logits)</code>, and the
 block adds the hidden states. nnterp serves <code>mlp_output</code>, the dense MLP's output plus the routed
-experts', and reports every mixture value unavailable: the product-key routing has no router or experts
-module to read them at.</p>
+experts', and reports every mixture value unavailable: <code>router_gate</code>'s output is the product keys'
+logits, two sets of <code>floor(sqrt(num_experts))</code> per token, not one logit per expert, and the experts are
+rows of an embedding, not modules.</p>
+<p>The routing mixes positions. <code>router_gate(x).view(2, batch * seq, -1)</code> splits the logits of the
+flattened tokens into two halves across the tokens instead of within each token, so a token's
+experts are chosen from other tokens' logits. A prompt's outputs then depend on its length and on
+the other prompts in the batch: on Doge-40M-MoE a 19-token prompt's logits move by up to 1.18 when
+a second prompt runs in another invoke of the same trace, and its first 6 tokens traced alone give
+logits up to 1.22 from the same positions inside the whole prompt (Doge-20M, dense: 0 and 0). Trace
+the clean and the corrupt prompt of a patching experiment in separate traces, and do not read a
+truncated prompt as the prefix of the full one.</p>
 <h2>The readout</h2>
 <p><code>logits</code> is <code>lm_head.output</code>, with no cap or scale, and <code>lm_head</code> shares its weight with
 <code>embed_tokens</code> on every listed checkpoint.</p></div>
@@ -1088,7 +1103,11 @@ mixture <code>DogeCDMoE</code> under <code>is_moe</code>, which returns <code>(h
 loads and runs; it needs transformers 5.18 or later, whose block takes the first element
 of <code>DogeCDMoE</code>'s tuple. Where it runs, <code>mlp_output</code> is the mixture's hidden states
 (dense MLP plus routed experts); the six mixture values stay unavailable, since
-the product-key routing has no router or experts module to read them at.</p></div>
+<code>router_gate</code> gives two sets of product-key logits per token rather than one per expert, and the
+experts are rows of two embedding tables. The routing views <code>router_gate</code>'s output as
+<code>(2, batch * seq, -1)</code>, which takes each token's two sets from other rows of the flattened batch, so a
+prompt's outputs depend on its length and on the other prompts in the trace: trace clean and corrupt
+prompts separately there.</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
       <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/doge.py">nnterp/families/doge.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_doge.py">tests/families/test_doge.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
@@ -1104,7 +1123,7 @@ the product-key routing has no router or experts module to read them at.</p></di
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">SmallDoge/Doge-260M</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">SmallDoge/Doge-260M</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

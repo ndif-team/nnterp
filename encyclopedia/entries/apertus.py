@@ -182,4 +182,12 @@ with model.trace(text, add_special_tokens=False):
 `lm_head(norm(hidden))`. `lm_head` and `embed_tokens` are one matrix on v1.1-0.5B and its Instruct, and separate on
 every other checkpoint listed here. Apertus v1.5 (`apertus1p5`) is another architecture, a
 multimodal wrapper, and is not this family.
+
+On v1.1-0.5B a logit lens reads one massive channel until late. Over positions 1 onward, channel
+883 holds 44 to 79% of `layer_output`'s squared norm at blocks 0 to 10 and channel 146 holds 39 to
+84% at blocks 11 to 19; through the final norm (gain up to 7.2) one channel still holds 42 to 63%
+at blocks 0 to 9, so the lens's logits there are mostly that channel's column of the tied
+unembedding. On a 218-token English passage `project_on_vocab(layer_output)` scores 40 to 56 nats
+per token at blocks 0 to 9 (uniform is 11.8), 17 at block 13, 40 at block 16, and 2.55, the
+model's own, at block 19.
 """

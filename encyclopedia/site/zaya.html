@@ -760,7 +760,10 @@ merges and 13.2 on the mixture's. The biases are at most 1.15 in size and averag
 stream, so <code>layers[i].input</code> and <code>layer_output</code> are float32 under a bfloat16 load, while
 <code>token_embeddings</code>, <code>attention_output</code>, <code>mlp_output</code> and <code>logits</code> keep the load's dtype.
 <code>input_layernorm</code>, <code>post_attention_layernorm</code> and the final norm cast the stream to their weight's
-dtype before they norm it.</p>
+dtype before they norm it. <code>layer_mid</code> is <code>post_attention_layernorm</code>'s input, that cast: under a
+bfloat16 load it is a bfloat16 copy of the float32 stream between the merges, and a write to it,
+in place or by assignment, changes what the mixture's norm reads and not the stream the second
+merge adds to.</p>
 <h2>Queries and keys are convolved, normed to √<code>head_dim</code> and the keys scaled</h2>
 <p><code>qkv_proj</code> computes the queries and keys with <code>q_proj</code> and <code>k_proj</code> and mixes them over the current
 and two previous tokens with two causal convolutions (<code>cca_time0</code> and <code>cca_time1</code> are 2 on ZAYA1-8B).
@@ -791,6 +794,15 @@ skip runs no expert: its weight is 0 and its index 0.</p>
 expert of every block, so in this forward the skip class never wins a slot: its softmax mass lowers
 the chosen expert's weight instead. The routing state carried to the next block means an edit to one
 block's routing input reaches every later block's router.</p>
+<p>It also means <code>layer_output</code> is not the whole state between blocks. A patch of <code>layer_output</code> from
+another run leaves this run's router state, so the later routers read the two runs mixed; patch
+the block's whole output, the stream and the router state, for a complete interchange between two
+prompts of one length:</p>
+<pre class="code"><code><span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">source</span><span class="p">):</span>
+    <span class="n">state</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">output</span><span class="o">.</span><span class="n">save</span><span class="p">()</span>     <span class="c1"># (hidden_states, prev_router_hidden_states)</span>
+<span class="k">with</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n">trace</span><span class="p">(</span><span class="n">prompt</span><span class="p">):</span>
+    <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">layers</span><span class="p">[</span><span class="mi">0</span><span class="p">]</span><span class="o">.</span><span class="n">output</span> <span class="o">=</span> <span class="n">state</span>
+    <span class="n role-stream">logits</span> <span class="o">=</span> <span class="n role-stream">model</span><span class="o">.</span><span class="n role-stream">logits</span><span class="o">.</span><span class="n">save</span><span class="p">()</span></code></pre>
 <h2>Ablating an expert leaves the merge's bias</h2>
 <p>With one slot per token, zeroing expert <code>e</code>'s weight removes the token's whole routed output, and
 <code>mlp_output</code> there becomes <code>hidden_states_bias * hidden_states_scale</code>, not zero. Count usage on
@@ -875,7 +887,7 @@ expert's is positive on every block, so skip is never chosen there; the tiny pic
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">Zyphra/ZAYA1-8B</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">Zyphra/ZAYA1-8B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

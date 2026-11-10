@@ -230,9 +230,11 @@ sum of sublayer terms: the terms are the post-norm outputs. The input side is or
 ## Load with eager, and not only for the pattern
 
 Gemma 2 softcaps its attention scores, `50 · tanh(qkᵀ / 50)`, inside the eager and flex
-attention paths. transformers' sdpa path ignores the `softcap` argument, so a default load
-(`sdpa`) runs a different attention than the model was trained with. `attn_implementation="eager"`
-is the faithful forward here, and it is also what makes the attention interior readable:
+attention paths; sdpa cannot softcap. From transformers 5.21 `Gemma2ForCausalLM` refuses
+`attn_implementation="sdpa"` and a default load is eager; before 5.21 a default load is sdpa, which
+drops the softcap and runs a different attention than the model was trained with.
+`attn_implementation="eager"` is the faithful forward on every release, and it is also what makes
+the attention interior readable:
 
 ```python
 model = StandardizedTransformer("google/gemma-2-2b", dispatch=True, attn_implementation="eager")

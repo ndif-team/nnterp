@@ -117,10 +117,11 @@ blocks are `full_attention` (the config's `sliding_window` of 512 is read by no 
 
 1B has 4 query heads and 4 key/value heads, each 256 wide, so the heads are 1024 wide against a
 `hidden_size` of 1152. The query scale is `query_pre_attn_scalar ** -0.5`, which is
-`256 ** -0.5`, equal to `head_dim ** -0.5` on 1B. With no score cap the default `sdpa` load and
-`attn_implementation="eager"` run the same attention on 1B; eager serves the interior values. On a
-config that sets `attn_logit_softcapping`, only eager applies the cap: transformers' `sdpa` path
-takes no softcap.
+`256 ** -0.5`, equal to `head_dim ** -0.5` on 1B. From transformers 5.21 `VaultGemmaForCausalLM`
+refuses `attn_implementation="sdpa"` (sdpa cannot softcap) and a default load is eager, so the
+interior values are served without asking. Before 5.21 a default load is sdpa, which runs the same
+attention as eager on 1B (no score cap) and serves no interior values; on a config that sets
+`attn_logit_softcapping` it drops the cap.
 
 ## Embeddings and the norm gain
 
@@ -129,4 +130,23 @@ in bfloat16), so `token_embeddings` is the scaled tensor and equals `layers[0].i
 `VaultGemmaRMSNorm` multiplies by `1 + weight`: folding the final norm into the unembedding uses
 `1 + model.norm._module.weight`. On 1B `lm_head` shares the weight of `embed_tokens`
 (`tie_word_embeddings`), so an edit to the embedding matrix edits the readout.
+
+## The tokenizer transformers builds has five tokens
+
+`google/vaultgemma-1b` ships `tokenizer.model` and no `tokenizer.json`, and the `GemmaTokenizer`
+transformers builds from it has five tokens: `model.tokenizer` encodes any text to `[2, 3]`
+(`<bos> <unk>`) without a warning, so a trace on a string runs on those two tokens. Tokenize with
+sentencepiece on the repository's `tokenizer.model` (256,000 pieces), put `<bos>` first and trace
+the ids:
+
+```python
+import sentencepiece as spm
+from huggingface_hub import hf_hub_download
+
+path = hf_hub_download("google/vaultgemma-1b", "tokenizer.model")
+sp = spm.SentencePieceProcessor(model_file=path)
+ids = torch.tensor([[2] + sp.encode("The Eiffel Tower is in Paris")])   # <bos> (id 2) first
+with model.trace(ids):
+    logits = model.logits.save()
+```
 """

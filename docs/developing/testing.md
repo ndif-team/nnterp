@@ -146,7 +146,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_interior_shapes` | q `[b, num_heads, s, qk_head_dim]`, k/v `[b, num_kv_heads, s, ·]`, scores and pattern `[b, num_heads, s, s]`, head outputs `[b, s, num_heads, ·]`; `pattern_from_scores(scores)` equals the pattern (overridable: GPT-OSS adds the sink column) |
 | `test_interior_writes_are_causal` | zeroing each of the five interior values moves the logits; with head outputs zeroed the contribution is the same at every position |
 | `test_interior_in_place_edits` | zeroing scores and head outputs in place moves the logits; queries too, or raise `RuntimeError` matching `view` with `REFUSES_IN_PLACE_QKV` |
-| `test_interior_per_invoke` | under two invokes each interior value is that invoke's row of one invoke of both, and an assignment in the first leaves the second's logits as they were (XGLM's keys and values are not per invoke: `TestXGLM` checks the other four and marks those two `xfail`) |
+| `test_interior_per_invoke` | on a family that reads the interior off its own arithmetic (no `interface`), under two invokes each interior value is that invoke's row of one invoke of both, and an assignment in the first leaves the second's logits as they were (XGLM's keys and values are not per invoke: `TestXGLM` checks the other four and marks those two `xfail`) |
 
 **The rotary embedding**
 

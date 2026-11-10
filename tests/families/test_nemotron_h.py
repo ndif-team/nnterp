@@ -133,6 +133,7 @@ class TestNemotronHDense(TestNemotronH):
 
     REPO = built(patched_checkpoint, TINY, draw=True,
                  layers_block_type=["linear_attention", "mlp", "linear_attention", "full_attention", "mlp"])
+    test_unrouted_without_mamba_ssm_reads_inside_the_dispatched_kernels = None  # the kernel binding is the family's: run on TestNemotronH
 
     def test_the_mlp_blocks_are_dense(self, model):
         kinds = model.config.layers_block_type
@@ -149,6 +150,7 @@ class TestNemotronHLatent(TestNemotronH):
 
     REPO = built(patched_checkpoint, TINY, draw=True, moe_latent_size=8)
     MOE_UNAVAILABLE = {"expert_outputs": "latent width"}
+    test_unrouted_without_mamba_ssm_reads_inside_the_dispatched_kernels = None  # the kernel binding is the family's: run on TestNemotronH
 
     def routed_from_experts(self, host, summed):
         """The experts sum in the latent width; ``fc2_latent_proj`` (no bias: ``mlp_bias`` is false) maps it back."""

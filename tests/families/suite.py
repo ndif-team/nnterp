@@ -872,9 +872,12 @@ class FamilySuite:
     def test_interior_per_invoke(self, model, values=INTERIOR + ("attention_probabilities",)):
         """Every interior value, under two invokes of one trace: each invoke reads its own row, as one invoke of both
         does, and an assignment in the first leaves the second's logits as they were (not where the forward mixes the
-        batch's rows, `ROWS_MIX`). A family test passes ``values`` to check some of them only."""
+        batch's rows, `ROWS_MIX`). A family test passes ``values`` to check some of them only. Not where the values are
+        read at the attention call `interface` makes again: that is one path, which `test_pattern_per_invoke` covers."""
         attn = self.attn_block(model).self_attn
         unavailable = attn.support()
+        if unavailable.get("interface") is None:
+            pytest.skip("the interior is read at the attention call")
         names = [name for name in values if not unavailable.get(name)]
         if not names:
             pytest.skip("no attention interior on this checkpoint")

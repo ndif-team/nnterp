@@ -85,6 +85,8 @@ class TestGraniteMoeHybridScaled(HybridSuite):
     """Granite's multipliers away from 1.0: the identity holds only on the scaled terms, on both block kinds."""
 
     REPO = built(test_granite._scaled_checkpoint, REPO)
+    test_unrouted_without_mamba_ssm_reads_inside_the_dispatched_kernels = None  # the kernel binding is the family's: run on TestGraniteMoeHybrid
+
     def test_mixer_contributions_are_scaled(self, model):
         ssd_block, attention_block = blocks(model, "linear_attention")[0], blocks(model, "full_attention")[0]
         with model.trace(PROMPT):
@@ -121,6 +123,7 @@ class TestGraniteMoeHybridDense(HybridSuite):
 
     REPO = built(test_granite._scaled_checkpoint, REPO, num_local_experts=0)
     NEURONS_FROM_ACTIVATION = False  # input_linear holds the gate and up halves: the neurons are act(gate) * up
+    test_unrouted_without_mamba_ssm_reads_inside_the_dispatched_kernels = None  # the kernel binding is the family's: run on TestGraniteMoeHybrid
 
     def test_no_routed_experts(self, model):
         assert all(layer._module.block_sparse_moe is None for layer in model.layers)

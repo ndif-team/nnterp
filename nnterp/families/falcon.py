@@ -1,10 +1,13 @@
-"""Falcon (``FalconForCausalLM``): the 7B layout (parallel attention), with or without alibi, and the 40B layout.
+"""Falcon (``FalconForCausalLM``): the 7B layout (parallel attention), with or without alibi; the 40B layout; and the RW layout.
 
 ``transformer.{word_embeddings, h[i].{input_layernorm, self_attention, mlp},
-ln_f}`` and ``lm_head``. One norm feeds both sublayers and the block sums
+ln_f}`` and ``lm_head``. On the 7B and 40B layouts the block is parallel and sums
 ``x + attn + mlp``, but it does so by adding the attention output *into the
 MLP's output tensor in place*, so ``mlp_output`` reads a copy taken as the
-MLP returns, and a transform carries edits to it back into the model.
+MLP returns (on every layout), and a transform carries edits to it back into the model. The RW
+layout (``parallel_attn`` false: falcon-rw-1b and -7b, which also set ``alibi``,
+per-head keys and values and biased projections) is a sequential pre-norm block
+with ``post_attention_layernorm`` before the MLP, so ``layer_mid`` is served there.
 
 The attention does its own arithmetic, and ``config.alibi`` picks one of two
 branches of it with different operations, so each interior value names its

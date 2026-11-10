@@ -207,7 +207,8 @@ class FamilySuite:
     ROUTER_EXTRA_CLASSES = 0
     #: A decode step's attention mask covers the cache and the new token (a pure state-space model's covers the new token only).
     DECODE_MASK_COVERS_CACHE = True
-    #: ``layer_mid == layer_input + the mixers' contributions``: false where a gate scales what the block adds (Doge, ZAYA).
+    #: ``layer_mid == layer_input + the mixers' contributions``: false where a gate scales the stream the block carries (Doge) or a
+    #: merge rescales the stream as well as what is added (ZAYA).
     MID_IDENTITY = True
     #: ``attention_premix`` is ``attention_head_outputs``: false where a gate or a norm sits between the heads and the output projection.
     PREMIX_IS_HEAD_OUTPUTS = True

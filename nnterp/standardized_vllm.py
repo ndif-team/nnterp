@@ -173,7 +173,7 @@ class StandardizedVLLM(Standardized, VLLM):
             "assign model.logits instead"
         )
 
-    @Flat("embed_tokens.output", batch=on_transformers_backend, description="The token embeddings entering the first block, [1, tokens, hidden_size]")
+    @Flat("embed_tokens.output", batch=on_transformers_backend, description="The embedding module's output, [1, tokens, hidden_size]; layers[0].layer_input is what enters the first block")
     def token_embeddings(self, value: torch.Tensor) -> Residual:
         """The embedding module's output, ``[1, tokens, hidden_size]``; what a family scales or adds positions to comes after."""
         return value

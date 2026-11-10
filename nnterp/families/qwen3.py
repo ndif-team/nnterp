@@ -2,7 +2,8 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. ``q_norm`` / ``k_norm`` sit inside the attention; ``head_dim`` is not ``hidden // heads``.
+added in the block, attention through the shared eager forward. ``q_norm`` / ``k_norm`` sit inside the attention; ``head_dim`` is the config's (128 on every size), which is not
+``hidden // heads`` on 0.6B, 4B and 32B.
 """
 
 from transformers.models.qwen3.modeling_qwen3 import Qwen3Attention, Qwen3DecoderLayer, Qwen3MLP

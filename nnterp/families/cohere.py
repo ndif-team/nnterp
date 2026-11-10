@@ -15,7 +15,10 @@ Cohere2-Vision wrappers never scale, so the lens scales only on the causal-LM
 classes.
 
 Aya Vision 32B (``aya_vision`` with a ``cohere`` text config) loads through this
-family. It binds no tower keys, so that load has no ``vision`` or ``projector``.
+family with ``task="image-text-to-text"``: the text names bind on the wrapper's
+``model.language_model.{embed_tokens, layers, norm}`` with ``lm_head`` at the root,
+and the lens there is ``lm_head(norm(h))``, unscaled, as the wrapper's logits are.
+The family binds no tower keys, so that load has no ``vision`` or ``projector``.
 """
 
 from typing import TYPE_CHECKING
@@ -33,6 +36,11 @@ RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.norm": "norm",
+    # The same text model inside Aya Vision 32B's wrapper (AyaVisionForConditionalGeneration with a cohere text
+    # config), loaded with task="image-text-to-text".
+    "model.language_model.embed_tokens": "embed_tokens",
+    "model.language_model.layers": "layers",
+    "model.language_model.norm": "norm",
 }
 
 

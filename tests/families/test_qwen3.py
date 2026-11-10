@@ -2,7 +2,7 @@
 
 import pytest
 
-from suite import FamilySuite, LLAMA_ROWS
+from suite import FamilySuite, LLAMA_ROWS, built, patched_checkpoint
 from vision_suite import WrapperSuite, wrapper_of
 
 from nnterp.families import qwen3
@@ -26,3 +26,18 @@ class TestLightOnOcrWrapper(WrapperSuite):
     @pytest.fixture(scope="class")
     def model(self):
         return wrapper_of(TestQwen3.REPO, "LightOnOcrConfig", dict(hidden_size=16, num_hidden_layers=1, num_attention_heads=2, intermediate_size=32, head_dim=8))
+
+
+class TestQwen3Yarn(TestQwen3):
+    """DeepSeek-R1-0528-Qwen3-8B's rotary: YaRN, factor 4 and ``attn_factor`` 0.878 (``original_max_position_embeddings``
+    32 here, 32768 there). The tiny checkpoint's weights."""
+
+    REPO = built(
+        patched_checkpoint, TestQwen3.REPO, rope_parameters={
+            "rope_type": "yarn", "rope_theta": 1000000.0, "factor": 4.0, "original_max_position_embeddings": 32,
+            "attn_factor": 0.8782488562869419,
+        },
+    )
+
+    def test_the_rotary_is_yarn(self, model):
+        assert model._module.model.rotary_emb.rope_type == "yarn"

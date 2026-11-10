@@ -1,13 +1,12 @@
 """OPT, end to end: no MLP module."""
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import NO_ROTARY, FamilySuite, PROMPT, rows
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows, cached_snapshot, built
 
 from nnterp.families import opt
 
@@ -38,7 +37,7 @@ class TestOPT(FamilySuite):
 
 def _post_norm_checkpoint(repo="hf-internal-testing/tiny-random-OPTForCausalLM"):
     """The tiny checkpoint with ``do_layer_norm_before`` false: OPT-350m's layout, the norms after the adds."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="opt-post-norm-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -73,7 +72,7 @@ class TestOPTPostNorm(TestOPT):
     the identity does not hold, and transformers builds no final norm: no ``norm`` and no ``final_norm_output``, and
     the logit lens is ``lm_head`` alone."""
 
-    REPO = _post_norm_checkpoint()
+    REPO = built(_post_norm_checkpoint)
     NATIVE = {k: v for k, v in TestOPT.NATIVE.items() if k != "norm"}
     ATTENTION_NORM = None
     MLP_NORM = None

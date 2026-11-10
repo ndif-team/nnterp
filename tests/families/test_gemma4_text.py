@@ -1,6 +1,5 @@
 """Gemma 4, text, end to end: sandwich block, per-layer embeddings, mixture of experts, KV sharing, layer_scalar."""
 
-import glob
 import json
 import os
 import tempfile
@@ -9,7 +8,7 @@ import numpy as np
 
 import pytest
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT, contributions, near, rows
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, contributions, near, rows, cached_snapshot, built
 from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
@@ -27,7 +26,7 @@ def _ple_checkpoint(repo="hf-tiny-v2/tiny-random-Gemma4ForCausalLM"):
     """
     from safetensors.torch import load_file, save_file
 
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = os.path.join(tempfile.gettempdir(), f"nnterp-gemma4-ple-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
@@ -267,7 +266,7 @@ class Gemma4Suite(FamilySuite):
 class TestGemma4Text(Gemma4Suite):
     """``Gemma4ForCausalLM``: per-layer embeddings, a mixture of experts on every block, the last two blocks sharing keys and values."""
 
-    REPO = _ple_checkpoint()
+    REPO = built(_ple_checkpoint)
     EXPECTED_UNAVAILABLE = BORROWED_KEYS
 
     def test_the_checkpoint_has_every_quirk(self, model):
@@ -452,7 +451,7 @@ class TestGemma4Vision(VisionSuite):
 
     REPO = "yujiepan/gemma-4-e-tiny-random"
     FAMILY = gemma4_text
-    TEXT_REPO = _ple_checkpoint()
+    TEXT_REPO = built(_ple_checkpoint)
     VISION_NATIVE = {
         "vision": "model.vision_tower",
         "vision.layers": "model.vision_tower.encoder.layers",

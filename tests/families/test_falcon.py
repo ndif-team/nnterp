@@ -1,13 +1,12 @@
 """Falcon (7B layout), end to end: parallel block, multi-query, in-place add into the MLP output."""
 
-import glob
 import json
 import os
 import tempfile
 
 import nnsight
 import torch
-from suite import NO_ROTARY, FamilySuite, rows, PROMPT, random_weights
+from suite import NO_ROTARY, FamilySuite, rows, PROMPT, cached_snapshot, built, draw_biases, patched_checkpoint
 
 from nnterp.components import OWN_ARITHMETIC
 from nnterp.families import falcon
@@ -78,7 +77,7 @@ class TestFalcon(FamilySuite):
 
 def _patched_checkpoint(repo, **overrides):
     """A tiny checkpoint with its config overridden: the same weights (a norm the layout adds is random), another layout."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="falcon-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -97,7 +96,7 @@ def _alibi_checkpoint(repo="Rocketknight1/tiny-random-falcon-7b"):
 class TestFalconAlibi(FamilySuite):
     """The 7B layout with alibi: no rotary, the pattern at the dropout after the second softmax, flattened head outputs."""
 
-    REPO = _alibi_checkpoint()
+    REPO = built(_alibi_checkpoint)
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     MLP_NORM = "input_layernorm"
@@ -129,15 +128,22 @@ class TestFalcon40B(FamilySuite):
 
 
 class TestFalconRW(FamilySuite):
-    """Falcon-RW's layout: ``parallel_attn`` false, a sequential pre-norm block with ``post_attention_layernorm``."""
+    """falcon-rw-1b's and -7b's layout: ``parallel_attn`` false (a sequential pre-norm block with
+    ``post_attention_layernorm``), alibi in place of the rotary, a key and value per head (``multi_query`` false) and
+    biased projections. The 7B tiny config with those four set, weights drawn for it, the biases too."""
 
-    REPO = _patched_checkpoint("Rocketknight1/tiny-random-falcon-7b", parallel_attn=False)
+    REPO = built(
+        patched_checkpoint, "Rocketknight1/tiny-random-falcon-7b", init=draw_biases, parallel_attn=False, alibi=True,
+        multi_query=False, bias=True,
+    )
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention")
-    EXPECTED_UNAVAILABLE = {"self_attn.interface": OWN_ARITHMETIC}
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "self_attn.interface": OWN_ARITHMETIC}
 
     def test_sequential_block(self, model):
-        assert not model.config.parallel_attn and not model.config.new_decoder_architecture
+        config = model.config
+        assert not config.parallel_attn and not config.new_decoder_architecture
+        assert config.alibi and not config.multi_query and config.bias and model.num_kv_heads == model.num_heads
         assert model.support(layer=0)["layer_mid"] is None
         with model.trace(PROMPT):
             mid = model.layers[0].layer_mid.save()
@@ -149,7 +155,7 @@ class TestFalconRW(FamilySuite):
 class TestFalcon11B(FamilySuite):
     """falcon-11B's layout: ``new_decoder_architecture`` with one norm (``num_ln_in_parallel_attn`` 1) feeding both sublayers."""
 
-    REPO = _patched_checkpoint("Rocketknight1/tiny-random-falcon-40b", num_ln_in_parallel_attn=1)
+    REPO = built(_patched_checkpoint, "Rocketknight1/tiny-random-falcon-40b", num_ln_in_parallel_attn=1)
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     KV_HEADS_EXPANDED = True
@@ -164,10 +170,3 @@ class TestFalcon11B(FamilySuite):
             raw = model.layers[0].input_layernorm.output.save()
         assert torch.equal(attn, raw) and torch.equal(mlp, raw)
 
-
-def test_value_weight_without_multi_query():
-    """Falcon-RW's ``query_key_value`` without multi-query holds each head's query, key and value; no tiny checkpoint
-    has it, so random weights."""
-    model = random_weights("Rocketknight1/tiny-random-falcon-7b", multi_query=False, parallel_attn=False, alibi=True)
-    assert model.num_kv_heads == model.num_heads
-    FamilySuite().test_value_weight_reproduces_the_values(model)

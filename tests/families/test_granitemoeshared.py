@@ -2,7 +2,7 @@
 
 import test_granite
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, built
 
 from nnterp.families import granitemoeshared
 
@@ -56,7 +56,7 @@ class TestGraniteMoeShared(FamilySuite):
 class TestGraniteMoeSharedScaled(test_granite.TestGraniteScaled):
     """The same weights with every multiplier away from 1.0 (Granite's rewrite)."""
 
-    REPO = test_granite._scaled_checkpoint(REPO)
+    REPO = built(test_granite._scaled_checkpoint, REPO)
     FAMILY = granitemoeshared
     mixture_output = scaled_mixture
     NATIVE = NATIVE
@@ -68,14 +68,15 @@ class TestGraniteMoeSharedScaled(test_granite.TestGraniteScaled):
             moe = model.layers[0].mlp.output.save()
             shared = model.layers[0].shared_mlp.output.save()
             mlp = model.layers[0].mlp.mlp_output.save()
-        torch.testing.assert_close(attn, attn_raw * 0.22)
-        torch.testing.assert_close(mlp, (moe + shared) * 0.22)
+        scale = model.config.residual_multiplier
+        torch.testing.assert_close(attn, attn_raw * scale)
+        torch.testing.assert_close(mlp, (moe + shared) * scale)
 
 
 class TestGraniteMoeSharedWithoutSharedExpert(FamilySuite):
     """``shared_intermediate_size`` 0: no shared expert, so the block adds the mixture alone."""
 
-    REPO = test_granite._scaled_checkpoint(REPO, shared_intermediate_size=0)
+    REPO = built(test_granite._scaled_checkpoint, REPO, shared_intermediate_size=0)
     FAMILY = granitemoeshared
     mixture_output = scaled_mixture
     MOE_UNAVAILABLE = {"shared_expert_output": "no shared expert"}
@@ -86,4 +87,4 @@ class TestGraniteMoeSharedWithoutSharedExpert(FamilySuite):
         with model.trace(PROMPT):
             moe = model.layers[0].mlp.output.save()
             out = model.layers[0].mlp.mlp_output.save()
-        torch.testing.assert_close(out, moe * 0.22)
+        torch.testing.assert_close(out, moe * model.config.residual_multiplier)

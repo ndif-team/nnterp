@@ -1,11 +1,10 @@
 """ZAYA, end to end: residual scaling modules that scale both the contribution and the stream."""
 
-import glob
 import os
 import tempfile
 
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT, random_weights
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, random_weights, cached_snapshot, built
 
 from nnterp import StandardizedTransformer
 from nnterp.families import zaya
@@ -26,7 +25,7 @@ def _patched_checkpoint(merges, repo=REPO):
     """
     from safetensors.torch import load_file, save_file
 
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = os.path.join(tempfile.gettempdir(), f"nnterp-zaya-{'merged' if merges else 'temp'}-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
@@ -65,7 +64,7 @@ def merged_identity(model):
 class TestZaya(FamilySuite):
     """Key temperatures of one; the merges at the tiny checkpoint's initial values."""
 
-    REPO = _patched_checkpoint(merges=False)
+    REPO = built(_patched_checkpoint, merges=False)
     FAMILY = zaya
     NATIVE = LLAMA_ROWS
     MID_IDENTITY = False                     # the stream gates scale what the block adds
@@ -90,7 +89,7 @@ class TestZaya(FamilySuite):
 class TestZayaMerged(FamilySuite):
     """Merges away from their initial values: the contributions are the scaled terms, the stream is rescaled too."""
 
-    REPO = _patched_checkpoint(merges=True)
+    REPO = built(_patched_checkpoint, merges=True)
     FAMILY = zaya
     NATIVE = LLAMA_ROWS
     MID_IDENTITY = False                     # the stream gates scale what the block adds

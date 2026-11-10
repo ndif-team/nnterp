@@ -3,7 +3,7 @@
 import pytest
 import torch
 
-from suite import FamilySuite, LLAMA_ROWS
+from suite import FamilySuite, LLAMA_ROWS, built, patched_checkpoint
 from vision_suite import IMAGE, PixtralSuite, VisionSuite, WrapperSuite, clip_rows, image_prompt, wrapper_of
 
 from nnterp import StandardizedTransformer
@@ -94,3 +94,10 @@ class TestLlavaNextMistralVision(VisionSuite):
         assert features.shape[0] != projected.shape[0] * projected.shape[1]
         newline = model.get("model").image_newline.detach()
         assert (features == newline).all(-1).any()
+
+
+class TestMistralReleased(TestMistral):
+    """Mistral-Nemo's and Mistral Small 3's heads (4 x 16 here, 32 x 128 there) wider than the stream, and
+    Mistral-7B-v0.1's sliding window, made 3 tokens so the suite's prompt passes it. Weights drawn for it."""
+
+    REPO = built(patched_checkpoint, TestMistral.REPO, draw=True, head_dim=16, sliding_window=3)

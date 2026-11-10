@@ -1,13 +1,12 @@
 """Kimi-Linear, end to end: a Kimi Delta Attention hybrid with latent attention and a mixture of experts."""
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import NO_ROTARY, FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed
+from suite import NO_ROTARY, FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, cached_snapshot, built
 
 from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
 from nnterp.components import Moe
@@ -30,7 +29,7 @@ def _checkpoint(repo="yujiepan/kimi-linear-tiny-random"):
     released checkpoints' own layout, which transformers converts at load) and
     the tokenizer are symlinked. Written once per snapshot.
     """
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = os.path.join(tempfile.gettempdir(), f"nnterp-kimi-linear-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "config.json")):
         return patched
@@ -47,7 +46,7 @@ def _checkpoint(repo="yujiepan/kimi-linear-tiny-random"):
 
 
 class TestKimiLinear(FamilySuite):
-    REPO = _checkpoint()
+    REPO = built(_checkpoint)
     FAMILY = kimi_linear
     # The KDA mixer's native name is ``self_attn``, which the family clears on its blocks, so ``linear_attn``
     # has no native path to compare with; `test_the_kda_mixer_is_native_self_attn` checks the module instead.

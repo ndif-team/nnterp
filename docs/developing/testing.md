@@ -57,14 +57,14 @@ once per class: `model` (`suite.py:88-92`), a `StandardizedTransformer` with
 
 | attribute | meaning |
 |---|---|
-| `REPO` | the pinned tiny checkpoint |
+| `REPO` | the pinned tiny checkpoint, or `built(patched_checkpoint, repo, ...)`: a copy of it in a config branch no pinned tiny takes (below) |
 | `FAMILY` | the family module the checkpoint must resolve to |
 | `NATIVE` | standard path → native path, usually built by `rows(container, layers, embed, norm, attn=, mlp=, ln1=, ln2=)` (`:58-73`); `LLAMA_ROWS` (`:76`) is the Llama layout |
 | `EXPECTED_UNAVAILABLE` | `support()` key → a substring of the reason, for values this checkpoint lacks; a module no block has (OPT's `mlp`) is absent from `support()` rather than unavailable, so it is not listed here |
 | `REFUSES_IN_PLACE_QKV` | the queries come out of a multi-view op (`split`, `chunk`), so torch refuses an in-place edit of them (GPT-2, GPT-BigCode, MPT) |
 | `ATTENTION_SINK` | the pattern's rows sum to less than one (GPT-OSS) |
 | `KV_HEADS_EXPANDED` | keys and values are read already expanded to `num_heads` (DeepSeek, Falcon 40B) |
-| `MLP_WIDTH_KEY` | a config key naming the MLP width when it is not `intermediate_size` |
+| `MLP_WIDTH_KEY` | a config key naming a mixture's MLP width when it is not `intermediate_size` (the experts'), read where the first block with an MLP is a mixture (`mlp_width_key(model)`), so a checkpoint whose first MLP is dense (ERNIE-4.5-21B, Nemotron-3-Nano-4B) takes the plain rule |
 | `LOAD_KWARGS` | extra load arguments (DBRX needs `dtype=torch.float32`) |
 | `QUERY_GATED` | `q_proj` yields the query and a gate side by side (Qwen3.5) |
 | `ATTENTION_NORM` | the block module whose output enters the attention; `None` when the block input does (OLMo-2/3) |
@@ -73,12 +73,22 @@ once per class: `model` (`suite.py:88-92`), a `StandardizedTransformer` with
 | `MOE_UNAVAILABLE` | mixture value → a substring of the reason, for the mixture values this checkpoint lacks on its mixture (a mixture without a shared expert needs no entry for `shared_expert_output`) |
 | `ROUTER_EXTRA_CLASSES` | router classes beyond the experts: ZAYA's skip class is one more column of `router_logits` |
 
-Two methods a family file overrides the way it sets an attribute: `pattern_from_scores`
-(what the softmax makes of the scores; GPT-OSS adds its sink column) and
-`rotated_as_served(attn, name, rotated)` (what the attention receives given `rotate` of a
-value before the rotary; the identity, HunYuan's and Llama 4's post-rotary norms, JetMoE's
-tiling of the keys). `model_size(host, axis, name)` takes the value's name, so JetMoE's file
+Methods a family file overrides the way it sets an attribute: `pattern_from_scores`
+(what the softmax makes of the scores; GPT-OSS adds its sink column);
+`rotated_as_served(attn, name, rotated, positions)` (what the attention receives given `rotate` of a
+value before the rotary at those positions; the identity, HunYuan's and Llama 4's post-rotary norms, JetMoE's
+tiling of the keys, Ministral 3's query scale by position); `native(model)` (`NATIVE` for the checkpoint
+loaded: a hybrid names its first block of each kind from the config's `layer_types`, so the class runs on a
+trained checkpoint whose blocks sit elsewhere); `mixture_output(model, host)` (what `routed_output +
+shared_expert_output` equals: JetMoE subtracts its mixture's bias, the Granite families divide by the
+multiplier); and `routed_scale(host)` / `routed_from_experts(host, summed)` (what a sum of `expert_outputs`
+adds to `routed_output`: Laguna's `routed_scaling_factor`, Nemotron-H's `fc2_latent_proj` under
+`moe_latent_size`). `model_size(host, axis, name)` takes the value's name, so JetMoE's file
 says its keys before the rotary are `num_kv_heads` wide where `KV_HEADS_EXPANDED` holds for the rest.
+A test that compares with a fact of the checkpoint (a block index, a multiplier, a width) reads it from the
+config or the module tree rather than writing the tiny checkpoint's value, so the class also runs on a
+trained checkpoint of the family; `blocks(model, kind)` lists the blocks the text config's `layer_types`
+names `kind`.
 
 Three helpers: `mixer(layer)` (`:40-43`) is `self_attn` or, on a linear
 block, `linear_attn`; `has_mlp(model)` (`:184-186`) reads `support()`;
@@ -96,7 +106,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_family_resolved` | `model.family is FAMILY` |
 | `test_standard_names_alias_native_envoys` | every `NATIVE` row: the standard path resolves to an `Envoy`, and it *is* the native envoy |
 | `test_no_inner_model_alias` | nothing is bound at `model.model`: the containers are lifted to the root |
-| `test_every_layer_is_renamed` | every `layers.0.*` row of `NATIVE` resolves on every block, and there is more than one block |
+| `test_every_layer_is_renamed` | every `layers.0.*` row of `native(model)` resolves on every block |
 | `test_envoy_classes` | every block is exactly `FAMILY.Layer`, every softmax attention `FAMILY.Attention`, every MLP `FAMILY.Mlp`, every mixer `FAMILY.LinearAttention`, and each subclasses the component base |
 | `test_trace_through_standard_names` | a trace through `mixer(...).output`, `layers[-1].output`, `norm.output`, `lm_head.output` gives `hidden_size` / `vocab_size` widths |
 
@@ -105,7 +115,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | method | asserts |
 |---|---|
 | `test_support_lists_every_standard_value` | `support()` keys equal `expected_values`; `support(layer=0)` drops the six root keys |
-| `test_support_is_what_this_family_expects` | every key in `EXPECTED_UNAVAILABLE` is a non-empty per-block dict whose reasons contain the substring; every other key is `None` |
+| `test_support_is_what_this_family_expects` | every key in `EXPECTED_UNAVAILABLE` is a non-empty per-block dict whose reasons contain the substring; `mlp_activation` and `mlp_neurons`, where not listed, are unavailable exactly on the blocks whose MLP is a routed mixture ("routed experts") or that have none ("no mlp module"); every other key is `None` |
 | `test_support_matches_what_reads` | on block 0, an available name is an `EProperty` on the host's class; a missing module says `no ... module`; an unavailable value raises `Unavailable` matching the reason |
 
 **Boundary values** (`:188-269`)
@@ -160,8 +170,8 @@ what every vision tower reports for the two values, which the suite expects on a
 
 | method | asserts |
 |---|---|
-| `test_skip_layers_hands_the_stream_straight_through` | skipping blocks 1..last leaves the last `layer_output` equal to block 0's, and the logits equal `project_on_vocab` of it |
-| `test_skip_layers_with_a_given_stream` | `skip_with=zeros` makes block 0's output and block 1's input zero |
+| `test_skip_layers_hands_the_stream_straight_through` | skipping blocks 1..last leaves the last `layer_output` equal to block 0's, and the logits equal `project_on_vocab` of it; skipped on a one-block checkpoint |
+| `test_skip_layers_with_a_given_stream` | `skip_with=zeros` makes block 0's output and block 1's input zero; skipped on a one-block checkpoint |
 | `test_steer` | the last position moves by `2 * vector`, the others are untouched, the logits move |
 | `test_project_on_vocab_is_the_logit_lens` | on the last block's output it equals `logits`; `get_topk_closest_tokens(k=3)` returns one dict of three token → probability entries summing to at most one |
 
@@ -191,8 +201,9 @@ two skipped where no attention block serves them, whose reasons are checked agai
 `"self_attn.value_weight"` and `"self_attn.output_weight"` are keys `support()` does not have (the weights are
 methods), so `test_support_is_what_this_family_expects` never meets them; latent attention, Gemma-4 and ZAYA name
 the first only, DeepSeek-V4, JetMoE and the default family both. Layouts no tiny checkpoint has run the value
-test on random weights (`random_weights(repo, **config)`): GPT-BigCode and Falcon-RW without multi-query,
-CodeGen with two heads per `mp_num` part, and Phi-3 under grouped-query attention. `test_gemma2.py` checks that
+test on random weights (`random_weights(repo, **config)`): GPT-BigCode without multi-query, CodeGen with two
+heads per `mp_num` part, and Phi-3 under grouped-query attention; Falcon-RW's runs it in `TestFalconRW`.
+`test_gemma2.py` checks that
 on a bf16 load both gains are `1 + weight` in float32, bit for bit. `tests/families/test_llama.py` runs both
 weight tests on the tiny Llama under a throwaway LoRA on `v_proj` and `o_proj` (`peft=` at load, B not zero)
 with the adapter enabled, disabled, merged, and disabled while merged, and checks the merged weight is
@@ -244,7 +255,7 @@ class TestFalcon(FamilySuite):                       # 7B layout
     #   test_values_bind_before_the_rotary
 
 class TestFalconAlibi(FamilySuite):                  # 7B layout, config.alibi = true
-    REPO = _alibi_checkpoint()                       # the 7B snapshot with alibi written into config.json
+    REPO = built(_alibi_checkpoint)                  # the 7B snapshot with alibi written into config.json
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     MLP_NORM = "input_layernorm"
@@ -266,10 +277,34 @@ says: `mlp_output` is a copy equal to `mlp.output - attention_output`
 user's tensor stays what they made it (`:28-36`), and `attention_values` must
 be read before `attention_queries` in one trace (`:38-44`). The alibi class
 runs the whole suite on the other attention branch: `_alibi_checkpoint()`
-(`:47-57`) symlinks the 7B snapshot's files into a temp dir and writes
+symlinks the 7B snapshot's files into a temp dir and writes
 `alibi: true` into its `config.json`, the way OLMo-3's test patches its
-checkpoint, and `test_alibi_branch` (`:68-73`) checks the pattern equals the
-`self_attention_dropout_0` output.
+checkpoint, and `test_alibi_branch` checks the pattern equals the
+`self_attention_dropout_0` output. `TestFalconRW` runs it on falcon-rw-1b's
+layout (sequential, alibi, a key and value per head, biased projections).
+
+**A config branch no tiny checkpoint takes** gets a class of its own on a
+patched copy of the tiny one, built from its config at test time, never
+downloaded: `REPO = built(patched_checkpoint, repo, **config)`
+(`suite.py`). `patched_checkpoint` writes `config` over the cached
+snapshot's `config.json` (a dict value updates the dict under that key) and
+links the weights, or, with `draw=True` or an `init`, draws weights for the new
+config with seed 0 and lets `init(model)` set what an initialization leaves
+degenerate (`draw_routers`: a router of zeros routes every token alike;
+`draw_biases`: zero biases); the copy is written once per change under the
+temp dir and shared by the test processes. `cached_snapshot(repo)` resolves a
+snapshot in the configured Hugging Face cache (`HF_HOME`, `HF_HUB_CACHE`).
+`built(...)` defers the build to the first read of `REPO` (the `model`
+fixture), so a snapshot missing from the cache errors that class's tests,
+not the module's collection, and the harness's subclass that sets `REPO` to a
+trained checkpoint never builds it. The classes cover the branches released
+checkpoints take: Granite's four multipliers, Laguna's routed scale and
+per-element gating, JetMoE's mixture bias, DeepSeek-V2-Lite's and V3's query
+paths and grouped routing, dots.llm1's and ERNIE-4.5's routing, Falcon-RW,
+the sequential StableLM, Ministral-8B's mixed blocks, Ministral 3's query
+scale, Maverick's attention without qk-norm, the all-dense Jamba, Nemotron-H's
+dense and latent layouts, the all-attention GraniteMoE-Hybrid, and others
+(each class's docstring names its checkpoints).
 
 `tests/families/test_olmo3.py` **patches a checkpoint**: the tiny OLMo-3
 checkpoint's flat `rope_parameters` does not parse for a model with
@@ -501,9 +536,9 @@ session collector agrees; `compute_next_token_probs` rows sum to one.
   per trace (`:327`, `:340`) because families bind them at different points.
 - The class-scoped `model` fixture is shared by every test in the class;
   a test that needs another config loads a patched copy of the checkpoint as
-  its own class (`_alibi_checkpoint()`, `test_falcon.py:47-57`;
-  `_patched_checkpoint()`, `test_olmo3.py:14-32`) rather than mutating the
-  fixture's.
+  its own class (`built(patched_checkpoint, repo, ...)`, `_alibi_checkpoint()`
+  in `test_falcon.py`, `_patched_checkpoint()` in `test_olmo3.py`) rather than
+  mutating the fixture's; build it with `built(...)`, not at import.
 - `route_delta_rule(..., "recurrent")` (`route_kernels(..., "torch")`) is
   process-wide; the hybrid tests load a second model after routing and restore
   `"chunked"` in a `finally`.

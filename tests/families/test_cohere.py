@@ -1,13 +1,12 @@
 """Cohere (Command-R), end to end: a parallel block, and logits scaled after the head."""
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, PROMPT, rows
+from suite import FamilySuite, PROMPT, rows, cached_snapshot, built
 from vision_suite import WrapperSuite, wrapper_of
 
 from nnterp.families import cohere
@@ -34,7 +33,7 @@ class TestCohere(FamilySuite):
 
 def _qk_norm_checkpoint(repo="trl-internal-testing/tiny-CohereForCausalLM"):
     """The tiny checkpoint with ``use_qk_norm`` on (Command-R+'s layout); the new per-head norms load at their init."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="cohere-qk-norm-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -48,7 +47,7 @@ def _qk_norm_checkpoint(repo="trl-internal-testing/tiny-CohereForCausalLM"):
 class TestCohereQkNorm(FamilySuite):
     """Command-R+'s per-head ``q_norm`` / ``k_norm`` run before the rotary; the interface still receives the queries."""
 
-    REPO = _qk_norm_checkpoint()
+    REPO = built(_qk_norm_checkpoint)
     FAMILY = cohere
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln2=None)
     MLP_NORM = "input_layernorm"

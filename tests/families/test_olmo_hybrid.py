@@ -1,20 +1,16 @@
 """OLMo-Hybrid, end to end: a gated DeltaNet hybrid whose two block types norm in opposite places."""
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import NO_ROTARY, FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, mixer
+from suite import NO_ROTARY, FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, mixer, cached_snapshot, blocks, built
 
 from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
 
 from nnterp.families import olmo_hybrid
-
-LINEAR_BLOCKS = (0,)   # ``config.layer_types``: one DeltaNet block, then one attention block
-ATTENTION_BLOCK = 1
 
 
 class TestOlmoHybrid(FamilySuite):
@@ -32,13 +28,21 @@ class TestOlmoHybrid(FamilySuite):
         "linear_attn.states": "",
     }
 
+    def native(self, model):
+        """`NATIVE` with the first attention block where the config puts it (block 1 on the tiny checkpoint)."""
+        first = blocks(model, "full_attention")[0]
+        rows = {k: v for k, v in self.NATIVE.items() if not k.endswith(".self_attn")}
+        return {**rows, f"layers.{first}.self_attn": f"model.layers.{first}.self_attn"}
+
     def test_every_layer_is_renamed(self, model):
+        linear, attention = blocks(model, "linear_attention"), blocks(model, "full_attention")
+        assert linear and attention and sorted(linear + attention) == list(range(len(model.layers)))
         for i, layer in enumerate(model.layers):
-            assert hasattr(layer, "linear_attn") == (i in LINEAR_BLOCKS)
-            assert (getattr(layer, "self_attn", None) is not None) == (i == ATTENTION_BLOCK)
+            assert hasattr(layer, "linear_attn") == (i in linear)
+            assert (getattr(layer, "self_attn", None) is not None) == (i in attention)
             assert hasattr(layer, "mlp") and hasattr(layer, "post_attention_layernorm")
-            assert hasattr(layer, "input_layernorm") == (i in LINEAR_BLOCKS)             # the attention block is post-norm
-            assert hasattr(layer, "post_feedforward_layernorm") == (i == ATTENTION_BLOCK)
+            assert hasattr(layer, "input_layernorm") == (i in linear)             # the attention blocks are post-norm
+            assert hasattr(layer, "post_feedforward_layernorm") == (i in attention)
 
     def test_layer_types_match_the_tree(self, model):
         kinds = ["linear_attention" if hasattr(layer, "linear_attn") else "full_attention" for layer in model.layers]
@@ -46,8 +50,8 @@ class TestOlmoHybrid(FamilySuite):
 
     def test_support_is_per_block_on_a_hybrid(self, model):
         support = model.support()
-        assert set(support["self_attn.attention_probabilities"]) == set(LINEAR_BLOCKS)
-        assert set(support["linear_attn.state_output"]) == {ATTENTION_BLOCK}
+        assert set(support["self_attn.attention_probabilities"]) == set(blocks(model, "linear_attention"))
+        assert set(support["linear_attn.state_output"]) == set(blocks(model, "full_attention"))
         assert support["layer_output"] is None and support["mlp.mlp_output"] is None
 
     def test_the_two_block_classes_share_one_mlp_class(self, model):
@@ -62,7 +66,7 @@ class TestOlmoHybrid(FamilySuite):
             lin = model.layers[0]
             lin_attn, lin_attn_raw = lin.linear_attn.attention_output.save(), lin.linear_attn.output.save()
             lin_mlp, lin_mlp_raw = lin.mlp.mlp_output.save(), lin.mlp.output.save()
-            att = model.layers[ATTENTION_BLOCK]
+            att = model.layers[blocks(model, "full_attention")[0]]
             att_attn, att_attn_norm = att.self_attn.attention_output.save(), att.post_attention_layernorm.output.save()
             att_mlp_raw = att.mlp.output.save()
             att_mlp, att_mlp_norm = att.mlp.mlp_output.save(), att.post_feedforward_layernorm.output.save()
@@ -84,7 +88,7 @@ class TestOlmoHybrid(FamilySuite):
 
     def test_attention_block_sublayer_inputs(self, model):
         """Post-norm: the block input enters the attention; the stream after the attention add enters the MLP."""
-        block = model.layers[ATTENTION_BLOCK]
+        block = model.layers[blocks(model, "full_attention")[0]]
         with model.trace(PROMPT):
             block_in = block.input.save()
             attn_in = block.self_attn.input.save()
@@ -94,7 +98,7 @@ class TestOlmoHybrid(FamilySuite):
         torch.testing.assert_close(mlp_in, block_in + attn)
 
     def test_attention_block_contribution_writes_land(self, model):
-        block = model.layers[ATTENTION_BLOCK]
+        block = model.layers[blocks(model, "full_attention")[0]]
         with model.trace(PROMPT):
             clean = model.logits.save()
         for host, name in ((block.self_attn, "attention_output"), (block.mlp, "mlp_output")):
@@ -185,8 +189,8 @@ class TestOlmoHybrid(FamilySuite):
 
     def test_per_token_state_needs_the_recurrent_kernel(self, model):
         reason = model.support()["linear_attn.states"]
-        assert all("route_kernels(model.family, 'torch')" in reason[i] for i in LINEAR_BLOCKS)
-        assert "no linear_attn module" in reason[ATTENTION_BLOCK]
+        assert all("route_kernels(model.family, 'torch')" in reason[i] for i in blocks(model, "linear_attention"))
+        assert all("no linear_attn module" in reason[i] for i in blocks(model, "full_attention"))
         with pytest.raises(Unavailable, match="route_kernels"):
             model.layers[0].linear_attn.state_after(0)
 
@@ -196,7 +200,7 @@ class TestOlmoHybrid(FamilySuite):
         recurrent = StandardizedTransformer(self.REPO, dispatch=True, attn_implementation="eager")
         try:
             mix = recurrent.layers[0].linear_attn
-            assert recurrent.support()["linear_attn.states"] == {ATTENTION_BLOCK: "no linear_attn module on this block"}
+            assert recurrent.support()["linear_attn.states"] == {i: "no linear_attn module on this block" for i in blocks(recurrent, "full_attention")}
             with recurrent.trace(PROMPT):
                 states = mix.states.save()
                 final = mix.state_output.save()
@@ -288,7 +292,7 @@ def _released_checkpoint(repo="hf-tiny-v2/tiny-random-OlmoHybridForCausalLM"):
     ``(0, 2)``). The weights and tokenizer are symlinked, only ``config.json``
     is rewritten.
     """
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="olmo-hybrid-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -303,7 +307,7 @@ def _released_checkpoint(repo="hf-tiny-v2/tiny-random-OlmoHybridForCausalLM"):
 class TestOlmoHybridReleasedConfig(TestOlmoHybrid):
     """The whole suite again on the released checkpoints' configuration: NoPE attention, betas in (0, 2)."""
 
-    REPO = _released_checkpoint()
+    REPO = built(_released_checkpoint)
     EXPECTED_UNAVAILABLE = {
         **TestOlmoHybrid.EXPECTED_UNAVAILABLE,
         **{name: "no " for name in NO_ROTARY},  # no self_attn module off the attention block, no rotary embedding on it

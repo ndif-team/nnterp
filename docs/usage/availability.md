@@ -81,7 +81,9 @@ OPT, loaded without `attn_implementation`, trimmed to the interesting keys:
  'attention_probabilities': "read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}
 ```
 
-Loaded with `attn_implementation="eager"`, every entry is `None`; `mlp.mlp_output` is
+Loaded with `attn_implementation="eager"`, the attention interior turns `None`. The values
+before the rotary stay unavailable (`no rotary embedding: OPT adds learned absolute position
+embeddings ...`), `mlp_input` reads `no mlp module on this block`, and `mlp.mlp_output` is
 still absent, since no block has the module.
 
 A hybrid (`"Qwen/Qwen3.5-9B"`, `attn_implementation="eager"`; on the tiny checkpoint
@@ -192,12 +194,13 @@ has_pattern = support["self_attn.attention_probabilities"] is None
 attn_blocks = [i for i, layer in enumerate(model.layers) if getattr(layer, "self_attn", None) is not None]
 has_mlp = support.get("mlp.mlp_output", "absent") is None   # .get: OPT has no key at all
 
+patterns = {}
 with model.trace(prompt):
     for i in attn_blocks:
         if has_pattern:
             patterns[i] = model.layers[i].self_attn.attention_probabilities.save()
     if has_mlp:
-        mlp = model.layers[0].mlp.mlp_output.save()
+        mlp = model.layers[-1].mlp.mlp_output.save()      # the last block: it runs after every pattern
 ```
 
 For one block, `model.support(layer=i)["self_attn.attention_probabilities"]` is the flat

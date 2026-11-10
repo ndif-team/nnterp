@@ -16,10 +16,6 @@ The model builds on the meta device, nothing downloads, and the block runs on
 NDIF against a model the server deployed. This page is the contract nnterp
 adds to that: which model the request reaches, what travels with it, what the
 server needs installed, and which values depend on the server's own stack.
-The mechanics are verified on the in-process simulation of the remote path
-(`remote="local"`, which serializes, deserializes and executes the block the
-way the server does); the statements about a live server follow from the
-design and are marked as such.
 
 ## Canonical pattern
 
@@ -46,7 +42,7 @@ A remote request carries a model key the server matches deployments by. A
 
 ```python
 model.to_model_key()
-# 'nnsight.modeling.transformers.TransformersModel:{"repo_id": "meta-llama/Llama-3.1-70B", "revision": null}'
+# 'nnsight.modeling.transformers.TransformersModel:{"repo_id": "meta-llama/Llama-3.1-70B", "revision": null, "task": "text-generation"}'
 ```
 
 `_remoteable_class` returns `TransformersModel` because that is what a server
@@ -96,10 +92,10 @@ out-of-order read is an `OutOfOrderError` from the server's run.
   `SourceNotAvailable` naming what is there, not with `Unavailable` on the
   client.
 - **Availability is checked against the client's config.** `support()` and the
-  `Unavailable` check run on your meta model: `attn_implementation="eager"` at
-  load makes the interior *declared* available, but whether the eager forward
-  runs is the deployment's choice. On a deployment running `sdpa` the read
-  fails server-side as above.
+  `Unavailable` check run on your meta model. The request carries that model's
+  resolved `attn_implementation`, and nnsight applies it to the deployed model
+  before the block runs (`TransformersModel._remoteable_set_env`), raising
+  `ValueError` for a model that cannot switch.
 - **The DeltaNet per-token state is a process-wide switch.**
   `route_kernels` rebinds the kernel in *your* process; the server's is not
   routed by a request. Treat `state`, `states`, `state_after` and
@@ -124,16 +120,17 @@ with model.trace("The Eiffel Tower is in the city of", remote="local"):
 
 ## Gotchas
 
-- **Load the client model with the same `attn_implementation` the deployment
-  runs** if you read the interior; the client check cannot see the server.
+- **Load the client model with `attn_implementation="eager"`** if you read the
+  interior; the request carries it to the server.
 - **A name bound in the block is gone after it** unless `.save()`d, remotely as
-  locally; a `support()` call inside the block is a plain dict and needs no
-  save, but it describes the client's model.
+  locally. `support()` describes the client's model; call it outside the block.
 - **The model key names `TransformersModel`**; a server that deploys a
   checkpoint under any other class does not match.
 - **Batch remote work into one `session`** (nnsight docs/remote/remote-session.md);
-  `collect_last_token_activations_session` and `run_prompts(..., remote=True)`
-  do this for their loops ([activations.md](activations.md), [prompt-utils.md](prompt-utils.md)).
+  `collect_last_token_activations_session` does this for its loop, and
+  `collect_token_activations_batched(..., remote=True)` goes through it
+  ([activations.md](activations.md)); `run_prompts(..., remote=True)` sends one
+  request per batch ([prompt-utils.md](prompt-utils.md)).
 
 ## Related
 

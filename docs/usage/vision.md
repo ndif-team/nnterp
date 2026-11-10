@@ -52,7 +52,7 @@ On `llava-hf/llava-1.5-7b-hf`: `mask` is `(1, 592)` with 576 image tokens, `patt
 `(1, 16, 577, 577)`, `patches` `(1, 577, 1024)` (CLIP's CLS token first), `features`
 `(576, 4096)`, and `torch.equal` is `True`; the tower has 24 blocks of width 1024, the text
 model 32 of width 4096. The same body runs on `trl-internal-testing/tiny-LlavaForConditionalGeneration`
-in a second on a CPU (every width 16, 4 tower heads), and on every wrapper in
+(every width 16, 4 tower heads), and on every wrapper in
 [the coverage list](#which-wrappers), less the lines a tower does not serve: the Qwen ViT has
 no `pattern`, and Gemma 4 unified's embedder has no blocks. On Gemma 4 (`google/gemma-4-E2B`, whose base checkpoint has no chat
 template: write the prompt as `f"{model.processor.image_token} ..."`) with a red 224x224
@@ -126,7 +126,7 @@ they are the tower's. The Qwen ViT, Pixtral,
 RADIO, Gemma 4 and Gemma 4 unified take images of any resolution, so their `image_size` raises
 `Unavailable` saying where each image's grid is (`image_grid_thw`, `image_sizes`,
 `image_position_ids`, `image_grid_hw`). Gemma 4's `head_dim` is the config's (64 on E2B, with 12 heads over a
-768-wide stream). The encoder-free embedder has `num_layers == 0`, `hidden_size` its
+768-wide stream). The encoder-free embedder has `num_layers == 0`, `vision_hidden_size` its
 `mm_embed_dim` and `patch_size` the 48-pixel merged patch it embeds; its `num_heads`,
 `head_dim` and `intermediate_size` raise `Unavailable`.
 
@@ -245,6 +245,9 @@ with model.generate(prompt, images=[image], max_new_tokens=3, do_sample=False) a
   `pixel_values`), but the scatter runs once over the batch: `vision.image_features` is
   then the whole batch's features, flat and the same tensor in every invoke, and a write
   in one invoke reaches every row's image (the mask is sliced per invoke).
+- The processors of the Qwen-VL families, Mistral 3 and Pixtral, SmolVLM, LLaVA-OneVision, Llama 4
+  and Gemma 4 need `torchvision` installed; without it the `task="image-text-to-text"` load raises
+  an `ImportError`.
 - Llama 4's image processor returns bfloat16 pixels, which a float32 tower refuses (as in
   plain transformers): load Llama 4 in bfloat16, or cast `pixel_values` in an encoding.
 
@@ -386,6 +389,8 @@ names bind but `image_features` is `Unavailable` and says so.
 | `llama4_text` | Llama 4 (`llama4`) | Llama 4's ViT |
 | `gemma4_text` | Gemma 4 (`gemma4`) | Gemma 4's ViT |
 | `gemma4_unified_text` | Gemma 4 unified (`gemma4_unified`) | the encoder-free embedder |
+| `hyperclovax` | HyperCLOVA X Vision V2 (`hyperclovax_vision_v2`; transformers 5.18 and later) | the Qwen2.5-VL ViT |
+| `nemotron_h` | NemotronH Omni (`nemotron_h_omni`; transformers 5.18 and later) | RADIO |
 
 ## What is not covered yet
 
@@ -400,4 +405,4 @@ names bind but `image_features` is `Unavailable` and says so.
 - [layouts.md](layouts.md): `Patches`, `ImageTokenMask`, `ImageFeatures`.
 - [availability.md](availability.md): the text-only-load reason and the `vision.` rows of `support()`.
 - [generation.md](generation.md): the values per step under `generate`.
-- [docs/developing/vision-design.md](../developing/vision-design.md): the design, what does not fit, what is left.
+- [docs/developing/vision-design.md](../developing/vision-design.md): the design and what does not fit.

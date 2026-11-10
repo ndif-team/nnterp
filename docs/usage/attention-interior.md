@@ -207,9 +207,10 @@ differences [below](#on-the-vllm-engine).
 
 Assignment reaches the model on every family. An in-place edit does too, except where the
 value is a split view of one fused tensor and torch refuses it as it does GPT-2's queries
-(`RuntimeError: Output 0 of Select is a view and is being modified inplace`): CodeGen's,
-DBRX's and GPT-NeoX's queries and keys, JetMoE's keys, and latent attention's shared rope
-key. Assign there, or edit under `torch.no_grad()`.
+(`RuntimeError: ... is a view and is being modified inplace`): CodeGen's, DBRX's and
+GPT-NeoX's `attention_queries_prerope` and `attention_keys_prerope`, JetMoE's
+`attention_keys_prerope`, and latent attention's shared rope key. Assign there, or edit
+under `torch.no_grad()`.
 
 ### `rotate` and the positions it is given
 
@@ -537,11 +538,11 @@ outputs lands (`tests/families/suite.py`).
 
 ## Family caveats
 
-### GPT-2 and MPT: queries, keys and values are split views
+### GPT-2, GPT-BigCode and MPT: split views
 
 GPT-2's `c_attn` produces one tensor that `split` divides into queries, keys
-and values, and MPT's `Wqkv` one that `chunk` divides. torch refuses to edit
-such a view in place:
+and values, and MPT's `Wqkv` one that `chunk` divides. torch refuses an in-place
+edit of GPT-2's and GPT-BigCode's queries, and of all three on MPT:
 
 ```python
 with model.trace(prompt):
@@ -552,7 +553,7 @@ with model.trace(prompt):
 
 Assign instead: `attn.attention_queries = attn.attention_queries * 0` or any
 tensor of the same shape. The scores, the pattern and the head outputs accept
-in-place edits on both (GPT-2's head outputs are a transposed view, which
+in-place edits on all three (GPT-2's head outputs are a transposed view, which
 torch allows).
 
 A GPT-2 checkpoint with `reorder_and_upcast_attn` set takes GPT-2's own upcast
@@ -774,8 +775,9 @@ way. To change what chosen heads read without touching the cache, call
   On a fresh model `self_attn.q_proj.output` (or `k_proj.output`) followed by
   `attention_queries` (or `interface`) raises `OutOfOrderError` naming an
   `attention_interface` input, on the first such trace only: nnsight builds
-  `self_attn.source` lazily, after the forward has started. Touch
-  `model.layers[i].self_attn.source` outside a trace first, or read them in two traces.
+  `self_attn.source` lazily, after the forward has started. Once the model is dispatched
+  (`dispatch=True`, `model.dispatch()`, or after its first trace), touch
+  `model.layers[i].self_attn.source` outside a trace first; or read them in two traces.
 - **Read `interface` once per forward, and make the first call before the scores.** Reading
   it again after a call, or making the first call after reading the scores, the pattern or the
   head outputs, asks for a point the forward has passed: `OutOfOrderError` in a plain trace and

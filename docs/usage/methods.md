@@ -13,8 +13,8 @@ sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/families/de
 Five methods on `StandardizedTransformer` do the things an experiment does over and over,
 written against the standard names so they run unchanged on every family: skip a range of
 blocks, add a vector to the residual stream, decode a hidden state through the model's own
-head (the logit lens), and turn a distribution into readable tokens. Three run inside a
-trace; two work on saved tensors outside.
+head (the logit lens), and turn a distribution into readable tokens. Two run only inside a
+trace; three work inside on live values or outside on saved ones.
 
 | method | where it runs | what it does |
 | --- | --- | --- |
@@ -127,8 +127,10 @@ torch.equal(model.project_on_vocab(last), logits)    # True (max abs diff 0.0 on
 Inside a trace it takes a live value, so a logit lens over every block is a loop:
 
 ```python
+import nnsight
+
 with model.trace(prompt):
-    lens = [model.project_on_vocab(layer.layer_output)[0, -1].save() for layer in model.layers]
+    lens = nnsight.save([model.project_on_vocab(layer.layer_output)[0, -1] for layer in model.layers])
 ```
 
 Outside a trace it runs the norm and head modules as plain `nn.Module`s on a saved tensor.

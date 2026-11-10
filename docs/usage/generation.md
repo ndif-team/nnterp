@@ -17,7 +17,7 @@ decode step `[batch, 1, hidden_size]`; `next_token_probs` is the distribution th
 produced each step's token; and `input_ids` is the one token the step is fed.
 `tracer.iter[...]` binds a stretch of the block to chosen steps, and
 `tracer.result` is the generated ids. How `generate` and `tracer.iter` work is
-nnsight's: nnsight docs/usage/generate.md and docs/usage/iter-all-next.md.
+nnsight's: nnsight docs/usage/generate.md and docs/usage/iteration.md.
 This page is what nnterp's values look like under them.
 
 ## Canonical pattern
@@ -164,4 +164,4 @@ and treat that warning as a read-order error.
 - [attention-interior.md](attention-interior.md), the interior values whose shapes change per step.
 - [delta-net.md](delta-net.md), the state hand-off from step to step on a hybrid.
 - [activations.md](activations.md), collecting `layer_output` per prompt rather than per step.
-- nnsight docs/usage/generate.md and docs/usage/iter-all-next.md, `generate` and `tracer.iter` themselves; docs/gotchas/iteration.md for the cut-short loop.
+- nnsight docs/usage/generate.md and docs/usage/iteration.md, `generate` and `tracer.iter` themselves; docs/errors/module-never-fired.md for the cut-short loop.

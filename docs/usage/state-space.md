@@ -1,7 +1,7 @@
 ---
 title: Mamba-2 State-Space Mixers
-one_liner: The `linear_attn` values on Mamba-2 (SSD) blocks — Mamba-2, Nemotron-H, Bamba, Falcon-H1 — what C, B, x and dt are called, the two kernels a prompt and a decode step run, the state handed between steps, and the state after every token with `chunk_per_token`.
-tags: [usage, hybrid, state-space, mamba2, ssd, state, nemotron_h, bamba, falcon_h1]
+one_liner: The `linear_attn` values on Mamba-2 (SSD) blocks — Mamba-2, Nemotron-H, Bamba, Falcon-H1, GraniteMoE-Hybrid — what C, B, x and dt are called, the two kernels a prompt and a decode step run, the state handed between steps, and the state after every token with `chunk_per_token`.
+tags: [usage, hybrid, state-space, mamba2, ssd, state, nemotron_h, bamba, falcon_h1, granitemoehybrid]
 related: [docs/usage/delta-net.md, docs/usage/vocabulary.md, docs/usage/availability.md, docs/usage/layouts.md, docs/usage/generation.md, docs/developing/recurrent-mixer-internals.md]
 sources: [nnterp/components/state_space.py, nnterp/components/eproperty.py, nnterp/components/recurrent.py, nnterp/components/layer.py, nnterp/families/mamba2.py, nnterp/families/nemotron_h.py, nnterp/families/bamba.py, nnterp/families/falcon_h1.py, tests/families/ssd.py, tests/families/test_mamba2.py, tests/families/test_nemotron_h.py]
 ---
@@ -10,8 +10,8 @@ sources: [nnterp/components/state_space.py, nnterp/components/eproperty.py, nnte
 
 ## What this is for
 
-Mamba-2, Nemotron-H (Nemotron-3 Nano and Super), Bamba and Falcon-H1 mix the
-sequence in some or all blocks with a Mamba-2 (SSD) mixer, at
+Mamba-2, Nemotron-H (Nemotron-3 Nano and Super), Bamba, Falcon-H1 and GraniteMoE-Hybrid
+(Granite 4.0-H) mix the sequence in some or all blocks with a Mamba-2 (SSD) mixer, at
 `layers[i].linear_attn`, the recurrent mixer's standard name on every hybrid.
 SSD is linear attention with one scalar decay per head. Per head, with the
 state `h` a `head_dim` by `state_dim` matrix, each token does
@@ -74,6 +74,7 @@ Decide which blocks hold a Mamba-2 mixer *outside* the trace, as above.
 | `nemotron_h` | `layers_block_type == "linear_attention"` | `mixer` | one sublayer per block: the `mixer` is `linear_attn`, `self_attn` or `mlp` by its class |
 | `bamba` | all but `attn_layer_indices` | `mamba` | `self_attn` on the others; `feed_forward` as `mlp` on every block |
 | `falcon_h1` | every block, beside `self_attn` | `mamba` | both mixers in parallel, then `feed_forward` as `mlp` |
+| `granitemoehybrid` | `layers_block_type == "linear_attention"` | `mamba` | `self_attn` on the others; `shared_mlp` as `mlp` on every block; each contribution times `residual_multiplier` |
 
 On Mamba-2 the block is the mixer alone, so `support()` lists no `self_attn.*`
 and no `mlp.*` value, and `layers[i].input + linear_attn.attention_output ==
@@ -210,7 +211,7 @@ Compare runs made under the same chunking, or in float32.
   mixer module of the model you pass, which the forward reads on every call;
   unlike `route_kernels` it touches no other model. `chunk_per_token(model,
   False)` restores the chunk size each mixer was built with
-  (`config.chunk_size`, `mamba_chunk_size` on Bamba and Falcon-H1). Call it on
+  (`config.chunk_size`, `mamba_chunk_size` on Bamba, Falcon-H1 and GraniteMoE-Hybrid). Call it on
   a loaded model.
 - **Slower on long prompts.** The recurrence between chunks is quadratic in
   the number of chunks, and with a chunk size of 1 that is the number of

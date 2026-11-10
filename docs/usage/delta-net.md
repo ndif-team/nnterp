@@ -365,4 +365,4 @@ this block`.
 - [attention-interior.md](attention-interior.md), the same names on the softmax blocks, with a pattern and scores.
 - [generation.md](generation.md), values per decode step, and the loop rules under `generate`.
 - [remote.md](remote.md), what these source-located values need from a server.
-- nnsight docs/usage/iter-all-next.md and docs/gotchas/iteration.md, `tracer.iter` and the cut-short loop.
+- nnsight docs/usage/iteration.md and docs/errors/module-never-fired.md, `tracer.iter` and the cut-short loop.

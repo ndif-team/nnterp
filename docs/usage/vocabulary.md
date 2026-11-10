@@ -45,7 +45,7 @@ The same body runs on `"meta-llama/Llama-3.1-8B"` and `"EleutherAI/pythia-70m-de
 | `model.layers[i].self_attn` | `...h[i].attn` | same | `...layers[i].attention` |
 | `model.layers[i].mlp` | same | same | same |
 | `model.norm` | `model.transformer.ln_f` | `model.model.norm` | `model.gpt_neox.final_layer_norm` |
-| `model.lm_head` | same | same | same (`embed_out` on old releases) |
+| `model.lm_head` | same | same | same |
 
 Two derived accessors belong to the vocabulary as well, because they are what a norm is
 for:
@@ -93,7 +93,7 @@ A `RENAME` key with several components (`transformer.h`, `model.decoder.layers`,
 to `model.layers` on every family rather than `model.model.layers` on some. A
 single-component key (`attn`, `attention`, `ffn`) binds on every envoy that has a child of
 that name, so one entry renames the attention in every block. A key that resolves nowhere
-is skipped, which is how `embed_out` -> `lm_head` covers both spellings of GPT-NeoX's head.
+is skipped.
 The rules are nnsight's (nnsight docs/usage/rename-modules.md); nnterp only chooses the keys.
 
 Because a single-component key binds everywhere it resolves, OPT's block-level
@@ -191,7 +191,8 @@ out = model.layers[0].mlp(emb)                         # any envoy: its module's
 
 - **Aliases are not paths.** `envoy.path` is always the native path
   (`model.transformer.h.0.attn`), `model.get("layers.0.self_attn")` resolves through the
-  alias, and `envoys=` keys must be native paths ([loading](loading.md)).
+  alias, and an `envoys=` path key matches the native path or any alias spelling of it
+  ([loading](loading.md#your-own-rename-and-envoys)).
 - **A single-component alias binds in every block**, which is why no family aliases a name
   that also exists outside the blocks (OPT's `final_layer_norm`).
 - **The norm aliases mean different things on different families.** Read

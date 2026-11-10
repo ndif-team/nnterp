@@ -82,14 +82,11 @@ def compute(model: Any) -> dict[int, dict[str, int]]:
     hybrid's linear- and softmax-attention blocks are each measured. A rank
     counts distinct locations in forward order: from 0 in each block, and once
     across the root's two sides. A model not yet dispatched is probed with a
-    `scan`, on its meta modules, so nothing loads; a forward that cannot run on
-    fake tensors (one that branches on its data: Granite's ``torch.equal``,
-    OPT's data-dependent shapes, a grouped-mm mixture of experts in float32) is
-    probed with a `trace`, which loads the weights. A dispatched model is
-    probed with a `trace` only: a scan would run its real modules on fake
-    tensors, and a module that caches what its forward computes keeps the
-    fake (a ``longrope`` rotary embedding's long frequencies, computed on the
-    first call and reused after), which breaks every later trace.
+    `scan`, or a `trace` (which loads the weights) where the forward cannot
+    run on fake tensors (Granite's ``torch.equal``, OPT's data-dependent
+    shapes, a grouped-mm mixture of experts in float32). A dispatched model is
+    probed with a `trace` only: a scan leaves fake tensors in a module that
+    caches its forward's result (a ``longrope`` rotary embedding).
     A model loaded with its processor is probed with an image in the prompt
     (`prompts`), since a value an image gates (Qwen3-VL's ``deepstack_output``)
     is reached by no text-only forward; where that prompt cannot run, the

@@ -5,9 +5,8 @@ ln_f}`` and ``lm_head``. On the 7B and 40B layouts the block is parallel and sum
 ``x + attn + mlp``, but it does so by adding the attention output *into the
 MLP's output tensor in place*, so ``mlp_output`` reads a copy taken as the
 MLP returns (on every layout), and a transform carries edits to it back into the model. The RW
-layout (``parallel_attn`` false: falcon-rw-1b and -7b, which also set ``alibi``,
-per-head keys and values and biased projections) is a sequential pre-norm block
-with ``post_attention_layernorm`` before the MLP, so ``layer_mid`` is served there.
+layout (``parallel_attn`` false: falcon-rw-1b and -7b) is a sequential pre-norm block, so
+``layer_mid`` is served there.
 
 The attention does its own arithmetic, and ``config.alibi`` picks one of two
 branches of it with different operations, so each interior value names its
@@ -115,10 +114,9 @@ class Attention(Attention):
     # order. Keys and values are ``num_kv_heads`` wide (1 under multi-query).
     # The scores are the softmax's input after the mask, the pattern the
     # softmax itself (no alibi) or the dropout after it (alibi). The head
-    # outputs are the ``scores @ values`` product, heads first, without alibi;
-    # with alibi the product is flattened over batch and heads, which nnsight
-    # cannot narrow to an invoke's rows, so they are read once merged
-    # (``_merge_heads``, ``[batch, seq, num_heads * head_dim]``). Both are served
+    # outputs are the ``scores @ values`` product without alibi, and with it
+    # the merged heads (``_merge_heads``: nnsight cannot narrow the product,
+    # flattened over batch and heads, to an invoke's rows); both are served
     # ``[batch, seq, heads, head_dim]`` as a view, so in-place edits land.
 
     def no_rotary(self) -> str | None:

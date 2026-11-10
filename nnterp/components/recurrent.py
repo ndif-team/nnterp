@@ -58,17 +58,8 @@ DISPATCHED = "implementation_0"
 
 
 def kernel_body(envoy: Envoy, call: str) -> str:
-    """The path into the body of the mixer's kernel call ``call``, for a key at a binding inside the kernel.
-
-    ``source.<call>.source`` where the forward calls the pure-torch kernel
-    itself (a routed name). Unrouted, the forward calls transformers' kernel
-    dispatcher, whose body calls the kernel it picked (`DISPATCHED`); where
-    that is the pure-torch function (`needs_torch_kernels` passes: no
-    optimized package installed), its body is one call further down,
-    ``source.<call>.source.implementation_0.source``. Decided on the call this
-    run drilled into, so it follows the function the forward actually calls.
-    Drills into ``call``, so it is read where the call's own values are, inside
-    the trace.
+    """The path into the body of the kernel the mixer's call ``call`` runs: ``source.<call>.source``, or one call
+    further down (`DISPATCHED`) where the forward calls transformers' kernel dispatcher unrouted. Read inside the trace.
     """
     try:
         getattr(getattr(envoy.source, call).source, DISPATCHED)

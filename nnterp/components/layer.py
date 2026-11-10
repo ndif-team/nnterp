@@ -221,15 +221,9 @@ class Layer(Standard):
         ``post_attention_layernorm.input``. A parallel block has no such
         stream, and marks this unavailable.
 
-        A write replaces the stream: the MLP's norm reads it and the block
-        adds the MLP's output to it. The block holds this tensor twice, as
-        the norm's argument and as ``residual``, so an assignment is copied
-        into it in place (``in_place``), the same write as
-        ``layer_mid[:] = new``. Like any in-place write, it changes a read of
-        ``layer_mid`` saved earlier in the trace, and a replacement computed
-        from such a read by an operation that keeps its input for the
-        backward pass (a learned scale or rotation) has to be computed from
-        ``layer_mid.clone()`` for gradients to flow.
+        An assignment is copied into the stream in place (``in_place``): the
+        block holds it as the norm's argument and as ``residual``, and both see
+        the write (docs/usage/residual-stream.md, "Writing `layer_mid`").
         """
         return value
 

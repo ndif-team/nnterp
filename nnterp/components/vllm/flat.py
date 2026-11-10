@@ -91,11 +91,8 @@ class Flat(EProperty):
             read that edits nothing hands the model's tensor back untouched,
             so dividing never rounds a clean forward.
 
-    ``in_place`` (`EProperty`'s) hands an edit back, and an assignment in,
-    by copying into the rows the model holds rather than swapping new ones
-    in, for rows the forward also holds under another name: the stream
-    between a block's sublayers, bound to ``residual`` before the MLP's norm
-    is called with it. The read is still a private copy.
+    ``in_place`` (`EProperty`'s) copies an edit or an assignment into the
+    rows the model holds; the read is still a private copy.
     """
 
     def __init__(

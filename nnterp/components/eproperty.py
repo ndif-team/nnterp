@@ -79,14 +79,9 @@ class EProperty(eproperty):
             to (`SelectiveScan`'s prompt and decode kernels, `StateSpace`'s
             two kernels).
         in_place: Write by copying into the tensor the location holds instead of
-            swapping another one in, for a tensor the forward also holds under a
-            second name it reads later. A block binds the stream between its
-            sublayers to ``residual`` and then calls the MLP's norm with it:
-            a swap at the norm's input would reach the norm only, and the copy
-            reaches both. An assignment is then the in-place write
-            ``value[:] = new`` (into the preprocess's view of the held tensor;
-            the postprocess is not used), and nothing is swapped, so several
-            invokes each keep writing into the one tensor. Reads are unchanged.
+            swapping another in, for a tensor the forward also holds under a
+            second name it reads later (a block's ``residual``). An assignment
+            is ``value[:] = new`` into the preprocess's view; reads are unchanged.
 
     The location is served by nnsight the way any eproperty's is, whatever the
     path: a module's output, a sibling norm's, or an operation's arguments,

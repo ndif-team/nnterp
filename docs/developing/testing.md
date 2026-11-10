@@ -118,6 +118,7 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 | `test_sublayer_inputs_are_the_normed_stream` | `self_attn.input` equals `ATTENTION_NORM`'s output (or the block input); `mlp.input` equals `MLP_NORM`'s output; reads ordered by the forward, one norm shared on a parallel block |
 | `test_renamed_model_equals_raw_model` | block 0's output and `lm_head.output` equal the raw `TransformersModel`'s |
 | `test_boundary_writes_land` | assigning `attention_output * 0`, `mlp_output * 0`, `layer_output * 0`, and zeroing `layer_output[:]` in place, each moves the logits |
+| `test_assigning_layer_mid_replaces_the_stream` | on the first block serving `layer_mid`, an assignment gives the in-place write's `layer_output` bit for bit, under one invoke and under two that both write; `layer_output == new + mlp_output` where the clean block sums plainly; the gradients of a learned scale and shift of a cloned read reach the assigned value as through the in-place write |
 
 **The attention pattern** (`:273-332`)
 

@@ -573,6 +573,89 @@ class FamilySuite:
             inplace = model.logits.save()
         assert not torch.equal(clean, inplace)
 
+    def test_assigning_layer_mid_replaces_the_stream(self, model):
+        """An assignment to ``layer_mid`` replaces the stream between the sublayers, as an in-place write does: the
+        MLP's norm reads the new value and the block adds the MLP's output to it, so ``layer_output == new +
+        mlp_output`` wherever the clean block sums that plainly (a gate, a scale or a third term elsewhere). Under one
+        invoke and under two that both write, and with gradients reaching what was assigned, a learned map of a
+        cloned read included."""
+        served = [i for i in range(model.num_layers) if model.support(layer=i)["layer_mid"] is None]
+        if not served:
+            pytest.skip("no block serves layer_mid")
+        layer = model.layers[served[0]]
+        mlp = layer.mlp if model.support(layer=served[0]).get("mlp.mlp_output", "absent") is None else None
+        added = part = None  # bound outside: a name first bound in a trace body is gone after it unless saved
+        with model.trace(PROMPT):
+            mid = layer.layer_mid.clone().save()
+            if mlp is not None:
+                added = mlp.mlp_output.save()
+            out = layer.layer_output.save()
+
+        def plain(out, mid, added):
+            """``out == mid + added`` to 16 units of the block's dtype at its scale."""
+            if added is None:
+                return False
+            eps = torch.finfo(out.dtype).eps
+            error = (out.double() - mid.double().reshape(out.shape) - added.double()).abs().max().item()
+            return error <= 16 * eps * max(1.0, out.double().abs().max().item())
+
+        sums_plainly = plain(out, mid, added)
+        generator = torch.Generator().manual_seed(0)
+        rms = mid.float().pow(2).mean().sqrt().clamp(min=1e-3).item()
+        delta = (torch.randn(mid.shape, generator=generator) * rms * 0.5).to(mid.dtype)
+        new, other = mid + delta, mid - 2 * delta
+
+        written = {}
+        for form in ("assign", "in place"):
+            with model.trace(PROMPT):
+                if form == "assign":
+                    layer.layer_mid = new
+                else:
+                    layer.layer_mid[:] = new
+                if mlp is not None:
+                    part = mlp.mlp_output.save()
+                result = layer.layer_output.save()
+            written[form] = (part, result)
+        (part, result), (_, reference) = written["assign"], written["in place"]
+        assert torch.equal(result, reference), "the assignment reached only part of the block"
+        if sums_plainly:
+            assert plain(result, new, part), "layer_output is not the assigned stream plus the MLP's output"
+
+        if mid.dim() == 3:  # two invokes, both writing; OPT's flattened rows are not split by invoke
+            ids = model.tokenizer(PROMPT).input_ids  # token ids: a wrapper's processor may refuse to batch text alone
+            batched = {}
+            for form in ("assign", "in place"):
+                with model.trace() as tracer:
+                    with tracer.invoke(ids):
+                        if form == "assign":
+                            layer.layer_mid = new
+                        else:
+                            layer.layer_mid[:] = new
+                    with tracer.invoke(ids):
+                        if form == "assign":
+                            layer.layer_mid = other
+                        else:
+                            layer.layer_mid[:] = other
+                    with tracer.invoke():
+                        result = layer.layer_output.save()
+                batched[form] = result
+            assert torch.equal(batched["assign"], batched["in place"]), "an assignment under two invokes reached only part of the block"
+
+        grads = {}
+        for form in ("assign", "in place"):
+            v = torch.zeros(mid.shape[-1], dtype=mid.dtype, requires_grad=True)
+            alpha = torch.ones((), dtype=mid.dtype, requires_grad=True)
+            with model.trace(PROMPT):
+                if form == "assign":
+                    layer.layer_mid = layer.layer_mid.clone() * alpha + v
+                else:
+                    layer.layer_mid[:] = layer.layer_mid.clone() * alpha + v
+                loss = model.logits[0, -1].float().log_softmax(-1).max().save()
+            grads[form] = torch.autograd.grad(loss, (v, alpha))
+        assert grads["in place"][0].abs().max() > 0  # alpha's can be exactly zero: a norm after a homogeneous MLP cancels a scale
+        for got, want in zip(grads["assign"], grads["in place"]):
+            torch.testing.assert_close(got, want)
+
     # -- the attention pattern --------------------------------------------------
 
     def test_probabilities_are_a_pattern(self, model):

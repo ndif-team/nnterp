@@ -62,14 +62,10 @@ class Layer(Layer):
     @EProperty(
         lambda block: "final_layer_norm.input" if norms_before(block) else "input_layernorm.output",
         description="The residual stream after the attention add, flattened to [batch * seq, hidden]",
+        in_place=True,
     )
     def layer_mid(self, value) -> FlatResidual:
-        return value.reshape(-1, value.shape[-1])  # a view: the block's own flat rows, or the norm's [batch, seq, hidden] output
-
-    @layer_mid.postprocess
-    def layer_mid(self, value):
-        current = self.final_layer_norm.input if norms_before(self) else self.input_layernorm.output
-        return value.view(current.shape)
+        return value.reshape(-1, value.shape[-1])  # a view: the block's own flat rows, or the norm's [batch, seq, hidden] output; a write lands in it
 
     @EProperty(
         "final_layer_norm.output", description="The normed stream entering the feed-forward path, flattened to [batch * seq, hidden]",

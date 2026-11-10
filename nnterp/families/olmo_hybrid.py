@@ -60,7 +60,7 @@ class Layer(Layer):
     def attention_norm_output(self, value) -> Residual:
         return value
 
-    @EProperty(lambda block: "mlp.input" if post_norm(block) else "post_attention_layernorm.input", description="The residual stream after the mixer's add")
+    @EProperty(lambda block: "mlp.input" if post_norm(block) else "post_attention_layernorm.input", description="The residual stream after the mixer's add", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 

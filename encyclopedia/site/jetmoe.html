@@ -577,6 +577,10 @@ SiLU) and <code>output_linear</code> over the sorted slots, so <code>expert_outp
 
 <span class="n">changed</span> <span class="o">=</span> <span class="p">(</span><span class="n">ablated</span> <span class="o">!=</span> <span class="n">clean</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">)</span>
 <span class="k">assert</span> <span class="n">torch</span><span class="o">.</span><span class="n">equal</span><span class="p">(</span><span class="n">changed</span><span class="p">,</span> <span class="p">(</span><span class="n">idx</span> <span class="o">==</span> <span class="n">e</span><span class="p">)</span><span class="o">.</span><span class="n">any</span><span class="p">(</span><span class="o">-</span><span class="mi">1</span><span class="p">))</span>            <span class="c1"># only the tokens that chose e</span></code></pre>
+<p>A rerouted index must not repeat the expert of the token's other slot. The router counts each
+expert once per token but sorts every slot, so the sizes it splits the sorted slots by no longer
+add up, and the mixture raises <code>RuntimeError</code> in <code>split_with_sizes</code>. Reroute to an expert the token
+does not use.</p>
 <h2>The readout and the tokenizer</h2>
 <p><code>logits</code> is <code>lm_head.output</code>, with no cap or scale, and <code>project_on_vocab</code> on the last block's
 <code>layer_output</code> equals <code>logits</code>. <code>lm_head</code> and <code>embed_tokens</code> share one weight. The
@@ -628,7 +632,7 @@ per-slot outputs, sorted by expert, are unavailable.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">jetmoe/jetmoe-8b</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">jetmoe/jetmoe-8b</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

@@ -137,7 +137,11 @@ mean = out[:, -1].mean(-2)     # the last position, the stream mean: [1, hidden_
 ```
 
 A write to `layer_output` lands natively; `steer` adds a `[hidden_size]` vector to every stream, and
-`skip_layers` passes the streams through.
+`skip_layers` passes the streams through. A sublayer reads a weighted sum of the streams (one
+weight per stream, `sigmoid(...) + hc_eps`, computed from the streams), so a vector added to every
+stream reaches the next sublayer's input multiplied by the weights' sum: 2.09 at block 5 of the
+pinned tiny checkpoint, between 0 and 4 by construction. `hc_head` weighs the readout the same way,
+so a steering coefficient tuned on a one-stream family does not carry over.
 
 ## The identity is the block's formula
 
@@ -265,6 +269,11 @@ scale = model.config.routed_scaling_factor
 torch.testing.assert_close(w, chosen / chosen.sum(-1, keepdim=True) * scale)
 torch.testing.assert_close(routed + shared, out)
 ```
+
+Within one forward the token ids are the one state a later block reads that `layer_output` does
+not carry: a patch of `layer_output` from another run at block 0 or 1 leaves the hash blocks after
+it routing by this run's ids (on the pinned tiny checkpoint the patched logits then miss the source
+run's by 0.009 and 0.006), and from block 2 on the patch is exact.
 
 `moe.SCORING` is `"hash"` on a hash block and `"sqrtsoftplus"` on the others. Ablating an expert
 is zeroing the weight of every slot that chose it; its effect on the block is read on the streams,

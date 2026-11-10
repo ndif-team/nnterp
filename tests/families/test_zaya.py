@@ -67,7 +67,7 @@ class TestZaya(FamilySuite):
     REPO = built(_patched_checkpoint, merges=False)
     FAMILY = zaya
     NATIVE = LLAMA_ROWS
-    MID_IDENTITY = False                     # the stream gates scale what the block adds
+    MID_IDENTITY = False                     # the merges rescale the stream as well as what is added
     MLP_WIDTH_KEY = "moe_intermediate_size"   # every block is a mixture
     ROUTER_EXTRA_CLASSES = 1  # router_logits' last column is the skip class
     EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "compressed convolutional attention"}
@@ -92,7 +92,7 @@ class TestZayaMerged(FamilySuite):
     REPO = built(_patched_checkpoint, merges=True)
     FAMILY = zaya
     NATIVE = LLAMA_ROWS
-    MID_IDENTITY = False                     # the stream gates scale what the block adds
+    MID_IDENTITY = False                     # the merges rescale the stream as well as what is added
     MLP_WIDTH_KEY = "moe_intermediate_size"
     ROUTER_EXTRA_CLASSES = 1  # router_logits' last column is the skip class
     EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "compressed convolutional attention"}

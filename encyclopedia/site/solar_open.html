@@ -498,8 +498,8 @@ weights. The tokenizer prepends nothing, so <code>model.input_ids</code> is the 
     <div class="prose docstring"><p>Solar Open (<code>SolarOpenForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
 added in the block, attention through the shared eager forward.
-The rotary covers <code>partial_rotary_factor</code> of each head (1.0, the whole head, on
-Solar-Open-100B). Every block's MLP is a mixture of experts: transformers builds
+The rotary covers the whole head: transformers' Solar Open attention has no partial rotary
+(<code>partial_rotary_factor</code> is 1.0 on Solar-Open-100B). Every block's MLP is a mixture of experts: transformers builds
 <code>SolarOpenMoE</code> on every block whatever <code>first_k_dense_replace</code> says. It adds a
 shared expert (<code>mlp.shared_experts</code>, a <code>SolarOpenMLP</code>) before it returns; the
 experts are <code>moe_intermediate_size</code> wide. <code>SolarOpenMLP</code> is keyed to <code>Mlp</code>, so the
@@ -519,7 +519,7 @@ shared expert carries its own <code>mlp_output</code>.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-03 · nnterp 2.0.0rc2.dev47+ge5d0f8e75 · transformers 5.20.2 · reference <span id="colophon-reference">upstage/Solar-Open-100B</span></span>
+    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev58+gb9621bc37 · transformers 5.21.0 · reference <span id="colophon-reference">upstage/Solar-Open-100B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

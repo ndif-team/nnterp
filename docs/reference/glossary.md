@@ -158,7 +158,7 @@ The rotation of each query and key by its position (RoPE) that most families app
 
 ## Sandwich block
 
-A block that norms a sublayer's output before adding it to the residual stream, `x + post_attention_layernorm(attn(...))` (Gemma-2/3/4, OLMo-2/3). The contribution is the post-norm's output, so those families point `attention_output` / `mlp_output` at the sibling norm. See [families.md](families.md#sandwich-norms) and [../extending/overriding-values.md](../extending/overriding-values.md).
+A block that norms a sublayer's output before adding it to the residual stream, `x + post_attention_layernorm(attn(...))` (Gemma-2/3/4, GLM-4, AFMoE and HyperCLOVA X with `use_post_norm`, which norm the input too; OLMo-2/3, EXAONE-4, FlexOlmo and OLMo-Hybrid's attention blocks, which norm only the output). The contribution is the post-norm's output, so those families point `attention_output` / `mlp_output` at the sibling norm. See [families.md](families.md#sandwich-norms) and [../extending/overriding-values.md](../extending/overriding-values.md).
 
 ## Scatter
 
@@ -170,7 +170,7 @@ Mamba-1's mixer: per channel, `h = exp(dt*A) h + dt B x`, `y = C.h + D x`, with 
 
 ## Softcap
 
-Gemma-2's `final_logit_softcapping`: `cap * tanh(logits / cap)` applied after `lm_head`. `model.logits` and `project_on_vocab` include it; `model.lm_head.output` does not. See [../usage/root-values.md](../usage/root-values.md) and [../patterns/logit-lens.md](../patterns/logit-lens.md).
+Gemma-2's `final_logit_softcapping`: `cap * tanh(logits / cap)` applied after `lm_head`. `model.logits` and `project_on_vocab` include it; `model.lm_head.output` does not. Gemma-2 also caps its attention scores (`attn_logit_softcapping`, 50) inside the eager attention, before the mask and the softmax, so `attention_scores` are the capped scores; VaultGemma does the same where its config sets the cap. See [../usage/root-values.md](../usage/root-values.md) and [../patterns/logit-lens.md](../patterns/logit-lens.md).
 
 ## Source-located value
 

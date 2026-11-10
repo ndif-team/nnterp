@@ -186,6 +186,11 @@ changed = (ablated != clean).any(-1)
 assert torch.equal(changed, (idx == e).any(-1))            # only the tokens that chose e
 ```
 
+A rerouted index must not repeat the expert of the token's other slot. The router counts each
+expert once per token but sorts every slot, so the sizes it splits the sorted slots by no longer
+add up, and the mixture raises `RuntimeError` in `split_with_sizes`. Reroute to an expert the token
+does not use.
+
 ## The readout and the tokenizer
 
 `logits` is `lm_head.output`, with no cap or scale, and `project_on_vocab` on the last block's

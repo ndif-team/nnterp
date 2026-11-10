@@ -36,7 +36,9 @@ model.num_layers, model.hidden_size, model.vocab_size, model.num_heads, model.nu
 
 Read them in forward order: `input_ids` / `attention_mask` / `input_size` first (they are
 the model's input), `token_embeddings` next, `lm_head.output`, `logits` and
-`next_token_probs` last.
+`next_token_probs` last. On a vision-language wrapper the ids are embedded before the tower runs,
+so in a trace `token_embeddings` comes after `vision.image_token_mask` and before the tower's
+values ([vision](vision.md)).
 
 ## `logits`
 
@@ -69,10 +71,16 @@ with model.trace(prompt) as tracer:
 The embedding module's output, `[batch, seq, hidden_size]`: `model.embed_tokens.output` under
 its standard name. It includes whatever the embedding module does itself (Gemma's
 `sqrt(hidden_size)` scale is inside every Gemma family's `...TextScaledWordEmbedding`, XGLM's inside its
-scaled embedding) and nothing the model applies afterwards: GPT-2's positional `wpe` is
-added after it, BLOOM's `word_embeddings_layernorm` norms it, and Granite, HyperCLOVA X and
-Falcon-H1 multiply it by `embedding_multiplier`. So it is what enters the first block only
-where the model adds nothing; `layers[0].input` is that tensor on every family. Assign to
+scaled embedding) and nothing the model applies afterwards. After it, GPT-2, GPT-BigCode and
+GPT-Neo add their positional `wpe`, OPT and XGLM their `embed_positions`; BLOOM's
+`word_embeddings_layernorm` norms it; the Granite families, HyperCLOVA X and Falcon-H1 multiply
+it by `embedding_multiplier`, and AFMoE by `sqrt(hidden_size)` where `mup_enabled` (every Trinity
+checkpoint); ZAYA adds a bias, scales it and casts it to float32; DeepSeek-V4 copies it into
+`hc_mult` streams; and a vision-language wrapper writes the image features over the image
+tokens' rows. On `facebook/opt-350m` it is also narrower than the stream: the embedding is
+`word_embed_proj_dim` (512) wide, and `project_in` lifts it to `hidden_size` (1024) before the
+positions are added. So it is what enters the first block only where the model adds nothing;
+`layers[0].input` is that tensor on every family. Assign to
 replace the module's output:
 
 ```python

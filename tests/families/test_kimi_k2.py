@@ -18,10 +18,11 @@ def _checkpoint(repo="hf-tiny-v2/tiny-random-Kimi_K25ForConditionalGeneration"):
 
     The released K2.5, K2.6 and K2.7-Code configs nest a ``text_config`` whose
     ``model_type`` is ``kimi_k2``; transformers builds it as a
-    ``DeepseekV3Config`` and keeps that type, so the family is looked up under
-    ``kimi_k2``. The tiny checkpoint says ``deepseek_v3`` there, groups its
+    ``DeepseekV3Config``, keeping that type before 5.20 and rewriting it to
+    ``deepseek_v3`` from 5.20, and the wrapper resolves by its own type,
+    ``kimi_k25``, either way. The tiny checkpoint says ``deepseek_v3`` there, groups its
     experts in two and sends every token to all eight; the rewrite sets
-    ``kimi_k2``, one expert group as K2's router has, and two experts per
+    ``kimi_k2`` as the released files do, one expert group as K2's router has, and two experts per
     token, so the routing is sparse as on K2 (8 of 384). Only ``config.json`` is rewritten; the weights and the tokenizer
     are symlinked. Written once per snapshot.
     """

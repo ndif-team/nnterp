@@ -115,7 +115,7 @@ torch.testing.assert_close(x + attn + mlp, out)
 8 key/value heads of 128). The forward clamps the whole output to `[-clip_qkv, clip_qkv]`
 (`attn_config.clip_qkv`, 8) and then splits it, so `Wqkv.output` is before the clamp and
 `attention_queries`, `attention_keys` and `attention_values` after it (queries and keys also after
-rotary, `rope_theta` 500,000). Splitting the clamped output by those widths gives the values exactly:
+the rotary, below). Splitting the clamped output by those widths gives the values exactly:
 
 ```python
 attn = model.layers[1].self_attn
@@ -134,6 +134,20 @@ An edit to a slice of `Wqkv.output` passes through the clamp, so a value written
 as ±8. Edit `attention_queries`, `attention_keys` or `attention_values` instead: no clamp follows
 them. Query head `h` reads key/value head `h // 6`: an edit to one key/value head reaches 6
 query heads. The output projection is `out_proj`, and no projection has a bias.
+
+## The rotary turns at `rope_theta` 10,000 unless the load passes the trained base
+
+transformers builds DBRX's rotary embedding from `config.rope_parameters`, which the released
+configs leave at the default `rope_theta` of 10,000, and does not read `attn_config.rope_theta`
+(500,000, the base the checkpoints were trained with). A default load therefore rotates the queries
+and keys faster than the trained model: the slowest pair of channels 47 times faster. Passing the
+trained base at load builds the rotary at 500,000, and `self_attn.rotate` follows whichever rotary
+the model built:
+
+```python
+model = StandardizedTransformer(
+    "Undi95/dbrx-base", rope_parameters={"rope_theta": 500000.0, "rope_type": "default"})
+```
 
 ## Load with eager for the attention interior only
 

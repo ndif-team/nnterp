@@ -179,6 +179,19 @@ expert of every block, so in this forward the skip class never wins a slot: its 
 the chosen expert's weight instead. The routing state carried to the next block means an edit to one
 block's routing input reaches every later block's router.
 
+It also means `layer_output` is not the whole state between blocks. A patch of `layer_output` from
+another run leaves this run's router state, so the later routers read the two runs mixed; patch
+the block's whole output, the stream and the router state, for a complete interchange between two
+prompts of one length:
+
+```python
+with model.trace(source):
+    state = model.layers[0].output.save()     # (hidden_states, prev_router_hidden_states)
+with model.trace(prompt):
+    model.layers[0].output = state
+    logits = model.logits.save()
+```
+
 ## Ablating an expert leaves the merge's bias
 
 With one slot per token, zeroing expert `e`'s weight removes the token's whole routed output, and

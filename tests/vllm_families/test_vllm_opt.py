@@ -99,3 +99,22 @@ class TestVLLMOPT(VLLMFamilySuite):
         heads, head_dim = model.num_heads, model.head_dim
         unscaled = raw.unflatten(-1, (heads, head_dim)).transpose(0, 1).unsqueeze(0)
         torch.testing.assert_close(queries, unscaled * head_dim ** -0.5)
+
+
+class TestVLLMOPT350m(TestVLLMOPT):
+    """OPT-350m: post-norm blocks, no final norm and ``project_in`` / ``project_out`` (512 <-> 1024) around the stack,
+    on both engines. The lens is ``lm_head(project_out(h))``, the decoder's own path."""
+
+    REPO = "facebook/opt-350m"
+    UNAVAILABLE = TestVLLMOPT.UNAVAILABLE | {"final_norm_output"}
+    NATIVE = {standard: native for standard, native in TestVLLMOPT.NATIVE.items() if standard != "norm"}
+
+    def test_no_final_norm(self, model):
+        assert model.model.decoder.final_layer_norm is None and model.model.decoder.project_out is not None
+        assert model.support()["final_norm_output"] == "no norm module on this model"
+
+    def test_contribution_identity(self, model, reference):
+        pytest.skip("the norms follow the adds: input + attention_output + fc2.output is normed before it is the block's output")
+
+    def test_module_boundaries_match_transformers(self, model, reference):
+        pytest.skip("vLLM's layer_mid and mlp_norm_output read the block's final_layer_norm, which follows the MLP's add on this post-norm layout")

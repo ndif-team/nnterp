@@ -77,8 +77,8 @@ STRIP = {
              "The tokenizer prepends <bos>.",
     "layers": "Each block rescales the stream at both of its adds, so a block's terms reach the last stream multiplied, "
               "channel by channel, by every later merge's residual_scale. The stream stays float32.",
-    "norm": "The final norm casts the float32 stream to its weight's dtype first; its weight runs 0.036 to 5.0 on "
-            "ZAYA1-8B (mean 2.9).",
+    "norm": "The final norm casts the float32 stream to its weight's dtype first, and project_on_vocab does the same; "
+            "its weight runs 0.036 to 5.0 on ZAYA1-8B (mean 2.9).",
     "head": "lm_head shares its weight with embed_tokens (tie_word_embeddings) on ZAYA1-8B and 74B-preview.",
 }
 
@@ -200,7 +200,9 @@ There is no shared expert, so `routed_output` is the mixture's own output, befor
 
 ## The readout and the tokenizer
 
-`logits` is `lm_head.output`, with no cap or scale. The tokenizer is a `GemmaTokenizer` that
+`logits` is `lm_head.output`, with no cap or scale. `project_on_vocab` casts the stream to the
+final norm's dtype before the norm, as the model does, so on a bfloat16 load it takes the float32
+`layer_output` as it is and the lens on the last block equals `logits`. The tokenizer is a `GemmaTokenizer` that
 prepends `<bos>` (id 2). On ZAYA1-8B it also appends `<|im_end|>` (id 106) to every text, so a plain
 prompt's last position is `<|im_end|>`, not the prompt's last word; ZAYA1-74B-preview's tokenizer
 appends nothing. To read the prediction after the prompt on ZAYA1-8B, tokenize with

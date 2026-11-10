@@ -19,7 +19,9 @@ When the checkpoint ties its embeddings (OPT-125m and most of the family),
 vLLM's ``lm_head`` *is* ``embed_tokens``: the same module under both names.
 On a checkpoint with ``do_layer_norm_before`` false (OPT-350m) the block
 norms after each add, and the stream is not ``layer_input`` plus the two
-contributions.
+contributions. OPT-350m also has no final norm (no ``norm``) and projects the
+stream with ``project_out`` before the head, as on transformers; the decoder
+applies whichever of the two it has, and `project_on_vocab` does the same.
 """
 
 import torch
@@ -97,3 +99,22 @@ class Mlp(Mlp):
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``. No MLP module to key.
 ENVOYS = {OPTDecoderLayer: Layer, OPTAttention: Attention}
+
+
+# -- the logit lens ------------------------------------------------------------------
+
+def project_on_vocab(model, hidden: torch.Tensor) -> torch.Tensor:
+    """The decoder's final norm where it has one, ``project_out`` where it has one, then vLLM's logits processor over ``lm_head``.
+
+    As on transformers: OPT-350m has no final norm and projects the stream from
+    ``hidden_size`` to ``word_embed_proj_dim`` before the head; every other
+    released OPT norms and does not project. vLLM's ``project_out`` returns
+    ``(output, bias)``.
+    """
+    decoder = model.model.decoder
+    rows = hidden.reshape(-1, hidden.shape[-1]).contiguous()
+    if decoder.final_layer_norm is not None:
+        rows = decoder.final_layer_norm(rows)
+    if decoder.project_out is not None:
+        rows = decoder.project_out(rows)[0]
+    return model.logits_processor(model.lm_head, rows).reshape(*hidden.shape[:-1], -1)

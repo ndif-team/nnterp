@@ -306,7 +306,10 @@ vision.image_features`, causal edits, no `vision` host on a text-only checkpoint
 load; `fix_processor` where a tiny checkpoint's processor disagrees with its model;
 `PixtralSuite` for the packed tower). `WrapperSuite`, in the same file, checks the text names
 on a wrapper built from a family's tiny text config where no tiny wrapper exists
-([vision-design.md](vision-design.md)).
+([vision-design.md](vision-design.md)), and that the logit lens on the wrapper's last block
+is the wrapper's own logits (a wrapper can drop a step its text model's causal-LM class
+takes: Aya Vision's never applies the `logit_scale` its text config sets, which
+`wrapper_of(..., text_overrides=...)` sets away from 1.0 so the test tells the two apart).
 
 ## The default family (`tests/families/test_default.py`)
 

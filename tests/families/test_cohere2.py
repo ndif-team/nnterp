@@ -1,5 +1,10 @@
 """Cohere 2 (Command-R7B), end to end: a parallel block, sliding layers with rotary, full layers without."""
 
+import glob
+import json
+import os
+import tempfile
+
 import pytest
 
 import torch
@@ -38,15 +43,52 @@ class TestCohere2(FamilySuite):
         assert model.family.project_on_vocab is cohere.project_on_vocab
 
 
+def _scaled_checkpoint(repo=TestCohere2.REPO, logit_scale=0.25):
+    """The tiny checkpoint with Command-R7B's ``logit_scale`` (0.25); the tiny config's is 1.0. Only ``config.json`` is rewritten."""
+    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    patched = tempfile.mkdtemp(prefix="cohere2-scaled-")
+    for name in os.listdir(snapshot):
+        if name != "config.json":
+            os.symlink(os.path.realpath(os.path.join(snapshot, name)), os.path.join(patched, name))
+    config = json.load(open(os.path.join(snapshot, "config.json")))
+    config["logit_scale"] = logit_scale
+    json.dump(config, open(os.path.join(patched, "config.json"), "w"))
+    return patched
+
+
+class TestCohere2Scaled(TestCohere2):
+    """The same weights with a ``logit_scale`` away from 1.0: ``logits`` is the head's output times it, and so is the lens."""
+
+    REPO = _scaled_checkpoint()
+
+    def test_logits_are_the_scaled_head_output(self, model):
+        with model.trace(PROMPT):
+            raw = model.lm_head_output.save()
+            logits = model.logits.save()
+        assert model.config.logit_scale == 0.25
+        torch.testing.assert_close(logits, raw * 0.25)
+
+
 class TestAyaVisionWrapper(WrapperSuite):
     """Aya Vision around Cohere 2, built from the tiny text checkpoint's config (no tiny wrapper checkpoint exists): the text stack at
-    ``model.language_model``."""
+    ``model.language_model``. Its text config carries Command-R7B's ``logit_scale``, which the wrapper never applies."""
 
     FAMILY = cohere2
 
     @pytest.fixture(scope="class")
     def model(self):
-        return wrapper_of(TestCohere2.REPO, "AyaVisionConfig", dict(hidden_size=16, num_hidden_layers=1, num_attention_heads=2, intermediate_size=32))
+        return wrapper_of(
+            TestCohere2.REPO, "AyaVisionConfig", dict(hidden_size=16, num_hidden_layers=1, num_attention_heads=2, intermediate_size=32),
+            text_overrides=dict(logit_scale=0.25),
+        )
+
+    def test_logits_are_the_unscaled_head_output(self, model):
+        """``AyaVisionForConditionalGeneration`` returns ``lm_head``'s output as it is, though its ``text_config`` sets a scale."""
+        with model.trace(PROMPT):
+            raw = model.lm_head_output.save()
+            logits = model.logits.save()
+        assert model.config.text_config.logit_scale == 0.25
+        assert torch.equal(logits, raw)
 
 
 class TestAyaVisionVision(VisionSuite):

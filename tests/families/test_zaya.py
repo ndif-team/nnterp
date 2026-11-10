@@ -7,6 +7,7 @@ import tempfile
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
+from nnterp import StandardizedTransformer
 from nnterp.families import zaya
 
 REPO = "hf-tiny-v2/tiny-random-ZayaForCausalLM"
@@ -74,6 +75,16 @@ class TestZaya(FamilySuite):
 
     def test_merged_identity(self, model):
         merged_identity(model)
+
+    def test_project_on_vocab_on_a_bfloat16_load(self):
+        """The stream stays float32 on a bfloat16 load; the model casts it to the final norm's dtype before the norm, and
+        so does the lens."""
+        model = StandardizedTransformer(self.REPO, dispatch=True, dtype=torch.bfloat16)
+        with model.trace(PROMPT):
+            last = model.layers[-1].layer_output.save()
+            logits = model.logits.save()
+        assert last.dtype == torch.float32 and logits.dtype == torch.bfloat16
+        assert torch.equal(model.project_on_vocab(last), logits)
 
 
 class TestZayaMerged(FamilySuite):

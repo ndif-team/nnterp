@@ -291,15 +291,9 @@ temp dir and shared by the test processes. `cached_snapshot(repo)` resolves a
 snapshot in the configured Hugging Face cache (`HF_HOME`, `HF_HUB_CACHE`).
 `built(...)` defers the build to the first read of `REPO` (the `model`
 fixture), so a snapshot missing from the cache errors that class's tests,
-not the module's collection, and the harness's subclass that sets `REPO` to a
-trained checkpoint never builds it. The classes cover the branches released
-checkpoints take: Granite's four multipliers, Laguna's routed scale and
-per-element gating, JetMoE's mixture bias, DeepSeek-V2-Lite's and V3's query
-paths and grouped routing, dots.llm1's and ERNIE-4.5's routing, Falcon-RW,
-the sequential StableLM, Ministral-8B's mixed blocks, Ministral 3's query
-scale, Maverick's attention without qk-norm, the all-dense Jamba, Nemotron-H's
-dense and latent layouts, the all-attention GraniteMoE-Hybrid, and others
-(each class's docstring names its checkpoints).
+not the module's collection, and a subclass that sets `REPO` to another
+checkpoint never builds it. Each class's docstring names the checkpoints that
+take its branch.
 
 `tests/families/test_olmo3.py` **patches a checkpoint**: the tiny OLMo-3
 checkpoint's flat `rope_parameters` does not parse for a model with

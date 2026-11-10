@@ -136,7 +136,7 @@ class built:
     A helper that writes a patched copy of a cached checkpoint then runs where the attribute is read (the ``model``
     fixture; pytest also reads it when it looks the class over, and ignores an error there), so a snapshot missing
     from the cache errors that class's tests instead of stopping the module's collection, and a subclass that sets
-    the attribute itself (the harness's trained checkpoint) never builds it. The value is kept once built.
+    the attribute itself never builds it. The value is kept once built.
     """
 
     def __init__(self, build, *args, **kwargs):

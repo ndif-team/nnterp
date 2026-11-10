@@ -8,6 +8,7 @@ import pytest
 import torch
 from suite import NO_ROTARY, FamilySuite, PROMPT, rows, cached_snapshot, built, patched_checkpoint
 
+from nnterp import StandardizedTransformer
 from nnterp.families import opt
 
 
@@ -85,9 +86,13 @@ class TestOPTPostNorm(TestOPT):
         assert torch.equal(mid, raw.reshape(-1, raw.shape[-1]))
 
 
-class ProjectedLayout:
-    """``project_in`` / ``project_out`` around the stack: ``token_embeddings`` is the embedding's output, before
-    ``project_in``, so it is ``word_embed_proj_dim`` wide, not the ``hidden_size`` its ``Residual`` layout names."""
+class TestOPT350mLayout(TestOPTPostNorm):
+    """OPT-350m's whole layout: post-norm blocks, no final norm, and ``project_in`` / ``project_out`` between the
+    embedding width and the stream's. The decoder makes its logits as ``lm_head(project_out(h))``, so the lens does.
+    ``token_embeddings`` is the embedding's output, before ``project_in``, so it is ``word_embed_proj_dim`` wide, not
+    the ``hidden_size`` its ``Residual`` layout names."""
+
+    REPO = built(patched_checkpoint, TestOPT.REPO, draw=True, do_layer_norm_before=False, word_embed_proj_dim=8)  # half the stream
 
     def test_token_embeddings_are_the_embedding_output(self, model):
         pytest.skip("token_embeddings is word_embed_proj_dim wide on this layout, not hidden_size")
@@ -96,24 +101,23 @@ class ProjectedLayout:
         pytest.skip("token_embeddings is word_embed_proj_dim wide on this layout, not the hidden_size of its Residual layout")
 
     def test_lens_reads_project_out(self, model):
-        """The lens is the decoder's own path: ``project_out`` after any final norm, then ``lm_head``."""
+        """The lens is the decoder's own path: ``project_out``, then ``lm_head``."""
         decoder = model.model.decoder
         with model.trace(PROMPT):
             resid = model.layers[-1].layer_output.save()
             logits = model.logits.save()
-        normed = resid if decoder.final_layer_norm is None else decoder.final_layer_norm(resid)
-        torch.testing.assert_close(model.project_on_vocab(resid), model.lm_head(decoder.project_out(normed)))
+        torch.testing.assert_close(model.project_on_vocab(resid), model.lm_head(decoder.project_out(resid)))
         torch.testing.assert_close(model.project_on_vocab(resid), logits)
 
 
-class TestOPT350mLayout(ProjectedLayout, TestOPTPostNorm):
-    """OPT-350m's whole layout: post-norm blocks, no final norm, and ``project_in`` / ``project_out`` between the
-    embedding width and the stream's. The decoder makes its logits as ``lm_head(project_out(h))``, so the lens does."""
-
-    REPO = built(patched_checkpoint, TestOPT.REPO, draw=True, do_layer_norm_before=False, word_embed_proj_dim=8)  # half the stream
-
-
-class TestOPTProjected(ProjectedLayout, TestOPT):
-    """A pre-norm OPT with ``project_out``: the decoder norms the stream, projects it, and the head reads that."""
-
-    REPO = built(patched_checkpoint, TestOPT.REPO, draw=True, do_layer_norm_before=True, word_embed_proj_dim=8)
+def test_a_pre_norm_projected_lens_reads_project_out():
+    """A pre-norm OPT with ``project_out`` (no released checkpoint): the decoder norms the stream, projects it, and the
+    head reads that, and so does the lens."""
+    path = patched_checkpoint(TestOPT.REPO, draw=True, do_layer_norm_before=True, word_embed_proj_dim=8)
+    model = StandardizedTransformer(path, dispatch=True)
+    decoder = model.model.decoder
+    with model.trace(PROMPT):
+        resid = model.layers[-1].layer_output.save()
+        logits = model.logits.save()
+    torch.testing.assert_close(model.project_on_vocab(resid), model.lm_head(decoder.project_out(decoder.final_layer_norm(resid))))
+    torch.testing.assert_close(model.project_on_vocab(resid), logits)

@@ -119,7 +119,7 @@ the matching skill changes too.
 
 ### "Change nnterp itself"
 - [docs/developing/index.md](docs/developing/index.md) — architecture, descriptor internals, the recurrent mixer (`RecurrentMixer`, DeltaNet) and its occurrence arithmetic, tests, transformers compatibility, gotchas, contributing
-- **Run `HF_HUB_OFFLINE=1 pytest` (about 6800 tests, ~7 min on CPU) before and after.**
+- **Run `HF_HUB_OFFLINE=1 pytest -n 8` (about 13,300 tests, ~8 min on CPU) before and after.**
 
 ### "Every symbol / every term"
 - [docs/reference/api-quick-reference.md](docs/reference/api-quick-reference.md), [docs/reference/glossary.md](docs/reference/glossary.md)

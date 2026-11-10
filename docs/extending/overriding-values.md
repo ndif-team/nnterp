@@ -376,9 +376,13 @@ def attention_head_outputs(self, value):
     return seq_first(value)
 ```
 
-A view keeps in-place edits landing on the model's tensor. BLOOM's `bmm` result is
-`[batch * num_heads, seq, head_dim]`, so its family views and transposes on read and
-reverses both on write in the `postprocess`.
+A view keeps in-place edits landing on the model's tensor. Read a value where the forward
+holds it batch first: nnsight narrows a served tensor to an invoke's rows only when its
+leading axis is the batch, so a `[batch * num_heads, ...]` tensor would hand every invoke
+the whole batch, and an edit in one invoke would reach the others. BLOOM's `bmm` result is
+such a tensor, so its family reads the head outputs once `_merge_heads` has made them
+`[batch, seq, num_heads * head_dim]`, and views them per head (`unflatten`, `flatten` back
+in the `postprocess`).
 
 ## A clone carried back by a transform
 

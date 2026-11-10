@@ -610,8 +610,12 @@ query head before the rotary embedding, so `attention_keys` and
 
 These seven do their own attention arithmetic too, and their families map the
 same six values onto it: GPT-J's, GPT-Neo's, CodeGen's and GPT-NeoX-Japanese's around
-their `_attn` calls, XGLM's on the flattened tensors its two `bmm` calls take, BLOOM's on
-its `_reshape` split and `bmm`, MPT's on its `*_states` bindings and second `matmul`. The
+their `_attn` calls, XGLM's on its projections, its cache update and the bindings around
+its two `bmm` calls, BLOOM's on its `_reshape` split, its cache update and its merge of the
+heads, MPT's on its `*_states` bindings, its cache update and second `matmul`. Where a
+forward flattens batch and heads together for a `bmm`, the value is read where the batch
+still leads, since nnsight narrows a tensor to an invoke's rows only then: each invoke of a
+trace reads and edits its own rows on all seven. The
 head outputs are heads-first in those forwards and are served as a sequence-first view,
 so an in-place edit still lands. All seven load eager by default. BLOOM's, MPT's,
 CodeGen's, XGLM's and GPT-NeoX-Japanese's values do not check the implementation at all
@@ -632,9 +636,10 @@ The scale sits in a different place on each of the others. CodeGen's scores are
 Its rotary embedding multiplies by a float32 buffer, so on a half-precision model its
 queries (and its keys, when no cache casts them back) are served in float32. XGLM scales
 the queries by `1/sqrt(head_dim)` as it projects them, so `attention_queries` is already
-scaled and the scores are `q @ k^T` plus the mask; each of its six values is a view of the
-`[batch * num_heads, ...]` tensor the forward holds, so an in-place edit lands and an
-assignment is reshaped back. GPT-NeoX-Japanese folds the scale into a `baddbmm` and adds
+scaled and the scores are `q @ k^T` plus the mask, clamped at the dtype's minimum; each of
+its six values is the tensor the forward holds, or a view of it, so an in-place edit lands.
+Its pattern is the softmax's output, which the dropout leaves as it is outside training; in
+training it is the dropout's output. GPT-NeoX-Japanese folds the scale into a `baddbmm` and adds
 the mask after it.
 
 ### GPT-OSS: an attention sink

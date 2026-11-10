@@ -169,7 +169,9 @@ transformers has one attention for BLOOM, its own arithmetic, so a load without
 `attn_implementation` runs it and all six interior values are served: `support()` reports none
 missing. The scores are read where the softmax takes them; the softmax runs in float32 and the
 pattern is cast back to the model's dtype. The head outputs are the `bmm` of the pattern and the
-values, `[batch * num_heads, seq, head_dim]` in the forward, served `[batch, seq, num_heads, head_dim]`.
+values, read once `_merge_heads` has merged them to `[batch, seq, num_heads * head_dim]` (the `bmm` holds
+them `[batch * num_heads, seq, head_dim]`, which nnsight does not narrow to an invoke's rows) and
+served `[batch, seq, num_heads, head_dim]`.
 `bigscience/bloom-560m` stores float16 weights, but its config names no dtype, so a load without
 `dtype` is float32.
 

@@ -57,8 +57,11 @@ class Attention(Attention):
     # the keys and values are the update's return where the call has a cache
     # and ``_reshape``'s where it has none (`by_cache`; the queries ask too, so
     # reading them first leaves the keys able to). The scores are the
-    # softmax's input after the mask; the head outputs are the ``bmm`` result,
-    # ``[batch * num_heads, seq, head_dim]``.
+    # softmax's input after the mask. The head outputs are the ``bmm`` result
+    # merged to ``[batch, seq, num_heads * head_dim]`` (``_merge_heads``, what
+    # ``dense`` receives), viewed per head: the ``bmm`` itself holds them
+    # ``[batch * num_heads, seq, head_dim]``, which nnsight cannot narrow to
+    # an invoke's rows.
 
     @EProperty(QUERIES[0], select=QUERIES[1], description=Attention.attention_queries.description)
     def attention_queries(self, value) -> Queries:
@@ -78,16 +81,13 @@ class Attention(Attention):
     def attention_scores(self, value) -> Pattern:
         return value
 
-    @EProperty("source.torch_bmm_0.output", description=Attention.attention_head_outputs.description)
+    @EProperty("source.self__merge_heads_0.output", description=Attention.attention_head_outputs.description)
     def attention_head_outputs(self, value) -> HeadOutputs:
-        batch_heads, seq, head_dim = value.shape
-        heads = self._module.num_heads
-        return value.view(batch_heads // heads, heads, seq, head_dim).transpose(1, 2)
+        return value.unflatten(-1, (self._module.num_heads, -1))
 
     @attention_head_outputs.postprocess
     def attention_head_outputs(self, value):
-        batch, seq, heads, head_dim = value.shape
-        return value.transpose(1, 2).reshape(batch * heads, seq, head_dim)
+        return value.flatten(-2)
 
     @EProperty(
         "source.dropout_add_0.input",

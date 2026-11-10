@@ -177,7 +177,8 @@ BLOOM reads its `dropout_add_0` call's input.
   `rotary_embedding` (where cos and sin come from) or `apply_rotary` (the arithmetic), so
   `rotate` keeps giving the served rotated values.
 - **Head outputs** are the last matmul: the interface call's output element 0,
-  `torch_bmm_0` on BLOOM, `torch_matmul_1` on MPT.
+  `torch_matmul_1` on MPT; where the forward flattens batch and heads together (BLOOM's
+  `bmm`), the first operation after it that holds them batch first, BLOOM's `_merge_heads`.
 
 ## What a wrong name tells you
 

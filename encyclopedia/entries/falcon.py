@@ -250,9 +250,11 @@ model = StandardizedTransformer("tiiuae/falcon-7b", attn_implementation="eager")
   per key/value head on 40B.
 - Falcon-RW (`tiiuae/falcon-rw-1b`, `falcon-rw-7b`) is sequential, with `input_layernorm` and
   `post_attention_layernorm`, biased projections, and ALiBi in place of rotary. Its fused
-  projection is laid out by head, `[q_h | k_h | v_h]`. With ALiBi the read order is the forward's:
-  queries, then keys, then values; values first raises `OutOfOrderError` naming
-  `query_layer_0`.
+  projection is laid out by head, `[q_h | k_h | v_h]`. With ALiBi read the queries first, then
+  the keys and values (the cache update's return, or without a cache the `key_layer` and
+  `value_layer` bindings, in that order); values first raises `OutOfOrderError` naming
+  `query_layer_0`. The head outputs are read once `_merge_heads` has merged them, since the
+  product before it is flattened over batch and heads.
 - On an ALiBi checkpoint the eager attention adds the bias twice: transformers builds it into the
   attention mask and adds it again to the scores, so `attention_scores` is
   `q @ kᵀ / sqrt(head_dim) + 2 * slope_h * j / sqrt(head_dim)` for key position `j`, plus the

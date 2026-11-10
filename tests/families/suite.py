@@ -702,6 +702,39 @@ class FamilySuite:
             torch.testing.assert_close(first[name][0], together[name][0], msg=name)
             torch.testing.assert_close(second[name][0], together[name][1], msg=name)
 
+    def test_interior_per_invoke(self, model):
+        """Every interior value, under two invokes of one trace: each invoke reads its own row, as one invoke of both
+        does, and an assignment in the first leaves the second's logits as they were."""
+        attn = self.attn_block(model).self_attn
+        unavailable = attn.support()
+        names = [name for name in INTERIOR + ("attention_probabilities",) if not unavailable.get(name)]
+        if not names:
+            pytest.skip("no attention interior on this checkpoint")
+        ids = model.tokenizer(PROMPT).input_ids
+        prompts = [ids, ids[::-1]]  # two different prompts of one length: no padding, so no pad token needed
+        with model.trace() as tracer:
+            with tracer.invoke(prompts[0]):
+                pass
+            with tracer.invoke(prompts[1]):
+                clean = model.logits.save()
+        for name in names:  # one trace each: families bind these at different points of the forward
+            with model.trace(prompts):
+                together = getattr(attn, name).save()
+            with model.trace() as tracer:
+                with tracer.invoke(prompts[0]):
+                    first = getattr(attn, name).save()
+                with tracer.invoke(prompts[1]):
+                    second = getattr(attn, name).save()
+            assert first.shape[0] == second.shape[0] == 1, (name, tuple(first.shape))
+            torch.testing.assert_close(first[0], together[0], msg=name)
+            torch.testing.assert_close(second[0], together[1], msg=name)
+            with model.trace() as tracer:
+                with tracer.invoke(prompts[0]):
+                    setattr(attn, name, getattr(attn, name) * 0)
+                with tracer.invoke(prompts[1]):
+                    other = model.logits.save()
+            torch.testing.assert_close(other, clean, msg=name)
+
     def test_written_pattern_moves_the_logits(self, model):
         """A read can be causally inert (weights a mixer merely returns); only a write tells."""
         block = self.attn_block(model)

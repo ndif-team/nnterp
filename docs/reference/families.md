@@ -99,7 +99,7 @@ One row per family, keyed on `model_type`. Public ids are checkpoints of that `m
 | `granite` | `nnterp.families.granite` | `ibm-granite/granite-3.3-8b-base`, `ibm-granite/granite-4.1-3b` | `hf-internal-testing/tiny-random-GraniteForCausalLM` (and a copy with its multipliers set away from 1.0 by the test) |
 | `gptj` | `nnterp.families.gptj` | `EleutherAI/gpt-j-6b` | `hf-internal-testing/tiny-random-GPTJForCausalLM` |
 | `gpt_neo` | `nnterp.families.gpt_neo` | `EleutherAI/gpt-neo-125m`, `EleutherAI/gpt-neo-2.7B`, `roneneldan/TinyStories-33M` | `hf-internal-testing/tiny-random-GPTNeoForCausalLM` |
-| `codegen` | `nnterp.families.codegen` | `Salesforce/codegen-350M-mono`, `Salesforce/codegen-2B-multi` (CodeGen2, `Salesforce/codegen2-*`, declares `model_type` `codegen` but its own code splits `qkv_proj` into `mp_num = 8` groups where transformers' class uses 4: loaded without its remote code the split is wrong while `support()` reports every value available) | `hf-internal-testing/tiny-random-CodeGenForCausalLM` |
+| `codegen` | `nnterp.families.codegen` | `Salesforce/codegen-350M-mono`, `Salesforce/codegen-2B-multi` (CodeGen2, `Salesforce/codegen2-*`, declares `model_type` `codegen`; the 1B and 3.7B checkpoints' own code splits `qkv_proj` into `mp_num = 8` groups where transformers' class uses 4: loaded without their remote code the split is wrong while `support()` reports every value available. The 7B and 16B checkpoints' code uses 4) | `hf-internal-testing/tiny-random-CodeGenForCausalLM` |
 | `bloom` | `nnterp.families.bloom` | `bigscience/bloom-560m` | `hf-internal-testing/tiny-random-BloomForCausalLM` |
 | `mpt` | `nnterp.families.mpt` | `ybelkada/mpt-7b-bf16-sharded`, `anas-awadalla/mpt-7b` (copies of MPT-7B; `mosaicml/mpt-7b` is not on the Hub) | `hf-internal-testing/tiny-random-MptForCausalLM` |
 | `falcon` (7B layout) | `nnterp.families.falcon` | `tiiuae/falcon-7b` | `Rocketknight1/tiny-random-falcon-7b` |
@@ -362,7 +362,7 @@ blocks, `gemma2`, `gemma3_text`, `gemma4_text` and `afmoe`; `post_self_attn_laye
 | four parts, each a quarter of the heads' queries, values, keys | `codegen` (`qkv_proj`) | the value rows of the head's part |
 | `Conv1D`, `[in, out]` | `gpt2` (`c_attn`, `c_proj`) | the columns, transposed; `output_weight` the rows of `c_proj`, transposed |
 | the values scaled after the projection | `mimo_v2_flash` (`attention_value_scale`) | `v_proj`'s rows times the scale |
-| values refused, `output_weight` served (a plain `o_proj`) | latent attention (`deepseek_v2`, `deepseek_v3`, `kimi_k2`, `deepseek_v32`, `glm_moe_dsa`, `glm4_moe_lite`, `youtu`, `kimi_linear`), `gemma4_text`, `gemma4_unified_text` (`v_norm` on the values), `zaya` (half of each value head from the previous token) | `value_weight` raises `Unavailable` |
+| values refused, `output_weight` served (a plain `o_proj`) | latent attention (`deepseek_v2`, `deepseek_v3`, `kimi_k2`, `deepseek_v32`, `glm_moe_dsa`, `glm4_moe_lite`, `youtu`, `kimi_linear`), `gemma4_text`, `gemma4_unified_text` (`v_norm` on the values), `zaya` (the second half of the value heads from the previous token's input) | `value_weight` raises `Unavailable` |
 | both refused: `no_head_weights()` gives the reason | `deepseek_v4` (keys and values one normed projection, a low-rank output projection), `jetmoe` (per-expert output projection), the default family | `Unavailable` |
 
 ### Latent attention

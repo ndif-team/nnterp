@@ -4,7 +4,6 @@ An entry declares::
 
     MODEL_TYPE   the family's model_type (the module's name)
     TITLE        the page title
-    SUBTITLE     one sentence under it
     REFERENCE    the public checkpoint the page opens on
     ORG          optional: the Hub org the index files the family under (the reference's author by default)
     PINNED       the tiny checkpoint the tests build the page from

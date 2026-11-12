@@ -11,10 +11,11 @@ the division by ``sqrt(head_dim)``, softmax, a cast to the values' dtype,
 so ``attn_implementation`` never routes around it and the interior needs no eager
 load. ``drop`` has no standard name.
 
-CodeGen2 checkpoints (``Salesforce/codegen2-*``) declare ``model_type`` ``codegen``,
-but their own code lays ``qkv_proj`` out in eight groups (``mp_num = 8``); loaded
-through transformers' class, which splits it in four, the queries, keys and values
-are cut wrong and nothing reports it.
+CodeGen2 checkpoints (``Salesforce/codegen2-*``) declare ``model_type`` ``codegen``.
+The 1B and 3.7B checkpoints' own code lays ``qkv_proj`` out in eight groups
+(``mp_num = 8``); loaded through transformers' class, which splits it in four, their
+queries, keys and values are cut wrong and nothing reports it. The 7B and 16B
+checkpoints' code uses four groups, as transformers' class does.
 """
 
 from typing import TYPE_CHECKING

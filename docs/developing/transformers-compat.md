@@ -24,8 +24,8 @@ too: it dropped the `use_precomputed_states` binding from every recurrent forwar
 the recurrent families' tests pass there; Jamba's router became a ``JambaTopKRouter`` module there (a bare ``nn.Linear``
 before), so its `router_logits` read whichever the mixture has; SmolVLM's model scatters its image features itself there
 (``masked_scatter``, as Llava does) where 5.20 called ``inputs_merger``, so its scatter host reads whichever operation
-the forward has, and the 5.20-only SmolVLM reshape bug that skipped its tower tests is fixed in 5.21. The suite passes
-on 5.21.0 with 0 failures. `pyproject.toml` requires `nnsight>=0.8`,
+the forward has, and the 5.20-only SmolVLM reshape bug that skipped its tower tests is fixed in 5.21.
+`pyproject.toml` requires `nnsight>=0.8`,
 `transformers>=5.17` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below) and whose `rename` takes a dotted alias (`{"attn.c_proj":
 "attn.o_proj"}` binds on the attention, which GPT-2's two `c_proj` need); nnsight 0.8.0

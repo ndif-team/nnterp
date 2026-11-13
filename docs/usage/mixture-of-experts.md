@@ -89,7 +89,9 @@ Each runs as written on the tiny Mixtral above, and on every MoE family with the
 has ([below](#per-family-caveats)). They read `expert_indices` before
 `expert_weights`, the order JetMoE's router computes them in
 ([read order](#read-order-within-a-mixture)); elsewhere the two are one call's arguments
-and either order works.
+and either order works. On a fresh JetMoE the first recipe raises `OutOfOrderError` at
+`router_logits` unless an earlier trace read the routing pair
+([per-family caveats](#per-family-caveats)).
 
 ```python
 prompts = ["The Eiffel Tower is in the city of", "def add(a, b):\n    return a + b"]

@@ -47,7 +47,7 @@ theme:
     - content.code.copy
     - content.code.annotate
     - content.tabs.link
-  logo: assets/logo-tile.png
+  logo: assets/logo.png
   favicon: assets/logo-tile.png
   icon:
     repo: fontawesome/brands/github

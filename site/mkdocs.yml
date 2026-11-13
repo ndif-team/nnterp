@@ -47,8 +47,8 @@ theme:
     - content.code.copy
     - content.code.annotate
     - content.tabs.link
-  logo: assets/logo.png
-  favicon: assets/logo.png
+  logo: assets/logo-tile.png
+  favicon: assets/logo-tile.png
   icon:
     repo: fontawesome/brands/github
     annotation: material/plus-circle
@@ -119,6 +119,7 @@ nav:
     - Values:
       - Residual stream: guide/values/residual-stream.md
       - Attention: guide/values/attention.md
+      - Before the rotary embedding: guide/values/rotary.md
       - The whole model: guide/values/whole-model.md
       - Layouts: guide/values/layouts.md
       - Availability: guide/values/availability.md

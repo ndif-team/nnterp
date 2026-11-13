@@ -7,6 +7,7 @@ native modules, the standard values read and write and mean what they say,
 availability is honest, sizes match the tensors.
 """
 
+import contextlib
 import re
 
 import pytest
@@ -16,8 +17,8 @@ from nnsight.intervention.envoy import Envoy
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.components import (
-    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, QUERY, SEQ, TOKENS, STATE_DIM, STREAMS,
-    VALUE_DIM, Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
+    BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, POST_NORM_ATTENTION, QUERY, SEQ, TOKENS, STATE_DIM,
+    STREAMS, VALUE_DIM, Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
     Vision, axis_size, first_tensor,
 )
 from nnterp.components.standard import in_width
@@ -30,10 +31,15 @@ VALUES = {
     "logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", "final_norm_output", "lm_head_output",
     "layer_input", "attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input", "layer_output",
     "self_attn.attention_output", "self_attn.attention_probabilities", "mlp.mlp_output",
+    "self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope",
     "self_attn.attention_queries", "self_attn.attention_keys", "self_attn.attention_values",
     "self_attn.attention_scores", "self_attn.attention_head_outputs",
-    "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons",
+    "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons", "self_attn.interface",
 }
+#: The values before the rotary on a block that applies none: `support()` gives `Attention.no_rotary`'s reason.
+NO_ROTARY = {name: "no rotary embedding" for name in ("self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope")}
+#: The same values on a vision tower's blocks, which never serve them (`VisionAttention.no_rotary`).
+TOWER_NO_ROTARY = {name: "a vision tower's attention" for name in NO_ROTARY}
 #: The MLP's interior, unavailable on a block whose MLP is a routed mixture.
 MLP_INTERIOR = ("mlp.mlp_activation", "mlp.mlp_neurons")
 #: A mixture of experts' values, on `Moe` (`nnterp.components.moe`).
@@ -81,6 +87,12 @@ def rows(container, layers, embed, norm, attn="self_attn", mlp="mlp", ln1="input
 LLAMA_ROWS = rows("model", "layers", "embed_tokens", "norm")
 
 
+def blocks(model, kind: str) -> list[int]:
+    """The blocks the text config's ``layer_types`` names ``kind`` (``linear_attention``, ``full_attention``; ``mlp``,
+    ``moe`` on Nemotron-H): a hybrid's test reads its layout from the checkpoint it runs on, not the tiny one's indices."""
+    return [i for i, k in enumerate(model.config.get_text_config().layer_types) if k == kind]
+
+
 def listed(name: str, text: str) -> bool:
     """Whether an envoy repr lists value ``name``: ``(name) -> Layout [axes]: ...``, or ``(name): ...`` for a value without a layout (and on an nnsight that prints the description alone)."""
     return f"({name}):" in text or f"({name}) -> " in text
@@ -116,6 +128,150 @@ def near(actual, expected, like, ulps: int = 16):
     scale = max(1.0, float(like.detach().abs().max())) if like.numel() else 1.0
     expected = expected if isinstance(expected, torch.Tensor) else torch.as_tensor(expected)
     torch.testing.assert_close(actual.double(), expected.double().to(actual.device).expand_as(actual), rtol=0, atol=ulps * eps * scale)
+
+
+class built:
+    """A class attribute computed when it is first read, not at import: ``REPO = built(patched_checkpoint, repo, ...)``.
+
+    A helper that writes a patched copy of a cached checkpoint then runs where the attribute is read (the ``model``
+    fixture; pytest also reads it when it looks the class over, and ignores an error there), so a snapshot missing
+    from the cache errors that class's tests instead of stopping the module's collection, and a subclass that sets
+    the attribute itself never builds it. The value is kept once built.
+    """
+
+    def __init__(self, build, *args, **kwargs):
+        self.build, self.args, self.kwargs, self.value = build, args, kwargs, None
+
+    def __get__(self, obj, owner=None):
+        if self.value is None:
+            self.value = self.build(*self.args, **self.kwargs)
+        return self.value
+
+
+def cached_snapshot(repo: str) -> str:
+    """The directory of ``repo``'s cached snapshot, in the Hugging Face cache the environment configures (``HF_HOME``,
+    ``HF_HUB_CACHE``); never a download. The snapshot is the one a load of ``repo`` by name reads (``main``), whose
+    ``config.json`` is cached; files the tests never load (an ONNX export) may be missing from it."""
+    import os
+
+    from huggingface_hub import try_to_load_from_cache
+
+    config = try_to_load_from_cache(repo, "config.json")
+    if not isinstance(config, str):
+        raise FileNotFoundError(f"{repo}'s config.json is not in the Hugging Face cache")
+    return os.path.dirname(config)
+
+
+def patched_checkpoint(repo: str, draw: bool = False, init=None, **config) -> str:
+    """A copy of ``repo``'s cached checkpoint with ``config`` written over its ``config.json``, in the temp dir: the
+    layout of a config branch no pinned tiny checkpoint takes, for a test class to load as its ``REPO``.
+
+    A dict value updates the dict the config holds under that key (``rope_parameters``). The weights are the
+    checkpoint's own, linked, unless ``draw`` (the new layout changes their shapes) or ``init`` is given: then they
+    are drawn for the new config with seed 0, ``init(model)`` (under ``torch.no_grad()``) sets what the branch needs
+    and an initialization leaves degenerate (a router of zeros, a bias of zeros), and they are written. The
+    tokenizer and the other files are linked either way. The copy is written once per snapshot, change, source of
+    this module and of ``init``'s, and transformers release, and shared by the test processes (each builds its own
+    and renames it into place).
+    """
+    import hashlib
+    import inspect
+    import json
+    import os
+    import shutil
+    import tempfile
+
+    import transformers
+    from transformers import AutoConfig, AutoModelForCausalLM
+
+    source = cached_snapshot(repo)
+    draw = draw or init is not None
+    code = [open(__file__).read()] + ([inspect.getsource(inspect.getmodule(init))] if init else [])  # an edit rebuilds
+    key = json.dumps([source, config, draw, code, transformers.__version__], sort_keys=True)
+    patched = os.path.join(tempfile.gettempdir(), f"nnterp-{repo.rsplit('/', 1)[-1]}-{hashlib.sha1(key.encode()).hexdigest()[:12]}")
+    if os.path.isdir(patched):
+        return patched
+    building = tempfile.mkdtemp(prefix=os.path.basename(patched) + "-")
+    raw = json.load(open(os.path.join(source, "config.json")))
+    for name, value in config.items():
+        raw[name] = {**raw[name], **value} if isinstance(value, dict) and isinstance(raw.get(name), dict) else value
+    json.dump(raw, open(os.path.join(building, "config.json"), "w"))
+    if draw:
+        torch.manual_seed(0)
+        model = AutoModelForCausalLM.from_config(AutoConfig.from_pretrained(building), dtype=torch.float32)
+        if init is not None:
+            with torch.no_grad():
+                init(model)
+        model.save_pretrained(building)
+    weights = (".safetensors", ".bin", ".safetensors.index.json", ".bin.index.json")
+    for name in os.listdir(source):  # after the save: a file it writes must not land through a link in the cache
+        target = os.path.join(building, name)
+        if not os.path.exists(target) and not (draw and name.endswith(weights)):
+            os.symlink(os.path.realpath(os.path.join(source, name)), target)
+    try:
+        os.rename(building, patched)
+    except OSError:  # another process put its copy there first
+        shutil.rmtree(building)
+    return patched
+
+
+def draw_routers(model):
+    """An ``init`` for `patched_checkpoint`: every router's weight (``mlp.gate.weight``) and selection bias
+    (``e_score_correction_bias``) drawn. An initialization leaves them zero, so every token routes alike (ties broken
+    by index), as on several tiny checkpoints; a trained router discriminates."""
+    for name, tensor in [*model.named_parameters(), *model.named_buffers()]:
+        if name.endswith("mlp.gate.weight"):
+            tensor.normal_(0, 0.5)
+        elif name.endswith("e_score_correction_bias"):
+            tensor.normal_(0, 0.1)
+
+
+def draw_biases(model):
+    """An ``init`` for `patched_checkpoint`: every linear projection's bias drawn. An initialization leaves them zero,
+    where a trained checkpoint's are not."""
+    for module in model.modules():
+        if isinstance(module, torch.nn.Linear) and module.bias is not None:
+            module.bias.normal_(0, 0.1)
+
+
+def random_weights(repo, **overrides):
+    """``repo``'s config with ``overrides`` and random weights, loaded as a module with the repo's tokenizer: a layout no tiny checkpoint has."""
+    from transformers import AutoConfig, AutoModelForCausalLM, AutoTokenizer
+
+    config = AutoConfig.from_pretrained(repo)
+    for name, value in overrides.items():
+        setattr(config, name, value)
+    torch.manual_seed(0)
+    module = AutoModelForCausalLM.from_config(config, attn_implementation="eager").eval()
+    return StandardizedTransformer(module, tokenizer=AutoTokenizer.from_pretrained(repo))
+
+
+@contextlib.contextmanager
+def ramped(norm):
+    """``norm``'s weight set to a ramp for the duration: a tiny checkpoint's norm is often all ones, which a gain of ones would pass."""
+    weight = getattr(norm._module, "weight", None)
+    if weight is None:
+        yield
+        return
+    kept = weight.detach().clone()
+    with torch.no_grad():
+        weight.copy_(torch.linspace(0.5, 1.5, weight.numel()).view_as(weight))
+    try:
+        yield
+    finally:
+        with torch.no_grad():
+            weight.copy_(kept)
+
+
+def normalized(norm, x, gain):
+    """What ``norm`` returns for ``x`` by its ``gain``, float64: ``gain * n(x) + norm(0)``, ``n`` the RMS normalization with the
+    norm's own eps, centred first on a norm that takes a constant to its bias (a LayerNorm)."""
+    zero = torch.zeros(x.shape[-1], dtype=x.dtype, device=x.device)  # where the norm's weights are
+    offset = norm(zero).double()  # the norm's bias, zero on an RMS norm
+    centred = torch.equal(norm(zero + 3), norm(zero))
+    eps = next((value for name in ("variance_epsilon", "eps", "epsilon") if isinstance(value := getattr(norm._module, name, None), float)), 1e-5)
+    x = x.double() - x.double().mean(-1, keepdim=True) if centred else x.double()
+    return gain.double() * x / (x.pow(2).mean(-1, keepdim=True) + eps).sqrt() + offset
 
 
 def expert_by_hand(host, x: torch.Tensor, expert: int, weight: torch.Tensor) -> torch.Tensor:
@@ -156,7 +312,8 @@ class FamilySuite:
     ATTENTION_SINK = False
     #: The keys and values are read already expanded to ``num_heads`` (latent attention; Falcon's 40B layout).
     KV_HEADS_EXPANDED = False
-    #: A config key naming the first block's MLP width when it is not `intermediate_size` (an all-MoE family's experts).
+    #: A config key naming the MLP width of a mixture block when it is not `intermediate_size` (the experts' width);
+    #: read where the first block with an MLP is a mixture, so a checkpoint whose first MLP is dense uses the plain rule.
     MLP_WIDTH_KEY = None
     #: Extra load arguments for this checkpoint (a dtype a degenerate tiny checkpoint needs).
     LOAD_KWARGS: dict = {}
@@ -175,8 +332,12 @@ class FamilySuite:
     ROUTER_EXTRA_CLASSES = 0
     #: A decode step's attention mask covers the cache and the new token (a pure state-space model's covers the new token only).
     DECODE_MASK_COVERS_CACHE = True
-    #: ``layer_mid == layer_input + the mixers' contributions``: false where a gate scales what the block adds (Doge, ZAYA).
+    #: ``layer_mid == layer_input + the mixers' contributions``: false where a gate scales the stream the block carries (Doge) or a
+    #: merge rescales the stream as well as what is added (ZAYA).
     MID_IDENTITY = True
+    #: One invoke's activations reach another invoke's outputs: true where the forward mixes the batch's rows (Doge's
+    #: cross-domain mixture routes each token by product keys taken from other rows of the flattened batch).
+    ROWS_MIX = False
     #: ``attention_premix`` is ``attention_head_outputs``: false where a gate or a norm sits between the heads and the output projection.
     PREMIX_IS_HEAD_OUTPUTS = True
     #: ``mlp_neurons`` is ``mlp_activation * up_proj.output`` on a gated MLP, ``mlp_activation`` on a plain one.
@@ -232,8 +393,13 @@ class FamilySuite:
     def test_family_resolved(self, model):
         assert model.family is self.FAMILY
 
+    def native(self, model) -> dict:
+        """`NATIVE` for this checkpoint: a family whose block kinds follow the config overrides it to name a block of
+        each kind by the config, not by the tiny checkpoint's indices."""
+        return self.NATIVE
+
     def test_standard_names_alias_native_envoys(self, model):
-        for standard, native in self.NATIVE.items():
+        for standard, native in self.native(model).items():
             assert isinstance(model.get(standard), Envoy), standard
             assert model.get(standard) is model.get(native), (standard, native)
 
@@ -242,8 +408,8 @@ class FamilySuite:
         assert "model" not in model._aliases
 
     def test_every_layer_is_renamed(self, model):
-        assert len(model.layers) > 1
-        names = [key.removeprefix("layers.0.") for key in self.NATIVE if key.startswith("layers.0.")]
+        assert len(model.layers) == model.num_layers >= 1
+        names = [key.removeprefix("layers.0.") for key in self.native(model) if key.startswith("layers.0.")]
         for layer in model.layers:
             for name in names:
                 assert isinstance(getattr(layer, name), Envoy), (layer.path, name)
@@ -288,22 +454,24 @@ class FamilySuite:
         } - {"logits", "token_embeddings", "next_token_probs", "input_ids", "attention_mask", "input_size", "final_norm_output", "lm_head_output"}
 
     def test_support_is_what_this_family_expects(self, model):
+        expected = {**{f"vision.{name}": reason for name, reason in TOWER_NO_ROTARY.items()}, **self.EXPECTED_UNAVAILABLE}
         for name, reason in model.support().items():
             if name.removeprefix("mlp.") in MOE:
                 continue  # test_moe_support_is_what_this_family_expects
-            if name in MLP_INTERIOR and name not in self.EXPECTED_UNAVAILABLE:
+            if name in MLP_INTERIOR and name not in expected:  # per block: served on a dense MLP, not on a mixture or where no MLP is
                 routed = {i for i, layer in enumerate(model.layers) if isinstance(getattr(layer, "mlp", None), Moe) and not layer.mlp.no_mixture()}
                 no_mlp = {i for i, layer in enumerate(model.layers) if getattr(layer, "mlp", None) is None}
-                if routed:
+                if routed or no_mlp:
                     assert isinstance(reason, dict) and set(reason) == routed | no_mlp, (name, reason)
                     assert all("routed experts" in r for i, r in reason.items() if i in routed), (name, reason)
+                    assert all("no mlp module" in r for i, r in reason.items() if i in no_mlp), (name, reason)
                     continue
-            if name in self.EXPECTED_UNAVAILABLE:
+            if name in expected:
                 if isinstance(reason, str):  # a root value's reason is one string
-                    assert self.EXPECTED_UNAVAILABLE[name] in reason, (name, reason)
+                    assert expected[name] in reason, (name, reason)
                     continue
                 assert isinstance(reason, dict) and reason, name
-                assert all(self.EXPECTED_UNAVAILABLE[name] in r for r in reason.values()), name
+                assert all(expected[name] in r for r in reason.values()), name
             else:
                 assert reason is None, (name, reason)
 
@@ -341,8 +509,9 @@ class FamilySuite:
             assert torch.equal(std, raw) and std.shape[-1] == model.hidden_size, i
         with model.trace(PROMPT):
             clean = model.logits.save()
+        second = model.layers[min(1, len(model.layers) - 1)]  # block 1, or the only block of a one-block checkpoint
         with model.trace(PROMPT):
-            model.layers[1].layer_input = model.layers[1].layer_input * 0
+            second.layer_input = second.layer_input * 0
             edited = model.logits.save()
         assert not torch.equal(clean, edited)
 
@@ -540,6 +709,89 @@ class FamilySuite:
             inplace = model.logits.save()
         assert not torch.equal(clean, inplace)
 
+    def test_assigning_layer_mid_replaces_the_stream(self, model):
+        """An assignment to ``layer_mid`` replaces the stream between the sublayers, as an in-place write does: the
+        MLP's norm reads the new value and the block adds the MLP's output to it, so ``layer_output == new +
+        mlp_output`` wherever the clean block sums that plainly (a gate, a scale or a third term elsewhere). Under one
+        invoke and under two that both write, and with gradients reaching what was assigned, a learned map of a
+        cloned read included."""
+        served = [i for i in range(model.num_layers) if model.support(layer=i)["layer_mid"] is None]
+        if not served:
+            pytest.skip("no block serves layer_mid")
+        layer = model.layers[served[0]]
+        mlp = layer.mlp if model.support(layer=served[0]).get("mlp.mlp_output", "absent") is None else None
+        added = part = None  # bound outside: a name first bound in a trace body is gone after it unless saved
+        with model.trace(PROMPT):
+            mid = layer.layer_mid.clone().save()
+            if mlp is not None:
+                added = mlp.mlp_output.save()
+            out = layer.layer_output.save()
+
+        def plain(out, mid, added):
+            """``out == mid + added`` to 16 units of the block's dtype at its scale."""
+            if added is None:
+                return False
+            eps = torch.finfo(out.dtype).eps
+            error = (out.double() - mid.double().reshape(out.shape) - added.double()).abs().max().item()
+            return error <= 16 * eps * max(1.0, out.double().abs().max().item())
+
+        sums_plainly = plain(out, mid, added)
+        generator = torch.Generator().manual_seed(0)
+        rms = mid.float().pow(2).mean().sqrt().clamp(min=1e-3).item()
+        delta = (torch.randn(mid.shape, generator=generator) * rms * 0.5).to(mid)  # on the model's device
+        new, other = mid + delta, mid - 2 * delta
+
+        written = {}
+        for form in ("assign", "in place"):
+            with model.trace(PROMPT):
+                if form == "assign":
+                    layer.layer_mid = new
+                else:
+                    layer.layer_mid[:] = new
+                if mlp is not None:
+                    part = mlp.mlp_output.save()
+                result = layer.layer_output.save()
+            written[form] = (part, result)
+        (part, result), (_, reference) = written["assign"], written["in place"]
+        assert torch.equal(result, reference), "the assignment reached only part of the block"
+        if sums_plainly:
+            assert plain(result, new, part), "layer_output is not the assigned stream plus the MLP's output"
+
+        if mid.dim() == 3:  # two invokes, both writing; OPT's flattened rows are not split by invoke
+            ids = model.tokenizer(PROMPT).input_ids  # token ids: a wrapper's processor may refuse to batch text alone
+            batched = {}
+            for form in ("assign", "in place"):
+                with model.trace() as tracer:
+                    with tracer.invoke(ids):
+                        if form == "assign":
+                            layer.layer_mid = new
+                        else:
+                            layer.layer_mid[:] = new
+                    with tracer.invoke(ids):
+                        if form == "assign":
+                            layer.layer_mid = other
+                        else:
+                            layer.layer_mid[:] = other
+                    with tracer.invoke():
+                        result = layer.layer_output.save()
+                batched[form] = result
+            assert torch.equal(batched["assign"], batched["in place"]), "an assignment under two invokes reached only part of the block"
+
+        grads = {}
+        for form in ("assign", "in place"):
+            v = torch.zeros(mid.shape[-1], dtype=mid.dtype, device=mid.device, requires_grad=True)
+            alpha = torch.ones((), dtype=mid.dtype, device=mid.device, requires_grad=True)
+            with model.trace(PROMPT):
+                if form == "assign":
+                    layer.layer_mid = layer.layer_mid.clone() * alpha + v
+                else:
+                    layer.layer_mid[:] = layer.layer_mid.clone() * alpha + v
+                loss = model.logits[0, -1].float().log_softmax(-1).max().save()
+            grads[form] = torch.autograd.grad(loss, (v, alpha))
+        assert grads["in place"][0].abs().max() > 0  # alpha's can be exactly zero: a norm after a homogeneous MLP cancels a scale
+        for got, want in zip(grads["assign"], grads["in place"]):
+            torch.testing.assert_close(got, want)
+
     # -- the attention pattern --------------------------------------------------
 
     def test_probabilities_are_a_pattern(self, model):
@@ -593,6 +845,68 @@ class FamilySuite:
         if block is not last:
             assert not torch.equal(first, last_probs)
 
+    def test_pattern_per_invoke(self, model):
+        """Two invokes of one trace each read their own rows of the scores and the pattern, as one invoke of both does."""
+        block = self.attn_block(model)
+        unavailable = block.self_attn.support()
+        names = [name for name in ("attention_scores", "attention_probabilities") if not unavailable.get(name)]
+        if not names:
+            pytest.skip("no attention interior on this checkpoint")
+        ids = model.tokenizer(PROMPT).input_ids
+        prompts = [ids, ids[::-1]]  # two different prompts of one length: no padding, so no pad token needed
+        together, first, second = {}, {}, {}
+        with model.trace(prompts):
+            for name in names:
+                together[name] = getattr(block.self_attn, name).save()
+        with model.trace() as tracer:
+            with tracer.invoke(prompts[0]):
+                for name in names:
+                    first[name] = getattr(block.self_attn, name).save()
+            with tracer.invoke(prompts[1]):
+                for name in names:
+                    second[name] = getattr(block.self_attn, name).save()
+        for name in names:
+            torch.testing.assert_close(first[name][0], together[name][0], msg=name)
+            torch.testing.assert_close(second[name][0], together[name][1], msg=name)
+
+    def test_interior_per_invoke(self, model, values=INTERIOR + ("attention_probabilities",)):
+        """Every interior value, under two invokes of one trace: each invoke reads its own row, as one invoke of both
+        does, and an assignment in the first leaves the second's logits as they were (not where the forward mixes the
+        batch's rows, `ROWS_MIX`). A family test passes ``values`` to check some of them only. Not where the values are
+        read at the attention call `interface` makes again: that is one path, which `test_pattern_per_invoke` covers."""
+        attn = self.attn_block(model).self_attn
+        unavailable = attn.support()
+        if unavailable.get("interface") is None:
+            pytest.skip("the interior is read at the attention call")
+        names = [name for name in values if not unavailable.get(name)]
+        if not names:
+            pytest.skip("no attention interior on this checkpoint")
+        ids = model.tokenizer(PROMPT).input_ids
+        prompts = [ids, ids[::-1]]  # two different prompts of one length: no padding, so no pad token needed
+        with model.trace() as tracer:
+            with tracer.invoke(prompts[0]):
+                pass
+            with tracer.invoke(prompts[1]):
+                clean = model.logits.save()
+        for name in names:  # one trace each: families bind these at different points of the forward
+            with model.trace(prompts):
+                together = getattr(attn, name).save()
+            with model.trace() as tracer:
+                with tracer.invoke(prompts[0]):
+                    first = getattr(attn, name).save()
+                with tracer.invoke(prompts[1]):
+                    second = getattr(attn, name).save()
+            assert first.shape[0] == second.shape[0] == 1, (name, tuple(first.shape))
+            torch.testing.assert_close(first[0], together[0], msg=name)
+            torch.testing.assert_close(second[0], together[1], msg=name)
+            with model.trace() as tracer:
+                with tracer.invoke(prompts[0]):
+                    setattr(attn, name, getattr(attn, name) * 0)
+                with tracer.invoke(prompts[1]):
+                    other = model.logits.save()
+            if not self.ROWS_MIX:
+                torch.testing.assert_close(other, clean, msg=name)
+
     def test_written_pattern_moves_the_logits(self, model):
         """A read can be causally inert (weights a mixer merely returns); only a write tells."""
         block = self.attn_block(model)
@@ -620,10 +934,11 @@ class FamilySuite:
         assert "attention_probabilities" in names
         read = {}
         for name in names:  # one trace per value: reads within a trace must follow forward order
+            hosts = [layer.self_attn for layer in blocks if layer.self_attn.support()[name] is None]  # a NoPE block has no prerope values
             with model.trace(PROMPT):
-                for layer in blocks:
-                    read[layer.path, name] = getattr(layer.self_attn, name).save()
-        assert len(read) == len(names) * len(blocks)
+                for attn in hosts:
+                    read[attn.path, name] = getattr(attn, name).save()
+            assert len(hosts) and all((attn.path, name) in read for attn in hosts), name
         assert all(isinstance(value, torch.Tensor) for value in read.values())
 
     # -- the attention interior -------------------------------------------------
@@ -690,9 +1005,310 @@ class FamilySuite:
             queries = model.logits.save()
         assert not torch.equal(clean, queries)
 
+    # -- calling the attention function again --------------------------------------
+
+    def interface_blocks(self, model):
+        """The blocks whose attention serves `interface`; where none does, its reason is checked with the others' (`test_support_is_what_this_family_expects`)."""
+        blocks = [layer for layer in self.attn_blocks(model) if layer.self_attn.support()["interface"] is None]
+        if not blocks:
+            pytest.skip("no attention function to call again on this checkpoint")
+        return blocks
+
+    def test_interface_reproduces_heads_and_pattern(self, model):
+        """On the served queries, keys and values the call gives `attention_head_outputs` and `attention_probabilities`
+        bit for bit, on every block: sliding and global, borrowed keys, sinks, softcaps."""
+        blocks = self.interface_blocks(model)
+        read = {}  # filled inside the block: a name bound there does not survive the trace
+        with model.trace(PROMPT):
+            for layer in blocks:
+                attn = layer.self_attn
+                heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+                read[layer.path] = heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()
+        assert len(read) == len(blocks)
+        for path, (heads, pattern, probs, served) in read.items():
+            assert torch.equal(heads, served) and torch.equal(pattern, probs), path
+
+    def test_interface_on_a_padded_batch(self, model):
+        """A padded batch in one invoke: the call gives both values bit for bit, pad rows included. Under two invokes it
+        runs one invoke's rows where the model ran both at once, so they agree to rounding."""
+        if model.tokenizer.pad_token is None:
+            pytest.skip("the tokenizer has no pad token, so prompts of different lengths do not batch")
+        attn = self.interface_blocks(model)[0].self_attn
+        read = {}
+        batch = dict(model.tokenizer(PROMPTS, padding=True, return_tensors="pt"))  # the tokenizer's: a wrapper's processor may refuse to pad text alone
+        with model.trace(batch):
+            heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+            read["batch"] = heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()
+        with model.trace() as tracer:
+            for i, prompt in enumerate(PROMPTS):
+                with tracer.invoke(dict(model.tokenizer(prompt, return_tensors="pt"))):
+                    heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+                    read[i] = heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()
+        heads, pattern, probs, served = read.pop("batch")
+        assert heads.shape[0] == len(PROMPTS)
+        torch.testing.assert_close(heads, served, rtol=0, atol=0, equal_nan=True)  # a pad row can be all masked
+        torch.testing.assert_close(pattern, probs, rtol=0, atol=0, equal_nan=True)
+        for i, (heads, pattern, probs, served) in read.items():
+            torch.testing.assert_close(heads, served, equal_nan=True, msg=f"invoke {i}")
+            torch.testing.assert_close(pattern, probs, equal_nan=True, msg=f"invoke {i}")
+
+    def test_interface_patch_reaches_its_group_alone(self, model):
+        """Keys and values of key/value head 0, patched through the call, move exactly the query heads that read that
+        head; written into the last row of the head outputs, they move the attention's output there and nowhere else
+        (the module's own output: a mixture of experts after it can move the other tokens by rounding)."""
+        attn = self.interface_blocks(model)[0].self_attn
+        with model.trace(PROMPT):
+            clean = first_tensor(attn.output).save()
+        saved = {}
+        with model.trace(PROMPT):
+            interface = attn.interface  # read once, where the queries are; called twice
+            q, k, v = attn.attention_queries, attn.attention_keys, attn.attention_values
+            keys, values = k.clone(), v.clone()
+            keys[:, 0] = keys[:, 0] * 2
+            values[:, 0] = values[:, 0] + 1
+            heads, _ = interface(q, k, v)
+            patched, _ = interface(q, keys, values)
+            saved["moved"] = patched.ne(heads).flatten(0, 1).any(0).any(-1).save()  # per query head
+            saved["group"] = q.shape[1] // k.shape[1]
+            saved["served"] = torch.equal(heads, attn.attention_head_outputs)
+            attn.attention_head_outputs[:, -1] = patched[:, -1]
+            saved["output"] = first_tensor(attn.output).save()
+        group, output = saved["group"], saved["output"]
+        assert saved["served"]
+        assert saved["moved"].tolist() == [h < group for h in range(attn.num_heads)]  # query head h reads key/value head h // group
+        assert torch.equal(output[:, :-1], clean[:, :-1]) and not torch.equal(output[:, -1], clean[:, -1])
+
+    def test_interface_on_decode_steps(self, model):
+        """Under generate each step's call has that step's mask and the whole cache: on the prompt and on a decode
+        step, the call gives that step's head outputs and pattern."""
+        attn = self.interface_blocks(model)[0].self_attn
+        read = []
+        with model.generate(PROMPT, max_new_tokens=2, min_new_tokens=2, do_sample=False, use_cache=True) as tracer:  # a tiny config may turn the cache off
+            for _ in tracer.iter[:2]:
+                heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+                read.append((heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()))
+        n = len(model.tokenizer(PROMPT).input_ids)
+        for step, (heads, pattern, probs, served) in enumerate(read):
+            assert pattern.shape[-2] == (n if step == 0 else 1), (step, tuple(pattern.shape))
+            assert torch.equal(heads, served) and torch.equal(pattern, probs), step
+
+    # -- the rotary embedding ------------------------------------------------------
+    # The queries and keys before the rotation, and `rotate`, which applies the
+    # block's own: proved together against the model's computation, since
+    # rotating the served value must give the rotated value the model serves.
+
+    def rope_block(self, model):
+        """The first softmax-attention block that applies a rotary embedding; the test does not apply to a model with none."""
+        for layer in self.attn_blocks(model):
+            if layer.self_attn.no_rotary() is None:
+                return layer
+        pytest.skip("no rotary embedding on any block")
+
+    def rope_pairs(self, attn):
+        """``(prerope, rotated)`` value names this block serves both of."""
+        support = attn.support()
+        pairs = (("attention_queries_prerope", "attention_queries"), ("attention_keys_prerope", "attention_keys"))
+        return [(pre, post) for pre, post in pairs if support[pre] is None and support[post] is None]
+
+    def read_one(self, model, host, name, prompt=PROMPT):
+        with model.trace(prompt):  # one trace each: families bind these at different points of the forward
+            value = getattr(host, name).save()
+        return value
+
+    def rotated_as_served(self, attn, name, rotated, positions):
+        """What the attention receives, given `rotate` of the value before the rotary ``name`` at ``positions``: the
+        rotated value itself, unless the block does more between the rotary and the attention (a norm, a tiling, a
+        scale by position), which a family's test says."""
+        return rotated
+
+    def test_rotate_gives_the_rotated_queries_and_keys(self, model):
+        """``rotate(prerope, positions)`` is the served queries and keys bit for bit.
+
+        A rotated value wider than what the rotary receives (latent attention's
+        keys, whose one rope key every head shares) holds it in its trailing
+        channels, on every head; the layouts say where the two differ.
+        """
+        attn = self.rope_block(model).self_attn
+        pairs = self.rope_pairs(attn)
+        assert pairs, attn.support()
+        for pre, post in pairs:
+            before, after = self.read_one(model, attn, pre), self.read_one(model, attn, post)
+            positions = torch.arange(before.shape[-2])
+            rotated = self.rotated_as_served(attn, pre, attn.rotate(before, positions), positions)
+            if getattr(type(attn), pre).layout is getattr(type(attn), post).layout:
+                assert rotated.shape == after.shape, (pre, tuple(rotated.shape), tuple(after.shape))
+            width = rotated.shape[-1]
+            assert rotated.dtype == after.dtype, (pre, rotated.dtype, after.dtype)
+            assert torch.equal(rotated.expand_as(after[..., -width:]), after[..., -width:]), (pre, (rotated - after[..., -width:]).abs().max())
+
+    def test_a_prerope_write_is_rotated_for_its_position(self, model):
+        """Writing one position's query (key) before the rotary moves the rotated value at that position only, rotated for it."""
+        attn = self.rope_block(model).self_attn
+        for pre, post in self.rope_pairs(attn):
+            before, clean = self.read_one(model, attn, pre), self.read_one(model, attn, post)
+            seq = before.shape[-2]
+            source, target = 0, seq - 1
+            written = before.clone()
+            written[..., target, :] = before[..., source, :]  # one position's vector moved to another
+            with model.trace(PROMPT):
+                setattr(attn, pre, written)
+                after = getattr(attn, post).save()
+            others = list(range(target))
+            assert torch.equal(after[..., others, :], clean[..., others, :]), pre
+            assert not torch.equal(after[..., target, :], clean[..., target, :]), pre
+            rotated = self.rotated_as_served(attn, pre, attn.rotate(before[..., source:source + 1, :], [target]), torch.tensor([target]))
+            width = rotated.shape[-1]
+            assert torch.equal(after[..., target:, -width:], rotated.expand_as(after[..., target:, -width:])), pre
+
+    def test_rotate_says_why_a_block_has_no_rotary(self, model):
+        """On a block without a rotary embedding, `support` and `rotate` give the same reason."""
+        blocks = [layer for layer in self.attn_blocks(model) if layer.self_attn.no_rotary()]
+        if not blocks:
+            pytest.skip("every attention block applies a rotary embedding")
+        for layer in blocks:
+            attn = layer.self_attn
+            reason = attn.support()["attention_queries_prerope"]
+            assert reason == attn.no_rotary(), (layer.path, reason)
+            with pytest.raises(Unavailable, match=re.escape(reason[:40])):
+                attn.rotate(torch.zeros(1, 1, 2, attn.qk_head_dim), [0, 1])
+
+    def test_order_ranks_the_prerope_values_first(self, model):
+        """`model.order` measures the values before the rotation ahead of the rotated ones."""
+        layer = self.rope_block(model)
+        index = int(layer.path.rsplit(".", 1)[1])
+        order = model.order(index)
+        for pre, post in self.rope_pairs(layer.self_attn):
+            assert order[f"self_attn.{pre}"] < order[f"self_attn.{post}"], (pre, order)
+            assert model.rank(f"self_attn.{pre}", index) < model.rank(f"self_attn.{post}", index)
+
+    # -- the weights per head ------------------------------------------------------
+    # Read off the modules, and proved against the values the model serves:
+    # a head's slice of a projection, applied to what the projection receives,
+    # is that head's share of what it returns.
+
+    def head_weights_block(self, model, method):
+        """The first softmax-attention block serving ``method`` (``"value_weight"``, ``"output_weight"``); where none does, the reason is checked by `test_head_weights_say_why_a_block_has_none`."""
+        for layer in self.attn_blocks(model):
+            try:
+                getattr(layer.self_attn, method)(0)
+            except Unavailable:
+                continue
+            return layer
+        pytest.skip(f"no attention block serves {method}")
+
+    def test_value_weight_reproduces_the_values(self, model):
+        """``value_weight(kv) @ x``, plus that head's bias, is ``attention_values[:, kv]`` for what the attention is called with, on every key/value head."""
+        attn = self.head_weights_block(model, "value_weight").self_attn
+        with model.trace(PROMPT):
+            x = attn.input.save()
+            values = attn.attention_values.save()
+        with model.trace(PROMPT):  # the input zeroed: the values are the projection's bias, that head's slice of it
+            attn.input = torch.zeros_like(attn.input)
+            bias = attn.attention_values.save()
+        group = values.shape[1] // attn.num_kv_heads  # 1, or the query heads per key/value head where values are read broadcast (Falcon's 40B layout)
+        for kv in range(attn.num_kv_heads):
+            weight = attn.value_weight(kv)
+            assert weight.shape == (attn.head_dim, x.shape[-1]), (kv, tuple(weight.shape))
+            expected = torch.nn.functional.linear(x.double(), weight.double()) + bias[:, kv * group].double()
+            torch.testing.assert_close(values[:, kv * group], expected.to(values.dtype))
+        with pytest.raises(IndexError):
+            attn.value_weight(attn.num_kv_heads)
+
+    def test_output_weight_reproduces_the_projection(self, model):
+        """``sum_j output_weight(j) @ attention_premix[:, t, j]``, plus the projection's bias, is what the output projection returns."""
+        attn = self.head_weights_block(model, "output_weight").self_attn
+        with model.trace(PROMPT):
+            premix = attn.attention_premix.save()
+            out = attn.o_proj.output.save()
+        with model.trace(PROMPT):  # the heads zeroed: what the projection returns is its bias
+            attn.attention_premix = torch.zeros_like(attn.attention_premix)
+            bias = attn.o_proj.output.save()
+        weights = [attn.output_weight(j) for j in range(attn.num_heads)]
+        assert all(weight.shape == (model.hidden_size, attn.head_dim) for weight in weights), [tuple(w.shape) for w in weights]
+        expected = sum(torch.nn.functional.linear(premix[:, :, j].double(), weight.double()) for j, weight in enumerate(weights)) + bias.double()
+        scale = expected.abs().max()  # at the output's scale: an element that cancels to near zero keeps its terms' rounding (DeepSeek-V3)
+        torch.testing.assert_close(out / scale, (expected / scale).to(out.dtype))
+
+    def test_attention_input_gain(self, model):
+        """The attention reads ``gain * n(x)``, plus the norm's bias, of the stream ``x`` on a pre-norm block, where ``n``
+        normalizes (centring first on a LayerNorm); the gain is ones where it reads the stream itself."""
+        layer = model.layers[0]
+        reason = layer.support()["attention_norm_output"]
+        if reason and reason != POST_NORM_ATTENTION:
+            with pytest.raises(Unavailable, match=re.escape(reason[:40])):
+                layer.attention_input_gain
+            return
+        if reason:
+            gain = layer.attention_input_gain
+            assert gain.shape == (model.hidden_size,) and torch.equal(gain, torch.ones_like(gain))
+            return
+        norm = layer.get(type(layer).attention_norm_output.path(layer).removesuffix(".output"))
+        with ramped(norm):
+            gain = layer.attention_input_gain
+            with model.trace(PROMPT):
+                x = layer.layer_input.save()
+                normed = layer.attention_norm_output.save()
+            expected = normalized(norm, x, gain)
+        assert gain.shape == (x.shape[-1],) and gain.dtype == torch.float32 and not gain.requires_grad
+        torch.testing.assert_close(normed, expected.to(normed.dtype))
+
+    def test_attention_output_gain(self, model):
+        """The block adds ``gain * n(y)``, plus the norm's bias, of the output projection's output ``y`` where
+        ``attention_output`` is read at a norm after the attention; the gain is ones where the output enters unnormed."""
+        layer = next(iter(self.attn_blocks(model)), model.layers[0])
+        attn = mixer(layer)
+        if attn is None:
+            with pytest.raises(Unavailable, match="no self_attn module"):
+                layer.attention_output_gain
+            return
+        reason = attn.support()["attention_output"]
+        if reason:
+            with pytest.raises(Unavailable, match=re.escape(reason[:40])):
+                layer.attention_output_gain
+            return
+        sibling = re.fullmatch(r"\.\./(\w+)\.output", type(attn).attention_output.path(attn))
+        norm = None if sibling is None else layer.get(sibling[1])
+        if norm is None or isinstance(norm._module, torch.nn.Identity):  # HyperCLOVA X without use_post_norm
+            gain = layer.attention_output_gain
+            assert gain.shape == (model.hidden_size,) and torch.equal(gain, torch.ones_like(gain))
+            return
+        with ramped(norm):
+            gain = layer.attention_output_gain
+            with model.trace(PROMPT):
+                y = attn.o_proj.output.save()
+                normed = norm.output.save()
+            expected = normalized(norm, y, gain)
+        assert gain.shape == (y.shape[-1],) and gain.dtype == torch.float32 and not gain.requires_grad
+        torch.testing.assert_close(normed, expected.to(normed.dtype))
+
+    def test_head_weights_say_why_a_block_has_none(self, model):
+        """Each per-head weight is served on every attention block or refused on every one with the reason this family
+        expects; `no_head_weights` is the reason where both are, and ``None`` otherwise."""
+        blocks = self.attn_blocks(model)
+        if not blocks:
+            pytest.skip("no softmax attention on any block")
+        for layer in blocks:
+            attn = layer.self_attn
+            refused = set()
+            for method in ("value_weight", "output_weight"):
+                expected = self.EXPECTED_UNAVAILABLE.get(f"self_attn.{method}")
+                if expected is None:
+                    getattr(attn, method)(0)
+                    continue
+                with pytest.raises(Unavailable, match=re.escape(expected)):
+                    getattr(attn, method)(0)
+                refused.add(method)
+            reason = attn.no_head_weights()
+            if refused == {"value_weight", "output_weight"}:
+                assert reason and self.EXPECTED_UNAVAILABLE["self_attn.output_weight"] in reason, (layer.path, reason)
+            else:
+                assert reason is None, (layer.path, reason)
+
     # -- methods over the values -------------------------------------------------
 
     def test_skip_layers_hands_the_stream_straight_through(self, model):
+        if model.num_layers < 2:
+            pytest.skip("one block: no blocks after the first to skip")
         last = model.num_layers - 1
         with model.trace(PROMPT):
             first = model.layers[0].layer_output.save()
@@ -703,6 +1319,8 @@ class FamilySuite:
         torch.testing.assert_close(logits, model.project_on_vocab(first))
 
     def test_skip_layers_with_a_given_stream(self, model):
+        if model.num_layers < 2:
+            pytest.skip("one block: no next block to receive the given stream")
         with model.trace(PROMPT):
             clean = model.layers[0].layer_output.save()
         with model.trace(PROMPT):
@@ -757,8 +1375,8 @@ class FamilySuite:
                           KEY_DIM: module.ssm_state_size, VALUE_DIM: module.head_dim})
         return sizes
 
-    def model_size(self, host, axis):
-        """A model-fact axis's size by `axis_size`, where the family's tensor differs from it by design."""
+    def model_size(self, host, axis, name=None):
+        """A model-fact axis's size by `axis_size` for value ``name``, where the family's tensor differs from it by design."""
         if axis == KV_HEADS and self.KV_HEADS_EXPANDED:
             return axis_size(host, HEADS)
         size = axis_size(host, axis)
@@ -799,7 +1417,10 @@ class FamilySuite:
                 for axis, size in zip(value.dims, saved.shape):
                     if axis == HEAD_DIM and self.KV_HEADS_EXPANDED:
                         continue
-                    expected = sizes[axis] if axis in sizes else self.model_size(host, axis)  # every other axis resolves
+                    if axis.isdigit():  # a fixed axis (latent attention's one shared rope key)
+                        expected = int(axis)
+                    else:
+                        expected = sizes[axis] if axis in sizes else self.model_size(host, axis, name)  # every other axis resolves
                     assert size == expected, (host.path, name, axis, size, expected)
                 checked += 1
         assert checked >= (11 if attention else 4)  # root 3 + layer 1 + attention 7, plus the MLP and linear hosts where present
@@ -906,8 +1527,14 @@ class FamilySuite:
         block = next((layer for layer in model.layers if getattr(layer, "mlp", None) is not None), block)._module
         dims = {d for p in block.parameters() for d in p.shape}
         assert isinstance(model.intermediate_size, int)  # resolves on every family, whatever the config calls it
-        width = getattr(model.config.get_text_config(), self.MLP_WIDTH_KEY) if self.MLP_WIDTH_KEY else model.intermediate_size
-        assert width in dims, (self.MLP_WIDTH_KEY or "intermediate_size", width, dims)
+        key = self.mlp_width_key(model)
+        width = getattr(model.config.get_text_config(), key) if key else model.intermediate_size
+        assert width in dims, (key or "intermediate_size", width, dims)
+
+    def mlp_width_key(self, model):
+        """`MLP_WIDTH_KEY` where the first block with an MLP runs a mixture of experts; None (`intermediate_size`) where it is dense."""
+        first = next((layer.mlp for layer in model.layers if getattr(layer, "mlp", None) is not None), None)
+        return self.MLP_WIDTH_KEY if isinstance(first, Moe) and first.no_mixture() is None else None
 
     def test_per_module_sizes_match_each_block(self, model):
         """Each block's attention and MLP report the sizes of their own tensors.
@@ -960,8 +1587,8 @@ class FamilySuite:
             assert width in dims, (mlp.path, width, dims)
             if experts is None:
                 assert width == model.intermediate_size, (mlp.path, width, model.intermediate_size)
-        if mlps and self.MLP_WIDTH_KEY:
-            assert mlps[0].intermediate_size == getattr(model.config.get_text_config(), self.MLP_WIDTH_KEY)
+        if mlps and self.mlp_width_key(model):
+            assert mlps[0].intermediate_size == getattr(model.config.get_text_config(), self.mlp_width_key(model))
 
     def test_repr_lists_the_values(self, model):
         blocks = self.attn_blocks(model)
@@ -998,6 +1625,11 @@ class FamilySuite:
     def routed_scale(self, host) -> float:
         """What ``routed_output`` is times the experts' sum (Laguna scales it in the mixture)."""
         return 1.0
+
+    def routed_from_experts(self, host, summed):
+        """What a sum of expert outputs, or a difference of them, adds to ``routed_output``: the sum times `routed_scale`,
+        unless the mixture maps the experts' width back to the stream's (Nemotron-H's ``fc2_latent_proj``)."""
+        return summed * self.routed_scale(host)
 
     def mixture_output(self, model, host):
         """What ``routed_output + shared_expert_output`` equals: the mixture's own output, ``[batch, seq, hidden_size]``."""
@@ -1039,7 +1671,7 @@ class FamilySuite:
         got = self.moe_read(model, host, "expert_outputs", "routed_output")
         slots, routed = got["expert_outputs"], got["routed_output"]
         assert slots.shape[:3] == (*routed.shape[:2], host.top_k) and slots.shape[3] == routed.shape[2]
-        near(slots.sum(2) * self.routed_scale(host), routed, routed)
+        near(self.routed_from_experts(host, slots.sum(2)), routed, routed)
 
     def test_routed_plus_shared_is_the_mixture(self, model):
         host = self.moe(model)
@@ -1089,7 +1721,7 @@ class FamilySuite:
         assert change[t].abs().max() > 0
         if self.available(host, "expert_outputs"):
             slots = self.moe_read(model, host, "expert_outputs")["expert_outputs"]
-            near(change[t], slots[0, t, j] * self.routed_scale(host), routed)
+            near(change[t], self.routed_from_experts(host, slots[0, t, j]), routed)
 
     def test_ablating_one_expert_everywhere(self, model):
         """``expert_weights = w.masked_fill(expert_indices == e, 0)`` removes exactly expert ``e``'s slots."""
@@ -1110,7 +1742,7 @@ class FamilySuite:
         near(change[~touched], 0.0, routed)
         if self.available(host, "expert_outputs"):
             slots = self.moe_read(model, host, "expert_outputs")["expert_outputs"]
-            expected = routed - (slots * (idx == e)[..., None]).sum(2) * self.routed_scale(host)
+            expected = routed - self.routed_from_experts(host, (slots * (idx == e)[..., None]).sum(2))
             near(ablated, expected, routed)
 
     def test_rerouting_one_token_matches_a_hand_computation(self, model):
@@ -1142,7 +1774,7 @@ class FamilySuite:
         if x is None:
             return  # no experts module to compute an expert with (JetMoE)
         x_t = x.reshape(-1, x.shape[-1])[t]
-        expected = (expert_by_hand(host, x_t, e2, w[0, t, j]) - expert_by_hand(host, x_t, e, w[0, t, j])) * self.routed_scale(host)
+        expected = self.routed_from_experts(host, expert_by_hand(host, x_t, e2, w[0, t, j]) - expert_by_hand(host, x_t, e, w[0, t, j]))
         near(change[t], expected, routed, ulps=64)
 
     def test_writing_router_logits_changes_the_routing(self, model):

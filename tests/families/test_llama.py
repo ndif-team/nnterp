@@ -17,6 +17,52 @@ class TestLlama(FamilySuite):
     NATIVE = LLAMA_ROWS
 
 
+@pytest.fixture(scope="module")
+def adapted(tmp_path_factory):
+    """The tiny Llama under a throwaway LoRA on ``v_proj`` and ``o_proj``, initialized away from zero so it moves the weights."""
+    peft = pytest.importorskip("peft")
+    path = tmp_path_factory.mktemp("lora")
+    base = transformers.AutoModelForCausalLM.from_pretrained(TestLlama.REPO)
+    config = peft.LoraConfig(r=2, target_modules=["v_proj", "o_proj"], init_lora_weights=False)
+    peft.get_peft_model(base, config).save_pretrained(path)
+    return StandardizedTransformer(TestLlama.REPO, peft=str(path), dispatch=True, attn_implementation="eager")
+
+
+def test_head_weights_under_a_lora_adapter(adapted):
+    """On an adapter's layers the weights are what the forward applies, and reproduce the values and the projection in
+    every state: base plus delta while enabled, the base while disabled, the merged base once merged, and while
+    disabled after a merge the base the forward unmerges to before it runs."""
+    from peft.tuners.tuners_utils import BaseTunerLayer
+
+    suite = TestLlama()
+    attn = adapted.layers[0].self_attn
+    lora = [module for module in adapted._module.modules() if isinstance(module, BaseTunerLayer)]
+    assert isinstance(attn.v_proj._module, BaseTunerLayer) and isinstance(attn.o_proj._module, BaseTunerLayer)
+
+    def reproduce():
+        suite.test_value_weight_reproduces_the_values(adapted)
+        suite.test_output_weight_reproduces_the_projection(adapted)
+
+    enabled = attn.value_weight(0).clone(), attn.output_weight(0).clone()
+    reproduce()
+    for module in lora:
+        module.enable_adapters(False)
+    base = attn.value_weight(0)
+    assert base._base is attn.v_proj.base_layer.weight and not torch.allclose(base, enabled[0])
+    reproduce()
+    for module in lora:
+        module.enable_adapters(True)
+        module.merge()
+    merged = attn.value_weight(0), attn.output_weight(0)
+    assert torch.equal(merged[0], enabled[0]) and torch.equal(merged[1], enabled[1])  # what merge() leaves, bit for bit
+    reproduce()
+    for module in lora:
+        module.enable_adapters(False)  # still merged: the next forward unmerges first
+    before = attn.value_weight(0)
+    reproduce()  # runs the forward, which unmerges
+    assert not attn.v_proj._module.merged and torch.equal(before, attn.value_weight(0))
+
+
 class TestLlavaWrapper(TestLlama):
     """Llava 1.5 loaded as the wrapper with its processor: the text stack at ``model.language_model``, the whole suite on it."""
 
@@ -130,9 +176,10 @@ class TestIdefics3Vision(VisionSuite):
 
 
 @pytest.mark.skipif(
-    Version(transformers.__version__) >= Version("5.20"),
+    Version("5.20") <= Version(transformers.__version__) < Version("5.21"),
     reason="transformers 5.20 reshapes SmolVLM's image features by vision_config.patch_size instead of the features per "
-    "image (inputs_merger), which fails whenever the two differ, as on this checkpoint (81 features a tile, patch size 14)",
+    "image (inputs_merger), which fails whenever the two differ, as on this checkpoint (81 features a tile, patch size 14); "
+    "5.21 fixed it",
 )
 class TestSmolVLMVision(TestIdefics3Vision):
     """SmolVLM: Idefics 3's layout."""

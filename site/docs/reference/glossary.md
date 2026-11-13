@@ -54,7 +54,7 @@ The terms this site uses, each in the one sense the pages give it, with the page
 
 **Image token mask**: `vision.image_token_mask`, `input_ids == image_token_id` as a `[batch, seq]` bool, read off the inputs and so first in a trace ([Vision-language](../guide/architectures/vision-language.md)).
 
-**Interface**: transformers' shared attention call, `attention_interface_1` (`nnterp.components.INTERFACE`), which under eager attention is `eager_attention_forward`. The base `Attention` reads the interior on and inside it, and a family with its own arithmetic relocates the names ([transformers compatibility](../developing/transformers-compatibility.md#the-shared-interface)).
+**Interface**: transformers' shared attention call, `attention_interface_1` (`nnterp.components.INTERFACE`), which under eager attention is `eager_attention_forward`. The base `Attention` reads the interior on and inside it, and a family with its own arithmetic relocates the names ([transformers compatibility](../developing/transformers-compatibility.md#the-shared-interface)). `self_attn.interface` is the function that call ran, bound to the rest of the call: `interface(q, k, v)` returns `(head_outputs, pattern)` as the model computes them, for an edit of keys or values that must reach chosen heads or rows only ([Attention](../guide/values/attention.md#calling-the-attention-function-again)).
 
 **Invoke**: nnsight's `tracer.invoke(prompt)`, one prompt batch inside a trace ([nnsight.net](https://nnsight.net/features/8_batching/)). A mixture's routing values serve each invoke its own rows, on vLLM an invoke is one prompt, and a trace with images carries one image-carrying invoke ([Mixture of experts](../guide/architectures/mixture-of-experts.md#ablating-and-rerouting)).
 
@@ -88,7 +88,7 @@ The terms this site uses, each in the one sense the pages give it, with the page
 
 **Projector**: `model.projector`, the last module before the scatter on a wrapper. `projector.input` is what the tower hands over, which is not `tower_output` on every host ([Vision-language](../guide/architectures/vision-language.md#the-projector)).
 
-**Read order**: the order of the reads within one trace, which has to follow forward order. A read out of order raises nnsight's `OutOfOrderError` in a plain trace and binds the next step's occurrence under `tracer.iter` ([Generation](../guide/generation.md#a-read-out-of-order-inside-the-loop)).
+**Read order**: the order of the reads within one trace, which has to follow forward order. A read out of order raises nnsight's `OutOfOrderError` in a plain trace; under `tracer.iter` it raises too or binds the next step's occurrence, depending on the loop's first step and the value ([Generation](../guide/generation.md#a-read-out-of-order-inside-the-loop)).
 
 **Reason**: the string `support()` gives for a value a checkpoint lacks and `Unavailable` carries, from the descriptor's `unavailable=`: a fixed string, or a predicate of the envoy evaluated on the instance ([Availability](../guide/values/availability.md#the-reasons)).
 
@@ -97,6 +97,8 @@ The terms this site uses, each in the one sense the pages give it, with the page
 **Registry**: `nnterp.families`: `lookup(model_type)` returns what `register` put in `REGISTRY`, else `nnterp.families.<model_type>` imported on first use, else the default family ([Registering](../developing/registering.md#the-lookup-order)).
 
 **Residual stream**: the `[batch, seq, hidden_size]` tensor a block passes to the next, `layer_input` entering and `layer_output` leaving ([Residual stream](../guide/values/residual-stream.md)).
+
+**Rotary embedding**: the rotation of each query and key by its position (RoPE) most families apply between the projection, with any query or key norm, and the attention. `attention_queries_prerope` and `attention_keys_prerope` are the queries and keys it receives, and `self_attn.rotate(x, positions)` applies a block's own rotation ([Before the rotary embedding](../guide/values/rotary.md)).
 
 **Router**: a mixture's gate, `moe.router`, whose `router_logits` are scored to pick each token's experts ([Mixture of experts](../guide/architectures/mixture-of-experts.md)).
 

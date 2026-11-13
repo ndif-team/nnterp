@@ -119,6 +119,21 @@ print(torch.allclose(scores.float().softmax(-1), pattern), pattern[0, 0].sum(-1)
 #        device='cuda:0')
 ```
 
+## Before the rotary embedding
+
+`attention_queries_prerope` and `attention_keys_prerope` are the arguments of the attention module's `self.rotary_emb(positions, q, k)` call, in the layouts of [Before the rotary embedding](../guide/values/rotary.md). vLLM's rotary kernel rotates them in place, and the served values are copies taken before it runs. `rotate` calls the block's rotary embedding, which lives in the engine's worker, so it runs inside a trace only, and there it gives the queries and keys the attention layer receives, bit for bit.
+
+```python
+with model.trace("The Eiffel Tower is in", temperature=0.0, max_tokens=1):
+    before = attn.attention_queries_prerope
+    rotated = attn.rotate(before, torch.arange(before.shape[2])).save()
+    q = attn.attention_queries.save()
+print(rotated.shape, torch.equal(rotated, q))
+# torch.Size([1, 14, 7, 64]) True
+```
+
+A write before the rotary is rotated for the position it lands at, as on transformers. On the families vLLM runs through its transformers backend, and under latent attention, the two values are unavailable ([What is unavailable](unavailable.md#on-some-families)).
+
 ## The same values on both engines
 
 The suite under `tests/vllm_families/` holds every value the engine serves against `StandardizedTransformer`'s on the same checkpoint and prompt, both in float32. On Qwen2.5-0.5B, block 12's stream agrees to 1e-5 of its largest magnitude, the pattern to 1e-3, the head outputs to 4e-3 and the logits to 2e-3. The two engines' attention kernels sum a sharp softmax differently, and that difference is what the later values carry. Compare at 5e-3 of a value's scale, and expect more from a bfloat16 load.

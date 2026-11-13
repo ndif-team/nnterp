@@ -11,6 +11,7 @@ class TestGlm4MoeLite(FamilySuite):
     FAMILY = glm4_moe_lite
     NATIVE = LLAMA_ROWS
     KV_HEADS_EXPANDED = True  # latent attention projects keys and values for every head
+    EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "latent attention"}
 
     def test_latent_attention_widths(self, model):
         assert model.qk_head_dim == model.config.qk_nope_head_dim + model.config.qk_rope_head_dim

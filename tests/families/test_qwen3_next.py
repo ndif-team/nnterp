@@ -2,14 +2,11 @@
 
 import pytest
 import torch
-from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed
+from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, blocks
 
 from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
 
 from nnterp.families import qwen3_next
-
-LINEAR_BLOCKS = (0, 1, 2)   # ``config.layer_types``: three DeltaNet blocks, then one attention block
-ATTENTION_BLOCK = 3
 
 
 class TestQwen3Next(FamilySuite):
@@ -27,9 +24,11 @@ class TestQwen3Next(FamilySuite):
     }
 
     def test_every_layer_is_renamed(self, model):
+        linear, attention = blocks(model, "linear_attention"), blocks(model, "full_attention")
+        assert linear and attention and sorted(linear + attention) == list(range(len(model.layers)))
         for i, layer in enumerate(model.layers):
-            assert hasattr(layer, "linear_attn") == (i in LINEAR_BLOCKS)
-            assert (getattr(layer, "self_attn", None) is not None) == (i == ATTENTION_BLOCK)
+            assert hasattr(layer, "linear_attn") == (i in linear)
+            assert (getattr(layer, "self_attn", None) is not None) == (i in attention)
             assert hasattr(layer, "mlp") and hasattr(layer, "input_layernorm")
 
     def test_layer_types_match_the_tree(self, model):
@@ -38,8 +37,8 @@ class TestQwen3Next(FamilySuite):
 
     def test_support_is_per_block_on_a_hybrid(self, model):
         support = model.support()
-        assert set(support["self_attn.attention_probabilities"]) == set(LINEAR_BLOCKS)
-        assert set(support["linear_attn.state_output"]) == {ATTENTION_BLOCK}
+        assert set(support["self_attn.attention_probabilities"]) == set(blocks(model, "linear_attention"))
+        assert set(support["linear_attn.state_output"]) == set(blocks(model, "full_attention"))
         assert support["layer_output"] is None and support["mlp.mlp_output"] is None
 
     def test_linear_values_shapes(self, model):
@@ -111,8 +110,8 @@ class TestQwen3Next(FamilySuite):
 
     def test_per_token_state_needs_the_recurrent_kernel(self, model):
         reason = model.support()["linear_attn.states"]
-        assert all("route_kernels(model.family, 'torch')" in reason[i] for i in LINEAR_BLOCKS)
-        assert "no linear_attn module" in reason[ATTENTION_BLOCK]
+        assert all("route_kernels(model.family, 'torch')" in reason[i] for i in blocks(model, "linear_attention"))
+        assert all("no linear_attn module" in reason[i] for i in blocks(model, "full_attention"))
         with pytest.raises(Unavailable, match="route_kernels"):
             model.layers[0].linear_attn.state_after(0)
 
@@ -122,7 +121,7 @@ class TestQwen3Next(FamilySuite):
         recurrent = StandardizedTransformer(self.REPO, dispatch=True, attn_implementation="eager")
         try:
             mix = recurrent.layers[0].linear_attn
-            assert recurrent.support()["linear_attn.states"] == {ATTENTION_BLOCK: "no linear_attn module on this block"}
+            assert recurrent.support()["linear_attn.states"] == {i: "no linear_attn module on this block" for i in blocks(recurrent, "full_attention")}
             with recurrent.trace(PROMPT):
                 states = mix.states.save()
                 final = mix.state_output.save()

@@ -1,12 +1,12 @@
 """ZAYA, end to end: residual scaling modules that scale both the contribution and the stream."""
 
-import glob
 import os
 import tempfile
 
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, random_weights, cached_snapshot, built
 
+from nnterp import StandardizedTransformer
 from nnterp.families import zaya
 
 REPO = "hf-tiny-v2/tiny-random-ZayaForCausalLM"
@@ -25,7 +25,7 @@ def _patched_checkpoint(merges, repo=REPO):
     """
     from safetensors.torch import load_file, save_file
 
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = os.path.join(tempfile.gettempdir(), f"nnterp-zaya-{'merged' if merges else 'temp'}-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
@@ -64,26 +64,38 @@ def merged_identity(model):
 class TestZaya(FamilySuite):
     """Key temperatures of one; the merges at the tiny checkpoint's initial values."""
 
-    REPO = _patched_checkpoint(merges=False)
+    REPO = built(_patched_checkpoint, merges=False)
     FAMILY = zaya
     NATIVE = LLAMA_ROWS
-    MID_IDENTITY = False                     # the stream gates scale what the block adds
+    MID_IDENTITY = False                     # the merges rescale the stream as well as what is added
     MLP_WIDTH_KEY = "moe_intermediate_size"   # every block is a mixture
     ROUTER_EXTRA_CLASSES = 1  # router_logits' last column is the skip class
+    EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "compressed convolutional attention"}
 
     def test_merged_identity(self, model):
         merged_identity(model)
+
+    def test_project_on_vocab_on_a_bfloat16_load(self):
+        """The stream stays float32 on a bfloat16 load; the model casts it to the final norm's dtype before the norm, and
+        so does the lens."""
+        model = StandardizedTransformer(self.REPO, dispatch=True, dtype=torch.bfloat16)
+        with model.trace(PROMPT):
+            last = model.layers[-1].layer_output.save()
+            logits = model.logits.save()
+        assert last.dtype == torch.float32 and logits.dtype == torch.bfloat16
+        assert torch.equal(model.project_on_vocab(last), logits)
 
 
 class TestZayaMerged(FamilySuite):
     """Merges away from their initial values: the contributions are the scaled terms, the stream is rescaled too."""
 
-    REPO = _patched_checkpoint(merges=True)
+    REPO = built(_patched_checkpoint, merges=True)
     FAMILY = zaya
     NATIVE = LLAMA_ROWS
-    MID_IDENTITY = False                     # the stream gates scale what the block adds
+    MID_IDENTITY = False                     # the merges rescale the stream as well as what is added
     MLP_WIDTH_KEY = "moe_intermediate_size"
     ROUTER_EXTRA_CLASSES = 1  # router_logits' last column is the skip class
+    EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "compressed convolutional attention"}
 
     def test_contribution_identity(self, model):
         """The suite's identity through each merge's residual scale and bias."""
@@ -123,3 +135,13 @@ class TestZayaMerged(FamilySuite):
             mid = layer.post_attention_layernorm.input.save()
         assert torch.equal(kept, torch.zeros_like(kept))
         torch.testing.assert_close(mid, (x + merge.residual_bias) * merge.residual_scale)
+
+
+def test_skip_layers_hands_on_the_router_state():
+    """A skipped block hands the next block the router state it received, as it hands on the stream (three random blocks)."""
+    model = random_weights(REPO, num_hidden_layers=3, layer_types=["hybrid"] * 3)
+    with model.trace(PROMPT):
+        carried = model.layers[0].output[1].save()
+        model.skip_layers(1, 1)
+        received = model.layers[2].inputs[0][1].save()
+    assert received is not None and torch.equal(received, carried)

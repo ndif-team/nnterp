@@ -78,6 +78,10 @@ class EProperty(eproperty):
             a value whose position differs between the calls a forward branches
             to (`SelectiveScan`'s prompt and decode kernels, `StateSpace`'s
             two kernels).
+        in_place: Write by copying into the tensor the location holds instead of
+            swapping another in, for a tensor the forward also holds under a
+            second name it reads later (a block's ``residual``). An assignment
+            is ``value[:] = new`` into the preprocess's view; reads are unchanged.
 
     The location is served by nnsight the way any eproperty's is, whatever the
     path: a module's output, a sibling norm's, or an operation's arguments,
@@ -97,10 +101,12 @@ class EProperty(eproperty):
         description: str | None = None,
         unavailable: str | Callable[[Envoy], str | None] | None = None,
         select: int | str | Callable[[Envoy], int | str | None] | None = None,
+        in_place: bool = False,
     ) -> None:
         self.locate = key if callable(key) else None
         self.unavailable = unavailable
         self.select = select
+        self.in_place = in_place
         super().__init__(key=f"<{key.__name__}>" if callable(key) else key, description=description)
 
     def __set_name__(self, owner: type, name: str) -> None:
@@ -310,6 +316,10 @@ class EProperty(eproperty):
         location = self._resolve(obj, key)
         attribute = self.attribute(key)
         select = self._selection(obj)
+        if self.in_place:
+            held = self._pick(attribute, Mediator.value(location), select)
+            write_into(self._preprocess(obj, held) if self._preprocess is not None else held, value)
+            return
         mesh = tensor_parallel_mesh(obj)
         axis = self.split_axis if mesh is not None else None
         current = Mediator.value(location) if axis is not None or select is not None or attribute == "input" else None
@@ -381,6 +391,22 @@ class EProperty(eproperty):
         if self._transform is not None:
             return self._transform(obj, piece, raw)
         return self._packed(obj, self.attribute(key), raw, piece, select)
+
+
+def write_into(held: torch.Tensor, value: Any) -> None:
+    """Copy ``value`` into ``held`` in place: an `EProperty` ``in_place`` write.
+
+    A value that shares ``held``'s storage (a view of it, as
+    ``held[:, :1].expand_as(held)`` is) is copied out first, since ``copy_``
+    refuses a source that partly overlaps its target.
+    """
+    if value is held:
+        return
+    # The storages compared by identity (`_cdata`, the storage object's address): a data pointer would warn on the
+    # fake tensors of `model.scan` and call every meta tensor the same.
+    if isinstance(value, torch.Tensor) and value.untyped_storage()._cdata == held.untyped_storage()._cdata:
+        value = value.clone()
+    held.copy_(value)
 
 
 def tensor_parallel_mesh(obj: Envoy) -> Any:

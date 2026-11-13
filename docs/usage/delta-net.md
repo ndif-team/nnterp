@@ -340,8 +340,6 @@ this block`.
   passed it. The other order is out of forward order too. Read them in separate traces.
 - **In-place edits on the queries, keys and values need `torch.no_grad()`**; assignment
   always works.
-- **`state` takes assignment, not in-place edits.** `mix.state[:] = 0` raises
-  `OutOfOrderError`; assign a tensor.
 - **Route before the layer is traced.** `route_kernels` after a model has
   already traced that layer leaves the forward on the kernel it was
   instrumented with: `states` then raises `AttributeError: 'LinearAttention'
@@ -367,4 +365,4 @@ this block`.
 - [attention-interior.md](attention-interior.md), the same names on the softmax blocks, with a pattern and scores.
 - [generation.md](generation.md), values per decode step, and the loop rules under `generate`.
 - [remote.md](remote.md), what these source-located values need from a server.
-- nnsight docs/usage/iter-all-next.md and docs/gotchas/iteration.md, `tracer.iter` and the cut-short loop.
+- nnsight docs/usage/iteration.md and docs/errors/module-never-fired.md, `tracer.iter` and the cut-short loop.

@@ -58,6 +58,11 @@ class Attention(Attention):
     def attention_scores(self, value) -> Pattern:
         return value
 
+    def value_weight(self, kv_head):
+        """``v_proj``'s rows, times the ``attention_value_scale`` the forward multiplies the values by."""
+        weight, scale = super().value_weight(kv_head), self._module.v_scale
+        return weight if scale == 1 else weight * scale
+
 
 class Mlp(Mlp):
     """MiMo-V2-Flash's dense MLP or mixture of experts; both return the hidden states, and the residual is added in the block."""

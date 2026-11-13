@@ -81,7 +81,7 @@ def test_vllm_family_passed_skips_the_lookup(monkeypatch):
     built = {}
     monkeypatch.setattr(vllm_envoys, "parallel_envoys", lambda: {"parallel": "envoy"})
     monkeypatch.setattr(VLLM, "__init__", lambda self, repo_id, *args, **kwargs: built.update(kwargs, repo_id=repo_id))
-    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, kwargs: pytest.fail("config read")))
+    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, **kwargs: pytest.fail("config read")))
 
     custom = types.SimpleNamespace(RENAME={"model.layers": "layers"}, ENVOYS={"parallel": "mine", int: "layer"})
     model = StandardizedVLLM("some/repo", family=custom, rename={"lm_head": "unembed"}, envoys={str: "extra"}, dispatch=True)
@@ -90,9 +90,31 @@ def test_vllm_family_passed_skips_the_lookup(monkeypatch):
     assert built["envoys"] == {"parallel": "mine", int: "layer", str: "extra"}  # the family's win over nnsight's, the load's over both
     assert "family" not in built and families.REGISTRY == {}
 
-    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, kwargs: types.SimpleNamespace(model_type="xglm")))
+    read = {}
+    monkeypatch.setattr(StandardizedVLLM, "_read_config", staticmethod(lambda repo_id, **kwargs: read.update(kwargs) or types.SimpleNamespace(model_type="xglm")))
     with pytest.raises(UnsupportedFamily, match="'xglm' on vllm"):
-        StandardizedVLLM("some/repo")
+        StandardizedVLLM("some/repo", download_dir="/models", hf_token="t", revision="main", dtype="float32", trust_remote_code=False)
+    # The config is looked for where the engine looks: vLLM's spellings of the hub arguments, under transformers' names.
+    assert read == {"cache_dir": "/models", "token": "t", "revision": "main", "trust_remote_code": False}
+
+
+def test_config_is_read_with_the_loads_kwargs(tmp_path):
+    """`_read_config` looks for the checkpoint where the build will: its named kwargs (`cache_dir`,
+    `local_files_only`, ...) reach `AutoConfig`; the build's own kwargs do not get in the way."""
+    import shutil
+    from pathlib import Path
+
+    from huggingface_hub.constants import HF_HUB_CACHE
+
+    load = {"task": "text-generation", "dispatch": True, "device_map": "auto", "dtype": "auto",
+            "attn_implementation": "eager", "local_files_only": True}
+    assert StandardizedTransformer._read_config(GPT2, **load).model_type == "gpt2"      # the build's kwargs are ignored
+    with pytest.raises(OSError):                                                        # an empty cache_dir is looked in
+        StandardizedTransformer._read_config(GPT2, **load, cache_dir=tmp_path)
+    folder = f"models--{GPT2.replace('/', '--')}"
+    shutil.copytree(Path(HF_HUB_CACHE) / folder, tmp_path / folder, symlinks=False,
+                    ignore=shutil.ignore_patterns("blobs", "*.safetensors", "*.bin"))  # the snapshot's config, no weights
+    assert StandardizedTransformer._read_config(GPT2, **load, cache_dir=tmp_path).model_type == "gpt2"
 
 
 def test_preloaded_module_uses_its_own_config():

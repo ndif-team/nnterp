@@ -35,14 +35,17 @@ print(model.family)                 # <module 'nnterp.families.gpt2' ...>
 print(model.num_layers, model.hidden_size, model.num_heads)
 
 with model.trace("The Eiffel Tower is in"):
-    resid = model.layers[3].layer_output.save()
     pattern = model.layers[3].self_attn.attention_probabilities.save()
+    resid = model.layers[3].layer_output.save()
     logits = model.logits.save()
 ```
 
 Every argument other than `family`, `rename`, `envoys` and `tokenizer_kwargs` goes straight to
 `TransformersModel`: `dispatch`, `dtype`, `device_map`, `attn_implementation`, `revision`,
-`trust_remote_code`, `task` and the rest. `task` defaults to `"text-generation"`;
+`trust_remote_code`, `task` and the rest; the config read that picks the family gets the hub
+ones among them (`cache_dir`, `revision`, `token`, `local_files_only`, ...), so a checkpoint
+that lives only in a `cache_dir`, or needs a `token`, resolves where the build will look for it.
+`task` defaults to `"text-generation"`;
 `task="image-text-to-text"` loads a vision-language checkpoint as its wrapper with its
 processor, which is what gives it `model.vision` ([vision.md](vision.md)).
 
@@ -67,7 +70,14 @@ wrapper with a family module of its own resolves to that one whatever its text c
 text config `deepseek_v3`); `nnterp.families.resolve(config)` is the rule.
 
 `model.family` is the module the checkpoint resolved to; `nnterp.families.known()` lists
-the shipped ones (99, counting `kimi_k25`) without loading anything.
+the shipped ones (99, counting `kimi_k25`) without loading anything. To know before a load
+whether a checkpoint gets a family of its own, ask `nnterp.families.resolve(config)`: it
+returns the family the load would use, from the config alone, and `nnterp.families.default`
+where the load would fall back to the best-effort default
+([below](#an-architecture-with-no-family)); a sweep over unfamiliar checkpoints can skip or
+flag the uncovered ones before loading any weights. `nnterp.families.covers(model_type)`
+answers for one type: `True` for a shipped or registered family, so `False` on a wrapper's
+own type whose text model has a family.
 
 ## An architecture with no family
 
@@ -111,8 +121,11 @@ What loads serves:
   `input_size`, `next_token_probs`) and the sizes; `skip_layers` and `steer`, which work on the stream.
 - The attention interior (`attention_queries/keys/values/scores/probabilities/head_outputs`),
   read on transformers' shared attention interface as on any family, wherever the module
-  calls it, and with `attn_implementation="eager"`. A module that makes no
-  `attention_interface` call (GPT-J, Falcon) reports them unavailable; a model whose eager
+  calls it, and with `attn_implementation="eager"`, and `self_attn.interface`, which calls
+  that function again ([attention-interior](attention-interior.md#calling-the-attention-function-again-interface)).
+  A module that makes no `attention_interface` call (GPT-J, Falcon) reports them and
+  `interface` unavailable ("The attention does its own arithmetic rather than transformers'
+  shared attention interface"); a model whose eager
   attention forward is its own, with no `nn.functional.softmax` (GPT-OSS's sink, Granite's
   sliding window), raises `SourceNotAvailable` naming the missing op when the scores are read.
 
@@ -122,11 +135,14 @@ block has a stream between its sublayers"), nor `mlp_norm_output` ("the default 
 whether post_attention_layernorm feeds the MLP": a sandwich or post-norm block norms the
 attention's output under that name; `mlp_input` is what the MLP reads), nor the interior of a
 mixture of experts (an MLP with `experts`, a `router` or a `gate`), nor `project_on_vocab` and `get_topk_closest_tokens` ("the
-default family cannot tell what follows lm_head"): a post-norm (Gemma-2), a residual taken
-inside the sublayer (BLOOM), a scale (Granite) or a softcap past the head is code a name does
-not show. A block's `self_attn.*` or `mlp.*` is unavailable when it has no module under a name
-the default knows. The contributions, the logit lens, the mixture values and the recurrent
-mixers (`linear_attn`) need a family module ([adding-a-family](../extending/adding-a-family.md)).
+default family cannot tell what follows lm_head"), nor `attention_queries_prerope`,
+`attention_keys_prerope` and `self_attn.rotate` ("the default family cannot tell where this
+attention applies its rotary embedding, if it has one, or with what"): a post-norm (Gemma-2),
+a residual taken inside the sublayer (BLOOM), a scale (Granite), a softcap past the head or the
+call a block rotates its queries and keys with is code a name does not show. A block's
+`self_attn.*` or `mlp.*` is unavailable when it has no module under a name the default knows.
+The contributions, the logit lens, the values before the rotary, the mixture values and the
+recurrent mixers (`linear_attn`) need a family module ([adding-a-family](../extending/adding-a-family.md)).
 
 `family=` skips all of this for one load: `StandardizedTransformer(repo_id,
 family=my_family)` uses `my_family` (a module, or a `types.SimpleNamespace` with `RENAME`
@@ -162,9 +178,12 @@ with model.trace("Hello world"):
 ## `device` and `device_map`
 
 `device="cpu"` (or `"cuda:0"`) puts the whole model on that device. `device_map` is passed on
-to transformers, but nnsight's pipeline passes its own `device` too, which wins: a model loaded
-with `device_map="cpu"` on a machine with a GPU lands on `cuda:0`. Use `device=` to choose
-one device, and `device_map="auto"` to spread a model over several:
+to transformers, but the transformers pipeline nnsight loads through then moves a model that
+sits on one device to its own, the first GPU when there is one: a model loaded with
+`device_map="cpu"` (or `{"": "cpu"}`) on a machine with a GPU lands on `cuda:0`. A map that
+puts the model on more than one device (`"auto"` over several GPUs or past one GPU's memory, a
+dict naming several) is kept. Use `device=` to choose one device, and `device_map` to spread a model over
+several:
 
 ```python
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, device="cpu")
@@ -238,9 +257,10 @@ are the base of the merge, so a family's or your own map never drops them.
 
 ## Across GPUs: `distributed_config=`
 
-A load with `distributed_config=DistributedConfig(tp_size=N)`, launched with `torchrun`, splits
-the model tensor-parallel (transformers 5.19 or later). The standard values read whole, the
-same on every rank. nnsight reassembles a split module's own input and output; where a rank
+A load with `distributed_config=DistributedConfig(tp_size=N)`, launched with
+`torchrun --nproc_per_node=N script.py` (one process per GPU, each running the whole script;
+nnsight docs/models/tensor-parallel.md), splits the model tensor-parallel (transformers 5.19
+or later). The standard values read whole, the same on every rank. nnsight reassembles a split module's own input and output; where a rank
 holds only its share of the heads or neurons, in the attention interior (`attention_queries`
 through `attention_head_outputs`) and at `mlp_activation`, nnterp gathers the value along that
 axis. An edit to one, in place or by assignment, goes back to each rank as its piece of the
@@ -296,39 +316,47 @@ GPT2Block(
   (input_layernorm/ln_1): LayerNorm((768,), eps=1e-05, elementwise_affine=True, bias=True)
   (self_attn/attn): GPT2Attention(
     (c_attn): Conv1D()
-    (c_proj): Conv1D()
+    (o_proj/c_proj): Conv1D()
     (attn_dropout): Dropout(p=0.1, inplace=False)
     (resid_dropout): Dropout(p=0.1, inplace=False)
+    (attention_queries_prerope) -> Queries [batch num_heads seq qk_head_dim]: The queries entering the rotary embedding
+    (attention_keys_prerope) -> Keys [batch num_kv_heads seq qk_head_dim]: The keys entering the rotary embedding
     (attention_queries) -> Queries [batch num_heads seq qk_head_dim]: The queries entering attention
     (attention_keys) -> Keys [batch num_kv_heads seq qk_head_dim]: The keys entering attention
     (attention_values) -> Values [batch num_kv_heads seq head_dim]: The values entering attention
     (attention_scores) -> Pattern [batch num_heads query key]: The attention scores entering the softmax, masked
+    (attention_premix) -> HeadOutputs [batch seq num_heads head_dim]: Every head's output side by side, as the output projection takes it
     (attention_output) -> Residual [batch seq hidden_size]: What the attention adds to the residual stream
     (attention_probabilities) -> Pattern [batch num_heads query key]: The attention pattern the values are mixed with
     (attention_head_outputs) -> HeadOutputs [batch seq num_heads head_dim]: The per-head outputs before the output projection
+    (interface): The attention function this call ran, as f(queries, keys, values) -> (head outputs, pattern), with the rest of the call's arguments
   )
   (post_attention_layernorm/ln_2): LayerNorm((768,), eps=1e-05, elementwise_affine=True, bias=True)
   (mlp): GPT2MLP(
     (c_fc): Conv1D()
-    (c_proj): Conv1D()
-    (act): NewGELUActivation()
+    (down_proj/c_proj): Conv1D()
+    (act_fn/act): NewGELUActivation()
     (dropout): Dropout(p=0.1, inplace=False)
+    (mlp_activation) -> Neurons [batch seq intermediate_size]: The activation function's output
+    (mlp_neurons) -> Neurons [batch seq intermediate_size]: What the down projection receives: act(gate)·up on a gated MLP, the activation itself otherwise
     (mlp_output) -> Residual [batch seq hidden_size]: What the MLP adds to the residual stream
   )
+  (layer_input) -> Residual [batch seq hidden_size]: The residual stream entering the block
+  (attention_norm_output) -> Residual [batch seq hidden_size]: The normed stream entering the attention
+  (layer_mid) -> Residual [batch seq hidden_size]: The residual stream after the attention add
+  (mlp_norm_output) -> Residual [batch seq hidden_size]: The normed stream entering the MLP
+  (mlp_input) -> Residual [batch seq hidden_size]: What the MLP is called with
   (layer_output) -> Residual [batch seq hidden_size]: The residual stream leaving the block, a tensor even when the block returns a tuple
 )
 ```
 
-The root's own values (`logits`, `token_embeddings`, `next_token_probs`, `input_ids`,
-`attention_mask`, `input_size`) print the same way at the end of `print(model)`; see
+The root's own values (`logits`, `token_embeddings`, `final_norm_output`, `lm_head_output`,
+`next_token_probs`, `input_ids`, `attention_mask`, `input_size`) print the same way at the end of `print(model)`; see
 [root-values](root-values.md). A value is listed whether or not this checkpoint has it;
 `support()` is what says.
 
 ## Gotchas
 
-- **Import `nnterp` (or `nnsight`) before any `transformers.models...` or
-  `transformers.modeling_layers` import.** The reverse order segfaults at import on this
-  stack. A plain `import transformers` first is fine.
 - **`attn_implementation` is not defaulted to eager.** A model loaded without it runs
   transformers' default, and the attention interior is unavailable; the boundary values
   still work.

@@ -173,7 +173,8 @@ recurrent state is patchable too: see [delta-net-state](delta-net-state.md).
 
 `attention_head_outputs[..., HEAD, :]` is one head's output before the projection,
 `[batch, seq, head_dim]`; patch that slice the same way, under
-`attn_implementation="eager"`.
+`attn_implementation="eager"`. To patch what a head *reads* (its keys and values over a
+span) rather than what it writes, see [head-kv-patching](head-kv-patching.md).
 
 ### Noising
 
@@ -195,7 +196,9 @@ is symmetric.
 - Across invokes, a consuming *write* needs a barrier; without it, `NameError`.
   Across traces, `.save()` or a session.
 - Within one invoke, reads follow the forward (`OutOfOrderError` otherwise), and
-  the source cannot be the target block's own clean value.
+  the source cannot be the target block's own clean value. To patch several sites in one
+  invoke, sort them by `model.rank(name, layer)` first
+  ([availability](../usage/availability.md#forward-order-order-and-rank)).
 - Different token lengths cannot share an absolute position; `[:, -1]` survives
   padding and length differences, an absolute index does not.
 - Patching mutates the served tensor; `.clone()` first if you want both.
@@ -209,6 +212,10 @@ is symmetric.
   local to the block it is made on; to patch what every borrower attends with, patch
   the source block's `k_proj` / `v_proj` output
   ([Borrowed keys and values](../reference/families.md#borrowed-keys-and-values)).
+- A `layer_output` patch is not the whole state where blocks pass more forward: Gemma-4
+  E2B/E4B (per-layer inputs, shared keys and values), DeepSeek-V4 (hash-routed blocks read the
+  token ids), GLM-5 and ZAYA (the block's second output). On GLM-5 and ZAYA patch
+  `layers[i].output` whole; [families.md](../reference/families.md) has the others.
 - On Granite (and GraniteMoE, Granite-SWA, HyperCLOVA X, ZAYA) a patch of
   `attention_output` or `mlp_output` at one position moves the other positions by
   rounding; in bf16 that can be a visible fraction of a small patch's effect, so load in

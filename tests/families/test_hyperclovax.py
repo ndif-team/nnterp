@@ -5,7 +5,7 @@ import pytest
 import test_granite
 import torch
 from qwen_vision_suite import PER_IMAGE_UNAVAILABLE, WIDE, QwenVisionSuite
-from suite import FamilySuite, LLAMA_ROWS, PROMPT, rows
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, rows, built
 from vision_suite import IMAGE, align_processor, image_prompt
 
 from nnterp.components import QwenVision, QwenVisionAttention
@@ -35,7 +35,7 @@ class TestHyperCLOVAX(FamilySuite):
 class TestHyperCLOVAXScaled(test_granite.TestGraniteScaled):
     """The same weights with every multiplier away from 1.0 (Granite's rewrite); here ``logits_scaling`` multiplies."""
 
-    REPO = test_granite._scaled_checkpoint(REPO)
+    REPO = built(test_granite._scaled_checkpoint, REPO)
     FAMILY = hyperclovax
     NATIVE = LLAMA_ROWS
 
@@ -45,8 +45,9 @@ class TestHyperCLOVAXScaled(test_granite.TestGraniteScaled):
             attn = model.layers[0].self_attn.attention_output.save()
             post_mlp = model.layers[0].post_norm2.output.save()
             mlp = model.layers[0].mlp.mlp_output.save()
-        torch.testing.assert_close(attn, post_attn * 0.22)
-        torch.testing.assert_close(mlp, post_mlp * 0.22)
+        scale = model.config.residual_multiplier
+        torch.testing.assert_close(attn, post_attn * scale)
+        torch.testing.assert_close(mlp, post_mlp * scale)
 
     def test_logits_are_the_head_over_logits_scaling(self, model):
         """Granite's test, inverted: HyperCLOVA X multiplies the head's output by ``logits_scaling``."""
@@ -54,14 +55,14 @@ class TestHyperCLOVAXScaled(test_granite.TestGraniteScaled):
             resid = model.layers[-1].layer_output.save()
             raw = model.lm_head.output.save()
             logits = model.logits.save()
-        torch.testing.assert_close(logits, raw * 4.0)
+        torch.testing.assert_close(logits, raw * model.config.logits_scaling)
         torch.testing.assert_close(model.project_on_vocab(resid), logits)
 
 
 class TestHyperCLOVAXWithoutPostNorm(FamilySuite):
     """``use_post_norm`` off: the post-norms are identities, so the contributions are the modules' outputs times the multiplier."""
 
-    REPO = test_granite._scaled_checkpoint(REPO, use_post_norm=False)
+    REPO = built(test_granite._scaled_checkpoint, REPO, use_post_norm=False)
     FAMILY = hyperclovax
     NATIVE = LLAMA_ROWS
 
@@ -71,8 +72,9 @@ class TestHyperCLOVAXWithoutPostNorm(FamilySuite):
             attn = model.layers[0].self_attn.attention_output.save()
             mlp_raw = model.layers[0].mlp.output.save()
             mlp = model.layers[0].mlp.mlp_output.save()
-        torch.testing.assert_close(attn, attn_raw * 0.22)
-        torch.testing.assert_close(mlp, mlp_raw * 0.22)
+        scale = model.config.residual_multiplier
+        torch.testing.assert_close(attn, attn_raw * scale)
+        torch.testing.assert_close(mlp, mlp_raw * scale)
 
 
 def align_vision_processor(model):

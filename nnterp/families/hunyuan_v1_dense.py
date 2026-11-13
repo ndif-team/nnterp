@@ -28,7 +28,11 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Hunyuan dense V1's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Hunyuan dense V1's attention; the shared eager forward and the residual added in the block, so the base holds.
+
+    ``query_layernorm`` / ``key_layernorm`` norm the queries and keys *after*
+    the rotary, so ``attention_queries`` is the norm of ``rotate(attention_queries_prerope, ...)``.
+    """
 
 
 class Mlp(Mlp):

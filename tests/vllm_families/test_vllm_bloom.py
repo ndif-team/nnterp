@@ -1,6 +1,6 @@
 """BLOOM on vLLM, against the transformers engine: ALiBi attention, a plain block with the positions first."""
 
-from vllm_suite import VLLMFamilySuite
+from vllm_suite import NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import bloom
 
@@ -8,7 +8,7 @@ from nnterp.families.vllm import bloom
 class TestVLLMBloom(VLLMFamilySuite):
     REPO = "bigscience/bloom-560m"
     FAMILY = bloom
-    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | NO_ROTARY) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "transformer.word_embeddings",
         "layers": "transformer.h",

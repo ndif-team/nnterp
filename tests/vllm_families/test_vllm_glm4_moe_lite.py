@@ -17,11 +17,11 @@ mapping, not that difference.
 
 import os
 
-from vllm_suite import LLAMA_ROWS, VLLMFamilySuite
+from vllm_suite import LLAMA_ROWS, NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import glm4_moe_lite
 
-UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | frozenset({
+UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | frozenset({
     f"self_attn.{value}" for value in ("attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_probabilities", "attention_head_outputs")
 }) | {"mlp.mlp_neurons"}
 

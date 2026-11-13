@@ -11,17 +11,23 @@ the division by ``sqrt(head_dim)``, softmax, a cast to the values' dtype,
 so ``attn_implementation`` never routes around it and the interior needs no eager
 load. ``drop`` has no standard name.
 
-CodeGen2 checkpoints (``Salesforce/codegen2-*``) declare ``model_type`` ``codegen``,
-but their own code lays ``qkv_proj`` out in eight groups (``mp_num = 8``); loaded
-through transformers' class, which splits it in four, the queries, keys and values
-are cut wrong and nothing reports it.
+CodeGen2 checkpoints (``Salesforce/codegen2-*``) declare ``model_type`` ``codegen``.
+The 1B and 3.7B checkpoints' own code lays ``qkv_proj`` out in eight groups
+(``mp_num = 8``); loaded through transformers' class, which splits it in four, their
+queries, keys and values are cut wrong and nothing reports it. The 7B and 16B
+checkpoints' code uses four groups, as transformers' class does.
 """
 
 from typing import TYPE_CHECKING
 
+import torch
 from transformers.models.codegen.modeling_codegen import CodeGenAttention, CodeGenBlock, CodeGenMLP
 
-from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, seq_first, unavailable
+from ..components import (
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, PARALLEL, Pattern, Queries, Residual, Values, projection_weight, rotary_reason, seq_first,
+    unavailable,
+)
+from .gptj import Attention as GPTJAttention
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -58,6 +64,34 @@ class Layer(Layer):
 
 class Attention(Attention):
     """CodeGen's attention: the residual is added in the block; the pattern lives in its ``_attn`` method."""
+
+    # GPT-J's rotary: tokens before heads, an interleaved rotation of each
+    # head's leading ``rotary_dim`` channels, so the values before it and the
+    # arithmetic are GPT-J's; sin and cos are indexed from the fp32 table and
+    # not cast, which is why the rotated queries come out fp32.
+
+    @EProperty("source.query_0.output", description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
+    def attention_queries_prerope(self, value) -> Queries:
+        return seq_first(value)
+
+    @attention_queries_prerope.postprocess
+    def attention_queries_prerope(self, value):
+        return seq_first(value)
+
+    @EProperty("source.key_0.output", description=Attention.attention_keys_prerope.description, unavailable=rotary_reason)
+    def attention_keys_prerope(self, value) -> Keys:
+        return seq_first(value)
+
+    @attention_keys_prerope.postprocess
+    def attention_keys_prerope(self, value):
+        return seq_first(value)
+
+    def rotary_embedding(self, x, position_ids):
+        """``(sin, cos)`` indexed from the module's fp32 sinusoid table at ``position_ids``, as the forward does."""
+        sincos = self._module.embed_positions.to(position_ids.device)[position_ids]
+        return torch.split(sincos, sincos.shape[-1] // 2, dim=-1)
+
+    apply_rotary = GPTJAttention.apply_rotary
 
     # The interior lives around the ``_attn`` method call: its arguments are the
     # queries, keys and values heads first, after the rotary embedding (no
@@ -101,6 +135,12 @@ class Attention(Attention):
     )
     def attention_probabilities(self, value) -> Pattern:
         return value
+
+    def value_weight(self, kv_head):
+        """``qkv_proj``'s rows are four parts (the forward's ``mp_num``), each a quarter of the heads' queries, values, then keys."""
+        per_part = self.num_heads // 4
+        weight = projection_weight(self, "qkv_proj").unflatten(0, (4, 3, per_part, self.head_dim))
+        return weight[kv_head // per_part, 1, kv_head % per_part]
 
 
 class Mlp(Mlp):

@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./nnterp_logo.png" alt="nnterp" width="300">
+  <img src="./nnterp_logo.png" alt="nnterp" width="220">
 </p>
 
 <h3 align="center">
@@ -45,13 +45,18 @@ and `model.layers[5]` are the same envoy and the native names keep working.
 same thing on every family. `layer_output` is the residual stream leaving a block, whether
 the block returns a tensor or a tuple. `attention_output` and `mlp_output` are what each
 sublayer adds to the residual stream, wherever the family adds the residual or applies a
-post-sublayer norm, so on every family
+post-sublayer norm, so on most families
 
 ```
 layers[i].input + attention_output + mlp_output == layers[i].layer_output
 ```
 
-Values can be read, edited in place, or assigned.
+Where a block scales, gates or splits its stream, or has no MLP module,
+[families.md](docs/reference/families.md#quirks-by-theme) gives its formula. Values can be
+read, edited in place, or assigned.
+
+The [encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/) has a page per family: the
+block drawn with nnterp's names, where each value is read, and what to know before tracing it.
 
 **Ask before you trace.** Not every checkpoint has every value. `model.support()` says what
 this one has and, for anything missing, why; reading a missing value raises
@@ -111,7 +116,7 @@ with model.trace("The Eiffel Tower is in"):
 98 families, among them GPT-2, Llama, Mistral, Qwen 2/3/3.5, Gemma 1-4, Phi, OLMo, GPT-NeoX,
 DeepSeek-V2/V3, GPT-OSS, Mixtral, Falcon, BLOOM, Mamba, Jamba and Nemotron-H, developed
 against transformers 5.17 and run on 5.19 and 5.20.1; 60 of them also run on vLLM
-([docs/usage/vllm.md](docs/usage/vllm.md)). Sixteen of them also name the vision tower of their
+([docs/usage/vllm.md](docs/usage/vllm.md)). Nineteen of them also name the vision tower of their
 image-text-to-text wrappers (Llava, LLaVA-NeXT, Gemma 3, PaliGemma, Mistral 3, Pixtral,
 Qwen2-VL to Qwen3.5, Llama 4, Gemma 4, Idefics 3, Aya Vision, ...). The full table, with each
 family's native names and quirks, is [docs/reference/families.md](docs/reference/families.md).
@@ -127,9 +132,9 @@ Extras:
 - `pip install "nnterp[models]"`: the tokenizers and processors some checkpoints need
   (`sentencepiece`, `tiktoken`, `protobuf`, `pillow`).
 - `pip install "nnterp[vllm]"`: vLLM.
-- `pip install "nnterp[test]"`: `pytest` and `pytest-xdist`, for the test suite.
+- `pip install "nnterp[test]"`: `pytest` and `pytest-xdist`, for the test suite, and `peft` for its adapter test.
 
-nnterp requires nnsight 0.8.0 or later (`nnsight>=0.8`; nnsight 0.8.0 is on PyPI).
+nnterp requires nnsight 0.8 or later (`nnsight>=0.8`).
 
 ## Documentation
 
@@ -166,7 +171,7 @@ issue on the [nnterp tracker](https://github.com/ndif-team/nnterp/issues).
 
 Contributions are welcome: a family that is not supported yet, a value you needed for your
 research, a fix. Read [docs/developing/contributing.md](docs/developing/contributing.md) for
-the style and workflow, and the list of open items.
+the style and workflow.
 
 ## Citation
 

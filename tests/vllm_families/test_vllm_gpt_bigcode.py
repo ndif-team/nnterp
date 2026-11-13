@@ -1,6 +1,6 @@
 """GPT-BigCode on vLLM's transformers backend, against the transformers engine: GPT-2's tree under ``model``, multi-query attention."""
 
-from vllm_suite import VLLMFamilySuite
+from vllm_suite import NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import gpt_bigcode
 
@@ -8,7 +8,7 @@ from nnterp.families.vllm import gpt_bigcode
 class TestVLLMGPTBigCode(VLLMFamilySuite):
     REPO = "bigcode/tiny_starcoder_py"
     FAMILY = gpt_bigcode
-    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE - {"mlp.mlp_activation"}
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | NO_ROTARY) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "model.wte",
         "layers": "model.h",

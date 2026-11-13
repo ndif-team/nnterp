@@ -20,7 +20,7 @@ import torch
 from nnsight.intervention.envoy import Envoy
 from nnsight.intervention.interleaver import OutOfOrderError
 from PIL import Image
-from suite import PROMPT, contributions
+from suite import PROMPT, TOWER_NO_ROTARY, contributions
 
 from nnterp import StandardizedTransformer, Unavailable, axis_size
 from nnterp.components import (
@@ -32,8 +32,10 @@ from nnterp.components.vision import scatter_call, scatter_host
 TOWER_VALUES = ("image_token_mask", "patch_embeddings", "tower_output", "image_features")
 BLOCK_VALUES = {
     "layer_input", "attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input", "layer_output", "self_attn.attention_output", "self_attn.attention_probabilities", "self_attn.attention_queries",
+    "self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope",
     "self_attn.attention_keys", "self_attn.attention_values", "self_attn.attention_scores",
     "self_attn.attention_head_outputs", "mlp.mlp_output", "self_attn.attention_premix", "mlp.mlp_activation", "mlp.mlp_neurons",
+    "self_attn.interface",
 }
 
 #: A fixed random image; the processor resizes it to the tower's size.
@@ -214,10 +216,11 @@ class VisionSuite:
     def test_support_lists_the_tower_values(self, model):
         vision = model.vision.support()
         assert set(vision) == {*TOWER_VALUES, *BLOCK_VALUES}
+        expected = {**TOWER_NO_ROTARY, **self.EXPECTED_VISION_UNAVAILABLE}
         for name, reason in vision.items():
-            if name in self.EXPECTED_VISION_UNAVAILABLE:
+            if name in expected:
                 assert set(reason) == set(range(model.vision.num_layers)), name
-                assert all(self.EXPECTED_VISION_UNAVAILABLE[name] in r for r in reason.values()), (name, reason)
+                assert all(expected[name] in r for r in reason.values()), (name, reason)
             else:
                 assert reason is None, (name, reason)
         assert set(model.vision.support(layer=0)) == BLOCK_VALUES
@@ -432,6 +435,20 @@ class VisionSuite:
             assert pattern.shape == (out.shape[0], model.vision.num_heads, out.shape[1], out.shape[1])
             torch.testing.assert_close(pattern.sum(-1), torch.ones_like(pattern[..., 0]))
 
+    def test_tower_interface_reproduces_heads_and_pattern(self, model):
+        """A tower block serving `interface` gives its head outputs and pattern bit for bit on the served queries, keys and values."""
+        layers = model.vision.layers if model.vision.num_layers else []
+        blocks = [layer for layer in layers if layer.self_attn.support()["interface"] is None]
+        if not blocks:
+            pytest.skip("no tower block calls one attention function: test_support_lists_the_tower_values")
+        attn = blocks[0].self_attn
+        with model.trace(image_prompt(model), images=[IMAGE]):
+            heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
+            probs = attn.attention_probabilities.save()
+            served = attn.attention_head_outputs.save()
+            heads, pattern = heads.save(), pattern.save()
+        assert torch.equal(heads, served) and torch.equal(pattern, probs)
+
     def read_patches_at(self, model):
         """The native value ``patch_embeddings`` is read at (`PATCHES_AT`), in a trace."""
         module, attribute = self.PATCHES_AT.rsplit(".", 1)
@@ -521,20 +538,20 @@ class PixtralSuite(VisionSuite):
             model.vision.image_size
 
 
-def wrapper_of(text_repo, config_class, vision_config, **load):
+def wrapper_of(text_repo, config_class, vision_config, text_overrides=None, **load):
     """A multimodal wrapper around a text family's tiny checkpoint config, random weights, loaded as a module.
 
     For a family whose wrapper has no tiny checkpoint: the wrapper (the class
     ``AutoModelForImageTextToText`` maps ``config_class`` to) is built from the tiny
-    text config and a small ``vision_config`` (an ``out_hidden_size`` of ``None``
-    takes the text width), and handed to `StandardizedTransformer` with the text
-    checkpoint's tokenizer, so the task is text generation and the tree is the
-    wrapper's.
+    text config, with ``text_overrides`` set on it, and a small ``vision_config`` (an
+    ``out_hidden_size`` of ``None`` takes the text width), and handed to
+    `StandardizedTransformer` with the text checkpoint's tokenizer, so the task is
+    text generation and the tree is the wrapper's.
     """
     import transformers
     from transformers import AutoConfig, AutoModelForImageTextToText, AutoTokenizer
 
-    text = AutoConfig.from_pretrained(text_repo)
+    text = AutoConfig.from_pretrained(text_repo, **(text_overrides or {}))
     if "out_hidden_size" in vision_config and vision_config["out_hidden_size"] is None:  # a merger projecting onto the text width
         vision_config = {**vision_config, "out_hidden_size": text.hidden_size}
     config = getattr(transformers, config_class)(text_config=text.to_dict(), vision_config=vision_config)
@@ -588,3 +605,13 @@ class WrapperSuite:
             logits = model.logits.save()
         torch.testing.assert_close(stream + sum(parts), out)
         assert logits.shape[-1] == model.vocab_size
+
+    def test_project_on_vocab_is_the_logit_lens(self, model):
+        """The lens follows the wrapper's own path to its logits, which can differ from the text model's class (a
+        wrapper that drops the text model's scale or softcap), and reads any block."""
+        with model.trace(self.text_input(model)):
+            mid = model.layers[model.num_layers // 2].layer_output.save()
+            last = model.layers[-1].layer_output.save()
+            logits = model.logits.save()
+        torch.testing.assert_close(model.project_on_vocab(last), logits)
+        assert model.project_on_vocab(mid).shape == logits.shape

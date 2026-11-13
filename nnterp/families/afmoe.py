@@ -47,7 +47,7 @@ class Layer(Layer):
     ``mlp_norm_output`` read ``pre_mlp_layernorm``, the MLP's pre-norm.
     """
 
-    @EProperty("pre_mlp_layernorm.input", description="The residual stream after the attention add")
+    @EProperty("pre_mlp_layernorm.input", description="The residual stream after the attention add", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 
@@ -59,6 +59,11 @@ class Layer(Layer):
 
 class Attention(Attention):
     """AFMoE's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
+
+    def no_rotary(self) -> str | None:
+        if not self._module.is_local_attention:
+            return "no rotary embedding on this block: AFMoE's full-attention blocks use no position encoding, its sliding-window blocks rotate"
+        return None
 
     @EProperty(
         "../post_attention_layernorm.output",

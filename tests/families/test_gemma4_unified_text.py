@@ -1,13 +1,13 @@
 """Gemma 4 unified, end to end: Gemma-4's sandwich and layer_scalar, KV sharing, no per-layer embeddings or experts;
 and the wrapper's encoder-free image embedder under ``vision``."""
 
-import glob
 import os
 import tempfile
 
 import pytest
 import torch
-from test_gemma4_text import Gemma4Suite
+from suite import cached_snapshot, built
+from test_gemma4_text import BORROWED_KEYS, Gemma4Suite
 from vision_suite import IMAGE, TOWER_VALUES, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
@@ -20,6 +20,7 @@ TEXT_REPO = "hf-tiny-v2/tiny-random-Gemma4UnifiedForCausalLM"
 class TestGemma4Unified(Gemma4Suite):
     REPO = TEXT_REPO
     FAMILY = gemma4_unified_text
+    EXPECTED_UNAVAILABLE = BORROWED_KEYS
 
     def test_no_per_layer_output(self, model):
         assert "per_layer_output" not in model.support()
@@ -50,7 +51,7 @@ def _unified_checkpoint():
         Gemma4UnifiedVideoProcessor,
     )
 
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{TEXT_REPO.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(TEXT_REPO)
     built = os.path.join(tempfile.gettempdir(), f"nnterp-gemma4-unified-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(built, "processor_config.json")):
         return built
@@ -74,7 +75,7 @@ def _unified_checkpoint():
 class TestGemma4UnifiedVision(VisionSuite):
     """The encoder-free embedder: ``vision`` with no blocks, ``projector`` its projection, ``image_features`` read at the scatter."""
 
-    REPO = _unified_checkpoint()
+    REPO = built(_unified_checkpoint)
     FAMILY = gemma4_unified_text
     TEXT_REPO = TEXT_REPO
     VISION_NATIVE = {

@@ -3,8 +3,9 @@
 import pytest
 import torch
 import vllm_suite
-from vllm_suite import BOUNDARY, INTERIOR, ROOT, VLLMFamilySuite, close
+from vllm_suite import BOUNDARY, INTERIOR, NO_ROTARY, ROOT, VLLMFamilySuite, close
 
+from nnterp.components import POST_NORM_ATTENTION, POST_NORM_MLP
 from nnterp.families.vllm import opt
 
 suite_boundary = vllm_suite.boundary
@@ -31,7 +32,7 @@ def boundary(layer, interior=()):
 class TestVLLMOPT(VLLMFamilySuite):
     REPO = "facebook/opt-125m"
     FAMILY = opt
-    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | {"mlp_input"}) - {"mlp.mlp_activation"}
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | {"mlp_input"}) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "model.decoder.embed_tokens",
         "layers": "model.decoder.layers",
@@ -99,3 +100,26 @@ class TestVLLMOPT(VLLMFamilySuite):
         heads, head_dim = model.num_heads, model.head_dim
         unscaled = raw.unflatten(-1, (heads, head_dim)).transpose(0, 1).unsqueeze(0)
         torch.testing.assert_close(queries, unscaled * head_dim ** -0.5)
+
+
+class TestVLLMOPT350m(TestVLLMOPT):
+    """OPT-350m: post-norm blocks, no final norm and ``project_in`` / ``project_out`` (512 <-> 1024) around the stack,
+    on both engines. The lens is ``lm_head(project_out(h))``, the decoder's own path."""
+
+    REPO = "facebook/opt-350m"
+    UNAVAILABLE = TestVLLMOPT.UNAVAILABLE | {"final_norm_output", "attention_norm_output", "mlp_norm_output"}
+    NATIVE = {standard: native for standard, native in TestVLLMOPT.NATIVE.items() if standard != "norm"}
+
+    def test_no_final_norm(self, model):
+        assert model.model.decoder.final_layer_norm is None and model.model.decoder.project_out is not None
+        assert model.support()["final_norm_output"] == "no norm module on this model"
+
+    def test_no_pre_norm_outputs(self, model):
+        """The norms follow the adds: no norm precedes either sublayer, so neither pre-norm output is served, with
+        transformers' reasons, and ``layer_mid`` is ``self_attn_layer_norm``'s output
+        (`test_module_boundaries_match_transformers` compares it)."""
+        support = model.support(layer=0)
+        assert support["attention_norm_output"] == POST_NORM_ATTENTION and support["mlp_norm_output"] == POST_NORM_MLP
+
+    def test_contribution_identity(self, model, reference):
+        pytest.skip("the norms follow the adds: input + attention_output + fc2.output is normed before it is the block's output")

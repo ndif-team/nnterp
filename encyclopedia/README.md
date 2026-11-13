@@ -35,7 +35,7 @@ for what the cache does not hold and writes it back; commit the cache and any ne
 Every family page has the same sections in the same order. An entry fills them; it does not
 rearrange them.
 
-1. **Hero.** `family <model_type>`, the title, a one-sentence subtitle, the
+1. **Hero.** `family <model_type>`, the title, the
    quirk chips (each links to the notes; the quirks that hold on the shown checkpoint), five overlapping circles in the family's five colours, and
    under them the **checkpoint selector**: a button naming the shown checkpoint that opens a list of
    the entry's `CHECKPOINTS`, text checkpoints first, then the vision-language ones, each marked with
@@ -51,7 +51,7 @@ rearrange them.
    The page opens on `REFERENCE`; the choice is the URL hash, `#ckpt=<repo id>`, so
    a link opens the page on a checkpoint. Switching does not reload: every part that depends on the
    checkpoint is in the page and the script swaps it. On a vision-language checkpoint the chips add
-   `Vision-language` and the vision encoder's and the wrapper's slugs; the subtitle stays the family's.
+   `Vision-language` and the vision encoder's and the wrapper's slugs.
    Nothing else: no layer count, no vLLM or eager stamps.
    The selector is the page's list of checkpoints; the suite's pinned tiny checkpoints are not on the
    page.
@@ -102,11 +102,17 @@ rearrange them.
    larger than the body), tagged `· CLIP · CLIPVisionModel`; absent on a text checkpoint.
 3. **The API** (`02`). In this order:
    - *Values, by host*: one ledger per host (`model`, `model.layers[i]`, `model.layers[i].self_attn`,
-     ...) with every standard value's name, layout and dims, description and where it is read. A row whose
+     ...) with every standard value's name, layout and dims, description and where it is read; a value that is a function to call (`self_attn.interface`) shows `method` and its signature in place of a layout, and where the checkpoint has no call to make again it reads `nowhere` with the reason. A value
+     read where a key function of the family puts it reads at the path that function gives on this checkpoint,
+     block by block where the blocks differ (OLMo-Hybrid's post-norm attention blocks), never at the function's
+     name; a recurrent mixer's, which picks the kernel on each call, reads at that kernel, described. A row whose
      value the diagram, the strip or the image's path shows is linked to it: hovering the row lights that part
      and fills the card, as hovering the part does. A value
      the checkpoint has only under some load carries an amber `⚠` before its name; hovering it shows
-     the condition in a popup.
+     the condition in a popup. A value it has under no load, unavailable on every block under both loads
+     the build makes for a reason that names nothing that lifts it (no rotary embedding, a parallel block),
+     reads `nowhere` with the reason and has no `⚠`; a reason that names another load or a call before the
+     trace (`load with ...`, `nnterp.route_kernels`, `nnterp.chunk_per_token`) keeps the `⚠`.
    - *Printout*: `print(model)`, highlighted, without the native container (`model`, `transformer`,
      ...): the standard names on the root, the blocks collapsed to one (`(0-25): 26 x ...`), and the
      root's values. On a wrapper the vision encoder follows under `vision`, its native `encoder` left out the
@@ -133,7 +139,7 @@ rearrange them.
    family's `RENAME` lines for the vision encoder are not singled out.
 
 The index lists every family in `nnterp.families.known()`: a card with the family's circles, title,
-subtitle, quirks and vLLM support (whether `nnterp/families/vllm/<model_type>.py` exists) for each entry (the quirks that hold on any of its checkpoints; an eye and the
+quirks and vLLM support (whether `nnterp/families/vllm/<model_type>.py` exists) for each entry (the quirks that hold on any of its checkpoints; an eye and the
 vision encoders found, `CLIP · SigLIP`, and the `Vision-language` chip when any checkpoint has a vision encoder), a
 stub for each family not written yet, a search box (title, `model_type`, org, architecture, Hub ids,
 quirks, vision encoders, wrappers) and three filter rows, each a fold closed at first whose label opens it and
@@ -146,7 +152,7 @@ card carries its org's logo, the name on hover. The org is the author of the ent
 ## Where each part comes from
 
 - **From the code**, by `build.py`, with nothing to write: the architecture class, `support()` under
-  an eager load and under the default one (the difference is what gets a `⚠`), every value's key,
+  an eager load and under the default one (the difference is what gets a `⚠`; a value neither serves reads `nowhere`), every value's key,
   layout, dims and description, the printout, the root sizes and config keys, the native path behind
   each standard name, the family module's docstring, the envoy classes, the palette (generated from a
   hue), and all syntax highlighting.
@@ -163,7 +169,7 @@ card carries its org's logo, the name on hover. The org is the author of the ent
   one of the vision encoder's `MODULE_CLASSES`.
 - **From the Hub**, by `hub.py`, cached in `hub_cache.json`: the org's display name and avatar, and
   each checkpoint's parameter count and creation date.
-- **From the entry**, `entries/<model_type>.py`: the title and subtitle, the checkpoints, the block
+- **From the entry**, `entries/<model_type>.py`: the title, the checkpoints, the block
   schema the diagram draws, the strip's notes, the quirk tags, the hue, the notes, and `WRAPPERS`.
 - **From a vision encoder module**, `vision/<tower>.py`: what holds on every host of a vision encoder.
 
@@ -184,9 +190,8 @@ The entry states facts about a family, and each one has a source. Before writing
 ### The fields
 
 1. **`MODEL_TYPE`**: the family's `model_type`, which is the entry's file name.
-2. **`TITLE`**, **`SUBTITLE`**: the family's public name (several model lines separated by ` / `,
-   `"Qwen2 / Qwen2.5"`, are shown stacked, one per line), and one sentence saying how this family
-   differs from a plain Llama block: what a person must know first. Present tense, no adjectives.
+2. **`TITLE`**: the family's public name (several model lines separated by ` / `,
+   `"Qwen2 / Qwen2.5"`, are shown stacked, one per line).
 3. **`REFERENCE`**: the public checkpoint the page opens on. Choose the one most used for
    interpretability (usually the smallest base model).
    **`CHECKPOINTS`**: the family's public checkpoints as Hub ids, the reference among them; each is a
@@ -266,6 +271,9 @@ The entry states facts about a family, and each one has a source. Before writing
        add, `final_layer_norm` after the MLP path's, whose output is `layer_output`). It is drawn on the
        stream line under the `⊕`; the next sublayer reads its output. Such a block's identity is not a
        sum, so give `identity`;
+     - `merge`: optional, the native name of a module that is this sublayer's add, whose output is the
+       stream after it (ZAYA's `post_attention_residual_scale`); `layer_mid` is looked for there rather
+       than at the next sublayer's pre-norm input. Nothing more is drawn for it;
      - `parallel_with_next`: optional, `True` on a sublayer of a `"sequential"` block that reads the
        same stream point as the sublayer after it, the two joining the stream at one add (Falcon-H1's
        Mamba-2 mixer and attention, then the MLP). The pair is drawn side by side with one `⊕`, the
@@ -351,8 +359,10 @@ The entry states facts about a family, and each one has a source. Before writing
    checkpoint's text config (as `BLOCK`'s), so it holds on the pinned tiny checkpoint as on the public
    ones. Each checkpoint's chips, quirk list and `logits` label show the quirks that hold on it; the
    index card shows those that hold on any checkpoint on the page, as plain chips. StableLM (`qkv-bias`
-   on 1.6B, `parallel-blocks` and `qk-norm` on 12B), OPT (`post-ln` on 350m), Llama 4 (`interleaved-moe` on Maverick) and VaultGemma
-   (`softcapped-logits` on a config that sets `final_logit_softcapping`) carry such items. The notes still
+   on 1.6B, `parallel-blocks` and `qk-norm` on 12B), OPT (`post-ln` on 350m), Llama 4 (`interleaved-moe` on Maverick), VaultGemma
+   (`softcapped-logits` on a config that sets `final_logit_softcapping`) and Cohere 2 (`scaled-logits` where the config
+   names `Cohere2ForCausalLM` in `architectures`: its vision wrappers return the head's output unscaled, and their
+   text config names no class) carry such items. The notes still
    say which checkpoints have the property.
 
    The vision slugs are not an entry's: a page adds them on a vision-language checkpoint, from the
@@ -450,50 +460,37 @@ out). `vision.resolve` turns either form into one dict, so the build reads both 
 
 ### The notes
 
-What someone needs to know before running an experiment on this family, that the tables above do
-not already say. Cover, where the family has something to say:
+A note is there because a standard experiment on this family (a logit lens, activation patching, an
+ablation, steering, reading attention patterns or a mixture's routing) gives a wrong or surprising
+result without it. Anything else stays out. A family with a plain block may have one note, or none.
 
-- **The block, in order**: the forward as two or three lines of pseudo-code in a fenced block, and
-  any trap in the native names.
-- **The contributions**: what `attention_output` and `mlp_output` are on this family (the module's
-  output, a post-norm's, a pre-residual tensor, a scaled copy), with the identity as a snippet, and
-  what that means for ablation, steering and attribution.
-- **Loading**: what needs `attn_implementation="eager"` and why; whether the default load runs a
-  different computation than the eager one; kernels to route on a recurrent mixer.
-- **Attention**: grouped-query heads and what an edit to a key/value head reaches, the query scale,
-  masks and windows, softcaps, sinks, anything read at an unusual place.
-- **The readout**: what `logits` is relative to `lm_head.output`, what `project_on_vocab` applies,
-  the final norm's gain, tied weights.
-- **The embeddings**: scaling, position embeddings, whether `token_embeddings` equals
-  `layers[0].input`.
-- **The family's own machinery**: the router and experts of a mixture, a recurrent state, parallel
-  streams, borrowed keys and values, read-order traps.
-- **Resources**: sparse autoencoders or other published interpretability artefacts trained on the
-  family's checkpoints, and which nnterp value their hook point is.
+What clears that bar, where it is true of the family:
+
+- a contribution that is not the module's plain output: a post-norm's output, a scaled or gated copy,
+  a parallel block whose MLP does not read the attention, a residual multiplier;
+- a readout that needs more than the final norm and the head, or logits that are scaled or capped;
+- embeddings that are scaled, or are not the first block's input;
+- attention that changes how a pattern or a head edit is read: grouped-query heads, a sink, a
+  softcap, windows;
+- a mixture whose weights do not sum to one, or a shared expert outside `mlp_output`;
+- a value a reader would expect that is unavailable or means something else here, and what to use;
+- a load option that changes the computation.
+
+What does not: rounding and bit-exactness, read orders and in-place mechanics, config branches no
+released checkpoint takes, facts about the pinned tiny checkpoint, anything the diagram, the ledgers
+or the family's docstring already show, and anything that holds on every family (that is in `docs/`).
 
 Rules:
 
-- Present tense, factual, this family's own facts. No history, no comparisons of quality, no advice
-  that holds for every family (that is in `docs/`).
-- Every claim is checked against the family module, its test file, the transformers source or a run.
-  Shapes, identities and read orders can be checked on the pinned tiny checkpoint; anything about
-  real values (norm scales, sinks, what a scaling does, SAE reconstruction) is checked on the
-  reference checkpoint or another real one whose weights are cached, because a tiny random
-  checkpoint can contradict a true claim (its activations sit below a norm's `eps`, its random norms
-  coincide). A number is one the reference config or a run gives; say which checkpoint it is for
-  when sizes differ (`48.0 on 2B`).
-- A behaviour that holds on every family is not a family fact: generic nnterp advice is in `docs/`,
-  and an nnsight bug is reported, not written into the notes as a trap (a read that fails only on the
-  first trace of a fresh model is one).
-- `##` headings, one per topic, each a statement where possible ("The contributions are the
-  post-norms' outputs"). Paragraphs of two to five sentences.
-- Snippets are short and use the standard names; they are highlighted at build time and each nnterp
-  name takes its role's colour, so write `model.layers[i].self_attn.attention_output`, not an alias
-  of your own. They are illustrative and are not executed, so they must be right as written: run
-  each once against the reference checkpoint, and against the pinned one where it can (a pinned
-  checkpoint has two or a few blocks, so index `layers[1]`, not `layers[8]`). Inside one trace,
-  reads come in forward order: `mlp.output` before `mlp_output` on a post-norm family,
-  `lm_head.output` before `logits`; one edit per trace when the text contrasts two edits.
+- One `##` heading per note, a statement of the fact ("The MLP does not read the attention"), then
+  one to three sentences: what is true, and what it means for an experiment.
+- Present tense, plain words, each fact once. No history, no comparisons of quality.
+- A forward of two to four lines of pseudo-code in a fenced block where the block is unusual. No
+  other code.
+- Every claim is checked against the family module, the transformers source or a run on a real
+  checkpoint: a tiny random checkpoint can contradict a true claim.
+- A number only where the reader needs it (a softcap, a multiplier); say which checkpoint when sizes
+  differ.
 - Inline code for every name, path and config key. Lists rather than Markdown tables: a table
   overflows the page at phone width.
 
@@ -518,9 +515,9 @@ Add `#ckpt=<repo id>` to the URL to render it on another checkpoint, and render 
   in the page's `checkpoints-json`), and every module boundary the family serves has its place: a ledger row
   with no link is a value read somewhere the diagram does not draw, which is worth a look at the family;
 - the slider's variants match `config.layer_types`;
-- the values that carry a `⚠` are the ones that need a non-default load, and no value is missing
-  from the ledgers;
-- the notes' code blocks are highlighted and nothing overflows the page at either width;
+- the values that carry a `⚠` are the ones that need a non-default load or a call before the trace, the
+  ones that read `nowhere` are the ones the checkpoint does not have, and no value is missing from the ledgers;
+- nothing overflows the page at either width;
 - on a vision-language checkpoint, the vision encoder's block reads in forward order, the image's path has a
   norm node only where the vision encoder has `vision.norm`, and the vision encoder's ledgers, sizes and Vision notes
   are there.

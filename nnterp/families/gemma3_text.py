@@ -62,7 +62,7 @@ class Layer(Layer):
     ``mlp_norm_output`` read ``pre_feedforward_layernorm``, the MLP's pre-norm.
     """
 
-    @EProperty("pre_feedforward_layernorm.input", description="The residual stream after the attention add")
+    @EProperty("pre_feedforward_layernorm.input", description="The residual stream after the attention add", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 

@@ -28,9 +28,15 @@ Three things differ, and these envoys absorb them:
 * **Some modules are vLLM's.** The backend fuses the query, key and value
   projections into one ``qkv_proj`` (and a gated MLP's into ``gate_up_proj``),
   rewriting the module's forward to call it, and swaps RMSNorms for vLLM's.
-  The values do not read inside those forwards: nnsight's ``.source``
-  instruments a module from its class's source, which still calls the
-  projections the fusion removed.
+  The values do not read inside those forwards: the rewritten forward is
+  compiled under the class's file and line numbers and bound on the
+  instance, so ``inspect``, and nnsight's ``.source`` with it, returns the
+  class's text, which still calls the projections the fusion removed
+  (docs/developing/gotchas.md). So the queries and keys before the rotary
+  embedding, which are arguments of a call inside the attention's forward
+  (``apply_rotary_pos_emb``), are not served here (`BACKEND_ROTARY`); the
+  limit lifts when vLLM registers the rewritten text in ``linecache`` under
+  its own file name and nnsight instruments the instance's forward.
 """
 
 from __future__ import annotations
@@ -46,6 +52,14 @@ from .attention import Attention as VLLMAttention
 from .layer import Layer as VLLMLayer
 from .flat import Flat
 from .mlp import Mlp as VLLMMlp
+
+
+#: Why the queries and keys before the rotary, and `rotate`, are not served on this backend.
+BACKEND_ROTARY = (
+    "not served on vLLM's transformers backend: the rotary is a call inside the attention's forward, which the backend "
+    "rewrites at load and nnsight's .source cannot instrument; read the queries and keys before it, and rotate, on a "
+    "StandardizedTransformer"
+)
 
 
 def engine_attention(envoy: Envoy) -> torch.nn.Module | None:
@@ -75,6 +89,9 @@ class Layer(standard.Layer):
     def layer_output(self, value: torch.Tensor) -> Residual:
         return value
 
+    attention_input_gain = VLLMLayer.attention_input_gain
+    attention_output_gain = VLLMLayer.attention_output_gain
+
     #: The boundaries between them, read as on every vLLM block (with the batch axis this backend keeps).
     attention_norm_output = VLLMLayer.attention_norm_output
     layer_mid = VLLMLayer.layer_mid
@@ -88,6 +105,9 @@ class Attention(VLLMAttention):
     It returns ``(attn_output, attn_weights)``; the first is what the block
     adds, unless a family's block norms it first.
     """
+
+    def no_rotary(self) -> str | None:
+        return BACKEND_ROTARY
 
     def __getattr__(self, name: str) -> Any:
         """``attn``: the engine's attention layer, mounted as this module's child in the worker, on first use.

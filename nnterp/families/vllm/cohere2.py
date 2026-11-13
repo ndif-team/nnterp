@@ -44,7 +44,12 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """The attention; its output is what the block adds, so the base holds."""
+    """The attention; its output is what the block adds, so the base holds. A full-attention block does not rotate."""
+
+    def no_rotary(self) -> str | None:
+        if self._module.sliding_window is None:
+            return "no rotary embedding on this block: Cohere 2's full-attention blocks use no position encoding, its sliding-window blocks rotate"
+        return None
 
 
 class Mlp(Mlp):

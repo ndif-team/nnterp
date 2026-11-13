@@ -52,7 +52,10 @@ NOT_SERVED = {
     "self_attn.attention_output": "cannot tell what this sublayer adds", "mlp.mlp_output": "cannot tell what this sublayer adds",
     "layer_mid": "cannot tell whether the block has a stream between its sublayers",
     "mlp_norm_output": "cannot tell whether post_attention_layernorm feeds the MLP",
+    **dict.fromkeys(("self_attn.value_weight", "self_attn.output_weight"), "cannot tell which rows of this attention's projections are a head's"),
 }
+#: Not served on any checkpoint, whatever the dedicated family says of it: where and how a block rotates.
+NO_ROTARY = {name: "cannot tell where this attention applies its rotary embedding" for name in ("self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope")}
 
 
 class DefaultSuite(FamilySuite):
@@ -130,7 +133,9 @@ def forced(name, **overrides):
     """A `DefaultSuite` over the shipped family ``name``'s checkpoint and suite settings."""
     source = dedicated_suite(name)
     settings = {key: getattr(source, key) for key in dir(source) if key.isupper() and key != "FAMILY"}
-    settings["EXPECTED_UNAVAILABLE"] = {**NOT_SERVED, **settings.get("EXPECTED_UNAVAILABLE", {}), **overrides.pop("EXPECTED_UNAVAILABLE", {})}
+    settings["EXPECTED_UNAVAILABLE"] = {
+        **NOT_SERVED, **settings.get("EXPECTED_UNAVAILABLE", {}), **NO_ROTARY, **overrides.pop("EXPECTED_UNAVAILABLE", {}),
+    }
     return type(f"TestDefaultOn{source.__name__.removeprefix('Test')}", (DefaultSuite,), {**settings, **overrides})
 
 
@@ -155,7 +160,7 @@ def test_unknown_model_type_loads_with_the_default(nanochat):
     assert nanochat.family is default
     assert type(nanochat.layers[0]) is default.Layer and type(nanochat.layers[0].self_attn) is default.Attention
     support = nanochat.support()
-    assert {name for name, reason in support.items() if reason is not None} == {"self_attn.attention_output", "mlp.mlp_output", "layer_mid", "mlp_norm_output"}
+    assert {name for name, reason in support.items() if reason is not None} == {"self_attn.attention_output", "mlp.mlp_output", "layer_mid", "mlp_norm_output", *NO_ROTARY}
     assert (nanochat.num_layers, nanochat.num_heads, nanochat.head_dim, nanochat.intermediate_size) == (2, 2, 16, 32)
 
 

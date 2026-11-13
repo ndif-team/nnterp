@@ -15,14 +15,6 @@ block's residual stream is `layer_output` on every family, a sublayer's contribu
 `project_on_vocab` is the model's own norm, unembedding and softcap. nnsight's
 `docs/patterns/` has the same techniques written against raw module paths.
 
-Every example loads eager, so the attention interior is available:
-
-```python
-from nnterp import StandardizedTransformer
-
-model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_implementation="eager")
-```
-
 ## Look at activations
 
 - [logit-lens](logit-lens.md) — `project_on_vocab(layer.layer_output)` per block; where the answer emerges.
@@ -34,6 +26,7 @@ model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_imp
 - [ablation](ablation.md) — zero or mean ablate a contribution, a head, a DeltaNet mixer, or whole blocks with `skip_layers`.
 - [expert-ablation](expert-ablation.md) — every routed expert's effect on a target token, by zeroing `expert_weights` where `expert_indices == e`, on every MoE family.
 - [activation-patching](activation-patching.md) — patch `layer_output` or a contribution from a clean run into a corrupt one; sweep layers and positions.
+- [head-kv-patching](head-kv-patching.md) — chosen query heads read another run's keys and values over a span, on the last row, through `self_attn.interface`; the rest of the group, the other rows and the KV cache stay clean.
 - [steering](steering.md) — a direction from contrasting prompts, added with `model.steer` in a trace or at every step of a generate.
 
 ## Across models and datasets

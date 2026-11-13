@@ -3,7 +3,7 @@
 import torch
 from suite import FamilySuite, LLAMA_ROWS, PROMPT
 
-from nnterp.components import Residual, StreamMixing, Streams, StreamWeights
+from nnterp.components import OWN_ARITHMETIC, Residual, StreamMixing, Streams, StreamWeights
 from nnterp.families import deepseek_v4
 
 #: Long enough that the compressed-sparse blocks (compress rate 4) carry compressed entries.
@@ -43,7 +43,7 @@ class TestDeepseekV4(FamilySuite):
     LOAD_KWARGS = {"dtype": torch.float32}  # the norms are kept in float32; a bf16 forward fails on CPU inside transformers
     ATTENTION_SINK = True
     MLP_WIDTH_KEY = "moe_intermediate_size"
-    EXPECTED_UNAVAILABLE = {"attention_norm_output": "hyper-connection streams", "self_attn.attention_premix": "a low-rank output projection", "layer_mid": "hyper-connection streams", "mlp_norm_output": "hyper-connection streams", "mlp_input": "hyper-connection streams"}
+    EXPECTED_UNAVAILABLE = {"layer_mid": "hyper-connection streams", "self_attn.interface": OWN_ARITHMETIC, "self_attn.value_weight": "the values are the keys", "self_attn.output_weight": "the values are the keys"}
 
     def expected_values(self, model):
         return super().expected_values(model) | set(WEIGHTS)
@@ -70,6 +70,27 @@ class TestDeepseekV4(FamilySuite):
         for i, (x, post_a, _, attn, post_f, _, mlp, out) in enumerate(read_blocks(model)):
             total = x.mean(2) + post_a.mean(-1, keepdim=True) * attn + post_f.mean(-1, keepdim=True) * mlp
             torch.testing.assert_close(total, out.mean(2), rtol=1e-5, atol=1e-5, msg=f"layer {i}")
+
+    def test_attention_input_gain(self, model):
+        """The attention reads ``gain * n(collapsed)``, ``collapsed`` the ``pre``-weighted mix of the streams that
+        ``attn_hc`` returns; the gain is ``input_layernorm``'s weight."""
+        layer = model.layers[0]
+        norm = layer.input_layernorm._module
+        kept = norm.weight.detach().clone()
+        try:
+            with torch.no_grad():
+                norm.weight.copy_(torch.linspace(0.5, 1.5, norm.weight.numel()))
+            gain = layer.attention_input_gain
+            with model.trace(PROMPT):
+                collapsed = layer.attn_hc.output[2].save()
+                normed = layer.attention_norm_output.save()
+        finally:
+            with torch.no_grad():
+                norm.weight.copy_(kept)
+        c = collapsed.double()
+        expected = gain.double() * c / (c.pow(2).mean(-1, keepdim=True) + norm.variance_epsilon).sqrt()
+        assert gain.dtype == torch.float32 and not gain.requires_grad
+        torch.testing.assert_close(normed, expected.to(normed.dtype))
 
     def test_plain_identity_does_not_hold(self, model):
         x, _, _, attn, _, _, mlp, out = read_blocks(model)[0]
@@ -171,7 +192,9 @@ class TestDeepseekV4(FamilySuite):
         with model.trace(PROMPT):
             interface = attn.source.attention_interface_1.output[0].save()
             heads = attn.attention_head_outputs.save()
+            premix = attn.attention_premix.save()
             grouped = attn.o_a_proj.input.save()
         assert not torch.allclose(heads, interface)
         batch, seq = heads.shape[:2]
         assert torch.equal(grouped, heads.reshape(batch, seq, model.config.o_groups, -1))
+        assert torch.equal(premix, heads) and premix.shape == (batch, seq, attn.num_heads, attn.head_dim)

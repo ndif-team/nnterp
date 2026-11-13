@@ -2,7 +2,9 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. Some layers use sliding-window attention and some no positional embedding.
+added in the block, attention through the shared eager forward. ``no_rope_layers`` leaves every fourth block
+without a rotary embedding. A config can put a sliding window on those blocks (``use_sliding_window``); the
+released checkpoints leave it off, so every block attends over the whole prompt.
 """
 
 from transformers.models.smollm3.modeling_smollm3 import SmolLM3Attention, SmolLM3DecoderLayer, SmolLM3MLP
@@ -22,6 +24,11 @@ class Layer(Layer):
 
 class Attention(Attention):
     """SmolLM3's attention; the shared eager forward and the residual added in the block, so the base holds."""
+
+    def no_rotary(self) -> str | None:
+        if not self._module.use_rope:
+            return "no rotary embedding on this block: SmolLM3 skips it on the blocks no_rope_layers marks"
+        return None
 
 
 class Mlp(Mlp):

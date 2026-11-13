@@ -24,8 +24,8 @@ from transformers.models.gpt_neox_japanese.modeling_gpt_neox_japanese import (
 )
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, first_tensor, rewrap,
-    seq_first,
+    Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, first_tensor, projection_weight,
+    rewrap, rotary_reason, seq_first,
 )
 
 if TYPE_CHECKING:
@@ -52,6 +52,24 @@ class Layer(Layer):
 
 class Attention(Attention):
     """GPT-NeoX-Japanese's attention: the bias and the residual are added in the block; the pattern lives in its ``_attn`` method."""
+
+    # The rotary call receives each head's leading ``rotary_ndims`` channels
+    # only; the values before the rotary are the whole heads it slices them
+    # from (the heads-first bindings of the fused projection's split),
+    # so they keep the queries' and keys' layout.
+
+    @EProperty("source.query_0.output", description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
+    def attention_queries_prerope(self, value) -> Queries:
+        return value
+
+    @EProperty("source.key_0.output", description=Attention.attention_keys_prerope.description, unavailable=rotary_reason)
+    def attention_keys_prerope(self, value) -> Keys:
+        return value
+
+    def apply_rotary(self, x, embedding):
+        """GPT-NeoX-Japanese rotates the leading ``rotary_ndims`` channels of each head and passes the rest, outside its apply function."""
+        width = self._module.rotary_ndims
+        return torch.cat((super().apply_rotary(x[..., :width], embedding), x[..., width:]), dim=-1)
 
     # The interior lives around the ``_attn`` method call: its arguments are the
     # queries, keys and values heads first, after the rotary embedding and the
@@ -113,6 +131,10 @@ class Attention(Attention):
         if bias is None or torch.equal(value, raw[0] + bias):
             return raw
         return (value - bias, *raw[1:])
+
+    def value_weight(self, kv_head):
+        """``query_key_value``'s rows are each head's query, key and value, ``[num_heads, 3, head_dim]``."""
+        return projection_weight(self, "query_key_value").unflatten(0, (self.num_heads, 3, self.head_dim))[kv_head, 2]
 
 
 class Mlp(Mlp):

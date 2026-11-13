@@ -1,6 +1,6 @@
 ---
 title: Logit Lens
-one_liner: "`model.project_on_vocab(layer.layer_output)` reads each block's residual stream through the final norm, `lm_head` and any softcap, so one loop over `model.layers` is the lens on every family."
+one_liner: "`model.project_on_vocab(layer.layer_output)` reads each block's residual stream through the model's own path to its logits (the final norm, `lm_head`, any softcap, scale or projection), so one loop over `model.layers` is the lens on every family."
 tags: [patterns, logit-lens, residual-stream, decoding]
 related: [docs/usage/root-values.md, docs/usage/residual-stream.md, docs/patterns/contribution-decomposition.md, docs/patterns/activation-patching.md, docs/patterns/probing.md]
 sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py]
@@ -17,10 +17,11 @@ refined.
 
 In nnterp the three things the lens needs are standard on every family: the stream
 is `model.layers[i].layer_output` (a tensor whether the block returns a tensor or a
-tuple), and `model.project_on_vocab(hidden)` applies `model.norm`, `model.lm_head`
-and the model's logit softcapping when its config has one. So the block below runs
-unchanged on GPT-2, Llama, Gemma-2 or a Qwen3.5 hybrid; the standard values do the
-per-architecture work, which is why this page is short.
+tuple), and `model.project_on_vocab(hidden)` takes the stream to the logits the way the
+model does: `model.norm`, `model.lm_head`, and whatever the model does around them, such as
+Gemma-2's logit softcapping or Cohere's `logit_scale`. So the block below runs unchanged on
+GPT-2, Llama, Gemma-2 or a Qwen3.5 hybrid; the standard values do the per-architecture work,
+which is why this page is short.
 
 ## Canonical pattern
 
@@ -46,8 +47,8 @@ assert torch.allclose(lens[model.num_layers - 1], logits[:, -1])   # the last bl
 The loop reads the blocks in forward order, and `logits` after them, which is the
 order one trace has to respect. The assertion is the wiring check: at the last
 block the lens *is* the final computation, so it equals `model.logits`. It holds
-on every family because `project_on_vocab` applies the same softcap the model
-does (see [Softcapping](#softcapping)).
+on every family because `project_on_vocab` follows the model's own path, the softcap
+included (see [Softcapping](#softcapping)).
 
 `get_topk_closest_tokens` turns a saved residual into `{token: probability}`:
 
@@ -163,12 +164,13 @@ are in [contribution-decomposition](contribution-decomposition.md).
   position is often the informative one; use the grid.
 - Keep the norm. Decoding `lm_head(hidden)` without `model.norm` is not a cheaper
   lens; a norm is not affine, and skipping it produces a confident, wrong curve
-  rather than an error. `project_on_vocab` includes it, which is the point.
+  rather than an error. `project_on_vocab` includes it, and every other step the
+  model takes to its logits, which is the point.
 
 ## Gotchas
 
-- `project_on_vocab` *calls* `model.norm` and `model.lm_head` inside the trace. nnsight
-  runs a module called this way stood down, as plain arithmetic; reading
+- `project_on_vocab` *calls* the model's modules (`model.norm`, `model.lm_head`) inside the
+  trace. nnsight runs a module called this way stood down, as plain arithmetic; reading
   `model.lm_head.output` is a different thing, the model's own call. See nnsight
   `docs/usage/access-and-modify.md`.
 - Reads follow the forward within one trace: the layer loop is in order by

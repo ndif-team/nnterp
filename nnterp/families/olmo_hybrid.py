@@ -53,23 +53,33 @@ class Layer(Layer):
     the MLP is called with and the two pre-norm outputs do not exist.
     """
 
-    attention_norm_output = EProperty(
+    @EProperty(
         "input_layernorm.output", description="The normed stream entering the mixer",
         unavailable=lambda block: POST_NORM_ATTENTION if post_norm(block) else None,
     )
+    def attention_norm_output(self, value) -> Residual:
+        return value
 
-    @EProperty(lambda block: "mlp.input" if post_norm(block) else "post_attention_layernorm.input", description="The residual stream after the mixer's add")
+    @EProperty(lambda block: "mlp.input" if post_norm(block) else "post_attention_layernorm.input", description="The residual stream after the mixer's add", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 
-    mlp_norm_output = EProperty(
+    @EProperty(
         "post_attention_layernorm.output", description="The normed stream entering the MLP",
         unavailable=lambda block: POST_NORM_MLP if post_norm(block) else None,
     )
+    def mlp_norm_output(self, value) -> Residual:
+        return value
 
 
 class Attention(Attention):
     """OLMo-Hybrid's softmax attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
+
+    def no_rotary(self) -> str | None:
+        rope = getattr(self._module.config, "rope_parameters", None)
+        if rope is None or rope.get("rope_theta") is None:
+            return "no rotary embedding: this checkpoint sets no rope_theta, so its attention uses no position encoding (NoPE)"
+        return None
 
     @EProperty(
         "../post_attention_layernorm.output",

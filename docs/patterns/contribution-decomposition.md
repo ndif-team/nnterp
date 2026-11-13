@@ -171,31 +171,25 @@ it by `embedding_multiplier` before block 0. On Llama the two are equal.
 
 `attention_head_outputs` is each head's output before concatenation and the output
 projection, `[batch, seq, num_heads, head_dim]`. The projection is linear, so head `h`'s
-contribution is its slice times the projection weight's matching rows. The projection
-module keeps its native name (`o_proj` on Llama-style families, `c_proj` on GPT-2,
-`dense` on GPT-NeoX, `out_proj` on GPT-Neo, GPT-J and CodeGen) and its weight layout
-differs: `torch.nn.Linear` stores `[out, in]`, GPT-2's `Conv1D` stores `[in, out]`.
+contribution is its slice times `self_attn.output_weight(h)`, the projection's columns for
+that head, `[hidden_size, head_dim]`. The projection is `self_attn.o_proj` on every family
+(aliased from `c_proj`, `dense`, `out_proj`), and `output_weight` reads its layout for you
+(GPT-2's `Conv1D` stores `[in, out]`) and, under a PEFT adapter, the adapted weight
+([attention-interior](../usage/attention-interior.md#the-weights-per-head-value_weight-output_weight-attention_input_gain)).
 
 ```python
 attention_blocks = [i for i, layer in enumerate(model.layers) if getattr(layer, "self_attn", None) is not None]
 LAYER = attention_blocks[len(attention_blocks) // 2]          # on a hybrid, num_layers // 2 can be a linear block
 attention = model.layers[LAYER].self_attn
-
-projection = None                          # `or` over envoys calls __len__ on the module; test `is not None`
-for name in ("o_proj", "c_proj", "dense", "out_proj"):
-    candidate = getattr(attention, name, None)
-    if candidate is not None:
-        projection = candidate
-        break
+projection = attention.o_proj
 
 with model.trace(prompt):
     heads = attention.attention_head_outputs.save()          # [batch, seq, num_heads, head_dim]
     contribution = attention.attention_output.save()         # [batch, seq, hidden_size]
 
-W = projection._module.weight
-W_in_out = W.t() if isinstance(projection._module, torch.nn.Linear) else W     # [num_heads * head_dim, hidden_size]
-H, D = heads.shape[2], heads.shape[3]
-per_head = torch.einsum("bshd,hdo->bsho", heads, W_in_out.reshape(H, D, -1))    # [batch, seq, num_heads, hidden_size]
+per_head = torch.stack(
+    [heads[:, :, h] @ attention.output_weight(h).T for h in range(attention.num_heads)], dim=2,
+)                                                            # [batch, seq, num_heads, hidden_size]
 
 bias = projection._module.bias
 total = per_head.sum(2) + (bias if bias is not None else 0)
@@ -212,9 +206,10 @@ the heads:
 | families | what `per_head.sum(2)` equals |
 | --- | --- |
 | Granite, GraniteMoE(-Shared, -Hybrid), Granite-SWA, GraniteMoE-SWA | `projection.output`; `attention_output` is that times `config.residual_multiplier` (0.22 on granite-3.0-1b-a400m) |
+| Falcon-H1 | `projection.output`; `attention_output` is that times `config.attention_out_multiplier` (0.0375 on the pinned tiny checkpoint, 1.0 on Falcon-H1-Tiny-90M); the MLP's output likewise reaches the stream times `mlp_multipliers[1]`, so a split of `mlp_neurons` through `down_proj` is `mlp_output` divided by it |
 | the post-norm families: Gemma-2/3/4, OLMo-2/3, EXAONE-4, FlexOlmo, GLM-4, OLMo-Hybrid's attention blocks; HyperCLOVA X (its post-norm, then `residual_multiplier`) | `projection.output`, the pre-norm output; the norm is not linear, so the split is of that, not of the contribution |
-| Qwen3-Next, Qwen3.5, Qwen3.5-MoE (a sigmoid gate from `q_proj`), Laguna (a softplus gate, `g_proj`), AFMoE (a sigmoid gate, `gate_proj`, then a post-norm) | neither: the gate multiplies the heads after `attention_head_outputs`. Split `projection.input` instead, `projection.input.unflatten(-1, (H, D))`, the gated heads the projection reads; its per-head sum is `projection.output` |
-| BitNet (`attn_sub_norm` before `o_proj`) | neither: the norm mixes the heads, so `projection.input` split by head is a split of the normed tensor |
+| Qwen3-Next, Qwen3.5, Qwen3.5-MoE (a sigmoid gate from `q_proj`), Laguna (a softplus gate, `g_proj`), AFMoE (a sigmoid gate, `gate_proj`, then a post-norm) | neither: the gate multiplies the heads after `attention_head_outputs`. Split `attention_premix` instead, the gated heads the projection reads; its per-head sum is `projection.output` |
+| BitNet (`attn_sub_norm` before `o_proj`) | neither: the norm mixes the heads, so `attention_premix` is a split of the normed tensor |
 
 The same numbers come from the model itself: zero every head but `h` in
 `attention_head_outputs` inside a trace and read `attention_output`; that equals
@@ -303,8 +298,6 @@ tensor when the prompt is one token or exactly `hc_mult` (4) tokens long.
   [above](#families-where-the-plain-sum-does-not-hold).
 - A softcapped model's logits are not a sum of anything; `project_on_vocab` applies
   the cap, the linear DLA does not.
-- `getattr(a, "x", None) or getattr(b, ...)` on envoys raises on a module without
-  `__len__`; chain with `is not None`.
 - The match holds to the checkpoint's dtype: within ~1e-4 relative in float32, and
   a few percent on a bf16 load (a sum of 60 bf16 terms on SmolLM2 lands about 2% off
   logits in the hundreds). Use a relative tolerance, or load with

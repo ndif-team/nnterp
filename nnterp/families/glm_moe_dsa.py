@@ -18,16 +18,17 @@ therefore travels between blocks: the attention returns
 ``(hidden_states, topk_indices)``, so ``returns_tuple`` is set; ``attention_output``
 and ``layer_output`` take the first element. The selection is
 ``self_attn.output[2]`` on every block (``self_attn.indexer.output`` on a full one);
-it has no standard name. ``skip_layers`` hands a skipped block's successor ``None`` for
-the selection, which a shared block refuses (transformers raises ``ValueError``), so
-skip up to a full block or to the end. Dense and mixture-of-experts MLPs follow
+it has no standard name. A skipped block hands on the selection it received, as it hands
+on the stream, so a shared block after ``skip_layers`` reuses the selection of the last
+full block before the span; a span that starts at block 0 has none to hand on, which a
+shared block after it refuses (transformers raises ``ValueError``). Dense and mixture-of-experts MLPs follow
 ``mlp_layer_types``. The sizes are DeepSeek-V2's.
 """
 
 from transformers.models.glm_moe_dsa.modeling_glm_moe_dsa import GlmMoeDsaAttention, GlmMoeDsaDecoderLayer, GlmMoeDsaMLP, GlmMoeDsaMoE
 
-from ..components import Attention, Layer, Mlp, Moe
-from .deepseek_v2 import head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
+from ..components import Layer, Mlp, Moe
+from .deepseek_v2 import Attention, head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -42,9 +43,16 @@ class Layer(Layer):
 
     returns_tuple = True
 
+    def skip_with(self, hidden):
+        """Skip this block, handing on ``hidden`` and the selection the block received, which a shared block after it reuses."""
+        self.skip((hidden, self.inputs[1].get("prev_topk_indices")))
+
 
 class Attention(Attention):
-    """GLM-5's sparse latent attention; the selection is folded into the mask before the shared eager forward, and the base takes the first of the three returns."""
+    """GLM-5's sparse latent attention: V2's, the selection folded into the mask before the shared eager forward, the rope parts rotated interleaved; the base takes the first of the three returns."""
+
+    def rope_call(self) -> str:
+        return "apply_rotary_pos_emb_interleave"
 
 
 class Mlp(Mlp):

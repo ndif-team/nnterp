@@ -104,6 +104,9 @@ Negative indices count from the end. A skip must cover every row of a forward, s
 this goes in a trace of its own rather than in one invoke of a batched trace (see
 Gotchas).
 
+On Gemma-4 and on Qwen3-VL with an image a skip does not remove only the blocks' terms
+([methods](../usage/methods.md#skip_layersstart-end-skip_withnone)).
+
 ### One head
 
 The per-head outputs before the output projection are
@@ -143,10 +146,7 @@ with model.trace() as tracer:
 print([round(float(p), 4) for p in rows])
 ```
 
-Do this through `attention_head_outputs`, not the pattern. A value nnterp reads inside a
-nested `.source` call (`attention_probabilities`, `attention_scores`) cannot be touched in
-two invokes of one trace today: the second invoke raises `TypeError: 'NoneType' object is
-not subscriptable` (an nnsight bug). For per-head pattern edits, use one trace per head.
+The pattern takes the same loop: `attention_probabilities[:, head] = 0` in each invoke.
 
 ### A DeltaNet mixer on a hybrid
 
@@ -207,8 +207,9 @@ or for a position other than the last.
   blocks have no `self_attn`. `model.support()` says so per block before any trace;
   reading anyway raises `nnterp.Unavailable`.
 - Decide `self_attn` versus `linear_attn` outside the trace, as above.
-- Head-level ablation needs `attn_implementation="eager"`; the boundary values
-  (`attention_output`, `mlp_output`, `layer_output`) do not.
+- Ablating a head through `attention_head_outputs` or its pattern needs
+  `attn_implementation="eager"`; `attention_premix` (the output projection's input, split
+  by head) and the boundary values (`attention_output`, `mlp_output`, `layer_output`) do not.
 - On Gemma-4 the KV-sharing blocks attend with an earlier block's keys and values.
   Zeroing `attention_keys` / `attention_values`, in place or by assignment, ablates
   them on that block alone; to ablate what every borrower attends with, edit the

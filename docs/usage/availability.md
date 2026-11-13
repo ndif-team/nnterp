@@ -1,12 +1,12 @@
 ---
-title: Availability
-one_liner: "`model.support()` says which standard values this checkpoint has and why not, before any trace; reading an unavailable one raises `nnterp.Unavailable` at that line."
-tags: [usage, support, Unavailable, SourceNotAvailable, eager, hybrids]
+title: Availability and forward order
+one_liner: "`model.support()` says which standard values this checkpoint has and why not, before any trace; reading an unavailable one raises `nnterp.Unavailable` at that line; `model.order()` and `model.rank()` give the forward order to read and edit the available ones in."
+tags: [usage, support, Unavailable, SourceNotAvailable, eager, hybrids, order, rank, OutOfOrderError]
 related: [docs/usage/loading.md, docs/usage/vocabulary.md, docs/usage/residual-stream.md, docs/usage/layouts.md]
 sources: [nnterp/standardized.py, nnterp/order.py, nnterp/components/standard.py, nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/gpt2.py, nnterp/families/falcon.py, nnterp/families/opt.py]
 ---
 
-# Availability
+# Availability and forward order
 
 ## What this is for
 
@@ -18,6 +18,10 @@ collects those reasons from the config alone, so a script can decide what to rea
 running anything.
 
 `None` means available. Anything else is the reason, a string.
+
+A script that reads or edits several values has a second question: which order to put them
+in. `model.order()` and `model.rank()` answer it for the values `support()` lists as
+available ([forward order](#forward-order-order-and-rank)).
 
 ## Canonical pattern
 
@@ -77,7 +81,9 @@ OPT, loaded without `attn_implementation`, trimmed to the interesting keys:
  'attention_probabilities': "read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'"}
 ```
 
-Loaded with `attn_implementation="eager"`, every entry is `None`; `mlp.mlp_output` is
+Loaded with `attn_implementation="eager"`, the attention interior turns `None`. The values
+before the rotary stay unavailable (`no rotary embedding: OPT adds learned absolute position
+embeddings ...`), `mlp_input` reads `no mlp module on this block`, and `mlp.mlp_output` is
 still absent, since no block has the module.
 
 A hybrid (`"Qwen/Qwen3.5-9B"`, `attn_implementation="eager"`; on the tiny checkpoint
@@ -128,6 +134,8 @@ outside the trace to pick blocks.
 | `this checkpoint sets reorder_and_upcast_attn, which takes GPT-2's own upcast attention path` | the GPT-2 interior | `config.reorder_and_upcast_attn` is set |
 | `The attention does its own arithmetic rather than transformers' shared attention interface; not mapped for this family yet` | an interior value a family has not mapped onto its own arithmetic | a family off the shared interface that marks it `unavailable(NOT_ON_INTERFACE)` |
 | `no self_attn module on this block` / `no linear_attn module on this block` / `no mlp module on this block` | every value of that module | some other block has the module and this one does not (a hybrid's blocks); a module no block has (OPT's `mlp`) has no key instead |
+| `no rotary embedding: ...` / `no rotary embedding on this block: ...` | `attention_queries_prerope`, `attention_keys_prerope` (and `self_attn.rotate` raises it) | the family has no rotary embedding (absolute or sinusoidal positions, ALiBi, none in the attention), or this block skips it (a NoPE block) ([attention-interior](attention-interior.md#before-the-rotary-embedding-attention_queries_prerope-attention_keys_prerope-rotate)) |
+| `a KV-sharing block: its keys are an earlier block's, rotated there; ...` | `attention_keys_prerope` (Gemma-4) | the block attends with an earlier block's keys and rotates none of its own |
 | `no o_proj module on this attention` / `no act_fn module on this mlp` / `no down_proj module on this mlp` | `attention_premix`; `mlp_activation`; `mlp_neurons` | the family aliases no module to that standard name: the projection is low-rank or per expert, or the activation is applied as a function rather than a module |
 | `routed experts; read per-expert via the Moe component` | `mlp_activation`, `mlp_neurons` | the block's MLP is a mixture of experts: no single activation or down projection ([mixture-of-experts](mixture-of-experts.md)) |
 | `a parallel block: ...` / `a post-norm block: ...` / `a state-space block: one sublayer, the mixer, so there is no stream between sublayers and no MLP` / `a one-sublayer block: its norm feeds its one sublayer, so there is no stream between sublayers` / `an MLP block: its norm feeds the MLP, so the normed stream is mlp_norm_output` | `attention_norm_output`, `layer_mid`, `mlp_norm_output`, `mlp_input` | the block is not the pre-norm one the values are defined on: GPT-J's parallel sublayers, OLMo-2's post-norms, a Mamba block, a Nemotron-H block ([residual-stream](residual-stream.md#the-module-boundaries)) |
@@ -138,8 +146,12 @@ outside the trace to pick blocks.
 | `the default family cannot tell what this sublayer adds to the stream; add a family module (docs/extending/adding-a-family.md)` | `attention_output`, `mlp_output` | the default family (a `model_type` with no family) serves no contribution ([loading](loading.md#an-architecture-with-no-family)); `project_on_vocab` and `get_topk_closest_tokens` raise the same way, "the default family cannot tell what follows lm_head" |
 | `no self_attn module found under the names the default family knows; ...` / `no mlp module found ...` | every value of that module | the default family found no such module on the block |
 | `the default family cannot tell whether the block has a stream between its sublayers ...` / `... whether post_attention_layernorm feeds the MLP ...` / `a mixture of experts (the module has experts, a router or a gate) ...` | `layer_mid`; `mlp_norm_output`; `mlp_activation`, `mlp_neurons` | the default family: the block's shape is a fact its names do not show ([loading](loading.md#an-architecture-with-no-family)) |
+| `the default family cannot tell where this attention applies its rotary embedding, if it has one, or with what; add a family module (docs/extending/adding-a-family.md)` | `attention_queries_prerope`, `attention_keys_prerope` (and `self_attn.rotate` raises it) | the default family, on every block: which call rotates the queries and keys, and with what cos and sin, is code its names do not show ([loading](loading.md#an-architecture-with-no-family)) |
+| `the queries, keys and values are not the arguments of one call in this forward that returns the head outputs (...), so there is no attention function to call again` | `self_attn.interface` | BLOOM, MPT, Falcon and XGLM (their own arithmetic) and DeepSeek-V4 (the head outputs are the interface's output rotated back); elsewhere `interface` has the reason of the queries, keys, values, head outputs or pattern it works with ([attention-interior](attention-interior.md#calling-the-attention-function-again-interface)) |
 | `read inside transformers' pure-torch torch_chunk_gated_delta_rule, but this process dispatches it to an optimized kernel (fla) with no Python source; uninstall it, or call nnterp.route_kernels(model.family, 'torch'), to read these` | every `linear_attn` value but `attention_output` | `flash-linear-attention` or `causal-conv1d` is installed |
 | `a text-only load: no processor, so no image reaches the model; load with task='image-text-to-text'` | every value of `model.vision` and its blocks | a vision-language wrapper loaded under the default `task="text-generation"` ([vision.md](vision.md#availability)); `model.vision.support()` is then empty and `model.support()` has no `vision.` rows |
+| `a vision tower's attention: the queries and keys before a rotary embedding, and ...` | `vision.self_attn.attention_queries_prerope`, `vision.self_attn.attention_keys_prerope` (and a tower block's `self_attn.rotate` raises it) | every block of every vision tower; the values before the rotary are the text model's ([vision.md](vision.md#availability)) |
+| `the Qwen ViT's attention makes one interface call per image ...` / `RADIO's attention makes one interface call over the packed row for one image ... and one per image for several ...` | `vision.self_attn.attention_scores`, `attention_probabilities`, `interface` (and RADIO's `attention_head_outputs`) | the Qwen ViT and RADIO, under every `attn_implementation`: no one call holds the block's pattern; the queries and keys are served whole, to split at `cu_seqlens` ([vision.md](vision.md#the-qwen-vit)) |
 | `<tower>.image_size is not available: the tower takes images of any resolution, each cut into its own patch grid by the processor; read the grid off the processor's output (image_grid_thw, image_sizes, image_position_ids)` | `vision.image_size` (a size, so raised at the read; not a `support()` row) | the Qwen ViT, Pixtral, Gemma 4 and Gemma 4 unified |
 | `the <family> family keys no ImageScatter on the '<model_type>' wrapper, so where its image features enter the text stream is unknown` | `vision.image_features` | the tower's names bind but the family does not say where the wrapper writes the features into the token embeddings |
 | `the config names no image_token_id` | `vision.image_token_mask`, `vision.image_features` | a wrapper whose config has no image token id to read the mask from |
@@ -182,12 +194,13 @@ has_pattern = support["self_attn.attention_probabilities"] is None
 attn_blocks = [i for i, layer in enumerate(model.layers) if getattr(layer, "self_attn", None) is not None]
 has_mlp = support.get("mlp.mlp_output", "absent") is None   # .get: OPT has no key at all
 
+patterns = {}
 with model.trace(prompt):
     for i in attn_blocks:
         if has_pattern:
             patterns[i] = model.layers[i].self_attn.attention_probabilities.save()
     if has_mlp:
-        mlp = model.layers[0].mlp.mlp_output.save()
+        mlp = model.layers[-1].mlp.mlp_output.save()      # the last block: it runs after every pattern
 ```
 
 For one block, `model.support(layer=i)["self_attn.attention_probabilities"]` is the flat
@@ -201,9 +214,19 @@ on `getattr(model, "vision", None)` first and on `support()` second
 
 ## Forward order: `order` and `rank`
 
-Within one invoke, values are read in the order the forward reaches them. `model.order()`
+Within one invoke, values are read and edited in the order the forward reaches them. `model.order()`
 says that order for the values `support()` lists as available, and `model.rank()` gives one
 sortable tuple per value. Like `support()`, both are asked outside a trace.
+
+Use them when one trace reads or edits values at several sites in an order the code
+decides: a helper that takes a list of `(value, block)` sites, a sweep that patches several
+values per block, a port of code that hooked modules in its own order. Sort the sites by
+`rank` before the trace and issue them in that order, instead of keeping a hand-written
+table of what comes first; that table differs per family (on Falcon without alibi the values
+come before the queries, and a mixture's shared expert runs first on some families and last
+on others). When a plain trace raises `OutOfOrderError`, or a list read under `tracer.iter`
+comes back shifted by one step ([generation](generation.md#read-order-within-a-step)),
+compare the ranks of the reads involved.
 
 ```python
 from nnterp import StandardizedTransformer
@@ -211,17 +234,20 @@ from nnterp import StandardizedTransformer
 model = StandardizedTransformer("hf-internal-testing/tiny-random-LlamaForCausalLM", attn_implementation="eager")
 
 model.order(0)
-# {'layer_input': 0, 'self_attn.attention_queries': 1, 'self_attn.attention_keys': 1,
-#  'self_attn.attention_values': 1, 'self_attn.attention_scores': 2,
-#  'self_attn.attention_probabilities': 3, 'self_attn.attention_head_outputs': 4,
-#  'self_attn.attention_output': 5, 'mlp.mlp_output': 6, 'layer_output': 7}
+# {'layer_input': 0, 'attention_norm_output': 1,
+#  'self_attn.attention_queries_prerope': 2, 'self_attn.attention_keys_prerope': 2,
+#  'self_attn.attention_queries': 3, 'self_attn.attention_keys': 3, 'self_attn.attention_values': 3,
+#  'self_attn.interface': 4, 'self_attn.attention_scores': 5, 'self_attn.attention_probabilities': 6,
+#  'self_attn.attention_head_outputs': 7, 'self_attn.attention_premix': 8, 'self_attn.attention_output': 9,
+#  'layer_mid': 10, 'mlp_norm_output': 11, 'mlp_input': 12, 'mlp.mlp_activation': 13,
+#  'mlp.mlp_neurons': 14, 'mlp.mlp_output': 15, 'layer_output': 16}
 model.order()
 # {'input_ids': 0, 'attention_mask': 0, 'input_size': 0, 'token_embeddings': 1,
-#  'logits': 2, 'next_token_probs': 2}
+#  'final_norm_output': 2, 'lm_head_output': 3, 'logits': 4, 'next_token_probs': 4}
 
 model.rank("input_ids")                            # (-1, 0): before the blocks
-model.rank("self_attn.attention_queries", 1)       # (1, 1)
-model.rank("logits")                               # (2, 2): num_layers, after the blocks
+model.rank("self_attn.attention_queries", 1)       # (1, 3)
+model.rank("logits")                               # (2, 4): num_layers, after the blocks
 
 reads = [("logits", None), ("layer_output", 1), ("mlp.mlp_output", 0), ("token_embeddings", None)]
 reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_output@0, layer_output@1, logits
@@ -230,9 +256,11 @@ reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_outpu
 - **A rank is `(side, r)`.** `side` is `-1` for a root value the model serves before the
   blocks, the layer for a block value (named as in `support(layer=i)`), and `num_layers`
   for a root value after the blocks; `r` is the value's place in `order(side's layer)`.
-  Sorting reads by rank sorts them into forward order, layer by layer.
+  Sorting reads by rank sorts them into forward order, layer by layer, and so does sorting
+  the edits of an intervention: an edit lands at its value's location as a read does.
 - **Equal ranks are one location.** The queries, keys and values are the arguments of one
-  attention call, so either can be read first. On Falcon the values come before the
+  attention call, so either can be read first; the queries and keys before the rotary are
+  the arguments of the rotary call, ranked before them. On Falcon the values come before the
   queries and keys (`rank("self_attn.attention_values", 0) < rank("self_attn.attention_queries", 0)`);
   on a Qwen3.5 linear-attention block the kernel's inputs (queries, keys, values, `betas`,
   `decays`, `state_input`) share one rank.
@@ -241,24 +269,36 @@ reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_outpu
 - **Unavailable values are not ranked.** Loaded with `sdpa`, the scores and the pattern
   are absent from `order(i)`, and `rank` raises `Unavailable` with `support()`'s reason;
   a name that is no value at all raises `KeyError`.
-- **Measured, then kept.** The first call runs one probe `model.scan` (meta tensors, no
-  weights or dispatch needed; `nnterp.order.probe` says how). A forward that cannot run on
-  meta tensors (Granite, OPT, a grouped-mm mixture of experts in float32) is probed with a
-  `trace` instead, which loads the weights. The result is measured once and kept on the
+- **Measured, then kept.** On a model not yet dispatched the first call runs one probe
+  `model.scan` (fake tensors, no weights or dispatch needed; `nnterp.order.probe` says how).
+  A forward that cannot run on fake tensors (Granite, OPT, a grouped-mm mixture of experts
+  in float32) is probed with a `trace` instead, which loads the weights. A dispatched model
+  is probed with a `trace` (one short forward): a scan would run its real modules on fake
+  tensors, and a module that caches what it computes would keep them (a `longrope` rotary
+  embedding's long frequencies: Phi-3-mini-128k, Phi-3.5, Phi-4-mini), breaking every later
+  trace. The result is measured once and kept on the
   model, so set `nnterp.route_kernels` and `nnterp.chunk_per_token` before the model is
   dispatched, traced or measured: the same rule kernel routing already has for traces
   (`sourced` envoys instrument at dispatch). With torch kernels routed, a DeltaNet block
   also ranks `state` and `states`.
 - **One forward pass.** The order is within one call of the model. Under `generate`, every
   step repeats it; `tracer.iter` picks the step. The vision tower's values
-  (`vision.*`) are not ranked, and `StandardizedVLLM` raises `NotImplementedError`.
+  (`vision.*`) are not ranked.
+- **On the vLLM engine, the transformers model's ranks.** `StandardizedVLLM.order` and `.rank`
+  are measured on the transformers model of the checkpoint, a weightless `StandardizedTransformer`
+  built on the first call (eager attention, the load's hub arguments), and answer for the values
+  the engine serves: the standard values sit at the same module boundaries on both engines, so the
+  forward reaches them in the same order. A value the engine lacks is absent from `order(i)`, and
+  `rank` raises `Unavailable` with the engine's reason (`model.rank("attention_mask")`: no mask on a
+  vLLM request); a checkpoint no transformers family covers raises `NotImplementedError`.
 
 ## Gotchas
 
 - **`hasattr(envoy, "attention_probabilities")` raises.** Python's `hasattr` treats only
   `AttributeError` as absence; an unavailable value raises `Unavailable` through it, and an
-  *available* source-located value read outside a trace raises `ValueError` (`Cannot access
-  ... outside of interleaving`). This is a documented limitation; use `support()`.
+  *available* value read outside a trace raises too (`ValueError: Cannot access ... outside
+  of interleaving`, or `SourceNotAvailable` for a value inside a nested call, such as the
+  pattern). This is a documented limitation; use `support()`.
 - **`getattr(envoy, name, None)` inside a trace can trip a served value.** Decide which
   blocks have `self_attn` or `mlp` before the trace.
 - **`support()` predicts; the forward decides.** A `SourceNotAvailable` at read time means

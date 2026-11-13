@@ -1,6 +1,6 @@
 """GPT-2, end to end."""
 
-from suite import FamilySuite, rows
+from suite import NO_ROTARY, FamilySuite, rows
 
 from nnterp.families import gpt2
 
@@ -10,6 +10,7 @@ class TestGPT2(FamilySuite):
     FAMILY = gpt2
     NATIVE = rows("transformer", "h", "wte", "ln_f", attn="attn", ln1="ln_1", ln2="ln_2")
     REFUSES_IN_PLACE_QKV = True  # q/k/v are split views of one c_attn tensor
+    EXPECTED_UNAVAILABLE = NO_ROTARY
 
     def test_reorder_and_upcast_makes_the_interface_unavailable(self, model):
         """That config flag takes GPT-2's own upcast path, where nothing on the interface runs."""
@@ -17,6 +18,6 @@ class TestGPT2(FamilySuite):
         config.reorder_and_upcast_attn = True
         try:
             support = model.support()
-            assert all("reorder_and_upcast_attn" in support[f"self_attn.{name}"][0] for name in ("attention_probabilities", "attention_queries"))
+            assert all("reorder_and_upcast_attn" in support[f"self_attn.{name}"][0] for name in ("attention_probabilities", "attention_queries", "interface"))
         finally:
             config.reorder_and_upcast_attn = False

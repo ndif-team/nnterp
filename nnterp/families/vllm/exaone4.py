@@ -32,13 +32,19 @@ class Layer(Layer):
     attention_norm_output = unavailable(POST_NORM_ATTENTION)
     mlp_norm_output = unavailable(POST_NORM_MLP)
 
-    @Flat("mlp.input", description="The residual stream after the attention add, what the MLP is called with, [1, tokens, hidden_size]")
+    @Flat("mlp.input", description="The residual stream after the attention add, what the MLP is called with, [1, tokens, hidden_size]", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 
 
 class Attention(Attention):
-    """The attention: what reaches the residual stream is the post-attention norm's output."""
+    """The attention: what reaches the residual stream is the post-attention norm's output. A hybrid's full-attention block does not rotate."""
+
+    def no_rotary(self) -> str | None:
+        module = self._module
+        if not (module.sliding_window or module.apply_rope_all_layers):
+            return "no rotary embedding on this block: EXAONE 4's full-attention blocks of a hybrid use no position encoding, its sliding-window blocks rotate"
+        return None
 
     @Flat(
         "../post_attention_layernorm.output",

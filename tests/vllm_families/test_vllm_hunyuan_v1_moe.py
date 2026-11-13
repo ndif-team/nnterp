@@ -45,6 +45,11 @@ class TestVLLMHunyuanV1Moe(VLLMFamilySuite):
     UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS
 
+    def rotated_as_served(self, attn, name, rotated):
+        """The queries and keys are normed per head after the rotary, by ``query_layernorm`` / ``key_layernorm``, tokens first."""
+        norm = attn.query_layernorm if name == "attention_queries_prerope" else attn.key_layernorm
+        return norm(rotated[0].transpose(0, 1).contiguous()).transpose(0, 1).unsqueeze(0)
+
     def test_the_block_passes_its_keys_and_values_through(self, model, reference):
         """An edit of the stream leaves the block's third element, its attention's keys and values, as they were."""
         layer = model.layers[reference["middle"]]

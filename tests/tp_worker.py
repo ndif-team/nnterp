@@ -10,6 +10,7 @@ same block, as a sharded model requires; nothing here branches on rank.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 
 import nnsight  # noqa: F401  nnsight before any transformers submodule
@@ -26,7 +27,7 @@ def main() -> None:
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
-    from nnterp import StandardizedTransformer
+    from nnterp import StandardizedTransformer, Unavailable
 
     kwargs = {"dispatch": True, "dtype": torch.float32, "attn_implementation": "eager"}
     if args.tp > 1:
@@ -45,9 +46,13 @@ def main() -> None:
 
     with torch.no_grad():
         with model.trace(PROMPT):
+            out["attention_queries_prerope"] = attn.attention_queries_prerope.save()
+            out["attention_keys_prerope"] = attn.attention_keys_prerope.save()
             out["attention_queries"] = attn.attention_queries.save()
             out["attention_keys"] = attn.attention_keys.save()
             out["attention_values"] = attn.attention_values.save()
+            heads_again, pattern_again = attn.interface(out["attention_queries"], out["attention_keys"], out["attention_values"])
+            out["interface_head_outputs"], out["interface_probabilities"] = heads_again.save(), pattern_again.save()
             out["attention_scores"] = attn.attention_scores.save()
             out["attention_probabilities"] = attn.attention_probabilities.save()
             out["attention_head_outputs"] = attn.attention_head_outputs.save()
@@ -57,6 +62,16 @@ def main() -> None:
             out["mlp_neurons"] = mlp.mlp_neurons.save()
             out["mlp_output"] = mlp.mlp_output.save()
             out["logits"] = model.logits.save()
+        positions = torch.arange(out["attention_queries_prerope"].shape[2])
+        out["rotated_queries"] = attn.rotate(out["attention_queries_prerope"], positions)
+        out["attention_input_gain"] = model.layers[LAYER].attention_input_gain
+        refusals = {"no_head_weights": attn.no_head_weights()}
+        for name in ("value_weight", "output_weight"):
+            try:
+                getattr(attn, name)(kv_heads - 1)
+                refusals[name] = None
+            except Unavailable as error:
+                refusals[name] = str(error)
 
         with model.trace(PROMPT):
             attn.attention_head_outputs[:, :, heads - 1] = 0
@@ -71,18 +86,47 @@ def main() -> None:
             out["queries_scaled_by_assignment"] = model.logits.save()
 
         with model.trace(PROMPT):
+            queries = attn.attention_queries_prerope.clone()
+            queries[:, :, -1] = queries[:, :, 0]  # the first query, rotated for the last position
+            attn.attention_queries_prerope = queries
+            out["queries_prerope_moved"] = model.logits.save()
+
+        with model.trace(PROMPT):
+            values = attn.attention_values.clone()
+            values[:, kv_heads - 1] += 1
+            heads_patched, _ = attn.interface(attn.attention_queries, attn.attention_keys, values)
+            attn.attention_head_outputs[:, -1, heads - 1] = heads_patched[:, -1, heads - 1]
+            out["head_patched_through_interface"] = model.logits.save()
+
+        with model.trace(PROMPT):
             activation = mlp.mlp_activation.clone()
             activation[..., neurons // 2 - 2 : neurons // 2 + 2] = 0
             mlp.mlp_activation = activation
             out["activation_assigned"] = model.logits.save()
+
+        block = model.layers[LAYER]  # the stream between the sublayers, held whole on every rank
+        with model.trace(PROMPT):
+            block.layer_mid = block.layer_mid * 0.5
+            out["mid_halved_by_assignment"] = model.logits.save()
+
+        with model.trace(PROMPT):
+            block.layer_mid[:] *= 0.5
+            out["mid_halved_in_place"] = model.logits.save()
 
     # With gradients on, a gathered value is a clone, which is what the in-place edit lands on.
     with model.trace(PROMPT):
         attn.attention_head_outputs[:, :, heads - 1] = 0
         out["head_outputs_zeroed_with_grad"] = model.logits.save()
 
+    # An assignment to layer_mid is copied into the stream, which requires grad here.
+    with model.trace(PROMPT):
+        model.layers[LAYER].layer_mid = model.layers[LAYER].layer_mid * 0.5
+        out["mid_halved_with_grad"] = model.logits.save()
+
     rank = int(os.environ.get("RANK", 0))
     torch.save({name: value.detach().cpu() for name, value in out.items()}, os.path.join(args.out, f"rank{rank}.pt"))
+    with open(os.path.join(args.out, f"rank{rank}.json"), "w") as file:
+        json.dump(refusals, file)
 
 
 if __name__ == "__main__":

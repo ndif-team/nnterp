@@ -5,11 +5,13 @@ self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
 added in the block, attention through the shared eager forward. Multi-head latent attention: queries and keys are ``qk_head_dim`` wide (``qk_nope_head_dim + qk_rope_head_dim``), values ``v_head_dim``, and the interface sees ``num_heads`` key/value heads whatever ``num_key_value_heads`` says. The first ``first_k_dense_replace`` blocks have a dense MLP, the rest a mixture of experts.
 """
 
+import sys
 from typing import TYPE_CHECKING
 
+import torch
 from transformers.models.deepseek_v2.modeling_deepseek_v2 import DeepseekV2Attention, DeepseekV2DecoderLayer, DeepseekV2MLP, DeepseekV2Moe
 
-from ..components import Attention, Layer, Mlp, Moe
+from ..components import Attention, EProperty, Layer, Mlp, Moe, Queries, SharedRopeKeys, Unavailable, rotary_reason
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -26,8 +28,59 @@ class Layer(Layer):
     """DeepSeek-V2's decoder block; returns a bare tensor, so the base holds."""
 
 
+#: Why latent attention serves no value weight per head (its output projection is a plain ``o_proj``, so `output_weight` is served).
+LATENT_VALUES = (
+    "latent attention: the values come out of a low-rank latent (kv_a_proj_with_mqa, its norm, kv_b_proj), "
+    "so no slice of one projection maps the attention's input to a head's values"
+)
+
+
+def _rope_call_inputs(attn: "Attention") -> str:
+    """The rope call's arguments, whichever function the family rotates with (`Attention.rope_call`)."""
+    return f"source.{attn.rope_call()}_0.inputs"
+
+
 class Attention(Attention):
-    """DeepSeek-V2's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """DeepSeek-V2's latent attention; the shared eager forward and the residual added in the block.
+
+    The rotary rotates each query head's trailing ``qk_rope_head_dim``
+    channels, and one rope key per position that every head shares; the rest
+    of each key comes out of the latent and carries no position. So the
+    queries before the rotary are whole heads (what the split into the two
+    parts receives, `Queries`), and the keys are that shared rope key
+    (`SharedRopeKeys`, ``[batch, 1, seq, qk_rope_head_dim]``). DeepSeek-V3
+    and the families that copy its attention subclass this, naming their own
+    rope call.
+    """
+
+    def rope_call(self) -> str:
+        """The modeling module's function the forward rotates the rope parts with: V2's complex ``apply_rotary_emb``."""
+        return "apply_rotary_emb"
+
+    @property
+    def qk_rope_head_dim(self) -> int:
+        """Width of the rotated part of a query head, and of the shared rope key."""
+        return self._module.qk_rope_head_dim
+
+    @EProperty("source.torch_split_0.input", description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
+    def attention_queries_prerope(self, value) -> Queries:
+        return value
+
+    @EProperty(_rope_call_inputs, select=1, description=Attention.attention_keys_prerope.description, unavailable=rotary_reason)
+    def attention_keys_prerope(self, value) -> SharedRopeKeys:
+        return value
+
+    def apply_rotary(self, x, embedding):
+        """The rope call on the trailing ``qk_rope_head_dim`` channels (all of a rope key's); the leading ones pass, as the forward concatenates them."""
+        rope = self.qk_rope_head_dim
+        apply = getattr(sys.modules[type(self._module).__module__], self.rope_call())
+        args = embedding if isinstance(embedding, tuple) else (embedding,)  # (cos, sin), or V2's complex frequencies
+        rot = x[..., -rope:]
+        heads = rot.reshape(args[0].shape[0], -1, *rot.shape[-2:])
+        return torch.cat((x[..., :-rope], apply(heads, heads, *args)[0].reshape(rot.shape)), dim=-1)
+
+    def value_weight(self, kv_head):
+        raise Unavailable(f"{self.path}.value_weight is not available: {LATENT_VALUES}")
 
 
 class Mlp(Mlp):

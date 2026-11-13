@@ -1,12 +1,13 @@
 """Cohere (Command-R), end to end: a parallel block, and logits scaled after the head."""
 
-import glob
 import json
 import os
 import tempfile
 
+import pytest
 import torch
-from suite import FamilySuite, PROMPT, rows
+from suite import FamilySuite, PROMPT, rows, cached_snapshot, built
+from vision_suite import WrapperSuite, wrapper_of
 
 from nnterp.families import cohere
 
@@ -32,7 +33,7 @@ class TestCohere(FamilySuite):
 
 def _qk_norm_checkpoint(repo="trl-internal-testing/tiny-CohereForCausalLM"):
     """The tiny checkpoint with ``use_qk_norm`` on (Command-R+'s layout); the new per-head norms load at their init."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="cohere-qk-norm-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -46,7 +47,7 @@ def _qk_norm_checkpoint(repo="trl-internal-testing/tiny-CohereForCausalLM"):
 class TestCohereQkNorm(FamilySuite):
     """Command-R+'s per-head ``q_norm`` / ``k_norm`` run before the rotary; the interface still receives the queries."""
 
-    REPO = _qk_norm_checkpoint()
+    REPO = built(_qk_norm_checkpoint)
     FAMILY = cohere
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln2=None)
     MLP_NORM = "input_layernorm"
@@ -54,3 +55,23 @@ class TestCohereQkNorm(FamilySuite):
 
     def test_the_norms_are_there(self, model):
         assert model.layers[0].self_attn._module.use_qk_norm
+
+
+class TestAyaVisionCohereWrapper(WrapperSuite):
+    """Aya Vision around a Cohere text model, Aya Vision 32B's layout, built from the tiny text checkpoint's config (no
+    tiny wrapper checkpoint exists): the text stack at ``model.language_model``. The text config's ``logit_scale`` is the
+    tiny's 0.125, which the wrapper never applies."""
+
+    FAMILY = cohere
+
+    @pytest.fixture(scope="class")
+    def model(self):
+        return wrapper_of(TestCohere.REPO, "AyaVisionConfig", dict(hidden_size=16, num_hidden_layers=1, num_attention_heads=2, intermediate_size=32))
+
+    def test_logits_are_the_unscaled_head_output(self, model):
+        """``AyaVisionForConditionalGeneration`` returns ``lm_head``'s output as it is, though its ``text_config`` sets a scale."""
+        with model.trace(PROMPT):
+            raw = model.lm_head_output.save()
+            logits = model.logits.save()
+        assert model.config.text_config.model_type == "cohere" and model.config.text_config.logit_scale == 0.125
+        assert torch.equal(logits, raw)

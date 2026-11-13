@@ -1,14 +1,14 @@
 """Falcon (7B layout), end to end: parallel block, multi-query, in-place add into the MLP output."""
 
-import glob
 import json
 import os
 import tempfile
 
 import nnsight
 import torch
-from suite import FamilySuite, rows, PROMPT
+from suite import NO_ROTARY, FamilySuite, rows, PROMPT, cached_snapshot, built, draw_biases, patched_checkpoint
 
+from nnterp.components import OWN_ARITHMETIC
 from nnterp.families import falcon
 
 
@@ -17,7 +17,7 @@ class TestFalcon(FamilySuite):
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     MLP_NORM = "input_layernorm"             # parallel (7B layout)
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block", "self_attn.interface": OWN_ARITHMETIC}
 
     def test_mlp_output_is_a_copy_the_block_does_not_touch(self, model):
         """The block adds the attention into the MLP's live tensor in place; the value is a copy."""
@@ -71,7 +71,7 @@ class TestFalcon(FamilySuite):
 
 def _patched_checkpoint(repo, **overrides):
     """A tiny checkpoint with its config overridden: the same weights (a norm the layout adds is random), another layout."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="falcon-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -90,11 +90,11 @@ def _alibi_checkpoint(repo="Rocketknight1/tiny-random-falcon-7b"):
 class TestFalconAlibi(FamilySuite):
     """The 7B layout with alibi: no rotary, the pattern at the dropout after the second softmax, flattened head outputs."""
 
-    REPO = _alibi_checkpoint()
+    REPO = built(_alibi_checkpoint)
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     MLP_NORM = "input_layernorm"
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "layer_mid": "a parallel block", "self_attn.interface": OWN_ARITHMETIC}
 
     def test_alibi_branch(self, model):
         assert model.layers[0].self_attn._module.config.alibi
@@ -114,7 +114,7 @@ class TestFalcon40B(FamilySuite):
     ATTENTION_NORM = "ln_attn"
     MLP_NORM = "ln_mlp"
     MLP_NORM_BEFORE_ATTENTION = True   # both norms are taken from the block input before either sublayer runs
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block", "self_attn.interface": OWN_ARITHMETIC}
 
     def test_new_decoder_architecture(self, model):
         assert model.config.new_decoder_architecture
@@ -122,14 +122,22 @@ class TestFalcon40B(FamilySuite):
 
 
 class TestFalconRW(FamilySuite):
-    """Falcon-RW's layout: ``parallel_attn`` false, a sequential pre-norm block with ``post_attention_layernorm``."""
+    """falcon-rw-1b's and -7b's layout: ``parallel_attn`` false (a sequential pre-norm block with
+    ``post_attention_layernorm``), alibi in place of the rotary, a key and value per head (``multi_query`` false) and
+    biased projections. The 7B tiny config with those four set, weights drawn for it, the biases too."""
 
-    REPO = _patched_checkpoint("Rocketknight1/tiny-random-falcon-7b", parallel_attn=False)
+    REPO = built(
+        patched_checkpoint, "Rocketknight1/tiny-random-falcon-7b", init=draw_biases, parallel_attn=False, alibi=True,
+        multi_query=False, bias=True,
+    )
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention")
+    EXPECTED_UNAVAILABLE = {**NO_ROTARY, "self_attn.interface": OWN_ARITHMETIC}
 
     def test_sequential_block(self, model):
-        assert not model.config.parallel_attn and not model.config.new_decoder_architecture
+        config = model.config
+        assert not config.parallel_attn and not config.new_decoder_architecture
+        assert config.alibi and not config.multi_query and config.bias and model.num_kv_heads == model.num_heads
         assert model.support(layer=0)["layer_mid"] is None
         with model.trace(PROMPT):
             mid = model.layers[0].layer_mid.save()
@@ -141,12 +149,12 @@ class TestFalconRW(FamilySuite):
 class TestFalcon11B(FamilySuite):
     """falcon-11B's layout: ``new_decoder_architecture`` with one norm (``num_ln_in_parallel_attn`` 1) feeding both sublayers."""
 
-    REPO = _patched_checkpoint("Rocketknight1/tiny-random-falcon-40b", num_ln_in_parallel_attn=1)
+    REPO = built(_patched_checkpoint, "Rocketknight1/tiny-random-falcon-40b", num_ln_in_parallel_attn=1)
     FAMILY = falcon
     NATIVE = rows("transformer", "h", "word_embeddings", "ln_f", attn="self_attention", ln2=None)
     KV_HEADS_EXPANDED = True
     MLP_NORM = "input_layernorm"
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}
+    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block", "self_attn.interface": OWN_ARITHMETIC}
 
     def test_one_norm_feeds_both(self, model):
         assert model.config.new_decoder_architecture and model.config.num_ln_in_parallel_attn == 1
@@ -155,3 +163,4 @@ class TestFalcon11B(FamilySuite):
             mlp = model.layers[0].mlp_norm_output.save()
             raw = model.layers[0].input_layernorm.output.save()
         assert torch.equal(attn, raw) and torch.equal(mlp, raw)
+

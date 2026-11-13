@@ -19,7 +19,7 @@ answers `support()` on its envoy and in `model.support()`. Nothing in nnterp cha
 
 ## Canonical pattern
 
-Verified on `hf-internal-testing/tiny-random-gpt2`; the model id below is what a user
+Run on `hf-internal-testing/tiny-random-gpt2`; the model id below is what a user
 types.
 
 ```python
@@ -109,7 +109,7 @@ does, through `interface_reason`.
 - **A module named from the model's root.** A leading `/` walks from the root envoy
   instead of the host, by standard names: `EProperty("/norm.output", ...)` on a block's
   attention is the final norm's output, `EProperty("/inputs", select="input_ids", ...)` the
-  ids the model was called with (verified on tiny GPT-2, `tests/test_base.py::test_root_anchored_keys`:
+  ids the model was called with (`tests/test_base.py::test_root_anchored_keys`:
   equal to `transformer.ln_f.output` and `model.input_ids`, and an assignment lands).
 - **A module named relative to the host.** A leading `../` steps to the parent, any other
   segment to a child. A path that goes up takes native names only after the `../`
@@ -117,9 +117,9 @@ does, through `interface_reason`.
   name is `ln_2`); one that stays at or below the host resolves aliases. On GPT-2's attention,
   `EProperty("../ln_2.output", description="The stream entering the MLP")` is the block's
   second norm; on the block, `EProperty("post_attention_layernorm.input", ...)` is the
-  residual stream after the attention sublayer (verified: equal to
+  residual stream after the attention sublayer (equal to
   `layer.input + attention_output`). In-place edits and assignments on either reach the
-  model.
+  model; set `in_place=True` on a value there that should replace the stream.
 - **An operation inside the forward.** `source` drills into the current module's forward,
   and again into a call the forward makes; the segment after it names the operation.
   `source.attention_interface_1.source.nn_functional_softmax_0.output` is the softmax
@@ -169,7 +169,7 @@ is, not when its forward is instrumented.
 A `jaxtyping` return annotation is the value's declared shape, and the standard shapes have
 names exported by `nnterp.components`: `Residual`, `Pattern`, `Keys`, ... (each defined
 beside the envoy that serves it; [../usage/layouts.md](../usage/layouts.md) lists all
-thirty-seven: thirty-four from `nnterp.components`, and the root's `Logits`, `NextTokenProbs`,
+thirty-eight: thirty-five from `nnterp.components`, and the root's `Logits`, `NextTokenProbs`,
 `Tokens` from `nnterp.standardized`).
 Annotate with the name where one fits: `attention_softmax` above is `-> Pattern`, so
 `Attention.attention_softmax.layout is Pattern`, the same object the base's
@@ -193,7 +193,8 @@ modeling module; import them after `import nnterp`.
 
 ## Where it shows
 
-- **The repr** of the envoy: every descriptor with a `description`, as `(name): description`.
+- **The repr** of the envoy: every descriptor with a `description`, as `(name) -> Layout [axes]: description`,
+  or `(name): description` without a layout.
 - **`envoy.support()`**: every descriptor on the envoy's class, `None` or the reason.
 - **`model.support()` and `model.support(layer=i)`**: the tree decides. The block's own
   values come from the block instance, and every child of a block that is a `Standard`
@@ -202,13 +203,10 @@ modeling module; import them after `import nnterp`.
   envoy's own `support()`. With the classes above, `model.support()` gains
   `self_attn.attention_softmax`, `self_attn.attention_entropy` and `mlp.last_position`,
   and `model.support(layer=i)` the same three; a load without your `envoys=` lists none of
-  them (verified on the tiny GPT-2;
-  `tests/test_registry.py::test_custom_value_through_envoys_is_in_support` pins it).
+  them (`tests/test_registry.py::test_custom_value_through_envoys_is_in_support` pins it).
 
 ## Gotchas
 
-- **`import nnterp` before `from transformers.models... import`**; the reverse order
-  segfaults at import on this stack.
 - **Key on the module type, not the alias.** `envoys=` matches type, then path (native,
   or an alias where its `rename` key ends the path); a path key loses to the family's type key.
 - **`unavailable=` is yours to state.** A value on an interface op without
@@ -233,4 +231,4 @@ modeling module; import them after `import nnterp`.
 - [overriding-values.md](overriding-values.md): the same descriptor, relocating a standard value.
 - [finding-source-ops.md](finding-source-ops.md): finding the op name for a `source.` path.
 - [registering.md](registering.md): making the custom class the family's for every load of that model type in the process.
-- nnsight docs/usage/extending.md and docs/developing/extending-envoy.md: the `eproperty` descriptor nnterp's are built on.
+- nnsight docs/developing/extending.md and docs/developing/extending-envoy.md: the `eproperty` descriptor nnterp's are built on.

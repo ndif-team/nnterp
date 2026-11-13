@@ -20,8 +20,8 @@ from nnterp.components import (
     PER_IMAGE, HeadOutputs, ImageFeatures, Keys, Patches, Queries, QwenVision, QwenVisionAttention, Values, pinned,
 )
 
-#: The tower's pattern, unavailable on every block: the attention runs one call per image.
-PER_IMAGE_VALUES = {"self_attn.attention_scores": PER_IMAGE, "self_attn.attention_probabilities": PER_IMAGE}
+#: The tower's pattern, and the call that would make it again, unavailable on every block: the attention runs one call per image.
+PER_IMAGE_VALUES = {name: PER_IMAGE for name in ("self_attn.attention_scores", "self_attn.attention_probabilities", "self_attn.interface")}
 #: What a `FamilySuite` on a wrapper loaded with its processor expects of the tower's rows.
 PER_IMAGE_UNAVAILABLE = {f"vision.{name}": reason for name, reason in PER_IMAGE_VALUES.items()}
 
@@ -228,6 +228,16 @@ class DeepstackSuite:
         support = layer.support
         monkeypatch.setattr(layer, "support", lambda self: {**support(self), "deepstack_output": "needs an image"})
         super().test_values_match_their_annotations(model)
+
+    def test_support_is_what_this_family_expects(self, model, monkeypatch):
+        """The base check on every other value: ``deepstack_output`` is unavailable past the taps (every released
+        Qwen3-VL taps 3 of 28 or more blocks; the tiny checkpoint's 3 taps cover its 2), which
+        `test_deepstack_is_listed_and_available_on_the_first_blocks` checks."""
+        support = type(model).support
+        monkeypatch.setattr(type(model), "support", lambda self, *args, **kwargs: {
+            name: reason for name, reason in support(self, *args, **kwargs).items() if name != "deepstack_output"
+        })
+        super().test_support_is_what_this_family_expects(model)
 
     def deepstack_count(self, model):
         return min(len(model.config.vision_config.deepstack_visual_indexes), model.num_layers)

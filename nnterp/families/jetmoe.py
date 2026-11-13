@@ -47,13 +47,22 @@ class Layer(Layer):
     """JetMoE's decoder block; returns a bare tensor, so the base holds."""
 
 
+#: Why the heads have no shared output projection: each routing slot's expert projects its own.
+PER_EXPERT_OUTPUT = "a mixture of attention heads: the output projection is per expert, inside experts"
+
+
 class Attention(Attention):
     """JetMoE's mixture of attention heads; the shared eager forward, a 3-tuple whose first element is the contribution, and the residual added in the block, so the base holds.
 
     The output projection is per expert, inside ``experts``, so ``attention_premix`` is unavailable.
+    The keys are tiled to every routing slot after the rotary (``repeat(1, top_k, 1, 1)``), so
+    ``attention_keys_prerope`` is ``num_kv_heads`` wide where ``attention_keys`` is ``top_k`` times that.
     """
 
-    attention_premix = unavailable("a mixture of attention heads: the output projection is per expert, inside experts")
+    attention_premix = unavailable(PER_EXPERT_OUTPUT)
+
+    def no_head_weights(self) -> str | None:
+        return PER_EXPERT_OUTPUT
 
 
 class Mlp(Moe):

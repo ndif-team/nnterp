@@ -57,9 +57,10 @@ def panes(page, checkpoint):
 #: The standard values at the block's, the sublayers' and the root's module boundaries.
 BOUNDARIES = ("attention_norm_output", "layer_mid", "mlp_norm_output", "mlp_input", "attention_premix", "mlp_activation",
               "mlp_neurons", "final_norm_output", "lm_head_output")
-#: A ledger row: its node, its condition mark, the value's name and its description.
+#: A ledger row: its node, its condition mark, the value's name, its description and where it is read.
 LEDGER_ROW = re.compile(r'<div class="ledger-row" data-node="([^"]*)">\s*<span class="mono-md name[^"]*">(<span class="warn".*?</span>)?(\w+)</span>'
-                        r'\s*<span class="hide-sm mono">.*?</span>\s*<span class="body-md">(.*?)</span>', re.S)
+                        r'\s*<span class="hide-sm mono">.*?</span>\s*<span class="body-md">(.*?)</span>'
+                        r'\s*<span class="hide-sm body-md where">(.*?)</span>', re.S)
 
 
 def block_of(entry):
@@ -109,13 +110,14 @@ def test_entry_builds_a_page(name):
             assert "identity" in block or term in shape["identity"]
     assert '"identity"' in page and "stream.output" in page
     # Every module boundary the family serves on every block has its place on the page, its ledger row linked to it:
-    # one with no place is read somewhere the diagram does not draw.
-    for node, warn, value, what in LEDGER_ROW.findall(panes(page, embedded(page, "checkpoints-json")["default"])["values"]):
-        if value in BOUNDARIES and not warn and not what.startswith("Unavailable"):
+    # one with no place is read somewhere the diagram does not draw. One the checkpoint does not have reads nowhere.
+    for node, warn, value, _, where in LEDGER_ROW.findall(panes(page, embedded(page, "checkpoints-json")["default"])["values"]):
+        if value in BOUNDARIES and not warn and not where.startswith("<p>nowhere"):
             assert node in nodes and nodes[node]["expr"].endswith("." + value), (value, node)
     for k in range(1, 6):
         assert f"--c{k}: #" in page and f"--c{k}-deep: #" in page
-    assert '<span class="k">with</span>' in page, "the notes' snippets are highlighted at build time"
+    if "```" in entry.NOTES:
+        assert '<pre class="code"><code><span' in page, "the notes' code blocks are highlighted at build time"
     assert f'<span class="n role-{build.HOST_ROLES[block["sublayers"][0]["host"]]}">' in page
     assert '<span class="rl">' in page, "the printout's layouts are lexed"
 
@@ -320,7 +322,7 @@ def test_every_vision_host_in_nnterp_is_a_wrapper():
         if not getattr(entry, "WRAPPERS", None):
             continue
         module = importlib.import_module(f"test_{entry.MODEL_TYPE}")
-        suites = {cls.REPO for cls in vars(module).values()
+        suites = {cls.REPO for cls in list(vars(module).values())  # reading a REPO can warn, adding __warningregistry__
                   if isinstance(cls, type) and issubclass(cls, VisionSuite) and getattr(cls, "REPO", None)}
         pinned_wrappers = {wrapper["pinned"] for wrapper in entry.WRAPPERS.values()}
         # a suite's local copy of PINNED, unless that local dir is itself a record's pinned (a wrapper the suite writes)
@@ -369,7 +371,7 @@ def test_the_index_lists_every_vision_encoder_an_entry_resolves():
     shown = {tower["label"] for tower in build.index_model(cards)["towers"]}
     assert titles and shown == titles
     index = build.environment().get_template("index.html.j2").render(**build.index_model(
-        [{**card, "title": "x", "subtitle": "", "palette": build.site_palette(), "checkpoints": [], "quirks": [],
+        [{**card, "title": "x", "palette": build.site_palette(), "checkpoints": [], "quirks": [],
           "vllm": False, "architecture": "", "family_module": "", "wrappers": [],
           "tower_slugs": [build.tower_slug(t) for t in card["towers"]]} for card in cards]))
     for title in titles:
@@ -402,7 +404,7 @@ def test_every_entrys_org_is_in_the_cache():
 
 def test_the_index_has_org_filters_and_cards_carry_their_org():
     org = {"id": "meta-llama", "name": "Meta Llama", "avatar": "orgs/meta-llama.png"}
-    card = {"model_type": "llama", "title": "Llama", "subtitle": "", "org": org, "palette": build.site_palette(), "checkpoints": [],
+    card = {"model_type": "llama", "title": "Llama", "org": org, "palette": build.site_palette(), "checkpoints": [],
             "quirks": [], "vllm": False, "architecture": "", "family_module": "", "towers": [], "wrappers": [],
             "tower_slugs": []}
     index = build.environment().get_template("index.html.j2").render(**build.index_model([card]))
@@ -431,7 +433,7 @@ def test_every_page_has_its_palette_as_the_tab_icon():
     assert (Path(build.__file__).parent / "static" / "favicon.svg").read_text().strip() == svg
     family = build.palette(entries.load("llama"))
     assert family["icon"] != uri and all(f"fill='{fill}'" in unquote(family["icon"]) for fill in family["fills"])
-    card = {"model_type": "llama", "title": "Llama", "subtitle": "", "org": None, "palette": family, "checkpoints": [],
+    card = {"model_type": "llama", "title": "Llama", "org": None, "palette": family, "checkpoints": [],
             "quirks": [], "vllm": False, "architecture": "", "family_module": "", "towers": [], "wrappers": [], "tower_slugs": []}
     index = build.environment().get_template("index.html.j2").render(**build.index_model([card]))
     assert f'<link rel="icon" type="image/svg+xml" sizes="any" href="{uri}">' in index

@@ -109,13 +109,15 @@ rule, so a stub on one receives the tensor:
 
 ```python
 class Layer(gpt2.Layer):
-    @EProperty("post_attention_layernorm.input", description="The residual stream after the attention sublayer")
+    @EProperty("post_attention_layernorm.input", description="The residual stream after the attention sublayer", in_place=True)
     def mid_stream(self, value) -> Residual:
         return value
 ```
 
-On GPT-2 tiny this reads `layer.input + attention_output` exactly, and assigning it swaps
-in the first argument with the call's other arguments intact. The pair, for a stub that
+On GPT-2 tiny this reads `layer.input + attention_output` exactly; `in_place=True` copies an
+assignment into the tensor the block also holds as `residual`
+([../developing/eproperty-internals.md](../developing/eproperty-internals.md#in_place-a-tensor-the-forward-holds-under-two-names)).
+The pair, for a stub that
 needs a keyword argument, is an `inputs` path: the root's `input_ids` is
 `EProperty(key="inputs")` with a stub that takes `kwargs["input_ids"]` and a postprocess
 that puts it back.
@@ -303,6 +305,48 @@ class Attention(Attention):
         return super().off_interface()
 ```
 
+`no_rotary()` is the same decision for the values before the rotary embedding and
+`Attention.rotate`: `None` on the base, a reason on a family without a rotary or on a block
+that skips it, read off the module where the block decides:
+
+```python
+# nnterp/families/smollm3.py
+class Attention(Attention):
+    def no_rotary(self) -> str | None:
+        if not self._module.use_rope:
+            return "no rotary embedding on this block: SmolLM3 skips it on the blocks no_rope_layers marks"
+        return None
+```
+
+`no_head_weights()` is the decision both `Attention.value_weight` and `output_weight` ask: a
+family whose heads share no output projection as one matrix (JetMoE's per-expert ones,
+DeepSeek-V4's low-rank one) returns its reason, and both methods raise it. A family whose values
+alone are not one linear map of the attention's input, behind a plain `o_proj` (latent attention,
+Gemma-4's `v_norm`, ZAYA), overrides `value_weight` to refuse instead, so `output_weight` is
+still served:
+
+```python
+# nnterp/families/deepseek_v2.py
+class Attention(Attention):
+    def value_weight(self, kv_head):
+        raise Unavailable(f"{self.path}.value_weight is not available: {LATENT_VALUES}")
+```
+
+A family that only lays its projections out differently overrides the methods, reading the
+fused projection through `projection_weight(self, name)` (in `nnterp.components`). It returns
+the weight the projection's next forward applies (under a PEFT LoRA layer, the base plus each
+active, unmerged adapter's delta; the base once merged), and raises `Unavailable` with
+`no_head_weights()`'s reason, on an undispatched model's meta weight, and on a quantized one:
+
+```python
+# nnterp/families/phi3.py
+class Attention(Attention):
+    def value_weight(self, kv_head):
+        """``qkv_proj``'s rows are every query, every key, then every value."""
+        weight = projection_weight(self, "qkv_proj")[self.num_heads * self.head_dim:]
+        return weight.unflatten(0, (2, self.num_kv_heads, self.head_dim))[1, kv_head]
+```
+
 ### A per-instance `unavailable=` callable
 
 `unavailable=` takes a function of the envoy returning a reason or `None`, evaluated on
@@ -345,9 +389,13 @@ def attention_head_outputs(self, value):
     return seq_first(value)
 ```
 
-A view keeps in-place edits landing on the model's tensor. BLOOM's `bmm` result is
-`[batch * num_heads, seq, head_dim]`, so its family views and transposes on read and
-reverses both on write in the `postprocess`.
+A view keeps in-place edits landing on the model's tensor. Read a value where the forward
+holds it batch first: nnsight narrows a served tensor to an invoke's rows only when its
+leading axis is the batch, so a `[batch * num_heads, ...]` tensor would hand every invoke
+the whole batch, and an edit in one invoke would reach the others. BLOOM's `bmm` result is
+such a tensor, so its family reads the head outputs once `_merge_heads` has made them
+`[batch, seq, num_heads * head_dim]`, and views them per head (`unflatten`, `flatten` back
+in the `postprocess`).
 
 ## A clone carried back by a transform
 
@@ -434,7 +482,7 @@ def qk_head_dim(model: "StandardizedTransformer") -> int:
 ```
 
 DeepSeek-V3 has the same attention and imports both (`from .deepseek_v2 import head_dim,
-qk_head_dim`), as do DeepSeek-V3.2, GLM-5, GLM-4.7-Flash and Youtu. Twenty-five shipped
+qk_head_dim`), as do DeepSeek-V3.2, GLM-5, GLM-4.7-Flash and Youtu. Twenty-seven shipped
 families define a size this way (`intermediate_size` on GPT-2, OPT, BLOOM, Falcon, DBRX,
 Llama 4, ...; `num_kv_heads` on Falcon, GPT-BigCode and Gemma-4); the full list with what
 each reads is in [../reference/families.md](../reference/families.md#logits-scales-and-sizes), and the recipe in

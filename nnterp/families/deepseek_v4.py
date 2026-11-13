@@ -19,7 +19,11 @@ matrix mixing the streams, consumed transposed. The block, per token::
 * **``layer_output`` is the block's own stream tensor**, under the `Streams`
   layout, and so is ``layers[i].input``; writes land natively, and
   ``skip_layers`` and ``steer`` work unchanged (a ``[hidden_size]`` steering vector
-  broadcasts over the streams).
+  broadcasts over the streams). ``layer_mid``, ``h`` above, is not mapped.
+* **What each sublayer is called with** is one stream's width:
+  ``attention_norm_output`` is ``input_layernorm(collapsed_a)``,
+  ``mlp_norm_output`` and ``mlp_input`` are ``post_attention_layernorm(collapsed_f)``,
+  ``[batch, seq, hidden_size]``.
 * **The contributions are the sublayers' own outputs**, ``[batch, seq, hidden_size]``,
   unscaled: ``attention_output`` is ``self_attn.output[0]``, ``mlp_output`` the
   mixture's return (routed plus shared experts). The weights that put them into
@@ -45,7 +49,8 @@ compressor's entries are concatenated after the token keys once the prompt is
 sequence there. The interface's output keeps a rotation on its rotary slice
 (the values are the rotated keys); the module rotates it back before the grouped
 output projection, and ``attention_head_outputs`` is that de-rotated tensor, what
-the projection reads. Not latent attention: the plain root sizes hold.
+the projection reads (``attention_premix`` is the projection's input, the same
+numbers). Not latent attention: the plain root sizes hold.
 
 Every MLP is a mixture (``DeepseekV4SparseMoeBlock``, a `Moe`; its router, ``gate``,
 is aliased ``router``); on the ``hash_moe`` blocks the router picks experts from the
@@ -54,6 +59,7 @@ weight the experts the ids chose: writing ``router_logits`` changes ``expert_wei
 not ``expert_indices``.
 """
 
+import sys
 from typing import TYPE_CHECKING
 
 import torch
@@ -62,7 +68,8 @@ from transformers.models.deepseek_v4.modeling_deepseek_v4 import (
 )
 
 from ..components import (
-    Attention, EProperty, HeadOutputs, INTERFACE, Layer, Moe, Pattern, StreamMixing, StreamWeights, Streams, first_tensor, interface_reason, rewrap, unavailable,
+    Attention, EProperty, HeadOutputs, INTERFACE, Keys, Layer, Moe, Pattern, Queries, StreamMixing, StreamWeights, Streams, first_tensor, holding,
+    interface_reason, rewrap, rotary_reason, unavailable,
 )
 
 if TYPE_CHECKING:
@@ -76,7 +83,7 @@ RENAME = {
 }
 
 
-STREAMS_BOUNDARY = "hyper-connection streams: the sublayers read a mix of the streams, not the stream; the block's inner boundaries are not mapped for this family yet"
+STREAMS_BOUNDARY = "hyper-connection streams: the sublayers read a mix of the streams, not the stream; the streams between the sublayers are not mapped for this family yet"
 
 
 class Layer(Layer):
@@ -86,13 +93,13 @@ class Layer(Layer):
     ``attention_comb`` (``attn_hc``) and ``mlp_post`` / ``mlp_comb``
     (``ffn_hc``), float32 whatever the model's dtype.
 
-    The inner boundaries are not mapped: each sublayer reads a mix of the streams.
+    The inner boundaries: ``attention_norm_output``, ``mlp_norm_output`` and
+    ``mlp_input`` are the base's, ``[batch, seq, hidden_size]``: what each
+    sublayer is called with, its norm's output on the collapsed mix of the
+    streams.
     """
 
-    attention_norm_output = unavailable(STREAMS_BOUNDARY)
     layer_mid = unavailable(STREAMS_BOUNDARY)
-    mlp_norm_output = unavailable(STREAMS_BOUNDARY)
-    mlp_input = unavailable(STREAMS_BOUNDARY)
 
 
     @EProperty(key="input", description="The residual streams entering the block")
@@ -127,15 +134,56 @@ class Layer(Layer):
 class Attention(Attention):
     """DeepSeek-V4's attention: the shared interface with a sink column, and head outputs rotated back after it.
 
-    The output projection is low-rank (``o_a_proj`` compresses the heads before ``o_b_proj``), so no module
-    receives every head's output side by side and ``attention_premix`` is unavailable.
+    The output projection is grouped and low-rank: ``o_a_proj`` maps each of
+    ``o_groups`` groups of heads to ``o_lora_rank`` numbers, then ``o_b_proj``
+    mixes the groups into the stream. ``o_a_proj`` receives every head's output
+    side by side, ``[batch, seq, o_groups, heads_per_group * head_dim]``, heads
+    in order, so ``attention_premix`` is its input split by head.
 
     The scores are the masked scores bound just before the sink column is
     concatenated (GPT-OSS's binding); the pattern is the base's. The keys and
     values are one tensor object.
+
+    The rotary rotates each head's trailing rope slice, the queries and the
+    one key/value head in two calls of ``apply_rotary_pos_emb(x, cos, sin)``
+    with the cos/sin of the block's rope type (``rope_layer_type``: ``main``
+    on a sliding block, ``compress`` on a compressed one). The values before
+    it are those calls' inputs; the keys there are the values too, so a write
+    to ``attention_keys_prerope`` rewrites both.
     """
 
-    attention_premix = unavailable("a low-rank output projection: o_a_proj compresses the heads before o_b_proj, so nothing receives them side by side")
+    @EProperty("source.apply_rotary_pos_emb_0.input", description=Attention.attention_queries_prerope.description, unavailable=rotary_reason)
+    def attention_queries_prerope(self, value) -> Queries:
+        return value
+
+    @EProperty("source.apply_rotary_pos_emb_1.input", description=Attention.attention_keys_prerope.description, unavailable=rotary_reason)
+    def attention_keys_prerope(self, value) -> Keys:
+        return value
+
+    def rotary_embedding(self, x, position_ids):
+        """The model's rotary for this block's ``rope_layer_type`` (``main`` or ``compress``), not its ``layer_types`` entry."""
+        return holding(self, "rotary_emb").rotary_emb(x, position_ids, self._module.rope_layer_type)
+
+    def apply_rotary(self, x, embedding):
+        """The modeling module's ``apply_rotary_pos_emb(x, cos, sin)``, which rotates one tensor's trailing rope slice."""
+        cos, sin = embedding
+        apply = sys.modules[type(self._module).__module__].apply_rotary_pos_emb
+        return apply(x.reshape(cos.shape[0], -1, *x.shape[-2:]), cos, sin).reshape(x.shape)
+
+    @EProperty("o_a_proj.input", description=Attention.attention_premix.description)
+    def attention_premix(self, value) -> HeadOutputs:
+        """What the grouped projection ``o_a_proj`` receives, split by head as a view: ``[batch, seq, num_heads, head_dim]``, the same numbers as `attention_head_outputs`."""
+        return value.view(*value.shape[:-2], self.num_heads, self.head_dim)
+
+    @attention_premix.postprocess
+    def attention_premix(self, value):
+        return value.reshape(*value.shape[:-2], self._module.config.o_groups, -1)
+
+    def no_head_weights(self) -> str | None:
+        return (
+            "the values are the keys, one projection normed per head (kv_proj, then kv_norm), and the output projection "
+            "is two matrices (o_a_proj per group of heads, then o_b_proj), so a head's weights are no slice of one projection"
+        )
 
 
     #: The pattern's rows sum to less than one: the sink takes the rest.

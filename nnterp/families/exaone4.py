@@ -36,7 +36,7 @@ class Layer(Layer):
 
     attention_norm_output = unavailable(POST_NORM_ATTENTION)
 
-    @EProperty("mlp.input", description="The residual stream after the attention add")
+    @EProperty("mlp.input", description="The residual stream after the attention add", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 
@@ -46,6 +46,12 @@ class Layer(Layer):
 
 class Attention(Attention):
     """EXAONE-4's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
+
+    def no_rotary(self) -> str | None:
+        module = self._module
+        if module.sliding_window is not None and not module.is_sliding:
+            return "no rotary embedding on this block: EXAONE 4's full-attention blocks of a hybrid use no position encoding, its sliding-window blocks rotate"
+        return None
 
     @EProperty(
         "../post_attention_layernorm.output",

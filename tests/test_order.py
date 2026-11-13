@@ -1,5 +1,7 @@
 """`model.order` / `model.rank`: the forward order of the values, measured by one probe scan."""
 
+import types
+
 import pytest
 
 from nnterp import StandardizedTransformer, StandardizedVLLM, Unavailable, route_kernels
@@ -8,25 +10,30 @@ from nnterp.families import qwen3_5_text
 LLAMA = "hf-internal-testing/tiny-random-LlamaForCausalLM"
 QWEN3_5 = "yujiepan/qwen3.5-tiny-random"
 
-#: Tiny Llama's block, in forward order: the queries, keys and values are the attention call's arguments, one location.
+#: Tiny Llama's block, in forward order: the queries and keys before the rotary are the rotary call's arguments, and
+#: the queries, keys and values the attention call's, one location each; the call to make again (`interface`) is read
+#: with the attention call's arguments and called before the scores, so it ranks between.
 LLAMA_BLOCK = {
     "layer_input": 0,
     "attention_norm_output": 1,
-    "self_attn.attention_queries": 2,
-    "self_attn.attention_keys": 2,
-    "self_attn.attention_values": 2,
-    "self_attn.attention_scores": 3,
-    "self_attn.attention_probabilities": 4,
-    "self_attn.attention_head_outputs": 5,
-    "self_attn.attention_premix": 6,
-    "self_attn.attention_output": 7,
-    "layer_mid": 8,
-    "mlp_norm_output": 9,
-    "mlp_input": 10,
-    "mlp.mlp_activation": 11,
-    "mlp.mlp_neurons": 12,
-    "mlp.mlp_output": 13,
-    "layer_output": 14,
+    "self_attn.attention_queries_prerope": 2,
+    "self_attn.attention_keys_prerope": 2,
+    "self_attn.attention_queries": 3,
+    "self_attn.attention_keys": 3,
+    "self_attn.attention_values": 3,
+    "self_attn.interface": 4,
+    "self_attn.attention_scores": 5,
+    "self_attn.attention_probabilities": 6,
+    "self_attn.attention_head_outputs": 7,
+    "self_attn.attention_premix": 8,
+    "self_attn.attention_output": 9,
+    "layer_mid": 10,
+    "mlp_norm_output": 11,
+    "mlp_input": 12,
+    "mlp.mlp_activation": 13,
+    "mlp.mlp_neurons": 14,
+    "mlp.mlp_output": 15,
+    "layer_output": 16,
 }
 
 
@@ -48,7 +55,7 @@ def test_llama_order(llama):
     assert llama.rank("logits") == llama.rank("next_token_probs") == (2, 4)
     assert llama.rank("final_norm_output") == (2, 2) and llama.rank("lm_head_output") == (2, 3)
     assert {name: llama.rank(name, 1) for name in LLAMA_BLOCK} == {name: (1, r) for name, r in LLAMA_BLOCK.items()}
-    assert llama.rank("layer_output", -1) == (1, 14)
+    assert llama.rank("layer_output", -1) == (1, 16)
 
 
 def test_ranks_sort_reads_into_forward_order(llama):
@@ -68,6 +75,9 @@ def test_falcon_values_come_before_queries_and_keys():
     model = StandardizedTransformer("Rocketknight1/tiny-random-falcon-7b", attn_implementation="eager")
     order = model.order(0)
     assert order["self_attn.attention_values"] < order["self_attn.attention_queries"] == order["self_attn.attention_keys"]
+    # The rotary's arguments and returns: the queries and keys before it, then the rotated ones.
+    assert order["self_attn.attention_values"] < order["self_attn.attention_queries_prerope"] == order["self_attn.attention_keys_prerope"]
+    assert order["self_attn.attention_keys_prerope"] < order["self_attn.attention_queries"]
     assert order["layer_input"] < order["self_attn.attention_values"]
     assert model.rank("self_attn.attention_values", 0) < model.rank("self_attn.attention_queries", 0)
 
@@ -127,9 +137,24 @@ def test_routed_kernels_add_the_state():
     assert set(routed) - set(chunked) == {"linear_attn.state", "linear_attn.states"}
 
 
-def test_vllm_raises():
-    model = object.__new__(StandardizedVLLM)  # the methods raise before touching the engine
-    with pytest.raises(NotImplementedError, match="vllm engine"):
-        model.order()
-    with pytest.raises(NotImplementedError, match="vllm engine"):
-        model.rank("logits")
+def test_vllm_order_needs_a_transformers_family(monkeypatch):
+    """On vLLM the order is the transformers model's of the checkpoint (`tests/vllm_families/` holds it to the
+    reference's); where no transformers family covers the checkpoint, both methods raise before touching the engine."""
+    model = object.__new__(StandardizedVLLM)
+    model._order_model = None
+    monkeypatch.setattr(StandardizedVLLM, "config", property(lambda self: types.SimpleNamespace(model_type="no_such_type")))
+    for ask in (model.order, lambda: model.rank("logits")):
+        with pytest.raises(NotImplementedError, match="no transformers family covers model_type 'no_such_type'"):
+            ask()
+
+
+def test_a_model_with_a_processor_is_probed_with_an_image():
+    """Qwen3-VL's first blocks add a deepstack feature at the image tokens, a value no text-only forward reaches:
+    the probe's prompt carries an image on a model loaded with its processor, so the value is ranked, after the
+    block's output."""
+    model = StandardizedTransformer("trl-internal-testing/tiny-Qwen3VLForConditionalGeneration",
+                                    task="image-text-to-text", attn_implementation="eager")
+    order = model.order(0)
+    assert order["deepstack_output"] > order["layer_output"]
+    assert {k: v for k, v in order.items() if k != "deepstack_output"} == LLAMA_BLOCK
+    assert model.rank("logits") == (model.num_layers, 4)

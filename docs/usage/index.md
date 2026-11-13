@@ -32,10 +32,10 @@ model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_imp
 - [root-values](root-values.md) — `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`, and the sizes.
 - [delta-net](delta-net.md) — the hybrids' `linear_attn`: `decays`, `betas`, `state_input`/`state_output`, and the per-token `state`/`states` behind `route_kernels`.
 - [selective-scan](selective-scan.md) — Mamba, Falcon-Mamba and Jamba's `linear_attn`: the Mamba-1 scan's `C`/`B`/`x`, step sizes and decays as tokens-first views, and the scan's own per-token state behind `route_kernels`.
-- [state-space](state-space.md) — the Mamba-2 (SSD) `linear_attn` on Mamba-2, Nemotron-H, Bamba and Falcon-H1: `C`/`B`/`x`/`dt` under the shared names, the state between steps.
+- [state-space](state-space.md) — the Mamba-2 (SSD) `linear_attn` on Mamba-2, Nemotron-H, Bamba, Falcon-H1 and GraniteMoE-Hybrid: `C`/`B`/`x`/`dt` under the shared names, the state between steps.
 - [mixture-of-experts](mixture-of-experts.md) — a mixture's `router_logits`, `expert_weights` / `expert_indices` (`[batch, seq, top_k]`), `expert_outputs`, `routed_output`, `shared_expert_output` on `layers[i].mlp` (a `Moe`); ablation, rerouting, `experts_implementation=`.
 - [layouts](layouts.md) — one axis layout per value on every family, a named `jaxtyping` type from `nnterp.components` (`Residual`, `Pattern`, ...; `value.dims`, `value.layout`).
-- [availability](availability.md) — `model.support()`, `nnterp.Unavailable`, and the reasons a checkpoint lacks a value.
+- [availability](availability.md) — `model.support()`, `nnterp.Unavailable`, and the reasons a checkpoint lacks a value; `model.order()` / `model.rank()`, the forward order to put several reads and edits in.
 - [vision](vision.md) — a vision-language checkpoint under `task="image-text-to-text"`: `model.vision`, `vision.layers[i]` (the same block values over `Patches`), `projector`, the tower's `vision.image_token_mask` and `vision.image_features` (`layers[0].input[mask] == features`), and the image rows vs the text rows of every text-block value.
 
 ## Doing things with them

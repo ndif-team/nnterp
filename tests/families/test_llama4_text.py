@@ -17,14 +17,13 @@ parses but its logits are NaN in plain transformers 5.17, and it has no
 dense block and no NoPE block.
 """
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import MOE, FamilySuite, LLAMA_ROWS, PROMPT, rows, MLP_INTERIOR
+from suite import MOE, NO_ROTARY, FamilySuite, LLAMA_ROWS, PROMPT, rows, MLP_INTERIOR, cached_snapshot, built, patched_checkpoint
 from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
@@ -35,7 +34,7 @@ NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.feed_forward"}
 
 def _patched_checkpoint(repo="yujiepan/llama-4-tiny-random"):
     """The tiny checkpoint with ``attn_temperature_tuning`` as the bool 5.17 validates; weights and tokenizer symlinked."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="llama4-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -48,10 +47,18 @@ def _patched_checkpoint(repo="yujiepan/llama-4-tiny-random"):
 
 
 class TestLlama4Text(FamilySuite):
-    REPO = _patched_checkpoint()
+    REPO = built(_patched_checkpoint)
     FAMILY = llama4_text
     MOE_UNAVAILABLE = {"expert_weights": "dense score", "expert_outputs": "dense score"}
     NATIVE = NATIVE
+    EXPECTED_UNAVAILABLE = NO_ROTARY  # the NoPE block (no_rope_layers' 0)
+
+    def rotated_as_served(self, attn, name, rotated, positions):
+        """The qk-norm (an L2 norm over each head, no weight) follows the rotary on a RoPE block, where the config has one
+        (``use_qk_norm``: Scout's, not Maverick's)."""
+        if not hasattr(attn._module, "qk_norm"):
+            return rotated
+        return attn.qk_norm(rotated.transpose(1, 2)).transpose(1, 2)  # normed tokens before heads, as the forward does
 
     def test_the_checkpoint_has_every_kind_of_block(self, model):
         """Dense and MoE blocks, RoPE and NoPE blocks, chunked and full attention: the quirks are all exercised."""
@@ -161,6 +168,18 @@ class TestLlama4Text(FamilySuite):
             torch.testing.assert_close(probs.sum(-1).float(), torch.ones(probs.shape[:-1], device=probs.device), atol=8 * eps, rtol=0)
 
 
+class TestLlama4TextNoQkNorm(TestLlama4Text):
+    """Llama-4-Maverick's attention: ``use_qk_norm`` false, so a RoPE block hands the rotated queries and keys to the
+    attention as they are. The tiny checkpoint's weights (the qk-norm has none)."""
+
+    REPO = built(patched_checkpoint, "yujiepan/llama-4-tiny-random", text_config={"attn_temperature_tuning": True, "use_qk_norm": False})
+
+    def test_the_checkpoint_has_every_kind_of_block(self, model):
+        """The tiny checkpoint's blocks, with no qk-norm on any of them."""
+        config = model.config.get_text_config()
+        assert not config.use_qk_norm and config.moe_layers == [1, 3] and config.no_rope_layers == [1, 1, 1, 0]
+        assert not any(hasattr(layer.self_attn._module, "qk_norm") for layer in model.layers)
+
 def test_a_wrapper_module_binds_through_language_model():
     """A ``Llama4ForConditionalGeneration`` passed in already loaded keeps the text model at ``language_model``."""
     from transformers import Llama4ForConditionalGeneration
@@ -174,8 +193,10 @@ def test_a_wrapper_module_binds_through_language_model():
     assert model.embed_tokens is model.get("language_model.model.embed_tokens")
     assert model.norm is model.get("language_model.model.norm")
     assert all(type(layer) is llama4_text.Layer and type(layer.mlp) in (llama4_text.Mlp, llama4_text.Moe) for layer in model.layers)
-    # the mixture values are per block (dense blocks have none) and two are unavailable on Llama 4: TestLlama4Text checks them
-    assert all(reason is None for name, reason in model.support().items() if name.removeprefix("mlp.") not in MOE and name not in MLP_INTERIOR)
+    # the mixture values are per block (dense blocks have none) and two are unavailable on Llama 4, and the NoPE block has
+    # no values before a rotary: TestLlama4Text checks them
+    assert all(reason is None for name, reason in model.support().items()
+               if name.removeprefix("mlp.") not in MOE and name not in MLP_INTERIOR and name not in NO_ROTARY)
     causal = StandardizedTransformer(repo, attn_implementation="eager")
     parts = []  # filled inside the block: a name bound there does not survive the trace
     with model.trace(PROMPT):
@@ -196,9 +217,9 @@ class TestLlama4Vision(VisionSuite):
     which a float32 tower refuses (as in plain transformers).
     """
 
-    REPO = TestLlama4Text.REPO
+    REPO = built(lambda: TestLlama4Text.REPO)
     FAMILY = llama4_text
-    TEXT_REPO = TestLlama4Text.REPO  # text-generation builds Llama4ForCausalLM out of the same checkpoint
+    TEXT_REPO = REPO  # text-generation builds Llama4ForCausalLM out of the same checkpoint
     DTYPE = torch.bfloat16
     VISION_NATIVE = {
         "vision": "vision_model",

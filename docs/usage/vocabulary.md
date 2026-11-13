@@ -45,7 +45,7 @@ The same body runs on `"meta-llama/Llama-3.1-8B"` and `"EleutherAI/pythia-70m-de
 | `model.layers[i].self_attn` | `...h[i].attn` | same | `...layers[i].attention` |
 | `model.layers[i].mlp` | same | same | same |
 | `model.norm` | `model.transformer.ln_f` | `model.model.norm` | `model.gpt_neox.final_layer_norm` |
-| `model.lm_head` | same | same | same (`embed_out` on old releases) |
+| `model.lm_head` | same | same | same |
 
 Two derived accessors belong to the vocabulary as well, because they are what a norm is
 for:
@@ -93,7 +93,7 @@ A `RENAME` key with several components (`transformer.h`, `model.decoder.layers`,
 to `model.layers` on every family rather than `model.model.layers` on some. A
 single-component key (`attn`, `attention`, `ffn`) binds on every envoy that has a child of
 that name, so one entry renames the attention in every block. A key that resolves nowhere
-is skipped, which is how `embed_out` -> `lm_head` covers both spellings of GPT-NeoX's head.
+is skipped.
 The rules are nnsight's (nnsight docs/usage/rename-modules.md); nnterp only chooses the keys.
 
 Because a single-component key binds everywhere it resolves, OPT's block-level
@@ -152,13 +152,13 @@ the roles match (a query reads the state, a key says where a token writes, a val
 it writes). The roles match; the tensors do not. Code written against one mixer runs on
 another and computes something else:
 
-| | gated DeltaNet ([delta-net](delta-net.md)) | Mamba-1 ([selective-scan](selective-scan.md)) | Mamba-2 ([state-space](state-space.md)) |
+| | gated DeltaNet, Kimi-Linear's Kimi Delta Attention among them ([delta-net](delta-net.md)) | Mamba-1 ([selective-scan](selective-scan.md)) | Mamba-2 ([state-space](state-space.md)) |
 | --- | --- | --- | --- |
 | state per | head | channel | head |
 | state layout | `[batch, heads, key_dim, value_dim]`, key side first | `[batch, channels, state_dim]`, value side first | `[batch, heads, state_dim, head_dim]`, key (`B`) side first, the transpose of the cache |
 | update | delta rule: decay, then write what the state lacks at the key, `S += k ⊗ beta (v - Sᵀk)` | `h = exp(dt A) h + dt B x`, per channel | `h = exp(dt A) h + dt x Bᵀ`, per head |
 | `attention_queries`, `attention_keys` | per head, before the kernel's l2-norm and `1/sqrt(key_dim)` | `C`, `B`: one group shared by every channel | `C`, `B`: per group of heads |
-| `decays` | log decay per head; writable | `dt * A` per channel *and* state dimension; read-only | `dt * A` per head; writable, but it is `dt`, so writing it rewrites `betas` |
+| `decays` | log decay per head (per head and key channel on Kimi-Linear, `ChannelGates`); writable | `dt * A` per channel *and* state dimension; read-only | `dt * A` per head; writable, but it is `dt`, so writing it rewrites `betas` |
 | `betas` | write strength in `(0, 1)` (`(0, 2)` on OLMo-Hybrid); writable on its own | the step `dt`; read-only | the step `dt`; writable, rounded on the way back |
 | per-token state writes | `state` under `tracer.iter`, `set_state_after` | `state` under `tracer.iter`, `set_state_after` | none; write `state_input` |
 
@@ -168,11 +168,31 @@ On every recurrent mixer the sequence axis of `attention_queries`, `attention_ke
 An index such as `q[:, -1]` is the last token on `linear_attn` and the last head on
 `self_attn`.
 
+## Calling a module outside a trace
+
+An envoy is callable. Outside a trace, calling one runs its module and returns what the
+module returns: no trace, nothing to save. Call the envoy, under its standard name where it
+has one, rather than reaching for `envoy._module`:
+
+```python
+import torch
+from nnterp import StandardizedTransformer
+
+model = StandardizedTransformer("Qwen/Qwen2.5-0.5B", dispatch=True)
+ids = model.tokenizer("The Eiffel Tower is in", return_tensors="pt").input_ids
+
+emb = model.embed_tokens(ids)                          # [1, 7, 896]: the embedding module, run
+positions = torch.arange(ids.shape[1])[None]           # [1, seq]
+cos, sin = model.model.rotary_emb(emb, positions)      # a module with no standard name, by its native path: [1, 7, 64] each
+out = model.layers[0].mlp(emb)                         # any envoy: its module's forward
+```
+
 ## Gotchas
 
 - **Aliases are not paths.** `envoy.path` is always the native path
   (`model.transformer.h.0.attn`), `model.get("layers.0.self_attn")` resolves through the
-  alias, and `envoys=` keys must be native paths ([loading](loading.md)).
+  alias, and an `envoys=` path key matches the native path or any alias spelling of it
+  ([loading](loading.md#your-own-rename-and-envoys)).
 - **A single-component alias binds in every block**, which is why no family aliases a name
   that also exists outside the blocks (OPT's `final_layer_norm`).
 - **The norm aliases mean different things on different families.** Read

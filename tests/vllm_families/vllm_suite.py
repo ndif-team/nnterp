@@ -25,6 +25,10 @@ ROOT = {"logits", "token_embeddings", "next_token_probs", "input_ids", "input_si
 BOUNDARY = ("layer_input", "attention_output", "mlp_output", "layer_output")
 INTERIOR = ("attention_queries", "attention_keys", "attention_values", "attention_head_outputs")
 PATTERN = ("attention_scores", "attention_probabilities")
+#: The queries and keys before the rotary embedding, and the value each becomes after it.
+PREROPE = {"attention_queries_prerope": "attention_queries", "attention_keys_prerope": "attention_keys"}
+#: The values before the rotary, by `support()` name, for a family whose blocks (some or all) apply none.
+NO_ROTARY = frozenset(f"self_attn.{name}" for name in PREROPE)
 #: The boundaries between the block values and the values inside the sublayers, by `support()` name.
 MODULE_VALUES = (
     "attention_norm_output", "self_attn.attention_premix", "layer_mid", "mlp_norm_output", "mlp_input",
@@ -45,7 +49,7 @@ LLAMA_ROWS = {
 def boundary(layer, interior=()):
     """A block's boundary values, and the named values of its attention's interior, read in forward order, on the CPU."""
     values = {"layer_input": layer.layer_input.cpu()}
-    for name in sorted(interior, key=(*INTERIOR[:3], *PATTERN, INTERIOR[3]).index):  # the head outputs leave the kernel last
+    for name in sorted(interior, key=(*PREROPE, *INTERIOR[:3], *PATTERN, INTERIOR[3]).index):  # the head outputs leave the kernel last
         values[name] = getattr(layer.self_attn, name).cpu()
     values["attention_output"] = layer.self_attn.attention_output.cpu()
     values["mlp_output"] = layer.mlp.mlp_output.cpu()
@@ -85,7 +89,8 @@ def close(got, want, tolerance, name=""):
 
 @torch.no_grad()
 def transformers_values(repo, skip, load=None):
-    """`PROMPT` through `StandardizedTransformer` in float32: the standard values, and the logits under three edits.
+    """`PROMPT` through `StandardizedTransformer` in float32: the standard values, the logits under three edits, the
+    ranks of the root's values and the picked blocks', and the generation config's EOS.
 
     Without gradients: a value saved with its graph keeps the weights it was
     computed from on the card, and the engine sizes itself from what is free.
@@ -109,6 +114,25 @@ def transformers_values(repo, skip, load=None):
             read = nnsight.save({i: getattr(hf.layers[i].self_attn, name).cpu() for i in picked})
         for i in picked:
             layers[i][name] = read[i]
+    for name in PREROPE:  # one value a trace, on the blocks that rotate
+        served = [i for i in picked if hf.support(layer=i).get(f"self_attn.{name}", "absent") is None]
+        if served:
+            with hf.trace(torch.tensor([ids])):
+                read = nnsight.save({i: getattr(hf.layers[i].self_attn, name).cpu() for i in served})
+            for i in served:
+                layers[i][name] = read[i]
+    # A block that rotates, the middle one where it does: the logits with position 0's query (key) written at the
+    # last position before the rotary, which the block then rotates for the last position.
+    rope = next((i for i in (middle, *picked) if "attention_queries_prerope" in layers[i]), None)
+    moved = {}
+    for name in PREROPE if rope is not None else ():
+        if name in layers[rope]:
+            with hf.trace(torch.tensor([ids])):
+                attn = hf.layers[rope].self_attn
+                written = getattr(attn, name).clone()
+                written[..., -1, :] = written[..., 0, :]
+                setattr(attn, name, written)
+                moved[name] = hf.logits[:, -1:].cpu().save()
     for name in MODULE_VALUES:  # one value a trace: where each sits in the forward differs between block structures
         served = [i for i in picked if hf.support(layer=i).get(name, "absent") is None]
         if served:
@@ -116,8 +140,15 @@ def transformers_values(repo, skip, load=None):
                 read = nnsight.save({i: value_of(hf.layers[i], name).cpu() for i in served})
             for i in served:
                 layers[i][name] = read[i]
-    with hf.trace(torch.tensor([ids])):
-        final_norm = hf.final_norm_output.cpu().save()
+    mid_halved = None  # the logits with the middle block's stream between the sublayers halved: what a write to layer_mid does
+    if hf.support(layer=middle).get("layer_mid", "absent") is None:
+        with hf.trace(torch.tensor([ids])):
+            hf.layers[middle].layer_mid[:] *= 0.5
+            mid_halved = hf.logits[:, -1:].cpu().save()
+    final_norm = None  # a checkpoint with no final norm (OPT-350m) has no final_norm_output
+    if support["final_norm_output"] is None:
+        with hf.trace(torch.tensor([ids])):
+            final_norm = hf.final_norm_output.cpu().save()
     scale = layers[middle]["layer_output"].norm(dim=-1).mean().item()
     with hf.trace(torch.tensor([ids])):
         hf.steer(middle, vector, factor=scale)
@@ -130,11 +161,14 @@ def transformers_values(repo, skip, load=None):
     with hf.trace(torch.tensor([ids])):
         hf.skip_layers(*(skip or (middle, middle)))
         skipped = hf.logits[:, -1:].cpu().save()
+    ranks = {(None, name): hf.rank(name) for name in hf.order()}
+    ranks.update(((i, name), hf.rank(name, i)) for i in picked for name in hf.order(i))
     positions = getattr(hf.config, "max_position_embeddings", None) or getattr(hf.config, "n_positions", None) or 512
     return {
         "ids": ids, "picked": picked, "middle": middle, "vector": vector, "scale": scale, "embeddings": embeddings,
         "final_norm": final_norm, "layers": layers, "logits": logits, "steered": steered, "headless": headless, "skipped": skipped,
         "skip": skip or (middle, middle), "max_len": min(512, positions), "sizes": {name: getattr(hf, name) for name in SIZES},
+        "rope": rope, "moved": moved, "ranks": ranks, "eos": hf.generation_config.eos_token_id, "mid_halved": mid_halved,
     }
 
 
@@ -162,9 +196,12 @@ class VLLMFamilySuite:
     SKIP = None
     #: The attention values vLLM's implementation of this family serves (the scores and the pattern included).
     SERVED = (*INTERIOR, *PATTERN)
-    #: The values this family lacks on vLLM, by `support()` name: the mask, the head's own output (vLLM never calls
-    #: lm_head), and a gated MLP's activation, which vLLM fuses with the multiply by the up projection.
-    UNAVAILABLE = frozenset({"attention_mask", "lm_head_output", "mlp.mlp_activation"})
+    #: The values this family lacks on vLLM, by `support()` name: the mask, a gated MLP's activation, which vLLM fuses
+    #: with the multiply by the up projection, and the attention function to call again (the engine's kernel writes its
+    #: cache as it runs). A family with a block that applies no rotary embedding adds `NO_ROTARY`; one whose logits
+    #: processor softcaps or scales adds ``lm_head_output`` (vLLM never calls lm_head, and the logits are its
+    #: projection only where nothing follows it).
+    UNAVAILABLE = frozenset({"attention_mask", "mlp.mlp_activation", "self_attn.interface"})
     #: Engine arguments this checkpoint needs.
     ENGINE: dict = {}
     #: Arguments the transformers reference needs to load this checkpoint (a VL wrapper's ``task``).
@@ -228,7 +265,59 @@ class VLLMFamilySuite:
         unavailable = {name for name, reason in support.items() if reason}
         assert unavailable == self.UNAVAILABLE
         for name in ("layer_input", "layer_output", "self_attn.attention_output", "mlp.mlp_output", "final_norm_output", *(f"self_attn.{name}" for name in self.SERVED)):
-            assert support[name] is None, name
+            assert name in self.UNAVAILABLE or support[name] is None, name
+
+    def test_order_and_rank_are_transformers(self, model, reference):
+        """`order` and `rank` are the transformers model's ranks for every value both engines serve, on the root and
+        the compared blocks; a value this engine lacks raises `Unavailable` with this engine's reason."""
+        compared = 0
+        for layer in (None, *reference["picked"]):
+            served = model.support() if layer is None else model.support(layer=layer)
+            want = {name: rank for (side, name), rank in reference["ranks"].items() if side == layer and served.get(name, "absent") is None}
+            assert model.order(layer) == {name: r for name, (_, r) in want.items()}, layer
+            for name, rank in want.items():
+                assert model.rank(name, layer) == rank, (layer, name)
+                compared += 1
+        assert compared >= len(BOUNDARY) * len(reference["picked"]), "too few values ranked on both engines"
+        support = model.support()
+        for name in self.UNAVAILABLE:
+            layer, reason = next(iter(support[name].items())) if isinstance(support[name], dict) else (None, support[name])
+            with pytest.raises(Unavailable, match=re.escape(reason)):
+                model.rank(name, layer)
+        with pytest.raises(KeyError, match="not a value"):
+            model.rank("no_such_value")
+
+    def test_generation_config(self, model, reference):
+        """The checkpoint's generation config, loaded once, with the EOS ids the transformers reference loads."""
+        from transformers import GenerationConfig
+
+        config = model.generation_config
+        assert isinstance(config, GenerationConfig) and model.generation_config is config
+        assert config.eos_token_id == reference["eos"]
+
+    def test_lm_head_output(self, model, reference):
+        """Where vLLM's logits processor applies nothing past the head, `lm_head_output` is `logits` bit for bit and a
+        write to it is a write to the logits; where it softcaps or scales, it is unavailable, naming which."""
+        reason = model.support()["lm_head_output"]
+        if "lm_head_output" in self.UNAVAILABLE:
+            processor = model.logits_processor._module
+            named = f"softcaps it at {processor.soft_cap}" if processor.soft_cap is not None else f"multiplies it by {processor.scale}"
+            assert named in reason, reason
+            with pytest.raises(Unavailable, match=re.escape(reason)):
+                model.lm_head_output
+            return
+        clean = self.clean(model, reference)
+        with self.run(model, reference):
+            head = model.lm_head_output.cpu().save()
+            logits = model.logits.cpu().save()
+        assert head.shape == (1, 1, model.vocab_size) and torch.equal(head, logits) and torch.equal(logits, clean)
+        with self.run(model, reference):
+            model.lm_head_output[:] *= 0.5
+            in_place = model.logits.cpu().save()
+        with self.run(model, reference):
+            model.lm_head_output = model.lm_head_output * 0.5
+            assigned = model.logits.cpu().save()
+        assert torch.equal(in_place, clean * 0.5) and torch.equal(assigned, clean * 0.5)
 
     def test_support_matches_what_reads(self, model):
         layer = model.layers[0]
@@ -276,15 +365,20 @@ class VLLMFamilySuite:
                     continue  # transformers does not serve it on this checkpoint
                 close(value, want.reshape(value.shape), tolerance, f"layers[{i}].{name}")  # OPT's transformers rows are flat
                 compared += 1
-        with self.run(model, reference):
-            norm = model.final_norm_output.cpu().save()
-        assert norm.shape == (1, tokens, model.hidden_size)
-        close(norm, reference["final_norm"], self.MODULE_TOLERANCE.get("final_norm_output", self.TOLERANCE), "final_norm_output")
+        if reference["final_norm"] is None:
+            assert model.support()["final_norm_output"] == "no norm module on this model"
+        else:
+            with self.run(model, reference):
+                norm = model.final_norm_output.cpu().save()
+            assert norm.shape == (1, tokens, model.hidden_size)
+            close(norm, reference["final_norm"], self.MODULE_TOLERANCE.get("final_norm_output", self.TOLERANCE), "final_norm_output")
         assert compared, "no module boundary served on both engines"
 
     @pytest.mark.parametrize("name", (*MODULE_VALUES, "final_norm_output"))
     def test_module_boundary_writes_land(self, model, reference, name):
-        """An in-place edit and an assignment are the same write, and a read that edits nothing changes nothing."""
+        """An in-place edit and an assignment are the same write, and a read that edits nothing changes nothing. A write
+        to ``layer_mid`` replaces the stream between the sublayers, the MLP's norm's input and what the block adds the
+        MLP's output to, as on transformers, whether the block is fused or holds the stream under two names."""
         host = model if name == "final_norm_output" else model.layers[reference["middle"]]
         reason = model.support().get(name) if host is model else model.support(layer=reference["middle"]).get(name, "absent")
         if reason is not None:
@@ -302,6 +396,9 @@ class VLLMFamilySuite:
         assert torch.equal(untouched, clean)
         assert not torch.allclose(clean, in_place)
         close(assigned, in_place, self.TOLERANCE, name)
+        if name == "layer_mid" and reference["mid_halved"] is not None:
+            close(in_place, reference["mid_halved"], self.TOLERANCE, "layer_mid halved in place, against transformers")
+            close(assigned, reference["mid_halved"], self.TOLERANCE, "layer_mid halved by assignment, against transformers")
 
     def test_attention_interior_matches_transformers(self, model, reference):
         """The queries, keys, values and head outputs are transformers' eager ones, in its layouts, heads split out."""
@@ -472,6 +569,127 @@ class VLLMFamilySuite:
             steered = model.logits.cpu().save()
         close(steered, reference["steered"], self.TOLERANCE, "steered logits")
         assert not torch.allclose(steered, self.clean(model, reference))
+
+    # -- the rotary embedding ------------------------------------------------------
+    # The queries and keys before the rotation are transformers' values, and `rotate`, which calls the block's
+    # rotary embedding, turns them into the rotated queries and keys the attention layer receives: one kernel on
+    # one input, so bit for bit. The engine's modules run inside a trace only, so `rotate` is called in one.
+
+    def rope_layers(self, model, reference):
+        """The compared blocks that apply a rotary embedding on vLLM; the tests do not apply to a model with none."""
+        layers = [i for i in reference["picked"] if model.support(layer=i)["self_attn.attention_queries_prerope"] is None]
+        if not layers:
+            pytest.skip(f"no rotary embedding on the compared blocks: {model.support(layer=reference['picked'][0])['self_attn.attention_queries_prerope']}")
+        return layers
+
+    def rotated_as_served(self, attn, name, rotated):
+        """What the attention layer receives, given `rotate` of the value before the rotary ``name``: the rotated value
+        itself, unless the block does more between the rotary and the attention (a norm), which a family's test says.
+        Called inside the trace, where the engine's modules run."""
+        return rotated
+
+    def test_prerope_values_match_transformers(self, model, reference):
+        """The queries and keys before the rotary are transformers' values, in its layouts; reading them changes nothing."""
+        layers, tokens, compared = self.rope_layers(model, reference), len(reference["ids"]), 0
+        clean = self.clean(model, reference)
+        for name in PREROPE:
+            with self.run(model, reference):
+                got = nnsight.save({i: getattr(model.layers[i].self_attn, name).cpu() for i in layers})
+                logits = model.logits.cpu().save()
+            assert torch.equal(logits, clean), name
+            for i, value in got.items():
+                assert value.shape[0] == 1 and value.shape[2] == tokens, (i, name, tuple(value.shape))
+                want = reference["layers"][i].get(name)
+                if want is not None:  # transformers serves it on this block too
+                    close(value, want, self.KERNEL_TOLERANCE, f"layers[{i}].self_attn.{name}")
+                    compared += 1
+        assert compared, "transformers serves none of this family's values before the rotary to compare with"
+
+    def test_rotate_gives_the_rotated_queries_and_keys(self, model, reference):
+        """``rotate(prerope, arange(tokens))`` is the queries and keys the attention layer receives, bit for bit, in their dtype."""
+        layers = self.rope_layers(model, reference)
+        for pre, post in PREROPE.items():
+            if post not in self.SERVED:
+                continue
+            with self.run(model, reference):
+                got = nnsight.save({})
+                for i in layers:
+                    attn = model.layers[i].self_attn
+                    before = getattr(attn, pre)
+                    rotated = self.rotated_as_served(attn, pre, attn.rotate(before, torch.arange(before.shape[-2])))
+                    got[i] = (rotated.cpu(), getattr(attn, post).cpu())
+            for i, (rotated, after) in got.items():
+                assert rotated.dtype == after.dtype and rotated.shape == after.shape, (i, pre, rotated.dtype, after.dtype, tuple(rotated.shape), tuple(after.shape))
+                assert torch.equal(rotated, after), (i, pre, (rotated - after).abs().max().item())
+        with pytest.raises(RuntimeError, match="inside a trace only"):
+            model.layers[layers[0]].self_attn.rotate(torch.zeros(1, 1, 2, 8), [0, 1])
+
+    def test_a_prerope_write_is_rotated_for_its_position(self, model, reference):
+        """Position 0's query (key) written at the last position before the rotary lands there alone, rotated for that
+        position, and moves the logits as the same write does on transformers."""
+        rope = reference["rope"]
+        if rope is None or model.support(layer=rope)["self_attn.attention_queries_prerope"] is not None:
+            pytest.skip("no block that both engines rotate")
+        attn, last = model.layers[rope].self_attn, len(reference["ids"]) - 1
+        for pre, post in PREROPE.items():
+            with self.run(model, reference):
+                clean = getattr(attn, post).cpu().save()
+            with self.run(model, reference):
+                before = getattr(attn, pre)
+                written = before.clone()
+                written[..., last, :] = before[..., 0, :]
+                setattr(attn, pre, written)
+                expected = self.rotated_as_served(attn, pre, attn.rotate(before[..., :1, :], [last])).cpu().save()
+                after = getattr(attn, post).cpu().save()
+                logits = model.logits.cpu().save()
+            assert torch.equal(after[..., :last, :], clean[..., :last, :]), pre
+            assert not torch.equal(after[..., last, :], clean[..., last, :]), pre
+            assert torch.equal(after[..., last:, :], expected), (pre, (after[..., last:, :] - expected).abs().max().item())
+            assert pre in reference["moved"], "transformers serves no value before the rotary on this block to write"
+            close(logits, reference["moved"][pre], self.KERNEL_TOLERANCE, f"logits with {pre} moved")
+
+    def test_rotate_on_decode_steps(self, model, reference):
+        """On decode step ``k`` the keys before the rotary are the new token's, and rotating them at position
+        ``tokens + k - 1`` gives that step's keys."""
+        layers = self.rope_layers(model, reference)
+        if "attention_keys" not in self.SERVED:
+            pytest.skip("vLLM does not serve the rotated keys on this family")
+        attn, tokens = model.layers[layers[-1]].self_attn, len(reference["ids"])
+        with model.trace(reference["ids"], temperature=0.0, max_tokens=3, ignore_eos=True) as tracer:
+            got = nnsight.save([])
+            for step in tracer.iter[:3]:
+                before = attn.attention_keys_prerope
+                start = 0 if step == 0 else tokens + step - 1
+                rotated = self.rotated_as_served(attn, "attention_keys_prerope", attn.rotate(before, torch.arange(before.shape[-2]) + start))
+                got.append((rotated.cpu(), attn.attention_keys.cpu()))
+        assert [after.shape[2] for _, after in got] == [tokens, 1, 1]
+        for step, (rotated, after) in enumerate(got):
+            assert torch.equal(rotated, after), (step, (rotated - after).abs().max().item())
+
+    def test_rotate_says_why_a_block_has_no_rotary(self, model):
+        """On a block without a rotary embedding, `support` and `rotate` give the same reason."""
+        blocks = [layer.self_attn for layer in model.layers if layer.self_attn.no_rotary()]
+        if not blocks:
+            pytest.skip("every attention block applies a rotary embedding")
+        for attn in blocks:
+            reason = attn.support()["attention_queries_prerope"]
+            assert reason == attn.no_rotary() == attn.support()["attention_keys_prerope"], (attn.path, reason)
+            with pytest.raises(Unavailable, match=re.escape(reason[:40])):
+                attn.rotate(torch.zeros(1, 1, 2, 8), [0, 1])
+
+    def test_head_weights_are_refused(self, model):
+        """The per-head weights are refused on this engine, with `no_head_weights`' one reason (it fuses and shards the projections), and so are the gains."""
+        for layer in model.layers:
+            attn = layer.self_attn
+            reason = attn.no_head_weights()
+            assert reason and "vLLM fuses the projections" in reason, (attn.path, reason)
+            for method in (attn.value_weight, attn.output_weight):
+                with pytest.raises(Unavailable, match=re.escape(reason[:40])):
+                    method(0)
+            with pytest.raises(Unavailable, match="attention_input_gain is not available"):
+                layer.attention_input_gain
+            with pytest.raises(Unavailable, match="attention_output_gain is not available"):
+                layer.attention_output_gain
 
     # -- the engine's own shape: steps and invokes -----------------------------------
 

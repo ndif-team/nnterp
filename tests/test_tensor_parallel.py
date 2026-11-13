@@ -7,6 +7,7 @@ same reads and edits in one process and across two CPU ranks over gloo; every va
 has to agree. CPU checks the layout, not real kernels or dtypes.
 """
 
+import json
 import os
 import socket
 import subprocess
@@ -28,13 +29,14 @@ TP_SIZE = 2
 WORKER = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tp_worker.py")
 
 READS = [
-    "attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_probabilities",
+    "attention_queries_prerope", "attention_keys_prerope", "rotated_queries", "attention_queries", "attention_keys", "attention_values", "attention_scores", "attention_probabilities",
     "attention_head_outputs", "attention_premix", "attention_output", "mlp_activation", "mlp_neurons", "mlp_output",
-    "logits",
+    "logits", "interface_head_outputs", "interface_probabilities", "attention_input_gain",
 ]
 EDITS = [
-    "head_outputs_zeroed_in_place", "keys_scaled_in_place", "queries_scaled_by_assignment", "activation_assigned",
-    "head_outputs_zeroed_with_grad",
+    "head_outputs_zeroed_in_place", "keys_scaled_in_place", "queries_scaled_by_assignment", "queries_prerope_moved", "activation_assigned",
+    "head_outputs_zeroed_with_grad", "head_patched_through_interface",
+    "mid_halved_by_assignment", "mid_halved_in_place", "mid_halved_with_grad",
 ]
 
 
@@ -66,11 +68,18 @@ def _run(tp: int, out: str) -> None:
 
 
 @pytest.fixture(scope="module")
-def runs(tmp_path_factory) -> tuple[dict, list[dict]]:
-    """``(one process's values, [each rank's values])``."""
+def launches(tmp_path_factory):
+    """The directories the one-process run and the split run wrote to."""
     whole, split = tmp_path_factory.mktemp("tp1"), tmp_path_factory.mktemp(f"tp{TP_SIZE}")
     _run(1, str(whole))
     _run(TP_SIZE, str(split))
+    return whole, split
+
+
+@pytest.fixture(scope="module")
+def runs(launches) -> tuple[dict, list[dict]]:
+    """``(one process's values, [each rank's values])``."""
+    whole, split = launches
     reference = torch.load(whole / "rank0.pt")
     return reference, [torch.load(split / f"rank{rank}.pt") for rank in range(TP_SIZE)]
 
@@ -101,3 +110,24 @@ def test_the_edit_moves_the_logits(runs, name):
     """Each edit changes the prediction, so matching it across ranks says the edit landed where it was aimed."""
     reference, _ = runs
     assert _rel(reference[name], reference["logits"]) > 1e-3
+
+
+def test_assigning_layer_mid_is_the_in_place_write(runs):
+    """An assignment to ``layer_mid`` is copied into the stream on every rank, as one process copies it: the same
+    logits as the in-place edit, with gradients on or off."""
+    reference, ranks = runs
+    for values in (reference, *ranks):
+        assert torch.equal(values["mid_halved_by_assignment"], values["mid_halved_in_place"])
+        assert torch.equal(values["mid_halved_with_grad"], values["mid_halved_in_place"])
+
+
+def test_head_weights_are_refused_on_a_split_model(launches):
+    """One process serves the per-head weights; on a split model every rank refuses both with the one reason."""
+    from nnterp.components import SHARDED_WEIGHTS
+
+    whole, split = launches
+    assert json.loads((whole / "rank0.json").read_text()) == {"no_head_weights": None, "value_weight": None, "output_weight": None}
+    for rank in range(TP_SIZE):
+        refusals = json.loads((split / f"rank{rank}.json").read_text())
+        assert refusals["no_head_weights"] == SHARDED_WEIGHTS
+        assert all(SHARDED_WEIGHTS in refusals[name] for name in ("value_weight", "output_weight")), refusals

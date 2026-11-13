@@ -1,6 +1,6 @@
 ---
 title: Expert Ablation
-one_liner: "Every routed expert's effect on a target token, by zeroing `expert_weights` where `expert_indices == e`: one trace per expert, or one invoke per expert with an in-place edit; the same code on every MoE family."
+one_liner: "Every routed expert's effect on a target token, by zeroing `expert_weights` where `expert_indices == e`: one trace per expert, or one invoke per expert with an in-place edit; the same code on every MoE family that serves the routing pair (all but Llama 4 and Doge)."
 tags: [patterns, moe, mixture-of-experts, ablation, experts]
 related: [docs/usage/mixture-of-experts.md, docs/patterns/ablation.md, docs/usage/availability.md]
 sources: [nnterp/components/moe.py, tests/families/suite.py]
@@ -38,13 +38,16 @@ effects = torch.zeros(len(blocks), blocks[0].num_experts)      # [block, expert]
 for b, moe in enumerate(blocks):
     for e in range(moe.num_experts):
         with model.trace(prompt):
-            moe.expert_weights = moe.expert_weights.masked_fill(moe.expert_indices == e, 0)
+            idx = moe.expert_indices                               # the indices first (JetMoE computes them before the weights)
+            moe.expert_weights = moe.expert_weights.masked_fill(idx == e, 0)
             effects[b, e] = (model.logits[0, -1].float().log_softmax(-1)[target] - clean).save()
 ```
 
 `support()` picks the blocks with the routing pair: dense blocks beside mixture blocks
 (DeepSeek-V3, GLM-4-MoE, Llama 4, Jamba) have none, and Llama 4's `expert_weights` is
-unavailable. `add_special_tokens=False` keeps the BOS token out of the target. This
+unavailable. The indices are read before the weights because JetMoE's router computes them
+first; on every other family the two are one call's arguments and either order works.
+`add_special_tokens=False` keeps the BOS token out of the target. This
 checkpoint's sentencepiece tokenizer (Mixtral-8x7B's) splits `" Paris"` into `['▁', '▁Paris']`,
 so the recipe falls back to the word without its space; a tokenizer with no single token
 for the word fails the assertion (`tokenizer(" Paris").input_ids[-1]` would silently be
@@ -67,24 +70,22 @@ invoke is served its own rows of the flat routing tensors, and an in-place edit 
 that invoke alone, to rounding.
 
 ```python
-moe = blocks[1]
+moe = blocks[-1]
 rows = []  # bound outside: a name bound inside the block does not survive it
 with model.trace() as tracer:
     with tracer.invoke(prompt):                    # unedited: the baseline, rounded the way the edited rows are
         base = model.logits[0, -1].float().log_softmax(-1)[target].save()
     for e in range(moe.num_experts):
         with tracer.invoke(prompt):
-            moe.expert_weights[:] = moe.expert_weights.masked_fill(moe.expert_indices == e, 0)
+            idx = moe.expert_indices
+            moe.expert_weights[:] = moe.expert_weights.masked_fill(idx == e, 0)
             rows.append(model.logits[0, -1].float().log_softmax(-1)[target].save())
-torch.stack([row - base for row in rows])         # == effects[1] in float32
+torch.stack([row - base for row in rows])         # == effects[-1] in float32
 ```
 
 The baseline comes from the batch, not from the single-prompt `clean` above, because a
 batch is computed with other kernels and rounding than one prompt: in bf16 that difference
 alone can exceed one expert's effect.
-
-An assignment (`moe.expert_weights = ...`) under two or more invokes needs nnsight's
-widen of an edit to a tensor whose leading axis is not the batch (nnsight PR #738).
 
 ## Gotchas
 
@@ -92,9 +93,9 @@ widen of an edit to a tensor whose leading axis is not the batch (nnsight PR #73
   expert 4 takes the first token with weight above 0.99 and ablating it costs about 9.6
   nats on the next token, through position 0 alone. Rank experts on positions 1 onward
   (or ablate per position) before reading a large effect as a mechanism.
-- **JetMoE computes the indices first.** Bind `idx = moe.expert_indices` before reading
-  `moe.expert_weights`, then `masked_fill(idx == e, 0)`; the order above raises
-  `OutOfOrderError` there.
+- **JetMoE computes the indices first.** Written in one expression,
+  `moe.expert_weights.masked_fill(moe.expert_indices == e, 0)` reads the weights first and
+  raises `OutOfOrderError` there; bind `idx = moe.expert_indices` before it, as above.
 - **An edit reroutes later blocks.** An edit to one token's stream changes that token's
   routing at later mixture blocks (a norm-4 edit at block 3 of granite-3.0-1b-a400m-base
   reroutes the last token on every later block); its effect includes the rerouting.

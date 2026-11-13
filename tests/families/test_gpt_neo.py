@@ -1,7 +1,8 @@
 """GPT-Neo, end to end: tuple block output, ``self_attn`` on the inner module, arithmetic in ``_attn``."""
 
+import pytest
 import torch
-from suite import FamilySuite, rows, PROMPT
+from suite import NO_ROTARY, FamilySuite, rows, PROMPT
 
 from nnterp.families import gpt_neo
 
@@ -10,6 +11,7 @@ class TestGPTNeo(FamilySuite):
     REPO = "hf-internal-testing/tiny-random-GPTNeoForCausalLM"
     FAMILY = gpt_neo
     NATIVE = rows("transformer", "h", "wte", "ln_f", attn="attn.attention", ln1="ln_1", ln2="ln_2")
+    EXPECTED_UNAVAILABLE = NO_ROTARY
 
     def test_block_returns_a_tuple(self, model):
         with model.trace(PROMPT):
@@ -38,6 +40,8 @@ class TestGPTNeo(FamilySuite):
         """A ``local`` layer's pattern is zero more than ``window_size`` tokens back."""
         types = model.config.attention_layers
         window = model.config.window_size
+        if "local" not in types:
+            pytest.skip("no local layer on this checkpoint")
         local = types.index("local")
         prompt = " ".join(["token"] * (window + 4))
         with model.trace(prompt):

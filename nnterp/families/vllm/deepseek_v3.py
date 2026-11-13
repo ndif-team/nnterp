@@ -31,6 +31,13 @@ RENAME = {
 
 LATENT = "vLLM runs DeepSeek's latent attention in its own kernel, on compressed keys and values; not mapped on vLLM"
 
+#: vLLM's latent attention rotates the rope slices alone, inside its own layer: transformers' whole-head queries are not there.
+LATENT_ROTARY = (
+    "not mapped on vLLM: DeepSeek's latent attention rotates only each query head's rope slice and the shared rope key, "
+    "inside vLLM's latent-attention layer, where transformers serves whole-head queries; read them, and rotate, on a "
+    "StandardizedTransformer"
+)
+
 
 class Layer(FusedLayer):
     """The decoder block: ``forward(positions, hidden_states, residual, llama_4_scaling) -> (hidden_states, residual)``."""
@@ -38,6 +45,9 @@ class Layer(FusedLayer):
 
 class Attention(Attention):
     """The latent attention: its output is what the block adds; its interior is not mapped."""
+
+    def no_rotary(self) -> str | None:
+        return LATENT_ROTARY
 
     attention_queries = unavailable(LATENT)
     attention_keys = unavailable(LATENT)

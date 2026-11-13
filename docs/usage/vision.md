@@ -52,7 +52,7 @@ On `llava-hf/llava-1.5-7b-hf`: `mask` is `(1, 592)` with 576 image tokens, `patt
 `(1, 16, 577, 577)`, `patches` `(1, 577, 1024)` (CLIP's CLS token first), `features`
 `(576, 4096)`, and `torch.equal` is `True`; the tower has 24 blocks of width 1024, the text
 model 32 of width 4096. The same body runs on `trl-internal-testing/tiny-LlavaForConditionalGeneration`
-in a second on a CPU (every width 16, 4 tower heads), and on every wrapper in
+(every width 16, 4 tower heads), and on every wrapper in
 [the coverage list](#which-wrappers), less the lines a tower does not serve: the Qwen ViT has
 no `pattern`, and Gemma 4 unified's embedder has no blocks. On Gemma 4 (`google/gemma-4-E2B`, whose base checkpoint has no chat
 template: write the prompt as `f"{model.processor.image_token} ..."`) with a red 224x224
@@ -97,6 +97,7 @@ without blocks too: `model.model.embed_audio`, native, and no `audio_tower`.
 | `layer_output` | `vision.layers[i]` | `Patches` | the tower's stream leaving the block |
 | `attention_output`, `mlp_output` | `vision.layers[i].self_attn`, `.mlp` | `Patches` | what each sublayer adds: `layer_input + attention_output + mlp_output == layer_output` |
 | `attention_probabilities`, `attention_queries`, ... | `vision.layers[i].self_attn` | `Pattern`, `Queries`, ... | as on a text block, the `batch` axis being the tower's rows; no causal mask (Pixtral masks between packed images, Gemma 4 masks its padded keys); needs eager (the Qwen ViT's: [below](#the-qwen-vit)) |
+| `interface` | `vision.layers[i].self_attn` | method | the attention function the block called, to call again on other queries, keys and values, as on a text block ([attention-interior](attention-interior.md#calling-the-attention-function-again-interface)); needs eager; served where the attention makes one interface call over the block's rows (SigLIP, CLIP, Pixtral, the ViTs of Gemma 4 and Llama 4), not on the Qwen ViT or RADIO, which make one per image |
 | `patch_embeddings` | `vision` | `Patches` | the patch embedding's output, one row per patch, before any position embedding, CLS token or pre-norm |
 | `tower_output` | `vision` | `Patches` | the last block's stream after `vision.norm` where there is one, before any pooling, CLS dropping or adapter (on the Qwen ViT, which has no final norm, the last block's `layer_output`, served at the tower's output, after the merger) |
 | `image_token_mask` | `vision` | `ImageTokenMask` `[batch seq]` bool | `input_ids == config.image_token_id`, read off the model's inputs; read-only |
@@ -125,7 +126,7 @@ they are the tower's. The Qwen ViT, Pixtral,
 RADIO, Gemma 4 and Gemma 4 unified take images of any resolution, so their `image_size` raises
 `Unavailable` saying where each image's grid is (`image_grid_thw`, `image_sizes`,
 `image_position_ids`, `image_grid_hw`). Gemma 4's `head_dim` is the config's (64 on E2B, with 12 heads over a
-768-wide stream). The encoder-free embedder has `num_layers == 0`, `hidden_size` its
+768-wide stream). The encoder-free embedder has `num_layers == 0`, `vision_hidden_size` its
 `mm_embed_dim` and `patch_size` the 48-pixel merged patch it embeds; its `num_heads`,
 `head_dim` and `intermediate_size` raise `Unavailable`.
 
@@ -244,6 +245,9 @@ with model.generate(prompt, images=[image], max_new_tokens=3, do_sample=False) a
   `pixel_values`), but the scatter runs once over the batch: `vision.image_features` is
   then the whole batch's features, flat and the same tensor in every invoke, and a write
   in one invoke reaches every row's image (the mask is sliced per invoke).
+- The processors of the Qwen-VL families, Mistral 3 and Pixtral, SmolVLM, LLaVA-OneVision, Llama 4
+  and Gemma 4 need `torchvision` installed; without it the `task="image-text-to-text"` load raises
+  an `ImportError`.
 - Llama 4's image processor returns bfloat16 pixels, which a float32 tower refuses (as in
   plain transformers): load Llama 4 in bfloat16, or cast `pixel_values` in an encoding.
 
@@ -253,7 +257,9 @@ Gemma 3's tower attends over 4096 patches, so under eager every block's pattern 
 card, and with it peaked at 11 GB.
 
 Read order is the forward's: `vision.image_token_mask` first (it comes off the inputs,
-like `input_ids`; under `generate` on transformers 5.18 and later, after the tower, above), then the tower's values, a block's attention interior before its
+like `input_ids`; under `generate` on transformers 5.18 and later, after the tower, above), then
+`token_embeddings` (the wrapper embeds the ids before it runs the tower; under `generate`, after the
+tower and the mask), then the tower's values, a block's attention interior before its
 `layer_output`, then `vision.image_features`, then the text model's. On the Qwen ViT the
 merger (`projector`) runs inside the tower and `tower_output` is served at the tower's
 output, after it: read `projector.input` and `projector.output` before `tower_output`, or
@@ -332,7 +338,11 @@ with torch.no_grad(), model.trace(prompt, images=[red, blue]):
 The text blocks of these families use multimodal rotary embeddings (M-RoPE: temporal,
 height and width position streams), which the model folds into one `cos`/`sin` before the
 blocks; the attention applies it before the interface, so `attention_queries` and
-`attention_keys` are the rotated queries and keys, as on any rotary family.
+`attention_keys` are the rotated queries and keys, as on any rotary family. With an image in
+the prompt a token's position is not its index (the image tokens take grid positions, and the
+text after resumes at the image's largest position plus one), so `self_attn.rotate` needs the
+model's `[3, batch, seq]` positions there
+([attention-interior](attention-interior.md#rotate-and-the-positions-it-is-given)).
 
 ## Availability
 
@@ -349,6 +359,16 @@ Qwen-VL wrappers when dispatched, transformers having no text-only class for the
 `model.support()` has no `vision` rows, and reading any tower or block value raises
 `Unavailable` ("a text-only load: no processor, so no image reaches the model; load with
 task='image-text-to-text'"), inside a trace too.
+
+`attention_queries_prerope` and `attention_keys_prerope` are unavailable on every tower block, so
+`model.vision.support()` gives a reason for both on every wrapper whose tower has blocks ("a vision
+tower's attention: the queries and keys before a rotary embedding, and `rotate`, are served on the
+text model's blocks"), and a tower block's `self_attn.rotate` raises the same: a tower's rotary,
+where it has one (Pixtral, the Qwen ViT, the ViTs of Gemma 4 and Llama 4), runs over 2-D patch
+positions. Read them, and call `rotate`, on the text model's blocks. On the Qwen ViT and RADIO the
+scores, the pattern and `interface` are unavailable under every `attn_implementation` too (the
+attention calls the interface per image, so no one call holds the block's pattern), and on RADIO
+the head outputs as well; the other towers serve all three under an eager load.
 
 `vision.image_features` needs the family to know where the wrapper writes the features in:
 an `ImageScatter` keyed on the wrapper's model, or, on Llama 4, whose top-level forward
@@ -375,6 +395,8 @@ names bind but `image_features` is `Unavailable` and says so.
 | `llama4_text` | Llama 4 (`llama4`) | Llama 4's ViT |
 | `gemma4_text` | Gemma 4 (`gemma4`) | Gemma 4's ViT |
 | `gemma4_unified_text` | Gemma 4 unified (`gemma4_unified`) | the encoder-free embedder |
+| `hyperclovax` | HyperCLOVA X Vision V2 (`hyperclovax_vision_v2`; transformers 5.18 and later) | the Qwen2.5-VL ViT |
+| `nemotron_h` | NemotronH Omni (`nemotron_h_omni`; transformers 5.18 and later) | RADIO |
 
 ## What is not covered yet
 
@@ -389,4 +411,4 @@ names bind but `image_features` is `Unavailable` and says so.
 - [layouts.md](layouts.md): `Patches`, `ImageTokenMask`, `ImageFeatures`.
 - [availability.md](availability.md): the text-only-load reason and the `vision.` rows of `support()`.
 - [generation.md](generation.md): the values per step under `generate`.
-- [docs/developing/vision-design.md](../developing/vision-design.md): the design, what does not fit, what is left.
+- [docs/developing/vision-design.md](../developing/vision-design.md): the design and what does not fit.

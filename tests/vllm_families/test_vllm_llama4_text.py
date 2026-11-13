@@ -18,7 +18,7 @@ import nnsight
 import pytest
 import torch
 from huggingface_hub import snapshot_download
-from vllm_suite import LLAMA_ROWS, VLLMFamilySuite
+from vllm_suite import LLAMA_ROWS, NO_ROTARY, VLLMFamilySuite
 
 from nnterp import StandardizedTransformer, Unavailable
 from nnterp.families.vllm import llama4_text
@@ -50,9 +50,15 @@ def _text_checkpoint(repo="yujiepan/llama-4-tiny-random"):
 class TestVLLMLlama4Text(VLLMFamilySuite):
     REPO = _text_checkpoint()
     FAMILY = llama4_text
-    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | {"mlp.mlp_neurons"}  # the NoPE blocks do not rotate
     NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.feed_forward"}
     ENGINE = {"override_generation_config": {"attn_temperature_tuning": True}}  # as the config says, which transformers follows
+
+    def rotated_as_served(self, attn, name, rotated):
+        """The qk-norm (an L2 norm over each head, no weight) follows the rotary, in float32 on vLLM's channel order."""
+        rows = llama4_text.halves_first(rotated)[0].transpose(0, 1)  # [tokens, heads, head_dim], as the forward holds them
+        normed = attn.qk_norm(rows.reshape(-1, rows.shape[-1]).float()).reshape(rows.shape).to(rows.dtype)
+        return llama4_text.pairs_first(normed.transpose(0, 1).unsqueeze(0))
 
     def test_every_kind_of_block(self, model):
         """Dense and MoE blocks, RoPE and NoPE blocks, chunked and full attention; a mixture's shared expert serves no contribution."""

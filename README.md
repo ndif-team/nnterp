@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="./nnterp_logo.png" alt="nnterp" width="300">
+  <img src="./nnterp_logo.png" alt="nnterp" width="220">
 </p>
 
 <h3 align="center">

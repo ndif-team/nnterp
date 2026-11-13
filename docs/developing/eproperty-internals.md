@@ -50,7 +50,7 @@ attn = model.layers[0].self_attn
 Attention.expanded_keys.key                # 'source.attention_interface_1.source.repeat_kv_0.output'
 Attention.expanded_keys.inside_forward()   # True
 Attention.expanded_keys.dims               # ('batch', 'num_heads', 'seq', 'head_dim')
-"(expanded_keys): The keys after repeat_kv" in repr(attn)   # True
+"The keys after repeat_kv" in repr(attn)   # True
 
 with model.trace("Hello world there"):
     keys = attn.attention_keys.save()       # [batch, num_kv_heads, seq, head_dim], read first: repeat_kv fires later
@@ -157,7 +157,7 @@ the `Source` a drill returns, an operation. An
 `AttributeError` anywhere is re-raised as `SourceNotAvailable` naming the
 value, the path and nnsight's list of what is there (`:216-220`), because of
 fact 2. The key it is given is `path(obj)` (`:176-178`: the string, or the
-function applied to the host). Verified on tiny GPT-2: a wrong op
+function applied to the host). On tiny GPT-2 a wrong op
 reads `model.transformer.h.0.attn.broken reads 'source.no_such_op_0.output',
 which this run does not have: 'model.transformer.h.0.attn.source' has no
 operation 'no_such_op_0'; available: is_cross_attention_0, ...`.
@@ -182,7 +182,7 @@ instrumented that forward at build (`sourced = True`, below); a second
 `source` on such a path, a call inside the parent's forward, would need the
 parent drilled at read time, and `_resolve` refuses it with a `ValueError`
 saying so. A value that reads something far from its host by standard name
-anchors its key at the root (`/`) instead, which is walked through envoys. Verified on tiny GPT-2: `EProperty("../ln_2.output")`
+anchors its key at the root (`/`) instead, which is walked through envoys. On tiny GPT-2, `EProperty("../ln_2.output")`
 on the attention equals `layers[0].ln_2.output`, and zeroing it in place
 moves the logits.
 
@@ -217,7 +217,7 @@ handed in by the caller:
 - `input` is `first_input(args, kwargs)` on read and
   `replace_first_input(args, kwargs, element)` on write, nnsight's own rule
   for `.input` with nnsight's own helpers (fact 6), so `EProperty("ln_2.input")`
-  on a block reads what `block.ln_2.input` reads. Verified on tiny GPT-2: it
+  on a block reads what `block.ln_2.input` reads. On tiny GPT-2 it
   equals `layer.input + attention_output`, and assigning it moves the logits
   with the call's other arguments intact. Nothing is destructured in the
   stub.
@@ -358,7 +358,7 @@ block.
   `RuntimeError("the availability check of ... failed: ...")` (`:115-121`),
   because of fact 2: left alone, a typo in a predicate would surface as "no
   attribute `attention_probabilities`" and hide the predicate's own bug.
-  Verified: a predicate reading `config.no_such_flag` raises
+  A predicate reading `config.no_such_flag` raises
   `RuntimeError: the availability check of model.transformer.h.0.attn.probe failed: 'GPT2Config' object has no attribute 'no_such_flag'`.
 - `layout` and `dims` (`:127-150`) read the return annotation of the stub with
   `typing.get_type_hints(func, include_extras=True)`. The annotation is one
@@ -374,7 +374,7 @@ block.
   resolves the same way (`expanded_keys` above). A `State | None` annotation
   (`LinearAttention.state_input`, which is `None` on a fresh prompt) is a
   `types.UnionType`, so the non-`None` member is taken (`:142-143`). `dims` is
-  `layout.dim_str.split()`. Verified:
+  `layout.dim_str.split()`. So
   `LinearAttention.state_input.layout is State` and
   `LinearAttention.state_input.dims == ('batch', 'heads', 'key_dim', 'value_dim')`.
 - `hasattr(envoy, "value")` and `getattr(envoy, "value", None)` both **raise**
@@ -405,10 +405,10 @@ knows, and it says so on the envoy that owns the forward: `sourced = True`
 on its class (`sourced = False` on `Standard`, `:50`). `__init__` (`:52-55`)
 and `_update` (`:57-60`) then touch `self.source`, at build and again when
 real weights replace meta ones and nnsight reinstalls the plain forward
-(nnsight `envoy.py:391`). Llama 4's `Layer` is the one instance
-(`families/llama4_text.py:78-86`): `sourced = True` under a docstring
+(nnsight `envoy.py:391`). Llama 4's `Layer` is an instance
+(`nnterp/families/llama4_text.py`, `Layer`): `sourced = True` under a docstring
 saying why, its `Mlp.mlp_output` being an operation in the block's forward
-read after the block's attention has returned. Verified on tiny GPT-2: a
+read after the block's attention has returned. On tiny GPT-2, a
 custom `Mlp` with `EProperty("../source.hidden_states_1.output")` passed
 through `envoys=` and read after `attention_output` ends with
 `OutOfOrderError: 'model.transformer.h.0.source.hidden_states_1.output.i0'
@@ -432,8 +432,10 @@ served values in forward order; `__set__` raises `AttributeError("... is
 derived and read-only")` (`:291-292`), which is the one place an
 `AttributeError` is right (it is the assignment that fails). `_preprocess`
 is set to `compute` (`:283`) **only** so that `layout` reads its return
-annotation; it is never called as a preprocess. `RecurrentMixer.states`
-(`recurrent.py:418-422`) is the one instance.
+annotation; it is never called as a preprocess. `RecurrentMixer.states`,
+`Attention.interface` and the Mamba mixers' `betas`, `decays` and `states`
+(`nnterp/components/recurrent.py`, `attention.py`, `selective_scan.py`,
+`state_space.py`) are instances.
 
 A forward that branches names its op with a function key decided once per
 module call: `RecurrentMixer.KERNEL`, `per_call` and `pinned` live in

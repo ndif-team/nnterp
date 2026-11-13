@@ -50,7 +50,8 @@ with model.trace("The Eiffel Tower is in the city of"):
 ```
 
 The reads are in forward order, so they fit in one trace. `slots.sum(2) == routed` to the
-dtype's rounding, and `routed_output + shared_expert_output` is the mixture's output.
+dtype's rounding (cast first: the weights and the slots can be float32 where the routed sum is
+in the model's dtype), and `routed_output + shared_expert_output` is the mixture's output.
 
 ## The six values
 
@@ -88,7 +89,9 @@ Each runs as written on the tiny Mixtral above, and on every MoE family with the
 has ([below](#per-family-caveats)). They read `expert_indices` before
 `expert_weights`, the order JetMoE's router computes them in
 ([read order](#read-order-within-a-mixture)); elsewhere the two are one call's arguments
-and either order works.
+and either order works. On a fresh JetMoE the first recipe raises `OutOfOrderError` at
+`router_logits` unless an earlier trace read the routing pair
+([per-family caveats](#per-family-caveats)).
 
 ```python
 prompts = ["The Eiffel Tower is in the city of", "def add(a, b):\n    return a + b"]
@@ -159,9 +162,7 @@ eager.support(layer=1)["mlp.expert_outputs"]
 #  load with experts_implementation='grouped_mm' (the default) or 'batched_mm'"
 ```
 
-`support()` reads the implementation off the model's config, so on a lazy load it is
-right once the weights are in (`dispatch=True`, or after the first trace), or before
-that where nnsight's meta build forwards `experts_implementation=`.
+`support()` reads the implementation off the model's config, on a lazy load too.
 Everything else reads and writes the same under every implementation: the routing pair
 and the routed sum are module boundaries. transformers also picks `eager` by itself where
 `grouped_mm` cannot run (CUDA below SM80). Unweighted per-slot outputs are
@@ -183,7 +184,7 @@ shared expert runs differs:
 On Qwen2-MoE, Qwen3-Next and Qwen3.5-MoE only the gated product (`shared_expert_output`)
 comes after `routed_output`: the ungated shared expert (`mlp.shared_expert.output`) runs
 first, before `router_logits`. On JetMoE the router computes the indices before the
-weights, so read `expert_indices` before `expert_weights` (the ablation below binds the
+weights, so read `expert_indices` before `expert_weights` (the ablation above binds the
 indices first there).
 
 An out-of-order read raises nnsight's `OutOfOrderError`. `model.order(i)` is this order

@@ -1,18 +1,17 @@
 ---
 title: Contributing
-one_liner: House style for nnterp code and docs, the workflow for a change, and the open items nnterp deliberately lacks or has not finished, distilled from GAPS.md.
-tags: [developing, contributing, style, workflow, roadmap]
+one_liner: House style for nnterp code and docs, and the workflow for a change.
+tags: [developing, contributing, style, workflow]
 related: [docs/developing/testing.md, docs/developing/architecture.md, docs/developing/transformers-compat.md, docs/developing/gotchas.md, docs/extending/index.md]
-sources: [GAPS.md, README.md, nnterp/families/llama.py, nnterp/families/gemma2.py, nnterp/components/eproperty.py, nnterp/components/layer.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/standardized.py, tests/families/suite.py, nnsight STYLE.md]
+sources: [README.md, nnterp/families/llama.py, nnterp/families/gemma2.py, nnterp/components/eproperty.py, nnterp/components/layer.py, nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/standardized.py, tests/families/suite.py, nnsight STYLE.md]
 ---
 
 # Contributing
 
 ## What this is for
 
-How a change lands in nnterp: the style the code and docs are held to, the
-steps from a branch to a passing suite, and the list of what nnterp does not
-do yet so a contribution can pick one up rather than rediscover it.
+How a change lands in nnterp: the style the code and docs are held to, and the
+steps from a branch to a passing suite.
 
 ## Canonical pattern
 
@@ -80,7 +79,9 @@ the ones that matter most here:
   to", no "fixed", no issue numbers, no TODO in prose. When code exists
   because something once broke, write the constraint, not the incident
   (`nnterp/components/eproperty.py:116-118` says why a predicate's
-  `AttributeError` becomes a `RuntimeError`, not when it bit).
+  `AttributeError` becomes a `RuntimeError`, not when it bit). The docs
+  describe nnterp in general: no machine, environment or path, no timings or
+  test counts from one run, no commit hash, no "verified on" stamp.
 - **Docstrings state the contract; comments say why.** A module docstring
   teaches the family or the concept (`nnterp/families/falcon.py:1-11`,
   `nnterp/components/recurrent.py:1-14`); a value's docstring says
@@ -112,8 +113,8 @@ the ones that matter most here:
   drift from the base, and `test_values_match_their_annotations` checks every
   axis against the model's sizes. A new shape is a new name defined beside the
   envoy that serves it, with a comment above it, and exported from
-  `nnterp.components`. Axis names are the shared set in those comments and in
-  `suite.py:448-454`.
+  `nnterp.components`. Axis names are the constants in
+  `nnterp/components/standard.py` (`BATCH`, `SEQ`, `HIDDEN`, `HEADS`, ...).
 - **Every source-located value has an `unavailable=` predicate** (`needs_eager`,
   `interface_reason`, `needs_torch_kernels`, or a family's own), so `support()`
   can answer before a trace runs and a read raises `Unavailable` rather than
@@ -129,12 +130,10 @@ the ones that matter most here:
 
 ## Workflow
 
-1. Branch from `main`; run git from the repository root and confirm
-   `git rev-parse --show-toplevel` prints your nnterp checkout before
-   staging ([gotchas.md](gotchas.md)).
+1. Branch from `main`.
 2. Make the change: a family module, a component value, or both.
 3. Run the family's file, then the whole suite
-   (`HF_HUB_OFFLINE=1 pytest -q`, about 71 s; [testing.md](testing.md)).
+   (`HF_HUB_OFFLINE=1 pytest -q`; [testing.md](testing.md)).
 4. For a new family, add `tests/families/test_<model_type>.py` with a tiny
    checkpoint that is offline-cached; prefer `hf-internal-testing/`,
    `trl-internal-testing/`, `yujiepan/` or `hf-tiny-v2/` repos. If the
@@ -146,80 +145,17 @@ the ones that matter most here:
    that family and listed in its `EXPECTED_UNAVAILABLE`.
 6. Update the docs page the change touches; every snippet in `docs/` has
    run against a pinned checkpoint before it is published.
+   A new or changed standard value also touches:
+   - the name sets the suites compare `support()` against: `VALUES` in
+     `tests/families/suite.py`, and `BLOCK_VALUES` in `tests/families/vision_suite.py` for a block value;
+   - the forward-order table in `tests/test_order.py` (`LLAMA_BLOCK`) for a block value;
+   - the classes that inherit it: a value on `Layer`, `Attention` or `Mlp` is also on the tower's
+     `VisionLayer`/`VisionAttention`/`VisionMlp` (`nnterp/components/vision.py`, re-annotated there,
+     [vision-design.md](vision-design.md)) and on the vLLM bases in `nnterp/components/vllm/`;
+   - its page under `docs/` and the matching page of the documentation site under `site/docs/` (`site/README.md`);
+   - the encyclopedia, whose pages embed `support()`: rebuild it ([encyclopedia/README.md](../../encyclopedia/README.md));
+   - the `nnterp` plugin's skills in https://github.com/ndif-team/skills.
 7. Commit as `area: lowercase imperative summary` with a body that says why.
-
-## Open items
-
-Distilled from `GAPS.md` (sections 2 and 4, a read-only comparison of
-nnterp 1.x on branch `internals-accessors` at `2db11d8` against this
-package), which is the source for everything in this list. Two kinds: things nnterp
-deliberately does not do the way nnterp 1.x does, and things that remain open.
-
-### Deliberately absent (design choices, from GAPS.md section 3 and 2a)
-
-- **The fallback for an unregistered `model_type` checks itself.** The
-  default family applies the shipped spellings to any model and serves only
-  what a name guess makes safe (the stream, the root values, the sizes, the
-  interface interior); the contributions and the logit lens are unavailable,
-  it refuses at load what it cannot check (`UnsupportedFamily`), and it warns
-  on every load, so a model nnterp relies on still gets its own module.
-- **Accessors live on the block envoy**, `model.layers[i].layer_output`, not
-  on the model as `model.layers_output[i]`; they exist inside a trace and
-  appear in the repr (§3 item 1).
-- **Containers are lifted to the root**, `model.layers` not `model.model.layers`;
-  the final norm keeps Llama's `norm`, not `ln_final` (§3 items 2-3).
-- **Forward order is measured, not tabled**: nnterp 1.x's hand-maintained
-  `Address.order` becomes `model.order()` / `model.rank(name, layer)`, read
-  off one probe run per model and block shape (`nnterp/order.py`: a `scan` on
-  a model not yet dispatched, a `trace` on a dispatched one), so a
-  family's quirk (Falcon's values before its queries) is in the ranks
-  without anyone writing it down (§2a "Forward-order"). The probe runs on
-  `StandardizedTransformer`; `StandardizedVLLM` answers from a weightless
-  `StandardizedTransformer` of the same checkpoint.
-- **Eager attention is not forced at load**; `attention_probabilities` says
-  `eager` is needed when the checkpoint runs `sdpa` (§3 item 5;
-  `tests/test_registry.py:88-92`).
-- **Nothing runs at construction** (no scan or trace validation); the suite
-  carries the checks (§3 item 8).
-- **Remote runs need nnterp installed on the server**; nothing is shipped by
-  value, since an `EProperty` cannot be pickled (§2a remote row, §3 item 10).
-
-### Open (from GAPS.md sections 2 and 4)
-
-- **Load-time validation**: a causal check that a written pattern moves the
-  logits, a refusal of heterogeneous layer classes (Mllama's cross-attention
-  blocks would be plain `Envoy`s with no `layer_output`), detection of
-  `reorder_and_upcast_attn` and of a sublayer that takes a `residual`
-  argument (§2a "Load-time validation", §4 items 9-11).
-- **Interventions and display conveniences**: nnterp 1.x's `logit_lens`,
-  `patchscope_lens`, `patchscope_generate`, `patch_object_attn_lens`,
-  `TargetPrompt(Batch)`, `repeat_prompt`, `plot_topk_tokens`, `prompts_to_df`
-  (§2b).
-- **VLMs**: `detect_automodel`, `text_only`, `StandardizedVLM`, `load_model`;
-  nnterp hardcodes `task="text-generation"` and would need the same container
-  lift for a `language_model` (§2a, §3 item 2).
-- **Real NDIF verification** of `remote=True` against a deployed
-  `TransformersModel` (§2a remote row; the key is right by
-  `tests/test_registry.py:80-85`, the round trip is not exercised).
-- **Optimized-kernel pinning** for hybrids: with `flash-linear-attention` or
-  `causal-conv1d` installed every DeltaNet value is unavailable; nnterp 1.x pins
-  the reference kernels at load and re-pins on `dispatch()` (§2a "Hybrid
-  Gated DeltaNet", §4 item 6).
-- **A `model.require(...)` / `model.available(...)` helper** that answers
-  for a set of values at once, instead of reading `support()` by hand and
-  meeting `Unavailable` from `hasattr` (§2a "Availability before any
-  trace"; the note under `Unavailable` in `nnterp/components/eproperty.py:28-32`).
-- **Sequence-first normalization of softmax q/k/v**: the sequence axis is 2
-  on `attention_queries`/`keys`/`values` and 1 everywhere else, the layout
-  transformers hands its interface; a `seq_axis`-style layout fact or a view
-  would make every value sequence-first (§2a "Layout facts", README
-  "Layouts").
-- **Block interior beyond attention**: nnterp 1.x's `layers_mid`,
-  `attentions_premix`, `mlps_activation`, `mlps_neurons` rows have no nnterp
-  value yet (§2a "Block accessors").
-- **`device_map="auto"` default**, `linear_attention_layers` /
-  `attention_layers` index lists, `block_structure` as a family constant
-  (§2a, marked trivial).
 
 ## Gotchas
 
@@ -239,5 +175,4 @@ deliberately does not do the way nnterp 1.x does, and things that remain open.
 - [architecture.md](architecture.md) — which layer a change belongs in
 - [transformers-compat.md](transformers-compat.md)
 - [gotchas.md](gotchas.md)
-- `GAPS.md` at the repository root — the full comparison this page distills
 - nnsight `STYLE.md`, `docs/developing/contributing.md`

@@ -123,9 +123,9 @@ assignment and in-place edits, and a family that names no `norm` or `lm_head` re
 
 ```python
 with model.trace(prompt):
-    normed = model.final_norm_output.save()          # [batch, seq, hidden_size]
+    normed = model.final_norm_output                 # [batch, seq, hidden_size]
+    normed[:, -1] *= 2                               # in place: the head reads the edited stream
     head = model.lm_head_output.save()               # [batch, seq, vocab_size]
-    model.final_norm_output[:, -1] *= 2              # the head reads the edited stream
     logits = model.logits.save()
 ```
 
@@ -151,15 +151,16 @@ torch.allclose(logits, other_logits)              # True: the second trace ran o
 assigned; assign input_ids`). A `torch.Size` bound inside the block does not survive the
 trace; save `torch.tensor(model.input_size)` if you need it outside.
 
-The six print with the model. The `token_embeddings` description says "entering the first
-block", which holds only where the model adds nothing after the embedding module (above):
+The eight print with the model:
 
 ```
-  (logits): The logits the model returns, after anything it does past lm_head (a softcap, a scale), [batch, seq, vocab_size]
-  (token_embeddings): The embedding module's output; layers[0].input is what enters the first block, [batch, seq, hidden_size]
-  (next_token_probs): The next-token distribution at the last position, [batch, vocab_size]; derived, read-only
-  (input_ids): The token ids the model was called with, [batch, seq]
-  (attention_mask): The attention mask the model was called with, [batch, seq]; zeros are padding
+  (logits) -> Logits [batch seq vocab_size]: The logits the model returns, after anything it does past lm_head (a softcap, a scale)
+  (token_embeddings) -> Residual [batch seq hidden_size]: The embedding module's output; layers[0].input is what enters the first block
+  (final_norm_output) -> Residual [batch seq hidden_size]: The residual stream after the final norm, what lm_head reads
+  (lm_head_output) -> Logits [batch seq vocab_size]: The head's logits before anything the model does past lm_head (a softcap, a scale)
+  (next_token_probs) -> NextTokenProbs [batch vocab_size]: The next-token distribution at the last position; derived, read-only
+  (input_ids) -> Tokens [batch seq]: The token ids the model was called with
+  (attention_mask) -> Tokens [batch seq]: The attention mask the model was called with; zeros are padding
   (input_size): [batch, seq] of the current call; read-only
 ```
 
@@ -198,7 +199,7 @@ model.num_kv_heads                                         # 2: the config's
 | `qk_head_dim` | `head_dim` |
 | `intermediate_size` | `config.intermediate_size` |
 
-Some of the twenty-five families whose configs say it otherwise (all of them, with what each
+Some of the twenty-seven families whose configs say it otherwise (all of them, with what each
 reads, are in [families.md](../reference/families.md#logits-scales-and-sizes)):
 
 | family | defines | what it reads |
@@ -259,8 +260,8 @@ same way: [adding-a-family](../extending/adding-a-family.md#sizes).
   the new ids have another length.
 - **`attention_mask` under an unpadded `generate`.** transformers >= 5.18 drops the mask
   when no prompt is padded and calls the model with none; reading `attention_mask` then
-  installs the all-ones mask that stands for (`[batch, past + seq]` on a decode step, as an
-  earlier version passed) into the call, so the read and in-place edits behave as before.
+  installs the all-ones mask that stands for (`[batch, past + seq]` on a decode step) into
+  the call, so the read and in-place edits work.
 - **`intermediate_size` is the dense MLP's width.** For an all-MoE family read
   `config.moe_intermediate_size`, or a block's `layers[i].mlp.intermediate_size`.
 - **A size is read-only.** `model.hidden_size = 5` raises `AttributeError: hidden_size is

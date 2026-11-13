@@ -10,7 +10,10 @@ sources: []
 
 One level below `docs/usage/` and `docs/extending/`: these pages cite `file:line`, describe
 data flow, and explain the constraints that shape the code. If you want to *use* a value,
-start in `docs/usage/`; if you want to add a family, start in `docs/extending/`.
+start in `docs/usage/`; if you want to add a family, start in `docs/extending/`. The tracing
+rules underneath (forward order, `.source`, saves, occurrences) are nnsight's, documented in
+the nnsight repository (https://github.com/ndif-team/nnsight, `docs/`) and in the `nnsight`
+plugin of https://github.com/ndif-team/skills.
 
 ## The one-paragraph model
 
@@ -28,12 +31,12 @@ read.
 - [architecture](architecture.md) — the map, which layer owns what, lazy family import.
 - [eproperty-internals](eproperty-internals.md) — `EProperty` and its path grammar (`../`, `source`, `input`/`inputs`/`output`), `_resolve`'s walk, drilling per run, `select`, the `Standard` instrumentation rule, `DerivedEProperty`.
 - [recurrent-mixer-internals](recurrent-mixer-internals.md) — `RecurrentMixer` and its DeltaNet subclass: the kernel op the forward's own test picks, the once-per-call record (`KERNEL`, `per_call`), per-token state through occurrence arithmetic, `route_kernels`.
-- [vision-design](vision-design.md) — the vision side of image-text-to-text checkpoints: the tower names, the image values on the tower, where `image_features` is read, where the code lives, what does not fit, what is left.
+- [vision-design](vision-design.md) — the vision side of image-text-to-text checkpoints: the tower names, the image values on the tower, where `image_features` is read, where the code lives, what does not fit.
 - [testing](testing.md) — `HF_HUB_OFFLINE=1 pytest`, what `FamilySuite` asserts method by method, the root tests.
 - [transformers-compat](transformers-compat.md) — the versions nnterp is developed against, which operation names a release can move, the upgrade procedure.
 - [releasing](releasing.md) — a GitHub release publishes to PyPI through `publish.yml`; the tag is the version, Trusted Publishing authenticates the upload.
 - [gotchas](gotchas.md) — contributor traps, each as constraint and reason.
-- [contributing](contributing.md) — house style, workflow, open items.
+- [contributing](contributing.md) — house style, workflow.
 
 ## Related
 

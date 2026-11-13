@@ -12,10 +12,12 @@ sources: [nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp
 
 Each entry is a constraint a contributor runs into, why it holds, and the
 line it comes from. User-facing versions of some live under `docs/usage/`;
-these are the ones you meet writing a family, a descriptor or a test. Every
-entry below was reproduced on a tiny checkpoint before it was written down
-(`hf-internal-testing/tiny-random-gpt2` and
-`hf-internal-testing/tiny-random-LlamaForCausalLM` unless said otherwise).
+these are the ones you meet writing a family, a descriptor or a test. The
+examples are on `hf-internal-testing/tiny-random-gpt2` and
+`hf-internal-testing/tiny-random-LlamaForCausalLM` unless said otherwise. The
+tracing rules these entries rest on are nnsight's, documented in the nnsight
+repository (https://github.com/ndif-team/nnsight, `docs/`) and in the `nnsight`
+plugin of https://github.com/ndif-team/skills.
 
 ## Canonical pattern
 
@@ -53,14 +55,10 @@ write (`nnterp/components/recurrent.py:405-422`).
 the value.** A value inside a call the forward makes is reached by drilling
 into that call, and the drill parks on `{op}.fn`
 (`components/eproperty.py:183-191`), which fires before the call runs.
-Reproduced: `layer_output` then `attention_probabilities` of the same block
+`layer_output` then `attention_probabilities` of the same block
 raises `OutOfOrderError: '...attention_interface_1.fn.i0' was requested but
 the model already ran past it`, and no save of the block is bound. Read in
 forward order.
-
-**No `continue` in a trace body.** nnsight compiles the block; keep bodies
-straight-line with plain `for`/`if`, and decide which blocks to visit outside
-(`[i for i, l in enumerate(model.layers) if getattr(l, "self_attn", None) is not None]`).
 
 **Nested `.source` only inside a trace.** `envoy.source` works anywhere and
 instruments the module; `op.source` needs the live callee and raises
@@ -118,9 +116,7 @@ fusion removed. So a value keyed on `source.<op>` of such a module (the
 queries and keys before the rotary, `apply_rotary_pos_emb_0`) cannot be
 served there; `transformers_backend.Attention.no_rotary` refuses with
 `BACKEND_ROTARY`. Values on the module's children (`qkv_proj`, `o_proj`, the
-mounted `attn`) are hooks and unaffected. The limit lifts when vLLM registers
-the rewritten text in `linecache` under a file name of its own and nnsight
-instruments the instance's forward rather than the class's.
+mounted `attn`) are hooks and unaffected.
 
 **A key function stored on a class is a bound method through an instance.**
 `RecurrentMixer.KERNEL` is a `staticmethod`
@@ -159,10 +155,10 @@ the tensor under another name first (`residual = hidden_states` before
 so an assignment is copied into the held tensor
 ([eproperty-internals.md](eproperty-internals.md#in_place-a-tensor-the-forward-holds-under-two-names)).
 
-**GPT-2 (and MPT) queries, keys and values are split views.** torch
-refuses `attention_queries[:, 0] = 0` ("Output 0 of Select is a view and is
-being modified inplace"); assign a new tensor instead
-(`components/attention.py:84-87`; `suite.py:389-393` with
+**GPT-2's and GPT-BigCode's queries, and MPT's queries, keys and values, are
+split views.** torch refuses `attention_queries[:, 0] = 0` ("Output 0 of Select
+is a view and is being modified inplace"); assign a new tensor instead
+(`tests/families/suite.py`, `test_interior_in_place_edits` with
 `REFUSES_IN_PLACE_QKV`).
 
 **Falcon adds the attention into the MLP's output tensor in place.** A live
@@ -182,4 +178,4 @@ state into it; `state_input` returns a clone (`linear_attention.py:76-85`).
 - [recurrent-mixer-internals.md](recurrent-mixer-internals.md)
 - [testing.md](testing.md)
 - [transformers-compat.md](transformers-compat.md)
-- nnsight `docs/gotchas/index.md`, `docs/errors/out-of-order-error.md`
+- nnsight `docs/errors/index.md`, `docs/errors/out-of-order-error.md`

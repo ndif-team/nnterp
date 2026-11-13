@@ -577,8 +577,8 @@ whose tensors are not `[batch, seq, ...]` overrides `_seq`.
 
 `tests/families/test_qwen3_5_text.py` is the executable version of this
 page, with `tests/test_base.py` for the base on its own.
-`HF_HUB_OFFLINE=1 pytest tests/families/test_qwen3_5_text.py -q` passes 46
-tests in about 13 s on CPU. The methods that pin the claims above:
+`HF_HUB_OFFLINE=1 pytest tests/families/test_qwen3_5_text.py -q` runs it. The
+methods that pin the claims above:
 
 | claim | test |
 |---|---|
@@ -597,8 +597,7 @@ tests in about 13 s on CPU. The methods that pin the claims above:
 | `select` given as a function of the host reads and writes | `tests/test_base.py::test_select_can_be_a_function_of_the_host` |
 | the Mamba-1 values recompute the scan's own states and `y`; views take writes and in-place edits; the decode step, the per-token state and a `state_input` read before `states` in a step | `tests/families/scan_suite.py` (run by `test_mamba.py`, `test_falcon_mamba.py`, `test_jamba.py`) |
 
-The canonical pattern above is the offset experiment in isolation; it ran
-on `yujiepan/qwen3.5-tiny-random` with the printed `[0, 0, 1]`.
+The canonical pattern above is the offset experiment in isolation.
 
 ## Gotchas
 
@@ -621,4 +620,4 @@ on `yujiepan/qwen3.5-tiny-random` with the printed `[0, 0, 1]`.
 - [eproperty-internals.md](eproperty-internals.md) — function keys, `_resolve`'s walk and the once-per-access key
 - [gotchas.md](gotchas.md)
 - [testing.md](testing.md) — the hybrid test files
-- nnsight `docs/usage/iter-all-next.md` — `tracer.iter` semantics; `docs/developing/interleaver-internals.md` — occurrences
+- nnsight `docs/usage/iteration.md` — `tracer.iter` semantics; `docs/developing/interleaver-internals.md` — occurrences

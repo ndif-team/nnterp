@@ -31,7 +31,7 @@ prompts = [
 ]
 mass = run_prompts(model, prompts, batch_size=32)
 mass["correct"].shape      # torch.Size([2, 1]): [num_prompts, layers]; the next-token distribution is one "layer"
-mass["wrong"][0, 0]        # the mass on ' London' and ' Berlin' (and 'London', 'Berlin') after the first prompt
+mass["wrong"][0, 0]        # the mass on ' London' and ' Berlin' (and 'London', 'Ber': the first tokens without the space) after the first prompt
 ```
 
 ## Words to token ids: `get_first_tokens`
@@ -138,9 +138,9 @@ mass["correct"].shape      # torch.Size([2, 2]): the target's mass at block 4 an
 
 ## Related
 
-- [root-values.md](root-values.md), `next_token_probs` and `add_prefix_false_tokenizer`.
+- [root-values.md](root-values.md), `next_token_probs`.
 - [methods.md](methods.md), `project_on_vocab` for a layer-wise `get_probs_func`.
-- [loading.md](loading.md), `tokenizer_kwargs` and the padding side.
+- [loading.md](loading.md), `tokenizer_kwargs`, the padding side and `add_prefix_false_tokenizer`.
 - [activations.md](activations.md), `nnterp.nnsight_utils`: `compute_next_token_probs` is what the default `get_probs` calls.
 - [generation.md](generation.md), the same `next_token_probs` at every step of `generate`.
 - [remote.md](remote.md), running these on NDIF.

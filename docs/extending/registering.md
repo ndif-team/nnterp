@@ -22,7 +22,7 @@ whichever family the load uses.
 
 ## Canonical pattern
 
-Verified on `hf-internal-testing/tiny-random-gpt2`: a variant of the shipped GPT-2 family
+Run on `hf-internal-testing/tiny-random-gpt2`: a variant of the shipped GPT-2 family
 that marks the pattern unavailable and adds an alias.
 
 ```python
@@ -89,11 +89,10 @@ shipped family spells its own way is listed in
 
 Two things do read more of the family later:
 
-- `nnterp.route_delta_rule(model.family, ...)` finds a hybrid's mixer module through
+- `nnterp.route_kernels(model.family, ...)` finds a hybrid's mixer module through
   `family.ENVOYS`.
-- The suite's `test_envoy_classes` and `expected_values` read `FAMILY.Layer`,
-  `FAMILY.Attention`, `FAMILY.Mlp` and `FAMILY.LinearAttention`, so a variant run through
-  `FamilySuite` carries the classes.
+- The suite's `test_envoy_classes` reads `FAMILY.Layer`, `FAMILY.Attention` and
+  `FAMILY.Mlp` (and `FAMILY.Moe`), so a variant run through `FamilySuite` carries the classes.
 
 A shipped family's module has all of these, so a variant built by spreading a shipped
 family's dicts, reusing its classes and carrying its size functions, as above, is
@@ -243,8 +242,8 @@ skips that lookup for one load, as `family=` does on `StandardizedTransformer`. 
   remote trace carries the envoy tree's classes by reference; a class defined in a
   script's `__main__` or a `SimpleNamespace` built inline is not importable on a server.
   For local use it is fine.
-- **`route_delta_rule` on a registered hybrid** reads the mixer class off `family.ENVOYS`;
-  keep the `LinearAttention` subclass keyed on the transformers mixer type.
+- **`route_kernels` on a registered hybrid** reads the mixer class off `family.ENVOYS`;
+  keep the `RecurrentMixer` subclass keyed on the transformers mixer type.
 
 ## Related
 

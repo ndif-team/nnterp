@@ -482,7 +482,7 @@ def qk_head_dim(model: "StandardizedTransformer") -> int:
 ```
 
 DeepSeek-V3 has the same attention and imports both (`from .deepseek_v2 import head_dim,
-qk_head_dim`), as do DeepSeek-V3.2, GLM-5, GLM-4.7-Flash and Youtu. Twenty-five shipped
+qk_head_dim`), as do DeepSeek-V3.2, GLM-5, GLM-4.7-Flash and Youtu. Twenty-seven shipped
 families define a size this way (`intermediate_size` on GPT-2, OPT, BLOOM, Falcon, DBRX,
 Llama 4, ...; `num_kv_heads` on Falcon, GPT-BigCode and Gemma-4); the full list with what
 each reads is in [../reference/families.md](../reference/families.md#logits-scales-and-sizes), and the recipe in

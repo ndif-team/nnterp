@@ -201,8 +201,9 @@ prompt within a few tokens, and its state norm curve above stays flat.
   the single token it processes. The per-token view under `generate` is an inner
   `tracer.iter[:n]` on step 0 and `state_output` on each later step.
 - The kernels must be transformers' pure-torch ones. With `flash-linear-attention`
-  or `causal-conv1d` installed the kernel has no Python source, every interior value
-  is unavailable, and `support()` says so; `attention_output` stays available.
+  installed the delta-rule kernels have no Python source, and every interior value is
+  unavailable until `route_kernels(model.family, "torch")`; `support()` says so, and
+  `attention_output` stays available. `causal-conv1d` alone leaves them readable.
 - A block has either `self_attn` or `linear_attn`; on the attention block
   (`config.layer_types`) the `linear_attn` values are reported missing. Decide the
   blocks outside the trace.
@@ -220,5 +221,5 @@ prompt within a few tokens, and its state norm curve above stays flat.
   kernel reasons in `support()`.
 - [../usage/generation.md](../usage/generation.md): `generate`, `tracer.iter`, the
   prefill and decode steps.
-- nnsight `docs/usage/iter-all-next.md`, `docs/usage/source.md`.
+- nnsight `docs/usage/iteration.md`, `docs/usage/source.md`.
 - Yang et al. (2024), "Gated Delta Networks".

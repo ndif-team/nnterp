@@ -207,8 +207,9 @@ or for a position other than the last.
   blocks have no `self_attn`. `model.support()` says so per block before any trace;
   reading anyway raises `nnterp.Unavailable`.
 - Decide `self_attn` versus `linear_attn` outside the trace, as above.
-- Head-level ablation needs `attn_implementation="eager"`; the boundary values
-  (`attention_output`, `mlp_output`, `layer_output`) do not.
+- Ablating a head through `attention_head_outputs` or its pattern needs
+  `attn_implementation="eager"`; `attention_premix` (the output projection's input, split
+  by head) and the boundary values (`attention_output`, `mlp_output`, `layer_output`) do not.
 - On Gemma-4 the KV-sharing blocks attend with an earlier block's keys and values.
   Zeroing `attention_keys` / `attention_values`, in place or by assignment, ablates
   them on that block alone; to ablate what every borrower attends with, edit the

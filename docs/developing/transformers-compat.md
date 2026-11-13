@@ -11,8 +11,7 @@ sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py,
 ## What this is for
 
 This is the one page in `docs/` that talks about versions. nnterp is
-developed on **transformers 5.17.0** and **nnsight 0.8.0** (the release; `dev` at
-`d565f5f8` is the same code), with torch 2.13 and
+developed on **transformers 5.17.0** and **nnsight 0.8.0**, with torch 2.13 and
 jaxtyping 0.3.11, and runs on **transformers 5.19.0** and **5.20.1** as well: the suite passes on
 all three (a test that needs a 5.18 class skips on 5.17; on 5.20 the SmolVLM tower tests skip, because 5.20's
 `inputs_merger` reshapes the image features by `vision_config.patch_size` rather than by the features each image
@@ -25,10 +24,10 @@ too: it dropped the `use_precomputed_states` binding from every recurrent forwar
 the recurrent families' tests pass there; Jamba's router became a ``JambaTopKRouter`` module there (a bare ``nn.Linear``
 before), so its `router_logits` read whichever the mixture has; SmolVLM's model scatters its image features itself there
 (``masked_scatter``, as Llava does) where 5.20 called ``inputs_merger``, so its scatter host reads whichever operation
-the forward has, and the 5.20-only SmolVLM reshape bug that skipped its tower tests is fixed in 5.21. The suite passes
-on 5.21.0 with 0 failures. `pyproject.toml` requires `nnsight>=0.8`,
+the forward has, and the 5.20-only SmolVLM reshape bug that skipped its tower tests is fixed in 5.21.
+`pyproject.toml` requires `nnsight>=0.8`,
 `transformers>=5.17` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
-(below) and whose `rename` takes a dotted alias (nnsight #768: `{"attn.c_proj":
+(below) and whose `rename` takes a dotted alias (`{"attn.c_proj":
 "attn.o_proj"}` binds on the attention, which GPT-2's two `c_proj` need); nnsight 0.8.0
 has both, which is what `nnsight>=0.8` says. The names a family binds to (`RENAME`, `ENVOYS`) are
 transformers' module names and classes, which move rarely. The **operation
@@ -60,7 +59,9 @@ with model.trace("Hello world there"):
 #  'nn_functional_dropout_0', 'attn_weights_3', 'torch_matmul_1', 'attn_output_0', ...]
 
 {name: attr.key for name, attr in type(attn).values().items() if attr.inside_forward()}
-# {'attention_queries':       'source.attention_interface_1.inputs',
+# {'attention_queries_prerope': 'source.apply_rotary_pos_emb_0.inputs',
+#  'attention_keys_prerope':  'source.apply_rotary_pos_emb_0.inputs',
+#  'attention_queries':       'source.attention_interface_1.inputs',
 #  'attention_keys':          'source.attention_interface_1.inputs',
 #  'attention_values':        'source.attention_interface_1.inputs',
 #  'attention_scores':        'source.attention_interface_1.source.nn_functional_softmax_0.input',
@@ -200,16 +201,16 @@ Three behaviours of nnsight 0.8 as it stands, all used by nnterp as current
 behaviour:
 
 - **`Envoy.parent` and `Envoy.root`**: every envoy keeps a weak link to the
-  envoy that holds it, and `root` follows the links up to the model envoy
-  (nnsight #759). A value reads its block through `self.parent` (the Granite
+  envoy that holds it, and `root` follows the links up to the model envoy.
+  A value reads its block through `self.parent` (the Granite
   mixtures' `residual_multiplier`, the Gemma-4 and GraniteMoE-Hybrid `Mlp`'s
   `router` and `experts`, ZAYA's `merge`) and the model through `self.root`
   (`Vision`'s config, processor and family), and a key with a leading `/` is
   walked from `root` (`"/inputs"`). The link is dropped when an
   envoy is pickled and rebuilt inside the payload, so a shipped tree whose top
   is the model envoy keeps its root; a remote trace ships the model's whole
-  tree (checked with `remote="local"` on the Gemma 3 tiny wrapper: the
-  deserialized tower's root is the deserialized `StandardizedTransformer`).
+  tree, so a deserialized tower's root is the deserialized
+  `StandardizedTransformer`.
 
 - **`envoys=` chooses the envoy class per module at construction**, by type
   (MRO) first and path suffix second, the native path or any alias spelling

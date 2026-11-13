@@ -21,7 +21,7 @@ labels mean, and which one to pick. nnsight docs/usage/source.md is the full acc
 ## Canonical pattern
 
 Outside a trace, print the module's source; the labels on the left are the operation
-names. Trimmed from `hf-internal-testing/tiny-random-gpt2` on transformers 5.17:
+names. Trimmed from `hf-internal-testing/tiny-random-gpt2`:
 
 ```python
 import nnterp
@@ -210,8 +210,8 @@ suite reads interior values one per trace for this reason.
 ## Names move with transformers
 
 The operation names are what transformers releases change: a renamed local variable
-renames a binding, a refactor that routes a family onto the shared interface (DBRX on
-5.17) replaces its own softmax with `attention_interface_1`, a moved dropout changes the
+renames a binding, a refactor that routes a family onto the shared interface
+replaces its own softmax with `attention_interface_1`, a moved dropout changes the
 pattern's op. Print the source for the version you run rather than copying a label from
 another family or from this page, and let `tests/families/test_<family>.py`'s
 `test_every_source_value_resolves_on_every_layer` and
@@ -240,8 +240,7 @@ address can read a perfectly good tensor nothing downstream uses.
   that step as its occurrence 0, so a later `tracer.iter[1]` read inside it returns step
   2's value, without an error. Touch `op.source` before the first step, or read it on
   every step from 0.
-- **Sourcing a module costs a little on every forward afterwards**, trace or not
-  (nnsight docs/usage/source.md quotes about 6% for all of GPT-2's blocks); a family
+- **Sourcing a module costs a little on every forward afterwards**, trace or not; a family
   value instruments only the modules it is read on.
 
 ## Related

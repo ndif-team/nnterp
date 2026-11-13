@@ -86,9 +86,6 @@ bodies:
   state after every token exists without a second kernel, and `state`,
   `states`, `state_after` and `set_state_after` work (the DeltaNet reroutes
   the prompt through its decode kernel for the same result).
-- Unrouted without `mamba_ssm`, `attention_head_outputs`, `state_output`, `state` and
-  `states` are unavailable (the forward reaches the pure-torch scan through transformers'
-  kernel dispatcher, and the reason names `route_kernels`); the other values read.
 - Unrouted with `mamba_ssm` installed, every kernel value reports `read inside
   transformers' pure-torch mamba_selective_scan, but this process dispatches
   it to an optimized kernel (mamba_ssm) with no Python source; uninstall it, or

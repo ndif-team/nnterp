@@ -324,23 +324,26 @@ family's subclass (JetMoE's `Mlp` returns its module's `hidden_size`);
 
 ### The logits
 
-`project_on_vocab(hidden)` is `lm_head(norm(hidden))`, then what the model does after the
-head: the root's applies the text config's `final_logit_softcapping` when it is set. A family
-whose model does something else to the head's output defines
-`def project_on_vocab(model, hidden)` in its module, which is bound in the root's place the
-way a size function is (`project_on_vocab` is a `StandardizedCapability`,
-`StandardizedProperty` for a method), so the logit lens on the last block still equals
-`logits`:
+`project_on_vocab(hidden)` follows the model's path from the last block's output to the
+logits. The root's is `lm_head(norm(hidden))`, then the text config's
+`final_logit_softcapping` when it is set. Read the causal-LM class's `forward` (and the base
+model's after its block loop, and a wrapper's where the family covers one) for every step
+between the two: a scale, a cast, a projection, a norm the config can leave out. A family
+whose model takes another path defines `def project_on_vocab(model, hidden)` in its module,
+which is bound in the root's place the way a size function is (`project_on_vocab` is a
+`StandardizedCapability`, `StandardizedProperty` for a method), so the logit lens on the
+last block still equals `logits`:
 
 ```python
-# nnterp/families/cohere.py
+# nnterp/families/granite.py
 
 def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:
-    """The logit lens as the model makes its logits: the final norm, ``lm_head``, then times ``logit_scale``."""
-    return model.lm_head(model.norm(hidden)) * model.config.logit_scale
+    """The logit lens as the model makes its logits: the final norm, ``lm_head``, then divided by ``logits_scaling``."""
+    return model.lm_head(model.norm(hidden)) / model.config.logits_scaling
 ```
 
-Granite's divides by `logits_scaling`; Cohere-2 imports Cohere's. The suite's
+Cohere's multiplies by `logit_scale` only on the causal-LM classes, since its vision
+wrappers never scale; Cohere-2 imports it. The suite's
 `test_logits_are_the_models_output` and `test_project_on_vocab_is_the_logit_lens` both check
 `project_on_vocab(layers[-1].layer_output) == logits`, so a missing or wrong one fails there.
 
@@ -419,6 +422,7 @@ class TestGPT2(FamilySuite):
     FAMILY = gpt2
     NATIVE = rows("transformer", "h", "wte", "ln_f", attn="attn", ln1="ln_1", ln2="ln_2")
     REFUSES_IN_PLACE_QKV = True  # q/k/v are split views of one c_attn tensor
+    EXPECTED_UNAVAILABLE = NO_ROTARY
 
     def test_reorder_and_upcast_makes_the_interface_unavailable(self, model):
         config = model.layers[0].self_attn._module.config

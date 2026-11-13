@@ -4,14 +4,14 @@ Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernor
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
 added in the block, attention through the shared eager forward. The MLP is a sparse mixture of experts; ``head_dim`` is the config's.
 
-A config with ``mlp_only_layers`` set gives those blocks a dense ``Qwen3MoeMLP`` that no
-envoy is keyed to: ``layers[i].mlp`` is a plain Envoy there and ``support()`` reports
-"no mlp module on this block". No released checkpoint sets it.
+A config with ``mlp_only_layers`` set (or a ``decoder_sparse_step`` above 1) gives the
+blocks it names a dense ``Qwen3MoeMLP``, an `Mlp`, ``intermediate_size`` wide; no released
+checkpoint sets either.
 """
 
-from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeAttention, Qwen3MoeDecoderLayer, Qwen3MoeSparseMoeBlock
+from transformers.models.qwen3_moe.modeling_qwen3_moe import Qwen3MoeAttention, Qwen3MoeDecoderLayer, Qwen3MoeMLP, Qwen3MoeSparseMoeBlock
 
-from ..components import Attention, Layer, Moe
+from ..components import Attention, Layer, Mlp, Moe
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -29,9 +29,13 @@ class Attention(Attention):
     """Qwen3-MoE's attention; the shared eager forward and the residual added in the block, so the base holds."""
 
 
-class Mlp(Moe):
+class Mlp(Mlp):
+    """Qwen3-MoE's dense MLP, on a block ``mlp_only_layers`` names; the residual is added in the block, so the base holds."""
+
+
+class Moe(Moe, Mlp):
     """A mixture of experts: the module returns the routed hidden states (a bare tensor on this transformers), so the base holds."""
 
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
-ENVOYS = {Qwen3MoeDecoderLayer: Layer, Qwen3MoeAttention: Attention, Qwen3MoeSparseMoeBlock: Mlp}
+ENVOYS = {Qwen3MoeDecoderLayer: Layer, Qwen3MoeAttention: Attention, Qwen3MoeMLP: Mlp, Qwen3MoeSparseMoeBlock: Moe}

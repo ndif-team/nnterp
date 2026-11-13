@@ -1,20 +1,22 @@
-"""Falcon (``FalconForCausalLM``): the 7B layout (parallel attention), with or without alibi, and the 40B layout.
+"""Falcon (``FalconForCausalLM``): the 7B layout (parallel attention), with or without alibi; the 40B layout; and the RW layout.
 
 ``transformer.{word_embeddings, h[i].{input_layernorm, self_attention, mlp},
-ln_f}`` and ``lm_head``. One norm feeds both sublayers and the block sums
+ln_f}`` and ``lm_head``. On the 7B and 40B layouts the block is parallel and sums
 ``x + attn + mlp``, but it does so by adding the attention output *into the
 MLP's output tensor in place*, so ``mlp_output`` reads a copy taken as the
-MLP returns, and a transform carries edits to it back into the model.
+MLP returns (on every layout), and a transform carries edits to it back into the model. The RW
+layout (``parallel_attn`` false: falcon-rw-1b and -7b) is a sequential pre-norm block, so
+``layer_mid`` is served there.
 
 The attention does its own arithmetic, and ``config.alibi`` picks one of two
 branches of it with different operations, so each interior value names its
 operation by that flag. Without alibi the queries and keys leave
 ``apply_rotary_pos_emb`` and the pattern is the first softmax, which has no
 dropout after it; with alibi there is no rotary, the pattern is the dropout
-after the second softmax, and the head outputs are flattened over batch and
-heads. The 40B layout (``ln_attn`` / ``ln_mlp``, ``new_decoder_architecture``)
-runs the same forward with its key/value heads already broadcast. falcon-11B has
-the 40B layout with ``num_ln_in_parallel_attn`` 1: one ``input_layernorm`` feeds both
+after the second softmax, and the head outputs are read once merged, since the
+product is flattened over batch and heads. The 40B layout (``ln_attn`` /
+``ln_mlp``, ``new_decoder_architecture``) runs the same forward with its
+key/value heads already broadcast. falcon-11B has the 40B layout with ``num_ln_in_parallel_attn`` 1: one ``input_layernorm`` feeds both
 sublayers, and 8 key/value heads serve its 32 query heads.
 """
 
@@ -75,6 +77,7 @@ class Layer(Layer):
         "post_attention_layernorm.input",
         description="The residual stream after the attention add",
         unavailable=lambda block: PARALLEL if parallel(block) else None,
+        in_place=True,
     )
     def layer_mid(self, value) -> Residual:
         return value
@@ -111,9 +114,10 @@ class Attention(Attention):
     # order. Keys and values are ``num_kv_heads`` wide (1 under multi-query).
     # The scores are the softmax's input after the mask, the pattern the
     # softmax itself (no alibi) or the dropout after it (alibi). The head
-    # outputs are the ``scores @ values`` product: heads first without alibi,
-    # flattened over batch and heads with it; both are served ``[batch, seq,
-    # heads, head_dim]`` as a view, so in-place edits land.
+    # outputs are the ``scores @ values`` product without alibi, and with it
+    # the merged heads (``_merge_heads``: nnsight cannot narrow the product,
+    # flattened over batch and heads, to an invoke's rows); both are served
+    # ``[batch, seq, heads, head_dim]`` as a view, so in-place edits land.
 
     def no_rotary(self) -> str | None:
         if alibi(self):
@@ -150,18 +154,15 @@ class Attention(Attention):
     def attention_scores(self, value) -> Pattern:
         return value
 
-    @EProperty(by_alibi("attn_output_1", "flatten_0"), description=Attention.attention_head_outputs.description, unavailable=needs_eager)
+    @EProperty(by_alibi("attn_output_1", "self__merge_heads_0"), description=Attention.attention_head_outputs.description, unavailable=needs_eager)
     def attention_head_outputs(self, value) -> HeadOutputs:
-        if alibi(self):  # [batch * num_heads, seq, head_dim] -> a [batch, seq, num_heads, head_dim] view
-            heads = self._module.num_heads
-            return value.view(-1, heads, *value.shape[1:]).transpose(1, 2)
+        if alibi(self):  # merged, [batch, seq, num_heads * head_dim]: viewed per head
+            return value.unflatten(-1, (self._module.num_heads, -1))
         return seq_first(value)
 
     @attention_head_outputs.postprocess
     def attention_head_outputs(self, value):
-        if alibi(self):
-            return value.transpose(1, 2).reshape(-1, *value.shape[1:2], value.shape[3])
-        return seq_first(value)
+        return value.flatten(-2) if alibi(self) else seq_first(value)
 
     @EProperty(
         by_alibi("F_softmax_0", "self_attention_dropout_0"),

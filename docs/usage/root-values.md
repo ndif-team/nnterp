@@ -36,7 +36,9 @@ model.num_layers, model.hidden_size, model.vocab_size, model.num_heads, model.nu
 
 Read them in forward order: `input_ids` / `attention_mask` / `input_size` first (they are
 the model's input), `token_embeddings` next, `lm_head.output`, `logits` and
-`next_token_probs` last.
+`next_token_probs` last. On a vision-language wrapper the ids are embedded before the tower runs,
+so in a trace `token_embeddings` comes after `vision.image_token_mask` and before the tower's
+values ([vision](vision.md)).
 
 ## `logits`
 
@@ -49,10 +51,10 @@ torch.equal(logits, raw)                          # False on Gemma-2, True on GP
 torch.allclose(logits, cap * torch.tanh(raw / cap))   # True
 ```
 
-`model.project_on_vocab(hidden)` ends with that step on any family: the softcap by default,
-and the family's own where the model does something else after the head (Cohere multiplies
-by `logit_scale`, Granite divides by `logits_scaling`), so `project_on_vocab` of the last
-block's `layer_output` equals `logits` everywhere ([methods.md](methods.md#project_on_vocabhidden)).
+`model.project_on_vocab(hidden)` follows the model's own path to its logits on any family:
+the softcap by default, and the family's own where the model does something else (Cohere
+multiplies by `logit_scale`, Granite divides by `logits_scaling`), so `project_on_vocab` of
+the last block's `layer_output` equals `logits` everywhere ([methods.md](methods.md#project_on_vocabhidden)).
 
 Assigning replaces the logits in the model's output, so `tracer.result.logits` is what you
 set:
@@ -68,10 +70,9 @@ with model.trace(prompt) as tracer:
 The embedding module's output, `[batch, seq, hidden_size]`: `model.embed_tokens.output` under
 its standard name. It includes whatever the embedding module does itself (Gemma's
 `sqrt(hidden_size)` scale is inside every Gemma family's `...TextScaledWordEmbedding`, XGLM's inside its
-scaled embedding) and nothing the model applies afterwards: GPT-2's positional `wpe` is
-added after it, BLOOM's `word_embeddings_layernorm` norms it, and Granite, HyperCLOVA X and
-Falcon-H1 multiply it by `embedding_multiplier`. So it is what enters the first block only
-where the model adds nothing; `layers[0].input` is that tensor on every family. Assign to
+scaled embedding) and nothing the model applies after it (positions, a norm, a multiplier,
+image features). So it is what enters the first block only where the model adds nothing;
+`layers[0].input` is that tensor on every family. Assign to
 replace the module's output:
 
 ```python

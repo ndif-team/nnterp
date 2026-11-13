@@ -212,6 +212,10 @@ is symmetric.
   local to the block it is made on; to patch what every borrower attends with, patch
   the source block's `k_proj` / `v_proj` output
   ([Borrowed keys and values](../reference/families.md#borrowed-keys-and-values)).
+- A `layer_output` patch is not the whole state where blocks pass more forward: Gemma-4
+  E2B/E4B (per-layer inputs, shared keys and values), DeepSeek-V4 (hash-routed blocks read the
+  token ids), GLM-5 and ZAYA (the block's second output). On GLM-5 and ZAYA patch
+  `layers[i].output` whole; [families.md](../reference/families.md) has the others.
 - On Granite (and GraniteMoE, Granite-SWA, HyperCLOVA X, ZAYA) a patch of
   `attention_output` or `mlp_output` at one position moves the other positions by
   rounding; in bf16 that can be a visible fraction of a small patch's effect, so load in

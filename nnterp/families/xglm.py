@@ -12,7 +12,10 @@ returns a bare tensor. The attention does its own arithmetic whatever
 ``attn_implementation`` says (the model has no other): queries scaled by
 ``1/sqrt(head_dim)`` as they are projected, queries, keys and values flattened to
 ``[batch * num_heads, seq, head_dim]`` for ``torch.bmm``, the mask added and clamped,
-softmax, dropout, ``bmm`` with the values; the interior needs no eager load.
+softmax, dropout, ``bmm`` with the values; the interior needs no eager load. The
+queries, scores, pattern and head outputs are read where the forward holds them
+batch first, so each invoke reads and edits its own rows; the keys and values, read
+after the cache update, are the whole batch's in every invoke.
 """
 
 from typing import TYPE_CHECKING
@@ -20,7 +23,7 @@ from typing import TYPE_CHECKING
 import torch
 from transformers.models.xglm.modeling_xglm import XGLMAttention, XGLMDecoderLayer
 
-from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values, seq_first
+from ..components import Attention, EProperty, HeadOutputs, Keys, Layer, Mlp, Pattern, Queries, Residual, Values
 
 if TYPE_CHECKING:
     from nnsight import Envoy
@@ -37,13 +40,18 @@ RENAME = {
 }
 
 
-def _softmax(envoy: "Envoy") -> str:
-    """The softmax the forward runs: an fp32 one cast back on an fp16 model, the plain one otherwise."""
-    fp16 = envoy._module.q_proj.weight.dtype == torch.float16
-    return f"source.nn_functional_softmax_{0 if fp16 else 1}.input"
+def _dropping(envoy: "Envoy") -> bool:
+    """Whether the attention dropout acts on this call: in training, with a dropout probability."""
+    return envoy._module.training and envoy._module.dropout > 0
 
 
-_softmax.__name__ = "nn_functional_softmax_0|nn_functional_softmax_1"
+def _pattern(envoy: "Envoy") -> str:
+    """The softmax's output viewed heads first, which the dropout leaves as it is outside training; in training the
+    dropout's output, which is only flat."""
+    return f"source.{'nn_functional_dropout_0' if _dropping(envoy) else 'attn_weights_reshaped_0'}.output"
+
+
+_pattern.__name__ = "attn_weights_reshaped_0|nn_functional_dropout_0"
 
 
 def _heads_first(envoy: "Envoy", value: torch.Tensor) -> torch.Tensor:
@@ -64,7 +72,7 @@ class Layer(Layer):
     read there; there is no ``mlp`` module, so ``mlp_input`` does not exist.
     """
 
-    @EProperty("final_layer_norm.input", description="The residual stream after the attention add")
+    @EProperty("final_layer_norm.input", description="The residual stream after the attention add", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 
@@ -80,24 +88,20 @@ class Attention(Attention):
     def no_rotary(self) -> str | None:
         return "no rotary embedding: XGLM adds sinusoidal absolute position embeddings to the stream"
 
-    # The queries, keys and values are the three ``reshape`` calls that flatten
-    # them for ``bmm`` (the keys and values after the cache update), viewed back
-    # to heads first; the scores are the softmax's input, masked; the pattern is
-    # the dropout's output; the head outputs are the ``bmm`` result viewed back to
-    # ``[batch, num_heads, seq, head_dim]``, served tokens first. Every read is a view
-    # of the tensor the forward holds, so in-place edits reach the model, and a
-    # write is reshaped back to the forward's layout.
+    # The forward flattens to ``[batch * num_heads, ...]`` for ``bmm``, which nnsight cannot narrow to an invoke's rows.
+    # Read points: the queries at the scaled projection, the scores at the clamp of the masked scores, the pattern at
+    # the softmax's output viewed heads first (the dropout's output, flat, in training), the head outputs at the
+    # transpose before the merge; the keys and values at the ``reshape`` after the cache update, the one operation that
+    # holds them with or without a cache. Each read is the forward's tensor or a view of it, so in-place edits land.
 
-    @EProperty(
-        "source.query_states_reshape_0.output",
-        description="The queries entering attention, already scaled by 1/sqrt(head_dim)",
-    )
+    @EProperty("source.query_states_0.output", description="The queries entering attention, already scaled by 1/sqrt(head_dim)")
     def attention_queries(self, value) -> Queries:
-        return _heads_first(self, value)
+        batch, seq, _ = value.shape
+        return value.view(batch, seq, self._module.num_heads, -1).transpose(1, 2)
 
     @attention_queries.postprocess
     def attention_queries(self, value):
-        return _flat(value)
+        return value.transpose(1, 2).flatten(2)
 
     @EProperty("source.key_states_reshape_0.output", description=Attention.attention_keys.description)
     def attention_keys(self, value) -> Keys:
@@ -115,32 +119,24 @@ class Attention(Attention):
     def attention_values(self, value):
         return _flat(value)
 
-    @EProperty(_softmax, description=Attention.attention_scores.description)
+    @EProperty("source.attn_weights_2.output", description=Attention.attention_scores.description)
     def attention_scores(self, value) -> Pattern:
-        return _heads_first(self, value)
+        """The masked scores clamped at the dtype's minimum, ``[batch, num_heads, query, key]``: the softmax's input, before
+        the forward flattens it."""
+        return value
 
-    @attention_scores.postprocess
-    def attention_scores(self, value):
-        return _flat(value)
-
-    @EProperty(
-        "source.nn_functional_dropout_0.output",
-        description="The attention pattern the values are mixed with",
-    )
+    @EProperty(_pattern, description="The attention pattern the values are mixed with")
     def attention_probabilities(self, value) -> Pattern:
-        return _heads_first(self, value)
+        return value if value.dim() == 4 else _heads_first(self, value)
 
     @attention_probabilities.postprocess
     def attention_probabilities(self, value):
-        return _flat(value)
+        return _flat(value) if _dropping(self) else value
 
-    @EProperty("source.torch_bmm_1.output", description=Attention.attention_head_outputs.description)
+    @EProperty("source.attn_output_2.output", description=Attention.attention_head_outputs.description)
     def attention_head_outputs(self, value) -> HeadOutputs:
-        return seq_first(_heads_first(self, value))
-
-    @attention_head_outputs.postprocess
-    def attention_head_outputs(self, value):
-        return _flat(seq_first(value))
+        """The ``bmm`` result viewed ``[batch, seq, num_heads, head_dim]``, before the heads are merged."""
+        return value
 
 
 class Mlp(Mlp):

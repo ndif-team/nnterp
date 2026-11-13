@@ -229,6 +229,16 @@ class DeepstackSuite:
         monkeypatch.setattr(layer, "support", lambda self: {**support(self), "deepstack_output": "needs an image"})
         super().test_values_match_their_annotations(model)
 
+    def test_support_is_what_this_family_expects(self, model, monkeypatch):
+        """The base check on every other value: ``deepstack_output`` is unavailable past the taps (every released
+        Qwen3-VL taps 3 of 28 or more blocks; the tiny checkpoint's 3 taps cover its 2), which
+        `test_deepstack_is_listed_and_available_on_the_first_blocks` checks."""
+        support = type(model).support
+        monkeypatch.setattr(type(model), "support", lambda self, *args, **kwargs: {
+            name: reason for name, reason in support(self, *args, **kwargs).items() if name != "deepstack_output"
+        })
+        super().test_support_is_what_this_family_expects(model)
+
     def deepstack_count(self, model):
         return min(len(model.config.vision_config.deepstack_visual_indexes), model.num_layers)
 

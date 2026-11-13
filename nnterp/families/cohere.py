@@ -8,18 +8,21 @@ contributions are the two modules' outputs and the base holds. There is no
 an optional per-head ``q_norm`` / ``k_norm`` (``use_qk_norm``) and an
 interleaved rotary.
 
-The model multiplies the head's output by ``config.logit_scale`` to make the
-logits, so the family defines ``project_on_vocab`` with that step, and the
-logit lens on the last block equals ``logits``.
+The causal-LM classes multiply the head's output by ``config.logit_scale`` to make
+the logits, and so does the family's ``project_on_vocab``; the Aya Vision and
+Cohere2-Vision wrappers do not, and neither does the lens on them. The logit lens
+on the last block equals ``logits``.
 
 Aya Vision 32B (``aya_vision`` with a ``cohere`` text config) loads through this
-family. It binds no tower keys, so that load has no ``vision`` or ``projector``.
+family, its text names under ``model.language_model``. The family binds no tower
+keys, so that load has no ``vision`` or ``projector``.
 """
 
 from typing import TYPE_CHECKING
 
 import torch
-from transformers.models.cohere.modeling_cohere import CohereAttention, CohereDecoderLayer, CohereMLP
+from transformers.models.cohere.modeling_cohere import CohereAttention, CohereDecoderLayer, CohereForCausalLM, CohereMLP
+from transformers.models.cohere2.modeling_cohere2 import Cohere2ForCausalLM
 
 from ..components import Attention, EProperty, Layer, Mlp, PARALLEL, Residual, unavailable
 
@@ -30,6 +33,10 @@ RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.norm": "norm",
+    # Aya Vision 32B's wrapper, loaded with task="image-text-to-text"
+    "model.language_model.embed_tokens": "embed_tokens",
+    "model.language_model.layers": "layers",
+    "model.language_model.norm": "norm",
 }
 
 
@@ -61,5 +68,9 @@ ENVOYS = {CohereDecoderLayer: Layer, CohereAttention: Attention, CohereMLP: Mlp}
 
 
 def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:
-    """The logit lens as the model makes its logits: the final norm, ``lm_head``, then times ``logit_scale``."""
-    return model.lm_head(model.norm(hidden)) * model.config.logit_scale
+    """The logit lens as the model makes its logits: the final norm, ``lm_head``, then times ``logit_scale`` on the
+    causal-LM classes (the vision wrappers return the head's output unscaled, though their text config sets a scale)."""
+    logits = model.lm_head(model.norm(hidden))
+    if isinstance(model._module, (CohereForCausalLM, Cohere2ForCausalLM)):
+        return logits * model.config.logit_scale
+    return logits

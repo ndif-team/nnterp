@@ -346,6 +346,10 @@ on a sandwich block (`gemma2`, `gemma3_text`, `afmoe`) the MLP's pre-norm is
 `[1, tokens, hidden_size]` on this engine, where transformers serves the flat rows OPT holds
 there (`FlatResidual`).
 
+A write to `layer_mid` replaces the stream between the sublayers as on transformers
+([residual-stream](residual-stream.md#writing-layer_mid)); the read is a private copy, so a
+read saved before the write keeps what it read.
+
 ### What is unavailable
 
 ```python

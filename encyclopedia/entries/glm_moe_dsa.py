@@ -2,10 +2,6 @@
 
 MODEL_TYPE = "glm_moe_dsa"
 TITLE = "GLM-5"
-SUBTITLE = (
-    "Latent attention over only the keys an indexer selects for each query, a selection each block returns "
-    "beside the stream for the next block to reuse, and a sigmoid-routed mixture with a shared expert after three dense blocks."
-)
 
 #: The public checkpoint the sizes, config and support() on the page are read from (meta build, config only).
 REFERENCE = "zai-org/GLM-5"
@@ -20,12 +16,6 @@ CHECKPOINTS = [
 #: Set by hues.py (lineage: GLM).
 PALETTE = {"hue": 128}
 QUIRKS = ["latent-attention", "sparse-attention", "interleaved-rotary", "mixture-of-experts", "dense-first-blocks"]
-
-#: Shapes, identities, read orders, the rotary order, the selection and the routing were run on the pinned tiny
-#: checkpoint (block 0 a mixture of 8 experts, top 2, block 1 dense; queries, keys and values 128 wide;
-#: index_topk 2048) and on the suite's copy with index_topk 2. Sizes, scales, the indexer layout, the routing
-#: settings and the tokenizer are the Hub configs', meta builds and tokenizers; no real weights were run
-#: (no checkpoint of the family is small enough).
 
 #: The sublayers in forward order; a block draws the MLP its ``mlp`` is (dense on blocks 0-2, a mixture after).
 BLOCK = {
@@ -66,153 +56,20 @@ BLOCK = {
     ],
 }
 
-STRIP = {
-    "embed": "A plain lookup: token_embeddings equals layers[0].input. The tokenizer prepends nothing.",
-    "layers": "Each block returns (hidden_states, topk_indices); layer_output is the first element. The checkpoints' "
-              "multi-token-prediction block (num_nextn_predict_layers) is not built: layers holds num_hidden_layers blocks.",
-    "head": "lm_head has its own weight (tie_word_embeddings is false); logits is lm_head.output.",
-}
+STRIP: dict[str, str] = {}
 
 NOTES = """
-## The block, in order
+## The heads share one rotary key, and `config.head_dim` is its width
 
-```
-a, sel = self_attn(input_layernorm(x), sel)   # sparse latent attention; sel is the key selection
-h      = x + a
-out    = h + mlp(post_attention_layernorm(h))  # dense on blocks 0-2, a mixture after
-return out, sel
-```
+The last `qk_rope_head_dim` dimensions of every head's key are one rotary key that all heads share.
+The config's `head_dim` is that width (64), which no served value has. Queries and keys
+are `model.qk_head_dim` wide and values `model.head_dim`.
 
-Llama's pre-norm block and Llama's names. The block returns `(hidden_states, topk_indices)`, and
-the attention `(attn_output, attn_weights, topk_indices)`: the key selection travels to the next
-block beside the stream. `layer_output` and `attention_output` are the first elements of these
-tuples, and the identity is the plain sum on a dense block and on a mixture block:
+## The expert weights sum to `routed_scaling_factor`
 
-```python
-with model.trace(prompt):
-    x = model.layers[1].input.save()
-    attn = model.layers[1].self_attn.attention_output.save()
-    mlp = model.layers[1].mlp.mlp_output.save()
-    out = model.layers[1].layer_output.save()
-
-torch.testing.assert_close(x + attn + mlp, out)
-```
-
-`config.mlp_layer_types` says which blocks are dense: blocks 0 to 2 on every GLM-5 checkpoint, a
-mixture on the other 75. The configs carry one multi-token-prediction block
-(`num_nextn_predict_layers` 1), stored after the last block; transformers does not build it, so
-`model.layers` has 78 blocks.
-
-## Latent attention: every head's key comes from one latent
-
-`attention_queries` and `attention_keys` are `qk_head_dim` wide (`qk_nope_head_dim +
-qk_rope_head_dim`, 192 + 64 = 256), `attention_values` and `attention_head_outputs` `head_dim`
-(`v_head_dim`, also 256). transformers sets the config's `head_dim` to `qk_rope_head_dim`, the
-rotary width (64), whatever the checkpoint's `config.json` says; no served value is that wide.
-Queries go through a compressed rank (`q_lora_rank` 2048): `q_a_proj`, `q_a_layernorm`, then
-`q_b_proj`, with no `q_proj` module. Keys and values are expanded for every head from one latent
-per token (`kv_lora_rank` 512), so `attention_keys` has `num_heads` (64) heads. The last 64
-dimensions of every head's key are one rotary key that all heads share. The scores are scaled by
-`qk_head_dim ** -0.5` (`self_attn.scaling`, 0.0625).
-
-```python
-attn = model.layers[1].self_attn
-with model.trace(prompt):
-    q = attn.attention_queries.save()          # [1, 64, seq, 256]
-    k = attn.attention_keys.save()             # [1, 64, seq, 256]
-    v = attn.attention_values.save()           # [1, 64, seq, 256]
-
-assert torch.equal(k[:, 0, :, -64:], k[:, 1, :, -64:])   # one rotary key
-```
-
-## The rotary part is served de-interleaved
-
-The attention rotates pair (2i, 2i + 1) of the projection into dimensions i and i + 32 of the
-rotary part on every checkpoint. The forward always does this, whatever `rope_interleave` says. `attention_queries[..., -64:]` and `attention_keys[..., -64:]` are in
-that rotate-half order: at position 0, where rotary is the identity, the served rotary part is
-`q_b_proj`'s even dimensions followed by its odd ones.
-
-```python
-with model.trace(prompt):
-    proj = attn.q_b_proj.output.save()
-with model.trace(prompt):
-    q = attn.attention_queries.save()
-
-rope = proj.view(1, -1, model.num_heads, model.qk_head_dim)[0, 0, 0, -64:]
-torch.testing.assert_close(q[0, 0, 0, -64:], torch.cat([rope[0::2], rope[1::2]]))
-```
-
-## Up to 2048 tokens the sparse attention is plain causal attention
-
-A lightning indexer (`self_attn.indexer`: `index_n_heads` 32 heads of `index_head_dim` 128)
-scores every key for every query and keeps the `index_topk` (2048) best. The attention sets the
-other keys' mask entries to the dtype's minimum before it calls the attention function. It does
-this under eager and under the default `sdpa` load alike, so both loads run the same sparse
-computation; the interior values need `attn_implementation="eager"`. `attention_scores` carry
-that mask, so a dropped key reads like a future one. `attention_probabilities` is the dense
-`[batch, num_heads, query, key]` pattern, exactly zero outside each query's selection.
-
-The selection is `self_attn.output[2]` on every block, int32 key indices of shape
-`[batch, query, min(index_topk, seq)]`; it has no standard name. On a prompt of up to 2048 tokens
-it lists every key, the causal mask removes the future ones, and the pattern is plain causal:
-row *t* has *t* + 1 nonzero entries.
-
-```python
-with model.trace(prompt):
-    probs = attn.attention_probabilities.save()
-    sel = attn.output[2].save()                # [1, seq, min(2048, seq)]
-
-rows = (probs[0, 0] != 0).sum(-1)
-assert torch.equal(rows, torch.arange(1, rows.numel() + 1))   # plain causal
-```
-
-A written pattern is used as written, so a write can give weight to a key the indexer dropped.
-The indexer runs under `torch.no_grad()`: no gradient reaches its projections, and the selection
-does not move with a gradient-based attribution.
-
-## The selection is shared between blocks on GLM-5.2 and GLM-5.3
-
-`config.indexer_types` marks each block `"full"` (it has an `indexer` and selects its own keys)
-or `"shared"` (no `indexer`; it reuses the selection the block before it returned). Every block is full on
-GLM-5 and GLM-5.1. On GLM-5.2 and GLM-5.3, 21 blocks are full (0, 1, 2, then every fourth from 6)
-and the 57 others shared: blocks 7 to 9 attend with block 6's selection.
-`skip_layers` hands the block after a skipped range no selection, which a shared block refuses
-with a `ValueError`: skip up to a full block or to the end.
-
-## The mixture: sigmoid scores, a selection bias, renormalized weights
-
-256 routed experts, 8 per token, and one shared expert every token runs through.
-`router_logits` are the logits before the sigmoid, and before the selection bias
-(`router.e_score_correction_bias`). The bias is added to the sigmoids only to choose; `n_group`
-and `topk_group` are 1, so every expert is a candidate. `expert_weights` are the chosen experts'
-sigmoids without the bias, renormalized to sum to one (`norm_topk_prob`) and multiplied by
-`routed_scaling_factor`, so they sum to 2.5 at every token.
-
-```python
-moe = model.layers[3].mlp
-with model.trace(prompt):
-    logits = moe.router_logits.save()
-    w = moe.expert_weights.save()
-    idx = moe.expert_indices.save()
-    routed = moe.routed_output.save()
-    shared = moe.shared_expert_output.save()
-    out = moe.mlp_output.save()
-
-chosen = logits.sigmoid().gather(-1, idx)
-scale = model.config.routed_scaling_factor
-torch.testing.assert_close(w, chosen / chosen.sum(-1, keepdim=True) * scale)
-torch.testing.assert_close(routed + shared, out)
-```
-
-The shared expert runs after the routed ones, so `shared_expert_output` is read after
-`routed_output`. Ablating an expert is zeroing the weight of every slot that chose it; the other
-slots keep their weights, so the token's weights then sum to less than 2.5:
-
-```python
-with model.trace(prompt):
-    moe.expert_weights = moe.expert_weights.masked_fill(moe.expert_indices == 3, 0)
-    ablated = model.logits.save()
-```
-
-Blocks 0 to 2 have a dense MLP: `support()` reports every mixture value missing there.
+The router picks experts by the sigmoid of `router_logits` plus a selection bias,
+`router.e_score_correction_bias`, so the top `router_logits` are not always the chosen experts.
+`expert_weights` are the chosen sigmoids without the bias, renormalized and multiplied by
+`routed_scaling_factor`, so a token's weights sum to 2.5. A shared expert runs on every token inside
+`mlp_output`, which is `routed_output + shared_expert_output`.
 """

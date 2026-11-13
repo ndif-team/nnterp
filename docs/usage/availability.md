@@ -266,10 +266,14 @@ reads.sort(key=lambda read: model.rank(*read))     # token_embeddings, mlp_outpu
 - **Unavailable values are not ranked.** Loaded with `sdpa`, the scores and the pattern
   are absent from `order(i)`, and `rank` raises `Unavailable` with `support()`'s reason;
   a name that is no value at all raises `KeyError`.
-- **Measured, then kept.** The first call runs one probe `model.scan` (meta tensors, no
-  weights or dispatch needed; `nnterp.order.probe` says how). A forward that cannot run on
-  meta tensors (Granite, OPT, a grouped-mm mixture of experts in float32) is probed with a
-  `trace` instead, which loads the weights. The result is measured once and kept on the
+- **Measured, then kept.** On a model not yet dispatched the first call runs one probe
+  `model.scan` (fake tensors, no weights or dispatch needed; `nnterp.order.probe` says how).
+  A forward that cannot run on fake tensors (Granite, OPT, a grouped-mm mixture of experts
+  in float32) is probed with a `trace` instead, which loads the weights. A dispatched model
+  is probed with a `trace` (one short forward): a scan would run its real modules on fake
+  tensors, and a module that caches what it computes would keep them (a `longrope` rotary
+  embedding's long frequencies: Phi-3-mini-128k, Phi-3.5, Phi-4-mini), breaking every later
+  trace. The result is measured once and kept on the
   model, so set `nnterp.route_kernels` and `nnterp.chunk_per_token` before the model is
   dispatched, traced or measured: the same rule kernel routing already has for traces
   (`sourced` envoys instrument at dispatch). With torch kernels routed, a DeltaNet block

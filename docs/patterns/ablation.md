@@ -104,6 +104,9 @@ Negative indices count from the end. A skip must cover every row of a forward, s
 this goes in a trace of its own rather than in one invoke of a batched trace (see
 Gotchas).
 
+On Gemma-4 and on Qwen3-VL with an image a skip does not remove only the blocks' terms
+([methods](../usage/methods.md#skip_layersstart-end-skip_withnone)).
+
 ### One head
 
 The per-head outputs before the output projection are

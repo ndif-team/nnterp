@@ -36,7 +36,7 @@ class Layer(Layer):
 
     attention_norm_output = unavailable(POST_NORM_ATTENTION)
 
-    @EProperty("mlp.input", description="The residual stream after the attention add")
+    @EProperty("mlp.input", description="The residual stream after the attention add", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 

@@ -200,7 +200,9 @@ class Moe(Mlp):
         """The experts each token is routed to, ``[batch, seq, top_k]``, int64.
 
         Write an index to reroute that slot to another expert; its weight
-        stays what the router gave the expert it chose.
+        stays what the router gave the expert it chose. Pick an expert the
+        token's other slots do not use: JetMoE's forward raises on a repeated
+        one, and the other families run that expert once per slot.
         """
         return value
 

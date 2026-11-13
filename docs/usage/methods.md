@@ -3,7 +3,7 @@ title: Methods over the values
 one_liner: "`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens` and `probs_to_dict`: the common operations written once against the standard values."
 tags: [usage, skip_layers, steer, project_on_vocab, logit-lens, topk]
 related: [docs/usage/residual-stream.md, docs/usage/root-values.md, docs/usage/vocabulary.md]
-sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py]
+sources: [nnterp/standardized.py, nnterp/components/layer.py, nnterp/families/deepseek_v4.py, nnterp/families/opt.py, nnterp/families/cohere.py]
 ---
 
 # Methods over the values
@@ -20,7 +20,7 @@ trace; two work on saved tensors outside.
 | --- | --- | --- |
 | `skip_layers(start, end, skip_with=None)` | inside a trace | blocks `start..end` inclusive do not run |
 | `steer(layers, vector, factor=1.0, token_positions=None, batch_index=None)` | inside a trace | adds `factor * vector` to `layer_output` in place |
-| `project_on_vocab(hidden)` | inside on a live value, or outside on a saved one | final norm, `lm_head`, then the model's own step after the head (softcap or scale) |
+| `project_on_vocab(hidden)` | inside on a live value, or outside on a saved one | the model's own path from the stream to its logits: the final norm, `lm_head`, and any step the model takes around them (a softcap, a scale, a projection) |
 | `get_topk_closest_tokens(hidden, k=5)` | either | `project_on_vocab` then softmax then top-k per position |
 | `probs_to_dict(probs, k=5)` | either | one `[vocab_size]` distribution to `{token: probability}` |
 
@@ -68,8 +68,12 @@ makes block 1 start from zeros.
 Each skipped block gets `Layer.skip_with(hidden)`, which calls nnsight's `.skip()` with
 `hidden` packed the way that family's block returns it: the tensor alone, or `(hidden, None)`
 on a family whose `Layer.returns_tuple` is `True` (GPT-J, GPT-Neo, BLOOM, MPT, Falcon), since the
-second element is the attention weights nothing downstream reads. Call `skip_with` directly
-to skip one block with a stream of your own:
+second element is the attention weights nothing downstream reads. Where the second element is
+state the next block reads, a skipped block hands on the state it received, as it hands on the
+stream: ZAYA's router state, and GLM-5's key selection, so a shared block after the span reuses
+the selection of the last full block before it (a span from block 0 has none to hand on, and a
+shared block after it raises). Call `skip_with` directly to skip one block with a stream of your
+own:
 
 ```python
 with model.trace(prompt):
@@ -79,6 +83,14 @@ with model.trace(prompt):
 Skipping needs the block's `input` to be read, so `skip_layers` reads it; a second read of
 `layers[start].input` after the call is out of order. Read `layers[start - 1].layer_output`
 before the call instead, as above.
+
+On two families a skip does not remove only the blocks' terms:
+
+- **Gemma-4** ends each block with `hidden_states *= layer_scalar`, which scales the incoming
+  stream too; `layers[i].skip_with(layers[i].layer_input * layers[i]._module.layer_scalar)`
+  removes the block's terms alone.
+- **Qwen3-VL** (and Qwen3-VL-MoE), with an image: the skipped blocks' `deepstack_output` is
+  still added at the image positions; zero `layers[k].deepstack_output` to skip it too.
 
 ## `steer(layers, vector, factor=1.0, token_positions=None, batch_index=None)`
 
@@ -109,12 +121,16 @@ block, which differs by orders of magnitude between models and changes with dept
 
 ## `project_on_vocab(hidden)`
 
-Logits for a residual-stream tensor: `lm_head(norm(hidden))`, then whatever the model does
-to the head's output to make its logits. That is the softcap when the text config sets
-`final_logit_softcapping` (Gemma-2), and nothing otherwise, unless the family defines its
-own `project_on_vocab` (a `StandardizedCapability`, bound in the root's place): Cohere
-multiplies by `config.logit_scale`, Granite divides by `config.logits_scaling`. Applied to
-the last block's `layer_output` it equals `logits` exactly:
+Logits for a residual-stream tensor, by the model's own path from the last block's output
+to its logits. The plain case is `lm_head(norm(hidden))`, then the softcap when the text
+config sets `final_logit_softcapping` (Gemma-2). A family whose model takes another path
+defines its own `project_on_vocab` (a `StandardizedCapability`, bound in the root's place):
+Cohere multiplies by `config.logit_scale` (on `CohereForCausalLM` and `Cohere2ForCausalLM`;
+the Aya Vision and Cohere2-Vision wrappers return the head's output unscaled, and the lens
+follows), Granite divides by `config.logits_scaling`, ZAYA casts its float32 stream to the
+final norm's dtype first, and OPT applies `project_out` where the decoder has it (OPT-350m,
+which has no final norm). Applied to the last block's `layer_output` it equals `logits`
+exactly:
 
 ```python
 with model.trace(prompt):
@@ -144,6 +160,11 @@ take it as it is:
 - **`steer`** adds in place on `layer_output[rows, cols]`, `[..., streams, hidden_size]`: a
   `[hidden_size]` vector broadcasts over the streams, adding `factor * vector` to every stream
   (and so to their mean); a `[streams, hidden_size]` vector steers each stream by its own row.
+  Each sublayer and the readout (`hc_head`) read a weighted sum of the streams with weights that
+  need not sum to one, so a vector added to every stream reaches them multiplied by that sum
+  (between 0 and `hc_mult`): a factor tuned on a
+  one-stream family does not carry over. Scale it against the collapsed input the next sublayer
+  reads (`layers[i + 1].attn_hc.output[2]`).
 - **`project_on_vocab`** is the family's: it collapses the streams with the model's own
   `hc_head` (a learned, content-dependent weighting), then `norm` and `lm_head`, which is
   how the model makes its logits, so on the last block it equals `logits` exactly. It
@@ -207,9 +228,10 @@ on saved tensors, is the plain form.
   `layers[i].mlp` is readable for a skipped `i` (nnsight docs/usage/skip.md).
 - **`steer` layers must be ascending**, and the add happens on `layer_output`: to steer
   the stream *entering* block `i`, steer block `i - 1`.
-- **`project_on_vocab` uses the model's `norm` and `lm_head`**, so on a checkpoint whose
-  head is tied, softcapped or scaled it is still exact; a hand-rolled `lm_head(hidden)` without
-  the norm and the model's step after the head is not the model's prediction.
+- **`project_on_vocab` runs the model's own modules on the model's path**, so on a checkpoint
+  whose head is tied, softcapped, scaled or preceded by a projection it is still exact; a
+  hand-rolled `lm_head(hidden)` without the norm and the model's other steps is not the
+  model's prediction.
 - **Top-k on a tiny random checkpoint is noise**; the shapes are what to check there.
 - **On DeepSeek-V4 a hand-rolled `lm_head(norm(layer_output))` returns `[batch, seq, streams,
   vocab]` without an error**: per-stream logits, none of which is the model's readout.

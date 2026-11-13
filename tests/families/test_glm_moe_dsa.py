@@ -1,13 +1,12 @@
 """GLM-5, end to end: latent attention with DeepSeek Sparse Attention, the selection shared across blocks."""
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, HEAD_WEIGHTS, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, random_weights, cached_snapshot, built
 
 from nnterp import StandardizedTransformer
 from nnterp.families import glm_moe_dsa
@@ -17,7 +16,7 @@ REPO = "hf-tiny-v2/tiny-random-GlmMoeDsaForCausalLM"
 
 def _patched_checkpoint(repo=REPO, **changes):
     """The tiny checkpoint with ``changes`` written into its config: the same weights, symlinked."""
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="glm-moe-dsa-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -76,7 +75,7 @@ class TestGlmMoeDsa(FamilySuite):
     FAMILY = glm_moe_dsa
     NATIVE = LLAMA_ROWS
     KV_HEADS_EXPANDED = True  # latent attention projects keys and values for every head
-    EXPECTED_UNAVAILABLE = {HEAD_WEIGHTS: "latent attention"}
+    EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "latent attention"}
 
     def test_latent_attention_widths(self, model):
         assert model.qk_head_dim == model.config.qk_nope_head_dim + model.config.qk_rope_head_dim
@@ -100,11 +99,11 @@ class TestGlmMoeDsa(FamilySuite):
 class TestGlmMoeDsaSparse(FamilySuite):
     """The same weights with ``index_topk = 2``: the suite's three-token prompt then drops a key from the last row."""
 
-    REPO = _patched_checkpoint(index_topk=2)
+    REPO = built(_patched_checkpoint, index_topk=2)
     FAMILY = glm_moe_dsa
     NATIVE = LLAMA_ROWS
     KV_HEADS_EXPANDED = True
-    EXPECTED_UNAVAILABLE = {HEAD_WEIGHTS: "latent attention"}
+    EXPECTED_UNAVAILABLE = {"self_attn.value_weight": "latent attention"}
 
     def test_pattern_is_zero_outside_the_selection(self, model):
         assert_pattern_is_zero_outside_the_selection(model, sparse=True)
@@ -148,8 +147,21 @@ class TestGlmMoeDsaShared:
             torch.testing.assert_close(inp + attn + mlp, out)
 
     def test_skipping_into_a_shared_block_is_refused(self, model):
-        """A skipped full block selects nothing, and the shared block after it has no selection to reuse."""
+        """A span from block 0 has no selection to hand on, and the shared block after it has none to reuse."""
         with pytest.raises(Exception, match="Shared DSA layers require top-k indices"):
             with model.trace(PROMPT):
                 model.skip_layers(0, 0)
                 model.logits.save()
+
+
+
+def test_a_skipped_block_hands_on_the_selection_it_received():
+    """Blocks ``full, shared, shared``: skipping block 1 hands block 2 block 0's selection, which it reuses (random weights)."""
+    model = random_weights(REPO, num_hidden_layers=3, index_topk=2, indexer_types=["full", "shared", "shared"],
+                           layer_types=["indexed_attention"] * 3, mlp_layer_types=["sparse", "dense", "dense"])
+    with model.trace(PROMPT):
+        selected = model.layers[0].self_attn.indexer.output.save()
+        model.skip_layers(1, 1)
+        reused = model.layers[2].self_attn.output[2].save()
+        model.logits.save()
+    assert torch.equal(reused, selected)

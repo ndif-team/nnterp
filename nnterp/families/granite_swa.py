@@ -9,10 +9,12 @@ the eager forward takes the softmax over the real keys, mixes the values with it
 and then scales each query's head output by ``sigmoid(logsumexp(scores) - sink)``,
 the share of the mass a softmax with the sink as one more logit would leave on the
 real keys. So ``attention_probabilities`` is that softmax (``F_dropout_0``), whose
-rows sum to one, ``attention_scores`` its input, and ``attention_head_outputs``
-the interface's output, after the sink scale. The eager forward spells its
-softmax and dropout ``F.softmax`` / ``F.dropout``, so both are redefined on those
-operations.
+rows sum to one, and ``attention_head_outputs`` the interface's output, after the
+sink scale. ``attention_scores`` is the masked scores both are computed from, the
+binding before the ``logsumexp`` (``attn_weights_1``, as on GPT-OSS), so a write
+to them reaches the pattern and the share alike; it exists when a mask is passed,
+as it is on every eager call. The eager forward spells its softmax and dropout
+``F.softmax`` / ``F.dropout``, so the pattern is redefined on that operation.
 """
 
 from transformers.models.granite_swa.modeling_granite_swa import GraniteSWAAttention, GraniteSWADecoderLayer, GraniteSWAMLP
@@ -52,8 +54,9 @@ class Attention(GraniteAttention):
         rotary = next(rotary for rotary in rotaries if rotary._module.config.rope_parameters["rope_theta"] == theta)
         return rotary(x, position_ids)
 
-    @EProperty(f"source.{INTERFACE}.source.F_softmax_0.input", description=GraniteAttention.attention_scores.description, unavailable=interface_reason)
+    @EProperty(f"source.{INTERFACE}.source.attn_weights_1.output", description=GraniteAttention.attention_scores.description, unavailable=interface_reason)
     def attention_scores(self, value) -> Pattern:
+        """The masked scores, before the sink's share and the softmax are both computed from them."""
         return value
 
     @EProperty(f"source.{INTERFACE}.source.F_dropout_0.output", description=GraniteAttention.attention_probabilities.description, unavailable=interface_reason)

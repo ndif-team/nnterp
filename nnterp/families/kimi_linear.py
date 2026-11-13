@@ -41,7 +41,7 @@ from transformers.models.kimi_linear.modeling_kimi_linear import (
     KimiLinearMoE,
 )
 
-from ..components import Attention, ChannelGates, EProperty, Layer, LinearAttention, Mlp, Moe, needs_torch_kernels
+from ..components import Attention, ChannelGates, EProperty, Layer, LinearAttention, Mlp, Moe, Unavailable, needs_torch_kernels
 from ..components.recurrent import kernel
 from .deepseek_v2 import LATENT_VALUES, head_dim, qk_head_dim  # noqa: F401  the same latent attention: the same sizes
 
@@ -74,8 +74,8 @@ class Attention(Attention):
     def no_rotary(self) -> str | None:
         return "no rotary embedding: Kimi-Linear's latent attention blocks use no position encoding, its Kimi Delta Attention blocks carry position"
 
-    def no_head_weights(self) -> str | None:
-        return LATENT_VALUES
+    def value_weight(self, kv_head):
+        raise Unavailable(f"{self.path}.value_weight is not available: {LATENT_VALUES}")
 
 
 class LinearAttention(LinearAttention):

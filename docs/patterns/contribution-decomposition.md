@@ -206,6 +206,7 @@ the heads:
 | families | what `per_head.sum(2)` equals |
 | --- | --- |
 | Granite, GraniteMoE(-Shared, -Hybrid), Granite-SWA, GraniteMoE-SWA | `projection.output`; `attention_output` is that times `config.residual_multiplier` (0.22 on granite-3.0-1b-a400m) |
+| Falcon-H1 | `projection.output`; `attention_output` is that times `config.attention_out_multiplier` (0.0375 on the pinned tiny checkpoint, 1.0 on Falcon-H1-Tiny-90M); the MLP's output likewise reaches the stream times `mlp_multipliers[1]`, so a split of `mlp_neurons` through `down_proj` is `mlp_output` divided by it |
 | the post-norm families: Gemma-2/3/4, OLMo-2/3, EXAONE-4, FlexOlmo, GLM-4, OLMo-Hybrid's attention blocks; HyperCLOVA X (its post-norm, then `residual_multiplier`) | `projection.output`, the pre-norm output; the norm is not linear, so the split is of that, not of the contribution |
 | Qwen3-Next, Qwen3.5, Qwen3.5-MoE (a sigmoid gate from `q_proj`), Laguna (a softplus gate, `g_proj`), AFMoE (a sigmoid gate, `gate_proj`, then a post-norm) | neither: the gate multiplies the heads after `attention_head_outputs`. Split `attention_premix` instead, the gated heads the projection reads; its per-head sum is `projection.output` |
 | BitNet (`attn_sub_norm` before `o_proj`) | neither: the norm mixes the heads, so `attention_premix` is a split of the normed tensor |

@@ -13,13 +13,17 @@ The MLP path runs on the flattened ``[batch * seq, ...]`` stream, so
 The queries are scaled by ``head_dim**-0.5`` at ``q_proj``'s output, so
 ``attention_queries`` are pre-scaled. ``facebook/opt-350m`` sets
 ``do_layer_norm_before`` false (norms after the adds, so that identity does not
-hold), has no final norm (no ``norm``; ``project_on_vocab`` raises
-``AttributeError``) and wraps the stack in ``project_in`` / ``project_out``
+hold), has no final norm and wraps the stack in ``project_in`` / ``project_out``
 (512 <-> 1024): ``token_embeddings`` is 512 wide and ``layers[0].input`` 1024.
+With no final norm there is no ``norm`` module (reading ``model.norm`` raises
+``AttributeError``, as for any module the model lacks) and ``final_norm_output``
+is unavailable ("no norm module on this model"). The decoder makes its logits as
+``lm_head(project_out(h))`` there, and `project_on_vocab` follows it.
 """
 
 from typing import TYPE_CHECKING
 
+import torch
 from transformers.models.opt.modeling_opt import OPTAttention, OPTDecoderLayer
 
 from ..components import POST_NORM_ATTENTION, POST_NORM_MLP, Attention, EProperty, FlatResidual, Layer, Mlp, Residual
@@ -62,14 +66,10 @@ class Layer(Layer):
     @EProperty(
         lambda block: "final_layer_norm.input" if norms_before(block) else "input_layernorm.output",
         description="The residual stream after the attention add, flattened to [batch * seq, hidden]",
+        in_place=True,
     )
     def layer_mid(self, value) -> FlatResidual:
-        return value.reshape(-1, value.shape[-1])  # a view: the block's own flat rows, or the norm's [batch, seq, hidden] output
-
-    @layer_mid.postprocess
-    def layer_mid(self, value):
-        current = self.final_layer_norm.input if norms_before(self) else self.input_layernorm.output
-        return value.view(current.shape)
+        return value.reshape(-1, value.shape[-1])  # a view: the block's own flat rows, or the norm's [batch, seq, hidden] output; a write lands in it
 
     @EProperty(
         "final_layer_norm.output", description="The normed stream entering the feed-forward path, flattened to [batch * seq, hidden]",
@@ -100,3 +100,22 @@ ENVOYS = {OPTDecoderLayer: Layer, OPTAttention: Attention}
 def intermediate_size(model: "StandardizedTransformer") -> int:
     """The width of the block's ``fc1``/``fc2`` path is ``ffn_dim``."""
     return model.config.ffn_dim
+
+
+# -- the logit lens ------------------------------------------------------------------
+
+def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:
+    """The logit lens as the decoder makes its logits: its final norm where it has one, ``project_out`` where it has one, ``lm_head``.
+
+    transformers builds the final norm when ``do_layer_norm_before`` is true and
+    ``project_out`` when ``word_embed_proj_dim`` differs from ``hidden_size``, and
+    the decoder applies each it has, in that order. Every released OPT but the
+    350m has the norm and no projection; the 350m has the projection and no norm,
+    so its lens is ``lm_head(project_out(h))``.
+    """
+    decoder = model.model.decoder
+    if decoder.final_layer_norm is not None:
+        hidden = decoder.final_layer_norm(hidden)
+    if decoder.project_out is not None:
+        hidden = decoder.project_out(hidden)
+    return model.lm_head(hidden)

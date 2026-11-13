@@ -63,6 +63,7 @@ class TestFalconH1GateInKernel(TestFalconH1):
 
     REPO = "hf-tiny-v2/tiny-random-FalconH1ForCausalLM"
     LOAD_KWARGS = {}
+    test_unrouted_without_mamba_ssm_reads_inside_the_dispatched_kernels = None  # the kernel binding is the family's: run on TestFalconH1
 
     def test_contributions_are_the_scaled_outputs(self, model):
         assert model.config.ssm_out_multiplier == 1 and not model.config.mamba_rms_norm

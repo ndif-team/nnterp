@@ -41,6 +41,11 @@ its index **0**, an alias of expert 0, so usage counts mask ``expert_weights == 
 The router picks on its softmax plus ``balancing_biases``; on ZAYA1-8B and
 ZAYA1-74B-preview (``num_experts_per_tok`` 1) the skip class's bias is -1 and some
 expert's is positive on every block, so skip is never chosen there; the tiny picks it.
+
+The stream is float32 whatever the load dtype (the model keeps ZAYA's
+``residual_in_fp32`` path), so ``layer_output`` is float32 on a bfloat16 load. The
+model casts it to the final norm's dtype before the norm, and `project_on_vocab`
+does the same.
 """
 
 from typing import TYPE_CHECKING
@@ -50,7 +55,7 @@ from nnsight.intervention.envoy import Envoy
 from transformers.models.zaya.modeling_zaya import ZayaAttention, ZayaDecoderLayer, ZayaSparseMoeBlock
 
 from ..components import (
-    Attention, EProperty, Layer, Moe, Residual, RouterLogits, TokenEProperty, first_tensor, rewrap,
+    Attention, EProperty, Layer, Moe, Residual, RouterLogits, TokenEProperty, Unavailable, first_tensor, rewrap,
 )
 
 if TYPE_CHECKING:
@@ -90,6 +95,21 @@ class Layer(Layer):
 
     returns_tuple = True
 
+    def skip_with(self, hidden):
+        """Skip this block, handing on ``hidden`` and the router state the block received, which the next block's router reads."""
+        self.skip((hidden, self.inputs[0][1]))
+
+    @EProperty("post_attention_residual_scale.output", description="The residual stream after the attention's merge")
+    def layer_mid(self, value) -> Residual:
+        """The stream between the sublayers: the attention's merge's output, float32 whatever the load dtype.
+
+        The block binds it as ``residual`` and calls the MLP's norm on a copy
+        cast to the norm's dtype (bfloat16 on a bfloat16 load), so the norm's
+        input is not the stream there. This is the stream itself: a write,
+        assigned or in place, reaches the norm and the merge after the MLP.
+        """
+        return value
+
 
 class Attention(Attention):
     """ZAYA's attention: the shared eager forward; the block adds its output shifted and scaled by ``post_attention_residual_scale``."""
@@ -99,10 +119,11 @@ class Attention(Attention):
         """The envoy of the merge that follows this sublayer, its sibling in the block."""
         return self.parent.post_attention_residual_scale
 
-    def no_head_weights(self) -> str | None:
-        return (
-            "compressed convolutional attention: half of each value head is the previous token's projection "
-            "(v_proj_delayed), so no slice of one projection maps a position's input to its values"
+    def value_weight(self, kv_head):
+        raise Unavailable(
+            f"{self.path}.value_weight is not available: compressed convolutional attention: the first half of the "
+            "key/value heads are v_proj_current's projection of a position's input and the second half v_proj_delayed's "
+            "projection of the previous position's input"
         )
 
     @EProperty(key="output", description="What the attention adds to the residual stream: its output plus the merge's hidden_states_bias, times its hidden_states_scale")
@@ -154,3 +175,13 @@ ENVOYS = {ZayaDecoderLayer: Layer, ZayaAttention: Attention, ZayaSparseMoeBlock:
 def intermediate_size(model: "StandardizedTransformer") -> int:
     """The MLP width is one expert's, ``moe_intermediate_size``: every block is a mixture and the config has no dense width."""
     return model.config.moe_intermediate_size
+
+
+def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:
+    """The logit lens as the model makes its logits: the stream cast to the final norm's dtype, the norm, ``lm_head``.
+
+    The float32 stream reaches the norm in the norm's own dtype (bfloat16 on a
+    bfloat16 load), as in the model; without the cast the norm would hand
+    ``lm_head`` float32 rows its bfloat16 weight cannot multiply.
+    """
+    return model.lm_head(model.norm(hidden.to(model.norm.weight.dtype)))

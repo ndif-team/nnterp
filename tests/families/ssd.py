@@ -301,6 +301,50 @@ class StateSpaceChecks:
         finally:
             route_kernels(self.FAMILY, "torch")
 
+    def test_unrouted_without_mamba_ssm_reads_inside_the_dispatched_kernels(self):
+        """Without ``mamba_ssm`` an unrouted forward calls transformers' kernel dispatcher, which calls the pure-torch
+        kernels: `support` lists ``states`` and ``state_output``, and a prompt's ``states`` and a decode step's
+        ``state_output`` (both read inside a kernel) are a routed run's, bit for bit. In a process of its own, where
+        ``mamba_ssm`` cannot be imported, so transformers binds its dispatcher at import."""
+        import json
+        import subprocess
+        import sys
+
+        code = f"""
+import sys
+sys.modules["mamba_ssm"] = None
+import json, nnsight, torch
+from nnterp import StandardizedTransformer, chunk_per_token, route_kernels
+
+def read(model):
+    mix = model.layers[{self.SSD_BLOCK}].linear_attn
+    chunk_per_token(model)
+    support = model.support(layer={self.SSD_BLOCK})
+    with model.trace({PROMPT!r}):
+        states = mix.states.save()
+    chunk_per_token(model, False)
+    steps = []
+    with model.generate({PROMPT!r}, max_new_tokens=2, min_new_tokens=2, do_sample=False) as tracer:
+        for _ in tracer.iter[:2]:
+            steps.append(mix.state_output.save())
+    return support, [states, *steps]
+
+load = lambda: StandardizedTransformer({self.REPO!r}, dispatch=True, attn_implementation="eager", **{dict(self.LOAD_KWARGS, device="cpu")!r})
+model = load()
+support, unrouted = read(model)
+route_kernels(model.family, "torch")
+_, routed = read(load())
+print(json.dumps({{
+    "support": [support["linear_attn.states"], support["linear_attn.state_output"]],
+    "equal": [torch.equal(a, b) for a, b in zip(unrouted, routed)],
+    "decode": [tuple(t.shape) for t in unrouted[1:]],
+}}))
+"""
+        run = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert run.returncode == 0, run.stderr[-2000:]
+        out = json.loads(run.stdout.strip().splitlines()[-1])
+        assert out["support"] == [None, None] and out["equal"] == [True, True, True], out
+
     def test_ssd_values_listed_in_the_repr(self, model):
         text = repr(self.ssd(model))
         for name in LINEAR:

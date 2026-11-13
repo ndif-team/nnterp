@@ -1,12 +1,11 @@
 """MiniMax-M2, end to end: Llama's block, whole-projection q/k norms, a mixture of experts in every block."""
 
-import glob
 import os
 import shutil
 import tempfile
 
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, cached_snapshot, built
 
 from nnterp.families import minimax_m2
 
@@ -36,7 +35,7 @@ def _grouped_checkpoint(repo="hf-tiny-v2/tiny-random-MiniMaxM2ForCausalLM"):
     """
     from transformers import AutoConfig, AutoModelForCausalLM
 
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="minimax-m2-grouped-")
     config = AutoConfig.from_pretrained(snapshot)
     config.num_attention_heads, config.num_key_value_heads, config.head_dim = 4, 2, 16
@@ -52,7 +51,7 @@ def _grouped_checkpoint(repo="hf-tiny-v2/tiny-random-MiniMaxM2ForCausalLM"):
 class TestMiniMaxM2Grouped(FamilySuite):
     """The released models' attention shape: grouped kv heads, a ``head_dim`` of its own, a partial rotary."""
 
-    REPO = _grouped_checkpoint()
+    REPO = built(_grouped_checkpoint)
     FAMILY = minimax_m2
     NATIVE = LLAMA_ROWS
 

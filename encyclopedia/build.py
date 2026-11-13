@@ -8,8 +8,8 @@ family module is imported, its reference checkpoint is built on the ``meta``
 device (config only, no weights), and the page reads ``support()`` under an
 eager load and under the default one, every standard value's key, layout and
 description, the sizes, the aliases and the native paths. What a person knows
-comes from ``entries/<model_type>.py``: the title and subtitle, the block schema
-the visualization draws, the quirk tags, the palette and the notes. The output
+comes from ``entries/<model_type>.py``: the title, the block schema the
+visualization draws, the quirk tags, the palette and the notes. The output
 is static HTML under ``site/``; ``static/`` is copied beside it.
 
 A page has one selector over the entry's checkpoints, and every part that
@@ -890,9 +890,9 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
         named = [h for h in block_hosts if h in hosts]
         assert sorted(named) == sorted(specs[k]["host"] for k in shape if not is_native(specs[k])), \
             f"{owner}: block {i} has {named} but BLOCK draws {[keys[k] for k in shape]} on it"
-        # every norm drawn on a block is one of its children, by native name or alias
+        # every norm drawn on a block, and a merge named, is one of its children, by native name or alias
         for k in shape:
-            for where in ("pre_norm", "post_norm", "stream_norm"):
+            for where in ("pre_norm", "post_norm", "stream_norm", "merge"):
                 norm_name = specs[k].get(where)
                 assert not norm_name or "block_children" not in info or norm_name in info["block_children"][i], \
                     f"{owner}: BLOCK's {keys[k]!r} names {where} {norm_name!r}; block {i} has no such module"
@@ -962,6 +962,8 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             sub["part_order"] = spec["part_order"]
         if key != host:
             sub["key"] = key
+        if spec.get("merge"):
+            sub["merge"] = spec["merge"]
         if spec.get("parallel_with_next"):
             sub["parallel_with_next"] = True
         if native:
@@ -1053,8 +1055,10 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
                 f"A native module under its own name. Its output is what `{reads}` reads: "
                 f"`{base}.{reads}.input`.",
                 extra=spec.get("pre_norm_note"))
-        # what the sublayer is called with, where the block serves it (mlp_input): the edge into the box
-        called = boundary(("mlp_input",), f"{reads}.input", drawing)
+        # what the sublayer is called with, where the block serves it (mlp_input): the edge into the box; read at the
+        # pre-norm's output where the block calls more than one module with it (GraniteMoE-Shared's two experts)
+        called = boundary(("mlp_input",), f"{reads}.input", drawing) or (
+            spec.get("pre_norm") and boundary(("mlp_input",), f"{spec['pre_norm']}.output", drawing))
         if called:
             sub["input_node"] = f"boundary.{called['name']}"
             nodes[sub["input_node"]] = value_node(called, "the sublayer's input")
@@ -1131,6 +1135,7 @@ def block_schema(owner: str, block_spec: dict[str, Any], info: dict[str, Any], b
             mid = f"stream.mid.{k}" if single else f"stream.mid.{s}.{k}"
             # the stream between the sublayers, where the block serves it (layer_mid): its segment is that value's
             at = (f"{nxt['hc']}.input" if streams else f"{subs[k]['stream_norm']}.output" if subs[k].get("stream_norm")
+                  else f"{subs[k]['merge']}.output" if subs[k].get("merge")
                   else f"{nxt['pre_norm']}.input" if nxt["pre_norm"] else f"{nxt['host']}.input")
             mid_row = boundary(("layer_mid",), at, [i for i, drawn_shape in enumerate(shape_of) if drawn_shape == shape])
             if mid_row:
@@ -1757,7 +1762,6 @@ def page_model(entry: ModuleType, read: list[dict[str, Any]], default: str) -> d
         **info,
         "model_type": entry.MODEL_TYPE,
         "title": entry.TITLE,
-        "subtitle": entry.SUBTITLE,
         "org": hub.org(entry),
         "palette": palette(entry),
         "default": default,
@@ -1853,7 +1857,7 @@ def build(only: list[str] | None = None, out: Path = HERE / "site") -> list[Path
         path.write_text(html)
         written.append(path)
         hub.save()
-        cards.append({**{k: model[k] for k in ("model_type", "title", "subtitle", "org", "palette", "checkpoints", "quirks", "vllm",
+        cards.append({**{k: model[k] for k in ("model_type", "title", "org", "palette", "checkpoints", "quirks", "vllm",
                                                 "architecture", "family_module", "towers", "wrappers")},
                       "tower_slugs": [tower_slug(t) for t in model["towers"]]})
         print(f"wrote {path.relative_to(HERE.parent)}")

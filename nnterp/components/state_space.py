@@ -13,7 +13,7 @@ from torch import Tensor
 
 from .eproperty import DerivedEProperty, EProperty, Unavailable, unavailable
 from .linear_attention import Gates
-from .recurrent import RecurrentMixer, State, States, kernel, needs_torch_kernels, per_call
+from .recurrent import RecurrentMixer, State, States, kernel, kernel_body, needs_torch_kernels, per_call
 from .standard import BATCH, GROUPS, HEAD_DIM, MIXER_HEADS, SEQ, STATE_DIM, module_int, unsized
 
 #: The layouts at the scan call, tokens before heads. SSD's ``C`` and ``B`` are projected once per *group* of
@@ -42,7 +42,7 @@ def _state_output(envoy: Any) -> str:
     cls = type(envoy)
     op = cls.KERNEL(envoy)
     if op == cls.RECURRENT_KERNEL:
-        return f"source.{op}.source.{cls.UPDATED_STATE}.output"
+        return f"{kernel_body(envoy, op)}.{cls.UPDATED_STATE}.output"
     if not envoy._returns_state():
         raise Unavailable(
             f"{envoy.path}.state_output is not available: this call ran without a cache (use_cache=False), "
@@ -103,7 +103,7 @@ def needs_per_token_chunks(envoy: Any) -> str | None:
 
 def _chunk_states_at(envoy: Any) -> str:
     cls = type(envoy)
-    return f"source.{cls.CHUNK_KERNEL}.source.{cls.CHUNK_STATES}.output"
+    return f"{kernel_body(envoy, cls.CHUNK_KERNEL)}.{cls.CHUNK_STATES}.output"
 
 
 @EProperty(_chunk_states_at)
@@ -179,7 +179,11 @@ class StateSpace(RecurrentMixer):
     cumulative step from the initial state, so ``set_state_after`` is
     unavailable too. With ``mamba_ssm`` installed the kernels have no Python
     source; ``route_kernels(model.family, "torch")`` binds transformers'
-    pure-torch ones (`RecurrentMixer`).
+    pure-torch ones (`RecurrentMixer`). Without it the forward reaches the
+    pure-torch kernels through transformers' kernel dispatcher, and the two
+    values read inside a kernel (a decode step's ``state_output``, the chunk
+    boundaries ``states`` reads) are keyed through it (`kernel_body`), so
+    nothing needs routing there.
 
     A value that needs another argument of the call (``betas`` needs
     ``dt_bias``, a prompt's ``state_output`` whether the scan returns a

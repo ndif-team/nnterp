@@ -435,7 +435,9 @@ the kernel computes them, and read-only. `state_input` is `None` on a prompt
 (the scan starts from zeros and takes no state; assigning raises) and a clone
 of the decode kernel's argument 0. Two values live inside the kernels and
 need the names bound to the pure-torch functions, not the dispatcher
-(`needs_kernel_source`): `attention_head_outputs` at `READ_OPS` (`y` after
+(`needs_kernel_source`), on every machine, since `SelectiveScan` keys them
+on the kernel's own body (`StateSpace` keys its two through the dispatcher
+instead, `kernel_body`): `attention_head_outputs` at `READ_OPS` (`y` after
 the `D` skip, before `silu(z)`: `scan_output_5` in the scan, `out_1` in the
 decode kernel), and `state_output` on a decode step at `STEP_OUTPUT_OP`
 (`ssm_state_to_0`, the state as it is copied into the cache). `state_output`
@@ -497,7 +499,13 @@ the subclass, not the base:
   buffer (`state.copy_(ssm_states)`), so a decode step's `state_output` is
   read inside the kernel at `UPDATED_STATE = "ssm_states_0"`, the binding
   both the copy and the output read: a write there reaches the cache and
-  `y`. On a prompt the scan returns `(y, final_state)` when the call has a
+  `y`. Unrouted without `mamba_ssm` the forward calls transformers'
+  dispatcher, whose body calls the pure-torch kernel as `implementation_0`
+  (`DISPATCHED`); `kernel_body(envoy, call)` in `components/recurrent.py`
+  gives the path into whichever body the drilled call has, so this key and
+  `_chunk_states`' go one call further down there and nothing needs routing
+  (`ssd.py::test_unrouted_without_mamba_ssm_reads_inside_the_dispatched_kernels`
+  runs it in a process without `mamba_ssm`). On a prompt the scan returns `(y, final_state)` when the call has a
   cache and `y` alone without one, so `attention_head_outputs` selects `0`
   or the whole return and `state_output` raises `Unavailable` at the read
   without a cache.
@@ -534,8 +542,8 @@ sets it to 1 on each `StateSpace` module of one model (recording the built
 value in the module's `_nnterp_chunk_size` for `enabled=False`), and every
 token is a boundary. `states` overrides the base's: a `DerivedEProperty`
 that reads `CHUNK_STATES` through a module-level `EProperty`
-(`_chunk_states`, keyed `source.<CHUNK_KERNEL>.source.new_states_0.output`,
-so the read drills and orders like any value), after `_arguments` so the
+(`_chunk_states`, keyed `<kernel_body>.new_states_0.output`, the chunk scan's
+body directly or through the dispatcher, so the read drills and orders like any value), after `_arguments` so the
 record holds the arguments for later values; it serves `[:, 1:]`, transposed
 and cloned. On a decode step it is `state_output` unsqueezed. Its predicate
 is `needs_per_token_chunks` (the kernel reason, then the chunk size).

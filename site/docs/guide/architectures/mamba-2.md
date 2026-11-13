@@ -29,7 +29,7 @@ print(decays.dtype, decays.max().item() <= 0, dt.min().item() > 0)
 # torch.float32 True True
 ```
 
-`route_kernels` comes first, as on the [DeltaNet page](delta-net.md#kernels-and-route_kernels): with `mamba_ssm` installed transformers calls its compiled kernels, which have no source to read and do not run on CPU. Unrouted, a CPU trace fails inside the kernel (`Pointer argument cannot be accessed from Triton` when a GPU is visible). On Mamba-2 only the two scan kernels are rerouted, and a prompt keeps the chunked scan.
+`route_kernels` comes first, as on the [DeltaNet page](delta-net.md#kernels-and-route_kernels): with `mamba_ssm` installed transformers calls its compiled kernels, which have no source to read and do not run on CPU. Unrouted, a CPU trace fails inside the kernel (`Pointer argument cannot be accessed from Triton` when a GPU is visible). On Mamba-2 only the two scan kernels are rerouted, and a prompt keeps the chunked scan. Without `mamba_ssm` nothing needs routing: transformers' dispatcher calls the pure-torch kernels, and nnterp reads inside them through it.
 
 ## The values
 

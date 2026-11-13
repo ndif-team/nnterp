@@ -158,6 +158,12 @@ that.
 
 ## In-place edits
 
+**A swap at a module's input reaches that module only.** If the forward bound
+the tensor under another name first (`residual = hidden_states` before
+`post_attention_layernorm(hidden_states)`), key the value with `in_place=True`
+so an assignment is copied into the held tensor
+([eproperty-internals.md](eproperty-internals.md#in_place-a-tensor-the-forward-holds-under-two-names)).
+
 **GPT-2's and GPT-BigCode's queries, and MPT's queries, keys and values, are
 split views.** torch refuses `attention_queries[:, 0] = 0` ("Output 0 of Select
 is a view and is being modified inplace"); assign a new tensor instead

@@ -116,7 +116,8 @@ Everything below is a consequence of these six.
 ## `EProperty`: one descriptor, a path for a key
 
 `EProperty(eproperty)` (`nnterp/components/eproperty.py`) takes `key`,
-`description`, `unavailable` and `select` (`EProperty.__init__`). A string `key`
+`description`, `unavailable`, `select` and `in_place` (`EProperty.__init__`; `in_place`
+[below](#in_place-a-tensor-the-forward-holds-under-two-names)). A string `key`
 is stored as nnsight's `key`; a callable one is stored as `locate` and the
 `key` shown in the repr and in `.key` is `<its name>` (`<kernel.inputs>`,
 `<apply_rotary_pos_emb_0|query_layer_0>`, `<_token_state_op>`).
@@ -244,7 +245,8 @@ swaps the whole back (`__set__`), which is why assigning
 when a `transform` is registered, the bind of fact 3 with the raw served
 value riding along. `__set__` is `_check`, the
 postprocess, one `path(obj)`, `_resolve`, `_put` when selecting, and
-`Mediator.swap`. Both call `Mediator` directly; a host has no hook in
+`Mediator.swap` (an `in_place` value copies into the held tensor instead, below).
+Both call `Mediator` directly; a host has no hook in
 between. The key is computed **once per access** (`EProperty.__get__`,
 `EProperty.__set__`) and its last segment passed down, never re-derived:
 a key function may read a
@@ -261,6 +263,51 @@ value that needs a copy carries edits back with a transform (Falcon's
 `mlp_output`, `families/falcon.py`), and the transform's `raw` is
 what a tuple-returning module would need to rebuild its container
 (`eproperty.transform`, nnsight `eproperty.py`).
+
+### `in_place`: a tensor the forward holds under two names
+
+A swap replaces what one location hands on, not what the forward has
+already bound elsewhere. A pre-norm block binds the stream between its
+sublayers twice before the MLP's norm runs:
+
+```
+hidden_states = residual + hidden_states       # the stream between the sublayers
+residual = hidden_states                       # bound a second time
+hidden_states = self.post_attention_layernorm(hidden_states)   # layer_mid is this call's input
+hidden_states = self.mlp(hidden_states)
+hidden_states = residual + hidden_states       # adds the MLP's output to `residual`
+```
+
+Swapping `post_attention_layernorm.input` hands the norm a new tensor and
+leaves `residual` on the old one, so the block's output would be `old +
+mlp(norm(new))`. Under two or more invokes it is worse: nnsight's batcher
+splices every swap into a new batch tensor (`torch.cat`, nnsight
+`batching.py` `_widen_tensor`), and each later invoke is served rows of that
+tensor, which `residual` does not hold, so even its in-place edits miss the
+add.
+
+`EProperty(..., in_place=True)` writes into the held tensor instead:
+`__set__` reads the location, picks the element (`_pick`), runs the
+preprocess, which must return a view of it, and copies the assigned value in
+(`write_into`, which first clones a value that shares the held tensor's
+storage, since `copy_` refuses a partial overlap). It swaps nothing and
+ignores the postprocess, so an assignment is exactly `value[:] = new`, every
+name for the tensor sees it, and under several invokes each invoke writes
+its own rows of the one tensor. Reads are unchanged: the live tensor, as
+for any value. `Layer.layer_mid` and every family's redefinition of it at a
+module input set it; a value at a module's *output* needs no flag, since
+the forward binds a module's return only after the swap (ZAYA's
+`layer_mid`, the attention merge's output).
+
+It is the in-place write it looks like, with the consequences for an earlier
+read and for gradients that [residual-stream](../usage/residual-stream.md#writing-layer_mid)
+gives.
+
+On vLLM (`Flat`) a read is already a private copy, so neither consequence
+applies; `in_place` makes the hand-back of an edited copy and an
+assignment copy into the request's rows rather than swap them in, and an
+assignment drops the hand-back still waiting from the read it was computed
+from, whose swap would otherwise splice the rows into a new tensor first.
 
 ### Tensor parallelism: `split_axis`, `piece_axis`
 
@@ -410,6 +457,7 @@ describes them.
 | boundary value (`layer_output`, `attention_output`, `logits`) | `EProperty(key="output")` | `{path}.output` (same as `.output`) | `postprocess` → swap; `transform` available |
 | the root's call arguments (`input_ids`, `attention_mask`, `input_size`) | `EProperty(key="inputs")` | `{path}.input`, the `(args, kwargs)` pair | `postprocess` repacks the pair → swap |
 | another module's value (Gemma-2 `attention_output`, `token_embeddings`) | `EProperty("../norm.output")`, `EProperty("embed_tokens.output")` | that module's `.output` | as any value |
+| a module input the forward also binds elsewhere (`layer_mid`) | `EProperty("post_attention_layernorm.input", in_place=True)` | `{path}.post_attention_layernorm.input`, the first argument | copied into the held tensor; nothing swapped |
 | value inside a forward (`attention_probabilities`, `decays`) | `EProperty("source.<op>.<attribute>", select=...)` | `{path}.source.<op>.{input\|output}` after a drill | `postprocess` → `_put` → swap |
 | an operation in the parent's forward (Llama 4 `mlp_output`) | `EProperty("../source.<op>.output")` | the parent's `.source.<op>.output`; the parent's class sets `sourced = True` | as any value |
 | computed (`states`) | `DerivedEProperty(compute)` | none | refused |

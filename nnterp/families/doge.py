@@ -24,7 +24,11 @@ Doge-20M, -40M and -260M load and run. Of the ``is_moe`` checkpoints, Doge-40M-M
 loads and runs; it needs transformers 5.18 or later, whose block takes the first element
 of ``DogeCDMoE``'s tuple. Where it runs, ``mlp_output`` is the mixture's hidden states
 (dense MLP plus routed experts); the six mixture values stay unavailable, since
-the product-key routing has no router or experts module to read them at.
+``router_gate`` gives two sets of product-key logits per token rather than one per expert, and the
+experts are rows of two embedding tables. The routing views ``router_gate``'s output as
+``(2, batch * seq, -1)``, which takes each token's two sets from other rows of the flattened batch, so a
+prompt's outputs depend on its length and on the other prompts in the trace: trace clean and corrupt
+prompts separately there.
 """
 
 import transformers
@@ -33,7 +37,6 @@ from packaging.version import Version
 from transformers.models.doge.modeling_doge import DogeAttention, DogeCDMoE, DogeDecoderLayer, DogeMLP
 
 from ..components import Attention, Layer, Mlp, Moe, unavailable
-from ..components.moe import ROUTED
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -56,7 +59,8 @@ class Mlp(Mlp):
 
 #: Why none of the cross-domain mixture's values are served: transformers before 5.18 cannot run it at all.
 CANNOT_RUN = (
-    "DogeCDMoE routes by product keys over embedding experts: no router or experts module to read the mixture values at"
+    "DogeCDMoE routes by product keys over embedding experts: router_gate gives two sets of product-key logits per token, "
+    "not one logit per expert, and the experts are embedding rows, so no mixture value maps onto them"
     if Version(transformers.__version__) >= Version("5.18")
     else "transformers < 5.18 cannot run DogeCDMoE: the block passes its tuple output to dropout"
 )
@@ -68,7 +72,10 @@ class Moe(Moe, Mlp):
     def no_mixture(self) -> str:
         return CANNOT_RUN
 
-    mlp_activation = mlp_neurons = unavailable(ROUTED)  # it runs the mixture, whose values no_mixture refuses
+    mlp_activation = mlp_neurons = unavailable(
+        "the cross-domain mixture calls act_fn twice (on the retrieved experts' scores, then on the dense gate) and "
+        "down_proj reads the dense half alone, so neither value is the mixture's"
+    )
 
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.

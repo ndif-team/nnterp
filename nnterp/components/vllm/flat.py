@@ -9,7 +9,7 @@ import torch
 from nnsight.intervention.envoy import Envoy
 from nnsight.intervention.interleaver import Mediator
 
-from ..eproperty import EProperty
+from ..eproperty import EProperty, write_into
 
 
 def on_transformers_backend(envoy: Envoy) -> bool:
@@ -90,6 +90,9 @@ class Flat(EProperty):
             computed copy: a write goes back divided by the factor, and a
             read that edits nothing hands the model's tensor back untouched,
             so dividing never rounds a clean forward.
+
+    ``in_place`` (`EProperty`'s) copies an edit or an assignment into the
+    rows the model holds; the read is still a private copy.
     """
 
     def __init__(
@@ -153,11 +156,30 @@ class Flat(EProperty):
         rows = self._pick(attribute, raw, select)
         if self.factor is not None and torch.equal(view, self._view(obj, rows)):
             return raw  # nothing edited: dividing the product back would round
+        if self.in_place:  # copied into the rows the model holds, which the forward also holds under another name
+            write_into(rows, self._rows(obj, view, rows))
+            return raw
         return self._put(attribute, raw, self._rows(obj, view, rows), select)
 
     def __set__(self, obj: Envoy, value: torch.Tensor) -> None:
         self._check(obj)
         key = self.path(obj)
         location, attribute, select = self._resolve(obj, key), self.attribute(key), self._selection(obj)
+        if self.in_place:
+            # The read a new value is usually computed from (``layer_mid = layer_mid * 0.5``) is still waiting to hand
+            # its copy back. Flushed, it would swap the request's rows in, which the batcher splices into a new tensor
+            # that the forward's other name for these rows does not hold. The assignment supersedes it: drop it, and
+            # write into the rows it was served from (`EProperty.__get__` binds `partial(transform, obj, view, raw)`).
+            mediator = Mediator.current(location)
+            waiting = mediator.transform
+            if waiting is not None and waiting.key == (self, location, mediator.wanted(location)):
+                mediator.transform = None
+                current = waiting.fn.args[2]
+            else:
+                current = Mediator.value(location)
+            rows = self._pick(attribute, current, select)
+            write_into(rows, self._rows(obj, value, rows))
+            return
         current = Mediator.value(location)
-        Mediator.swap(location, self._put(attribute, current, self._rows(obj, value, self._pick(attribute, current, select)), select))
+        rows = self._pick(attribute, current, select)
+        Mediator.swap(location, self._put(attribute, current, self._rows(obj, value, rows), select))

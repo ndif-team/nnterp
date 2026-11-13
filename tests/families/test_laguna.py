@@ -1,13 +1,12 @@
 """Laguna, end to end: gated attention, a dense block then a mixture, and per-block head counts."""
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, cached_snapshot, built, patched_checkpoint
 
 from nnterp import Unavailable, axis_size
 from nnterp.components import HEADS as HEADS_AXIS
@@ -29,7 +28,7 @@ def _per_layer_heads_checkpoint(repo=REPO):
     from safetensors.torch import load_file
     from transformers import AutoConfig, AutoModelForCausalLM
 
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = os.path.join(tempfile.gettempdir(), f"nnterp-laguna-heads-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "model.safetensors")):
         return patched
@@ -50,11 +49,18 @@ def _per_layer_heads_checkpoint(repo=REPO):
     return patched
 
 
+def routed_scale(self, host):
+    """The mixture multiplies the experts' sum by ``moe_routed_scaling_factor`` (2.5 on XS-2.1 and S-2.1) after the
+    weighted slots: ``routed_output`` carries it, ``expert_outputs`` do not."""
+    return host._module.routed_scaling_factor
+
+
 class TestLaguna(FamilySuite):
     REPO = REPO
     FAMILY = laguna
     NATIVE = LLAMA_ROWS
     PREMIX_IS_HEAD_OUTPUTS = False           # a gate on the heads before o_proj
+    routed_scale = routed_scale
 
     def test_dense_then_mixture(self, model):
         kinds = [type(layer.mlp._module).__name__ for layer in model.layers]
@@ -80,10 +86,11 @@ class TestLaguna(FamilySuite):
 class TestLagunaPerLayerHeads(FamilySuite):
     """Blocks with different head counts, as the released checkpoints have."""
 
-    REPO = _per_layer_heads_checkpoint()
+    REPO = built(_per_layer_heads_checkpoint)
     FAMILY = laguna
     NATIVE = LLAMA_ROWS
     PREMIX_IS_HEAD_OUTPUTS = False
+    routed_scale = routed_scale
 
     def test_each_block_reports_its_own_heads(self, model):
         assert [layer.self_attn.num_heads for layer in model.layers] == HEADS
@@ -123,3 +130,20 @@ class TestLagunaPerLayerHeads(FamilySuite):
                 read.append((layer.input.save(), layer.self_attn.attention_output.save(), layer.mlp.mlp_output.save(), layer.layer_output.save()))
         for x, attn, mlp, out in read:
             torch.testing.assert_close(x + attn + mlp, out)
+
+
+class TestLagunaScaled(TestLaguna):
+    """Branches the released checkpoints take and the tiny checkpoint does not: XS-2.1's and S-2.1's
+    ``moe_routed_scaling_factor`` 2.5, and M.1's per-element gating (one gate per channel, not per head) on every
+    block full attention (no ``layer_types``, ``sliding_window`` 0). The tiny config otherwise, weights drawn for it."""
+
+    REPO = built(
+        patched_checkpoint, REPO, draw=True, moe_routed_scaling_factor=2.5, gating="per-element",
+        layer_types=["full_attention", "full_attention"], sliding_window=0,
+    )
+
+    def test_the_branches_are_taken(self, model):
+        attn = model.layers[0].self_attn._module
+        assert not attn.gate_per_head and all(layer.self_attn._module.sliding_window in (None, 0) for layer in model.layers)
+        moe = next(layer.mlp for layer in model.layers if type(layer.mlp._module).__name__ == "LagunaSparseMoeBlock")
+        assert moe._module.routed_scaling_factor == 2.5

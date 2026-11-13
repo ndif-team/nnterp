@@ -3,11 +3,11 @@
 </p>
 
 <h3 align="center">
-One module vocabulary across transformer architectures, on top of nnsight
+Standardizing Interpretability
 </h3>
 
 <p align="center">
-<a href="https://ndif-team.github.io/nnterp/"><b>Documentation</b></a> | <a href="https://github.com/ndif-team/nnterp"><b>GitHub</b></a> | <a href="https://pypi.org/project/nnterp/"><b>PyPI</b></a> | <a href="https://discuss.ndif.us/"><b>Forum</b></a> | <a href="https://arxiv.org/abs/2511.14465"><b>Paper</b></a>
+<a href="https://ndif-team.github.io/nnterp/"><b>Documentation</b></a> | <a href="https://github.com/ndif-team/nnterp"><b>GitHub</b></a> | <a href="https://pypi.org/project/nnterp/"><b>PyPI</b></a> | <a href="https://arxiv.org/abs/2511.14465"><b>Paper</b></a>
 </p>
 
 <p align="center">

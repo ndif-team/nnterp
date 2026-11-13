@@ -109,6 +109,13 @@
 
 .md-header__button.md-logo {
   margin-right: 1rem;
+  padding: 0.1rem 0.4rem;
+}
+
+/* The mark at nearly the header's height (Material draws it at 1.2rem) */
+.md-header__button.md-logo img {
+  height: 1.8rem;
+  width: auto;
 }
 
 /* The logo is the wordmark: no site name or page title in the header */

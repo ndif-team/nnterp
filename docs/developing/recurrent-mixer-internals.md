@@ -21,10 +21,10 @@ two kernels. How a mixer's values are reached through all three is the same
 whatever the values are, so it lives in one base class and the mixers
 declare only their values:
 
-- `RecurrentMixer` (`nnterp/components/recurrent.py:257-446`) holds the
+- `RecurrentMixer` (`nnterp/components/recurrent.py`) holds the
   mechanism: the kernel choice, `attention_output`, the availability
   predicates, the per-token state machinery and the routing functions.
-- `LinearAttention` (`nnterp/components/linear_attention.py:23-96`), the
+- `LinearAttention` (`nnterp/components/linear_attention.py`), the
   gated DeltaNet mixer (`linear_attn` on Qwen3-Next, Qwen3.5, Qwen3.5-MoE
   text and OLMo-Hybrid), sets the kernel constants and declares its eight
   values: `attention_queries`, `attention_keys`, `attention_values`,
@@ -81,7 +81,7 @@ route_kernels(qwen3_5_text, "default")
 ```
 
 The open `tracer.iter[:]` ends with nnsight's "never reached" warning by
-design (`nnsight iterator.py:66-71`). Without the `first` offset, step 2
+design (`Iterations`, `nnsight iterator.py`). Without the `first` offset, step 2
 would ask for occurrence 0 of the recurrent kernel's state op, which step 1
 already consumed, and the read would dangle.
 
@@ -92,21 +92,21 @@ it branches, then calls `torch_recurrent_gated_delta_rule(...)` when it does
 and the call is one token, and `torch_chunk_gated_delta_rule(...)` otherwise.
 Through transformers 5.20 it binds the bool `use_precomputed_states =
 cache_params is not None and cache_params.has_previous_state(self.layer_idx,
-state_idx=0)` (`modeling_qwen3_5.py:547-549` in 5.20) and tests `use_precomputed_states and
-seq_len == 1` (`:611`); from 5.21 it fetches the state itself under `if
-cache_params is not None:`, `recurrent_state =
+state_idx=0)` (`Qwen3_5GatedDeltaNet.forward`, `modeling_qwen3_5.py`) and
+tests `use_precomputed_states and seq_len == 1`; from 5.21 it fetches the
+state itself under `if cache_params is not None:`, `recurrent_state =
 cache_params.get_recurrent_state(self.layer_idx, state_idx=0)` (None on a
-fresh prompt; `:550` in 5.21), and tests `recurrent_state is not None and
-seq_len == 1` (`:612`). Both kernels take `(query, key, value, g=, beta=,
-initial_state=, ...)` and return `(core_attn_out, last_recurrent_state)`.
-nnsight names them `torch_recurrent_gated_delta_rule_0` and
-`torch_chunk_gated_delta_rule_0`, and the cached-state op
-`use_precomputed_states_0` or `cache_params_get_recurrent_state_0` (a
-binding is an op, nnsight `source.py:26-31`). The call's length is the
+fresh prompt), and tests `recurrent_state is not None and seq_len == 1`.
+Both kernels take `(query, key, value, g=, beta=, initial_state=, ...)` and
+return `(core_attn_out, last_recurrent_state)`. nnsight names them
+`torch_recurrent_gated_delta_rule_0` and `torch_chunk_gated_delta_rule_0`,
+and the cached-state op `use_precomputed_states_0` or
+`cache_params_get_recurrent_state_0` (a binding is an op,
+`Instrument.visit_Assign`, nnsight `source.py`). The call's length is the
 sequence axis of the masked input the forward binds once per call,
 `apply_mask_to_padding_states_0`.
 
-A subclass names these in class constants (`recurrent.py:308-323`):
+A subclass names these in class constants (`RecurrentMixer`, `recurrent.py`):
 
 | constant | meaning | `LinearAttention` |
 |---|---|---|
@@ -117,11 +117,11 @@ A subclass names these in class constants (`recurrent.py:308-323`):
 | `STATE_OP` | inside the token-by-token kernel, the binding of the state after each token's update, or `None` | `"last_recurrent_state_3"` |
 | `STEP_STATE_OP` | set when the decode kernel is a single-step update, not the token loop: the binding of the new state inside it; the prompt's kernel is then the loop | `None` (Mamba-1: `"ssm_state_0"`) |
 
-- `KERNEL` (`:327-348`) is one `staticmethod` on the base, the same for
+- `KERNEL` is one `staticmethod` on the base, the same for
   every mixer: the forward's own test, one token over a cached state
   (`use_precomputed_states and seq_len == 1` through transformers 5.20,
   `recurrent_state is not None and seq_len == 1` from 5.21). It reads the
-  `BRANCH` op the forward has (`present`, `:247-255`) and `SEQ_OP` in the
+  `BRANCH` op the forward has (`present`) and `SEQ_OP` in the
   order the forward makes them (sorted by each op's source line: the
   DeltaNet forward masks its input before it learns about the cached state,
   the Mamba forwards after), takes a `BRANCH` value that is neither `None`
@@ -136,23 +136,24 @@ A subclass names these in class constants (`recurrent.py:308-323`):
   the run ends with `OutOfOrderError` naming it.
   Being a `staticmethod`, `type(self).KERNEL(self)` and
   `self.KERNEL(self)` are the same call.
-- `kernel(attribute)` (`:247-254`) is the key function every
+- `kernel(attribute)` is the key function every
   kernel-located value is declared on: it returns
   `source.<KERNEL(envoy)>.<attribute>`, so `LinearAttention` declares its
   values as `@EProperty(kernel("inputs"), select=0, ...)` through
   `@EProperty(kernel("output"), select=1, ...)`
-  (`linear_attention.py:51-95`). At read time `KERNEL` reads the two
+  (`linear_attention.py`). At read time `KERNEL` reads the two
   bindings' `.output` on this call and picks the name. The choice is made
   once per call ([Once per call](#once-per-call-kernel-and-per_call)), so
   the eight values read in one step ask the model for the bindings once.
-- `attention_output` (`:341-348`) is the base's: the module's own output,
+- `attention_output` is the base's: the module's own output,
   the contribution to the residual stream, unwrapped from a tuple and
   rewrapped on write.
 
 Each decode step under `generate` is one forward over one token: the
 kernel's inputs then have sequence length 1, `state_input` is the cached
 state, and `state_output` the state the step leaves
-(`tests/families/test_qwen3_5_text.py:93-109`).
+(`TestQwen3_5.test_values_follow_the_step_under_generate`,
+`tests/families/test_qwen3_5_text.py`).
 
 ## Once per call: `KERNEL` and `per_call`
 
@@ -160,12 +161,12 @@ The bindings the forward tests are served once per module call, and several
 values of one call depend on the kernel they pick, so the decision is made
 once and kept for the call:
 
-- `RecurrentMixer.KERNEL` (`recurrent.py:311-329`) makes its two reads and
+- `RecurrentMixer.KERNEL` (`recurrent.py`) makes its two reads and
   its choice inside `per_call`, under the key `"kernel"`.
-- `per_call(envoy, key, compute)` (`:190-228`), exported from
+- `per_call(envoy, key, compute)`, exported from
   `nnterp.components`, keeps one record per `(envoy.path, key)`,
   `(call, value)`, and runs `compute()` when there is no record or when the
-  record's call is not the current one (`:226-227`). The records live on
+  record's call is not the current one. The records live on
   the worker, the greenlet running the intervention code
   (`getcurrent().__dict__["_nnterp_per_call"]`). Every run of every invoke
   has its own worker, a replayed `model.edit` too, so two invokes reading
@@ -175,7 +176,7 @@ once and kept for the call:
   (`::test_edit_on_a_kernel_value_replays_on_another_prompt`), and nothing
   stays on the envoy: the tensors in a record are freed with the worker.
 
-One rule names the current call (`:216`):
+One rule names the current call (`per_call`):
 
 ```python
 call = mediator.iteration or mediator.occurrence(f"{envoy.path}.output")
@@ -188,7 +189,7 @@ call = mediator.iteration or mediator.occurrence(f"{envoy.path}.output")
   after a step's first read and `0` on step 0 and in a plain trace, so the
   call is how many times the module's `.output` has been passed. nnsight
   counts every location's visits per worker whether or not the location was
-  read (`interleaver.py:331-334`, `occurrence`): inside call c, c calls
+  read (`interleaver.py`, `occurrence`): inside call c, c calls
   have returned, and between calls the count names the one about to start.
 
 The two agree on step k of a `generate`, so every read of a step body finds
@@ -205,18 +206,20 @@ lands in.
 `per_call` holds three things: `KERNEL`'s choice (key `"kernel"`),
 `_token_op`'s `(op, first, seq)` (key `"call"`) and the kernel call's
 `(args, kwargs)` that `StateSpace._arguments` reads (key `"arguments"`,
-`state_space.py:213-221`).
+`state_space.py`).
 
 ## `state_input` is a clone
 
 The forward passes the cache's own buffer as `initial_state`
-(`modeling_qwen3_5.py:624`, `cache_params.layers[i].recurrent_states[0]`)
-and afterwards `cache_params.update_recurrent_state(last_recurrent_state,
-...)` (`:653-654`) writes the new state into that buffer in place
-(`transformers/cache_utils.py:1091-1093`, "Update the linear attention
-cache in-place"). A saved `state_input` that held the live tensor would read
+(`Qwen3_5GatedDeltaNet.forward`, `modeling_qwen3_5.py`,
+`cache_params.layers[i].recurrent_states[0]`) and afterwards
+`cache_params.update_recurrent_state(last_recurrent_state, ...)` writes the
+new state into that buffer in place
+(`LinearAttentionLayer.update_recurrent_state`,
+`transformers/cache_utils.py`, "Update the linear attention cache
+in-place"). A saved `state_input` that held the live tensor would read
 as this step's *output* by the time the trace ends, so the preprocess
-returns `value.clone()` (`linear_attention.py:76-85`). Assigning replaces
+returns `value.clone()` (`linear_attention.py`). Assigning replaces
 what the step starts from; the clone only affects reads. It is a DeltaNet
 value, so it is the subclass's; a mixer whose kernel takes the cached state
 the same way clones it the same way.
@@ -225,33 +228,35 @@ the same way clones it the same way.
 
 transformers decorates both kernels with
 `use_kernel_func_from_hub_with_fallback("chunk_gated_delta_rule", "fla")` /
-`("fused_recurrent_gated_delta_rule", "fla")` (`modeling_qwen3_5.py:300`,
-`:437`); Mamba-2's `mamba2_chunk_scan` / `mamba2_selective_state_update`
+`("fused_recurrent_gated_delta_rule", "fla")` (`torch_chunk_gated_delta_rule`,
+`torch_recurrent_gated_delta_rule`, `modeling_qwen3_5.py`); Mamba-2's
+`mamba2_chunk_scan` / `mamba2_selective_state_update`
 carry the same decorator over `mamba_ssm`. The decorator
-(`transformers/integrations/hub_kernels.py:829-870`) binds the
+(`use_kernel_func_from_hub_with_fallback`,
+`transformers/integrations/hub_kernels.py`) binds the
 module-level name to a `wrapped` closure whose nonlocals are
 `torch_function` (the pure-torch body) and `implementation` (the optimized
 function when its package is installed, else `torch_function` again).
 
-- `_dispatch(bound)` (`recurrent.py:46-53`) reads that closure with
+- `_dispatch(bound)` (`recurrent.py`) reads that closure with
   `inspect.getclosurevars(bound).nonlocals`, `{}` for a plain function;
-  `_torch_function(bound)` (`:56-58`) is its `torch_function`, or the
-  binding itself. `_name(op)` (`:41-43`) is the module-level name an op
+  `_torch_function(bound)` is its `torch_function`, or the
+  binding itself. `_name(op)` is the module-level name an op
   calls (`torch_chunk_gated_delta_rule_0` -> `torch_chunk_gated_delta_rule`).
-- `needs_torch_kernels` (`:146-160`) is the `unavailable` predicate of every
+- `needs_torch_kernels` is the `unavailable` predicate of every
   kernel-located value: for `type(envoy).CHUNK_KERNEL` and
   `RECURRENT_KERNEL` it refuses when `implementation is not
   torch_function`. A compiled kernel has no Python source, so `.source`
-  could not drill into it (nnsight `source.py:364-374`, `compiled` raises
+  could not drill into it (nnsight `source.py`, `compiled` raises
   `SourceNotAvailable` for a callable without `__code__`). The reason
   names the package and says to uninstall it or route to the torch kernels.
 
 ## Routing the kernels: `route_kernels`
 
-`route_kernels(family, kernel)` (`:95-129`) rebinds the family's kernel
+`route_kernels(family, kernel)` rebinds the family's kernel
 names in its modeling module, process-wide:
 
-- `_mixer(family)` (`:65-92`) finds the transformers modeling module and
+- `_mixer(family)` finds the transformers modeling module and
   the mixer's envoy class from the family's `ENVOYS` entry whose envoy
   subclasses `RecurrentMixer`. Given a modeling module directly, it takes
   the `RecurrentMixer` subclass a loaded family keys on one of that
@@ -272,36 +277,37 @@ names in its modeling module, process-wide:
   it has one occurrence per token. On a mixer without a `STATE_OP`, each
   name is bound to its own `torch_function`: the kernels become readable
   and a prompt keeps its chunked kernel.
-- `route_delta_rule(family, kernel)` (`:132-143`) is the DeltaNet spelling:
+- `route_delta_rule(family, kernel)` is the DeltaNet spelling:
   `"recurrent"` is `"torch"`, `"chunked"` is `"default"`.
 
 **Why it must run before tracing that layer.** nnsight's `.source` builds
 the instrumented forward once per module and, when it drills into a call,
 instruments the callee it received and stores it in `interleaver.sourced`
 for the run; `instrument` rebuilds the function with `fn.__globals__`
-copied into a new function object (nnsight `source.py:439-444`,
+copied into a new function object (nnsight `source.py`,
 `function_like`). A callee already instrumented keeps the binding it was
 compiled with, and the module-level `forward` body has already been
 compiled over its globals dict, so a rebinding made after the first drill is
 not what the instrumented copy calls. The reason and the docstring
 say so; the tests route, load, trace, and restore in a `finally`
-(`test_qwen3_5_text.py:118-148`), and `tests/test_base.py` checks that
+(`TestQwen3_5.test_per_token_state_with_the_recurrent_kernel`,
+`test_qwen3_5_text.py`), and `tests/test_base.py` checks that
 `"torch"` / `"default"` round-trip the bindings.
 
 ## The state after every token
 
 Only the recurrent kernel has a per-token state. Its loop
-(`modeling_qwen3_5.py:480-491`) rebinds `last_recurrent_state` twice per
-token, decay at `:484` and update at `:489`; with the two bindings before
-the loop (`:474`, `:476`) the post-update binding is the **fourth**
+(`torch_recurrent_gated_delta_rule`, `modeling_qwen3_5.py`) rebinds
+`last_recurrent_state` twice per token, decay and update; with the two
+bindings before the loop the post-update binding is the **fourth**
 `last_recurrent_state` in the function, so `STATE_OP =
-"last_recurrent_state_3"` (`linear_attention.py:49`) fires once per token.
-The chunk kernel binds the same name four times too (`:407`, `:409`, `:425`
-inside the chunk loop, `:428`), so `last_recurrent_state_3` exists there as
-well, but it is the single final binding, not a per-token one; that is why
-`state` and `states` are guarded by `needs_recurrent_routing`
-(`recurrent.py:163-187`) rather than by the op resolving. The predicate
-answers, in order:
+"last_recurrent_state_3"` (`linear_attention.py`) fires once per token.
+The chunk kernel binds the same name four times too
+(`torch_chunk_gated_delta_rule`, the third inside the chunk loop), so
+`last_recurrent_state_3` exists there as well, but it is the single final
+binding, not a per-token one; that is why `state` and `states` are guarded
+by `needs_recurrent_routing` (`recurrent.py`) rather than by the op
+resolving. The predicate answers, in order:
 
 1. `STATE_OP is None`: "this mixer's kernels do not materialize the state
    per token". A subclass without a per-token kernel declares nothing; its
@@ -316,16 +322,18 @@ answers, in order:
 ## Occurrence arithmetic
 
 `state` is an `EProperty` whose key function returns
-`source.{kernel}.source.{STATE_OP}.output` (`:352-377`), a location with
+`source.{kernel}.source.{STATE_OP}.output`
+(`RecurrentMixer._token_state_op`), a location with
 one occurrence per token, so nnsight's own `tracer.iter` walks it:
 `for t in tracer.iter[:n]: mix.state` reads the state after every prompt
 token, `tracer.iter[4]` the one after token 4, and an assignment there is a
 write the following tokens continue from
-(`test_qwen3_5_text.py:150-178`). `states`, `state_after` and
+(`TestQwen3_5.test_state_iterates_with_the_users_own_iter`,
+`test_qwen3_5_text.py`). `states`, `state_after` and
 `set_state_after` are the same location addressed by index, and need three
 numbers.
 
-- **Which kernel.** `_token_state_op` (`:352-362`) is `state`'s key
+- **Which kernel.** `_token_state_op` is `state`'s key
   function. Under `tracer.iter` the pin at the read is a token index, while
   the bindings `KERNEL` reads and the kernel call's `.fn` fire once per
   forward. So inside `with pinned(None):` it decides the call's kernel
@@ -333,45 +341,47 @@ numbers.
   kernel call, relaxed; then it returns the key, and the pinned read that
   follows asks for that token's occurrence of the state op. This is what
   lets `for t in tracer.iter[2]: mix.state` resolve on a first read pinned
-  past 0 (`test_qwen3_5_text.py:173-176`).
-- **Where this call starts.** `_token_op` (`:383-403`) computes, once per
+  past 0 (`TestQwen3_5.test_state_iterates_with_the_users_own_iter`,
+  `test_qwen3_5_text.py`).
+- **Where this call starts.** `_token_op` computes, once per
   call through `per_call`, `(op, first, seq)`: `op` is the state op of the
   kernel that fires (`_state_op(kernel)`, under the drilled kernel call),
   `seq` is `_seq()`, and `first` is
   `Mediator.current(location).occurrence(location)` for the state op's
-  `.output` location. `_seq()` (`:379-381`) is an overridable method; the
+  `.output` location. `_seq()` is an overridable method; the
   base reads `attention_queries.shape[1]`, the DeltaNet kernel's sequence
   axis, and a mixer whose kernel is laid out otherwise overrides it. The
   trick is *when* it is read. Reading a kernel argument parks the worker at
-  the kernel call's start (nnsight `interleaver.py:331-334`, `occurrence`
+  the kernel call's start (nnsight `interleaver.py`, `occurrence`
   is the interleaver's count minus the count when this worker started),
   which is the one moment the state op's count is exactly the number of
   tokens **earlier calls** put through it. Occurrences are counted per
-  location since the op was drilled into in the run (`interleaver.py:629-633`,
-  `:785-791`), so on step *k* ≥ 1
+  location since the op was drilled into in the run (`Interleaver.sourced`,
+  `Interleaver.handle`, `interleaver.py`), so on step *k* ≥ 1
   of a `generate` the recurrent op's count is *k* − 1: the canonical
   pattern's `[0, 0, 1]`. The prompt's tokens are under the chunk kernel's
   op, a different location, so they do not offset a decode step.
-- **Reading position `t`.** `_states` (`:405-413`) loops `for t in
+- **Reading position `t`.** `_states` loops `for t in
   range(seq): with pinned(first + t): states.append(op.output)` and stacks
-  on axis 1; `state_after(t)` (`:429-434`) reads one; `set_state_after`
-  (`:436-446`) writes one. `pinned(n)` (`:231-244`, exported from
+  on axis 1; `state_after(t)` reads one; `set_state_after`
+  writes one. `pinned(n)` (exported from
   `nnterp.components`) is a context manager: it sets the worker mediator's
   `iteration` to `n`, as `tracer.iter[n]` does (`None` relaxes the pin),
   and restores the pin the worker had on the way out. The first hit relaxes
-  the mediator (`interleaver.py:478-483`), so a `with` holds one read, and
-  `_token_op` must have parked at the call's start before the loop begins;
-  a second per-token read in the same call reuses its record and does not
-  re-ask.
-- `states` is a `DerivedEProperty` (`:418-422`): read-only, a stack of the
-  per-occurrence reads. `_require_state` (`:424-427`) gives `state_after`
+  the mediator (`Mediator.handle`, `interleaver.py`), so a `with` holds one
+  read, and `_token_op` must have parked at the call's start before the
+  loop begins; a second per-token read in the same call reuses its record
+  and does not re-ask.
+- `states` is a `DerivedEProperty`: read-only, a stack of the
+  per-occurrence reads. `_require_state` gives `state_after`
   and `set_state_after` the same `Unavailable` a read of `state` would
   raise.
 
 Reads follow the forward: in one trace, positions before a write come
 before it and positions after it come after; `states` reads every position,
 so it goes in its own trace
-(`test_qwen3_5_text.py:133-144`).
+(`TestQwen3_5.test_per_token_state_with_the_recurrent_kernel`,
+`test_qwen3_5_text.py`).
 
 ## Mamba-1: `SelectiveScan`
 
@@ -503,7 +513,7 @@ the subclass, not the base:
   Seven values select from the kernel's `inputs`, and `betas`, `decays` and
   a prompt's `state_output` need arguments beyond their own (`dt_bias`, `A`,
   `return_final_states`), possibly after the model has moved into the
-  kernel. `_arguments()` (`state_space.py:213-221`) reads the kernel call's
+  kernel. `_arguments()` (`state_space.py`) reads the kernel call's
   `(args, kwargs)` once per call, `per_call(self, "arguments", lambda:
   Mediator.value(location))`, on the call's first need, and names them by
   the call site's table; a value that asks later in the call finds them in
@@ -582,12 +592,12 @@ methods that pin the claims above:
 
 | claim | test |
 |---|---|
-| the values follow the branch and the state hands off between steps | `test_values_follow_the_step_under_generate` (`:93-109`) |
-| `state_output` is the state the last token leaves | `test_state_output_is_the_state_the_last_token_leaves` (`:79-86`) |
-| `states` needs routing, and `support()` says so per block | `test_per_token_state_needs_the_recurrent_kernel` (`:111-116`) |
-| `states[:, t] == state_after(t)`; a write flows into later tokens only | `test_per_token_state_with_the_recurrent_kernel` (`:118-148`) |
-| `state` walks with the user's own `tracer.iter`; a first read pinned past 0 resolves | `test_state_iterates_with_the_users_own_iter` (`:150-178`) |
-| under `generate`, the prompt is an inner loop on step 0 and each later step one token; a decode step's `states` is its own token | `test_per_token_state_within_a_generate` (`:180-205`) |
+| the values follow the branch and the state hands off between steps | `test_values_follow_the_step_under_generate` |
+| `state_output` is the state the last token leaves | `test_state_output_is_the_state_the_last_token_leaves` |
+| `states` needs routing, and `support()` says so per block | `test_per_token_state_needs_the_recurrent_kernel` |
+| `states[:, t] == state_after(t)`; a write flows into later tokens only | `test_per_token_state_with_the_recurrent_kernel` |
+| `state` walks with the user's own `tracer.iter`; a first read pinned past 0 resolves | `test_state_iterates_with_the_users_own_iter` |
+| under `generate`, the prompt is an inner loop on step 0 and each later step one token; a decode step's `states` is its own token | `test_per_token_state_within_a_generate` |
 | two invokes reading one mixer each decide their own kernel, and nothing stays on the envoy | `tests/test_base.py::test_two_invokes_read_one_mixers_values` |
 | a `model.edit` on a kernel value replays on another prompt | `tests/test_base.py::test_edit_on_a_kernel_value_replays_on_another_prompt` |
 | several tokens over a cached state read the prompt's kernel | `tests/test_base.py::test_cached_call_with_several_tokens_reads_the_prompts_kernel` |

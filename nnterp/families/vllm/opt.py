@@ -19,14 +19,16 @@ When the checkpoint ties its embeddings (OPT-125m and most of the family),
 vLLM's ``lm_head`` *is* ``embed_tokens``: the same module under both names.
 On a checkpoint with ``do_layer_norm_before`` false (OPT-350m) the block
 norms after each add, and the stream is not ``layer_input`` plus the two
-contributions.
+contributions. OPT-350m also has no final norm (no ``norm``) and projects the
+stream with ``project_out`` before the head, as on transformers; the decoder
+applies whichever of the two it has, and `project_on_vocab` does the same.
 """
 
 import torch
 
 from vllm.model_executor.models.opt import OPTAttention, OPTDecoderLayer
 
-from ...components import Pattern, Queries, Residual
+from ...components import POST_NORM_ATTENTION, POST_NORM_MLP, Pattern, Queries, Residual
 from ...components.eproperty import DerivedEProperty
 from ...components.vllm import Attention, Flat, Layer, Mlp, on_decode_step
 from ..opt import intermediate_size  # noqa: F401  the width of fc1/fc2 is ffn_dim, as on transformers
@@ -39,6 +41,11 @@ RENAME = {
     # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
     "out_proj": "o_proj",
 }
+
+
+def norms_before(block) -> bool:
+    """The block's ``do_layer_norm_before``: the norms precede the sublayers (every OPT but the 350m, whose norms follow the adds)."""
+    return block._module.do_layer_norm_before
 
 
 def query_scale(envoy) -> float:
@@ -59,14 +66,23 @@ class Layer(Layer):
     The pre-MLP norm is the block's own ``final_layer_norm`` and the feed-forward is ``fc1``/``fc2`` on the block
     itself, so ``layer_mid`` and ``mlp_norm_output`` read the norm and there is no ``mlp`` module. vLLM's rows are
     the flattened stream transformers holds there (``FlatResidual``); they are served ``[1, tokens, hidden_size]``,
-    as every value on vLLM is.
+    as every value on vLLM is. With ``do_layer_norm_before`` false (OPT-350m) the norms follow the adds, as on
+    transformers: the attention reads the stream itself, ``layer_mid`` is ``self_attn_layer_norm``'s output, and no
+    norm precedes the feed-forward path.
     """
 
-    @Flat("final_layer_norm.input", description="The residual stream after the attention add, [1, tokens, hidden_size]")
+    @Flat("input_layernorm.output", unavailable=lambda block: None if norms_before(block) else POST_NORM_ATTENTION,
+          description="The normed stream entering the attention, [1, tokens, hidden_size]")
+    def attention_norm_output(self, value) -> Residual:
+        return value
+
+    @Flat(lambda block: "final_layer_norm.input" if norms_before(block) else "input_layernorm.output",
+          description="The residual stream after the attention add, [1, tokens, hidden_size]", in_place=True)
     def layer_mid(self, value) -> Residual:
         return value
 
-    @Flat("final_layer_norm.output", description="The normed stream entering the feed-forward path, [1, tokens, hidden_size]")
+    @Flat("final_layer_norm.output", unavailable=lambda block: None if norms_before(block) else POST_NORM_MLP,
+          description="The normed stream entering the feed-forward path, [1, tokens, hidden_size]")
     def mlp_norm_output(self, value) -> Residual:
         return value
 
@@ -97,3 +113,22 @@ class Mlp(Mlp):
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``. No MLP module to key.
 ENVOYS = {OPTDecoderLayer: Layer, OPTAttention: Attention}
+
+
+# -- the logit lens ------------------------------------------------------------------
+
+def project_on_vocab(model, hidden: torch.Tensor) -> torch.Tensor:
+    """The decoder's final norm where it has one, ``project_out`` where it has one, then vLLM's logits processor over ``lm_head``.
+
+    As on transformers: OPT-350m has no final norm and projects the stream from
+    ``hidden_size`` to ``word_embed_proj_dim`` before the head; every other
+    released OPT norms and does not project. vLLM's ``project_out`` returns
+    ``(output, bias)``.
+    """
+    decoder = model.model.decoder
+    rows = hidden.reshape(-1, hidden.shape[-1]).contiguous()
+    if decoder.final_layer_norm is not None:
+        rows = decoder.final_layer_norm(rows)
+    if decoder.project_out is not None:
+        rows = decoder.project_out(rows)[0]
+    return model.logits_processor(model.lm_head, rows).reshape(*hidden.shape[:-1], -1)

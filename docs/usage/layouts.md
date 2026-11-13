@@ -257,8 +257,10 @@ model.layers[0].self_attn.qk_rope_head_dim                         # 64
 ## `Streams` on DeepSeek-V4
 
 DeepSeek-V4 carries `hc_mult` parallel copies of the residual stream between blocks, and
-`layer_output` is the block's own tensor, so its layout is `Streams`, not `Residual`. The
-contributions stay `Residual`: each sublayer reads one weighted collapse of the streams and
+`layer_output` is the block's own tensor, so its layout is `Streams`, not `Residual`; so is
+`layer_input`. The contributions and what
+each sublayer is called with (`attention_norm_output`, `mlp_norm_output`, `mlp_input`) stay
+`Residual`: each sublayer reads one weighted collapse of the streams and
 returns `[batch, seq, hidden_size]`, which the block writes into every stream with the weights
 `attention_post` / `mlp_post` (`StreamWeights`) after mixing the streams with
 `attention_comb` / `mlp_comb` (`StreamMixing`):

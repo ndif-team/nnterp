@@ -21,8 +21,11 @@ tries a config's own type before its text model's), and every snippet in `docs/`
 identical values on both wherever they do not depend on unseeded randomness. On **5.21.0** the recurrent mixers hold
 too: it dropped the `use_precomputed_states` binding from every recurrent forward for a fetch from the cache, which
 `RecurrentMixer.BRANCH` now names beside the old binding ([below](#gated-deltanet-qwen3-next-qwen35-qwen35-moe)), and
-the recurrent families' tests pass there (Jamba's mixture tests do not: one of its mixture values is a tuple on 5.21,
-not yet handled); `pyproject.toml` requires `nnsight>=0.8`,
+the recurrent families' tests pass there; Jamba's router became a ``JambaTopKRouter`` module there (a bare ``nn.Linear``
+before), so its `router_logits` read whichever the mixture has; SmolVLM's model scatters its image features itself there
+(``masked_scatter``, as Llava does) where 5.20 called ``inputs_merger``, so its scatter host reads whichever operation
+the forward has, and the 5.20-only SmolVLM reshape bug that skipped its tower tests is fixed in 5.21. The suite passes
+on 5.21.0 with 0 failures. `pyproject.toml` requires `nnsight>=0.8`,
 `transformers>=5.17` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below) and whose `rename` takes a dotted alias (`{"attn.c_proj":
 "attn.o_proj"}` binds on the attention, which GPT-2's two `c_proj` need); nnsight 0.8.0
@@ -101,14 +104,14 @@ an attention mask is passed, as it is on every prompt.
 
 | family | value → op (`nnterp/families/<f>.py`) |
 |---|---|
-| **BLOOM** (`bloom.py:44-84`, `:90-96`) | q/k/v `self__reshape_0.output[0..2]`; scores `F_softmax_0.input`; head outputs `torch_bmm_0.output`; pattern `self_attention_dropout_0.output`; both contributions `dropout_add_0.input` |
+| **BLOOM** (`bloom.py:44-84`, `:90-96`) | q/k/v `self__reshape_0.output[0..2]`; scores `F_softmax_0.input`; head outputs `self__merge_heads_0.output` viewed per head; pattern `self_attention_dropout_0.output`; both contributions `dropout_add_0.input` |
 | **MPT** (`mpt.py:45-74`, `:80-85`) | q/k/v the bindings `query_states_0`, `key_states_0`, `value_states_0`; scores `nn_functional_softmax_0.input`; head outputs `torch_matmul_1`; pattern `nn_functional_dropout_0`; MLP contribution `F_dropout_0` |
-| **Falcon** (`falcon.py:42-119`) | each op chosen by `config.alibi` through `by_alibi(without, with_alibi)`. Without alibi: queries/keys `apply_rotary_pos_emb_0.output[0/1]`; values the binding `value_layer_0`; scores `F_softmax_0.input`; head outputs `attn_output_1` (the `attention_scores @ value_layer` binding; `attn_output_0` is the sdpa branch that does not run, `modeling_falcon.py:350`, `:365`); pattern `F_softmax_0.output` (no dropout follows). With alibi: queries/keys/values the bindings `query_layer_0`, `key_layer_0`, `value_layer_0`; scores `F_softmax_1.input`; pattern `self_attention_dropout_0.output`; head outputs `flatten_0.output` (`[batch * num_heads, seq, head_dim]`, served as a `[batch, seq, num_heads, head_dim]` view) |
+| **Falcon** (`falcon.py:42-119`) | each op chosen by `config.alibi` through `by_alibi(without, with_alibi)`. Without alibi: queries/keys `apply_rotary_pos_emb_0.output[0/1]`; values the binding `value_layer_0`; scores `F_softmax_0.input`; head outputs `attn_output_1` (the `attention_scores @ value_layer` binding; `attn_output_0` is the sdpa branch that does not run, `modeling_falcon.py:350`, `:365`); pattern `F_softmax_0.output` (no dropout follows). With alibi: queries/keys/values the bindings `query_layer_0`, `key_layer_0`, `value_layer_0`; scores `F_softmax_1.input`; pattern `self_attention_dropout_0.output`; head outputs `self__merge_heads_0.output` (`[batch, seq, num_heads * head_dim]`, served as a `[batch, seq, num_heads, head_dim]` view; the product before it, `flatten_0`, is `[batch * num_heads, ...]`) |
 | **GPT-J** (`gptj.py:43-73`) | everything around the `self._attn(...)` call: `self__attn_0.inputs[0..2]`, `self__attn_0.source.nn_functional_softmax_0.input`, `self__attn_0.output[0]`, `self__attn_0.source.self_attn_dropout_0` |
 | **GPT-Neo** (`gpt_neo.py`) | the same ops as GPT-J on the inner `GPTNeoSelfAttention` (`attn.attention`), which the `GPTNeoAttention` wrapper calls |
 | **CodeGen** (`codegen.py`) | GPT-J's ops around `self__attn_0`, except the scores: `self__attn_0.source.call_0.input`, the call of the `nn.Softmax(dim=-1)` instance built on the same line (`nn_Softmax_0` is the construction) |
 | **GPT-NeoX-Japanese** (`gpt_neox_japanese.py`) | around `self__attn_0`: `inputs[0..2]`, `source.nn_functional_softmax_0.input`, `output[0]`, `source.self_attention_dropout_0` |
-| **XGLM** (`xglm.py`) | q/k/v `query_states_reshape_0` / `key_states_reshape_0` / `value_states_reshape_0` outputs; scores `nn_functional_softmax_1.input` (`_0` is the fp16 upcast branch, chosen by the weights' dtype); pattern `nn_functional_dropout_0.output`; head outputs `torch_bmm_1.output`; every one viewed from `[batch * num_heads, ...]` |
+| **XGLM** (`xglm.py`) | every value but the keys and values where the batch still leads (the `bmm` calls take `[batch * num_heads, ...]`): queries the `query_states_0` binding, viewed heads first; keys/values `key_states_reshape_0` / `value_states_reshape_0` outputs, after the cache update, viewed from `[batch * num_heads, ...]`; scores the `attn_weights_2` binding (the clamp, before either softmax branch); pattern the `attn_weights_reshaped_0` binding (`nn_functional_dropout_0.output`, viewed, in training); head outputs the `attn_output_2` binding |
 | **DBRX** (`dbrx.py:10`) | on the shared interface in 5.17, so the base class holds; an earlier layout had its own arithmetic |
 
 ### Gated DeltaNet (Qwen3-Next, Qwen3.5, Qwen3.5-MoE)

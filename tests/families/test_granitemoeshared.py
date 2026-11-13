@@ -2,7 +2,7 @@
 
 import test_granite
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT
+from suite import FamilySuite, LLAMA_ROWS, PROMPT, built
 
 from nnterp.families import granitemoeshared
 
@@ -15,6 +15,24 @@ def scaled_mixture(self, model, host):
     with model.trace(PROMPT):
         out = host.mlp_output.save()
     return out / model.config.residual_multiplier
+
+
+def written_mlp_input_reaches(model, layer, first, second):
+    """Zero ``mlp_input``'s last row, in place and by assignment: both feed-forward modules, ``first`` then ``second`` in
+    the order the block calls them, receive the written tensor."""
+    for how in ("in place", "assigned"):
+        with model.trace(PROMPT):
+            if how == "in place":
+                layer.mlp_input[:, -1] = 0
+            else:
+                written = layer.mlp_input.clone()
+                written[:, -1] = 0
+                layer.mlp_input = written
+            first_in = first.input.save()
+            second_in = second.input.save()
+        for module, x in ((first, first_in), (second, second_in)):
+            assert torch.equal(x[:, -1], torch.zeros_like(x[:, -1])), (how, module.path)
+            assert x[:, :-1].abs().sum() > 0, (how, module.path)
 
 
 class TestGraniteMoeShared(FamilySuite):
@@ -30,11 +48,15 @@ class TestGraniteMoeShared(FamilySuite):
             out = model.layers[0].mlp.mlp_output.save()
         assert torch.equal(out, moe + shared)
 
+    def test_mlp_input_reaches_the_mixture_and_the_shared_expert(self, model):
+        layer = model.layers[0]
+        written_mlp_input_reaches(model, layer, layer.mlp, layer.shared_mlp)
+
 
 class TestGraniteMoeSharedScaled(test_granite.TestGraniteScaled):
     """The same weights with every multiplier away from 1.0 (Granite's rewrite)."""
 
-    REPO = test_granite._scaled_checkpoint(REPO)
+    REPO = built(test_granite._scaled_checkpoint, REPO)
     FAMILY = granitemoeshared
     mixture_output = scaled_mixture
     NATIVE = NATIVE
@@ -46,14 +68,15 @@ class TestGraniteMoeSharedScaled(test_granite.TestGraniteScaled):
             moe = model.layers[0].mlp.output.save()
             shared = model.layers[0].shared_mlp.output.save()
             mlp = model.layers[0].mlp.mlp_output.save()
-        torch.testing.assert_close(attn, attn_raw * 0.22)
-        torch.testing.assert_close(mlp, (moe + shared) * 0.22)
+        scale = model.config.residual_multiplier
+        torch.testing.assert_close(attn, attn_raw * scale)
+        torch.testing.assert_close(mlp, (moe + shared) * scale)
 
 
 class TestGraniteMoeSharedWithoutSharedExpert(FamilySuite):
     """``shared_intermediate_size`` 0: no shared expert, so the block adds the mixture alone."""
 
-    REPO = test_granite._scaled_checkpoint(REPO, shared_intermediate_size=0)
+    REPO = built(test_granite._scaled_checkpoint, REPO, shared_intermediate_size=0)
     FAMILY = granitemoeshared
     mixture_output = scaled_mixture
     MOE_UNAVAILABLE = {"shared_expert_output": "no shared expert"}
@@ -64,4 +87,4 @@ class TestGraniteMoeSharedWithoutSharedExpert(FamilySuite):
         with model.trace(PROMPT):
             moe = model.layers[0].mlp.output.save()
             out = model.layers[0].mlp.mlp_output.save()
-        torch.testing.assert_close(out, moe * 0.22)
+        torch.testing.assert_close(out, moe * model.config.residual_multiplier)

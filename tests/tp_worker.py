@@ -104,10 +104,24 @@ def main() -> None:
             mlp.mlp_activation = activation
             out["activation_assigned"] = model.logits.save()
 
+        block = model.layers[LAYER]  # the stream between the sublayers, held whole on every rank
+        with model.trace(PROMPT):
+            block.layer_mid = block.layer_mid * 0.5
+            out["mid_halved_by_assignment"] = model.logits.save()
+
+        with model.trace(PROMPT):
+            block.layer_mid[:] *= 0.5
+            out["mid_halved_in_place"] = model.logits.save()
+
     # With gradients on, a gathered value is a clone, which is what the in-place edit lands on.
     with model.trace(PROMPT):
         attn.attention_head_outputs[:, :, heads - 1] = 0
         out["head_outputs_zeroed_with_grad"] = model.logits.save()
+
+    # An assignment to layer_mid is copied into the stream, which requires grad here.
+    with model.trace(PROMPT):
+        model.layers[LAYER].layer_mid = model.layers[LAYER].layer_mid * 0.5
+        out["mid_halved_with_grad"] = model.logits.save()
 
     rank = int(os.environ.get("RANK", 0))
     torch.save({name: value.detach().cpu() for name, value in out.items()}, os.path.join(args.out, f"rank{rank}.pt"))

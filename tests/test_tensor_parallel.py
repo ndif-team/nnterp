@@ -36,6 +36,7 @@ READS = [
 EDITS = [
     "head_outputs_zeroed_in_place", "keys_scaled_in_place", "queries_scaled_by_assignment", "queries_prerope_moved", "activation_assigned",
     "head_outputs_zeroed_with_grad", "head_patched_through_interface",
+    "mid_halved_by_assignment", "mid_halved_in_place", "mid_halved_with_grad",
 ]
 
 
@@ -109,6 +110,15 @@ def test_the_edit_moves_the_logits(runs, name):
     """Each edit changes the prediction, so matching it across ranks says the edit landed where it was aimed."""
     reference, _ = runs
     assert _rel(reference[name], reference["logits"]) > 1e-3
+
+
+def test_assigning_layer_mid_is_the_in_place_write(runs):
+    """An assignment to ``layer_mid`` is copied into the stream on every rank, as one process copies it: the same
+    logits as the in-place edit, with gradients on or off."""
+    reference, ranks = runs
+    for values in (reference, *ranks):
+        assert torch.equal(values["mid_halved_by_assignment"], values["mid_halved_in_place"])
+        assert torch.equal(values["mid_halved_with_grad"], values["mid_halved_in_place"])
 
 
 def test_head_weights_are_refused_on_a_split_model(launches):

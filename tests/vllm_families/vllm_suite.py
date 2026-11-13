@@ -140,8 +140,15 @@ def transformers_values(repo, skip, load=None):
                 read = nnsight.save({i: value_of(hf.layers[i], name).cpu() for i in served})
             for i in served:
                 layers[i][name] = read[i]
-    with hf.trace(torch.tensor([ids])):
-        final_norm = hf.final_norm_output.cpu().save()
+    mid_halved = None  # the logits with the middle block's stream between the sublayers halved: what a write to layer_mid does
+    if hf.support(layer=middle).get("layer_mid", "absent") is None:
+        with hf.trace(torch.tensor([ids])):
+            hf.layers[middle].layer_mid[:] *= 0.5
+            mid_halved = hf.logits[:, -1:].cpu().save()
+    final_norm = None  # a checkpoint with no final norm (OPT-350m) has no final_norm_output
+    if support["final_norm_output"] is None:
+        with hf.trace(torch.tensor([ids])):
+            final_norm = hf.final_norm_output.cpu().save()
     scale = layers[middle]["layer_output"].norm(dim=-1).mean().item()
     with hf.trace(torch.tensor([ids])):
         hf.steer(middle, vector, factor=scale)
@@ -161,7 +168,7 @@ def transformers_values(repo, skip, load=None):
         "ids": ids, "picked": picked, "middle": middle, "vector": vector, "scale": scale, "embeddings": embeddings,
         "final_norm": final_norm, "layers": layers, "logits": logits, "steered": steered, "headless": headless, "skipped": skipped,
         "skip": skip or (middle, middle), "max_len": min(512, positions), "sizes": {name: getattr(hf, name) for name in SIZES},
-        "rope": rope, "moved": moved, "ranks": ranks, "eos": hf.generation_config.eos_token_id,
+        "rope": rope, "moved": moved, "ranks": ranks, "eos": hf.generation_config.eos_token_id, "mid_halved": mid_halved,
     }
 
 
@@ -258,7 +265,7 @@ class VLLMFamilySuite:
         unavailable = {name for name, reason in support.items() if reason}
         assert unavailable == self.UNAVAILABLE
         for name in ("layer_input", "layer_output", "self_attn.attention_output", "mlp.mlp_output", "final_norm_output", *(f"self_attn.{name}" for name in self.SERVED)):
-            assert support[name] is None, name
+            assert name in self.UNAVAILABLE or support[name] is None, name
 
     def test_order_and_rank_are_transformers(self, model, reference):
         """`order` and `rank` are the transformers model's ranks for every value both engines serve, on the root and
@@ -358,15 +365,20 @@ class VLLMFamilySuite:
                     continue  # transformers does not serve it on this checkpoint
                 close(value, want.reshape(value.shape), tolerance, f"layers[{i}].{name}")  # OPT's transformers rows are flat
                 compared += 1
-        with self.run(model, reference):
-            norm = model.final_norm_output.cpu().save()
-        assert norm.shape == (1, tokens, model.hidden_size)
-        close(norm, reference["final_norm"], self.MODULE_TOLERANCE.get("final_norm_output", self.TOLERANCE), "final_norm_output")
+        if reference["final_norm"] is None:
+            assert model.support()["final_norm_output"] == "no norm module on this model"
+        else:
+            with self.run(model, reference):
+                norm = model.final_norm_output.cpu().save()
+            assert norm.shape == (1, tokens, model.hidden_size)
+            close(norm, reference["final_norm"], self.MODULE_TOLERANCE.get("final_norm_output", self.TOLERANCE), "final_norm_output")
         assert compared, "no module boundary served on both engines"
 
     @pytest.mark.parametrize("name", (*MODULE_VALUES, "final_norm_output"))
     def test_module_boundary_writes_land(self, model, reference, name):
-        """An in-place edit and an assignment are the same write, and a read that edits nothing changes nothing."""
+        """An in-place edit and an assignment are the same write, and a read that edits nothing changes nothing. A write
+        to ``layer_mid`` replaces the stream between the sublayers, the MLP's norm's input and what the block adds the
+        MLP's output to, as on transformers, whether the block is fused or holds the stream under two names."""
         host = model if name == "final_norm_output" else model.layers[reference["middle"]]
         reason = model.support().get(name) if host is model else model.support(layer=reference["middle"]).get(name, "absent")
         if reason is not None:
@@ -384,6 +396,9 @@ class VLLMFamilySuite:
         assert torch.equal(untouched, clean)
         assert not torch.allclose(clean, in_place)
         close(assigned, in_place, self.TOLERANCE, name)
+        if name == "layer_mid" and reference["mid_halved"] is not None:
+            close(in_place, reference["mid_halved"], self.TOLERANCE, "layer_mid halved in place, against transformers")
+            close(assigned, reference["mid_halved"], self.TOLERANCE, "layer_mid halved by assignment, against transformers")
 
     def test_attention_interior_matches_transformers(self, model, reference):
         """The queries, keys, values and head outputs are transformers' eager ones, in its layouts, heads split out."""
@@ -663,7 +678,7 @@ class VLLMFamilySuite:
                 attn.rotate(torch.zeros(1, 1, 2, 8), [0, 1])
 
     def test_head_weights_are_refused(self, model):
-        """The per-head weights are refused on this engine, with `no_head_weights`' one reason (it fuses and shards the projections), and so is the gain."""
+        """The per-head weights are refused on this engine, with `no_head_weights`' one reason (it fuses and shards the projections), and so are the gains."""
         for layer in model.layers:
             attn = layer.self_attn
             reason = attn.no_head_weights()
@@ -673,6 +688,8 @@ class VLLMFamilySuite:
                     method(0)
             with pytest.raises(Unavailable, match="attention_input_gain is not available"):
                 layer.attention_input_gain
+            with pytest.raises(Unavailable, match="attention_output_gain is not available"):
+                layer.attention_output_gain
 
     # -- the engine's own shape: steps and invokes -----------------------------------
 

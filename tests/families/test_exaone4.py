@@ -2,13 +2,12 @@
 
 import pytest
 
-import glob
 import json
 import os
 import tempfile
 
 import torch
-from suite import NO_ROTARY, FamilySuite, PROMPT, rows
+from suite import NO_ROTARY, FamilySuite, PROMPT, rows, cached_snapshot, built
 from vision_suite import WrapperSuite, wrapper_of
 
 from nnterp.families import exaone4
@@ -38,7 +37,7 @@ def _hybrid_checkpoint(repo="hf-tiny-v2/tiny-random-Exaone4ForCausalLM"):
     layers' NoPE branch (no rotary) never runs. The weights and tokenizer are
     symlinked, only ``config.json`` is rewritten.
     """
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="exaone4-hybrid-")
     for name in os.listdir(snapshot):
         if name != "config.json":
@@ -52,7 +51,7 @@ def _hybrid_checkpoint(repo="hf-tiny-v2/tiny-random-Exaone4ForCausalLM"):
 class TestExaone4Hybrid(FamilySuite):
     """A sliding-window layer and a full-attention layer that skips the rotary."""
 
-    REPO = _hybrid_checkpoint()
+    REPO = built(_hybrid_checkpoint)
     FAMILY = exaone4
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln1=None)
     ATTENTION_NORM = None

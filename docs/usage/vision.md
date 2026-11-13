@@ -257,7 +257,9 @@ Gemma 3's tower attends over 4096 patches, so under eager every block's pattern 
 card, and with it peaked at 11 GB.
 
 Read order is the forward's: `vision.image_token_mask` first (it comes off the inputs,
-like `input_ids`; under `generate` on transformers 5.18 and later, after the tower, above), then the tower's values, a block's attention interior before its
+like `input_ids`; under `generate` on transformers 5.18 and later, after the tower, above), then
+`token_embeddings` (the wrapper embeds the ids before it runs the tower; under `generate`, after the
+tower and the mask), then the tower's values, a block's attention interior before its
 `layer_output`, then `vision.image_features`, then the text model's. On the Qwen ViT the
 merger (`projector`) runs inside the tower and `tower_output` is served at the tower's
 output, after it: read `projector.input` and `projector.output` before `tower_output`, or
@@ -336,7 +338,11 @@ with torch.no_grad(), model.trace(prompt, images=[red, blue]):
 The text blocks of these families use multimodal rotary embeddings (M-RoPE: temporal,
 height and width position streams), which the model folds into one `cos`/`sin` before the
 blocks; the attention applies it before the interface, so `attention_queries` and
-`attention_keys` are the rotated queries and keys, as on any rotary family.
+`attention_keys` are the rotated queries and keys, as on any rotary family. With an image in
+the prompt a token's position is not its index (the image tokens take grid positions, and the
+text after resumes at the image's largest position plus one), so `self_attn.rotate` needs the
+model's `[3, batch, seq]` positions there
+([attention-interior](attention-interior.md#rotate-and-the-positions-it-is-given)).
 
 ## Availability
 

@@ -1,13 +1,12 @@
 """Kimi-Linear, end to end: a Kimi Delta Attention hybrid with latent attention and a mixture of experts."""
 
-import glob
 import json
 import os
 import tempfile
 
 import pytest
 import torch
-from suite import NO_ROTARY, FamilySuite, HEAD_WEIGHTS, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed
+from suite import NO_ROTARY, FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, cached_snapshot, built
 
 from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
 from nnterp.components import Moe
@@ -30,7 +29,7 @@ def _checkpoint(repo="yujiepan/kimi-linear-tiny-random"):
     released checkpoints' own layout, which transformers converts at load) and
     the tokenizer are symlinked. Written once per snapshot.
     """
-    snapshot = glob.glob(os.path.expanduser(f"~/.cache/huggingface/hub/models--{repo.replace('/', '--')}/snapshots/*"))[0]
+    snapshot = cached_snapshot(repo)
     patched = os.path.join(tempfile.gettempdir(), f"nnterp-kimi-linear-{os.path.basename(snapshot)}")
     if os.path.exists(os.path.join(patched, "config.json")):
         return patched
@@ -47,7 +46,7 @@ def _checkpoint(repo="yujiepan/kimi-linear-tiny-random"):
 
 
 class TestKimiLinear(FamilySuite):
-    REPO = _checkpoint()
+    REPO = built(_checkpoint)
     FAMILY = kimi_linear
     # The KDA mixer's native name is ``self_attn``, which the family clears on its blocks, so ``linear_attn``
     # has no native path to compare with; `test_the_kda_mixer_is_native_self_attn` checks the module instead.
@@ -55,7 +54,7 @@ class TestKimiLinear(FamilySuite):
     NATIVE = {k: v for k, v in NATIVE.items() if v is not None}
     KV_HEADS_EXPANDED = True  # latent attention projects keys and values for every head
     EXPECTED_UNAVAILABLE = {
-        HEAD_WEIGHTS: "latent attention",
+        "self_attn.value_weight": "latent attention",
         **{name: "no self_attn module" for name in VALUES if name.startswith("self_attn.")},
         **{name: "no " for name in NO_ROTARY},  # no self_attn module off the attention blocks, no rotary embedding on them
         **{f"linear_attn.{name}": "no linear_attn module" for name in LINEAR if name not in ("state", "states")},

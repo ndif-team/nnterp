@@ -3,8 +3,8 @@
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
 added in the block, attention through the shared eager forward.
-The rotary covers ``partial_rotary_factor`` of each head (1.0, the whole head, on
-Solar-Open-100B). Every block's MLP is a mixture of experts: transformers builds
+The rotary covers the whole head: transformers' Solar Open attention has no partial rotary
+(``partial_rotary_factor`` is 1.0 on Solar-Open-100B). Every block's MLP is a mixture of experts: transformers builds
 ``SolarOpenMoE`` on every block whatever ``first_k_dense_replace`` says. It adds a
 shared expert (``mlp.shared_experts``, a ``SolarOpenMLP``) before it returns; the
 experts are ``moe_intermediate_size`` wide. ``SolarOpenMLP`` is keyed to `Mlp`, so the

@@ -38,6 +38,7 @@ class Layer(Layer):
         "post_attention_layernorm.input",
         description="The residual stream after the attention add",
         unavailable=lambda block: PARALLEL if block.root.config.use_parallel_residual else None,
+        in_place=True,
     )
     def layer_mid(self, value) -> Residual:
         return value

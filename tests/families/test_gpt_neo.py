@@ -1,5 +1,6 @@
 """GPT-Neo, end to end: tuple block output, ``self_attn`` on the inner module, arithmetic in ``_attn``."""
 
+import pytest
 import torch
 from suite import NO_ROTARY, FamilySuite, rows, PROMPT
 
@@ -39,6 +40,8 @@ class TestGPTNeo(FamilySuite):
         """A ``local`` layer's pattern is zero more than ``window_size`` tokens back."""
         types = model.config.attention_layers
         window = model.config.window_size
+        if "local" not in types:
+            pytest.skip("no local layer on this checkpoint")
         local = types.index("local")
         prompt = " ".join(["token"] * (window + 4))
         with model.trace(prompt):

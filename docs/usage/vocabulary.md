@@ -152,13 +152,13 @@ the roles match (a query reads the state, a key says where a token writes, a val
 it writes). The roles match; the tensors do not. Code written against one mixer runs on
 another and computes something else:
 
-| | gated DeltaNet ([delta-net](delta-net.md)) | Mamba-1 ([selective-scan](selective-scan.md)) | Mamba-2 ([state-space](state-space.md)) |
+| | gated DeltaNet, Kimi-Linear's Kimi Delta Attention among them ([delta-net](delta-net.md)) | Mamba-1 ([selective-scan](selective-scan.md)) | Mamba-2 ([state-space](state-space.md)) |
 | --- | --- | --- | --- |
 | state per | head | channel | head |
 | state layout | `[batch, heads, key_dim, value_dim]`, key side first | `[batch, channels, state_dim]`, value side first | `[batch, heads, state_dim, head_dim]`, key (`B`) side first, the transpose of the cache |
 | update | delta rule: decay, then write what the state lacks at the key, `S += k ⊗ beta (v - Sᵀk)` | `h = exp(dt A) h + dt B x`, per channel | `h = exp(dt A) h + dt x Bᵀ`, per head |
 | `attention_queries`, `attention_keys` | per head, before the kernel's l2-norm and `1/sqrt(key_dim)` | `C`, `B`: one group shared by every channel | `C`, `B`: per group of heads |
-| `decays` | log decay per head; writable | `dt * A` per channel *and* state dimension; read-only | `dt * A` per head; writable, but it is `dt`, so writing it rewrites `betas` |
+| `decays` | log decay per head (per head and key channel on Kimi-Linear, `ChannelGates`); writable | `dt * A` per channel *and* state dimension; read-only | `dt * A` per head; writable, but it is `dt`, so writing it rewrites `betas` |
 | `betas` | write strength in `(0, 1)` (`(0, 2)` on OLMo-Hybrid); writable on its own | the step `dt`; read-only | the step `dt`; writable, rounded on the way back |
 | per-token state writes | `state` under `tracer.iter`, `set_state_after` | `state` under `tracer.iter`, `set_state_after` | none; write `state_input` |
 

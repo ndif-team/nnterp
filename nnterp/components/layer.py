@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from functools import partial
 from typing import TYPE_CHECKING, Any
 
@@ -41,6 +42,39 @@ STATE_SPACE = "a state-space block: one sublayer, the mixer, so there is no stre
 ONE_SUBLAYER = "a one-sublayer block: its norm feeds its one sublayer, so there is no stream between sublayers"
 
 
+def _norm_gain(norm: Envoy, width: int, device: torch.device) -> Tensor:
+    """The per-channel gain of the norm ``norm``, float32 ``[width]``: what it multiplies a normalized input by.
+
+    Measured by calling it on ``+-256`` in alternating channels, which a norm
+    normalizes to ``+-1`` whatever it computes in, so ``(norm(p) - norm(-p)) / 2``
+    is the gain times the signs: exact without a bias, to the rounding of the
+    bias otherwise. The probe is float32, so a norm that computes in float32
+    returns the float32 gain it multiplies by (Gemma's ``1 + weight``, not
+    rounded to a bf16 weight's dtype); one that takes only its weight's dtype
+    (torch's LayerNorm) is called in that dtype, the one it multiplies in. A
+    module that does not normalize (an identity, a layer scale) returns twice
+    as much at ``+-512``, and its gain is the first probe's over 256. Detached:
+    a measurement, not a parameter.
+    """
+    weight = next(norm._module.parameters(), None)
+    signs = torch.ones(width, device=device if weight is None else weight.device)
+    signs[1::2] = -1
+
+    def odd(scale: float) -> Tensor:
+        probe = signs * scale
+        try:
+            out = norm(probe) - norm(-probe)
+        except RuntimeError:  # a norm that refuses a float32 input beside a lower-precision weight
+            probe = probe.to(weight.dtype if weight is not None else probe.dtype)
+            out = norm(probe) - norm(-probe)
+        return out.float() / 2 * signs
+
+    gain = odd(256)
+    if torch.allclose(odd(512), 2 * gain):  # it scaled the probe rather than normalizing it
+        gain = gain / 256
+    return gain.detach()
+
+
 class Layer(Standard):
     """A decoder block. Its hidden states are ``layer_output``, whatever the block returns.
 
@@ -78,7 +112,9 @@ class Layer(Standard):
         The block does not run; ``hidden`` takes the place of its
         ``layer_output``, packed the way the block would have returned it (a
         tuple family gets ``(hidden, None)``: the second element is the
-        attention weights nothing downstream reads). Call it inside a trace,
+        attention weights nothing downstream reads; a family whose second
+        element is state the next block reads, ZAYA's and GLM-5's, overrides
+        this to hand on the state the block received). Call it inside a trace,
         before the block runs.
         """
         self.skip((hidden, None) if self.returns_tuple else hidden)
@@ -97,10 +133,10 @@ class Layer(Standard):
         stream direction ``h``.
 
         Measured by calling the norm, outside a trace or inside one, on
-        ``+-256`` in alternating channels, which it normalizes to ``+-1``
-        whatever it computes in: exact on a norm without a bias, to the
-        rounding of the bias otherwise. In the dtype and on the device of the
-        norm's weight (else the block's).
+        ``+-256`` in alternating channels (`_norm_gain`): exact on a norm
+        without a bias, to the rounding of the bias otherwise. Float32, the
+        gain the norm multiplies by, on the device of the norm's weight (else
+        the block's), and detached.
 
         Raises:
             Unavailable: with `attention_norm_output`'s reason, where the block
@@ -111,14 +147,48 @@ class Layer(Standard):
         reason = value.reason(self)
         if reason and reason != POST_NORM_ATTENTION:
             raise Unavailable(f"{self.path}.attention_input_gain is not available: {reason}")
-        block = next(self._module.parameters())
+        device = next(self._module.parameters()).device
         if reason:  # a post-norm block: the attention reads the stream itself
-            return torch.ones(axis_size(self, HIDDEN), dtype=block.dtype, device=block.device)
-        norm = self.get(value.path(self).removesuffix(".output"))
-        weight = next(norm._module.parameters(), block)
-        signs = torch.ones(axis_size(self, value.dims[-1]), dtype=weight.dtype, device=weight.device)
-        signs[1::2] = -1
-        return (norm(signs * 256) - norm(signs * -256)) / 2 * signs
+            return torch.ones(axis_size(self, HIDDEN), device=device)
+        return _norm_gain(self.get(value.path(self).removesuffix(".output")), axis_size(self, value.dims[-1]), device)
+
+    @property
+    def attention_output_gain(self) -> Tensor:
+        """The per-channel gain between the attention's output and what the block adds to the stream, ``[hidden_size]``.
+
+        The gain of the norm `attention_output` is read at, on a block that
+        norms what the attention returns before adding it
+        (``post_attention_layernorm`` on the post-norm blocks, Gemma-2/3/4 and
+        AFMoE; ``post_self_attn_layernorm`` on GLM-4; ``post_norm1`` on
+        HyperCLOVA X): the block then adds ``gain * n(y)``, plus the norm's
+        bias, for the output projection's output ``y``, which `output_weight`
+        maps the heads into. Ones where the attention's output enters the
+        stream unnormed. So ``gain * (output_weight(j) @ value_weight(kv) @
+        (attention_input_gain * h))`` is head ``j``'s map of a stream direction
+        ``h`` into the stream, on a block with no further step.
+
+        Measured as `attention_input_gain` is (`_norm_gain`), with the same
+        dtype and device. On a block without softmax attention it follows the
+        mixer's (``linear_attn``) `attention_output`.
+
+        Raises:
+            Unavailable: with `attention_output`'s reason, or on a block with no
+                sequence mixer.
+        """
+        attn = getattr(self, "self_attn", None)
+        if attn is None:
+            attn = getattr(self, "linear_attn", None)
+        if attn is None:
+            raise Unavailable(f"{self.path}.attention_output_gain is not available: {absent(self, 'self_attn')}")
+        value = type(attn).attention_output
+        reason = value.reason(attn)
+        if reason:
+            raise Unavailable(f"{self.path}.attention_output_gain is not available: {reason}")
+        width, device = axis_size(attn, value.dims[-1]), next(self._module.parameters()).device
+        sibling = re.fullmatch(r"\.\./(\w+)\.output", value.path(attn))  # a module of the block, after the attention
+        if sibling is None:  # read at the attention's own output, or at an operation: added unnormed
+            return torch.ones(width, device=device)
+        return _norm_gain(self.get(sibling[1]), width, device)
 
     @EProperty(key="input", description="The residual stream entering the block")
     def layer_input(self, value: torch.Tensor) -> Residual:
@@ -142,15 +212,18 @@ class Layer(Standard):
         """
         return value
 
-    @EProperty("post_attention_layernorm.input", description="The residual stream after the attention add", unavailable=partial(absent, name="post_attention_layernorm"))
+    @EProperty("post_attention_layernorm.input", description="The residual stream after the attention add", unavailable=partial(absent, name="post_attention_layernorm"), in_place=True)
     def layer_mid(self, value: torch.Tensor) -> Residual:
         """The residual stream between the two sublayers, ``[batch, seq, hidden_size]``.
 
         What the MLP's pre-norm is called with: ``layer_input +
         attention_output`` on a pre-norm block, where it is read as
         ``post_attention_layernorm.input``. A parallel block has no such
-        stream, and marks this unavailable. In-place edits and assignment reach
-        the model.
+        stream, and marks this unavailable.
+
+        An assignment is copied into the stream in place (``in_place``): the
+        block holds it as the norm's argument and as ``residual``, and both see
+        the write (docs/usage/residual-stream.md, "Writing `layer_mid`").
         """
         return value
 

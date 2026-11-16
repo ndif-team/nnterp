@@ -173,8 +173,8 @@ per block: the full-attention blocks of Cohere 2, AFMoE and a hybrid EXAONE 4, t
 SmolLM3's `no_rope_layers` mark, and every block of a GraniteMoE-Hybrid or OLMo-Hybrid
 checkpoint whose config gives no rotary (`position_embedding_type`, `rope_theta`).
 
-GPT-J, CodeGen, Phi, StableLM, Persimmon, GPT-NeoX-Japanese, Granite SWA, GraniteMoE SWA
-and Llama 4 rotate their queries and keys their own way, and serve neither value nor
+GPT-J, CodeGen, Phi-1/1.5/2, StableLM, Persimmon, GPT-NeoX-Japanese, Granite SWA, GraniteMoE
+SWA and Llama 4 rotate their queries and keys their own way, and serve neither value nor
 `rotate` on any block. `support()` names the reason per block. `StandardizedVLLM` serves
 both values and `rotate` too, with the differences [below](#on-the-vllm-engine).
 

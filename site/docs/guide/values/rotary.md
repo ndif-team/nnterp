@@ -43,7 +43,7 @@ Use these values, not `self_attn.q_proj.output`, for any edit that must come bef
 
 ## Families without these values
 
-GPT-2, OPT, BLOOM, MPT, XGLM and the other families that position tokens another way (absolute embeddings, ALiBi) have neither value, and some families skip the rotary on some blocks (Cohere 2's and AFMoE's full-attention blocks, SmolLM3's `no_rope_layers`). GPT-J, CodeGen, Phi, StableLM, Persimmon, GPT-NeoX-Japanese, Granite SWA, GraniteMoE SWA and Llama 4 rotate their own way, and nnterp serves neither value there. `model.support()` names the reason per block, and `rotate` raises `nnterp.Unavailable` with it:
+GPT-2, OPT, BLOOM, MPT, XGLM and the other families that position tokens another way (absolute embeddings, ALiBi) have neither value, and some families skip the rotary on some blocks (Cohere 2's and AFMoE's full-attention blocks, SmolLM3's `no_rope_layers`). GPT-J, CodeGen, Phi-1/1.5/2, StableLM, Persimmon, GPT-NeoX-Japanese, Granite SWA, GraniteMoE SWA and Llama 4 rotate their own way, and nnterp serves neither value there. `model.support()` names the reason per block, and `rotate` raises `nnterp.Unavailable` with it:
 
 ```python
 gpt2 = StandardizedTransformer("openai-community/gpt2")

@@ -288,8 +288,8 @@ real stream, then the unembedding, as
 [contribution-decomposition](../patterns/contribution-decomposition.md#through-the-final-norm)
 does), a head's write of a given stream direction; and to read an adapted model's weights without
 merging the adapter. Use them instead of slicing `v_proj.weight` / `o_proj.weight` by hand: the
-rows of a head are laid out differently on fused projections (below), a LoRA layer's `.weight`
-is the base weight, and a norm's gain is `weight` on one family and `1 + weight` on another.
+rows of a head are laid out differently on fused projections (below), a PEFT adapter layer's
+`.weight` is the base weight, and a norm's gain is `weight` on one family and `1 + weight` on another.
 
 ```python
 import torch
@@ -338,10 +338,11 @@ family fuses or transposes its projections, its `Attention` reads its own:
 | four parts, each a quarter of the heads' queries, values, then keys | CodeGen (`qkv_proj`, the forward's `mp_num`) |
 | `Conv1D`, `[in, out]`: columns of `c_attn`, rows of `c_proj`, transposed | GPT-2 |
 
-**Under a PEFT adapter** the weight is the one the projection's next forward applies: the base
-plus each active, unmerged adapter's delta, in the base weight's dtype; the base once merged. A
-DoRA or aLoRA adapter, or a non-LoRA tuner, raises `NotImplementedError`: its forward is not the
-base layer plus a delta.
+**Under a PEFT adapter** (PEFT 0.19 or later) the weight is the one the projection's next forward
+applies, in the base weight's dtype: the base layer's weight, plus each active adapter's delta
+while the layer is enabled and unmerged; a layer left merged with its adapters disabled is
+unmerged first, as its forward would. An active, unmerged adapter that is not a delta added to
+the base weight (DoRA, OFT, IA3) raises `NotImplementedError`.
 
 **The gains** are measured by calling the norm on `+-256` in alternating channels, which every
 norm here normalizes to `+-1`, so each is the gain whatever the parameterization (`weight`,

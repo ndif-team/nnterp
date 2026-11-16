@@ -1,15 +1,14 @@
-"""Arcee (AFM) on vLLM (``vllm.model_executor.models.arcee``).
+"""Arcee (AFM) on vLLM, through its transformers backend (``ArceeForCausalLM`` -> ``TransformersForCausalLM``).
 
-Llama's names and Llama's fused block: it takes and returns the stream as
-``(hidden_states, residual)``. The block is vLLM's own class, its attention
-is Llama's ``LlamaAttention``, and its MLP is vLLM's ungated one
-(``down_proj(relu2(up_proj(x)))``), as on transformers.
+vLLM runs transformers' modules (see `nnterp.components.vllm.transformers_backend`),
+with Llama's names. The block is Llama's, pre-norm with the residual added in
+the block, so the contributions are the modules' outputs and the backend's
+envoys hold as they are. The MLP has no gate (``down_proj(relu2(up_proj(x)))``).
 """
 
-from vllm.model_executor.models.arcee import ArceeDecoderLayer, ArceeMLP
-from vllm.model_executor.models.llama import LlamaAttention
+from transformers.models.arcee.modeling_arcee import ArceeAttention, ArceeDecoderLayer, ArceeMLP
 
-from ...components.vllm import Attention, FusedLayer, Mlp
+from ...components.vllm.transformers_backend import Attention, Layer, Mlp
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
@@ -17,18 +16,5 @@ RENAME = {
     "model.norm": "norm",
 }
 
-
-class Layer(FusedLayer):
-    """The decoder block: ``forward(positions, hidden_states, residual) -> (hidden_states, residual)``."""
-
-
-class Attention(Attention):
-    """Llama's attention; its output is what the block adds, so the base holds."""
-
-
-class Mlp(Mlp):
-    """The ungated MLP; its output is what the block adds, so the base holds."""
-
-
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
-ENVOYS = {ArceeDecoderLayer: Layer, LlamaAttention: Attention, ArceeMLP: Mlp}
+ENVOYS = {ArceeDecoderLayer: Layer, ArceeAttention: Attention, ArceeMLP: Mlp}

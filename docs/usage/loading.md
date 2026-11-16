@@ -121,6 +121,8 @@ What loads serves:
   on an MLP that is not a mixture), the root values (`logits`,
   `token_embeddings`, `final_norm_output`, `lm_head_output`, `input_ids`, `attention_mask`,
   `input_size`, `next_token_probs`) and the sizes; `skip_layers` and `steer`, which work on the stream.
+  `final_norm_output` is unavailable where the forward does not call `norm` exactly once (NanoChat
+  norms the embeddings with it too, so `norm.output` is that first call's).
 - The attention interior (`attention_queries/keys/values/scores/probabilities/head_outputs`),
   read on transformers' shared attention interface as on any family, wherever the module
   calls it, and with `attn_implementation="eager"`, and `self_attn.interface`, which calls

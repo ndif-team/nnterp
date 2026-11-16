@@ -367,7 +367,8 @@ shapes, DeepSeek-V4's parallel streams) and `NO_OP` the pattern reads that
 fail loudly on a family whose eager attention forward has no softmax. The rest
 pin NanoChat (a `model_type` with no family: the warning, the stream and
 logits against the raw model, the one reason for the contributions and the
-lens, `steer` and `skip_layers`), Gemma-2's contributions reported
+lens, `final_norm_output` refused where the forward calls `norm` twice,
+`steer` and `skip_layers`), Gemma-2's contributions reported
 unavailable rather than wrong, and the refusals (RWKV's names,
 GPT-NeoX-Japanese's container, Gemma-3n's parallel streams, Inkling's scan
 under `grouped_mm`).

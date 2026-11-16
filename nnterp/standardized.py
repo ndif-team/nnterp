@@ -447,7 +447,10 @@ class StandardizedTransformer(Standardized, TransformersModel):
         """
         return value
 
-    @EProperty("norm.output", description="The residual stream after the final norm, what lm_head reads", unavailable=partial(absent, name="norm", where="model"))
+    #: Why ``norm.output`` is not the final norm's output on this model, where the family's load-time check finds so.
+    final_norm_unavailable: str | None = None
+
+    @EProperty("norm.output", description="The residual stream after the final norm, what lm_head reads", unavailable=lambda model: absent(model, "norm", "model") or model.final_norm_unavailable)
     def final_norm_output(self, value: torch.Tensor) -> Residual:
         """The final norm's output, ``[batch, seq, hidden_size]``: the stream the head projects. Assign to replace it; in-place edits reach the model."""
         return value

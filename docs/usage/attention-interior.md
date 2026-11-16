@@ -325,8 +325,9 @@ clamp the projections' outputs after them, and that MiMo-V2-Flash's `value_weigh
 parameter's dtype and on its device, live views of the parameter where torch allows: an in-place
 edit of one is an edit of the model, and they require grad as the parameters do. The model must
 hold its weights: on an undispatched model, whose weights are meta until its first trace or
-`model.dispatch()`, they raise `Unavailable`, and so they do on a quantized one (its weights are
-codes, not values) and on BitNet's layers (they apply a function of the weight they store).
+`model.dispatch()`, they and the two gains raise `Unavailable`, and so the weights do on a quantized
+one (its weights are codes, not values) and on BitNet's layers (they apply a function of the weight
+they store).
 
 **The layouts.** The base slices head-major rows of `v_proj` and columns of `o_proj`. Where a
 family fuses or transposes its projections, its `Attention` reads its own:

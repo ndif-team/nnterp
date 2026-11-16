@@ -52,6 +52,20 @@ def test_unavailable_marker_is_listed_and_raises():
         hasattr(attn, "attention_probabilities")
 
 
+def test_the_gains_refuse_an_undispatched_model():
+    """The gains are measured by calling a norm, so a model on the meta device has none: `Unavailable`, as for the per-head weights."""
+    model = StandardizedTransformer("hf-internal-testing/tiny-random-LlamaForCausalLM")
+    layer = model.layers[0]
+    for read in (
+        lambda: layer.attention_input_gain, lambda: layer.attention_output_gain,
+        lambda: layer.self_attn.value_weight(0), lambda: layer.self_attn.output_weight(0),
+    ):
+        with pytest.raises(Unavailable, match="not dispatched; load it with dispatch=True"):
+            read()
+    model.dispatch()
+    assert layer.attention_input_gain.shape == layer.attention_output_gain.shape == (model.hidden_size,)
+
+
 @pytest.fixture(scope="module")
 def gpt2_paths():
     """A GPT-2 attention with one value per kind of path an `EProperty` key can take."""

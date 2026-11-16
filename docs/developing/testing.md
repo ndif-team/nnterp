@@ -74,7 +74,7 @@ once per class: `model` (`suite.py`), a `StandardizedTransformer` with
 Methods a family file overrides the way it sets an attribute: `pattern_from_scores`
 (what the softmax makes of the scores; GPT-OSS adds its sink column);
 `rotated_as_served(attn, name, rotated, positions)` (what the attention receives given `rotate` of a
-value before the rotary at those positions; the identity, HunYuan's and Llama 4's post-rotary norms, JetMoE's
+value before the rotary at those positions; the identity, HunYuan's post-rotary norms, JetMoE's
 tiling of the keys, Ministral 3's query scale by position); `native(model)` (`NATIVE` for the checkpoint
 loaded: a hybrid names its first block of each kind from the config's `layer_types`, so the class runs on a
 trained checkpoint whose blocks sit elsewhere); `mixture_output(model, host)` (what `routed_output +
@@ -150,13 +150,14 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 
 | method | asserts |
 |---|---|
-| `test_rotate_gives_the_rotated_queries_and_keys` | on the first block with a rotary, `self_attn.rotate(prerope, arange(seq))` equals `attention_queries` / `attention_keys` bit for bit, in their dtype, and has their shape where the two layouts are the same name (`rotated_as_served` first: a family's test file says what its block does after the rotary, HunYuan's norms, Llama 4's `qk_norm`, JetMoE's tiling); a rotated value narrower than the served one (latent attention's shared rope key) is its trailing channels on every head |
+| `test_rotate_gives_the_rotated_queries_and_keys` | on the first block with a rotary, `self_attn.rotate(prerope, arange(seq))` equals `attention_queries` / `attention_keys` bit for bit, in their dtype, and has their shape where the two layouts are the same name (`rotated_as_served` first: a family's test file says what its block does after the rotary, HunYuan's norms, JetMoE's tiling); a rotated value narrower than the served one (latent attention's shared rope key) is its trailing channels on every head |
 | `test_a_prerope_write_is_rotated_for_its_position` | assigning position 0's prerope vector at the last position leaves the rotated value at every other position bit-identical and makes the last one `rotate(vector, [last])` |
-| `test_rotate_says_why_a_block_has_no_rotary` | on every block whose `no_rotary()` gives a reason, `support()` gives the same one and `rotate` raises `Unavailable` with it |
+| `test_rotate_says_why_a_block_has_no_rotary` | on every block whose `no_rotary()` gives a reason, `support()` gives the same one and `rotate` raises `Unavailable` with it; a family whose test expects `OWN_ROTARY` gives a reason on every block |
 | `test_order_ranks_the_prerope_values_first` | `model.order(i)` and `model.rank` put both values before the rotated ones |
 
 `NO_ROTARY` (`suite.py`) is the `EXPECTED_UNAVAILABLE` entry of a family without a rotary
-(GPT-2, OPT, BLOOM, ...) or with NoPE blocks (Cohere 2, SmolLM3, ...); `TOWER_NO_ROTARY` is
+(GPT-2, OPT, BLOOM, ...) or with NoPE blocks (Cohere 2, SmolLM3, ...); `OWN_ROTARY` is that of
+a family that rotates its own way and serves neither value (GPT-J, Phi, ...); `TOWER_NO_ROTARY` is
 what every vision tower reports for the two values, which the suite expects on a wrapper's
 `vision.*` rows without a family saying so.
 
@@ -416,8 +417,7 @@ rotary (`test_rotate_says_why_a_block_has_no_rotary`). `test_head_weights_are_re
 both gains raise too. A family whose block
 does more between its rotary and its attention layer overrides
 `rotated_as_served(attn, name, rotated)`, called inside the trace, where the
-engine's modules run (HunYuan's `query_layernorm` / `key_layernorm`, Llama 4's
-`qk_norm` in vLLM's channel order); a family with a block that applies no
+engine's modules run (HunYuan's `query_layernorm` / `key_layernorm`); a family with a block that applies no
 rotary, or that does not serve the values, adds `NO_ROTARY` to its
 `UNAVAILABLE`.
 

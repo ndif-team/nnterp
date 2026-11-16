@@ -307,7 +307,8 @@ class Attention(Attention):
 
 `no_rotary()` is the same decision for the values before the rotary embedding and
 `Attention.rotate`: `None` on the base, a reason on a family without a rotary or on a block
-that skips it, read off the module where the block decides:
+that skips it, read off the module where the block decides, and `OWN_ROTARY` on a family
+that rotates off the shared path and does not map it (`gptj.py`):
 
 ```python
 # nnterp/families/smollm3.py

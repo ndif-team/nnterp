@@ -45,7 +45,8 @@ block adds (an `attention_output` keyed on a post-norm's output on Gemma-2,
 [overriding-values.md](overriding-values.md)), what follows the head (a
 `def project_on_vocab(model, hidden)` for a softcap or a scale) and how its blocks rotate
 (on transformers' shared `apply_rotary_pos_emb` the base `Attention` serves the values
-before the rotary and `rotate`; a block without one overrides `no_rotary`). Anything further in the
+before the rotary and `rotate`; a block without one overrides `no_rotary`, and a family that
+rotates another way returns `OWN_ROTARY` from it). Anything further in the
 dict names another spot: "no self_attn module found under the names the default family
 knows" is a `RENAME` entry, and "the attention does its own arithmetic rather than
 transformers' shared attention interface" is an interior mapped onto the family's own
@@ -514,7 +515,7 @@ Every class attribute of `FamilySuite`:
 | `REPO` | The pinned tiny checkpoint, offline-cached. |
 | `FAMILY` | The family module the checkpoint must resolve to (`model.family is FAMILY`). |
 | `NATIVE` | Standard path to native path; each pair must be the same envoy, and every `layers.0.*` name must exist on every block. |
-| `EXPECTED_UNAVAILABLE` | `support()` key to a substring of the reason, for values this checkpoint lacks; every other value must report `None`. Default `{}`. `suite.NO_ROTARY` is the entry of a family without a rotary embedding. |
+| `EXPECTED_UNAVAILABLE` | `support()` key to a substring of the reason, for values this checkpoint lacks; every other value must report `None`. Default `{}`. `suite.NO_ROTARY` is the entry of a family without a rotary embedding, `suite.OWN_ROTARY` of one that rotates its own way. |
 | `REFUSES_IN_PLACE_QKV` | torch refuses in-place edits on queries that are views out of a `split`/`chunk` (GPT-2, GPT-BigCode, MPT); the suite expects a `RuntimeError` on the in-place query edit and skips it. |
 | `ATTENTION_SINK` | The pattern's rows sum to less than one (GPT-OSS). |
 | `KV_HEADS_EXPANDED` | Keys and values are read already expanded to `num_heads` (latent attention; Falcon's 40B layout). |

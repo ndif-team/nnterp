@@ -165,13 +165,13 @@ BLOOM reads its `dropout_add_0` call's input.
   one, before `repeat_kv` so the head axis is `num_kv_heads` wide.
 - **Queries and keys before the rotary** are what the rotary step receives: the shared
   `apply_rotary_pos_emb_0` call's first two arguments (`nnterp.components.ROTARY`), else the
-  binding the forward slices or splits them from (Phi's `query_states_1` after its
-  layernorm, GPT-J's `query_1`, latent attention's `torch_split_0` input), so a value stays
-  the whole head; a call that takes one tensor (Gemma-4's two `apply_rotary_pos_emb` calls)
-  is read at each call's `input`. A family whose block rotates nothing returns its reason
-  from `no_rotary()`, and one whose rotation is spelled another way overrides
-  `rotary_embedding` (where cos and sin come from) or `apply_rotary` (the arithmetic), so
-  `rotate` keeps giving the served rotated values.
+  binding the forward slices or splits them from (latent attention's `torch_split_0`
+  input), so a value stays the whole head; a call that takes one tensor (Gemma-4's two
+  `apply_rotary_pos_emb` calls) is read at each call's `input`. A family whose block rotates
+  nothing returns its reason from `no_rotary()`, and one whose rotation is spelled another
+  way either returns `OWN_ROTARY` from it (the values and `rotate` are then unavailable) or
+  overrides `rotary_embedding` (where cos and sin come from) or `apply_rotary` (the
+  arithmetic), so `rotate` keeps giving the served rotated values.
 - **Head outputs** are the last matmul: the interface call's output element 0,
   `torch_matmul_1` on MPT; where the forward flattens batch and heads together (BLOOM's
   `bmm`), the first operation after it that holds them batch first, BLOOM's `_merge_heads`.

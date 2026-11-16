@@ -118,7 +118,7 @@ the same for the keys, wherever the block does nothing more between its rotary a
 attention ([below](#where-a-familys-values-before-the-rotary-differ)): `rotate` calls the rotary embedding module the model computes its
 cos and sin with (rope scaling included, and the block's own layer type where sliding and
 full blocks rotate differently) and the apply function the block's forward calls (partial
-and interleaved rotations included). The per-family suite checks both on every family.
+and interleaved rotations included). The per-family suite checks both on every family that serves them.
 `rotate` takes `x` as `[..., seq, qk_head_dim]` and `positions` as `[seq]` (a tensor, a
 list or a `range`), or `[batch, seq]` for an `x` of `[batch, heads, seq, qk_head_dim]` whose
 prompts sit at different positions; it needs no trace, and on a model split over several
@@ -170,21 +170,19 @@ the same reason: GPT-2, GPT-BigCode, GPT-Neo, OPT and XGLM add absolute position
 stream, BLOOM, MPT and Falcon with `alibi` bias the scores with ALiBi, and the attention
 blocks of Jamba, Nemotron-H and Kimi-Linear use no position encoding. Some families skip it
 per block: the full-attention blocks of Cohere 2, AFMoE and a hybrid EXAONE 4, the blocks
-SmolLM3's and Llama 4's `no_rope_layers` mark, a Granite-SWA block whose
-`layer_rope_theta` is 0, and every block of a GraniteMoE-Hybrid or OLMo-Hybrid checkpoint
-whose config gives no rotary (`position_embedding_type`, `rope_theta`). `support()` names
-the reason per block. `StandardizedVLLM` serves both values and `rotate` too, with the
-differences [below](#on-the-vllm-engine).
+SmolLM3's `no_rope_layers` mark, and every block of a GraniteMoE-Hybrid or OLMo-Hybrid
+checkpoint whose config gives no rotary (`position_embedding_type`, `rope_theta`).
+
+GPT-J, CodeGen, Phi, StableLM, Persimmon, GPT-NeoX-Japanese, Granite SWA, GraniteMoE SWA
+and Llama 4 rotate their queries and keys their own way, and serve neither value nor
+`rotate` on any block. `support()` names the reason per block. `StandardizedVLLM` serves
+both values and `rotate` too, with the differences [below](#on-the-vllm-engine).
 
 ### Where a family's values before the rotary differ
 
-- **A partial rotary** (GPT-NeoX, Phi, Phi-3, StableLM, Persimmon, GPT-NeoX-Japanese, GLM,
-  MiniMax-M2, MiMo-V2-Flash, GPT-J and CodeGen with a `rotary_dim`): the values are the
+- **A partial rotary** (GPT-NeoX, Phi-3, GLM, MiniMax-M2, MiMo-V2-Flash): the values are the
   whole heads, `qk_head_dim` wide, though the rotary rotates only each head's leading
   channels; `rotate` rotates those and passes the rest, as the forward does.
-- **GPT-J and CodeGen** rotate interleaved channel pairs, tokens before heads, with sin and
-  cos from the module's own table; the values are served heads first as views, as
-  everywhere else.
 - **Latent attention** (DeepSeek-V2/V3, Kimi-K2, DeepSeek-V3.2, GLM-5, GLM-4.7-Flash, Youtu):
   only the trailing `qk_rope_head_dim` channels of a query head rotate, and one rope key
   per position that every head shares; the rest of each key comes out of the latent and
@@ -200,8 +198,8 @@ differences [below](#on-the-vllm-engine).
   and its values: a write to `attention_keys_prerope` rewrites the values too. Its sliding
   and compressed blocks take the rotary's `main` and `compress` frequencies.
 - **Steps between the rotary and the attention**: HunYuan (dense and MoE) norms the
-  queries and keys after the rotary (`query_layernorm`, `key_layernorm`), and Llama 4 too
-  (`qk_norm`, an L2 norm), so `attention_queries` is the norm of `rotate(...)` there;
+  queries and keys after the rotary (`query_layernorm`, `key_layernorm`), so
+  `attention_queries` is the norm of `rotate(...)` there;
   JetMoE tiles the keys to every routing slot (`repeat(1, top_k, 1, 1)`) after the rotary,
   so its `attention_keys_prerope` is `num_kv_heads` wide where `attention_keys` is not;
   Ministral 3 scales its queries after the rotary by a factor that is 1 below
@@ -268,7 +266,8 @@ here. Three things differ:
   only each query head's rope slice and the shared rope key, inside its latent-attention layer,
   where `StandardizedTransformer` serves whole-head queries.
 
-The blocks without a rotary embedding are the ones above, with the same reasons.
+The blocks without a rotary embedding are the ones above, with the same reasons, and GPT-J,
+StableLM and Llama 4 refuse both values and `rotate` as they do on transformers.
 
 ## The weights per head: `value_weight`, `output_weight`, `attention_input_gain`
 

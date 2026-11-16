@@ -13,7 +13,7 @@ import torch
 
 from vllm.model_executor.models.gpt_j import GPTJAttention, GPTJBlock, GPTJMLP
 
-from ...components import PARALLEL, Residual, unavailable
+from ...components import OWN_ROTARY, PARALLEL, Residual, unavailable
 from ...components.vllm import Attention, Flat, Layer, Mlp, project
 
 if TYPE_CHECKING:
@@ -46,7 +46,10 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """The attention; its output is what the block adds, so the base holds."""
+    """The attention; its output is what the block adds. The values before the rotary and `rotate` are refused, as on transformers."""
+
+    def no_rotary(self) -> str | None:
+        return OWN_ROTARY
 
 
 class Mlp(Mlp):

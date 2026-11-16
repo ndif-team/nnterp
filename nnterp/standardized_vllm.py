@@ -59,8 +59,8 @@ class StandardizedVLLM(Standardized, VLLM):
     `StandardizedTransformer`'s counterpart for nnsight's ``VLLM``: the same
     vocabulary (``model.layers[i].self_attn``, ``.mlp``, ``model.norm``,
     ``model.lm_head``), the same values with the same layouts, and the same
-    methods, over the engine's continuous batching. The family is vLLM's own
-    implementation of the checkpoint's ``model_type``, a module under
+    methods, over the engine's continuous batching. The family is the one for
+    the modules vLLM runs the checkpoint's ``model_type`` with, a module under
     `nnterp.families.vllm`.
 
     It is nnsight's ``VLLM`` otherwise, with vLLM's defaults: a trace is a

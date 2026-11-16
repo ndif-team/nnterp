@@ -216,8 +216,8 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
             the model is not dispatched (its weights are meta), or the weight is
             quantized (its elements are codes, not the values it applies; a BitNet
             layer applies a function of it).
-        NotImplementedError: an active, unmerged adapter that PEFT does not state to
-            be a delta added to the base weight (LoRA's variants such as DoRA, OFT, IA3).
+        NotImplementedError: an active, unmerged adapter that PEFT does not flag as a
+            delta added to the base weight (DoRA and LoRA's other variants, OFT, IA3).
     """
     reason = attn.no_head_weights()
     if reason:

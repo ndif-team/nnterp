@@ -132,7 +132,7 @@ print(rotated.shape, torch.equal(rotated, q))
 # torch.Size([1, 14, 7, 64]) True
 ```
 
-A write before the rotary is rotated for the position it lands at, as on transformers. On the families vLLM runs through its transformers backend, and under latent attention, the two values are unavailable ([What is unavailable](unavailable.md#on-some-families)).
+A write before the rotary is rotated for the position it lands at, as on transformers. On the families vLLM runs through its transformers backend, under latent attention, and on GPT-J, StableLM and Llama 4, the two values are unavailable ([What is unavailable](unavailable.md#on-some-families)).
 
 ## The same values on both engines
 

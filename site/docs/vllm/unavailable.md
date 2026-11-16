@@ -113,7 +113,7 @@ except RuntimeError as error:
 
 ## On some families
 
-A mixture of experts serves `mlp_output` and nothing inside it: the experts run in vLLM's fused MoE kernel, so `mlp_activation` and `mlp_neurons` are unavailable, and the router has no values on this engine. DeepSeek-V2, DeepSeek-V3, Kimi-K2 and GLM-4.7-Flash run latent attention in a kernel of their own, so the six values of the attention interior are unavailable there while `attention_output` is served, and the queries and keys before the rotary embedding are unavailable too. The families vLLM runs through its transformers backend serve no queries and keys before the rotary either, and the blocks without a rotary embedding have none, as on transformers. The reasons are constants, which `support()` prints for the affected values.
+A mixture of experts serves `mlp_output` and nothing inside it: the experts run in vLLM's fused MoE kernel, so `mlp_activation` and `mlp_neurons` are unavailable, and the router has no values on this engine. DeepSeek-V2, DeepSeek-V3, Kimi-K2 and GLM-4.7-Flash run latent attention in a kernel of their own, so the six values of the attention interior are unavailable there while `attention_output` is served, and the queries and keys before the rotary embedding are unavailable too. The families vLLM runs through its transformers backend serve no queries and keys before the rotary either, and the blocks without a rotary embedding, and GPT-J, StableLM and Llama 4, have none, as on transformers. The reasons are constants, which `support()` prints for the affected values.
 
 ```python
 from nnterp.components.vllm.mlp import ROUTED

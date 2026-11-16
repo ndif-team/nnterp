@@ -26,8 +26,7 @@ import torch
 from suite import MOE, NO_ROTARY, FamilySuite, LLAMA_ROWS, PROMPT, rows, MLP_INTERIOR, cached_snapshot, built, patched_checkpoint
 from vision_suite import IMAGE, VisionSuite, image_prompt
 
-from nnterp import StandardizedTransformer, Unavailable
-from nnterp.components import OWN_ROTARY
+from nnterp import StandardizedTransformer, Unavailable, components
 from nnterp.families import llama4_text
 
 NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.feed_forward"}
@@ -58,7 +57,7 @@ class TestLlama4Text(FamilySuite):
         """A RoPE block refuses them as a family that rotates its own way does, the NoPE block (``no_rope_layers``' 0) as one with no rotary."""
         for name in NO_ROTARY:
             reasons = model.support()[name]
-            assert [reasons[i] for i in range(3)] == [OWN_ROTARY] * 3, reasons
+            assert [reasons[i] for i in range(3)] == [components.OWN_ROTARY] * 3, reasons
             assert reasons[3].startswith("no rotary embedding on this block"), reasons
 
     def test_the_checkpoint_has_every_kind_of_block(self, model):

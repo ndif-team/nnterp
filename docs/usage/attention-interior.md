@@ -339,10 +339,9 @@ family fuses or transposes its projections, its `Attention` reads its own:
 | `Conv1D`, `[in, out]`: columns of `c_attn`, rows of `c_proj`, transposed | GPT-2 |
 
 **Under a PEFT adapter** (PEFT 0.19 or later) the weight is the one the projection's next forward
-applies, in the base weight's dtype: the base layer's weight, plus each active adapter's delta
-while the layer is enabled and unmerged; a layer left merged with its adapters disabled is
-unmerged first, as its forward would. An active, unmerged adapter that is not a delta added to
-the base weight (DoRA, OFT, IA3) raises `NotImplementedError`.
+applies, in the base weight's dtype: the base layer's, plus each active adapter's delta while
+unmerged. A layer left merged with its adapters disabled is unmerged first, as its forward would;
+an active, unmerged adapter that is no delta on the base weight (DoRA, OFT, IA3) raises `NotImplementedError`.
 
 **The gains** are measured by calling the norm on `+-256` in alternating channels, which every
 norm here normalizes to `+-1`, so each is the gain whatever the parameterization (`weight`,

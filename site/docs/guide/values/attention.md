@@ -175,4 +175,4 @@ print(pattern.shape)
 # torch.Size([1, 12, 1, 8])
 ```
 
-The signatures are on [`Attention`](../../documentation/components/attention.md), and the values of the whole model, from the input to the logits, are on [The whole model](whole-model.md).
+The signatures are on [`Attention`](../../documentation/components/attention.md), the weights that produce the values and project the head outputs are on [Head weights](head-weights.md), and the values of the whole model, from the input to the logits, are on [The whole model](whole-model.md).

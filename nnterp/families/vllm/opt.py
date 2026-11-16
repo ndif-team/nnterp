@@ -16,10 +16,10 @@ transformers serves, as a computed copy divided back on a write, and the
 recomputed scores are ``queries @ keys.T`` with no further scale.
 
 When the checkpoint ties its embeddings (OPT-125m and most of the family),
-vLLM's ``lm_head`` *is* ``embed_tokens``: the same module under both names.
-On a checkpoint with ``do_layer_norm_before`` false (OPT-350m) the block
-norms after each add, and the stream is not ``layer_input`` plus the two
-contributions. OPT-350m also has no final norm (no ``norm``) and projects the
+vLLM's ``lm_head`` holds ``embed_tokens``' weight: one parameter under two
+modules. On a checkpoint with ``do_layer_norm_before`` false (OPT-350m) the
+block norms after each add, and the stream is not ``layer_input`` plus the
+two contributions. OPT-350m also has no final norm (no ``norm``) and projects the
 stream with ``project_out`` before the head, as on transformers; the decoder
 applies whichever of the two it has, and `project_on_vocab` does the same.
 """

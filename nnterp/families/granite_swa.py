@@ -19,7 +19,7 @@ as it is on every eager call. The eager forward spells its softmax and dropout
 
 from transformers.models.granite_swa.modeling_granite_swa import GraniteSWAAttention, GraniteSWADecoderLayer, GraniteSWAMLP
 
-from ..components import EProperty, INTERFACE, Layer, Pattern, holding, interface_reason
+from ..components import EProperty, INTERFACE, Layer, OWN_ROTARY, Pattern, interface_reason
 from .granite import Attention as GraniteAttention
 from .granite import Mlp as GraniteMlp
 from .granite import project_on_vocab  # noqa: F401  the logit lens divides by logits_scaling, as Granite's
@@ -42,17 +42,11 @@ class Attention(GraniteAttention):
     sink's share scales the head outputs, not the pattern.
     """
 
+    # One rotary embedding per distinct ``layer_rope_theta`` (the model's ``rotary_embs``), and none on a NoPE block.
     def no_rotary(self) -> str | None:
         if not self._module.config.layer_rope_theta[self._module.layer_idx]:
             return "no rotary embedding on this block: its layer_rope_theta is 0, so it uses no position encoding (NoPE)"
-        return None
-
-    def rotary_embedding(self, x, position_ids):
-        """The rotary for this block's ``layer_rope_theta``: the model keeps one per distinct theta in ``rotary_embs``."""
-        theta = self._module.config.layer_rope_theta[self._module.layer_idx]
-        rotaries = holding(self, "rotary_embs").rotary_embs
-        rotary = next(rotary for rotary in rotaries if rotary._module.config.rope_parameters["rope_theta"] == theta)
-        return rotary(x, position_ids)
+        return OWN_ROTARY
 
     @EProperty(f"source.{INTERFACE}.source.attn_weights_1.output", description=GraniteAttention.attention_scores.description, unavailable=interface_reason)
     def attention_scores(self, value) -> Pattern:

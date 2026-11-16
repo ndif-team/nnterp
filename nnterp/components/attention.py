@@ -58,6 +58,13 @@ NOT_ON_INTERFACE = (
 )
 
 
+#: The reason a family gives for the queries and keys before the rotary, and `rotate`, where it rotates its own way.
+OWN_ROTARY = (
+    "this family's transformers attention rotates its queries and keys its own way, not on the shared rotary path "
+    "nnterp reads; not mapped"
+)
+
+
 #: Why `Attention.interface` is unavailable where no one call takes the queries, keys and values and returns the head outputs.
 OWN_ARITHMETIC = (
     "the queries, keys and values are not the arguments of one call in this forward that returns the head outputs "
@@ -282,7 +289,7 @@ class Attention(Standard):
     ``attn_implementation``: the queries and keys the rotary embedding
     receives, read at the shared ``apply_rotary_pos_emb`` call (`ROTARY`),
     and `rotate`, which applies the block's rotary to any such tensor.
-    `no_rotary` is the one place that decides a block has none.
+    `no_rotary` is the one place that decides a block serves neither.
 
     Its sizes (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) are
     this block's, read off the module, so they hold on a model whose blocks
@@ -303,11 +310,12 @@ class Attention(Standard):
         return needs_eager(self)
 
     def no_rotary(self) -> str | None:
-        """Why this block applies no rotary embedding, or ``None``: the one place the prerope values and `rotate` ask.
+        """Why this block serves no values before a rotary embedding and no `rotate`, or ``None``: the one place they ask.
 
         A family without rotary embeddings (learned or sinusoidal positions,
         ALiBi, none) overrides it with its reason, as does one whose blocks
-        differ (a NoPE block beside rotary ones).
+        differ (a NoPE block beside rotary ones), and one that rotates off
+        the shared path, with `OWN_ROTARY`.
         """
         return None
 
@@ -536,8 +544,8 @@ class Attention(Standard):
         so ``rotate(attention_queries_prerope, positions)`` is the block's
         `attention_queries` bit for bit, and the same for the keys, where the
         block does nothing more between its rotary and its attention (a family
-        that norms after the rotary, HunYuan or Llama 4, or tiles its keys,
-        JetMoE, does that to the result). A rope scaling that adapts to the
+        that norms after the rotary, HunYuan, or tiles its keys, JetMoE, does
+        that to the result). A rope scaling that adapts to the
         sequence (``dynamic``, ``longrope``) picks its frequencies from the
         largest position given, as the model does from the whole prompt. The
         embedding is computed by the model's rotary module wherever it lives
@@ -546,7 +554,8 @@ class Attention(Standard):
         inside one it computes without touching the trace.
 
         Raises:
-            Unavailable: the block applies no rotary embedding (`no_rotary`).
+            Unavailable: the block applies no rotary embedding, or its family
+                rotates its own way (`no_rotary`).
         """
         reason = self.no_rotary()
         if reason:

@@ -58,6 +58,7 @@
 - [jamba](jamba.md)
 - [jetmoe](jetmoe.md)
 - [kimi_k2](kimi_k2.md)
+- [kimi_k25](kimi_k25.md)
 - [kimi_linear](kimi_linear.md)
 - [laguna](laguna.md)
 - [llama](llama.md)

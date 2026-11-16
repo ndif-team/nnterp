@@ -120,6 +120,7 @@ nav:
       - Residual stream: guide/values/residual-stream.md
       - Attention: guide/values/attention.md
       - Before the rotary embedding: guide/values/rotary.md
+      - Head weights: guide/values/head-weights.md
       - The whole model: guide/values/whole-model.md
       - Layouts: guide/values/layouts.md
       - Availability: guide/values/availability.md

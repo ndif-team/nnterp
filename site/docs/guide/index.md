@@ -4,6 +4,7 @@
 - [Names](names.md): the module names every family answers to.
 - [Residual stream](values/residual-stream.md): the stream leaving a block and what each sublayer adds to it.
 - [Attention](values/attention.md): the tensors inside the attention module, from the queries to the head outputs.
+- [Head weights](values/head-weights.md): a head's slices of the value and output projections, and the gains of the norms around the attention.
 - [The whole model](values/whole-model.md): the values on the root, from the input ids to the logits.
 - [Layouts](values/layouts.md): the axis layout of every value.
 - [Availability](values/availability.md): which values a checkpoint has.

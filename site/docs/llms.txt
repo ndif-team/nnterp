@@ -47,6 +47,7 @@ Every page below is linked as Markdown; the same path without `.md` (for `index.
 - Residual stream: https://ndif-team.github.io/nnterp/guide/values/residual-stream.md
 - Attention: https://ndif-team.github.io/nnterp/guide/values/attention.md
 - Before the rotary embedding: https://ndif-team.github.io/nnterp/guide/values/rotary.md
+- Head weights: https://ndif-team.github.io/nnterp/guide/values/head-weights.md
 - The whole model: https://ndif-team.github.io/nnterp/guide/values/whole-model.md
 - Layouts: https://ndif-team.github.io/nnterp/guide/values/layouts.md
 - Availability: https://ndif-team.github.io/nnterp/guide/values/availability.md

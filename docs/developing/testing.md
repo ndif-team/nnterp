@@ -152,12 +152,12 @@ hybrid and drops `mlp.mlp_output` when no block has an MLP module (OPT). `VALUES
 |---|---|
 | `test_rotate_gives_the_rotated_queries_and_keys` | on the first block with a rotary, `self_attn.rotate(prerope, arange(seq))` equals `attention_queries` / `attention_keys` bit for bit, in their dtype, and has their shape where the two layouts are the same name (`rotated_as_served` first: a family's test file says what its block does after the rotary, HunYuan's norms, JetMoE's tiling); a rotated value narrower than the served one (latent attention's shared rope key) is its trailing channels on every head |
 | `test_a_prerope_write_is_rotated_for_its_position` | assigning position 0's prerope vector at the last position leaves the rotated value at every other position bit-identical and makes the last one `rotate(vector, [last])` |
-| `test_rotate_says_why_a_block_has_no_rotary` | on every block whose `no_rotary()` gives a reason, `support()` gives the same one and `rotate` raises `Unavailable` with it; a family whose test expects `OWN_ROTARY` gives a reason on every block |
+| `test_rotate_says_why_a_block_has_no_rotary` | on every block whose `no_rotary()` gives a reason, `support()` gives the same one and `rotate` raises `Unavailable` with it; every block of an `OWN_ROTARY` family gives one |
 | `test_order_ranks_the_prerope_values_first` | `model.order(i)` and `model.rank` put both values before the rotated ones |
 
 `NO_ROTARY` (`suite.py`) is the `EXPECTED_UNAVAILABLE` entry of a family without a rotary
-(GPT-2, OPT, BLOOM, ...) or with NoPE blocks (Cohere 2, SmolLM3, ...); `OWN_ROTARY` is that of
-a family that rotates its own way and serves neither value (GPT-J, Phi, ...); `TOWER_NO_ROTARY` is
+(GPT-2, OPT, BLOOM, ...) or with NoPE blocks (Cohere 2, SmolLM3, ...), `OWN_ROTARY` that of
+a family that rotates its own way (GPT-J, Phi, ...); `TOWER_NO_ROTARY` is
 what every vision tower reports for the two values, which the suite expects on a wrapper's
 `vision.*` rows without a family saying so.
 

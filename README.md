@@ -132,7 +132,7 @@ Extras:
 - `pip install "nnterp[models]"`: the tokenizers and processors some checkpoints need
   (`sentencepiece`, `tiktoken`, `protobuf`, `pillow`).
 - `pip install "nnterp[vllm]"`: vLLM.
-- `pip install "nnterp[test]"`: `pytest` and `pytest-xdist`, for the test suite, and `peft` for its adapter test.
+- `pip install "nnterp[test]"`: `pytest` and `pytest-xdist`, for the test suite, and `peft` for its adapter tests.
 
 nnterp requires nnsight 0.8 or later (`nnsight>=0.8`).
 

@@ -113,8 +113,7 @@ without an error. Which one happens depends on the loop and the value:
   next step.
 
 A late read of an input of a call whose output the step has already served (the queries after
-the head outputs, a second `self_attn.interface`) raises in a loop from step 0 whatever the
-model has run before.
+the head outputs) raises in a loop from step 0 whatever the model has run before.
 
 On GPT-2, reading block 6's
 `attention_probabilities` after its `attention_output` in `tracer.iter[:3]` returns steps

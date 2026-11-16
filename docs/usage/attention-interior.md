@@ -450,9 +450,9 @@ with model.trace(prompt):
 
 ## Calling the attention function again: `interface`
 
-`model.layers[i].self_attn.interface` is the attention function this block's forward called
+`model.layers[i].self_attn.interface` is the attention function this block's forward calls
 (`eager_attention_forward`, or the family's own: Gemma-2's with its logit softcap, GPT-OSS's
-with its sink column), bound to everything else the call received this time: the mask, the
+with its sink column), bound to everything else the call receives this time: the mask, the
 scale, the dropout, the sliding window. Call it on queries, keys and values and it returns
 `(head_outputs, pattern)`, computed the way the model computes its own:
 
@@ -466,8 +466,8 @@ prompt = "The capital of France is"
 
 with model.trace(prompt):
     q, k, v = attn.attention_queries, attn.attention_keys, attn.attention_values
-    heads, pattern = attn.interface(q, k, v)         # the function this call ran, run again on the same tensors
-    probs = attn.attention_probabilities.save()      # read after the call: the pattern comes later in the forward
+    heads, pattern = attn.interface(q, k, v)         # the block's attention function, on the same tensors
+    probs = attn.attention_probabilities.save()
     served = attn.attention_head_outputs.save()
     heads, pattern = heads.save(), pattern.save()
 
@@ -477,12 +477,13 @@ heads.shape, pattern.shape                                # [1, 5, 14, 64], [1, 
 
 The tensors you pass take the layouts of `attention_queries`, `attention_keys` and
 `attention_values`, keys and values `num_kv_heads` wide (the function repeats them for each
-group itself), with the live call's query and key lengths, which its mask has. The result is
-in the layouts of `attention_head_outputs` and `attention_probabilities`, and on the served
-tensors it is those two values bit for bit; the per-family suite checks that on every
-family, on the prompt, on a decode step and on a padded batch. The call computes and
-returns: nothing reaches the model, the cache, the other heads or the other rows until you
-write a result.
+group itself), with the live call's query and key lengths, which its mask has: pass whole
+tensors and slice the result (a single query row broadcasts against the mask's rows instead
+of failing). The result is in the layouts of `attention_head_outputs` and
+`attention_probabilities`, and on the served tensors it is those two values bit for bit; the
+per-family suite checks that on every family, on the prompt, on a decode step and on a
+padded batch. The call computes and returns: nothing reaches the model, the cache, the other
+heads or the other rows until you write a result.
 
 Use it for:
 
@@ -503,22 +504,14 @@ A key or query edited before the rotary goes in rotated for its position,
 first, since the forward reaches it before the interface
 ([Before the rotary embedding](#before-the-rotary-embedding-attention_queries_prerope-attention_keys_prerope-rotate)).
 
-Reading `attn.interface` takes the call's arguments, so it is read where the queries, keys
-and values are, in any order with them; the first call of the result takes the function, which
-the forward hands over just before it runs it, so make the first call before reading or writing
-anything later in the attention (the scores, the pattern, the head outputs). Later calls reuse
-the function and can come after those reads. `model.order(i)` ranks `self_attn.interface`
-between the values and the scores. Read it once per forward and call the result as often as you
-need. A second `attn.interface` after a call, or a first call after those reads, asks for a
-point the model has passed: it raises `OutOfOrderError` in a plain trace and in a `tracer.iter`
-loop from step 0 (`iter[:3]`). In a loop that starts past step 0 (`iter[1:3]`) it lands on the
-next step's call instead: a second read then fails at the call with a shape mismatch (this
-step's tensors against the next step's mask), and a late first call ends the loop early with
-nnsight's `was never reached` warning:
+Reading `attn.interface` reads the call's arguments, so it is read where the queries, keys
+and values are, in any order with them: `model.order(i)` ranks `self_attn.interface` between
+them and the scores ([forward order](availability.md#forward-order-order-and-rank)). The
+result is a plain function, called at any later point of the trace and as often as you need:
 
 ```python
 with model.trace(prompt):
-    interface = attn.interface                       # read once, with the queries, keys and values
+    interface = attn.interface                       # read with the queries, keys and values
     q, k, v = attn.attention_queries, attn.attention_keys, attn.attention_values
     k2 = k.clone()                                   # a copy: k is what the model attends with (and, under generate, the cache)
     k2[:, 1, 0] = 0                                  # key/value head 1, position 0
@@ -534,8 +527,8 @@ Inside `tracer.iter` it is that step's call: on a decode step the queries have o
 keys and values are the whole cache, and the mask is the step's (none, on an unpadded
 `generate`). Within one invoke, a padded batch included, it is bit for bit. Across invokes
 the model runs every invoke's rows in one call and `interface` runs one invoke's rows, so
-the two agree to rounding (about `1e-8` in float32 on the tiny checkpoints), not bit for
-bit: put the prompts in one invoke (`model.trace([a, b])`) when that matters. On a model
+the two agree to rounding (within `3e-7` in float32 on the tiny checkpoints), not always bit
+for bit: put the prompts in one invoke (`model.trace([a, b])`) when that matters. On a model
 split tensor-parallel ([Across GPUs](#across-gpus)) it takes the gathered queries, keys and
 values and runs every head on every rank. In training mode with a dropout the call draws
 its own mask.
@@ -835,11 +828,6 @@ way. To change what chosen heads read without touching the cache, call
   `self_attn.source` lazily, after the forward has started. Once the model is dispatched
   (`dispatch=True`, `model.dispatch()`, or after its first trace), touch
   `model.layers[i].self_attn.source` outside a trace first; or read them in two traces.
-- **Read `interface` once per forward, and make the first call before the scores.** Reading
-  it again after a call, or making the first call after reading the scores, the pattern or the
-  head outputs, asks for a point the forward has passed: `OutOfOrderError` in a plain trace and
-  in a `tracer.iter` loop from step 0, the next step's call in a loop that starts later. Later
-  calls of the same result can follow those reads.
 - **GPT-2 and GPT-BigCode queries, MPT queries, keys and values: assign, do not edit in place** (or edit under `torch.no_grad()`). GPT-2's and GPT-BigCode's keys and values take an in-place edit.
 - **`hasattr(attn, "attention_probabilities")` raises `Unavailable`** when the
   value is unavailable; use `attn.support()` or `model.support(layer=i)`.

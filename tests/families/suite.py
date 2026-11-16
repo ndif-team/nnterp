@@ -15,7 +15,7 @@ import torch
 from nnsight import TransformersModel  # nnsight before any transformers submodule
 from nnsight.intervention.envoy import Envoy
 
-from nnterp import StandardizedTransformer, Unavailable
+from nnterp import StandardizedTransformer, Unavailable, components
 from nnterp.components import (
     BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, POST_NORM_ATTENTION, QUERY, SEQ, TOKENS, STATE_DIM,
     STREAMS, VALUE_DIM, Attention, EProperty, Layer, LinearAttention, Mlp, Moe, RecurrentMixer, SelectiveScan, Standard, StateSpace,
@@ -38,6 +38,8 @@ VALUES = {
 }
 #: The values before the rotary on a block that applies none: `support()` gives `Attention.no_rotary`'s reason.
 NO_ROTARY = {name: "no rotary embedding" for name in ("self_attn.attention_queries_prerope", "self_attn.attention_keys_prerope")}
+#: The same values on a family that rotates its own way: every block refuses them with `components.OWN_ROTARY`.
+OWN_ROTARY = dict.fromkeys(NO_ROTARY, components.OWN_ROTARY)
 #: The same values on a vision tower's blocks, which never serve them (`VisionAttention.no_rotary`).
 TOWER_NO_ROTARY = {name: "a vision tower's attention" for name in NO_ROTARY}
 #: The MLP's interior, unavailable on a block whose MLP is a routed mixture.
@@ -1098,11 +1100,11 @@ class FamilySuite:
     # rotating the served value must give the rotated value the model serves.
 
     def rope_block(self, model):
-        """The first softmax-attention block that applies a rotary embedding; the test does not apply to a model with none."""
+        """The first softmax-attention block that serves the values before its rotary embedding; the test does not apply to a model with none."""
         for layer in self.attn_blocks(model):
             if layer.self_attn.no_rotary() is None:
                 return layer
-        pytest.skip("no rotary embedding on any block")
+        pytest.skip("no block serves the values before a rotary embedding")
 
     def rope_pairs(self, attn):
         """``(prerope, rotated)`` value names this block serves both of."""
@@ -1161,14 +1163,17 @@ class FamilySuite:
             assert torch.equal(after[..., target:, -width:], rotated.expand_as(after[..., target:, -width:])), pre
 
     def test_rotate_says_why_a_block_has_no_rotary(self, model):
-        """On a block without a rotary embedding, `support` and `rotate` give the same reason."""
+        """On a block that serves no values before a rotary embedding, `support` and `rotate` give the same reason; a
+        family that rotates its own way (`OWN_ROTARY`) gives it on every block."""
         blocks = [layer for layer in self.attn_blocks(model) if layer.self_attn.no_rotary()]
+        if self.EXPECTED_UNAVAILABLE.get("self_attn.attention_queries_prerope") == components.OWN_ROTARY:
+            assert len(blocks) == len(self.attn_blocks(model)), [layer.path for layer in blocks]
         if not blocks:
             pytest.skip("every attention block applies a rotary embedding")
         for layer in blocks:
             attn = layer.self_attn
             reason = attn.support()["attention_queries_prerope"]
-            assert reason == attn.no_rotary(), (layer.path, reason)
+            assert reason == attn.no_rotary() == attn.support()["attention_keys_prerope"], (layer.path, reason)
             with pytest.raises(Unavailable, match=re.escape(reason[:40])):
                 attn.rotate(torch.zeros(1, 1, 2, attn.qk_head_dim), [0, 1])
 

@@ -27,6 +27,7 @@ from suite import MOE, NO_ROTARY, FamilySuite, LLAMA_ROWS, PROMPT, rows, MLP_INT
 from vision_suite import IMAGE, VisionSuite, image_prompt
 
 from nnterp import StandardizedTransformer, Unavailable
+from nnterp.components import OWN_ROTARY
 from nnterp.families import llama4_text
 
 NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.feed_forward"}
@@ -51,14 +52,14 @@ class TestLlama4Text(FamilySuite):
     FAMILY = llama4_text
     MOE_UNAVAILABLE = {"expert_weights": "dense score", "expert_outputs": "dense score"}
     NATIVE = NATIVE
-    EXPECTED_UNAVAILABLE = NO_ROTARY  # the NoPE block (no_rope_layers' 0)
+    EXPECTED_UNAVAILABLE = {name: "rotary" for name in NO_ROTARY}  # every block, for one of two reasons: see the test below
 
-    def rotated_as_served(self, attn, name, rotated, positions):
-        """The qk-norm (an L2 norm over each head, no weight) follows the rotary on a RoPE block, where the config has one
-        (``use_qk_norm``: Scout's, not Maverick's)."""
-        if not hasattr(attn._module, "qk_norm"):
-            return rotated
-        return attn.qk_norm(rotated.transpose(1, 2)).transpose(1, 2)  # normed tokens before heads, as the forward does
+    def test_no_block_serves_the_values_before_the_rotary(self, model):
+        """A RoPE block refuses them as a family that rotates its own way does, the NoPE block (``no_rope_layers``' 0) as one with no rotary."""
+        for name in NO_ROTARY:
+            reasons = model.support()[name]
+            assert [reasons[i] for i in range(3)] == [OWN_ROTARY] * 3, reasons
+            assert reasons[3].startswith("no rotary embedding on this block"), reasons
 
     def test_the_checkpoint_has_every_kind_of_block(self, model):
         """Dense and MoE blocks, RoPE and NoPE blocks, chunked and full attention: the quirks are all exercised."""
@@ -193,8 +194,8 @@ def test_a_wrapper_module_binds_through_language_model():
     assert model.embed_tokens is model.get("language_model.model.embed_tokens")
     assert model.norm is model.get("language_model.model.norm")
     assert all(type(layer) is llama4_text.Layer and type(layer.mlp) in (llama4_text.Mlp, llama4_text.Moe) for layer in model.layers)
-    # the mixture values are per block (dense blocks have none) and two are unavailable on Llama 4, and the NoPE block has
-    # no values before a rotary: TestLlama4Text checks them
+    # the mixture values are per block (dense blocks have none) and two are unavailable on Llama 4, and no block serves
+    # the values before the rotary: TestLlama4Text checks them
     assert all(reason is None for name, reason in model.support().items()
                if name.removeprefix("mlp.") not in MOE and name not in MLP_INTERIOR and name not in NO_ROTARY)
     causal = StandardizedTransformer(repo, attn_implementation="eager")

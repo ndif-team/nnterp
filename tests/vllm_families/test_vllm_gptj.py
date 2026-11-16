@@ -1,6 +1,6 @@
 """GPT-J on vLLM, against the transformers engine: a parallel block, a head with a bias."""
 
-from vllm_suite import VLLMFamilySuite
+from vllm_suite import NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import gptj
 
@@ -8,7 +8,7 @@ from nnterp.families.vllm import gptj
 class TestVLLMGPTJ(VLLMFamilySuite):
     REPO = "EleutherAI/gpt-j-6b"
     FAMILY = gptj
-    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | {"layer_mid"}) - {"mlp.mlp_activation"}
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | {"layer_mid"}) - {"mlp.mlp_activation"}  # refused as on transformers
     NATIVE = {
         "embed_tokens": "transformer.wte",
         "layers": "transformer.h",

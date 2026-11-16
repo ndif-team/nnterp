@@ -2,7 +2,7 @@
 
 import pytest
 import torch
-from suite import FamilySuite, rows, PROMPT
+from suite import OWN_ROTARY, FamilySuite, rows, PROMPT
 
 from nnterp.families import gpt_neox_japanese
 
@@ -11,6 +11,7 @@ class TestGPTNeoXJapanese(FamilySuite):
     REPO = "hf-internal-testing/tiny-random-GPTNeoXJapaneseForCausalLM"
     FAMILY = gpt_neox_japanese
     NATIVE = {**rows("gpt_neox_japanese", "layers", "embed_in", "final_layer_norm", attn="attention"), "lm_head": "embed_out"}
+    EXPECTED_UNAVAILABLE = OWN_ROTARY
 
     def test_block_returns_a_tuple(self, model):
         with model.trace(PROMPT):

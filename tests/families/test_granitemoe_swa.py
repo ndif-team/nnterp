@@ -2,7 +2,7 @@
 
 import test_granite
 import torch
-from suite import FamilySuite, LLAMA_ROWS, built
+from suite import OWN_ROTARY, FamilySuite, LLAMA_ROWS, built
 from test_granite_swa import sink_scaled_head_outputs, written_scores_and_head_outputs
 from test_granitemoeshared import written_mlp_input_reaches
 
@@ -17,6 +17,7 @@ class TestGraniteMoeSWA(FamilySuite):
     REPO = REPO
     FAMILY = granitemoe_swa
     NATIVE = NATIVE
+    EXPECTED_UNAVAILABLE = OWN_ROTARY
 
     def test_sink_scales_the_head_outputs_not_the_pattern(self, model):
         for layer in model.layers:
@@ -37,6 +38,7 @@ class TestGraniteMoeSWAScaled(test_granite.TestGraniteScaled):
     REPO = built(test_granite._scaled_checkpoint, REPO)
     FAMILY = granitemoe_swa
     NATIVE = NATIVE
+    EXPECTED_UNAVAILABLE = OWN_ROTARY
 
 
 def test_mlp_input_reaches_the_shared_expert():

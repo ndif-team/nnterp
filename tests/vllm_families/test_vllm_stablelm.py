@@ -2,7 +2,7 @@
 
 import nnsight
 import torch
-from vllm_suite import LLAMA_ROWS, VLLMFamilySuite
+from vllm_suite import LLAMA_ROWS, NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import stablelm
 
@@ -12,6 +12,7 @@ class TestVLLMStableLm(VLLMFamilySuite):
     FAMILY = stablelm
     NATIVE = LLAMA_ROWS
     MEMORY = 0.3
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | NO_ROTARY  # refused as on transformers
     # StableLM-2-1.6B's first block has keys near 50, so its softmax is sharp: block 0's queries, keys and values
     # agree with transformers' to 3e-7 of their scale and the recomputed pattern to 1.2e-5, but the kernel's head
     # outputs to 5.2e-3. Carried through the stack, block 12's attention_output differs by 6.1e-3 and the last

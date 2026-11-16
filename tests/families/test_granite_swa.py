@@ -2,7 +2,7 @@
 
 import test_granite
 import torch
-from suite import FamilySuite, LLAMA_ROWS, PROMPT, built
+from suite import OWN_ROTARY, FamilySuite, LLAMA_ROWS, PROMPT, built
 
 from nnterp.families import granite_swa
 
@@ -49,6 +49,7 @@ class TestGraniteSWA(FamilySuite):
     REPO = REPO
     FAMILY = granite_swa
     NATIVE = LLAMA_ROWS
+    EXPECTED_UNAVAILABLE = OWN_ROTARY
 
     def test_block_kinds(self, model):
         windows = [layer.self_attn._module.sliding_window for layer in model.layers]
@@ -73,3 +74,4 @@ class TestGraniteSWAScaled(test_granite.TestGraniteScaled):
     REPO = built(test_granite._scaled_checkpoint, REPO)
     FAMILY = granite_swa
     NATIVE = LLAMA_ROWS
+    EXPECTED_UNAVAILABLE = OWN_ROTARY

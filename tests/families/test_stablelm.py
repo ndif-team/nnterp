@@ -1,7 +1,7 @@
 """StableLM-2, end to end: a parallel block, or a sequential one."""
 
 import torch
-from suite import LLAMA_ROWS, PROMPT, FamilySuite, built, draw_biases, patched_checkpoint, rows
+from suite import LLAMA_ROWS, OWN_ROTARY, PROMPT, FamilySuite, built, draw_biases, patched_checkpoint, rows
 
 from nnterp.families import stablelm
 
@@ -15,7 +15,7 @@ class TestStableLm(FamilySuite):
     FAMILY = stablelm
     NATIVE = rows("model", "layers", "embed_tokens", "norm", ln2=None)
     MLP_NORM = "input_layernorm"             # parallel
-    EXPECTED_UNAVAILABLE = {"layer_mid": "a parallel block"}   # use_parallel_residual on the tiny checkpoint
+    EXPECTED_UNAVAILABLE = {**OWN_ROTARY, "layer_mid": "a parallel block"}   # use_parallel_residual on the tiny checkpoint
 
     def test_block_is_parallel(self, model):
         assert model.config.use_parallel_residual
@@ -29,6 +29,7 @@ class TestStableLmSequential(FamilySuite):
     REPO = built(patched_checkpoint, REPO, init=draw_biases, use_parallel_residual=False, qk_layernorm=False, use_qkv_bias=True)
     FAMILY = stablelm
     NATIVE = LLAMA_ROWS
+    EXPECTED_UNAVAILABLE = OWN_ROTARY
 
     def test_block_is_sequential(self, model):
         config = model.config

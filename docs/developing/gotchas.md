@@ -123,8 +123,8 @@ file at those lines: the class's forward, which calls the projections the
 fusion removed. So a value keyed on `source.<op>` of such a module (the
 queries and keys before the rotary, `apply_rotary_pos_emb_0`) cannot be
 served there; `transformers_backend.Attention.no_rotary` refuses with
-`BACKEND_ROTARY`. Values on the module's children (`qkv_proj`, `o_proj`, the
-mounted `attn`) are hooks and unaffected.
+`BACKEND_ROTARY`. Values on the module's children (`qkv_proj`, `o_proj`,
+`attn`) are hooks and unaffected.
 
 **A key function stored on a class is a bound method through an instance.**
 `RecurrentMixer.KERNEL` is a `staticmethod`

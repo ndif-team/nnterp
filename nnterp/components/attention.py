@@ -101,17 +101,15 @@ def attention_call(envoy: Envoy) -> tuple[str, int, Callable] | None:
 
     The call the class reads `attention_queries`, `attention_keys` and
     `attention_values` at, as arguments in a row, and `attention_head_outputs`
-    at, as its first return, with the function that call runs, found on the
-    module. transformers' shared ``attention_interface(self, q, k, v, mask,
-    ...)`` runs, under eager attention, the module-level function the forward
-    names for it: ``eager_attention_forward``, or a name ending so (Llama 4's
-    tower has ``vision_eager_attention_forward``), looked up in the forward's
-    own globals. GPT-J, GPT-Neo, CodeGen and GPT-NeoX-Japanese call the
-    module's ``_attn(q, k, v, mask, head_mask)``. ``None`` on a family that
-    maps those values onto its own arithmetic (BLOOM, MPT, Falcon, XGLM) or
-    reads its head outputs after the module changes the call's output
-    (DeepSeek-V4), and where the forward names no such function. Read off the
-    class and the module, so it answers outside a trace.
+    at, as its first return, with the function it runs. For transformers'
+    shared ``attention_interface(self, q, k, v, mask, ...)`` that is the
+    module-level function the forward names for eager attention
+    (``eager_attention_forward``, or any name with that ending), from the
+    forward's own globals; for the ``self._attn(q, k, v, mask, head_mask)`` of
+    GPT-J, GPT-Neo, CodeGen and GPT-NeoX-Japanese, the method. ``None`` on a
+    family that maps those values onto its own arithmetic (BLOOM, MPT, Falcon,
+    XGLM) or reads its head outputs after the module changes the call's
+    output (DeepSeek-V4). It answers outside a trace.
     """
     cls, module = type(envoy), envoy._module
     forward = inspect.unwrap(type(module).forward)

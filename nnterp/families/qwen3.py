@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. ``q_norm`` / ``k_norm`` sit inside the attention; ``head_dim`` is the config's (128 on every size), which is not
+added in the block, attention through the shared attention interface. ``q_norm`` / ``k_norm`` sit inside the attention; ``head_dim`` is the config's (128 on every size), which is not
 ``hidden // heads`` on 0.6B, 4B and 32B.
 """
 
@@ -27,7 +27,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Qwen3's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Qwen3's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward.
+added in the block, attention through the shared attention interface.
 The norms are ``nn.LayerNorm``. Every block's MLP is a sparse mixture of experts
 that returns the routed hidden states as a bare tensor; the experts are
 ``intermediate_size`` wide.
@@ -24,7 +24,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Phi-3.5-MoE's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Phi-3.5-MoE's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Moe):

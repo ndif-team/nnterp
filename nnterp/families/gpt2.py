@@ -7,7 +7,7 @@ not ``model.model.layers``. ``wpe`` (learned absolute positions) and ``drop``
 have no standard name; they stay reachable under their own.
 
 A checkpoint with ``reorder_and_upcast_attn`` set takes GPT-2's own
-``_upcast_and_reordered_attn`` path instead of the shared eager forward, so
+``_upcast_and_reordered_attn`` path instead of the shared attention interface, so
 none of the attention's interior values is available there.
 """
 
@@ -39,7 +39,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GPT-2's attention; the shared eager forward and the residual added in the block, so the base holds.
+    """GPT-2's attention; the shared attention interface and the residual added in the block, so the base holds.
 
     A checkpoint with ``reorder_and_upcast_attn`` takes GPT-2's own upcast
     path instead, where nothing on the interface is reachable.

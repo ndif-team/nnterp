@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. The MLP is a sparse mixture of experts
+added in the block, attention through the shared attention interface. The MLP is a sparse mixture of experts
 (`Moe`); its router, ``gate``, is aliased ``router``.
 """
 
@@ -23,7 +23,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Mixtral's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Mixtral's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Moe):

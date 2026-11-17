@@ -43,7 +43,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """DBRX's attention; the shared eager forward, and the residual added outside it in ``norm_attn_norm``."""
+    """DBRX's attention; the shared attention interface, and the residual added outside it in ``norm_attn_norm``."""
 
     def value_weight(self, kv_head):
         """``Wqkv``'s rows are every query, every key, then every value; the forward clamps its output at ``clip_qkv``."""

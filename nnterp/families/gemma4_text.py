@@ -180,7 +180,7 @@ def _borrowed_keys(attn: Envoy) -> str | None:
 
 
 class Attention(Attention):
-    """Gemma-4's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output.
+    """Gemma-4's attention: the shared attention interface, but what reaches the residual stream is the post-attention norm's output.
 
     The keys and values served are what the interface receives: on a
     KV-sharing block, the tensors an earlier block computed; on an

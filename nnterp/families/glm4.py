@@ -9,7 +9,7 @@ What the block adds is each post-norm's output, not the module's, so
 ``attention_output`` points at ``post_self_attn_layernorm`` and ``mlp_output`` at
 ``post_mlp_layernorm``. Unlike Gemma-2, ``post_attention_layernorm`` here is the
 pre-MLP norm (the Llama meaning), so the standard aliases need no renaming and
-``mlp.input`` is its output. The attention runs the shared eager forward with a
+``mlp.input`` is its output. The attention runs the shared attention interface with a
 partial rotary embedding; the MLP is a fused ``gate_up_proj``.
 """
 
@@ -31,7 +31,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GLM-4's attention: the shared eager forward, but what reaches the residual stream is the post-self-attention norm's output."""
+    """GLM-4's attention: the shared attention interface, but what reaches the residual stream is the post-self-attention norm's output."""
 
     @EProperty(
         "../post_self_attn_layernorm.output",

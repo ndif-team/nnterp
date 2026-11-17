@@ -83,7 +83,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Falcon-H1's attention: the shared eager forward, but the block adds its output times ``attention_out_multiplier``."""
+    """Falcon-H1's attention: the shared attention interface, but the block adds its output times ``attention_out_multiplier``."""
 
     @EProperty(f"../source.{ATTENTION_SCALED}.output", description="What the attention adds to the residual stream: its output times attention_out_multiplier")
     def attention_output(self, value) -> Residual:

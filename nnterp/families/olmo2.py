@@ -36,7 +36,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """OLMo-2's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
+    """OLMo-2's attention: the shared attention interface, but what reaches the residual stream is the post-attention norm's output."""
 
     @EProperty(
         "../post_attention_layernorm.output",

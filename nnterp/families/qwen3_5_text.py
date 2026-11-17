@@ -51,7 +51,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Qwen3.5's softmax attention (one block in four); the shared eager forward, so the base holds."""
+    """Qwen3.5's softmax attention (one block in four); the shared attention interface, so the base holds."""
 
 
 class LinearAttention(LinearAttention):

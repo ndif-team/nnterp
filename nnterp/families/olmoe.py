@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. The attention
+added in the block, attention through the shared attention interface. The attention
 norms its queries and keys (``q_norm``, ``k_norm``) across all heads before the
 rotary embedding, and optionally clamps them (``clip_qkv``); both happen before
 the interface call, so the queries and keys are read after them. Every MLP is a
@@ -27,7 +27,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """OLMoE's attention; the query and key norms run before the shared eager forward and the residual is added in the block, so the base holds."""
+    """OLMoE's attention; the query and key norms run before the shared attention interface and the residual is added in the block, so the base holds."""
 
 
 class Mlp(Moe):

@@ -44,7 +44,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """DeepSeek-V3.2's sparse latent attention: V2's, the indexer's selection folded into the mask before the shared eager forward, the rope parts rotated interleaved."""
+    """DeepSeek-V3.2's sparse latent attention: V2's, the indexer's selection folded into the mask before the shared attention interface, the rope parts rotated interleaved."""
 
     def rope_call(self) -> str:
         return "apply_rotary_pos_emb_interleave"

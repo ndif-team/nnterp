@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. Queries and keys
+added in the block, attention through the shared attention interface. Queries and keys
 are ``head_dim`` wide and values ``v_head_dim`` wide, so the family defines
 ``qk_head_dim`` as the config's ``head_dim`` and ``head_dim`` as ``v_head_dim``. The
 values are scaled by ``attention_value_scale`` before the interface.

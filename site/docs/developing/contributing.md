@@ -19,7 +19,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GPT-2's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """GPT-2's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

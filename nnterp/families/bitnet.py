@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward.
+added in the block, attention through the shared attention interface.
 The attention norms its per-head outputs (``attn_sub_norm``) after the
 interface and before ``o_proj``, so ``attention_head_outputs`` is before that
 norm; the MLP norms its gated product (``ffn_sub_norm``) before ``down_proj``.
@@ -28,7 +28,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """BitNet b1.58's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """BitNet b1.58's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

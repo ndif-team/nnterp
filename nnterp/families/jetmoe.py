@@ -10,7 +10,7 @@ The attention is a mixture of attention heads: a router picks
 queries for ``num_key_value_heads`` heads (``experts.map``) and later projects their
 outputs back (``experts.reduce``, in place of an ``o_proj``). Keys and values come
 from one shared ``kv_proj`` and are tiled (``repeat``, not interleaved) to every
-query head before the shared eager forward, so the interface sees ``num_heads``
+query head before the shared attention interface, so the interface sees ``num_heads``
 key/value heads and interface head ``h`` is routing slot ``h // num_kv_heads`` over
 kv head ``h % num_kv_heads``: which expert's parameters a head's query came from
 varies by token. The attention returns ``(attn_output, attn_weights,
@@ -52,7 +52,7 @@ PER_EXPERT_OUTPUT = "a mixture of attention heads: the output projection is per 
 
 
 class Attention(Attention):
-    """JetMoE's mixture of attention heads; the shared eager forward, a 3-tuple whose first element is the contribution, and the residual added in the block, so the base holds.
+    """JetMoE's mixture of attention heads; the shared attention interface, a 3-tuple whose first element is the contribution, and the residual added in the block, so the base holds.
 
     The output projection is per expert, inside ``experts``, so ``attention_premix`` is unavailable.
     The keys are tiled to every routing slot after the rotary (``repeat(1, top_k, 1, 1)``), so

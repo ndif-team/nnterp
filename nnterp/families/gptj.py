@@ -3,7 +3,7 @@
 ``transformer.{wte, drop, h[i].{ln_1, attn, mlp}, ln_f}`` and ``lm_head``. A
 parallel block: ``ln_1`` feeds both sublayers and ``x + attn + mlp`` is
 summed in the block, which returns a tuple. The attention does its own
-arithmetic in ``_attn`` rather than the shared eager forward, so the pattern
+arithmetic in ``_attn`` rather than the shared attention interface, so the pattern
 and the rest of the interior are read around that method call.
 """
 

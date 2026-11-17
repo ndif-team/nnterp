@@ -7,7 +7,7 @@ so the contributions are the modules' outputs and the base holds.
 ``post_attention_layernorm`` (the Llama meaning; VaultGemma has no norm after the
 attention). The embedding module scales its own output by ``sqrt(hidden_size)``,
 so ``token_embeddings`` is ``layers[0].input``. The attention runs the shared
-eager forward with Gemma-2's score softcapping inside it where
+attention interface, its eager forward with Gemma-2's score softcapping inside it where
 ``attn_logit_softcapping`` is set (``attention_scores`` are then the capped scores
 entering the softmax), and ``final_logit_softcapping``, where set, applies to the
 logits after ``lm_head``, which the root's ``project_on_vocab`` follows. The released
@@ -32,7 +32,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """VaultGemma's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """VaultGemma's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

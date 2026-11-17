@@ -25,7 +25,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Llama's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Llama's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

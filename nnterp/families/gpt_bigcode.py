@@ -3,7 +3,7 @@
 GPT-2's tree and GPT-2's block: ``transformer.{wte, wpe, h[i].{ln_1, attn, ln_2,
 mlp}, ln_f}`` and ``lm_head``, the residual added in the block, which returns a bare
 tensor. The attention projects queries, keys and values with one fused ``c_attn``
-and runs the shared eager forward. Under ``multi_query`` (every released checkpoint)
+and runs the shared attention interface. Under ``multi_query`` (every released checkpoint)
 the keys and values are one head shared by every query head, so ``num_kv_heads`` is
 1. Queries, keys and values are split views of the one ``c_attn`` tensor: torch
 refuses an in-place edit of ``attention_queries`` outside ``torch.no_grad()`` (assign
@@ -41,7 +41,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GPT-BigCode's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """GPT-BigCode's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
     def no_rotary(self) -> str | None:
         return "no rotary embedding: GPT-BigCode adds learned absolute position embeddings (wpe) to the stream"

@@ -33,12 +33,7 @@ def hub_kwargs(kwargs: dict) -> dict:
 
 
 def past_the_head(model: Any) -> str | None:
-    """Why ``lm_head_output`` is unavailable: what vLLM's logits processor applies after the projection, or ``None``.
-
-    The processor projects with the head's weight (adding the head's bias where
-    the model passes one) and then softcaps and scales in the same call, so
-    where it does either the projection alone is never a tensor.
-    """
+    """Why ``lm_head_output`` is unavailable: what vLLM's logits processor applies after the projection, or ``None``."""
     processor = model.logits_processor._module
     after = []
     if processor.soft_cap is not None:
@@ -57,41 +52,18 @@ class StandardizedVLLM(Standardized, VLLM):
     """A causal language model on the vLLM engine whose modules answer to the standard names.
 
     `StandardizedTransformer`'s counterpart for nnsight's ``VLLM``: the same
-    vocabulary (``model.layers[i].self_attn``, ``.mlp``, ``model.norm``,
-    ``model.lm_head``), the same values with the same layouts, and the same
-    methods, over the engine's continuous batching. The family is the one for
-    the modules vLLM runs the checkpoint's ``model_type`` with, a module under
+    names, values, layouts and methods, with the family for the modules vLLM
+    runs the checkpoint's ``model_type`` with, a module under
     `nnterp.families.vllm`.
 
     It is nnsight's ``VLLM`` otherwise, with vLLM's defaults: a trace is a
     generation request (``max_tokens=16`` and ``temperature=1.0`` unless you
     say), sampling settings go on ``trace``/``invoke``, one prompt per invoke,
     and a block runs in the engine's worker, where nnterp has to be importable.
-    What that changes for the values:
-
-    * A request is one sequence, so every value's batch axis is 1:
-      ``layer_output`` is ``[1, tokens, hidden_size]``, the whole prompt on the
-      prefill and one token on each decode step (``tracer.iter``).
-    * ``logits`` is this step's, ``[1, 1, vocab_size]``: the engine computes the
-      last position only. ``logits[:, -1]`` and ``next_token_probs`` read the
-      same on both engines.
-    * Values are private copies, so a saved one stays what it was read as.
-    * The queries, keys, values and head outputs are what goes into and
-      comes out of the engine's attention layer, for this step's tokens. The
-      scores and the pattern are inside its kernel, so they are recomputed
-      from the queries and keys: read-only, and on the prefill only (a decode
-      step raises `Unavailable`). There is no ``attention_mask``.
-    * `project_on_vocab` runs the engine's modules, so it works inside a
-      trace only.
-    * ``lm_head_output`` is `logits` where vLLM's logits processor applies
-      nothing past the head, and unavailable where it softcaps or scales,
-      naming which: vLLM never calls ``lm_head``.
-
-    Outside a trace, `order` and `rank` give the forward order of the values
-    this engine serves, measured on the transformers model of the checkpoint
-    (a weightless `StandardizedTransformer`, built on first use): the values
-    sit at the same module boundaries on both engines. `generation_config` is
-    the checkpoint's ``transformers.GenerationConfig``.
+    A request is one sequence, so every value's batch axis is 1
+    (``layer_output`` is ``[1, tokens, hidden_size]``): the whole prompt on
+    the prefill, one token on each decode step (``tracer.iter``). Values are
+    private copies, so a saved one stays what it was read as.
 
     Args:
         repo_id: A HuggingFace repo id.
@@ -152,9 +124,8 @@ class StandardizedVLLM(Standardized, VLLM):
         """The logits of this request's current step, ``[1, 1, vocab_size]``.
 
         The engine computes logits for the last position only: the prompt's
-        on the prefill, the newest token's on each decode step. Softcapping
-        is applied (vLLM's logits processor does it). Assigning, or editing in
-        place, changes what the sampler sees.
+        on the prefill, the newest token's on each decode step, after any
+        softcap. Assigning, or editing in place, changes what the sampler sees.
         """
         return value.unsqueeze(1)
 
@@ -186,9 +157,7 @@ class StandardizedVLLM(Standardized, VLLM):
     def final_norm_output(self, value: torch.Tensor) -> Residual:
         """The final norm's output, ``[1, tokens, hidden_size]``: every position of the step, of which the engine projects the last.
 
-        A family whose blocks hand the stream on in two halves calls the final
-        norm with both, and the norm returns ``(normed, residual)``: this is
-        the normed half. Assign to replace it; in-place edits reach the model.
+        Assign to replace it; in-place edits reach the model.
         """
         return value
 
@@ -200,14 +169,10 @@ class StandardizedVLLM(Standardized, VLLM):
     def lm_head_output(self, value: torch.Tensor) -> Logits:
         """The head's projection of this step's last position, ``[1, 1, vocab_size]``: `logits`, at the same location.
 
-        vLLM never calls ``lm_head``: its logits processor projects with the
-        head's weight (and the head's bias, on GPT-J and Phi) and applies any
-        softcap and scale in the same call. Where it applies neither, the
-        logits are the head's projection, as ``lm_head.output`` and ``logits``
-        are one tensor on transformers there; read, edit in place and assign
-        it as `logits`. Where it applies one (Gemma-2's softcap; the scale of
-        Cohere, Granite and HyperCLOVA X checkpoints), the projection alone is
-        never a tensor, and this is unavailable, naming what follows the head.
+        Read, edit in place and assign it as `logits`. Unavailable, naming
+        what follows the head, where vLLM's logits processor softcaps or
+        scales (Gemma-2's softcap): it does so in the call that projects, so
+        the projection alone is never a tensor.
         """
         return value.unsqueeze(1)
 
@@ -243,12 +208,10 @@ class StandardizedVLLM(Standardized, VLLM):
     def project_on_vocab(self, hidden: torch.Tensor) -> torch.Tensor:
         """Logits for a residual-stream tensor: the final norm, ``lm_head``, and vLLM's logits processor.
 
-        The logit lens, inside a trace: the modules are the engine's, so there
-        is nothing to call outside one. The processor applies the model's
-        softcapping and scaling where it has them. ``hidden`` is ``[...,
-        hidden]``; the leading dimensions are kept. A family whose model
-        projects another way defines ``def project_on_vocab(model, hidden)``
-        in its module.
+        The logit lens, inside a trace only: the modules are the engine's.
+        ``hidden`` is ``[..., hidden_size]``; the leading dimensions are kept.
+        A family whose model projects another way defines
+        ``def project_on_vocab(model, hidden)`` in its module.
         """
         return project(self, hidden, self.lm_head)
 
@@ -257,13 +220,10 @@ class StandardizedVLLM(Standardized, VLLM):
     def order(self, layer: int | None = None) -> dict[str, int]:
         """The values this engine serves in forward order: name -> rank; equal ranks are one location, either read first.
 
-        `StandardizedTransformer.order` of the transformers model of the
-        checkpoint (`_transformers_model`), kept to the values `support` lists
-        as available here: the standard values sit at the same module
-        boundaries on both engines, so the forward reaches them in the same
-        order. With ``layer``, that block's values by dotted name; without,
-        the root's, numbered across the whole forward. The ranks are the
-        transformers model's, so a value this engine lacks leaves a gap.
+        With ``layer``, that block's values by dotted name; without, the
+        root's, numbered across the whole forward. The ranks are measured on
+        the transformers model of the checkpoint (`_transformers_model`), so a
+        value this engine lacks leaves a gap.
         """
         table = self._transformers_model().order(layer)
         served = self._served(layer)
@@ -272,8 +232,6 @@ class StandardizedVLLM(Standardized, VLLM):
     def rank(self, name: str, layer: int | None = None) -> tuple[int, int]:
         """Where a value falls in the forward: ``(side, r)``, which sorts reads into forward order.
 
-        `StandardizedTransformer.rank` of the transformers model of the
-        checkpoint (`_transformers_model`), for a value this engine serves:
         ``side`` is ``-1`` or ``num_layers`` for a root value served before or
         after the blocks, else ``layer``; ``r`` is `order`'s rank.
 
@@ -306,11 +264,7 @@ class StandardizedVLLM(Standardized, VLLM):
     def _transformers_model(self) -> StandardizedTransformer:
         """The weightless transformers model of this checkpoint whose forward order `order` and `rank` give; built and measured on first use.
 
-        Loaded as transformers loads the checkpoint (as its vision-language
-        wrapper, ``task="image-text-to-text"``, where transformers has no
-        causal-LM class for the config), with the load's hub arguments
-        (`hub_kwargs`), eager attention and ``dispatch=False``: its probe
-        runs on meta tensors, except where the forward cannot
+        Its probe runs on meta tensors, except where the forward cannot
         (`nnterp.order.compute`), and then it loads the weights on the CPU.
 
         Raises:
@@ -360,12 +314,10 @@ class StandardizedVLLM(Standardized, VLLM):
     def generation_config(self) -> Any:
         """The checkpoint's ``transformers.GenerationConfig``, loaded once on first use.
 
-        Read from the repo's ``generation_config.json`` with the load's hub
-        arguments, or made from the model's config
-        (``GenerationConfig.from_model_config``) where the repo has none, as
-        transformers does when it loads a model: the checkpoint's EOS ids and
-        its own sampling settings. A trace samples with vLLM's defaults unless
-        it is given settings (``trace(..., temperature=0.0)``), not with these.
+        The repo's ``generation_config.json``, or one made from the model's
+        config where the repo has none: the checkpoint's EOS ids and its own
+        sampling settings. A trace samples with vLLM's defaults unless it is
+        given settings (``trace(..., temperature=0.0)``), not with these.
         """
         if self._generation_config is None:
             from transformers import GenerationConfig

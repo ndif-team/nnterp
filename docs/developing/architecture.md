@@ -162,8 +162,8 @@ The two facts nnterp's design rests on:
   (`model.transformer.h.0.attn`) and then on each spelling of it under the
   `rename` aliases (`spellings`, `aliasing.py`). A type key always beats a
   path key. This is why every family keys `ENVOYS` on transformers' module
-  types (`families/gpt2.py`) and why the README tells a user who wants to
-  displace a family envoy to key on the type too.
+  types (`families/gpt2.py`) and why a user who wants to displace a family
+  envoy keys on the type too ([loading](../usage/loading.md#gotchas)).
 - **Aliases bind after the children exist, per envoy.** `Envoy.__init__`
   wraps the children (`envoy.py`) and then calls `bind`
   (`aliasing.py`). Every envoy in the tree resolves every

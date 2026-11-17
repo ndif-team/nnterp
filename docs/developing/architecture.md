@@ -10,7 +10,7 @@ sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/components
 
 ## What this is for
 
-nnterp is three small layers on nnsight 0.8, and each owns one kind of fact.
+nnterp is three small layers on nnsight, and each owns one kind of fact.
 A **family** (`nnterp/families/<model_type>.py`) knows the checkpoint's *names*
 and *which operation* in its forward each value lives at. A **component**
 (`nnterp/components/`) knows *what a value means* and how to read and write
@@ -72,17 +72,16 @@ rest of this page says which.
    after the children exist: aliasing.bind(envoy)                (rename keys resolved per envoy)
         │
         ▼  the tree the user sees
-   model                        StandardizedTransformer  ── logits, token_embeddings, next_token_probs,
-   ├── embed_tokens ─┐ alias                                 input_ids, attention_mask, input_size,
-   ├── layers ───────┤ alias of transformer.h                sizes, skip_layers/steer/project_on_vocab,
-   │   └── [i]       │ family.Layer      ── layer_output      support()
-   │       ├── self_attn   family.Attention ── attention_output, attention_probabilities, queries, ...
-   │       ├── linear_attn family.LinearAttention (hybrids) ── attention_output, decays, betas, state*, ...
-   │       └── mlp         family.Mlp        ── mlp_output
-   │                       (a mixture: family.Moe or a Moe-based Mlp ── + router_logits, expert_weights/indices,
-   │                        expert_outputs, routed_output, shared_expert_output)
+   model                        StandardizedTransformer  ── root values, sizes, methods, support()
+   ├── embed_tokens ─┐ alias
+   ├── layers ───────┤ alias of transformer.h
+   │   └── [i]       │ family.Layer        ── the stream at the block's boundaries
+   │       ├── self_attn   family.Attention  ── attention_output, the pattern, the interior
+   │       ├── linear_attn a RecurrentMixer (hybrids, Mamba) ── attention_output, the kernel's values, the state
+   │       └── mlp         family.Mlp, a Moe on a mixture ── mlp_output, the neurons, the routing and experts
    ├── norm ──────────┘ alias
-   └── lm_head
+   ├── lm_head
+   └── vision          the family's Vision (multimodal wrappers) ── the tower's blocks, the image values
         │
         ▼  inside a trace, a value read
    EProperty.__get__ ── _check(unavailable) ── _resolve(path) ── Mediator.value(location) ── _pick(select)
@@ -99,7 +98,7 @@ rest of this page says which.
 
 `Standardized` (`nnterp/standardized.py`) holds what does not depend on the
 engine: the sizes, `support()`, `steer`, `skip_layers`,
-`get_topk_closest_tokens`, `_read_config`. `StandardizedTransformer` mixes it
+`get_topk_closest_tokens`, `probs_to_dict`, `_read_config`. `StandardizedTransformer` mixes it
 over `TransformersModel`, `StandardizedVLLM` (`nnterp/standardized_vllm.py`)
 over nnsight's `VLLM`; each leaf resolves its family, merges `rename=` /
 `envoys=`, and defines the root values where its engine keeps them.
@@ -133,7 +132,8 @@ this order, and the order matters:
 2. **Family lookup.** `families.resolve(config)` (`nnterp/families/__init__.py`),
    which calls `lookup` on the config's own `model_type` when a family covers it (a
    wrapper with a family named after it, `kimi_k25`), else on its `text_config`'s: a
-   multimodal config nests the language model's config there.
+   multimodal config nests the language model's config there. With a
+   `family=` argument the config is not read.
 3. **Merge and hand to nnsight.** `rename={**self.family.RENAME, **(rename
    or {})}` and `envoys={**self._base_envoys(...), **self.family.ENVOYS,
    **(envoys or {})}` (`StandardizedTransformer.__init__`, `standardized.py`).
@@ -162,8 +162,8 @@ The two facts nnterp's design rests on:
   (`model.transformer.h.0.attn`) and then on each spelling of it under the
   `rename` aliases (`spellings`, `aliasing.py`). A type key always beats a
   path key. This is why every family keys `ENVOYS` on transformers' module
-  types (`families/gpt2.py`) and why the README tells a user who wants to
-  displace a family envoy to key on the type too.
+  types (`families/gpt2.py`) and why a user who wants to displace a family
+  envoy keys on the type too ([loading](../usage/loading.md#gotchas)).
 - **Aliases bind after the children exist, per envoy.** `Envoy.__init__`
   wraps the children (`envoy.py`) and then calls `bind`
   (`aliasing.py`). Every envoy in the tree resolves every
@@ -189,9 +189,9 @@ is how `support()`-visible values show up in `print(model)`.
 
 | layer | owns | must not know |
 |---|---|---|
-| `nnterp/families/<model_type>.py` | `RENAME` (native name → standard name); `Layer`/`Attention`/`Mlp`/`Moe`/`LinearAttention` subclasses that point a value at *this family's* op or sibling; `ENVOYS` keyed on transformers types; a module-level `def <size>(model)` for each root size *this family's* config spells its own way (`falcon.py`: `num_kv_heads`, `intermediate_size`; `deepseek_v2.py`: `head_dim`, `qk_head_dim`) | what a value means, how nnsight serves it; the plain rule for a size |
+| `nnterp/families/<model_type>.py` | `RENAME` (native name → standard name); subclasses of the base envoys below that point a value at *this family's* op or sibling; `ENVOYS` keyed on transformers types; a module-level `def <size>(model)` for each root size *this family's* config spells its own way, and `def project_on_vocab(model, hidden)` for what its model does after the head | what a value means, how nnsight serves it; the plain rule for a size |
 | `nnterp/components/` | what each standard value **means** (`layer_output` is the residual stream leaving the block, `attention_output` the contribution, `attention_probabilities` the post-dropout pattern); how to read/write it (`EProperty` with a path for a key, `DerivedEProperty`); availability (`unavailable=`, `support`); the default op on transformers' shared interface (`INTERFACE`, `attention.py`) | any one family's module names or classes |
-| `nnterp/standardized.py` | the root values (`logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`); the methods (`skip_layers`, `steer`, `project_on_vocab`, `get_topk_closest_tokens`); the sizes (`num_layers` … `intermediate_size`, `standardized.py`), each a `StandardizedProperty` holding the plain rule over the config and yielding on read to a same-named function in `model.family`; `support()` over the tree (`Standardized.support`, through `standard_children` and `blocks_support` in `nnterp/components/standard.py`: each block's `Standard` children under their standard names, each alias read off its own binding on the block, a mounted alias such as DBRX's `norm_attn_norm.attn` and a module another block owns (shared weights) included, so a value installed through `envoys=` is listed and a module no block has is not); the remote key (`StandardizedTransformer._remoteable_class`) | op names inside a forward; any one family's config keys |
+| `nnterp/standardized.py` | the root values ([root-values](../usage/root-values.md)); the methods ([methods](../usage/methods.md)); the sizes (`num_layers` … `intermediate_size`) and `project_on_vocab`, each the plain rule, yielding on read to a same-named function in `model.family` (`StandardizedProperty`, `StandardizedCapability`); `support()` over the tree (`Standardized.support`, through `standard_children` and `blocks_support` in `nnterp/components/standard.py`: each block's `Standard` children under their standard names, each alias read off its own binding on the block, a mounted alias such as DBRX's `norm_attn_norm.attn` and a module another block owns (shared weights) included, so a value installed through `envoys=` is listed and a module no block has is not; a `Standard` child of the root, the vision tower, adds its own rows); the remote key (`StandardizedTransformer._remoteable_class`) | op names inside a forward; any one family's config keys |
 
 Two examples of the boundary. Gemma-2's contribution is the post-attention
 norm's output: the *family* says so with an `EProperty` keyed
@@ -213,8 +213,7 @@ in a function of that name in its own module (`families/falcon.py`, the
 looks it up on `model.family` and calls it, or falls back to the rule;
 `__set__` refuses an assignment, so the family module is the only
 place a root size is said. A block's own sizes are plain properties of its
-`Attention` (`num_heads`, `num_kv_heads`, `head_dim`, `qk_head_dim`) and `Mlp`
-(`intermediate_size`), read off the module's attributes and projection shapes
+`Attention` and `Mlp`, read off the module's attributes and projection shapes
 rather than the config, so a family whose blocks differ needs no per-layer
 config parsing; a module that spells one another way gets an override on the
 family's subclass (`families/jetmoe.py`, `Mlp.intermediate_size`).
@@ -228,33 +227,42 @@ and `sourced` (`False` here) is the flag a family sets to `True` on an
 envoy whose forward holds a value read after the call has started;
 `__init__` and `_update` then instrument that forward at build and again
 when real weights replace meta ones (Llama 4's `Layer`, for its
-`Mlp.mlp_output`). `Layer` (`components/layer.py`) adds `returns_tuple`,
-`skip_with` and `layer_output` (`first_tensor` in, `rewrap` out).
-`Attention` (`components/attention.py`) adds the contribution and the six
-interior values on `INTERFACE`; `off_interface` is the one method a family
-overrides to give another reason the interface does not run
-(`families/gpt2.py` for `reorder_and_upcast_attn`). `Mlp`
-(`components/mlp.py`) adds `mlp_output`. `Moe` (`components/moe.py`), an
-`Mlp`, adds a mixture of experts' six values, read where the model consumes them:
-`router_logits` at the router's logits op (`LOGITS`, `F_linear_0`), the routing pair
-as the experts module's arguments, `expert_outputs` inside transformers'
-`grouped_mm` / `batched_mm` experts forward (`DISPATCH`, `PER_SLOT`),
-`routed_output` as the experts' output, `shared_expert_output` as the shared
-expert's. The model routes flat `[batch * seq, ...]` tensors; the values are
-`TokenEProperty`s (`components/tokens.py`), an `EProperty` subclass that serves
-this invoke's `[batch, seq, ...]` rows of what `EProperty` reads (`rows`, from the
-interleaver batcher's `total` and the worker's `batch_group`) and splices a write
-back into the flat tensor before `EProperty` writes it (`splice`).
-`no_mixture` (`None` on the base) is the one method a family overrides when its
-host runs no mixture on some checkpoints (Gemma-4's dense MLP, which hosts the
-block's experts; GraniteMoE-Hybrid's shared MLP; Doge), as `off_interface` is for
-attention; `num_experts`, `top_k` and `SCORING` are its sizes and its router's kind.
-`RecurrentMixer`
-(`components/recurrent.py`) adds `attention_output`, the kernel choice, the
-per-token state and the kernel routing for a mixer read at a kernel call, and
-`LinearAttention` (`components/linear_attention.py`) sets its kernel
-constants and declares the gated DeltaNet's values on it; both are their own
-page, [recurrent-mixer-internals.md](recurrent-mixer-internals.md).
+`Mlp.mlp_output`). Each base below declares its host's values:
+
+- `Layer` (`components/layer.py`), the block: the stream at its boundaries,
+  ending in `layer_output` (`first_tensor` in, `rewrap` out)
+  ([residual-stream](../usage/residual-stream.md)), `returns_tuple`,
+  `skip_with` and the norm gains.
+- `Attention` (`components/attention.py`), the softmax attention: its
+  contribution and everything read inside it, the interior on `INTERFACE`
+  ([attention-interior](../usage/attention-interior.md)). `off_interface`
+  is the one method a family overrides to give another reason the
+  interface does not run (`families/gpt2.py` for `reorder_and_upcast_attn`).
+- `Mlp` (`components/mlp.py`), the feed-forward: its contribution, its
+  activation and its neurons.
+- `Moe` (`components/moe.py`), an `Mlp` for a mixture of experts: the
+  routing and the experts' outputs, read where the model consumes them
+  ([mixture-of-experts](../usage/mixture-of-experts.md)). The model routes
+  flat `[batch * seq, ...]` tensors; the values are `TokenEProperty`s
+  (`components/tokens.py`), an `EProperty` subclass that serves this
+  invoke's `[batch, seq, ...]` rows of what `EProperty` reads (`rows`, from
+  the interleaver batcher's `total` and the worker's `batch_group`) and
+  splices a write back into the flat tensor before `EProperty` writes it
+  (`splice`). `no_mixture` (`None` on the base) is the one method a family
+  overrides when its host runs no mixture on some checkpoints (Gemma-4's
+  dense MLP, which hosts the block's experts; GraniteMoE-Hybrid's shared
+  MLP; Doge), as `off_interface` is for attention.
+- `RecurrentMixer` (`components/recurrent.py`), a mixer read at a kernel
+  call: `attention_output`, the kernel choice, the per-token state and the
+  kernel routing. `LinearAttention` (`components/linear_attention.py`, the
+  gated DeltaNet), `SelectiveScan` (`components/selective_scan.py`,
+  Mamba-1) and `StateSpace` (`components/state_space.py`, Mamba-2) set its
+  kernel constants and declare the values
+  ([recurrent-mixer-internals.md](recurrent-mixer-internals.md)).
+- `Vision` (`components/vision.py`), a multimodal wrapper's vision tower:
+  its sizes, the image values, and its blocks `VisionLayer`,
+  `VisionAttention` and `VisionMlp`, the text classes with a `Patches`
+  stream ([vision-design.md](vision-design.md)).
 
 ## The registry
 
@@ -281,11 +289,10 @@ purpose: `import nnterp` must import no transformers modeling module
   `StandardizedTransformer.__init__` calls on the built tree when the family
   is `default` (by identity: a copy skips it): the required root modules and
   a shape-only `scan` of the stream and the logits, raising
-  `UnsupportedFamily` when the guess cannot stand or the scan cannot run. It
-  serves `layer_output`, the root values, the sizes and the interface
-  interior; `attention_output`, `mlp_output` and `project_on_vocab` are
-  `Unavailable` with one reason each, since what a sublayer adds and what
-  follows the head are code a name does not show.
+  `UnsupportedFamily` when the guess cannot stand or the scan cannot run.
+  What it serves and refuses is in
+  [loading](../usage/loading.md#an-architecture-with-no-family): what a
+  sublayer adds and what follows the head are code a name does not show.
 - `register(family, *model_types)` writes each of `model_types`, or with
   none the last component of `family.__name__`, into `REGISTRY`, which
   `lookup` consults first, so a module from outside the package, or an
@@ -309,17 +316,13 @@ checkpoint of that type is looked up, and never earlier.
 | registry, `lookup`, `register`, `UnsupportedFamily` | `nnterp/families/__init__.py` |
 | one family | `nnterp/families/<model_type>.py` |
 | descriptors | `nnterp/components/eproperty.py` ([eproperty-internals.md](eproperty-internals.md)) |
-| base envoys | `nnterp/components/{standard,layer,attention,mlp}.py` |
-| recurrent mixers: the base, and the DeltaNet subclass | `nnterp/components/recurrent.py`, `nnterp/components/linear_attention.py` ([recurrent-mixer-internals.md](recurrent-mixer-internals.md)) |
+| base envoys | `nnterp/components/`, one module each ([above](#the-base-envoys)) |
 | forward order (`order()`, `rank()`), measured by one probe run per model and block shape | `nnterp/order.py` |
 | helpers that use the values | `nnterp/prompt_utils.py`, `nnterp/nnsight_utils.py` |
 | the executable contract | `tests/families/suite.py` ([testing.md](testing.md)) |
 
 ## Gotchas
 
-- `envoys=` matches type before path (a path key matches the native path or
-  any alias spelling of it); a family's type key can only be displaced by a
-  type key (nnsight `Envoy._resolve_envoy_class`, `envoy.py`).
 - The family is chosen from `config.model_type` *before* the model is built,
   so an already-loaded `nn.Module` is looked up by its own `config`
   (`Standardized._read_config`, `standardized.py`;
@@ -342,7 +345,7 @@ checkpoint of that type is looked up, and never earlier.
 ## Related
 
 - [eproperty-internals.md](eproperty-internals.md) — the four descriptors and the nnsight facts they use
-- [recurrent-mixer-internals.md](recurrent-mixer-internals.md) — `RecurrentMixer`, the DeltaNet subclass, and occurrence arithmetic
+- [recurrent-mixer-internals.md](recurrent-mixer-internals.md) — `RecurrentMixer`, its three subclasses, and occurrence arithmetic
 - [testing.md](testing.md) — `FamilySuite`, the contract every family passes
 - [transformers-compat.md](transformers-compat.md) — what a release can rename
 - [gotchas.md](gotchas.md) — contributor-facing traps

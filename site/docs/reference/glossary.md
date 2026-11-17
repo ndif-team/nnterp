@@ -26,7 +26,7 @@ The terms this site uses, each in the one sense the pages give it, with the page
 
 **Drill**: instrumenting a function that the forward calls, through `<call>.source`, so the operations inside it can be read. It works inside a trace only, and an `EProperty` whose path has two `source` segments drills before every read ([Finding source ops](../developing/finding-source-ops.md#inside-a-call)).
 
-**Eager attention**: transformers' `attn_implementation="eager"`, the Python attention forward the attention interior is read inside. The default is the checkpoint's, usually `sdpa`, and the interior is then unavailable ([Attention](../guide/values/attention.md#eager-attention)).
+**Eager attention**: transformers' `attn_implementation="eager"`, the Python attention forward the attention interior is read on and inside. The default is the checkpoint's, usually `sdpa`, and the interior is then unavailable ([Attention](../guide/values/attention.md#eager-attention)).
 
 **Encyclopedia**: one page per supported family, built from the family module: the block drawn with the standard names, every value and where it is read, the `support()` report per public checkpoint, and the family's quirks ([encyclopedia](https://ndif-team.github.io/nnterp/encyclopedia/)).
 

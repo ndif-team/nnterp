@@ -41,7 +41,7 @@ class TestGemma3WrapperWithACap(TestGemma3Wrapper):
     """A wrapper whose text config sets a softcap: the model does not apply it, so the lens does not either."""
 
     def test_the_lens_matches_the_uncapped_logits(self, model):
-        model.config.text_config.final_logit_softcapping = 30.0
+        model.config.text_config.final_logit_softcapping = 0.1  # well below the logits, so a capped lens would differ
         try:
             with model.trace(PROMPT):
                 out = model.layers[-1].layer_output.save()

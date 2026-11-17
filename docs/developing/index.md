@@ -1,6 +1,6 @@
 ---
 title: Developing nnterp
-one_liner: Internals reference for contributors: architecture, the descriptors, DeltaNet occurrence arithmetic, the test suite, transformers compatibility, gotchas, house style.
+one_liner: Internals reference for contributors: architecture, the descriptors, the recurrent mixers' occurrence arithmetic, the test suite, transformers compatibility, gotchas, house style.
 tags: [internals, dev, index]
 related: [docs/developing/architecture.md, docs/developing/eproperty-internals.md, docs/developing/testing.md]
 sources: []
@@ -30,7 +30,7 @@ read.
 
 - [architecture](architecture.md) — the map, which layer owns what, lazy family import.
 - [eproperty-internals](eproperty-internals.md) — `EProperty` and its path grammar (`../`, `source`, `input`/`inputs`/`output`), `_resolve`'s walk, drilling per run, `select`, the `Standard` instrumentation rule, `DerivedEProperty`.
-- [recurrent-mixer-internals](recurrent-mixer-internals.md) — `RecurrentMixer` and its DeltaNet subclass: the kernel op the forward's own test picks, the once-per-call record (`KERNEL`, `per_call`), per-token state through occurrence arithmetic, `route_kernels`.
+- [recurrent-mixer-internals](recurrent-mixer-internals.md) — `RecurrentMixer` and its three subclasses: the kernel op the forward's own test picks, the once-per-call record (`KERNEL`, `per_call`), per-token state through occurrence arithmetic, `route_kernels`.
 - [vision-design](vision-design.md) — the vision side of image-text-to-text checkpoints: the tower names, the image values on the tower, where `image_features` is read, where the code lives, what does not fit.
 - [testing](testing.md) — `HF_HUB_OFFLINE=1 pytest`, what `FamilySuite` asserts method by method, the root tests.
 - [transformers-compat](transformers-compat.md) — the versions nnterp is developed against, which operation names a release can move, the upgrade procedure.

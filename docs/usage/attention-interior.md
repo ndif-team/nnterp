@@ -394,8 +394,10 @@ gains are refused there too).
 
 ## Requirement: eager attention
 
-All six live inside the eager attention forward. A model loaded with `sdpa`
-or `flash_attention_2` never runs it, and each value says so:
+The scores and the pattern are read inside the eager attention forward; the
+queries, keys and values are the arguments of the module's call to it, and the
+head outputs its first return. A model loaded with `sdpa` or
+`flash_attention_2` never runs it, and each value says so:
 
 ```python
 model = StandardizedTransformer("openai-community/gpt2", attn_implementation="sdpa")
@@ -622,8 +624,9 @@ the keys touches the group of query heads that shares that key head.
 ### Falcon: two attention branches, by `config.alibi`
 
 Falcon's attention does its own arithmetic, and `config.alibi` picks one of
-two branches with different operations. Each of the six values names its
-operation by that flag, and all six need only an eager load on either branch.
+two branches with different operations. Five of the six values name their
+operation by that flag (`attention_values` has one on both), and all six need
+only an eager load on either branch.
 Without alibi the queries and keys are the two returns of the rotary
 embedding and the values are bound *before* it, so in one trace the values
 must be read before the queries or keys:

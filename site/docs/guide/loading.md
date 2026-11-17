@@ -22,11 +22,11 @@ print(resid.shape, logits.shape)
 
 ## Arguments
 
-`family=`, `rename=`, `envoys=` and `tokenizer_kwargs=` are nnterp's own. Everything else, such as `dispatch`, `dtype`, `device_map`, `attn_implementation`, `revision` and `task`, goes to `TransformersModel` as documented at [nnsight.net](https://nnsight.net/features/5_loading/), and `revision` and `trust_remote_code` also reach the config read that picks the family. The full signature is under the Documentation tab ([standardized](../documentation/standardized.md)). `task` defaults to `"text-generation"`, and `task="image-text-to-text"` loads a vision-language checkpoint as its wrapper, with its processor ([Vision-language](architectures/vision-language.md)). Without `dtype` the weights load in the config's own dtype, float32 for GPT-2 and bfloat16 for Qwen2.5. Without `dispatch=True` the model is built on the meta device and the weights load at the first trace, while `model.support()` and the sizes, which read the config, work either way.
+`family=`, `rename=`, `envoys=` and `tokenizer_kwargs=` are nnterp's own. Everything else, such as `dispatch`, `dtype`, `device_map`, `attn_implementation`, `revision` and `task`, goes to `TransformersModel` as documented at [nnsight.net](https://nnsight.net/features/5_loading/), and the ones that say where the checkpoint is and how to fetch it (`revision`, `cache_dir`, `token`, `trust_remote_code`, ...) also reach the config read that picks the family. The full signature is under the Documentation tab ([standardized](../documentation/standardized.md)). `task` defaults to `"text-generation"`, and `task="image-text-to-text"` loads a vision-language checkpoint as its wrapper, with its processor ([Vision-language](architectures/vision-language.md)). Without `dtype` the weights load in the config's own dtype, float32 for GPT-2 and bfloat16 for Qwen2.5. Without `dispatch=True` the model is built on the meta device and the weights load at the first trace, while `model.support()` and the sizes, which read the config, work either way.
 
 ### `attn_implementation="eager"`
 
-The values inside attention (`attention_probabilities`, `attention_scores`, the queries, keys, values and head outputs) are read inside transformers' eager attention forward. The default implementation is the checkpoint's, usually `sdpa`, and those values are then unavailable:
+The values inside attention (`attention_probabilities`, `attention_scores`, the queries, keys, values and head outputs) are read on and inside transformers' eager attention forward. The default implementation is the checkpoint's, usually `sdpa`, and those values are then unavailable:
 
 ```python
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, device="cpu")

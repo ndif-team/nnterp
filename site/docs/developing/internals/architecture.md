@@ -15,7 +15,7 @@ print(model.layers[0]._aliases)                                  # {'input_layer
 print(model.layers[0].self_attn is model.transformer.h[0].attn)  # True
 print(type(model.layers[0]) is gpt2.Layer, type(model.layers[0].self_attn) is gpt2.Attention)  # True True
 print(sorted(gpt2.Attention.values()))
-# ['attention_head_outputs', 'attention_keys', 'attention_output', 'attention_premix', 'attention_probabilities', 'attention_queries', 'attention_scores', 'attention_values']
+# ['attention_head_outputs', 'attention_keys', 'attention_keys_prerope', 'attention_output', 'attention_premix', 'attention_probabilities', 'attention_queries', 'attention_queries_prerope', 'attention_scores', 'attention_values', 'interface']
 
 with model.trace("The Eiffel Tower is in"):
     pattern = model.layers[2].self_attn.attention_probabilities.save()
@@ -28,7 +28,7 @@ An alias is the same envoy object, so `model.layers[0].self_attn` is the `gpt2.A
 
 ## From `model_type` to a family
 
-`StandardizedTransformer.__init__` in `nnterp/standardized.py` reads the config before anything is built. `_read_config` returns a ready `nn.Module`'s own `config`, else `AutoConfig.from_pretrained` with the call's `revision` and `trust_remote_code`, and a config transformers cannot parse fails there with transformers' own error. On a multimodal config the lookup takes `text_config.model_type`, because the text model is what the family standardizes.
+`StandardizedTransformer.__init__` in `nnterp/standardized.py` reads the config before anything is built. `_read_config` returns a ready `nn.Module`'s own `config`, else `AutoConfig.from_pretrained` with the load's arguments that say where the checkpoint is, such as `revision`, `cache_dir` and `token`, and a config transformers cannot parse fails there with transformers' own error. On a multimodal config `families.resolve` takes `text_config.model_type`, because the text model is what the family standardizes, unless a family is named after the wrapper's own type (`kimi_k25`).
 
 `families.lookup(model_type)` in `nnterp/families/__init__.py` consults `REGISTRY` first and then imports `nnterp.families.<model_type>`. A `ModuleNotFoundError` naming exactly that module means there is no such family, and `lookup` warns and returns `nnterp.families.default`. Any other import error comes from inside a family module and is re-raised as it is. A family module imports its transformers modeling module at its top, which keeps `import nnterp` free of modeling code and makes the first lookup of a type load only that family's module. `tests/test_registry.py` checks this in a subprocess.
 
@@ -58,11 +58,11 @@ The envoy class is chosen per module at construction: nnsight tries the module t
 | `nnterp/components/` | what each value means and how it is read and written (`EProperty` paths, `select`, transforms); the availability predicates; the shared operation names such as `INTERFACE` | any one family's module names or classes |
 | `nnterp/standardized.py` | the root values and methods, the sizes, `support()`, the load path, the remote key | an operation name inside a forward; a family's config keys |
 
-Gemma-2's `attention_output` is the post-attention norm's output: The family keys it `"../post_attention_layernorm.output"` on its `Attention`, and the component only knows how to walk such a path. BLOOM's contribution is the first argument of its `dropout_add` call, so the family names `"source.dropout_add_0.input"`. A family on transformers' shared path, such as `nnterp/families/llama.py`, overrides nothing and is three container keys, three empty subclasses and the type keys.
+Gemma-2's `attention_output` is the post-attention norm's output: The family keys it `"../post_attention_layernorm.output"` on its `Attention`, and the component only knows how to walk such a path. BLOOM's contribution is the first argument of its `dropout_add` call, so the family names `"source.dropout_add_0.input"`. A family on transformers' shared path overrides nothing: The `Layer`, `Attention` and `Mlp` of `nnterp/families/llama.py` are three empty subclasses.
 
 ## The root
 
-`Standardized`, in `nnterp/standardized.py`, is the engine-independent part: the sizes, `support()`, `skip_layers`, `steer`, `get_topk_closest_tokens` and `_read_config`. `StandardizedTransformer` mixes it over `TransformersModel`, and `StandardizedVLLM` over nnsight's `VLLM` ([vLLM](../../vllm/index.md)). The root values are `EProperty` descriptors like a block's. `logits` reads the model's output and picks `.logits`, `token_embeddings` is keyed `"embed_tokens.output"`, `final_norm_output` and `lm_head_output` read `norm` and `lm_head`, `next_token_probs` is derived and refuses assignment, and `input_ids`, `attention_mask` and `input_size` are keyed `"inputs"` and read the call's keyword arguments.
+`Standardized`, in `nnterp/standardized.py`, is the engine-independent part: the sizes, `support()`, `skip_layers`, `steer`, `get_topk_closest_tokens`, `probs_to_dict` and `_read_config`. `StandardizedTransformer` mixes it over `TransformersModel`, and `StandardizedVLLM` over nnsight's `VLLM` ([vLLM](../../vllm/index.md)). The root values are `EProperty` descriptors like a block's. `logits` reads the model's output and picks `.logits`, `token_embeddings` is keyed `"embed_tokens.output"`, `final_norm_output` and `lm_head_output` read `norm` and `lm_head`, `next_token_probs` is derived and refuses assignment, and `input_ids`, `attention_mask` and `input_size` are keyed `"inputs"` and read the call's keyword arguments.
 
 Each size is a `StandardizedProperty`. On read it looks for a function of its own name on `model.family` and calls it with the model, else runs the plain rule over `config.get_text_config()`. Assignment raises `AttributeError`, which leaves the family module as the only place a size is spelled otherwise. `project_on_vocab` is a `StandardizedCapability`, the same lookup for a method.
 

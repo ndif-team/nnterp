@@ -57,8 +57,9 @@ work needs full precision.
 ## How the family is chosen
 
 The constructor reads the checkpoint's config before any model is built, with
-`AutoConfig.from_pretrained(repo_id, revision=..., trust_remote_code=...)`, so those two
-arguments flow into the config read as well as the load. A `config=` argument (a config
+`AutoConfig.from_pretrained(repo_id, ...)` and the load's arguments that say where the
+checkpoint is and how to fetch it (`revision`, `cache_dir`, `token`, `local_files_only`,
+`subfolder`, `trust_remote_code`, ...), so the config is read from where the model will be. A `config=` argument (a config
 object or a path to one) is read in place of the checkpoint's and is also the config the
 model is built from. The config's `model_type` is the
 family: `nnterp.families.<model_type>` is imported on first use (`gpt2.py` for `gpt2`,
@@ -68,7 +69,7 @@ as `text_config`, and that `model_type` is the one looked up under either task: 
 is the text model's (`gemma3_text` for a Gemma 3 wrapper, `llama` for Llava 1.5), and it
 carries the wrapper's spellings and the vision tower's names beside the text model's. A
 wrapper with a family module of its own resolves to that one whatever its text config says
-(`kimi_k25.py`, Kimi K2's family under the wrapper's name, since transformers 5.20 labels its
+(`kimi_k25.py`, Kimi K2's family under the wrapper's name, since transformers labels its
 text config `deepseek_v3`); `nnterp.families.resolve(config)` is the rule.
 
 `model.family` is the module the checkpoint resolved to; `nnterp.families.known()` lists
@@ -203,7 +204,7 @@ way, since they read the config.
 `attn_implementation` is transformers' argument and it keeps transformers' default
 (`sdpa` where available). The attention interior (`attention_probabilities`,
 `attention_scores`, `attention_queries`, `attention_keys`, `attention_values`,
-`attention_head_outputs`) is read inside the eager attention forward, so under any other
+`attention_head_outputs`) is read on and inside the eager attention forward, so under any other
 implementation those values are unavailable and `support()` says so:
 
 ```

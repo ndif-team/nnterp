@@ -23,7 +23,7 @@ Everything else is nnsight's `VLLM`, with vLLM's own defaults: a trace is a gene
 and each invoke is one prompt. Read nnsight's vLLM guide for the engine; this page is what
 nnterp adds and what differs from the transformers engine.
 
-Families on this engine (60): `llama`, `mistral`, `ministral3`, `phi3`, `qwen2`, `qwen3`,
+Families on this engine (60, counting `kimi_k25`): `llama`, `mistral`, `ministral3`, `phi3`, `qwen2`, `qwen3`,
 `ernie4_5`, `apertus`, `nemotron`, `gemma`, `gemma2`, `gemma3_text`, `exaone4`, `hyperclovax`,
 `cohere`, `cohere2`, `granite`, `granitemoe`, `stablelm`, `mixtral`, `phimoe`, `qwen2_moe`,
 `qwen3_moe`, `olmoe`, `ernie4_5_moe`, `glm4_moe`, `glm4_moe_lite`, `minimax_m2`, `afmoe`, `laguna`,
@@ -556,7 +556,7 @@ assert model.family is family and model.layers[0].ffn is model.layers[0].mlp
 
 ## Related
 
-- nnsight `docs/models/vllm.md` and the `nnsight:vllm` skill — the engine: sampling, `edit()`,
+- nnsight `docs/models/vllm.md` and the `nnsight` skill's vLLM guide — the engine: sampling, `edit()`,
   taps, serving, tensor parallelism.
 - [residual-stream](residual-stream.md), [root-values](root-values.md), [availability](availability.md).
 - [docs/developing/testing.md](../developing/testing.md) — running `tests/vllm_families/`.

@@ -149,9 +149,7 @@ scan starts from zeros and takes no state to replace`.
 
 The values follow whichever kernel the forward calls: the scan on the
 prompt, the single-step update on each cached one-token call (the forward's
-own condition, one token over a cached state: `use_precomputed_states and
-seq_len == 1` through transformers 5.20, `recurrent_state is not None and
-seq_len == 1` from 5.21). The state hands off
+own condition, one token over a cached state). The state hands off
 from step to step:
 
 ```python
@@ -202,10 +200,10 @@ before `t`".
 - **A mixer's submodule and its kernel values do not mix in one trace.** Reading a
   submodule's value (`linear_attn.x_proj.output`) and then a kernel value (`betas`) raises
   `OutOfOrderError` naming an op at the top of the mixer's forward (the cached-state op the kernel choice reads:
-  `use_precomputed_states_0` through transformers 5.20, `cache_params_get_recurrent_state_0` from 5.21): the kernel
+  `cache_params_get_recurrent_state_0`, or `use_precomputed_states_0` where the forward binds that bool): the kernel
   values look up that op to see which kernel runs, and the submodule read has already
   passed it. The other order is out of forward order too. Read them in separate traces.
-- **From transformers 5.21 a run without a cache (`use_cache=False`) serves no kernel value.** The forward
+- **A run without a cache (`use_cache=False`) serves no kernel value.** The forward
   fetches its cached state only when it receives a cache, and the kernel choice reads that fetch, so a read inside
   the mixer parks on `cache_params_get_recurrent_state_0` and the run ends with `OutOfOrderError` naming it. Leave
   `use_cache` on (the default) for anything inside the mixer.

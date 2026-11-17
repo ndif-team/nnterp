@@ -28,7 +28,7 @@ model = StandardizedTransformer("openai-community/gpt2", dispatch=True, attn_imp
 ## The standard values
 
 - [residual-stream](residual-stream.md) — `layer_input`, `layer_output`, `attention_output`, `mlp_output`, and the identity `layer_input + attention_output + mlp_output == layer_output`.
-- [attention-interior](attention-interior.md) — `attention_queries` / `keys` / `values` / `scores` / `probabilities` / `head_outputs` inside the eager attention forward, with each family's caveats.
+- [attention-interior](attention-interior.md) — `attention_queries` / `keys` / `values` / `scores` / `probabilities` / `head_outputs` on and inside the eager attention forward, with each family's caveats.
 - [root-values](root-values.md) — `logits`, `token_embeddings`, `next_token_probs`, `input_ids`, `attention_mask`, `input_size`, and the sizes.
 - [delta-net](delta-net.md) — the hybrids' `linear_attn`: `decays`, `betas`, `state_input`/`state_output`, and the per-token `state`/`states` behind `route_kernels`.
 - [selective-scan](selective-scan.md) — Mamba, Falcon-Mamba and Jamba's `linear_attn`: the Mamba-1 scan's `C`/`B`/`x`, step sizes and decays as tokens-first views, and the scan's own per-token state behind `route_kernels`.

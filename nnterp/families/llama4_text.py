@@ -10,8 +10,8 @@ module passed in already loaded keeps the text model at
 ``language_model.{model.*, lm_head}``, so ``RENAME`` carries both spellings
 and whichever the tree has binds.
 
-The block adds both residuals itself, attention through the shared eager
-forward (Llama 4's own copy, which keeps the softmax in the model dtype).
+The block adds both residuals itself, attention through the shared attention
+interface (Llama 4's eager forward keeps the softmax in the model dtype).
 What differs from Llama, inside the attention and the feed-forward:
 
 * **iRoPE.** ``no_rope_layers[i] == 0`` marks a NoPE block: no rotary
@@ -129,7 +129,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Llama 4's attention; the shared eager forward and the residual added in the block, so the base holds.
+    """Llama 4's attention; the shared attention interface and the residual added in the block, so the base holds.
 
     The queries and keys it serves are after the rotary embedding and the
     qk-norm on a RoPE block, and the queries after temperature tuning on a

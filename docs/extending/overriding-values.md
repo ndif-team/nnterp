@@ -3,7 +3,7 @@ title: Overriding Values
 one_liner: How a family redefines a standard value when the base does not hold — an `EProperty` keyed on a path (`../norm.output`, `source.<op>.input`, `source.<call>.inputs` with `select`), `unavailable` markers and predicates, `off_interface`, `seq_first`, a clone with a transform, `postprocess` for writes; and a root size, which is a plain function in the family module, not a descriptor.
 tags: [extending, families, eproperty, source, availability]
 related: [docs/extending/adding-a-family.md, docs/extending/custom-values.md, docs/extending/finding-source-ops.md]
-sources: [nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/layer.py, nnterp/components/mlp.py, nnterp/components/standard.py, nnterp/families/gemma2.py, nnterp/families/olmo2.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/gptj.py, nnterp/families/falcon.py, nnterp/families/gpt2.py, nnterp/families/gpt_oss.py, nnterp/families/llama4_text.py, nnterp/families/deepseek_v2.py, nnterp/families/deepseek_v3.py, nnterp/standardized.py]
+sources: [nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/layer.py, nnterp/components/mlp.py, nnterp/components/standard.py, nnterp/families/gemma2.py, nnterp/families/olmo2.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/gptj.py, nnterp/families/falcon.py, nnterp/families/gpt2.py, nnterp/families/gpt_oss.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/deepseek_v2.py, nnterp/families/deepseek_v3.py, nnterp/standardized.py]
 ---
 
 # Overriding Values
@@ -35,7 +35,7 @@ from ..components import Attention, EProperty, Layer, Mlp, Residual
 
 
 class Attention(Attention):
-    """Gemma-2's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
+    """Gemma-2's attention: the shared attention interface, but what reaches the residual stream is the post-attention norm's output."""
 
     @EProperty(
         "../post_attention_layernorm.output",
@@ -219,7 +219,11 @@ exists.
   before it.
 
 The element handed back is the object the call holds, so in-place edits reach the model;
-a transform is there for a value whose stub returns a copy.
+a transform is there for a value whose stub returns a copy. An output of `chunk`, `split`
+or `unbind`, or a view of one (GPT-2's queries), is the exception: torch refuses an in-place
+edit of it while gradients are on. A value that has to take one reads a slice of that
+operation's input instead, a plain view, with a `postprocess` that rebuilds the whole for an
+assignment.
 
 ### Reuse the base description and the base layout name
 
@@ -334,8 +338,8 @@ class Attention(Attention):
 
 A family that only lays its projections out differently overrides the methods, reading the
 fused projection through `projection_weight(self, name)` (in `nnterp.components`). It returns
-the weight the projection's next forward applies (under a PEFT LoRA layer, the base plus each
-active, unmerged adapter's delta; the base once merged), and raises `Unavailable` with
+the weight the projection's next forward applies (under a PEFT adapter, the base layer's weight
+plus each active, unmerged adapter's delta), and raises `Unavailable` with
 `no_head_weights()`'s reason, on an undispatched model's meta weight, and on a quantized one:
 
 ```python
@@ -429,10 +433,14 @@ attention_output` and that `mlp_output[:] = 0` moves the logits while the saved 
 zero. A transform is needed only when the preprocess returns something other than the
 served object (a clone, a reshaped copy) *and* in-place edits must still reach the model.
 GPT-2's MLP output is not mutated later, so the base holds and `mlp_output[:] = 0` reaches
-the model with no clone and no transform. `transform(self, view, raw)` receives the raw
-served value so a module that returns a tuple can be rebuilt around the edited element
-(`(edited.clone(), *raw[1:])`); see nnsight docs/developing/extending-envoy.md. A
-transform works on any path, an operation inside a forward included.
+the model with no clone and no transform. `transform(self, view, raw)` returns the
+location's whole value, not the selected element: `raw` is that value as served, to rebuild
+around the edited view (`(view.clone(), *raw[1:])` where a module returns a tuple; the
+`(args, kwargs)` pair on an `input` or `inputs` key, as Gemma-4's `_hand_back` does). An
+assignment does not pass through it: `postprocess` and `select` are applied for you there,
+and not in a transform. See nnsight docs/developing/extending-envoy.md and
+[eproperty-internals.md](../developing/eproperty-internals.md#the-nnsight-side-in-six-facts).
+A transform works on any path, an operation inside a forward included.
 
 ## `postprocess`: writes on a `key="output"` value
 

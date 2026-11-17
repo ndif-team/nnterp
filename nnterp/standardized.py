@@ -254,24 +254,29 @@ class Standardized:
         force_download: bool = False,
         trust_remote_code: bool | None = None,
         code_revision: str | None = None,
+        config: Any = None,
         **kwargs: Any,
     ) -> Any:
         """The checkpoint's config, before any model is built.
 
-        A ready module carries its own; a repo id is read with ``AutoConfig``
-        and the named kwargs, the ones that say where the checkpoint is and how
-        to fetch it, so it is looked for where the build will look, and a config
-        transformers cannot parse fails here with its own error. The rest of
-        the load's kwargs (``dtype``, ``device_map``, ...) are the build's and
-        are ignored here. The Hub caches the file, and the meta build reads it
-        again.
+        A ready module carries its own, and a ``config=`` load argument is the
+        one the model is built from: a config object is returned as it is, a
+        path is read in place of the repo id. A repo id is read with
+        ``AutoConfig`` and the named kwargs, the ones that say where the
+        checkpoint is and how to fetch it, so it is looked for where the build
+        will look, and a config transformers cannot parse fails here with its
+        own error. The rest of the load's kwargs (``dtype``, ``device_map``,
+        ...) are the build's and are ignored here. The Hub caches the file, and
+        the meta build reads it again.
         """
         if isinstance(repo_id, torch.nn.Module):
             return repo_id.config
-        from transformers import AutoConfig
+        from transformers import AutoConfig, PretrainedConfig
 
+        if isinstance(config, PretrainedConfig):
+            return config
         return AutoConfig.from_pretrained(
-            repo_id,
+            repo_id if config is None else config,
             cache_dir=cache_dir,
             revision=revision,
             token=token,
@@ -442,7 +447,10 @@ class StandardizedTransformer(Standardized, TransformersModel):
         """
         return value
 
-    @EProperty("norm.output", description="The residual stream after the final norm, what lm_head reads", unavailable=partial(absent, name="norm", where="model"))
+    #: Why ``norm.output`` is not the final norm's output on this model, where the family's load-time check finds so.
+    final_norm_unavailable: str | None = None
+
+    @EProperty("norm.output", description="The residual stream after the final norm, what lm_head reads", unavailable=lambda model: absent(model, "norm", "model") or model.final_norm_unavailable)
     def final_norm_output(self, value: torch.Tensor) -> Residual:
         """The final norm's output, ``[batch, seq, hidden_size]``: the stream the head projects. Assign to replace it; in-place edits reach the model."""
         return value

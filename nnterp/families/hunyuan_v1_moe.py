@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward.
+added in the block, attention through the shared attention interface.
 The attention norms its queries and keys per head after the rotary embedding,
 before the interface. Every block's MLP is a mixture of experts that adds a
 shared expert (``mlp.shared_mlp``) to the routed sum and returns one tensor.
@@ -30,7 +30,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Hunyuan MoE V1's attention; the shared eager forward and the residual added in the block, so the base holds.
+    """Hunyuan MoE V1's attention; the shared attention interface and the residual added in the block, so the base holds.
 
     ``query_layernorm`` / ``key_layernorm`` norm the queries and keys *after*
     the rotary, so ``attention_queries`` is the norm of ``rotate(attention_queries_prerope, ...)``.

@@ -3,7 +3,7 @@
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
 added in the block, which returns a bare tensor. Attention is DeepSeek-V2's
-multi-head latent attention through the shared eager forward: queries and keys are
+multi-head latent attention through the shared attention interface: queries and keys are
 ``qk_head_dim`` wide (``qk_nope_head_dim + qk_rope_head_dim``), values
 ``v_head_dim``, and the interface sees ``num_heads`` key/value heads. The config
 maps ``head_dim`` to ``qk_rope_head_dim``, the rotary part only, so both widths come

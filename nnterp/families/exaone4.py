@@ -5,7 +5,7 @@ after, ``x + post_attention_layernorm(attn(x))`` and then
 ``+ post_feedforward_layernorm(mlp(x))``. What the block adds is the post-norm's
 output, not the module's, so the contributions point at the sibling norms.
 EXAONE 4.0 has only the post-norms: no ``input_layernorm`` exists to alias.
-The attention runs the shared eager forward with per-head q/k norms. A checkpoint
+The attention runs the shared attention interface with per-head q/k norms. A checkpoint
 with a ``sliding_window`` mixes sliding-window layers, which apply the rotary, and
 full-attention layers, which apply none (NoPE); both reach the interface the same
 way, so the values are the same on every block.
@@ -45,7 +45,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """EXAONE-4's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
+    """EXAONE-4's attention: the shared attention interface, but what reaches the residual stream is the post-attention norm's output."""
 
     def no_rotary(self) -> str | None:
         module = self._module

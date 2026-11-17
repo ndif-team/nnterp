@@ -1,4 +1,4 @@
-"""Gemma on vLLM, against the transformers engine: no ``lm_head`` module, embeddings scaled after the lookup."""
+"""Gemma on vLLM, against the transformers engine: embeddings scaled after the lookup."""
 
 import torch
 from vllm_suite import LLAMA_ROWS, VLLMFamilySuite
@@ -9,7 +9,7 @@ from nnterp.families.vllm import gemma
 class TestVLLMGemma(VLLMFamilySuite):
     REPO = "unsloth/gemma-2b"
     FAMILY = gemma
-    NATIVE = {name: path for name, path in LLAMA_ROWS.items() if name != "lm_head"}   # vLLM unembeds with embed_tokens
+    NATIVE = LLAMA_ROWS
     MEMORY = 0.3
 
     def embedding_scale(self, model):

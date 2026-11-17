@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. Queries, keys and values are indexed out of one fused ``qkv_proj``.
+added in the block, attention through the shared attention interface. Queries, keys and values are indexed out of one fused ``qkv_proj``.
 """
 
 from transformers.models.phi3.modeling_phi3 import Phi3Attention, Phi3DecoderLayer, Phi3MLP
@@ -23,7 +23,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Phi-3's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Phi-3's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
     def value_weight(self, kv_head):
         """``qkv_proj``'s rows are every query, every key, then every value."""

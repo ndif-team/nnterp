@@ -13,7 +13,8 @@ sources: [tests/conftest.py, tests/families/suite.py, tests/families/test_falcon
 The suite is the executable contract of nnterp: every statement the README
 makes about a value is a method in `tests/families/suite.py`, run against a
 pinned tiny checkpoint of every family. Adding a family is one test file;
-adding a value is one method here. This page is how to run it, what each
+adding a standard value is one method here and the name sets
+[contributing.md](contributing.md#workflow) step 6 lists. This page is how to run it, what each
 test asserts, and how a family file states its specifics.
 
 ## Canonical pattern
@@ -199,9 +200,9 @@ test on random weights (`random_weights(repo, **config)`): GPT-BigCode without m
 heads per `mp_num` part, and Phi-3 under grouped-query attention; Falcon-RW's runs it in `TestFalconRW`.
 `test_gemma2.py` checks that
 on a bf16 load both gains are `1 + weight` in float32, bit for bit. `tests/families/test_llama.py` runs both
-weight tests on the tiny Llama under a throwaway LoRA on `v_proj` and `o_proj` (`peft=` at load, B not zero)
-with the adapter enabled, disabled, merged, and disabled while merged, and checks the merged weight is
-`value_weight`'s bit for bit.
+weight tests on the tiny Llama under a throwaway LoRA, and a LoKr, on `v_proj` and `o_proj` (`peft=` at load,
+initialized away from zero) with the adapter enabled, disabled, merged, and disabled while merged, checks the
+merged weight is `value_weight`'s bit for bit, and under DoRA checks the refusal.
 
 **Layouts**
 
@@ -366,7 +367,8 @@ shapes, DeepSeek-V4's parallel streams) and `NO_OP` the pattern reads that
 fail loudly on a family whose eager attention forward has no softmax. The rest
 pin NanoChat (a `model_type` with no family: the warning, the stream and
 logits against the raw model, the one reason for the contributions and the
-lens, `steer` and `skip_layers`), Gemma-2's contributions reported
+lens, `final_norm_output` refused where the forward calls `norm` twice,
+`steer` and `skip_layers`), Gemma-2's contributions reported
 unavailable rather than wrong, and the refusals (RWKV's names,
 GPT-NeoX-Japanese's container, Gemma-3n's parallel streams, Inkling's scan
 under `grouped_mm`).
@@ -416,9 +418,9 @@ rotary (`test_rotate_says_why_a_block_has_no_rotary`). `test_head_weights_are_re
 both gains raise too. A family whose block
 does more between its rotary and its attention layer overrides
 `rotated_as_served(attn, name, rotated)`, called inside the trace, where the
-engine's modules run (HunYuan's `query_layernorm` / `key_layernorm`, Llama 4's
-`qk_norm` in vLLM's channel order); a family with a block that applies no
-rotary, or that does not serve the values, adds `NO_ROTARY` to its
+engine's modules run (Llama 4's `qk_norm` in vLLM's channel order); a family
+with a block that applies no rotary, or that does not serve the values (every
+family on vLLM's transformers backend), adds `NO_ROTARY` to its
 `UNAVAILABLE`.
 
 ```bash
@@ -440,18 +442,19 @@ float32; narrower can hang the engine) and most of its MLPs take SiLU only.
 The reference reads the attention's interior one value a trace, since each
 transformers family reads its own in its own order. Class attributes say
 what a family differs in: `SERVED` (the interior values vLLM serves; `()` on
-the latent-attention families), `UNAVAILABLE`, `TOLERANCE` and
-`KERNEL_TOLERANCE` (set, with the measurement beside them, where the two
-engines' attention kernels differ more than the default allows), `DTYPE`,
-`ENGINE` (engine arguments: `language_model_only=True` on the
-vision-language wrappers, `hf_overrides` where a checkpoint has to be told
-what vLLM misreads) and `REFERENCE` (arguments of the transformers
-reference's load: a wrapper's `task`, or a config value set to what vLLM
-builds). The latent-attention families' files have two classes, one per
-attention backend. Two classes skip on a stock install, with the condition
-in their file: Apertus (nnsight's meta build must answer `.cpu().item()`)
-and DBRX (vLLM 0.27.1's loader does not find the experts). The checkpoints are
-about 250 GB together.
+the latent-attention families), `UNAVAILABLE`, `TOLERANCE`,
+`KERNEL_TOLERANCE` and `MODULE_TOLERANCE` (set, with the measurement beside
+them, where the two engines' attention kernels differ more than the default
+allows; the last is per value, for the value as read and for the logits after
+`layer_mid` is halved), `DTYPE`, `ENGINE` (engine arguments:
+`language_model_only=True` on the vision-language wrappers, `hf_overrides`
+where a checkpoint has to be told what vLLM misreads or its config leaves
+out) and `REFERENCE` (arguments of the transformers reference's load: a
+wrapper's `task`). The latent-attention families' files have two classes, one
+per attention backend. Two classes skip on a stock install, with the
+condition in their file: Apertus (nnsight's meta build must answer
+`.cpu().item()`) and DBRX (vLLM's loader does not find the experts). The
+checkpoints are about 215 GB together.
 
 ## The root tests
 

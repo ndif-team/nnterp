@@ -14,7 +14,7 @@ block the reverse. ``feed_forward`` is a dense MLP or, one block in
 ``pre_ff_layernorm`` is ``post_attention_layernorm``.
 
 The attention has no positional encoding (the Mamba blocks carry position)
-and runs the shared eager interface, so the base holds. The Mamba mixer puts
+and runs the shared attention interface, so the base holds. The Mamba mixer puts
 RMS norms on the step size, ``B`` and ``C`` before the scan (with weights,
 where Falcon-Mamba's are weightless); the values are read at the kernel
 call, after them.
@@ -44,7 +44,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Jamba's attention (one block in ``attn_layer_period``); the shared eager forward, so the base holds."""
+    """Jamba's attention (one block in ``attn_layer_period``); the shared attention interface, so the base holds."""
 
     def no_rotary(self) -> str | None:
         return "no rotary embedding: Jamba's attention blocks use no position encoding, its Mamba blocks carry position"

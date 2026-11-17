@@ -88,9 +88,9 @@ class TestVLLMOPT(VLLMFamilySuite):
         assert torch.equal(in_place, read_twice)
         close(assigned, in_place, self.TOLERANCE, name)
 
-    def test_lm_head_is_the_embedding(self, model):
-        """With tied embeddings vLLM unembeds with the embedding module itself: one module, two names."""
-        assert model.lm_head._module is model.embed_tokens._module
+    def test_lm_head_shares_the_embeddings_weight(self, model):
+        """With tied embeddings vLLM's ``lm_head`` holds the embedding's weight: one parameter under two modules."""
+        assert model.lm_head._module.weight is model.embed_tokens._module.weight
 
     def test_queries_are_pre_scaled(self, model, reference):
         attention = model.layers[0].self_attn

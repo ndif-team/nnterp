@@ -189,8 +189,10 @@ class VLLMFamilySuite:
     #: sharp softmax differently, which a checkpoint with very large queries and keys shows in its head outputs, and
     #: from there in every later block's queries, keys and values, more than in the residual stream they are small in.
     KERNEL_TOLERANCE = 5e-3
-    #: Agreement of a module value where it needs its own, by `support()` name. A norm divides the stream by its
-    #: spread, so a difference that is small against the stream's largest magnitude can be large against its output's.
+    #: Agreement of a module value where it needs its own, by `support()` name: of the value as read, and of the
+    #: logits after ``layer_mid`` is halved. A norm divides the stream by its spread, so a difference that is small
+    #: against the stream's largest magnitude can be large against its output's; a halved stream weighs less against
+    #: what the later blocks add, so the logits show more of the difference between the engines' kernels.
     MODULE_TOLERANCE: dict = {}
     #: The blocks `test_skip_layers` skips; the middle one when not said.
     SKIP = None
@@ -397,8 +399,9 @@ class VLLMFamilySuite:
         assert not torch.allclose(clean, in_place)
         close(assigned, in_place, self.TOLERANCE, name)
         if name == "layer_mid" and reference["mid_halved"] is not None:
-            close(in_place, reference["mid_halved"], self.TOLERANCE, "layer_mid halved in place, against transformers")
-            close(assigned, reference["mid_halved"], self.TOLERANCE, "layer_mid halved by assignment, against transformers")
+            tolerance = self.MODULE_TOLERANCE.get(name, self.TOLERANCE)
+            close(in_place, reference["mid_halved"], tolerance, "layer_mid halved in place, against transformers")
+            close(assigned, reference["mid_halved"], tolerance, "layer_mid halved by assignment, against transformers")
 
     def test_attention_interior_matches_transformers(self, model, reference):
         """The queries, keys, values and head outputs are transformers' eager ones, in its layouts, heads split out."""

@@ -1,6 +1,6 @@
-"""Phi-1.5 on vLLM, against the transformers engine: a parallel block, a head with a bias."""
+"""Phi-1.5 on vLLM's transformers backend, against the transformers engine: a parallel block, a head with a bias."""
 
-from vllm_suite import VLLMFamilySuite
+from vllm_suite import NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import phi
 
@@ -8,7 +8,7 @@ from nnterp.families.vllm import phi
 class TestVLLMPhi(VLLMFamilySuite):
     REPO = "microsoft/phi-1_5"
     FAMILY = phi
-    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | {"layer_mid"}) - {"mlp.mlp_activation"}
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | {"layer_mid"}) - {"mlp.mlp_activation"}
     NATIVE = {
         "embed_tokens": "model.embed_tokens",
         "layers": "model.layers",

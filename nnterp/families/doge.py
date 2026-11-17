@@ -13,8 +13,8 @@ What each sublayer adds is its module's output, unscaled, so the base holds for
 ``layer_output == post_attention_residual * (input_residual * input + attention_output) + mlp_output``,
 which is the plain one only where both gates are one (their initial value). The
 gates are ``layers[i]._module.input_residual`` / ``post_attention_residual``;
-nothing is computed or divided for you. The attention runs the shared eager
-forward with q/k norms and a *dynamic mask*: ``dt_proj`` of the values, through
+nothing is computed or divided for you. The attention runs the shared attention
+interface with q/k norms and a *dynamic mask*: ``dt_proj`` of the values, through
 ``A``, gives each key a per-head bias, added to the causal mask (and, past
 ``keep_window_size`` keys, used to drop all but the top keys), so
 ``attention_scores`` carry it. The MLP is a gated ``DogeMLP``, or the cross-domain
@@ -50,7 +50,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Doge's attention; the shared eager forward with a dynamic mask, and its output added unscaled, so the base holds."""
+    """Doge's attention; the shared attention interface with a dynamic mask, and its output added unscaled, so the base holds."""
 
 
 class Mlp(Mlp):

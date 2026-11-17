@@ -11,7 +11,7 @@
 
 ## Agent setup
 
-To teach an LLM agent nnterp, install the nnterp skills from https://github.com/ndif-team/skills (three skills: `nnterp` for the values, `patterns` for recipes that run on every family, `extending` for new families and values).
+To teach an LLM agent nnterp, install the `nnterp` skill from https://github.com/ndif-team/skills (one skill, for the values, with guides inside it for recipes that run on every family and for new families and values).
 
 Claude Code:
 ```
@@ -22,11 +22,11 @@ claude
 
 OpenAI Codex:
 ```
-codex
-$skill-installer install https://github.com/ndif-team/skills
+codex plugin marketplace add ndif-team/skills
+codex plugin add nnterp@ndif-team
 ```
 
-The nnsight skills (`/plugin install nnsight@ndif-team`) cover the tracing that nnterp builds on.
+The `nnsight` skill (`/plugin install nnsight@ndif-team`) covers the tracing that nnterp builds on.
 
 ## Pages as Markdown
 
@@ -47,6 +47,7 @@ Every page below is linked as Markdown; the same path without `.md` (for `index.
 - Residual stream: https://ndif-team.github.io/nnterp/guide/values/residual-stream.md
 - Attention: https://ndif-team.github.io/nnterp/guide/values/attention.md
 - Before the rotary embedding: https://ndif-team.github.io/nnterp/guide/values/rotary.md
+- Head weights: https://ndif-team.github.io/nnterp/guide/values/head-weights.md
 - The whole model: https://ndif-team.github.io/nnterp/guide/values/whole-model.md
 - Layouts: https://ndif-team.github.io/nnterp/guide/values/layouts.md
 - Availability: https://ndif-team.github.io/nnterp/guide/values/availability.md

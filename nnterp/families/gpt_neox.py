@@ -46,7 +46,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GPT-NeoX's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """GPT-NeoX's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
     def value_weight(self, kv_head):
         """``query_key_value``'s rows are each head's query, key and value, ``[num_heads, 3, head_dim]``."""

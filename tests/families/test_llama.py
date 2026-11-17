@@ -17,26 +17,27 @@ class TestLlama(FamilySuite):
     NATIVE = LLAMA_ROWS
 
 
-@pytest.fixture(scope="module")
-def adapted(tmp_path_factory):
-    """The tiny Llama under a throwaway LoRA on ``v_proj`` and ``o_proj``, initialized away from zero so it moves the weights."""
+@pytest.fixture(scope="module", params=[("LoraConfig", {"init_lora_weights": False}), ("LoKrConfig", {"init_weights": False})], ids=["lora", "lokr"])
+def adapted(request, tmp_path_factory):
+    """The tiny Llama under a throwaway adapter on ``v_proj`` and ``o_proj``, initialized away from zero so it moves the
+    weights: a LoRA, and a LoKr, another tuner whose adapter is a delta added to the base weight."""
     peft = pytest.importorskip("peft")
-    path = tmp_path_factory.mktemp("lora")
+    name, kwargs = request.param
+    path = tmp_path_factory.mktemp(name)
     base = transformers.AutoModelForCausalLM.from_pretrained(TestLlama.REPO)
-    config = peft.LoraConfig(r=2, target_modules=["v_proj", "o_proj"], init_lora_weights=False)
-    peft.get_peft_model(base, config).save_pretrained(path)
+    peft.get_peft_model(base, getattr(peft, name)(r=2, target_modules=["v_proj", "o_proj"], **kwargs)).save_pretrained(path)
     return StandardizedTransformer(TestLlama.REPO, peft=str(path), dispatch=True, attn_implementation="eager")
 
 
-def test_head_weights_under_a_lora_adapter(adapted):
+def test_head_weights_under_an_adapter(adapted):
     """On an adapter's layers the weights are what the forward applies, and reproduce the values and the projection in
     every state: base plus delta while enabled, the base while disabled, the merged base once merged, and while
-    disabled after a merge the base the forward unmerges to before it runs."""
+    disabled after a merge the base again, the read unmerging the layer as its next forward would."""
     from peft.tuners.tuners_utils import BaseTunerLayer
 
     suite = TestLlama()
     attn = adapted.layers[0].self_attn
-    lora = [module for module in adapted._module.modules() if isinstance(module, BaseTunerLayer)]
+    layers = [module for module in adapted._module.modules() if isinstance(module, BaseTunerLayer)]
     assert isinstance(attn.v_proj._module, BaseTunerLayer) and isinstance(attn.o_proj._module, BaseTunerLayer)
 
     def reproduce():
@@ -45,22 +46,33 @@ def test_head_weights_under_a_lora_adapter(adapted):
 
     enabled = attn.value_weight(0).clone(), attn.output_weight(0).clone()
     reproduce()
-    for module in lora:
+    for module in layers:
         module.enable_adapters(False)
     base = attn.value_weight(0)
     assert base._base is attn.v_proj.base_layer.weight and not torch.allclose(base, enabled[0])
     reproduce()
-    for module in lora:
+    for module in layers:
         module.enable_adapters(True)
         module.merge()
     merged = attn.value_weight(0), attn.output_weight(0)
     assert torch.equal(merged[0], enabled[0]) and torch.equal(merged[1], enabled[1])  # what merge() leaves, bit for bit
     reproduce()
-    for module in lora:
-        module.enable_adapters(False)  # still merged: the next forward unmerges first
-    before = attn.value_weight(0)
-    reproduce()  # runs the forward, which unmerges
-    assert not attn.v_proj._module.merged and torch.equal(before, attn.value_weight(0))
+    for module in layers:
+        module.enable_adapters(False)  # still merged: the next forward unmerges first, and so does a read before it
+    before = attn.value_weight(0), attn.output_weight(0)
+    assert not attn.v_proj._module.merged and not attn.o_proj._module.merged and before[0]._base is attn.v_proj.base_layer.weight
+    reproduce()
+
+
+@pytest.mark.parametrize("adapted", [("LoraConfig", {"init_lora_weights": False, "use_dora": True})], ids=["dora"], indirect=True)
+def test_head_weights_refuse_an_adapter_that_is_no_delta(adapted):
+    """DoRA rescales the weight it adapts, so its layers refuse while enabled and unmerged; merged, they hold the weight they apply."""
+    attn = adapted.layers[0].self_attn
+    for method in (attn.value_weight, attn.output_weight):
+        with pytest.raises(NotImplementedError, match="not a delta added to the base weight"):
+            method(0)
+    attn.v_proj._module.merge()
+    TestLlama().test_value_weight_reproduces_the_values(adapted)
 
 
 class TestLlavaWrapper(TestLlama):

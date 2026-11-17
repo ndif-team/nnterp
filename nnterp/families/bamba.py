@@ -39,7 +39,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Bamba's attention: the shared eager forward, so the base holds."""
+    """Bamba's attention: the shared attention interface, so the base holds."""
 
 
 class StateSpace(StateSpace):

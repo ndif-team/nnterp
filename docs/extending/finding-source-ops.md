@@ -68,7 +68,10 @@ attention_mask, ...)`, so the base `Attention` reads the queries as
 
 ## Inside a call: nested `.source`, inside a trace only
 
-`attention_interface_1` calls a function, transformers' `eager_attention_forward`. Its
+`attention_interface_1` calls a function: under eager, the `eager_attention_forward` of the
+module's own modeling file. Each file defines its own, and the operations the base
+`Attention` reads have the same names in them, which is why one path serves every family
+on the interface; a family whose copy differs redefines the value (GPT-OSS, below). Its
 operations exist only under `attention_interface_1.source`, and that drill works only
 inside a trace: the callee is a local variable bound at run time, so nnsight resolves it
 from the live call (`.fn`) the first time someone drills into it in that run, and clears

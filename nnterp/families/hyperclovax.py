@@ -77,7 +77,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """HyperCLOVA X's attention: the shared eager forward; the block adds its post-norm's output times ``residual_multiplier``."""
+    """HyperCLOVA X's attention: the shared attention interface; the block adds its post-norm's output times ``residual_multiplier``."""
 
     @EProperty("../post_norm1.output", description="What the attention adds to the residual stream: the post-attention norm's output times residual_multiplier")
     def attention_output(self, value) -> Residual:

@@ -23,15 +23,15 @@ Everything else is nnsight's `VLLM`, with vLLM's own defaults: a trace is a gene
 and each invoke is one prompt. Read nnsight's vLLM guide for the engine; this page is what
 nnterp adds and what differs from the transformers engine.
 
-Families on this engine (61): `llama`, `mistral`, `ministral3`, `phi3`, `qwen2`, `qwen3`,
-`ernie4_5`, `glm`, `arcee`, `apertus`, `seed_oss`, `nemotron`, `gemma`, `gemma2`, `gemma3_text`,
-`exaone4`, `hyperclovax`, `cohere`, `cohere2`, `granite`, `granitemoe`, `stablelm`,
-`hunyuan_v1_dense`, `hunyuan_v1_moe`, `mixtral`, `phimoe`, `qwen2_moe`, `qwen3_moe`, `olmoe`,
-`flex_olmo`, `ernie4_5_moe`, `glm4_moe`, `glm4_moe_lite`, `minimax_m2`, `afmoe`, `laguna`,
+Families on this engine (60): `llama`, `mistral`, `ministral3`, `phi3`, `qwen2`, `qwen3`,
+`ernie4_5`, `apertus`, `nemotron`, `gemma`, `gemma2`, `gemma3_text`, `exaone4`, `hyperclovax`,
+`cohere`, `cohere2`, `granite`, `granitemoe`, `stablelm`, `mixtral`, `phimoe`, `qwen2_moe`,
+`qwen3_moe`, `olmoe`, `ernie4_5_moe`, `glm4_moe`, `glm4_moe_lite`, `minimax_m2`, `afmoe`, `laguna`,
 `llama4_text`, `mimo_v2_flash`, `gpt_oss`, `dbrx`, `deepseek_v2`, `deepseek_v3`, `kimi_k2`, `kimi_k25`,
-`qwen2_vl_text`, `qwen2_5_vl_text`, `qwen3_vl_text`, `gpt2`, `gptj`, `gpt_neox`, `bloom`, `mpt`,
-`falcon`, `phi`, `opt`, `olmo3`, and on vLLM's transformers backend `olmo`, `olmo2`, `smollm3`,
-`starcoder2`, `gpt_bigcode` ([family notes](#family-notes)). Another `model_type` raises `UnsupportedFamily`.
+`qwen2_vl_text`, `qwen2_5_vl_text`, `qwen3_vl_text`, `gpt2`, `gptj`, `bloom`, `falcon`, `opt`, and
+on vLLM's transformers backend `arcee`, `flex_olmo`, `glm`, `gpt_bigcode`, `gpt_neox`,
+`hunyuan_v1_dense`, `hunyuan_v1_moe`, `olmo`, `olmo2`, `olmo3`, `phi`, `seed_oss`, `smollm3`,
+`starcoder2` ([family notes](#family-notes)). Another `model_type` raises `UnsupportedFamily`.
 
 The snippets on this page use `HuggingFaceTB/SmolLM2-135M-Instruct`.
 
@@ -241,10 +241,10 @@ print(tuple(q_src.shape), torch.equal(moved[:, :, -1:], expected))
 `positions` is `[tokens]`, a tensor, a list or a `range`. On the M-RoPE rotary of the Qwen-VL text
 families a position is a text token's, the same on the three rows; a `[3, tokens]` tensor gives
 each row its own. On decode step `k` of `tracer.iter` (step 0 is the prompt of `n` tokens) the
-keys before the rotary are the new token's, at position `n + k - 1`. HunYuan's and Llama 4's
-attention norm the queries and keys after the rotary on this engine too, so `attention_queries` is
-the norm of `rotate(...)` there; on Llama 4 both values, and `rotate`'s input and output, are in
-transformers' channel order.
+keys before the rotary are the new token's, at position `n + k - 1`. Llama 4's attention norms
+the queries and keys after the rotary on this engine too, so `attention_queries` is the norm of
+`rotate(...)` there, and both values, and `rotate`'s input and output, are in transformers' channel
+order.
 
 ### The pattern is recomputed: read-only, and the prefill's
 
@@ -319,7 +319,7 @@ Two can differ from the transformers engine:
   kernel: what `act_fn` returns is already the neurons, and `act(gate)` alone is never a tensor.
   `mlp_neurons` is served (it is `act_fn`'s output, read as `down_proj`'s input) and
   `mlp_activation` is unavailable, with that reason. A plain MLP (GPT-2, GPT-J, Pythia, BLOOM,
-  Falcon, Phi-1.5, MPT, Nemotron, Arcee, Apertus, StarCoder2) serves both, the same tensor:
+  Falcon, Phi-1.5, Nemotron, Arcee, Apertus, StarCoder2) serves both, the same tensor:
   `down_proj`'s input is the activation's output there. It is read at `down_proj`, not at
   `act_fn`, because vLLM builds an activation by name once and every block shares that one
   module, so `layers[i].mlp.act_fn.output` cannot tell the blocks apart. A mixture of experts
@@ -335,8 +335,8 @@ Two can differ from the transformers engine:
   value to read.
 
 The output projection, the activation and the down projection are `o_proj`, `act_fn` and
-`down_proj` under every family's `RENAME`, as on transformers (vLLM spells them `dense`,
-`out_proj`, `c_proj`; `act`, `gelu_impl`; `dense_4h_to_h`, `fc_out`, `fc2`, `c_proj`).
+`down_proj` under every family's `RENAME`, as on transformers (natively `dense`, `out_proj`,
+`c_proj`; `act`, `activation_fn`, `gelu_impl`; `dense_4h_to_h`, `fc_out`, `fc2`, `c_proj`).
 Where a family's block is not the pre-norm one the values say so as on transformers: a parallel
 block (`gptj`, `phi`, `cohere`, `cohere2`, `falcon`, Pythia's `gpt_neox`) has no `layer_mid`,
 and its `mlp_norm_output` is the one norm both sublayers read; a post-norm block (`exaone4`,
@@ -386,23 +386,20 @@ the same family on transformers.
 
 | family | vLLM's block | notes |
 | --- | --- | --- |
-| `llama`, `mistral`, `phi3`, `qwen2`, `qwen3`, `ernie4_5`, `arcee`, `seed_oss`, `nemotron` | fused: `(hidden_states, residual)` | names are transformers'. vLLM runs Phi-3 and ERNIE-4.5 through its Llama classes. |
-| `glm` | fused (vLLM's Llama classes) | vLLM sets `partial_rotary_factor` to 0.5 on every GLM checkpoint whatever its config says ([differences](#known-differences-between-the-engines)). |
+| `llama`, `mistral`, `phi3`, `qwen2`, `qwen3`, `ernie4_5`, `nemotron` | fused: `(hidden_states, residual)` | names are transformers'. vLLM runs Phi-3 and ERNIE-4.5 through its Llama classes. |
 | `ministral3` | fused (vLLM's `mistral` module) | an HF-format checkpoint needs `hf_overrides={"rope_parameters": {..., "apply_yarn_scaling": False}}`, or every query and key is 1.28 times transformers' ([differences](#known-differences-between-the-engines)). |
 | `apertus` | fused | transformers' norm names, `attention_layernorm` and `feedforward_layernorm`, are aliased to `input_layernorm` and `post_attention_layernorm`. |
 | `hyperclovax` | returns `(stream, residual)`, sandwich norms, Granite's multipliers | not fused: the block ignores its `residual` argument and returns the whole stream first. Contributions are the post-norms' outputs times `residual_multiplier` (the module's own where `use_post_norm` is off); `token_embeddings` precedes `embedding_multiplier`; `logits_scaling` is in the logits processor. |
 | `granite`, `granitemoe` | plain, positions first | contributions are the module's output times `residual_multiplier`, a computed copy divided back on a write (a `Flat` with a `factor`), as on transformers. `token_embeddings` precedes `embedding_multiplier`; vLLM's logits processor divides by `logits_scaling`. GraniteMoE's `block_sparse_moe` is `mlp`. |
 | `stablelm` | returns `(stream, stale residual)` | not fused: the first element is the whole stream, and the second is not a half of it, so summing the pair is wrong. |
-| `hunyuan_v1_dense`, `hunyuan_v1_moe` | fused, plus a third element | the block returns `(hidden_states, residual, kv_states)` and the attention `(output, (k, v))`; the third element (keys and values for cross-layer sharing) passes through edits untouched. The cross-layer attention class (`use_cla`) is not mapped. The queries and keys are normed after the rotary, as on transformers. |
-| `gemma` | fused | no `lm_head` module: the unembedding is `embed_tokens`' weight, and `project_on_vocab` uses it. `token_embeddings` is the lookup *before* the `sqrt(hidden_size)` scaling (transformers' module scales itself); `layers[0].layer_input` is the scaled stream. |
-| `gemma2`, `gemma3_text` | fused, sandwich norms | contributions are the post-norms' outputs, as on transformers. `token_embeddings` as on `gemma`. `gemma2` has no `lm_head` module either. |
+| `gemma` | fused | `token_embeddings` is the lookup *before* the `sqrt(hidden_size)` scaling (transformers' module scales itself); `layers[0].layer_input` is the scaled stream. |
+| `gemma2`, `gemma3_text` | fused, sandwich norms | contributions are the post-norms' outputs, as on transformers. `token_embeddings` as on `gemma`. `gemma2` has no `lm_head` module: the unembedding is `embed_tokens`' weight, and `project_on_vocab` uses it. |
 | `mixtral`, `qwen2_moe`, `qwen3_moe`, `olmoe`, `ernie4_5_moe`, `glm4_moe`, `minimax_m2` | fused, a mixture of experts for an MLP | `mlp_output` is the mixture's output. The routing is inside vLLM's fused MoE kernel: no router values. Mixtral's and MiniMax-M2's `block_sparse_moe` is aliased to `mlp`. |
 | `phimoe` | returns `(stream, residual)`, a mixture of experts | not fused: the first element is the whole stream. `block_sparse_moe` is `mlp`. vLLM's logits leave out `lm_head.bias` ([differences](#known-differences-between-the-engines)). |
 | `afmoe`, `laguna` | fused, a mixture with a shared expert | the shared expert serves no `mlp_output` of its own (it is inside the mixture's output). AFMoE's contributions are the post-norms' outputs, as on transformers. Laguna's `attention_output` is the gated projection, its head outputs ungated, and a block's head counts are its own attention layer's. |
 | `llama4_text` | fused, dense and mixture blocks interleaved, chunked attention | queries and keys, before the rotary and after it, are served in transformers' channel order (vLLM permutes the projections' rows at load, and the values undo it), and `rotate` takes and returns that order. A chunked block's recomputed pattern masks other chunks. `feed_forward` is `mlp`. |
 | `mimo_v2_flash` | fused | values and head outputs are `v_head_dim` wide, queries and keys `head_dim`; sliding blocks have their own kv-head count and a sink, so their recomputed pattern's rows sum to less than one, as on transformers. |
 | `gpt_oss` | fused, the stream first: `(hidden_states, positions, residual)` | `model.embedding` is `embed_tokens` and `attn` is `self_attn`. The recomputed pattern includes each head's sink column and drops it, so rows sum to less than one, as on transformers. |
-| `flex_olmo` | returns `(stream, None)`, post-norm | not fused: the first element is the whole stream. Contributions are the post-norms' outputs, as on transformers. |
 | `dbrx` | plain, positions first | the attention sits inside `norm_attn_norm`; `ffn` is `mlp`. vLLM cannot load DBRX weights ([differences](#known-differences-between-the-engines)). |
 | `deepseek_v2`, `deepseek_v3` | fused, latent attention, a mixture of experts | the attention's interior is unavailable: vLLM runs latent attention in its own kernel on compressed keys and values. That kernel is half-precision only; `VLLM_MLA_DISABLE=1` selects vLLM's ordinary attention layer, which runs in float32. The values before the rotary are unavailable too: vLLM's latent-attention layer rotates each query head's rope slice and the shared rope key alone, where transformers serves whole-head queries. |
 | `glm4_moe_lite` | fused, latent attention, a mixture of experts | as `deepseek_v2` (it is vLLM's DeepSeek-V2 attention). vLLM's latent norms use the config's `rms_norm_eps` where transformers' use 1e-6 ([differences](#known-differences-between-the-engines)). |
@@ -411,14 +408,12 @@ the same family on transformers.
 | `qwen2_vl_text`, `qwen2_5_vl_text`, `qwen3_vl_text` | Qwen2's or Qwen3's fused block, inside the VL wrapper at `language_model.model` | text only: the engine needs `language_model_only=True` (in its multimodal mode vLLM embeds the prompt outside the forward and the model never sees the ids). On text the M-RoPE positions are three identical rows and Qwen3-VL adds no deepstack features. The vision tower is not mapped on this engine. |
 | `exaone4` | returns `(stream, residual)`, post-norm | not fused, whatever the signature says: the first element is the whole stream. Contributions are the post-norms' outputs, as on transformers. |
 | `cohere`, `cohere2` | returns `(stream, residual)`, parallel | not fused either. No `lm_head` module; `project_on_vocab` unembeds with `embed_tokens`. |
-| `olmo3` | plain, positions first, post-norm | contributions are the post-norms' outputs, as on transformers. |
 | `gpt2` | plain: takes and returns the stream | names are transformers' (`transformer.h`, `attn`, `ln_1`, `ln_2`) |
-| `gptj`, `phi` | plain, positions first, parallel | the head has a bias, which `project_on_vocab` adds as the model does. |
-| `gpt_neox` | plain, positions first | `embed_out` is `lm_head`. |
-| `opt` | plain: takes and returns the stream | no `mlp` on either engine, as on transformers (`fc1`/`fc2` sit on the block). `attention_queries` are served times `head_dim**-0.5`, as transformers scales them. With tied embeddings `lm_head` is `embed_tokens`. |
-| `bloom`, `mpt` | plain, positions first, ALiBi | vLLM's attention and MLP modules return their contributions alone (transformers' add the residual inside). The recomputed scores carry the ALiBi bias as slope times distance behind the query, which differs from transformers' by one constant per query and leaves the pattern the same. |
+| `gptj` | plain, positions first, parallel | the head has a bias, which `project_on_vocab` adds as the model does. |
+| `opt` | plain: takes and returns the stream | no `mlp` on either engine, as on transformers (`fc1`/`fc2` sit on the block). `attention_queries` are served times `head_dim**-0.5`, as transformers scales them. With tied embeddings `lm_head` holds `embed_tokens`' weight. |
+| `bloom` | plain, positions first, ALiBi | vLLM's attention and MLP modules return their contributions alone (transformers' add the residual inside). The recomputed scores carry the ALiBi bias as slope times distance behind the query, which differs from transformers' by one constant per query and leaves the pattern the same. |
 | `falcon` | plain, positions first, parallel | attention and MLP return `(output, bias)`. On a checkpoint whose projections have a bias (Falcon-RW) the contributions are unavailable. |
-| `olmo`, `olmo2`, `smollm3`, `starcoder2`, `gpt_bigcode` | transformers' own block, on vLLM's transformers backend | vLLM has no implementation of its own and runs transformers' modules (`nnterp.components.vllm.transformers_backend`): activations carry the batch axis inside the model, and the engine's attention layer, which the backend keeps outside the module tree, is mounted as `self_attn.attn` inside a trace. OLMo-2's contributions are the post-norms' outputs. GPT-BigCode's tree is `model.{wte, h, ln_f}`. `.source` on these modules does not work: the backend rewrites their forwards at load (an AST rewrite that fuses `q_proj`, `k_proj` and `v_proj` into `qkv_proj`), compiles the rewritten function under the class's file and line numbers and binds it on the instance, so `inspect`, and nnsight with it, reads the class's own text, which still calls the projections the fusion removed. So the queries and keys before the rotary, arguments of the `apply_rotary_pos_emb` call inside that forward, are unavailable there, and `rotate` with them (GPT-BigCode, which adds learned absolute positions and has no rotary, gives its no-rotary reason instead); values on the module's children (`qkv_proj`, `o_proj`, the mounted `attn`) are hooks and unaffected ([gotchas](../developing/gotchas.md#tracing)). |
+| `arcee`, `flex_olmo`, `glm`, `gpt_bigcode`, `gpt_neox`, `hunyuan_v1_dense`, `hunyuan_v1_moe`, `olmo`, `olmo2`, `olmo3`, `phi`, `seed_oss`, `smollm3`, `starcoder2` | transformers' own block, on vLLM's transformers backend | vLLM has no implementation of its own and runs transformers' modules (`nnterp.components.vllm.transformers_backend`): activations carry the batch axis inside the model (natively `layers[i].input` is the stream, `[1, tokens, hidden_size]`), and the engine's attention layer is the attention module's `attn` child. The contributions of the post-norm blocks (`olmo2`, `olmo3`, `flex_olmo`) are the post-norms' outputs. `phi`'s head has a bias, which `project_on_vocab` adds as the model does. The backend builds the bare base model under `model`: GPT-BigCode's tree is `model.{wte, h, ln_f}`, GPT-NeoX's `model.{embed_in, layers, final_layer_norm}`, both with `lm_head` beside it. A mixture's routing and experts (`flex_olmo`, `hunyuan_v1_moe`) are inside vLLM's fused MoE kernel, as on its own mixtures. `.source` on these modules does not work: the backend rewrites their forwards at load (an AST rewrite that fuses `q_proj`, `k_proj` and `v_proj` into `qkv_proj`), compiles the rewritten function under the class's file and line numbers and binds it on the instance, so `inspect`, and nnsight with it, reads the class's own text, which still calls the projections the fusion removed. So the queries and keys before the rotary, arguments of the `apply_rotary_pos_emb` call inside that forward, are unavailable there, and `rotate` with them (GPT-BigCode, which adds learned absolute positions and has no rotary, gives its no-rotary reason instead); values on the module's children (`qkv_proj`, `o_proj`, `attn`) are hooks and unaffected ([gotchas](../developing/gotchas.md#tracing)). |
 
 vLLM's attention kernels need a head width of at least 16 (32 for the float32 one; a narrower
 one can hang the engine rather than fail), and most of its MLPs take SiLU only, so most of the
@@ -432,8 +427,6 @@ vLLM's implementation of a family is not always transformers' model, and transfo
 always the checkpoint's. Where the two disagree nnterp serves what vLLM computes; the suite
 aligns the two engines for the comparison and says how in each test file.
 
-- **GLM** (`GlmForCausalLM`): vLLM sets `partial_rotary_factor` to 0.5 whatever the config says.
-  GLM-Edge says 1.0, so vLLM rotates half of each head where transformers rotates all of it.
 - **Ministral 3**: vLLM's plain YaRN rotary ignores `mscale` and `mscale_all_dim` and multiplies
   cos and sin by `0.1 * ln(factor) + 1` (1.277 at factor 16), which transformers' equal
   `mscale`/`mscale_all_dim` cancel. Mistral's own `params.json` (`yarn.apply_scale: false`) turns
@@ -449,7 +442,8 @@ aligns the two engines for the comparison and says how in each test file.
 - **StableLM**: vLLM builds the sequential block only, with no query/key norms:
   `use_parallel_residual` and `qk_layernorm` are ignored, so on StableLM-2-12B (both set) it runs
   another model.
-- **FlexOlmo**: vLLM's MLP is SiLU whatever `hidden_act` says.
+- **FlexOlmo, Hunyuan MoE** (the mixtures on the transformers backend): vLLM's fused MoE kernel
+  runs the experts with SiLU whatever `hidden_act` says.
 - **Llama 4**: vLLM permutes the rows of `q_proj`/`k_proj` at load (its rotary pairs channels
   differently); nnterp's queries and keys undo it. vLLM reads `attn_temperature_tuning` from
   the generation config, not the model config, and by default turns it on only above 32K
@@ -483,7 +477,7 @@ One module, `nnterp/families/vllm/<model_type>.py`, with what a transformers fam
   `act_fn` and `down_proj`: alias the family's spellings in `RENAME` (with nnsight's dotted alias
   where one name is two modules, `"attn.c_proj": "attn.o_proj"` on GPT-2). A block built
   otherwise redefines them as on transformers: `unavailable(PARALLEL)` and the shared norm's
-  output (`phi.py`), the post-norm reasons and `Flat("mlp.input")` for `layer_mid` (`olmo3.py`),
+  output (`gptj.py`), the post-norm reasons and `Flat("mlp.input")` for `layer_mid` (`exaone4.py`),
   and on a fused sandwich block `summed("pre_feedforward_layernorm.inputs")`, the stream a norm
   takes in two halves (`gemma2.py`).
 - `Attention`'s interior is the inputs and output of the module's `attn` child (vLLM's attention
@@ -495,17 +489,21 @@ One module, `nnterp/families/vllm/<model_type>.py`, with what a transformers fam
   `self.rotary_emb(positions, q, k)`. A block that applies no rotary embedding overrides
   `no_rotary` with the reason, as on transformers (`gpt2.py`, the NoPE blocks of `cohere2.py`).
 - `def project_on_vocab(model, hidden)` where the model does not unembed with `lm_head` alone:
-  `project(model, hidden, model.embed_tokens)` for tied embeddings (`gemma.py`),
-  `project(model, hidden, model.lm_head, model.lm_head.bias)` for a head with a bias (`phi.py`).
+  `project(model, hidden, model.embed_tokens)` where there is no `lm_head` module (`gemma2.py`),
+  `project(model, hidden, model.lm_head, model.lm_head.bias)` for a head with a bias (`gptj.py`).
 - A size the config spells its own way is the transformers family's function, imported
   (`from ..falcon import num_kv_heads`).
 - A value that is a tensor times a scalar of the model is a `Flat` with a `factor`, a function
   of the host giving the scalar: it is served multiplied and divided back on a write
   (`granite.py`'s contributions, `opt.py`'s queries).
-- A family vLLM runs through its transformers backend (transformers' own modules) builds on
-  `nnterp.components.vllm.transformers_backend` (`olmo2.py`): its `Layer`, `Attention` and `Mlp`
-  serve tensors that already carry the batch axis (`Flat(..., batch=True)`) and mount the
-  engine's attention layer as `self_attn.attn`.
+- A family vLLM runs through its transformers backend (transformers' own modules: vLLM's
+  registry sends the architecture to `TransformersForCausalLM` or `TransformersMoEForCausalLM`)
+  keys `ENVOYS` on transformers' classes and takes `Layer`, `Attention` and `Mlp` from
+  `nnterp.components.vllm.transformers_backend`, which serve tensors that already carry the
+  batch axis. Where the block is pre-norm with the residual added in the block they are the
+  family's as they are (`arcee.py` is a `RENAME` and an `ENVOYS`); otherwise subclass them and
+  point the value with `Flat(..., batch=True)` (`olmo2.py`, `phi.py`), or import a family built
+  the same way (`olmo3.py`).
 
 Read vLLM's forward before choosing: the return type does not tell. Exaone4's and Cohere's
 blocks return a pair whose first element is already the whole stream. Then add

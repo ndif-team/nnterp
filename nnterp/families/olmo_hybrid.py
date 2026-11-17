@@ -12,7 +12,7 @@ Llama's containers over two block classes, chosen by ``config.layer_types``:
   stream; it has no ``input_layernorm``, so the block input enters the attention.
 
 Each block has ``self_attn`` or ``linear_attn``, never both. The attention runs
-the shared eager forward (query and key norms before it; no rotary embedding
+the shared attention interface (query and key norms before it; no rotary embedding
 when the checkpoint sets no ``rope_theta``), so its contribution is OLMo-3's
 override at the post-attention norm. Both block classes hold one MLP class,
 ``OlmoHybridMLP``, whose contribution is its own output on a linear block and the
@@ -73,7 +73,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """OLMo-Hybrid's softmax attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
+    """OLMo-Hybrid's softmax attention: the shared attention interface, but what reaches the residual stream is the post-attention norm's output."""
 
     def no_rotary(self) -> str | None:
         rope = getattr(self._module.config, "rope_parameters", None)

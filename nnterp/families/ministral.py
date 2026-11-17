@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward.
+added in the block, attention through the shared attention interface.
 Every block may take a sliding window (``layer_types``); the window is a mask
 given to the interface, so the values are read as it applies.
 """
@@ -23,7 +23,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Ministral's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Ministral's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

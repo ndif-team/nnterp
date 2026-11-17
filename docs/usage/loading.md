@@ -58,7 +58,9 @@ work needs full precision.
 
 The constructor reads the checkpoint's config before any model is built, with
 `AutoConfig.from_pretrained(repo_id, revision=..., trust_remote_code=...)`, so those two
-arguments flow into the config read as well as the load. The config's `model_type` is the
+arguments flow into the config read as well as the load. A `config=` argument (a config
+object or a path to one) is read in place of the checkpoint's and is also the config the
+model is built from. The config's `model_type` is the
 family: `nnterp.families.<model_type>` is imported on first use (`gpt2.py` for `gpt2`,
 `gemma3_text.py` for `gemma3_text`), and that module's `RENAME` and `ENVOYS` become
 nnsight's `rename=` and `envoys=`. A multimodal config nests the language model's config
@@ -119,6 +121,8 @@ What loads serves:
   on an MLP that is not a mixture), the root values (`logits`,
   `token_embeddings`, `final_norm_output`, `lm_head_output`, `input_ids`, `attention_mask`,
   `input_size`, `next_token_probs`) and the sizes; `skip_layers` and `steer`, which work on the stream.
+  `final_norm_output` is unavailable where the forward does not call `norm` exactly once (NanoChat
+  norms the embeddings with it too, so `norm.output` is that first call's).
 - The attention interior (`attention_queries/keys/values/scores/probabilities/head_outputs`),
   read on transformers' shared attention interface as on any family, wherever the module
   calls it, and with `attn_implementation="eager"`, and `self_attn.interface`, which calls

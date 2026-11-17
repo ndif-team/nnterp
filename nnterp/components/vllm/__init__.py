@@ -1,6 +1,6 @@
 """The base envoys of a vLLM family: the same values as `nnterp.components`, read where vLLM keeps them.
 
-vLLM runs a family through its own implementation, which differs from
+vLLM runs most families through its own implementation, which differs from
 transformers' in three ways a value has to absorb:
 
 * **No batch axis.** A request's activations are ``[tokens, hidden_size]``: every
@@ -33,7 +33,7 @@ every block that rotates the same way holds.
 A family vLLM runs through its transformers backend (transformers' own
 modules inside the engine) builds on `nnterp.components.vllm.transformers_backend`
 instead, where the batch axis is already there and the engine's attention
-layer is mounted as the attention module's ``attn`` child.
+layer is the attention module's ``attn`` child as well.
 """
 
 from .attention import DECODE_STEP, ROTARY, Attention, on_decode_step, rotary_head_size

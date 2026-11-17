@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. ``no_rope_layers`` leaves every fourth block
+added in the block, attention through the shared attention interface. ``no_rope_layers`` leaves every fourth block
 without a rotary embedding. A config can put a sliding window on those blocks (``use_sliding_window``); the
 released checkpoints leave it off, so every block attends over the whole prompt.
 """
@@ -23,7 +23,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """SmolLM3's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """SmolLM3's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
     def no_rotary(self) -> str | None:
         if not self._module.use_rope:

@@ -15,7 +15,8 @@ string key against a module's alias paths as well as its native one, so
 ``"self_attn"`` reaches GPT-2's ``attn`` once ``RENAME`` has aliased it, and
 ``"layers.*"`` reaches every block.
 
-Served: ``layer_output``, the root values, the sizes, and the attention
+Served: ``layer_output``, the root values (``final_norm_output`` only where
+the forward calls ``norm`` once), the sizes, and the attention
 interior wherever the module calls transformers' shared attention interface
 (the base `Attention`'s reads). Not served: ``attention_output``,
 ``mlp_output``, `project_on_vocab`, the queries and keys before the rotary
@@ -108,6 +109,8 @@ LENS = (
     "the default family cannot tell what follows lm_head; "
     "add a family module (docs/extending/adding-a-family.md)"
 )
+#: Why ``final_norm_output`` is not served where one forward does not call ``norm`` exactly once.
+NORM_CALLS = "the forward calls norm {} times, not once: norm.output is its first call's, which is not what lm_head reads"
 
 
 # -- the envoys ----------------------------------------------------------------------
@@ -259,7 +262,9 @@ def check(model: "StandardizedTransformer") -> None:
     loads or computes), block 0 does not take and the blocks do not return a
     ``[batch, seq, hidden_size]`` stream or the logits do not start ``[batch,
     seq]``; and when the scan itself fails, naming the error. Records on each
-    block whether it returns a tuple.
+    block whether it returns a tuple, and on the model why ``final_norm_output``
+    is not served (`NORM_CALLS`) where the scan's forward does not call ``norm``
+    exactly once.
     """
     missing = [name for name in REQUIRED if not isinstance(model.__dict__.get(name), Envoy)]
     if not missing and not any(isinstance(block, Layer) for block in model.layers):
@@ -270,6 +275,8 @@ def check(model: "StandardizedTransformer") -> None:
     ids = torch.zeros(1, 3, dtype=torch.long)
     first, last = model.layers[0], model.layers[-1]
     seen: dict[str, Any] = {}
+    calls: list[None] = []
+    counting = model.norm._module.register_forward_hook(lambda *_: calls.append(None))
     try:
         with model.scan(ids):
             seen["input"] = first.input.shape
@@ -284,6 +291,8 @@ def check(model: "StandardizedTransformer") -> None:
             "Load with arguments under which the forward runs on fake tensors (a mixture of experts: "
             "experts_implementation='batched_mm')",
         ) from error
+    finally:
+        counting.remove()
     stream = seen["input"]
     if len(stream) != 3 or stream[:2] != ids.shape or seen["first"] != stream or seen["last"] != stream:
         raise _refuse(
@@ -296,6 +305,8 @@ def check(model: "StandardizedTransformer") -> None:
         raise _refuse(model, f"the logits are {list(seen['logits'])} for ids {list(ids.shape)}", _rename())
     for block in model.layers:
         block.returns_tuple = seen["tuple"]
+    if len(calls) != 1:
+        model.final_norm_unavailable = NORM_CALLS.format(len(calls))
 
 
 # -- sizes: off the modules where the config may not say -----------------------------

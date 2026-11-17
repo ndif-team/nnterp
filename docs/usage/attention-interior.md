@@ -17,8 +17,9 @@ the softmax, the pattern the values are mixed with, and each head's output
 before the heads are concatenated and projected. Head ablation, pattern
 surgery, key-side steering and query/key patching are all reads and writes of
 these. They are source-located values: nnterp reaches them through nnsight
-`.source` (nnsight docs/usage/source.md) at transformers' shared eager
-attention call, or at the family's own operations where it does its own
+`.source` (nnsight docs/usage/source.md) at transformers' shared attention
+interface call (under eager, each modeling file's own `eager_attention_forward`),
+or at the family's own operations where it does its own
 arithmetic, and presents them with one layout on every family.
 
 ## Canonical pattern
@@ -261,9 +262,10 @@ here. Three things differ:
   range(tokens))` is the `attention_queries` vLLM's attention layer receives, bit for bit, and
   outside a trace it raises `RuntimeError`. `positions` is `[tokens]`; on the M-RoPE rotary of the
   Qwen-VL text families a position is a text token's, the same on all three rows.
-- **Not served on vLLM's transformers backend** (OLMo, OLMo 2, SmolLM3, StarCoder2): the rotary
-  is a call inside a forward the backend rewrites at load, which nnsight cannot instrument.
-  GPT-BigCode, the backend's fifth family, has no rotary to serve and gives its no-rotary reason.
+- **Not served on vLLM's transformers backend** (the families [vllm.md](vllm.md#family-notes)
+  lists, OLMo, Phi, GLM and Pythia among them): the rotary is a call inside a forward the backend
+  rewrites at load, which nnsight cannot instrument. GPT-BigCode, which has no rotary to serve,
+  gives its no-rotary reason.
 - **Not served under latent attention** (DeepSeek-V2/V3, Kimi-K2, GLM-4.7-Flash): vLLM rotates
   only each query head's rope slice and the shared rope key, inside its latent-attention layer,
   where `StandardizedTransformer` serves whole-head queries.
@@ -288,8 +290,8 @@ real stream, then the unembedding, as
 [contribution-decomposition](../patterns/contribution-decomposition.md#through-the-final-norm)
 does), a head's write of a given stream direction; and to read an adapted model's weights without
 merging the adapter. Use them instead of slicing `v_proj.weight` / `o_proj.weight` by hand: the
-rows of a head are laid out differently on fused projections (below), a LoRA layer's `.weight`
-is the base weight, and a norm's gain is `weight` on one family and `1 + weight` on another.
+rows of a head are laid out differently on fused projections (below), a PEFT adapter layer's
+`.weight` is the base weight, and a norm's gain is `weight` on one family and `1 + weight` on another.
 
 ```python
 import torch
@@ -323,8 +325,9 @@ clamp the projections' outputs after them, and that MiMo-V2-Flash's `value_weigh
 parameter's dtype and on its device, live views of the parameter where torch allows: an in-place
 edit of one is an edit of the model, and they require grad as the parameters do. The model must
 hold its weights: on an undispatched model, whose weights are meta until its first trace or
-`model.dispatch()`, they raise `Unavailable`, and so they do on a quantized one (its weights are
-codes, not values) and on BitNet's layers (they apply a function of the weight they store).
+`model.dispatch()`, they and the two gains raise `Unavailable`, and so the weights do on a quantized
+one (its weights are codes, not values) and on BitNet's layers (they apply a function of the weight
+they store).
 
 **The layouts.** The base slices head-major rows of `v_proj` and columns of `o_proj`. Where a
 family fuses or transposes its projections, its `Attention` reads its own:
@@ -338,10 +341,10 @@ family fuses or transposes its projections, its `Attention` reads its own:
 | four parts, each a quarter of the heads' queries, values, then keys | CodeGen (`qkv_proj`, the forward's `mp_num`) |
 | `Conv1D`, `[in, out]`: columns of `c_attn`, rows of `c_proj`, transposed | GPT-2 |
 
-**Under a PEFT adapter** the weight is the one the projection's next forward applies: the base
-plus each active, unmerged adapter's delta, in the base weight's dtype; the base once merged. A
-DoRA or aLoRA adapter, or a non-LoRA tuner, raises `NotImplementedError`: its forward is not the
-base layer plus a delta.
+**Under a PEFT adapter** (PEFT 0.19 or later) the weight is the one the projection's next forward
+applies, in the base weight's dtype: the base layer's, plus each active adapter's delta while
+unmerged. A layer left merged with its adapters disabled is unmerged first, as its forward would;
+an active, unmerged adapter that is no delta on the base weight (DoRA, OFT, IA3) raises `NotImplementedError`.
 
 **The gains** are measured by calling the norm on `+-256` in alternating channels, which every
 norm here normalizes to `+-1`, so each is the gain whatever the parameterization (`weight`,

@@ -12,7 +12,7 @@ sublayers:
   block's count, read off the module; the root's ``num_heads`` is the config's
   top-level ``num_attention_heads``.
 * **Gated attention.** q/k norms before the rotary (partial on the full blocks),
-  the shared eager forward, then a softplus gate (``g_proj``, per head or per
+  the shared attention interface, then a softplus gate (``g_proj``, per head or per
   channel) on the interface's output before ``o_proj``: ``attention_head_outputs``
   are ungated and ``attention_output`` is the gated projection the block adds.
 * **Mixture of experts.** ``mlp_layer_types`` names the dense blocks
@@ -51,7 +51,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Laguna's attention; the shared eager forward, a gate after it, and the residual added in the block, so the base holds."""
+    """Laguna's attention; the shared attention interface, a gate after it, and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

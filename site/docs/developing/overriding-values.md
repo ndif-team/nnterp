@@ -125,7 +125,7 @@ class Layer(Layer):
     layer_mid = unavailable(PARALLEL)
 ```
 
-When the checkpoint decides, `unavailable=` takes a function of the envoy returning a reason or `None`. Every value the base `Attention` reads inside the shared attention forward takes `unavailable=interface_reason`, which calls the envoy's `off_interface()`. The default answer is `needs_eager`, the reason given when the model runs `sdpa`. A family with another reason overrides the method once rather than each value. GPT-2's `reorder_and_upcast_attn` routes around the interface:
+When the checkpoint decides, `unavailable=` takes a function of the envoy returning a reason or `None`. Every value the base `Attention` reads on or inside the interface call takes `unavailable=interface_reason`, which calls the envoy's `off_interface()`. The default answer is `needs_eager`, the reason given when the model runs `sdpa`. A family with another reason overrides the method once rather than each value. GPT-2's `reorder_and_upcast_attn` routes around the interface:
 
 ```python
 # nnterp/families/gpt2.py

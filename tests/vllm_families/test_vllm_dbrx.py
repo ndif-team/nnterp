@@ -6,7 +6,7 @@ transformers 5.15's ``DbrxConfig`` ignores, falling back to 10000. The copy
 adds a top-level ``rope_parameters`` with the checkpoint's own base, so both
 engines rotate alike (the weights and tokenizer are symlinked).
 
-vLLM 0.27.1 cannot load any DBRX checkpoint: its mixture keeps the experts'
+vLLM cannot load any DBRX checkpoint: its mixture keeps the experts'
 weights under ``ffn.experts.routed_experts``, and ``DbrxModel.load_weights``
 still looks for them under ``ffn.experts`` (``KeyError: ...w13_weight``). The
 class is skipped on a vLLM whose loader does not know the new place; with the

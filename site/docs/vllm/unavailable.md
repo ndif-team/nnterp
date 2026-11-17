@@ -53,15 +53,15 @@ vLLM's attention layer is a kernel that writes the step's keys and values into t
 
 ## `lm_head_output` where something follows the head
 
-vLLM never calls `lm_head`: its logits processor projects with the head's weight and applies any softcap and scale in the same call, for the last position only. Where it applies neither, as on Qwen2.5, the logits are the head's projection, and `lm_head_output` is served as `logits` at the same location, `[1, 1, vocab_size]`, read and written alike. Where the processor softcaps (Gemma-2) or scales (Cohere, Granite, HyperCLOVA X) the projection alone is never a tensor, and `lm_head_output` is unavailable with a reason naming the cap or the scale. `project_on_vocab` on the last block's stream is `logits` too, as on transformers; it and `get_topk_closest_tokens` call the engine's modules and work inside a trace only.
+vLLM never calls `lm_head`: its logits processor projects with the head's weight and applies any softcap and scale in the same call, for the last position only. Where it applies neither, as on Qwen2.5, the logits are the head's projection, and `lm_head_output` is served as `logits` at the same location, `[1, 1, vocab_size]`, read and written alike. Where the processor softcaps (Gemma-2) or scales (Cohere, Granite, HyperCLOVA X) the projection alone is never a tensor, and `lm_head_output` is unavailable with a reason naming the cap or the scale. `project_on_vocab` on the last block's stream reproduces `logits` to float32 rounding, as on transformers; it and `get_topk_closest_tokens` call the engine's modules and work inside a trace only.
 
 ```python
 with model.trace("The Eiffel Tower is in", temperature=0.0, max_tokens=1):
-    head = model.lm_head_output.save()
     lens = model.project_on_vocab(model.layers[-1].layer_output[:, -1:]).save()
+    head = model.lm_head_output.save()
     logits = model.logits.save()
 print(head.shape, (head - logits).abs().max().item(), (lens - logits).abs().max().item())
-# torch.Size([1, 1, 151936]) 0.0 0.0
+# torch.Size([1, 1, 151936]) 0.0 4.76837158203125e-06
 ```
 
 ## The pattern on a decode step

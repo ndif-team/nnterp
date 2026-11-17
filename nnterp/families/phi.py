@@ -48,7 +48,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Phi's attention; the shared eager forward and the residual added in the block, and a partial rotary sliced outside its apply function."""
+    """Phi's attention; the shared attention interface and the residual added in the block, and a partial rotary sliced outside its apply function."""
 
     # The rotary call receives each head's leading ``rotary_ndims`` channels
     # only; the values before the rotary are the whole heads it slices them

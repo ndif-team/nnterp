@@ -4,7 +4,7 @@ nnterp gives every transformer family the same module names and the same standar
 
 ## Installation
 
-nnterp is a PyPI package for Python 3.10 or later. It depends on nnsight 0.8 and transformers 5.17 or later, which pip installs with it.
+nnterp is a PyPI package for Python 3.10 or later. It depends on nnsight 0.8 and transformers 5.19 or later, which pip installs with it.
 
 ```bash
 pip install nnterp

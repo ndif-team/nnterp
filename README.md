@@ -114,8 +114,7 @@ with model.trace("The Eiffel Tower is in"):
 ## Supported families
 
 98 families, among them GPT-2, Llama, Mistral, Qwen 2/3/3.5, Gemma 1-4, Phi, OLMo, GPT-NeoX,
-DeepSeek-V2/V3, GPT-OSS, Mixtral, Falcon, BLOOM, Mamba, Jamba and Nemotron-H, developed
-against transformers 5.17 and run on 5.19 and 5.20.1; 59 of them also run on vLLM
+DeepSeek-V2/V3, GPT-OSS, Mixtral, Falcon, BLOOM, Mamba, Jamba and Nemotron-H; 59 of them also run on vLLM
 ([docs/usage/vllm.md](docs/usage/vllm.md)). Nineteen of them also name the vision tower of their
 image-text-to-text wrappers (Llava, LLaVA-NeXT, Gemma 3, PaliGemma, Mistral 3, Pixtral,
 Qwen2-VL to Qwen3.5, Llama 4, Gemma 4, Idefics 3, Aya Vision, ...). The full table, with each
@@ -134,7 +133,7 @@ Extras:
 - `pip install "nnterp[vllm]"`: vLLM.
 - `pip install "nnterp[test]"`: `pytest` and `pytest-xdist`, for the test suite, and `peft` for its adapter tests.
 
-nnterp requires nnsight 0.8 or later (`nnsight>=0.8`).
+nnterp requires nnsight 0.8 or later and transformers 5.19 or later (`nnsight>=0.8`, `transformers>=5.19`).
 
 ## Documentation
 

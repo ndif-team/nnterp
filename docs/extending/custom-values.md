@@ -102,8 +102,8 @@ does, through `interface_reason`.
           return value[1]
   ```
 
-  A preprocess that returns an element or a slice hands out the model's own tensor, so an
-  in-place edit lands; one that returns a copy needs a `transform` for that. Either way an
+  A preprocess that returns an element or a slice hands out the model's own tensor or a view
+  of it, so an in-place edit lands; one that returns a copy needs a `transform` for that. Either way an
   assignment needs a `postprocess` that rebuilds the served shape (`rewrap`). See
   [overriding-values.md](overriding-values.md).
   `key="input"` is the call's first argument, `key="inputs"` the raw `(args, kwargs)` pair.

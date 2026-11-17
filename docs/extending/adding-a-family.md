@@ -76,7 +76,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Llama's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Llama's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):
@@ -106,7 +106,7 @@ not ``model.model.layers``. ``wpe`` (learned absolute positions) and ``drop``
 have no standard name; they stay reachable under their own.
 
 A checkpoint with ``reorder_and_upcast_attn`` set takes GPT-2's own
-``_upcast_and_reordered_attn`` path instead of the shared eager forward, so
+``_upcast_and_reordered_attn`` path instead of the shared attention interface, so
 none of the attention's interior values is available there.
 """
 
@@ -138,7 +138,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GPT-2's attention; the shared eager forward and the residual added in the block, so the base holds.
+    """GPT-2's attention; the shared attention interface and the residual added in the block, so the base holds.
 
     A checkpoint with ``reorder_and_upcast_attn`` takes GPT-2's own upcast
     path instead, where nothing on the interface is reachable.
@@ -202,9 +202,9 @@ A family that ships with nnterp also touches:
 - an encyclopedia entry, `encyclopedia/entries/<model_type>.py`, with the family placed in
   `encyclopedia/hues.py`'s layout ([encyclopedia/README.md](../../encyclopedia/README.md));
 - the site's API pages, regenerated with `python site/gen_reference.py`;
-- the family counts in `CLAUDE.md`, `README.md` and `docs/reference/families.md` (and
-  `docs/usage/mixture-of-experts.md` for a mixture);
-- the `nnterp` plugin's skills in https://github.com/ndif-team/skills, where they count or list families.
+- the family counts in `CLAUDE.md`, `README.md` and `docs/reference/families.md`, which also
+  counts the pinned checkpoints (and `docs/usage/mixture-of-experts.md` for a mixture);
+- the `nnterp` skill in https://github.com/ndif-team/skills, where it counts or lists families.
 
 ### `RENAME`
 
@@ -436,7 +436,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """<Family>'s attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """<Family>'s attention; the shared attention interface and the residual added in the block, so the base holds."""
 
     # def no_rotary(self) -> str | None:   # a block with no rotary embedding; NO_ROTARY in the test's EXPECTED_UNAVAILABLE
     #     return "no rotary embedding: <why>"

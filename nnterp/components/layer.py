@@ -41,6 +41,9 @@ POST_NORM_MLP = "a post-norm block: the MLP reads the residual stream itself, la
 STATE_SPACE = "a state-space block: one sublayer, the mixer, so there is no stream between sublayers and no MLP"
 ONE_SUBLAYER = "a one-sublayer block: its norm feeds its one sublayer, so there is no stream between sublayers"
 
+#: Why the gains (`attention_input_gain`, `attention_output_gain`) are unavailable on a model whose weights are not loaded.
+UNDISPATCHED = "the block's weights are on the meta device: the model is not dispatched; load it with dispatch=True, or call model.dispatch(), before reading its gains"
+
 
 def _norm_gain(norm: Envoy, width: int, device: torch.device) -> Tensor:
     """The per-channel gain of the norm ``norm``, float32 ``[width]``: what it multiplies a normalized input by.
@@ -141,13 +144,15 @@ class Layer(Standard):
         Raises:
             Unavailable: with `attention_norm_output`'s reason, where the block
                 has no stream entering an attention (a mixture of hyper-connection
-                streams, an MLP-only block).
+                streams, an MLP-only block); on a model that is not dispatched.
         """
         value = type(self).attention_norm_output
         reason = value.reason(self)
         if reason and reason != POST_NORM_ATTENTION:
             raise Unavailable(f"{self.path}.attention_input_gain is not available: {reason}")
         device = next(self._module.parameters()).device
+        if device.type == "meta":
+            raise Unavailable(f"{self.path}.attention_input_gain is not available: {UNDISPATCHED}")
         if reason:  # a post-norm block: the attention reads the stream itself
             return torch.ones(axis_size(self, HIDDEN), device=device)
         return _norm_gain(self.get(value.path(self).removesuffix(".output")), axis_size(self, value.dims[-1]), device)
@@ -172,8 +177,8 @@ class Layer(Standard):
         mixer's (``linear_attn``) `attention_output`.
 
         Raises:
-            Unavailable: with `attention_output`'s reason, or on a block with no
-                sequence mixer.
+            Unavailable: with `attention_output`'s reason, on a block with no
+                sequence mixer, or on a model that is not dispatched.
         """
         attn = getattr(self, "self_attn", None)
         if attn is None:
@@ -185,6 +190,8 @@ class Layer(Standard):
         if reason:
             raise Unavailable(f"{self.path}.attention_output_gain is not available: {reason}")
         width, device = axis_size(attn, value.dims[-1]), next(self._module.parameters()).device
+        if device.type == "meta":
+            raise Unavailable(f"{self.path}.attention_output_gain is not available: {UNDISPATCHED}")
         sibling = re.fullmatch(r"\.\./(\w+)\.output", value.path(attn))  # a module of the block, after the attention
         if sibling is None:  # read at the attention's own output, or at an operation: added unnormed
             return torch.ones(width, device=device)

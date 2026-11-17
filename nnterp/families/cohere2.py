@@ -71,7 +71,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Cohere-2's attention; the shared eager forward on sliding and full layers alike, so the base holds."""
+    """Cohere-2's attention; the shared attention interface on sliding and full layers alike, so the base holds."""
 
     def no_rotary(self) -> str | None:
         if self._module.sliding_window is None:

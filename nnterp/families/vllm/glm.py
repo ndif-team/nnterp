@@ -1,35 +1,22 @@
-"""GLM-4, the first generation (``GlmForCausalLM``), on vLLM (``vllm.model_executor.models.glm``).
+"""GLM-4, the first generation (``GlmForCausalLM``), on vLLM, through its transformers backend (``TransformersForCausalLM``).
 
-vLLM runs it as a Llama: ``GlmForCausalLM`` subclasses its
-``LlamaForCausalLM``, builds Llama's own modules and then switches each
-attention's rotary embedding to the interleaved (not NeoX) layout and drops
-the output projection's bias. So the names, the fused block and the classes
-are Llama's; the MLP's gate and up projections are fused into one
-``gate_up_proj`` on both engines.
+vLLM runs transformers' modules (see `nnterp.components.vllm.transformers_backend`),
+with Llama's names. The block is Llama's, pre-norm with the residual added in
+the block, so the contributions are the modules' outputs and the backend's
+envoys hold as they are. The MLP's gate and up projections are one
+``gate_up_proj``.
 """
 
-from vllm.model_executor.models.llama import LlamaAttention, LlamaDecoderLayer, LlamaMLP
+from transformers.models.glm.modeling_glm import GlmAttention, GlmDecoderLayer, GlmMLP
 
-from ...components.vllm import Attention, FusedLayer, Mlp
+from ...components.vllm.transformers_backend import Attention, Layer, Mlp
 
 RENAME = {
     "model.embed_tokens": "embed_tokens",
     "model.layers": "layers",
     "model.norm": "norm",
+    "activation_fn": "act_fn",
 }
 
-
-class Layer(FusedLayer):
-    """The decoder block: ``forward(positions, hidden_states, residual) -> (hidden_states, residual)``."""
-
-
-class Attention(Attention):
-    """The attention; its output is what the block adds, so the base holds."""
-
-
-class Mlp(Mlp):
-    """The MLP; its output is what the block adds, so the base holds."""
-
-
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.
-ENVOYS = {LlamaDecoderLayer: Layer, LlamaAttention: Attention, LlamaMLP: Mlp}
+ENVOYS = {GlmDecoderLayer: Layer, GlmAttention: Attention, GlmMLP: Mlp}

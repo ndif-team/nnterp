@@ -33,7 +33,7 @@ live on ``mlp`` (a `Moe`), which reads ``block_sparse_moe``'s ``router`` and
 and ``routed_output + shared_expert_output == mlp_output / residual_multiplier``. ``mlp.intermediate_size``
 and the root's ``intermediate_size`` are the shared expert's width,
 ``shared_intermediate_size``; the routed experts are ``intermediate_size`` wide.
-The attention runs the shared eager forward with ``attention_multiplier`` as its
+The attention runs the shared attention interface with ``attention_multiplier`` as its
 scale and no rotary under ``position_embedding_type`` ``nope`` (Granite-4.0-H);
 ``embedding_multiplier`` and ``logits_scaling`` are as on Granite.
 """

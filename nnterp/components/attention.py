@@ -260,9 +260,10 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
 class Attention(Standard):
     """A softmax-attention module: its contribution, its pattern, and its interior.
 
-    Everything but ``attention_output`` is read inside transformers' shared
-    ``eager_attention_forward``, reached through the module's
-    ``attention_interface`` call (`INTERFACE`): the queries, keys and values
+    Everything but ``attention_output`` is read at the module's
+    ``attention_interface`` call (`INTERFACE`) and inside the function it runs
+    under eager, the modeling file's own ``eager_attention_forward`` (each file
+    defines one, with the operation names read here): the queries, keys and values
     it receives, the scores entering its softmax, the pattern leaving it, and
     the per-head outputs it returns. They are unavailable unless the model was
     loaded with ``attn_implementation="eager"``; `off_interface` is the one

@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. Where the config sets ``clip_qkv`` (8.0 on
+added in the block, attention through the shared attention interface. Where the config sets ``clip_qkv`` (8.0 on
 OLMo-1B-0724-hf; unset on OLMo-1B-hf), the attention clamps the ``q_proj``, ``k_proj`` and ``v_proj`` outputs to
 ``±clip_qkv`` in place, before the head split: ``q_proj.output`` reads the clamped tensor, an edit written there is
 clamped after it, the values before the rotary and the interface's are after the clamp, and ``value_weight``
@@ -25,7 +25,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """OLMo's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """OLMo's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

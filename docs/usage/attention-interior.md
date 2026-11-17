@@ -17,8 +17,9 @@ the softmax, the pattern the values are mixed with, and each head's output
 before the heads are concatenated and projected. Head ablation, pattern
 surgery, key-side steering and query/key patching are all reads and writes of
 these. They are source-located values: nnterp reaches them through nnsight
-`.source` (nnsight docs/usage/source.md) at transformers' shared eager
-attention call, or at the family's own operations where it does its own
+`.source` (nnsight docs/usage/source.md) at transformers' shared attention
+interface call (under eager, each modeling file's own `eager_attention_forward`),
+or at the family's own operations where it does its own
 arithmetic, and presents them with one layout on every family.
 
 ## Canonical pattern
@@ -261,9 +262,10 @@ here. Three things differ:
   range(tokens))` is the `attention_queries` vLLM's attention layer receives, bit for bit, and
   outside a trace it raises `RuntimeError`. `positions` is `[tokens]`; on the M-RoPE rotary of the
   Qwen-VL text families a position is a text token's, the same on all three rows.
-- **Not served on vLLM's transformers backend** (OLMo, OLMo 2, SmolLM3, StarCoder2): the rotary
-  is a call inside a forward the backend rewrites at load, which nnsight cannot instrument.
-  GPT-BigCode, the backend's fifth family, has no rotary to serve and gives its no-rotary reason.
+- **Not served on vLLM's transformers backend** (the families [vllm.md](vllm.md#family-notes)
+  lists, OLMo, Phi, GLM and Pythia among them): the rotary is a call inside a forward the backend
+  rewrites at load, which nnsight cannot instrument. GPT-BigCode, which has no rotary to serve,
+  gives its no-rotary reason.
 - **Not served under latent attention** (DeepSeek-V2/V3, Kimi-K2, GLM-4.7-Flash): vLLM rotates
   only each query head's rope slice and the shared rope key, inside its latent-attention layer,
   where `StandardizedTransformer` serves whole-head queries.
@@ -323,8 +325,9 @@ clamp the projections' outputs after them, and that MiMo-V2-Flash's `value_weigh
 parameter's dtype and on its device, live views of the parameter where torch allows: an in-place
 edit of one is an edit of the model, and they require grad as the parameters do. The model must
 hold its weights: on an undispatched model, whose weights are meta until its first trace or
-`model.dispatch()`, they raise `Unavailable`, and so they do on a quantized one (its weights are
-codes, not values) and on BitNet's layers (they apply a function of the weight they store).
+`model.dispatch()`, they and the two gains raise `Unavailable`, and so the weights do on a quantized
+one (its weights are codes, not values) and on BitNet's layers (they apply a function of the weight
+they store).
 
 **The layouts.** The base slices head-major rows of `v_proj` and columns of `o_proj`. Where a
 family fuses or transposes its projections, its `Attention` reads its own:

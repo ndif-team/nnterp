@@ -1,13 +1,11 @@
 """SmolLM3 on vLLM, through its transformers backend (``SmolLM3ForCausalLM`` -> ``TransformersForCausalLM``).
 
-vLLM has no SmolLM3 of its own: it runs transformers' modules, so the tree
-and the block are transformers' (see `nnterp.components.vllm.transformers_backend`),
-with Llama's names, the stream ``[1, tokens, hidden_size]`` and the engine's
-attention layer mounted as the attention's ``attn`` child. The block is
-Llama's, pre-norm with the residual added in the block, so the
-contributions are the modules' outputs. Every fourth block's attention
-skips the rotary embedding (``no_rope_layers``); the queries and keys are
-served as the attention layer receives them, rotated or not.
+vLLM runs transformers' modules (see `nnterp.components.vllm.transformers_backend`),
+with Llama's names. The block is Llama's, pre-norm with the residual added in
+the block, so the contributions are the modules' outputs and the backend's
+block and MLP envoys hold as they are. Every fourth block's attention skips
+the rotary embedding (``no_rope_layers``); the queries and keys are served as
+the attention layer receives them, rotated or not.
 """
 
 from transformers.models.smollm3.modeling_smollm3 import SmolLM3Attention, SmolLM3DecoderLayer, SmolLM3MLP
@@ -21,21 +19,13 @@ RENAME = {
 }
 
 
-class Layer(Layer):
-    """SmolLM3's decoder block: called with the stream and returning it, so the base holds."""
-
-
 class Attention(Attention):
-    """SmolLM3's attention; its output is what the block adds, so the base holds."""
+    """SmolLM3's attention: the backend's, saying which blocks apply no rotary embedding."""
 
     def no_rotary(self) -> str | None:
         if not self._module.use_rope:
             return "no rotary embedding on this block: SmolLM3 skips it on the blocks no_rope_layers marks"
         return super().no_rotary()
-
-
-class Mlp(Mlp):
-    """SmolLM3's MLP; its output is what the block adds, so the base holds."""
 
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.

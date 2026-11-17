@@ -1,22 +1,23 @@
-"""GPT-NeoX (Pythia) on vLLM (``vllm.model_executor.models.gpt_neox``).
+"""GPT-NeoX (Pythia) on vLLM, through its transformers backend (``GPTNeoXForCausalLM`` -> ``TransformersForCausalLM``).
 
-Its tree is transformers' (``gpt_neox.{embed_in, layers[i].{input_layernorm,
-attention, post_attention_layernorm, mlp}, final_layer_norm}`` plus
-``embed_out``). The block is called with the positions and the residual
-stream and returns the stream, adding both contributions itself, in parallel
-or in sequence as the config's ``use_parallel_residual`` says.
+vLLM runs transformers' modules (see `nnterp.components.vllm.transformers_backend`).
+The tree is transformers' under ``model`` rather than ``gpt_neox`` (the backend
+builds the bare ``GPTNeoXModel``): ``model.{embed_in, layers[i].{input_layernorm,
+attention, post_attention_layernorm, mlp}, final_layer_norm}`` and ``lm_head``.
+The block adds both contributions itself, in parallel or in sequence as the
+config's ``use_parallel_residual`` says, and returns the stream.
 """
 
-from vllm.model_executor.models.gpt_neox import GPTNeoXAttention, GPTNeoXLayer, GPTNeoXMLP
+from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXAttention, GPTNeoXLayer, GPTNeoXMLP
 
 from ...components import PARALLEL, Residual
-from ...components.vllm import Attention, Flat, Layer, Mlp
+from ...components.vllm import Flat
+from ...components.vllm.transformers_backend import Attention, Layer, Mlp
 
 RENAME = {
-    "gpt_neox.embed_in": "embed_tokens",
-    "gpt_neox.layers": "layers",
-    "gpt_neox.final_layer_norm": "norm",
-    "embed_out": "lm_head",
+    "model.embed_in": "embed_tokens",
+    "model.layers": "layers",
+    "model.final_layer_norm": "norm",
     "attention": "self_attn",
     # The sublayers' interiors: the output projection, the activation and the down projection under their standard names.
     "dense": "o_proj",
@@ -26,29 +27,20 @@ RENAME = {
 
 
 class Layer(Layer):
-    """The block: called with the positions and the residual stream, and returns the stream."""
-
-    STREAM = 1
+    """GPT-NeoX's block: called with the stream and returning it."""
 
     # With ``use_parallel_residual`` (Pythia's default) the block is parallel: no stream between the sublayers,
     # and the MLP reads its own norm of the block's input.
 
     @Flat(
         "post_attention_layernorm.input",
+        batch=True,
         unavailable=lambda block: PARALLEL if block.root.config.use_parallel_residual else None,
         description="The residual stream after the attention add, [1, tokens, hidden_size]",
         in_place=True,
     )
     def layer_mid(self, value) -> Residual:
         return value
-
-
-class Attention(Attention):
-    """The attention; its output is what the block adds, so the base holds."""
-
-
-class Mlp(Mlp):
-    """The MLP; its output is what the block adds, so the base holds."""
 
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.

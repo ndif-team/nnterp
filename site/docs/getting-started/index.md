@@ -28,14 +28,14 @@ pip install "nnterp[test]"     # pytest and pytest-xdist, for the test suite
 
 ### For agents
 
-If an agent writes your nnterp code, give it the nnterp skills from [ndif-team/skills](https://github.com/ndif-team/skills): three skills, for the values, for the recipes that run across families, and for extending nnterp. In Claude Code:
+If an agent writes your nnterp code, give it the `nnterp` skill from [ndif-team/skills](https://github.com/ndif-team/skills): one skill, for the values, with guides inside it for the recipes that run across families and for extending nnterp. In Claude Code:
 
 ```
 /plugin marketplace add https://github.com/ndif-team/skills.git
 /plugin install nnterp@ndif-team
 ```
 
-In Codex, `$skill-installer install https://github.com/ndif-team/skills`. Every page of this site is also served as Markdown, listed in [llms.txt](../llms.txt), with the whole site in [llms-full.txt](https://ndif-team.github.io/nnterp/llms-full.txt).
+In Codex, `codex plugin marketplace add ndif-team/skills` then `codex plugin add nnterp@ndif-team`. Every page of this site is also served as Markdown, listed in [llms.txt](../llms.txt), with the whole site in [llms-full.txt](https://ndif-team.github.io/nnterp/llms-full.txt).
 
 ## Quick start
 

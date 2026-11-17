@@ -1,60 +1,39 @@
-"""Hunyuan MoE V1 on vLLM, against the transformers engine: a fused block returning a third element, a mixture of experts.
+"""Hunyuan MoE V1 on vLLM's transformers backend, against the transformers engine: Llama's block, a mixture of experts.
 
-The tiny checkpoint's config is transformers' alone, and vLLM's Hunyuan
-reads the keys Tencent's released configs carry beside it, so it is
-config-patched for both engines (the weights and tokenizer are symlinked):
-``hidden_act`` becomes ``silu`` (vLLM refuses anything else; the released
-checkpoints use it), and ``moe_intermediate_size``, ``use_mixed_mlp_moe``,
-``num_shared_expert`` and ``use_qk_norm`` say what transformers' modules
-always do (experts and one shared expert ``intermediate_size`` wide, per-head
-query and key norms), as Hunyuan-A13B's config says them.
+The tiny checkpoint's config says ``hidden_act: gelu``; vLLM's fused MoE
+kernel ignores it and runs the experts with SiLU, as the released checkpoints
+specify. So the checkpoint is config-patched to ``silu`` for both engines
+(the weights and tokenizer are symlinked); unpatched, the mixture's output
+differs by 5% in the first block.
 """
 
 import json
 import os
 import tempfile
 
-import torch
 from huggingface_hub import snapshot_download
-from vllm_suite import LLAMA_ROWS, VLLMFamilySuite
+from vllm_suite import LLAMA_ROWS, NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import hunyuan_v1_moe
 
 
-def _released_style_checkpoint(repo="hf-tiny-v2/tiny-random-HunYuanMoEV1ForCausalLM"):
-    """The tiny checkpoint with the config keys vLLM reads written as a released config writes them; everything else symlinked."""
+def _silu_checkpoint(repo="hf-tiny-v2/tiny-random-HunYuanMoEV1ForCausalLM"):
+    """The tiny checkpoint with ``hidden_act`` rewritten to ``silu``; everything else symlinked."""
     snapshot = snapshot_download(repo, local_files_only=True)
-    patched = os.path.join(tempfile.gettempdir(), f"nnterp-vllm-hunyuan-moe-{os.path.basename(snapshot)}")
+    patched = os.path.join(tempfile.gettempdir(), f"nnterp-vllm-hunyuan-moe-silu-{os.path.basename(snapshot)}")
     os.makedirs(patched, exist_ok=True)
     for name in os.listdir(snapshot):
         target = os.path.join(patched, name)
         if name != "config.json" and not os.path.exists(target):
             os.symlink(os.path.realpath(os.path.join(snapshot, name)), target)
     config = json.load(open(os.path.join(snapshot, "config.json")))
-    config.update(
-        hidden_act="silu", moe_intermediate_size=config["intermediate_size"], use_mixed_mlp_moe=True, num_shared_expert=1,
-        use_qk_norm=True,
-    )
+    config["hidden_act"] = "silu"
     json.dump(config, open(os.path.join(patched, "config.json"), "w"))
     return patched
 
 
 class TestVLLMHunyuanV1Moe(VLLMFamilySuite):
-    REPO = _released_style_checkpoint()
+    REPO = _silu_checkpoint()
     FAMILY = hunyuan_v1_moe
-    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | {"mlp.mlp_neurons"}
+    UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | {"mlp.mlp_neurons"}
     NATIVE = LLAMA_ROWS
-
-    def rotated_as_served(self, attn, name, rotated):
-        """The queries and keys are normed per head after the rotary, by ``query_layernorm`` / ``key_layernorm``, tokens first."""
-        norm = attn.query_layernorm if name == "attention_queries_prerope" else attn.key_layernorm
-        return norm(rotated[0].transpose(0, 1).contiguous()).transpose(0, 1).unsqueeze(0)
-
-    def test_the_block_passes_its_keys_and_values_through(self, model, reference):
-        """An edit of the stream leaves the block's third element, its attention's keys and values, as they were."""
-        layer = model.layers[reference["middle"]]
-        with self.run(model, reference):
-            kept = layer.output[2][1].clone().cpu().save()
-            layer.layer_output[:, -1] += 1.0
-            after = layer.output[2][1].cpu().save()
-        torch.testing.assert_close(after, kept)

@@ -21,7 +21,7 @@ reads through its parent as ``merge``), the plain one only
 at their initial values (scales one, biases zero). The model also scales and
 shifts the embedding module's output before the first block.
 
-The attention runs the shared eager forward; its queries and keys come from a
+The attention runs the shared attention interface; its queries and keys come from a
 compressed convolutional projection (``qkv_proj``, a causal convolution over q/k
 and a delayed half of the values) and ``qk_norm``, so there are no ``q_proj`` /
 ``k_proj`` on the module. The block returns ``(hidden_states,
@@ -112,7 +112,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """ZAYA's attention: the shared eager forward; the block adds its output shifted and scaled by ``post_attention_residual_scale``."""
+    """ZAYA's attention: the shared attention interface; the block adds its output shifted and scaled by ``post_attention_residual_scale``."""
 
     @property
     def merge(self) -> Envoy:

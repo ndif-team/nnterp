@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward.
+added in the block, attention through the shared attention interface.
 The rotary covers the whole head: transformers' Solar Open attention has no partial rotary
 (``partial_rotary_factor`` is 1.0 on Solar-Open-100B). Every block's MLP is a mixture of experts: transformers builds
 ``SolarOpenMoE`` on every block whatever ``first_k_dense_replace`` says. It adds a
@@ -33,7 +33,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Solar Open's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Solar Open's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

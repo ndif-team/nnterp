@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward.
+added in the block, attention through the shared attention interface.
 """
 
 from transformers.models.ernie4_5.modeling_ernie4_5 import Ernie4_5Attention, Ernie4_5DecoderLayer, Ernie4_5MLP
@@ -21,7 +21,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """ERNIE 4.5 dense's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """ERNIE 4.5 dense's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

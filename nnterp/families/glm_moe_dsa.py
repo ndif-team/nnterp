@@ -49,7 +49,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GLM-5's sparse latent attention: V2's, the selection folded into the mask before the shared eager forward, the rope parts rotated interleaved; the base takes the first of the three returns."""
+    """GLM-5's sparse latent attention: V2's, the selection folded into the mask before the shared attention interface, the rope parts rotated interleaved; the base takes the first of the three returns."""
 
     def rope_call(self) -> str:
         return "apply_rotary_pos_emb_interleave"

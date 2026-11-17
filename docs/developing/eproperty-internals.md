@@ -23,7 +23,7 @@ it depends on, with the line that establishes it on each side. Read nnsight
 
 ## Canonical pattern
 
-A value of your own, located inside the shared attention forward, on a
+A value of your own, located inside the eager attention forward, on a
 Llama-family model (run on `hf-internal-testing/tiny-random-LlamaForCausalLM`):
 
 ```python

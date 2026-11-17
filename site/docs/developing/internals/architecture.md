@@ -36,7 +36,7 @@ An alias is the same envoy object, so `model.layers[0].self_attn` is the `gpt2.A
 import sys
 from nnterp import families
 
-print(len(families.known()), families.lookup("gpt2") is gpt2)               # 98 True
+print("gpt2" in families.known(), families.lookup("gpt2") is gpt2)         # True True
 print(sorted(m for m in sys.modules if m.startswith("nnterp.families.")))  # ['nnterp.families.default', 'nnterp.families.gpt2']
 ```
 

@@ -60,7 +60,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Granite's attention; the shared eager forward, but the block adds its output times ``residual_multiplier``."""
+    """Granite's attention; the shared attention interface, but the block adds its output times ``residual_multiplier``."""
 
     @EProperty(key="output", description="What the attention adds to the residual stream: its output times residual_multiplier")
     def attention_output(self, value) -> Residual:

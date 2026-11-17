@@ -69,7 +69,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Kimi-Linear's latent attention (one block in four); DeepSeek-V3's without rotary, through the shared eager forward, so the base holds."""
+    """Kimi-Linear's latent attention (one block in four); DeepSeek-V3's without rotary, through the shared attention interface, so the base holds."""
 
     def no_rotary(self) -> str | None:
         return "no rotary embedding: Kimi-Linear's latent attention blocks use no position encoding, its Kimi Delta Attention blocks carry position"

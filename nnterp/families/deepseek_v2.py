@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. Multi-head latent attention: queries and keys are ``qk_head_dim`` wide (``qk_nope_head_dim + qk_rope_head_dim``), values ``v_head_dim``, and the interface sees ``num_heads`` key/value heads whatever ``num_key_value_heads`` says. The first ``first_k_dense_replace`` blocks have a dense MLP, the rest a mixture of experts.
+added in the block, attention through the shared attention interface. Multi-head latent attention: queries and keys are ``qk_head_dim`` wide (``qk_nope_head_dim + qk_rope_head_dim``), values ``v_head_dim``, and the interface sees ``num_heads`` key/value heads whatever ``num_key_value_heads`` says. The first ``first_k_dense_replace`` blocks have a dense MLP, the rest a mixture of experts.
 """
 
 import sys
@@ -41,7 +41,7 @@ def _rope_call_inputs(attn: "Attention") -> str:
 
 
 class Attention(Attention):
-    """DeepSeek-V2's latent attention; the shared eager forward and the residual added in the block.
+    """DeepSeek-V2's latent attention; the shared attention interface and the residual added in the block.
 
     The rotary rotates each query head's trailing ``qk_rope_head_dim``
     channels, and one rope key per position that every head shares; the rest

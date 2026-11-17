@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward.
+added in the block, attention through the shared attention interface.
 Blocks from ``moe_layer_start_index`` to ``moe_layer_end_index``, every
 ``moe_layer_interval``-th, have a mixture of experts (with optional shared experts,
 added before it returns); the others a dense MLP. The experts are
@@ -31,7 +31,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """ERNIE 4.5 MoE's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """ERNIE 4.5 MoE's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

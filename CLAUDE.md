@@ -10,14 +10,15 @@ whose envoy tree answers to one set of names on every transformer family, with s
 everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.iter`, invokes,
 `.source`, remote) works unchanged. nnsight is https://github.com/ndif-team/nnsight (its guide is
 its `CLAUDE.md`, its docs are under `docs/`), and the `nnsight` plugin of
-https://github.com/ndif-team/skills carries its skills. `StandardizedVLLM` is the same over
+https://github.com/ndif-team/skills carries its skill. `StandardizedVLLM` is the same over
 nnsight's `VLLM` engine. This file covers only what nnterp adds.
 
 This file is for agents working *in this repository*. An agent *using* nnterp from another project
-should install the `nnterp` plugin from https://github.com/ndif-team/skills (skills `nnterp`, `patterns`, `extending`)
+should install the `nnterp` plugin from https://github.com/ndif-team/skills (one skill, `nnterp`)
 and read the documentation site, which serves every page as Markdown
 (https://ndif-team.github.io/nnterp/llms.txt). When a change here alters what an agent should do,
-the matching skill changes too.
+the skill changes too: `plugins/nnterp/skills/nnterp/` there, its `SKILL.md` and the files under
+`references/` (the recipes and the extending guide among them).
 
 ---
 
@@ -112,6 +113,7 @@ the matching skill changes too.
 - [docs/developing/recurrent-mixer-internals.md](docs/developing/recurrent-mixer-internals.md) — a mixer with a recurrent state read at a kernel call: subclass `RecurrentMixer`, set `CHUNK_KERNEL` / `RECURRENT_KERNEL` / `STATE_OP`
 - [docs/extending/overriding-values.md](docs/extending/overriding-values.md) — pointing a value elsewhere: an `EProperty` keyed on a path, `unavailable(...)`, `off_interface`, transforms
 - [docs/extending/custom-values.md](docs/extending/custom-values.md) — a value of your own: a new `EProperty` through `envoys=`, annotated with a layout (`-> Residual`)
+- [docs/developing/contributing.md](docs/developing/contributing.md#workflow) — a new *standard* value, served on every family: workflow steps 5 and 6 list the suite lists, classes and pages it touches (`site/docs/`, the encyclopedia and the skill among them)
 - [docs/extending/finding-source-ops.md](docs/extending/finding-source-ops.md) — `print(envoy.source)` and how ops are named
 - [docs/extending/registering.md](docs/extending/registering.md) — a family from outside nnterp: `nnterp.families.register(family, *model_types)`; for one load, `StandardizedTransformer(repo_id, family=...)`
 
@@ -120,7 +122,9 @@ the matching skill changes too.
 
 ### "Change nnterp itself"
 - [docs/developing/index.md](docs/developing/index.md) — internals: architecture, descriptors, `RecurrentMixer` and its occurrence arithmetic, tests, transformers compatibility, gotchas, contributing, releasing
-- **Run `HF_HUB_OFFLINE=1 pytest -n 8` before and after.**
+- [docs/developing/eproperty-internals.md](docs/developing/eproperty-internals.md) — how a value is served: descriptor, path, location, availability; its place in a trace is its [rank](docs/usage/availability.md#forward-order-order-and-rank)
+- [docs/developing/transformers-compat.md](docs/developing/transformers-compat.md) — a transformers release that moves a name: the procedure, and the one page version notes and history go on
+- **Run `HF_HUB_OFFLINE=1 pytest -n 8` before and after**, where this checkout is the installed nnterp (`pip install -e ".[test,models]"`).
 
 ### "Every symbol / every term"
 - [docs/reference/api-quick-reference.md](docs/reference/api-quick-reference.md), [docs/reference/glossary.md](docs/reference/glossary.md)

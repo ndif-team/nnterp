@@ -70,7 +70,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Gemma-2's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
+    """Gemma-2's attention: the shared attention interface, but what reaches the residual stream is the post-attention norm's output."""
 
     @EProperty(
         "../post_attention_layernorm.output",

@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block with no scaling, attention through the shared eager forward.
+added in the block with no scaling, attention through the shared attention interface.
 The attention norms its queries and keys across the whole projection
 (``q_norm``/``k_norm`` over ``heads * head_dim``) before the head split; the
 queries and keys are read where they enter the interface, after the norms and
@@ -35,7 +35,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """MiniMax-M2's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """MiniMax-M2's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Moe):

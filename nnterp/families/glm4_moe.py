@@ -3,7 +3,7 @@
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
 added in the block, which returns a bare tensor. Attention goes through the shared
-eager forward; rotary embeddings cover only ``partial_rotary_factor`` of each head
+attention interface; rotary embeddings cover only ``partial_rotary_factor`` of each head
 and ``q_norm``/``k_norm`` run on the heads when ``use_qk_norm`` is set, both before
 the interface, so queries and keys are read as the interface sees them. ``head_dim``
 is the config's (128 on the real checkpoints, not ``hidden_size // num_heads``).
@@ -31,7 +31,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """GLM-4-MoE's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """GLM-4-MoE's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

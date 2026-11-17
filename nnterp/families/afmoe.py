@@ -8,7 +8,7 @@ Llama's tree with a sandwich block, every sublayer normed before and after::
 What the block adds is each post-norm's output, so ``attention_output`` points at
 ``post_attention_layernorm`` (which *follows* the attention, as on Gemma-2) and
 ``mlp_output`` at ``post_mlp_layernorm``; ``pre_mlp_layernorm`` keeps its native
-name and ``mlp.input`` is its output. The attention runs the shared eager forward
+name and ``mlp.input`` is its output. The attention runs the shared attention interface
 with q/k norms, the rotary only on its sliding-window (local) blocks, and a
 sigmoid gate (``gate_proj``) on the interface's output before ``o_proj``, so
 ``attention_head_outputs`` are ungated. The first ``num_dense_layers`` blocks have
@@ -58,7 +58,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """AFMoE's attention: the shared eager forward, but what reaches the residual stream is the post-attention norm's output."""
+    """AFMoE's attention: the shared attention interface, but what reaches the residual stream is the post-attention norm's output."""
 
     def no_rotary(self) -> str | None:
         if not self._module.is_local_attention:

@@ -44,7 +44,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """<Model>'s attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """<Model>'s attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):
@@ -149,14 +149,21 @@ the ones that matter most here:
    run against a pinned checkpoint before it is published.
    A new or changed standard value also touches:
    - the name sets the suites compare `support()` against: `VALUES` in
-     `tests/families/suite.py`, and `BLOCK_VALUES` in `tests/families/vision_suite.py` for a block value;
+     `tests/families/suite.py` (with `MLP_INTERIOR` for a value inside the MLP), `BLOCK_VALUES` in
+     `tests/families/vision_suite.py` for a block value, and `UNAVAILABLE` in
+     `tests/vllm_families/vllm_suite.py` where the engine lacks the value, which only a run with
+     vLLM checks; `tests/families/test_default.py` writes its own sets out;
    - the forward-order table in `tests/test_order.py` (`LLAMA_BLOCK`) for a block value;
    - the classes that inherit it: a value on `Layer`, `Attention` or `Mlp` is also on the tower's
      `VisionLayer`/`VisionAttention`/`VisionMlp` (`nnterp/components/vision.py`, re-annotated there,
      [vision-design.md](vision-design.md)) and on the vLLM bases in `nnterp/components/vllm/`;
-   - its page under `docs/` and the matching page of the documentation site under `site/docs/` (`site/README.md`);
+   - the classes that give its neighbours a reason of their own, where it needs the same: `Moe`
+     (`nnterp/components/moe.py`) and the default family's envoys (`nnterp/families/default.py`);
+   - its page under `docs/`, the matching page of the documentation site under `site/docs/`
+     (`site/README.md`), and the `CLAUDE.md` cheat-sheet where it names the value's neighbours;
    - the encyclopedia, whose pages embed `support()`: rebuild it ([encyclopedia/README.md](../../encyclopedia/README.md));
-   - the `nnterp` plugin's skills in https://github.com/ndif-team/skills.
+     its diagram takes the module boundaries inside a sublayer from `INTERIOR_BOUNDARIES` (`encyclopedia/build.py`);
+   - the `nnterp` skill in https://github.com/ndif-team/skills.
 7. Commit as `area: lowercase imperative summary` with a body that says why.
 
 ## Gotchas

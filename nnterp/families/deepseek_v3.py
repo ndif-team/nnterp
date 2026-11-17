@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward. Multi-head latent attention as in V2; dense MLPs for the first ``first_k_dense_replace`` blocks, a mixture of experts after.
+added in the block, attention through the shared attention interface. Multi-head latent attention as in V2; dense MLPs for the first ``first_k_dense_replace`` blocks, a mixture of experts after.
 Moonshot's Kimi K2.5 / K2.6 / K2.7-Code (``Kimi_K25ForConditionalGeneration``) wrap this text
 model under ``model.language_model`` with ``lm_head`` at the root, so ``RENAME`` carries both
 spellings; they resolve by the wrapper's own type, ``kimi_k25``, whose module re-exports ``kimi_k2.py``,

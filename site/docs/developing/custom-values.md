@@ -46,7 +46,7 @@ print(soft.shape, ent.shape)
 # torch.Size([1, 12, 7, 7]) torch.Size([1, 12, 7])
 ```
 
-The softmax is an operation inside transformers' shared eager attention, and the path has a `source` segment for the call and another for the operation inside it ([Finding source ops](finding-source-ops.md)). `unavailable=interface_reason` is the predicate the base's interior values carry: Under the checkpoint's default `sdpa`, both values then report "read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'" in `support()` instead of failing at read time with `SourceNotAvailable`.
+The softmax is an operation inside the eager attention forward the interface calls, and the path has a `source` segment for the call and another for the operation inside it ([Finding source ops](finding-source-ops.md)). `unavailable=interface_reason` is the predicate the base's interior values carry: Under the checkpoint's default `sdpa`, both values then report "read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'" in `support()` instead of failing at read time with `SourceNotAvailable`.
 
 A `DerivedEProperty` runs its function on the envoy at read time, inside the trace, and forward order applies to what it reads: `attention_entropy` reads the pattern, and a trace that reads it and then `attention_queries` is out of order. A derived value is read-only, and assigning raises `AttributeError: attention_entropy is derived and read-only`.
 
@@ -86,7 +86,7 @@ print([name for name in model.support() if name in ("mid_stream", "mlp.last_posi
 # ['mid_stream', 'mlp.last_position']
 ```
 
-`key="output"` shares the module's own output location, and a stub that returns a slice hands the reader a view the model does not see: An in-place edit to `last_position` needs a `transform` to land, and an assignment a `postprocess` that rebuilds the served shape ([Overriding a value](overriding-values.md)). A path below the host resolves aliases, and `"ln_2.input"` and `"post_attention_layernorm.input"` are the same location on GPT-2's block, where the base reads `layer_mid`. Above the host, after `../`, only native names resolve: from GPT-2's attention `"../ln_1.input"` works, `"../input_layernorm.input"` does not. `model.support()` walks each block's children that carry values under their standard names, where a value on an `Attention` or `Mlp` appears as `self_attn.<name>` or `mlp.<name>`, and a load without your `envoys=` lists none of them.
+`key="output"` shares the module's own output location, and a stub that returns a slice hands the reader a view of the model's tensor: An in-place edit to `last_position` lands, and an assignment needs a `postprocess` that rebuilds the served shape ([Overriding a value](overriding-values.md)). A path below the host resolves aliases, and `"ln_2.input"` and `"post_attention_layernorm.input"` are the same location on GPT-2's block, where the base reads `layer_mid`. Above the host, after `../`, only native names resolve: from GPT-2's attention `"../ln_1.input"` works, `"../input_layernorm.input"` does not. `model.support()` walks each block's children that carry values under their standard names, where a value on an `Attention` or `Mlp` appears as `self_attn.<name>` or `mlp.<name>`, and a load without your `envoys=` lists none of them.
 
 ## The layout annotation
 

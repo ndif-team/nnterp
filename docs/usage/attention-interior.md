@@ -17,8 +17,9 @@ the softmax, the pattern the values are mixed with, and each head's output
 before the heads are concatenated and projected. Head ablation, pattern
 surgery, key-side steering and query/key patching are all reads and writes of
 these. They are source-located values: nnterp reaches them through nnsight
-`.source` (nnsight docs/usage/source.md) at transformers' shared eager
-attention call, or at the family's own operations where it does its own
+`.source` (nnsight docs/usage/source.md) at transformers' shared attention
+interface call (under eager, each modeling file's own `eager_attention_forward`),
+or at the family's own operations where it does its own
 arithmetic, and presents them with one layout on every family.
 
 ## Canonical pattern

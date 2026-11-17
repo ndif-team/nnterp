@@ -2,8 +2,8 @@
 
 Llama's tree and Llama's block under other norm names: ``model.{embed_tokens,
 layers[i].{attention_layernorm, self_attn, feedforward_layernorm, mlp}, norm}`` and
-``lm_head``, the residual added in the block, attention through the shared eager
-forward. ``attention_layernorm`` feeds the attention and ``feedforward_layernorm``
+``lm_head``, the residual added in the block, attention through the shared attention
+interface. ``attention_layernorm`` feeds the attention and ``feedforward_layernorm``
 the MLP, so they are aliased ``input_layernorm`` and ``post_attention_layernorm``.
 The attention norms its queries and keys per head (``q_norm``, ``k_norm``) before
 the rotary embedding. The MLP has no gate: ``down_proj(xielu(up_proj(x)))``.
@@ -27,7 +27,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Apertus's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """Apertus's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

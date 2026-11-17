@@ -2,7 +2,7 @@
 
 Llama's tree and Llama's block: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, norm}`` and ``lm_head``, the residual
-added in the block, attention through the shared eager forward.
+added in the block, attention through the shared attention interface.
 The attention norms its queries and keys per head (``q_norm``, ``k_norm``)
 before the rotary embedding. The first ``first_k_dense_replace`` blocks have a
 dense MLP, the rest a mixture of experts that adds a shared expert
@@ -27,7 +27,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """dots.llm1's attention; the shared eager forward and the residual added in the block, so the base holds."""
+    """dots.llm1's attention; the shared attention interface and the residual added in the block, so the base holds."""
 
 
 class Mlp(Mlp):

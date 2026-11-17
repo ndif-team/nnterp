@@ -2,7 +2,7 @@
 
 Llama's tree with Persimmon's final norm: ``model.{embed_tokens, layers[i].{input_layernorm,
 self_attn, post_attention_layernorm, mlp}, final_layernorm}`` and ``lm_head``; the
-residual added in the block, attention through the shared eager forward. The norms
+residual added in the block, attention through the shared attention interface. The norms
 are ``nn.LayerNorm``. The attention projects queries, keys and values with one fused
 ``query_key_value``, norms the queries and keys per head (``q_layernorm``,
 ``k_layernorm``, under ``qk_layernorm``) and applies the rotary embedding to
@@ -32,7 +32,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Persimmon's attention; the shared eager forward and the residual added in the block, and a partial rotary sliced outside its apply function."""
+    """Persimmon's attention; the shared attention interface and the residual added in the block, and a partial rotary sliced outside its apply function."""
 
     # The rotary call receives each head's leading ``rotary_ndims`` channels
     # only; the values before the rotary are the whole heads it slices them

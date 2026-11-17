@@ -102,9 +102,10 @@ does, through `interface_reason`.
           return value[1]
   ```
 
-  A preprocess that returns a slice or a copy is a view the model does not see; an
-  in-place edit to it needs a `transform` to land, and an assignment needs a `postprocess`
-  that rebuilds the served shape (`rewrap`). See [overriding-values.md](overriding-values.md).
+  A preprocess that returns an element or a slice hands out the model's own tensor or a view
+  of it, so an in-place edit lands; one that returns a copy needs a `transform` for that. Either way an
+  assignment needs a `postprocess` that rebuilds the served shape (`rewrap`). See
+  [overriding-values.md](overriding-values.md).
   `key="input"` is the call's first argument, `key="inputs"` the raw `(args, kwargs)` pair.
 - **A module named from the model's root.** A leading `/` walks from the root envoy
   instead of the host, by standard names: `EProperty("/norm.output", ...)` on a block's
@@ -123,7 +124,7 @@ does, through `interface_reason`.
 - **An operation inside the forward.** `source` drills into the current module's forward,
   and again into a call the forward makes; the segment after it names the operation.
   `source.attention_interface_1.source.nn_functional_softmax_0.output` is the softmax
-  inside transformers' shared eager attention. Find names with
+  inside the eager attention forward the interface calls. Find names with
   `print(model.layers[0].self_attn.source)` ([finding-source-ops.md](finding-source-ops.md));
   the operation must exist on the path this checkpoint's forward takes, and a value inside
   the interface needs `attn_implementation="eager"`, which `unavailable=interface_reason`

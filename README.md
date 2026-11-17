@@ -151,10 +151,11 @@ nnterp requires nnsight 0.8 or later (`nnsight>=0.8`).
 
 ## Agents
 
-The skills that teach an agent nnterp are in [ndif-team/skills](https://github.com/ndif-team/skills): `nnterp` for the
-values, `patterns` for recipes that run on every family, `extending` for new families and values.
+The skill that teaches an agent nnterp is in [ndif-team/skills](https://github.com/ndif-team/skills): one skill, `nnterp`, for the
+values, with guides inside it for recipes that run on every family and for new families and values.
 In Claude Code, `/plugin marketplace add https://github.com/ndif-team/skills.git` then
-`/plugin install nnterp@ndif-team`; in Codex, `$skill-installer install https://github.com/ndif-team/skills`.
+`/plugin install nnterp@ndif-team`; in Codex, `codex plugin marketplace add ndif-team/skills` then
+`codex plugin add nnterp@ndif-team`.
 The documentation site serves every page as Markdown, listed at
 [llms.txt](https://ndif-team.github.io/nnterp/llms.txt). [CLAUDE.md](CLAUDE.md) is for agents
 working in this repository.

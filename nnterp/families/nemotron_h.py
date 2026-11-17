@@ -23,7 +23,7 @@ is the sublayer's ``.input``). A block has exactly one of the three, so
 contribution identity is ``input + <the one sublayer's output> ==
 layer_output``.
 
-The attention runs the shared eager forward (no rotary embedding), so the
+The attention runs the shared attention interface (no rotary embedding), so the
 base `Attention` holds; the Mamba-2 mixer is transformers' Mamba-2 code, so the
 base `StateSpace` holds; the MoE and the MLP return what the block adds. The
 model makes its logits in float32 (``lm_head(...).float()``), so
@@ -130,7 +130,7 @@ class Layer(Layer):
 
 
 class Attention(Attention):
-    """Nemotron-H's attention: the shared eager forward without a rotary embedding, so the base holds."""
+    """Nemotron-H's attention: the shared attention interface without a rotary embedding, so the base holds."""
 
     def no_rotary(self) -> str | None:
         return "no rotary embedding: Nemotron-H's attention blocks use no position encoding, its Mamba-2 blocks carry position"

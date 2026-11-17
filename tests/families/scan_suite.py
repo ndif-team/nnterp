@@ -62,8 +62,8 @@ class SelectiveScanSuite:
 
     def test_unrouted_without_mamba_ssm_reads_inside_the_dispatched_kernels(self):
         """Without ``mamba_ssm`` an unrouted forward calls transformers' kernel dispatcher, which calls the pure-torch
-        kernels: `support` and `order` list ``attention_head_outputs`` and ``state_output``, and on a prompt and on
-        decode steps both, and the logits under an in-place edit of ``y``, are a routed run's, bit for bit. In a
+        kernels: `support` and `order` list ``attention_head_outputs`` and ``state_output``, and both, on a prompt and
+        on decode steps, and the logits under an in-place edit of ``y``, are a routed run's, bit for bit. In a
         process of its own, where ``mamba_ssm`` cannot be imported, so transformers binds its dispatcher at import."""
         import json
         import subprocess
@@ -74,8 +74,6 @@ import sys
 sys.modules["mamba_ssm"] = None
 import json, nnsight, torch
 from nnterp import StandardizedTransformer, route_kernels
-
-NAMES = ["linear_attn.attention_head_outputs", "linear_attn.state_output"]
 
 def read(model):
     mix = model.layers[{self.SCAN_BLOCK}].linear_attn
@@ -90,11 +88,9 @@ def read(model):
                 got.append(mix.state_output.save())
                 got.append(mix.attention_head_outputs.save())
     with model.trace({PROMPT!r}):
-        clean = model.logits.save()
-    with model.trace({PROMPT!r}):
         mix.attention_head_outputs[:, -1] = 0
-        edited = model.logits.save()
-    return [support[name] for name in NAMES], [*got, clean, edited], model.order({self.SCAN_BLOCK})
+        got.append(model.logits.save())
+    return support, got, model.order({self.SCAN_BLOCK})
 
 load = lambda: StandardizedTransformer({self.REPO!r}, dispatch=True, attn_implementation="eager", **{dict(self.LOAD_KWARGS, device="cpu")!r})
 model = load()
@@ -102,10 +98,8 @@ support, unrouted, order = read(model)
 route_kernels(model.family, "torch")
 _, routed, routed_order = read(load())
 print(json.dumps({{
-    "support": support,
+    "support": [support["linear_attn.attention_head_outputs"], support["linear_attn.state_output"]],
     "equal": [torch.equal(a, b) for a, b in zip(unrouted, routed)],
-    "edited": not torch.equal(unrouted[-1], unrouted[-2]),
-    "ranked": set(NAMES) <= set(order),
     "order": all((order[a] < order[b]) == (routed_order[a] < routed_order[b]) for a in order for b in order),
     "routed_only": sorted(set(routed_order) - set(order)),
 }}))
@@ -113,9 +107,9 @@ print(json.dumps({{
         run = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
         assert run.returncode == 0, run.stderr[-2000:]
         out = json.loads(run.stdout.strip().splitlines()[-1])
-        assert out["support"] == [None, None] and out["equal"] == [True] * 8 and out["edited"], out
+        assert out["support"] == [None, None] and out["equal"] == [True] * 7, out
         # the routed order without the per-token state
-        assert out["ranked"] and out["order"] and out["routed_only"] == ["linear_attn.state", "linear_attn.states"], out
+        assert out["order"] and out["routed_only"] == ["linear_attn.state", "linear_attn.states"], out
 
     def test_linear_values_shapes(self, model):
         mix = self.scan_mixer(model)

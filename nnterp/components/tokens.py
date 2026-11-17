@@ -1,16 +1,4 @@
-"""`TokenEProperty`: a value the model holds flat over tokens, served per invoke as ``[batch, seq, ...]``.
-
-A mixture of experts routes ``[batch * seq, ...]`` tensors, batch-major: the
-router's logits, the weights and indices the experts receive, the experts'
-output. nnsight narrows a served tensor to an invoke's rows only when its
-leading dim is the whole batch, which a flat token axis is only on a one-token
-step; otherwise every invoke is served the whole run's tokens. A
-`TokenEProperty` serves such a tensor as this invoke's ``[batch, seq, ...]``
-rows, a view, so in-place edits land on the model's tensor and reach that
-invoke alone, and splices an assignment back into the whole flat tensor. A
-tensor already at the value's layout rank (DBRX's experts, which take and
-return ``[batch, seq, hidden_size]``) passes through both ways.
-"""
+"""`TokenEProperty`: a value the model holds flat over tokens, served per invoke as ``[batch, seq, ...]``."""
 
 from __future__ import annotations
 
@@ -59,19 +47,12 @@ def splice(whole: Any, value: Any, rank: int) -> Any:
 class TokenEProperty(EProperty):
     """An `EProperty` whose tensor the model may hold flat over tokens, ``[batch * seq, ...]``, one rank below its layout.
 
-    The same descriptor in every other respect (path, ``select``,
-    ``unavailable``, layout, ``support``, the repr line). The preprocess,
-    postprocess and transform see the model's own tensor; the user sees and
-    writes this invoke's ``[batch, seq, ...]``:
-
-    * ``__get__`` reads as `EProperty` does, then serves `rows` of the result:
-      a view, so an in-place edit lands on the model's tensor.
-    * ``__set__`` splices the assigned ``[batch, seq, ...]`` into the whole
-      tensor the location holds now (`splice`), then writes as `EProperty`
-      does.
-
-    Under two or more invokes the spliced tensor's leading dim is not the
-    batch; nnsight keeps such an edit from PR #738 on (`Batcher._widen_tensor`).
+    A read serves this invoke's ``[batch, seq, ...]`` rows (`rows`): a view,
+    so an in-place edit lands on the model's tensor and reaches that invoke
+    alone. An assignment is spliced into the whole tensor the location holds
+    (`splice`). A tensor already at the layout's rank passes through both
+    ways. The preprocess, postprocess and transform see the model's own
+    tensor.
     """
 
     def _rank(self) -> int:

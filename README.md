@@ -147,7 +147,7 @@ nnterp requires nnsight 0.8 or later (`nnsight>=0.8`).
 - [docs/reference/](docs/reference/index.md): the API quick reference, the families table, a glossary.
 - [docs/developing/](docs/developing/index.md): internals, testing, transformers compatibility.
 - [CLAUDE.md](CLAUDE.md) routes a task to the right page.
-- [GAPS.md](GAPS.md) maps the nnterp 1.x API onto this one, for users of nnterp 1.x.
+- [Coming from nnterp 1.x](https://ndif-team.github.io/nnterp/getting-started/#coming-from-nnterp-1x) maps the nnterp 1.x API onto this one.
 
 ## Agents
 

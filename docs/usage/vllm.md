@@ -556,7 +556,7 @@ assert model.family is family and model.layers[0].ffn is model.layers[0].mlp
 
 ## Related
 
-- nnsight `docs/models/vllm.md` and the `nnsight:vllm` skill — the engine: sampling, `edit()`,
+- nnsight `docs/models/vllm.md` and the `nnsight` skill's vLLM guide — the engine: sampling, `edit()`,
   taps, serving, tensor parallelism.
 - [residual-stream](residual-stream.md), [root-values](root-values.md), [availability](availability.md).
 - [docs/developing/testing.md](../developing/testing.md) — running `tests/vllm_families/`.

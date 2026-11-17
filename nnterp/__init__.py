@@ -12,20 +12,12 @@ Llama's::
     model.norm
     model.lm_head
 
-and the root answers for the whole model: ``logits``, ``token_embeddings``,
-``next_token_probs`` and the sizes (``num_layers``, ``num_heads``, ...).
-
-Each family under `nnterp.families` says how its own names map onto those, and
-`nnterp.components` holds the envoys that give standard modules standard values
-(``layer_output``, ``attention_output``, ``mlp_output``,
-``attention_probabilities``), which each family subclasses. On a multimodal
-checkpoint loaded with ``task="image-text-to-text"`` the vision tower is
-``model.vision`` (its blocks ``model.vision.layers[i]``, its values
-``model.vision.image_token_mask`` and ``model.vision.image_features``) and the
-projector ``model.projector``.
-
-`StandardizedVLLM` is the same over nnsight's ``VLLM`` engine, with a family
-for the modules vLLM runs each ``model_type`` with under `nnterp.families.vllm`.
+Each family under `nnterp.families` maps its own names onto those, and
+`nnterp.components` holds the envoys that give the standard modules standard
+values (``layer_output``, ``attention_output``, ``mlp_output``,
+``attention_probabilities``), which each family subclasses. `StandardizedVLLM`
+is the same over nnsight's ``VLLM`` engine, with its families under
+`nnterp.families.vllm`.
 """
 
 from importlib.metadata import PackageNotFoundError, version as _version

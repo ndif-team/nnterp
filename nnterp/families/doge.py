@@ -21,18 +21,15 @@ interface with q/k norms and a *dynamic mask*: ``dt_proj`` of the values, throug
 mixture ``DogeCDMoE`` under ``is_moe``, which returns ``(hidden_states, router_logits)``.
 
 Doge-20M, -40M and -260M load and run. Of the ``is_moe`` checkpoints, Doge-40M-MoE
-loads and runs; it needs transformers 5.18 or later, whose block takes the first element
-of ``DogeCDMoE``'s tuple. Where it runs, ``mlp_output`` is the mixture's hidden states
-(dense MLP plus routed experts); the six mixture values stay unavailable, since
-``router_gate`` gives two sets of product-key logits per token rather than one per expert, and the
-experts are rows of two embedding tables. The routing views ``router_gate``'s output as
+loads and runs: the block takes the first element of ``DogeCDMoE``'s tuple, so
+``mlp_output`` is the mixture's hidden states (dense MLP plus routed experts). The six
+mixture values are unavailable, since ``router_gate`` gives two sets of product-key logits
+per token rather than one per expert, and the experts are rows of two embedding tables.
+The routing views ``router_gate``'s output as
 ``(2, batch * seq, -1)``, which takes each token's two sets from other rows of the flattened batch, so a
 prompt's outputs depend on its length and on the other prompts in the trace: trace clean and corrupt
 prompts separately there.
 """
-
-import transformers
-from packaging.version import Version
 
 from transformers.models.doge.modeling_doge import DogeAttention, DogeCDMoE, DogeDecoderLayer, DogeMLP
 
@@ -57,17 +54,15 @@ class Mlp(Mlp):
     """Doge's MLP or cross-domain mixture (``(hidden_states, router_logits)``); the output is added unscaled, so the base holds."""
 
 
-#: Why none of the cross-domain mixture's values are served: transformers before 5.18 cannot run it at all.
+#: Why none of the cross-domain mixture's values are served.
 CANNOT_RUN = (
     "DogeCDMoE routes by product keys over embedding experts: router_gate gives two sets of product-key logits per token, "
     "not one logit per expert, and the experts are embedding rows, so no mixture value maps onto them"
-    if Version(transformers.__version__) >= Version("5.18")
-    else "transformers < 5.18 cannot run DogeCDMoE: the block passes its tuple output to dropout"
 )
 
 
 class Moe(Moe, Mlp):
-    """Doge's cross-domain mixture (``is_moe``): product-key routing over a dense MLP. Every mixture value is unavailable (`CANNOT_RUN`); ``mlp_output`` is served where transformers runs it (>= 5.18)."""
+    """Doge's cross-domain mixture (``is_moe``): product-key routing over a dense MLP. Every mixture value is unavailable (`CANNOT_RUN`); ``mlp_output`` is the mixture's hidden states."""
 
     def no_mixture(self) -> str:
         return CANNOT_RUN

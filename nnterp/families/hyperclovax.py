@@ -34,6 +34,7 @@ from transformers.models.hyperclovax.modeling_hyperclovax import (
     HyperCLOVAXDecoderLayer,
     HyperCLOVAXMLP,
 )
+from transformers.models.hyperclovax_vision_v2.modeling_hyperclovax_vision_v2 import HyperCLOVAXVisionV2Model
 
 from transformers.models.qwen2_5_vl.modeling_qwen2_5_vl import (
     Qwen2_5_VLMLP, Qwen2_5_VLVisionAttention, Qwen2_5_VLVisionBlock, Qwen2_5_VisionTransformerPretrainedModel,
@@ -43,11 +44,6 @@ from ..components import (
     Attention, EProperty, ImageScatter, Layer, Mlp, QwenVision, QwenVisionAttention, Residual, VisionLayer, VisionMlp,
 )
 from .granitemoe import scaled_back
-
-try:  # the vision wrapper arrived in transformers 5.18
-    from transformers.models.hyperclovax_vision_v2.modeling_hyperclovax_vision_v2 import HyperCLOVAXVisionV2Model
-except ImportError:
-    HyperCLOVAXVisionV2Model = None
 
 if TYPE_CHECKING:
     from ..standardized import StandardizedTransformer
@@ -114,9 +110,8 @@ ENVOYS = {
     # The Qwen2.5-VL ViT of HyperCLOVA X Vision V2: one attention call per window, so a QwenVisionAttention.
     Qwen2_5_VisionTransformerPretrainedModel: QwenVision, Qwen2_5_VLVisionBlock: VisionLayer,
     Qwen2_5_VLVisionAttention: QwenVisionAttention, Qwen2_5_VLMLP: VisionMlp,
+    HyperCLOVAXVisionV2Model: ImageScatter,  # the wrapper's forward scatters the image features: vision.image_features
 }
-if HyperCLOVAXVisionV2Model is not None:
-    ENVOYS[HyperCLOVAXVisionV2Model] = ImageScatter  # the wrapper's forward scatters the image features: vision.image_features
 
 
 def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:

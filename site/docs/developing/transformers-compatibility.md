@@ -1,6 +1,6 @@
 # transformers compatibility
 
-`pyproject.toml` requires `transformers>=5.17`, `nnsight>=0.8` and `jaxtyping`, and the pages on this site ran on transformers 5.17.0 and nnsight 0.8.0. The module names and classes a family binds to (`RENAME`, `ENVOYS`) rarely move between releases. The operation names inside a forward that every `source.` path pins are what a release renames.
+`pyproject.toml` requires `transformers>=5.19`, `nnsight>=0.8` and `jaxtyping`, and the suite is run on transformers 5.19.0, 5.20.1, 5.21.1 and 5.23.0. The module names and classes a family binds to (`RENAME`, `ENVOYS`) rarely move between releases. The operation names inside a forward that every `source.` path pins are what a release renames.
 
 ```python
 import nnterp
@@ -60,7 +60,7 @@ A `RENAME` key that resolves nowhere is skipped silently, so a renamed module is
 4. Re-run the family's file, then the whole suite. Families get no version conditionals: One module targets the version nnterp is developed on, and this procedure moves it.
 5. A checkpoint with a config that no longer parses is a test-data problem, not a family problem: Patch the config the way `tests/families/test_olmo3.py` does, into a copy of the snapshot.
 
-Releases also move behavior no operation name pins. From 5.18 `generate` calls the model with no `attention_mask` when the batch has no padding, so `attention_mask` installs the all-ones mask it stands for into the call on read. `generate` also encodes a wrapper's images before the first forward, so under `generate` the tower's values come before `vision.image_token_mask`.
+Releases also move behavior no operation name pins. `generate` calls the model with no `attention_mask` when the batch has no padding, so `attention_mask` installs the all-ones mask it stands for into the call on read. `generate` also encodes a wrapper's images before the first forward, so under `generate` the tower's values come before `vision.image_token_mask`.
 
 ## What nnterp needs from nnsight
 

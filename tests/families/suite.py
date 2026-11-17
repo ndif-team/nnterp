@@ -820,7 +820,7 @@ class FamilySuite:
         assert torch.equal(probs.tril(), probs)  # causal
 
     def test_attention_interior_under_generate(self, model):
-        """Scores and pattern on the prompt and on a decode step of an unpadded generate, where transformers >= 5.18 passes no mask."""
+        """Scores and pattern on the prompt and on a decode step of an unpadded generate, where transformers passes no mask."""
         block = self.attn_block(model)
         unavailable = block.self_attn.support()
         names = [name for name in ("attention_scores", "attention_probabilities") if not unavailable.get(name)]
@@ -1451,7 +1451,7 @@ class FamilySuite:
         assert all(listed(name, text) for name in ("input_ids", "attention_mask", "input_size"))
 
     def test_attention_mask_under_generate(self, model):
-        """Each step's mask covers the cache and the new token, all ones, though generate (transformers >= 5.18) passes none unpadded."""
+        """Each step's mask covers the cache and the new token, all ones, though generate passes none unpadded."""
         masks = []
         with model.generate(PROMPT, max_new_tokens=2, min_new_tokens=2, do_sample=False) as tracer:
             for _ in tracer.iter[:2]:

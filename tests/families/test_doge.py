@@ -3,10 +3,7 @@
 import os
 import tempfile
 
-import pytest
 import torch
-import transformers
-from packaging.version import Version
 from suite import FamilySuite, LLAMA_ROWS, PROMPT, cached_snapshot, built, patched_checkpoint
 
 from nnterp.families import doge
@@ -106,8 +103,7 @@ def draw_gates(model):
 
 class TestDogeMoe(FamilySuite):
     """The cross-domain mixture (``is_moe``, as on Doge-40M-MoE): 16 product-key experts, top 4, behind gates away from
-    one. It runs from transformers 5.18; its mixture values are unavailable either way. The tiny config with
-    ``is_moe`` set, weights drawn for it, the gates too."""
+    one. Its mixture values are unavailable. The tiny config with ``is_moe`` set, weights drawn for it, the gates too."""
 
     REPO = built(patched_checkpoint, REPO, init=draw_gates, is_moe=True, num_experts=16, num_experts_per_tok=4)
     FAMILY = doge
@@ -126,16 +122,9 @@ class TestDogeMoe(FamilySuite):
         assert support["mlp.mlp_output"] is None
         assert all(support[f"mlp.{name}"] == doge.CANNOT_RUN for name in ("router_logits", "expert_weights", "routed_output"))
 
-    @pytest.mark.skipif(Version(transformers.__version__) < Version("5.18"), reason="transformers < 5.18 cannot run DogeCDMoE")
     def test_mlp_output_is_the_mixtures_hidden_states(self, model):
         with model.trace(PROMPT):
             raw = model.layers[0].mlp.output[0].save()
             mlp = model.layers[0].mlp.mlp_output.save()
         assert torch.equal(mlp, raw)
         gated_identity(model)
-
-    @pytest.mark.skipif(Version(transformers.__version__) >= Version("5.18"), reason="transformers >= 5.18 runs DogeCDMoE")
-    def test_forward_fails_before_5_18(self, model):
-        with pytest.raises(TypeError, match="dropout"):
-            with model.trace(PROMPT):
-                model.logits.save()

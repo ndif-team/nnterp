@@ -1,6 +1,6 @@
 ---
 title: transformers Compatibility
-one_liner: The versions nnterp is developed against, exactly which operation names a transformers release can move, how the suite catches it, and the upgrade procedure.
+one_liner: The transformers releases nnterp supports, exactly which operation names a release can move, how the suite catches it, and the upgrade procedure.
 tags: [developing, compatibility, transformers, nnsight, versions, source]
 related: [docs/developing/testing.md, docs/developing/eproperty-internals.md, docs/developing/architecture.md, docs/developing/gotchas.md]
 sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/gemma2.py, nnterp/families/gpt_oss.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/falcon.py, nnterp/families/gptj.py, tests/families/suite.py, tests/conftest.py, pyproject.toml]
@@ -10,22 +10,21 @@ sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py,
 
 ## What this is for
 
-This is the one page in `docs/` that talks about versions. nnterp is
-developed on **transformers 5.17.0** and **nnsight 0.8.0**, with torch 2.13 and
-jaxtyping 0.3.11, and runs on **transformers 5.19.0** and **5.20.1** as well: the suite passes on
-all three (a test that needs a 5.18 class skips on 5.17; on 5.20 the SmolVLM tower tests skip, because 5.20's
+This is the one page in `docs/` that talks about versions. nnterp supports
+**transformers 5.19 and later**, and the suite is run on **5.19.0**, **5.20.1**, **5.21.1** and **5.23.0**, where it
+passes. On 5.20 the SmolVLM tower tests skip, because 5.20's
 `inputs_merger` reshapes the image features by `vision_config.patch_size` rather than by the features each image
-yields, which fails when the two differ, and Kimi K2.5's `text_config.model_type` became `deepseek_v3`, so
-the wrapper resolves through a family module of its own, `kimi_k25.py`, which re-exports `kimi_k2`'s; `nnterp.families.resolve`
-tries a config's own type before its text model's), and every snippet in `docs/` that runs on CPU with a tiny checkpoint returns
-identical values on both wherever they do not depend on unseeded randomness. On **5.21.0** the recurrent mixers hold
+yields, which fails when the two differ; from 5.20 Kimi K2.5's `text_config.model_type` is `deepseek_v3`, so
+the wrapper resolves through a family module of its own, `kimi_k25.py`, which re-exports `kimi_k2`'s (`nnterp.families.resolve`
+tries a config's own type before its text model's). Every snippet in `docs/` that runs on CPU with a tiny checkpoint returns
+identical values on 5.19.0 and 5.20.1 wherever they do not depend on unseeded randomness. On **5.21.0** the recurrent mixers hold
 too: it dropped the `use_precomputed_states` binding from every recurrent forward for a fetch from the cache, which
 `RecurrentMixer.BRANCH` now names beside the old binding ([below](#gated-deltanet-qwen3-next-qwen35-qwen35-moe)), and
 the recurrent families' tests pass there; Jamba's router became a ``JambaTopKRouter`` module there (a bare ``nn.Linear``
 before), so its `router_logits` read whichever the mixture has; SmolVLM's model scatters its image features itself there
 (``masked_scatter``, as Llava does) where 5.20 called ``inputs_merger``, so its scatter host reads whichever operation
 the forward has, and the 5.20-only SmolVLM reshape bug that skipped its tower tests is fixed in 5.21.
-The suite is run on **5.21.1**, where it passes, and on **5.23.0**. From 5.23.0 the delta-rule kernels repeat a gated
+From 5.23.0 the delta-rule kernels repeat a gated
 DeltaNet's queries and keys (`num_k_heads` up to `num_v_heads`) where the mixer's forward did before, so
 `linear_attn.attention_queries` and `attention_keys`, the kernel call's arguments, are one per query/key head from
 5.23.0 and one per value head before ([below](#gated-deltanet-qwen3-next-qwen35-qwen35-moe)); the gated-DeltaNet
@@ -36,7 +35,7 @@ nnsight, `nnsight.modeling.tp.MINIMUM_TRANSFORMERS`: 5.19.0 on nnsight 0.8.0 thr
 `dev` branch after them, which reads the plan a model resolves for itself, as 5.23.0 is the first to do.
 `tests/test_tensor_parallel.py` skips below that floor: with nnsight's `dev` it skips on 5.21.1 and passes on 5.23.0.
 `pyproject.toml` requires `nnsight>=0.8`,
-`transformers>=5.17` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
+`transformers>=5.19` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below) and whose `rename` takes a dotted alias (`{"attn.c_proj":
 "attn.o_proj"}` binds on the attention, which GPT-2's two `c_proj` need); nnsight 0.8.0
 has both, which is what `nnsight>=0.8` says. The names a family binds to (`RENAME`, `ENVOYS`) are
@@ -97,7 +96,7 @@ off transformers' shared attention interface.
 `INTERFACE = "attention_interface_1"` (`nnterp/components/attention.py`).
 The module binds `attention_interface = ALL_ATTENTION_FUNCTIONS.get_interface(...)`
 (`attention_interface_0`) and then calls it (`attention_interface_1`);
-`LlamaAttention.forward`, `modeling_llama.py` in 5.17. Inside
+`LlamaAttention.forward`, `modeling_llama.py`. Inside
 `eager_attention_forward` (`modeling_llama.py`) the pattern is
 `nn.functional.softmax(...)` then `nn.functional.dropout(...)`:
 `nn_functional_softmax_0` (its `.input` is `attention_scores`) and
@@ -125,7 +124,7 @@ an attention mask is passed, as it is on every prompt.
 | **CodeGen** (`codegen.py`) | GPT-J's ops around `self__attn_0`, except the scores: `self__attn_0.source.call_0.input`, the call of the `nn.Softmax(dim=-1)` instance built on the same line (`nn_Softmax_0` is the construction) |
 | **GPT-NeoX-Japanese** (`gpt_neox_japanese.py`) | around `self__attn_0`: `inputs[0..2]`, `source.nn_functional_softmax_0.input`, `output[0]`, `source.self_attention_dropout_0` |
 | **XGLM** (`xglm.py`) | every value but the keys and values where the batch still leads (the `bmm` calls take `[batch * num_heads, ...]`): queries the `query_states_0` binding, viewed heads first; keys/values `key_states_reshape_0` / `value_states_reshape_0` outputs, after the cache update, viewed from `[batch * num_heads, ...]`; scores the `attn_weights_2` binding (the clamp, before either softmax branch); pattern the `attn_weights_reshaped_0` binding (`nn_functional_dropout_0.output`, viewed, in training); head outputs the `attn_output_2` binding |
-| **DBRX** (`Attention`, `dbrx.py`) | on the shared interface in 5.17, so the base class holds; an earlier layout had its own arithmetic |
+| **DBRX** (`Attention`, `dbrx.py`) | on the shared interface, so the base class holds; an earlier layout had its own arithmetic |
 
 ### Gated DeltaNet (Qwen3-Next, Qwen3.5, Qwen3.5-MoE)
 
@@ -236,21 +235,9 @@ a key, bound where it resolves (`RENAME`, `gpt_neox.py`).
    stream (`Attention`, `components/attention.py`).
 4. Re-run the family's file, then the whole suite. Update the version
    sentence at the top of this page.
-   Releases also move behaviour no op name pins. On 5.18 and later `generate`
-   calls the model with no `attention_mask` when the batch has no padding
-   (`model.attention_mask` serves the all-ones mask it would have had,
-   [root-values.md](../usage/root-values.md)), and encodes a wrapper's images before
-   the first forward, so under `generate` the tower's values come before
-   `vision.image_token_mask` ([vision.md](../usage/vision.md)). 5.18 is also
-   the first release that runs Doge's cross-domain mixture (before it the
-   block passes the mixture's tuple to dropout and the forward fails), that
-   reads MiniMax-M2's `rotary_dim` (5.17 ignores it and rotates the whole
-   head), and that has the HyperCLOVA X Vision V2 and NemotronH Omni wrappers.
 5. A checkpoint whose config no longer parses is a test-data problem, not a
    family problem: patch the config the way `_patched_checkpoint`
-   (`tests/families/test_olmo3.py`) does (5.17 does not parse that
-   checkpoint's flat `rope_parameters`; from 5.18 it parses, with plain
-   rotary on both layer types).
+   (`tests/families/test_olmo3.py`) does.
 
 ## What nnterp needs from nnsight
 

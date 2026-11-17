@@ -9,11 +9,11 @@ temperature tuning, the others RoPE with qk-norm and chunked attention
 ``Llama4ForCausalLM``.
 
 It is config-patched: its ``attn_temperature_tuning`` is the int ``4``, which
-transformers 5.17's config validation rejects (it wants a bool; the model
+transformers' config validation rejects (it wants a bool; the model
 only tests it for truth), so ``config.json`` is rewritten with ``True`` and
 the weights and tokenizer are symlinked. The one ``Llama4ForCausalLM`` tiny
 checkpoint on the Hub, ``trl-internal-testing/tiny-Llama4ForCausalLM``,
-parses but its logits are NaN in plain transformers 5.17, and it has no
+parses but its logits are NaN in plain transformers, and it has no
 dense block and no NoPE block.
 """
 
@@ -33,7 +33,7 @@ NATIVE = {**LLAMA_ROWS, "layers.0.mlp": "model.layers.0.feed_forward"}
 
 
 def _patched_checkpoint(repo="yujiepan/llama-4-tiny-random"):
-    """The tiny checkpoint with ``attn_temperature_tuning`` as the bool 5.17 validates; weights and tokenizer symlinked."""
+    """The tiny checkpoint with ``attn_temperature_tuning`` as the bool transformers validates; weights and tokenizer symlinked."""
     snapshot = cached_snapshot(repo)
     patched = tempfile.mkdtemp(prefix="llama4-")
     for name in os.listdir(snapshot):

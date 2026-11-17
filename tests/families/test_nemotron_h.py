@@ -1,6 +1,5 @@
 """Nemotron-H, end to end: one mixer per block, a Mamba-2 mixer, attention or a mixture of experts."""
 
-import importlib.util
 import os
 import tempfile
 
@@ -22,7 +21,7 @@ TINY = "hf-tiny-v2/tiny-random-NemotronHForCausalLM"
 
 
 def _patched_checkpoint(repo=TINY):
-    """The tiny checkpoint with its embedding under the name transformers 5.17 loads.
+    """The tiny checkpoint with its embedding under the name transformers loads.
 
     It stores ``backbone.embedding.weight``; the model's module is
     ``model.embeddings``, so a load would leave the embedding randomly
@@ -187,9 +186,6 @@ def omni_processor():
     )
 
 
-@pytest.mark.skipif(
-    importlib.util.find_spec("transformers.models.nemotron_h_omni") is None, reason="NemotronH Omni is in transformers 5.18 and later"
-)
 class TestNemotronHOmniVision(VisionSuite):
     """NemotronH Omni's RADIO tower (packed behind its CLS and register tokens, layer-scaled blocks), its projector after
     the pixel shuffle, and the root's own scatter."""

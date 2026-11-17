@@ -433,11 +433,10 @@ things differ from the DeltaNet, and each is handled where it arises:
 `A * betas`, computed from the call's arguments (`_read(name)`) the same way
 the kernel computes them, and read-only. `state_input` is `None` on a prompt
 (the scan starts from zeros and takes no state; assigning raises) and a clone
-of the decode kernel's argument 0. Two values live inside the kernels and
-need the names bound to the pure-torch functions, not the dispatcher
-(`needs_kernel_source`), on every machine, since `SelectiveScan` keys them
-on the kernel's own body (`StateSpace` keys its two through the dispatcher
-instead, `kernel_body`): `attention_head_outputs` at `READ_OPS` (`y` after
+of the decode kernel's argument 0. Two values live inside the kernels,
+keyed through `kernel_body` as `StateSpace`'s two are, so they are read in
+the pure-torch body whether the forward calls it directly or through the
+dispatcher: `attention_head_outputs` at `READ_OPS` (`y` after
 the `D` skip, before `silu(z)`: `scan_output_5` in the scan, `out_1` in the
 decode kernel), and `state_output` on a decode step at `STEP_OUTPUT_OP`
 (`ssm_state_to_0`, the state as it is copied into the cache). `state_output`
@@ -605,7 +604,7 @@ methods that pin the claims above:
 | `route_kernels` `"torch"` / `"default"` round-trip the module's bindings, and `route_delta_rule` spells the same | `tests/test_base.py::test_route_kernels_round_trips_the_bindings` |
 | with `STEP_STATE_OP` (Mamba-1) each name is bound to its own pure-torch function | `tests/test_base.py::test_route_kernels_binds_a_single_step_decode_kernel_to_its_own` |
 | `select` given as a function of the host reads and writes | `tests/test_base.py::test_select_can_be_a_function_of_the_host` |
-| the Mamba-1 values recompute the scan's own states and `y`; views take writes and in-place edits; the decode step, the per-token state and a `state_input` read before `states` in a step | `tests/families/scan_suite.py` (run by `test_mamba.py`, `test_falcon_mamba.py`, `test_jamba.py`) |
+| the Mamba-1 values recompute the scan's own states and `y`; views take writes and in-place edits; the decode step, the per-token state and a `state_input` read before `states` in a step; unrouted, the two values inside the kernels are a routed run's | `tests/families/scan_suite.py` (run by `test_mamba.py`, `test_falcon_mamba.py`, `test_jamba.py`) |
 
 The canonical pattern above is the offset experiment in isolation.
 

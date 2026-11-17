@@ -219,7 +219,10 @@ exists.
   before it.
 
 The element handed back is the object the call holds, so in-place edits reach the model;
-a transform is there for a value whose stub returns a copy.
+a transform is there for a value whose stub returns a copy. An output of `chunk`, `split`
+or `unbind` is the exception: torch refuses an in-place edit of it while gradients are on
+(GPT-2's queries). A value that has to take one reads a slice of that operation's input
+instead, a plain view, with a `postprocess` that rebuilds the whole for an assignment.
 
 ### Reuse the base description and the base layout name
 
@@ -429,10 +432,14 @@ attention_output` and that `mlp_output[:] = 0` moves the logits while the saved 
 zero. A transform is needed only when the preprocess returns something other than the
 served object (a clone, a reshaped copy) *and* in-place edits must still reach the model.
 GPT-2's MLP output is not mutated later, so the base holds and `mlp_output[:] = 0` reaches
-the model with no clone and no transform. `transform(self, view, raw)` receives the raw
-served value so a module that returns a tuple can be rebuilt around the edited element
-(`(edited.clone(), *raw[1:])`); see nnsight docs/developing/extending-envoy.md. A
-transform works on any path, an operation inside a forward included.
+the model with no clone and no transform. `transform(self, view, raw)` returns the
+location's whole value, not the selected element: `raw` is that value as served, to rebuild
+around the edited view (`(view.clone(), *raw[1:])` where a module returns a tuple; the
+`(args, kwargs)` pair on an `input` or `inputs` key, as Gemma-4's `_hand_back` does). An
+assignment does not pass through it: `postprocess` and `select` are applied for you there,
+and not in a transform. See nnsight docs/developing/extending-envoy.md and
+[eproperty-internals.md](../developing/eproperty-internals.md#the-nnsight-side-in-six-facts).
+A transform works on any path, an operation inside a forward included.
 
 ## `postprocess`: writes on a `key="output"` value
 

@@ -102,9 +102,10 @@ does, through `interface_reason`.
           return value[1]
   ```
 
-  A preprocess that returns a slice or a copy is a view the model does not see; an
-  in-place edit to it needs a `transform` to land, and an assignment needs a `postprocess`
-  that rebuilds the served shape (`rewrap`). See [overriding-values.md](overriding-values.md).
+  A preprocess that returns an element or a slice hands out the model's own tensor, so an
+  in-place edit lands; one that returns a copy needs a `transform` for that. Either way an
+  assignment needs a `postprocess` that rebuilds the served shape (`rewrap`). See
+  [overriding-values.md](overriding-values.md).
   `key="input"` is the call's first argument, `key="inputs"` the raw `(args, kwargs)` pair.
 - **A module named from the model's root.** A leading `/` walks from the root envoy
   instead of the host, by standard names: `EProperty("/norm.output", ...)` on a block's

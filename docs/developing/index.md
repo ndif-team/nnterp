@@ -36,7 +36,7 @@ read.
 - [transformers-compat](transformers-compat.md) — the versions nnterp is developed against, which operation names a release can move, the upgrade procedure.
 - [releasing](releasing.md) — a GitHub release publishes to PyPI through `publish.yml`; the tag is the version, Trusted Publishing authenticates the upload.
 - [gotchas](gotchas.md) — contributor traps, each as constraint and reason.
-- [contributing](contributing.md) — house style, workflow.
+- [contributing](contributing.md) — house style, the workflow, and the checklist of everything a new standard value touches.
 
 ## Related
 

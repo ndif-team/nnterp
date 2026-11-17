@@ -13,7 +13,8 @@ sources: [tests/conftest.py, tests/families/suite.py, tests/families/test_falcon
 The suite is the executable contract of nnterp: every statement the README
 makes about a value is a method in `tests/families/suite.py`, run against a
 pinned tiny checkpoint of every family. Adding a family is one test file;
-adding a value is one method here. This page is how to run it, what each
+adding a standard value is one method here and the name sets
+[contributing.md](contributing.md#workflow) step 6 lists. This page is how to run it, what each
 test asserts, and how a family file states its specifics.
 
 ## Canonical pattern

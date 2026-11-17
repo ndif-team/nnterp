@@ -202,8 +202,8 @@ A family that ships with nnterp also touches:
 - an encyclopedia entry, `encyclopedia/entries/<model_type>.py`, with the family placed in
   `encyclopedia/hues.py`'s layout ([encyclopedia/README.md](../../encyclopedia/README.md));
 - the site's API pages, regenerated with `python site/gen_reference.py`;
-- the family counts in `CLAUDE.md`, `README.md` and `docs/reference/families.md` (and
-  `docs/usage/mixture-of-experts.md` for a mixture);
+- the family counts in `CLAUDE.md`, `README.md` and `docs/reference/families.md`, which also
+  counts the pinned checkpoints (and `docs/usage/mixture-of-experts.md` for a mixture);
 - the `nnterp` skill in https://github.com/ndif-team/skills, where it counts or lists families.
 
 ### `RENAME`

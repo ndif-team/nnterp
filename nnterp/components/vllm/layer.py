@@ -126,8 +126,9 @@ class FusedLayer(standard.Layer):
     It is called ``forward(positions, hidden_states, residual)`` and returns
     ``(hidden_states, residual)``: ``hidden_states`` is what the last sublayer
     produced and ``residual`` the stream before it, so the stream is their
-    sum, entering and leaving. An edit goes back as a change to
-    ``hidden_states``, and a read that edits nothing changes nothing.
+    sum, entering and leaving. The first block is called with ``residual``
+    ``None`` and the embeddings as ``hidden_states``. An edit goes back as a
+    change to ``hidden_states``, and a read that edits nothing changes nothing.
     """
 
     attention_input_gain = Layer.attention_input_gain

@@ -11,12 +11,14 @@ transformers. Three things differ, and these envoys absorb them:
   the engine's attention layer, the one the vLLM `Attention` base reads.
 * **Some modules are vLLM's.** The backend fuses the query, key and value
   projections into one ``qkv_proj`` (and a gated MLP's into ``gate_up_proj``),
-  rewriting the module's forward, where nnsight's ``.source`` then returns
-  the class's text (docs/developing/gotchas.md). So the queries and keys
-  before the rotary embedding, arguments of a call inside the attention's
-  forward, are not served here (`BACKEND_ROTARY`); the limit lifts when vLLM
-  registers the rewritten text in ``linecache`` under its own file name and
-  nnsight instruments the instance's forward.
+  rewriting the module's forward, swaps RMSNorms for vLLM's, and replaces a
+  mixture's experts with the engine's fused MoE kernel. On a rewritten
+  forward nnsight's ``.source`` returns the class's text
+  (docs/developing/gotchas.md), so the queries and keys before the rotary
+  embedding, arguments of a call inside the attention's forward, are not
+  served here (`BACKEND_ROTARY`); the limit lifts when vLLM registers the
+  rewritten text in ``linecache`` under its own file name and nnsight
+  instruments the instance's forward.
 """
 
 from __future__ import annotations

@@ -160,7 +160,7 @@ def test_unknown_model_type_loads_with_the_default(nanochat):
     assert nanochat.family is default
     assert type(nanochat.layers[0]) is default.Layer and type(nanochat.layers[0].self_attn) is default.Attention
     support = nanochat.support()
-    assert {name for name, reason in support.items() if reason is not None} == {"self_attn.attention_output", "mlp.mlp_output", "layer_mid", "mlp_norm_output", *NO_ROTARY}
+    assert {name for name, reason in support.items() if reason is not None} == {"self_attn.attention_output", "mlp.mlp_output", "layer_mid", "mlp_norm_output", "final_norm_output", *NO_ROTARY}
     assert (nanochat.num_layers, nanochat.num_heads, nanochat.head_dim, nanochat.intermediate_size) == (2, 2, 16, 32)
 
 
@@ -197,6 +197,20 @@ def test_contributions_and_the_lens_are_unavailable(nanochat):
         nanochat.project_on_vocab(resid)
     with pytest.raises(Unavailable, match="the default family cannot tell what follows lm_head"):
         nanochat.get_topk_closest_tokens(resid[0, -1])
+
+
+def test_a_norm_the_forward_calls_twice_is_not_served_as_the_final_norm(nanochat):
+    """NanoChat norms the embeddings with the module that norms the last block's output, so ``norm.output``, the first
+    call's, is not the final norm's: unavailable with the reason in `support`, at the read and in `rank`."""
+    reason = "the forward calls norm 2 times, not once"
+    assert reason in nanochat.support()["final_norm_output"]
+    with pytest.raises(Unavailable, match=reason):
+        with nanochat.trace(PROMPT):
+            nanochat.final_norm_output.save()
+    with pytest.raises(Unavailable, match=reason):
+        nanochat.rank("final_norm_output")
+    assert "final_norm_output" not in nanochat.order() and "lm_head_output" in nanochat.order()
+    assert load_default(dedicated_suite("gpt2").REPO).support()["final_norm_output"] is None  # a norm called once is served
 
 
 def test_steer_and_skip_layers_work_on_the_stream(nanochat):

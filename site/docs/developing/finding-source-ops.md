@@ -43,7 +43,7 @@ The labels on the left are the operation names, trimmed here to the lines a path
 
 ## Inside a call
 
-`attention_interface_1` calls a function, transformers' `eager_attention_forward`. Its operations exist only under `attention_interface_1.source`, and that drill works inside a trace only, because the callee is a local bound at run time: nnsight resolves it from the live call the first time a trace drills into it, and clears what it built when the next run starts.
+`attention_interface_1` calls a function: under eager, the `eager_attention_forward` of the module's own modeling file. Each file defines its own, and the operations the base `Attention` reads have the same names in them, so one path serves every family on the interface. Its operations exist only under `attention_interface_1.source`, and that drill works inside a trace only, because the callee is a local bound at run time: nnsight resolves it from the live call the first time a trace drills into it, and clears what it built when the next run starts.
 
 ```python
 import torch

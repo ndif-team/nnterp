@@ -124,7 +124,7 @@ does, through `interface_reason`.
 - **An operation inside the forward.** `source` drills into the current module's forward,
   and again into a call the forward makes; the segment after it names the operation.
   `source.attention_interface_1.source.nn_functional_softmax_0.output` is the softmax
-  inside transformers' shared eager attention. Find names with
+  inside the eager attention forward the interface calls. Find names with
   `print(model.layers[0].self_attn.source)` ([finding-source-ops.md](finding-source-ops.md));
   the operation must exist on the path this checkpoint's forward takes, and a value inside
   the interface needs `attn_implementation="eager"`, which `unavailable=interface_reason`

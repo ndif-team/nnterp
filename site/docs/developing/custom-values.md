@@ -46,7 +46,7 @@ print(soft.shape, ent.shape)
 # torch.Size([1, 12, 7, 7]) torch.Size([1, 12, 7])
 ```
 
-The softmax is an operation inside transformers' shared eager attention, and the path has a `source` segment for the call and another for the operation inside it ([Finding source ops](finding-source-ops.md)). `unavailable=interface_reason` is the predicate the base's interior values carry: Under the checkpoint's default `sdpa`, both values then report "read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'" in `support()` instead of failing at read time with `SourceNotAvailable`.
+The softmax is an operation inside the eager attention forward the interface calls, and the path has a `source` segment for the call and another for the operation inside it ([Finding source ops](finding-source-ops.md)). `unavailable=interface_reason` is the predicate the base's interior values carry: Under the checkpoint's default `sdpa`, both values then report "read inside the eager attention forward, but this model runs 'sdpa'; load with attn_implementation='eager'" in `support()` instead of failing at read time with `SourceNotAvailable`.
 
 A `DerivedEProperty` runs its function on the envoy at read time, inside the trace, and forward order applies to what it reads: `attention_entropy` reads the pattern, and a trace that reads it and then `attention_queries` is out of order. A derived value is read-only, and assigning raises `AttributeError: attention_entropy is derived and read-only`.
 

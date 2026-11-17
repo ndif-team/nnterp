@@ -171,7 +171,7 @@ Three families serve block values of their own on their `Layer`, for the terms t
 
 ## `Attention`
 
-A softmax-attention module. The base class reads everything but `attention_output` inside transformers' shared eager attention forward, reached through the module's `attention_interface` call (`INTERFACE = "attention_interface_1"`). GPT-J, GPT-Neo, CodeGen, GPT-NeoX-Japanese, XGLM, BLOOM, MPT and Falcon relocate the same names onto their own operations; [families.md](families.md) has the ops.
+A softmax-attention module. The base class reads everything but `attention_output` at the module's `attention_interface` call (`INTERFACE = "attention_interface_1"`) and inside the function it runs under eager, the modeling file's own `eager_attention_forward`. GPT-J, GPT-Neo, CodeGen, GPT-NeoX-Japanese, XGLM, BLOOM, MPT and Falcon relocate the same names onto their own operations; [families.md](families.md) has the ops.
 
 | Value | Layout | Base location | Assignable | Availability |
 |---|---|---|---|---|

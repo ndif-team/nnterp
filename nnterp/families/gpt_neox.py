@@ -2,8 +2,8 @@
 
 Its tree is ``gpt_neox.{embed_in, emb_dropout, layers[i].{input_layernorm,
 post_attention_layernorm, attention, mlp}, final_layer_norm}``. The head is
-``lm_head`` on current transformers and was ``embed_out`` before; that key
-binds only where it resolves, so both spellings map to ``lm_head``.
+``lm_head``; ``RENAME`` also carries ``embed_out``, a key that binds only where
+it resolves.
 """
 
 from transformers.models.gpt_neox.modeling_gpt_neox import GPTNeoXAttention, GPTNeoXLayer, GPTNeoXMLP

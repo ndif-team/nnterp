@@ -49,15 +49,11 @@ def _norm_gain(norm: Envoy, width: int, device: torch.device) -> Tensor:
     """The per-channel gain of the norm ``norm``, float32 ``[width]``: what it multiplies a normalized input by.
 
     Measured by calling it on ``+-256`` in alternating channels, which a norm
-    normalizes to ``+-1`` whatever it computes in, so ``(norm(p) - norm(-p)) / 2``
-    is the gain times the signs: exact without a bias, to the rounding of the
-    bias otherwise. The probe is float32, so a norm that computes in float32
-    returns the float32 gain it multiplies by (Gemma's ``1 + weight``, not
-    rounded to a bf16 weight's dtype); one that takes only its weight's dtype
-    (torch's LayerNorm) is called in that dtype, the one it multiplies in. A
-    module that does not normalize (an identity, a layer scale) returns twice
-    as much at ``+-512``, and its gain is the first probe's over 256. Detached:
-    a measurement, not a parameter.
+    normalizes to ``+-1``, so ``(norm(p) - norm(-p)) / 2`` is the gain times
+    the signs: exact without a bias, to the rounding of the bias otherwise.
+    The probe is float32, or the weight's dtype where the norm takes no other.
+    A module that does not normalize (an identity, a layer scale) has the gain
+    it scales the probe by. Detached.
     """
     weight = next(norm._module.parameters(), None)
     signs = torch.ones(width, device=device if weight is None else weight.device)
@@ -83,19 +79,16 @@ class Layer(Standard):
 
     Attributes:
         self_attn: The softmax attention, an `Attention`; absent on a hybrid's linear blocks.
-        linear_attn: The recurrent mixer, a `LinearAttention` (gated DeltaNet) or a `StateSpace` (Mamba-2);
-            hybrids and state-space models only.
-        mlp: The feed-forward, an `Mlp`; absent on OPT.
+        linear_attn: The recurrent mixer, a `RecurrentMixer`; hybrids and state-space models only.
+        mlp: The feed-forward, an `Mlp`; absent on a block without one (OPT).
         input_layernorm, post_attention_layernorm: The block's norms under their aliased names,
-            where the family has them (their meaning varies; see the README).
+            where the family has them (their meaning varies).
 
-    Between ``layer_input`` and ``layer_output`` the block has four more boundaries,
-    each the input or output of one of its modules: ``attention_norm_output``,
-    ``layer_mid``, ``mlp_norm_output`` and ``mlp_input``. They are defined on the
-    pre-norm block (``x + attn(norm1(x))``, then ``+ mlp(norm2(.))``) and keyed on
-    the aliased norms, so on a block built otherwise the family's subclass points
-    them at its own modules or marks them unavailable with the reason; a block
-    without the module reports ``no <module> module on this block``.
+    The boundaries between ``layer_input`` and ``layer_output``
+    (``attention_norm_output``, ``layer_mid``, ``mlp_norm_output``, ``mlp_input``)
+    are defined on the pre-norm block (``x + attn(norm1(x))``, then
+    ``+ mlp(norm2(.))``) and keyed on the aliased norms; a family whose block is
+    built otherwise points them at its own modules or marks them unavailable.
     """
 
     self_attn: Attention
@@ -113,12 +106,10 @@ class Layer(Standard):
         """Skip this block, handing ``hidden`` on as its residual stream.
 
         The block does not run; ``hidden`` takes the place of its
-        ``layer_output``, packed the way the block would have returned it (a
-        tuple family gets ``(hidden, None)``: the second element is the
-        attention weights nothing downstream reads; a family whose second
-        element is state the next block reads, ZAYA's and GLM-5's, overrides
-        this to hand on the state the block received). Call it inside a trace,
-        before the block runs.
+        ``layer_output``, packed the way the block returns it (``(hidden,
+        None)`` under `returns_tuple`). A family whose block returns state the
+        next block reads overrides this to hand on the state the block
+        received. Call it inside a trace, before the block runs.
         """
         self.skip((hidden, None) if self.returns_tuple else hidden)
 
@@ -126,25 +117,22 @@ class Layer(Standard):
     def attention_input_gain(self) -> Tensor:
         """The per-channel gain between the residual stream and what the attention reads, ``[hidden_size]``.
 
-        The gain of the norm `attention_norm_output` is read at (``weight``;
-        ``1 + weight`` on Gemma; ones on a norm without one), so the attention
-        reads ``gain * n(x)``, plus the norm's bias where it has one, for a
-        stream ``x`` and its normalization ``n`` (``x / rms(x)``, or ``x``
-        centred first on a LayerNorm). On a post-norm block the attention reads
-        the stream itself, and the gain is ones. Folding it into a head's
-        weights, ``value_weight(kv) @ (gain * h)``, is that head's map of a
-        stream direction ``h``.
+        The gain of the norm `attention_norm_output` is read at, so the
+        attention reads ``gain * n(x)``, plus the norm's bias where it has
+        one, for a stream ``x`` and its normalization ``n`` (``x / rms(x)``,
+        or ``x`` centred first on a LayerNorm). On a post-norm block the
+        attention reads the stream itself, and the gain is ones. Folding it
+        into a head's weights, ``value_weight(kv) @ (gain * h)``, is that
+        head's map of a stream direction ``h``.
 
-        Measured by calling the norm, outside a trace or inside one, on
-        ``+-256`` in alternating channels (`_norm_gain`): exact on a norm
-        without a bias, to the rounding of the bias otherwise. Float32, the
-        gain the norm multiplies by, on the device of the norm's weight (else
-        the block's), and detached.
+        Measured by calling the norm, outside a trace or inside one: exact on
+        a norm without a bias, to the rounding of the bias otherwise. Float32
+        and detached, on the device of the norm's weight (else the block's).
 
         Raises:
             Unavailable: with `attention_norm_output`'s reason, where the block
-                has no stream entering an attention (a mixture of hyper-connection
-                streams, an MLP-only block); on a model that is not dispatched.
+                has no stream entering an attention (an MLP-only block); on a
+                model that is not dispatched.
         """
         value = type(self).attention_norm_output
         reason = value.reason(self)
@@ -162,19 +150,17 @@ class Layer(Standard):
         """The per-channel gain between the attention's output and what the block adds to the stream, ``[hidden_size]``.
 
         The gain of the norm `attention_output` is read at, on a block that
-        norms what the attention returns before adding it
-        (``post_attention_layernorm`` on the post-norm blocks, Gemma-2/3/4 and
-        AFMoE; ``post_self_attn_layernorm`` on GLM-4; ``post_norm1`` on
-        HyperCLOVA X): the block then adds ``gain * n(y)``, plus the norm's
-        bias, for the output projection's output ``y``, which `output_weight`
-        maps the heads into. Ones where the attention's output enters the
-        stream unnormed. So ``gain * (output_weight(j) @ value_weight(kv) @
-        (attention_input_gain * h))`` is head ``j``'s map of a stream direction
-        ``h`` into the stream, on a block with no further step.
+        norms what the attention returns before adding it: the block then adds
+        ``gain * n(y)``, plus the norm's bias, for the output projection's
+        output ``y``, which `output_weight` maps the heads into. Ones where
+        the attention's output enters the stream unnormed. So ``gain *
+        (output_weight(j) @ value_weight(kv) @ (attention_input_gain * h))`` is
+        head ``j``'s map of a stream direction ``h`` into the stream, on a
+        block with no further step.
 
-        Measured as `attention_input_gain` is (`_norm_gain`), with the same
-        dtype and device. On a block without softmax attention it follows the
-        mixer's (``linear_attn``) `attention_output`.
+        Measured as `attention_input_gain` is, with the same dtype and device.
+        On a block without softmax attention it follows the mixer's
+        (``linear_attn``) `attention_output`.
 
         Raises:
             Unavailable: with `attention_output`'s reason, on a block with no
@@ -201,10 +187,7 @@ class Layer(Standard):
     def layer_input(self, value: torch.Tensor) -> Residual:
         """The residual stream entering this block, before any of its norms.
 
-        The block's first argument where the block is called with the stream
-        (every transformers family), and the stream wherever an engine passes
-        it otherwise (vLLM's fused blocks take it in two halves). With the
-        contributions it is the identity the values are defined by:
+        With the contributions it is the identity the values are defined by:
         ``layer_input + attention_output + mlp_output == layer_output``.
         In-place edits and assignment reach the model.
         """
@@ -224,13 +207,12 @@ class Layer(Standard):
         """The residual stream between the two sublayers, ``[batch, seq, hidden_size]``.
 
         What the MLP's pre-norm is called with: ``layer_input +
-        attention_output`` on a pre-norm block, where it is read as
-        ``post_attention_layernorm.input``. A parallel block has no such
-        stream, and marks this unavailable.
+        attention_output`` on a pre-norm block. Unavailable on a parallel
+        block, which has no such stream.
 
-        An assignment is copied into the stream in place (``in_place``): the
-        block holds it as the norm's argument and as ``residual``, and both see
-        the write (docs/usage/residual-stream.md, "Writing `layer_mid`").
+        An assignment is copied into the stream in place: the block holds it
+        as the norm's argument and as ``residual``, and both see the write
+        (docs/usage/residual-stream.md, "Writing `layer_mid`").
         """
         return value
 
@@ -252,11 +234,9 @@ class Layer(Standard):
     def layer_output(self, value: Any) -> Residual:
         """The residual stream leaving this block, always a tensor.
 
-        Some blocks return ``hidden_states`` alone, others a tuple with it first
-        (GPT-J, Bloom, MPT, Falcon). This is the tensor either way, the same
-        object the block returned, so in-place edits reach the model. Assigning
-        replaces it and, for a tuple block, leaves the other elements as they
-        were::
+        The tensor whether the block returns it alone or first in a tuple, and
+        the same object the block returned, so in-place edits reach the model.
+        Assigning replaces it and leaves a tuple's other elements as they were::
 
             with model.trace(prompt):
                 resid = model.layers[3].layer_output.save()

@@ -32,8 +32,8 @@ model makes its logits in float32 (``lm_head(...).float()``), so
 MLP is ``intermediate_size`` wide, an MoE block's experts
 ``moe_intermediate_size``.
 
-NemotronH Omni (``NemotronH_Omni_Reasoning_V3``, model type ``nemotron_h_omni``,
-transformers 5.18 and later) holds this model whole at ``language_model``
+NemotronH Omni (``NemotronH_Omni_Reasoning_V3``, model type ``nemotron_h_omni``)
+holds this model whole at ``language_model``
 (``language_model.model.*``, ``language_model.lm_head``) beside a RADIO tower at
 ``vision_model``, ``vision`` (a `RadioVision`), and ``multi_modal_projector``,
 ``projector`` (after the pixel shuffle). The root scatters the image features in

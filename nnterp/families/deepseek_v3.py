@@ -6,8 +6,8 @@ added in the block, attention through the shared attention interface. Multi-head
 Moonshot's Kimi K2.5 / K2.6 / K2.7-Code (``Kimi_K25ForConditionalGeneration``) wrap this text
 model under ``model.language_model`` with ``lm_head`` at the root, so ``RENAME`` carries both
 spellings; they resolve by the wrapper's own type, ``kimi_k25``, whose module re-exports ``kimi_k2.py``,
-this family under Moonshot's type, whatever their ``text_config`` says (``kimi_k2`` in the files, which
-transformers 5.20 and later rewrite to ``deepseek_v3`` at load).
+this family under Moonshot's type, whatever their ``text_config`` says (``kimi_k2`` in the files,
+``deepseek_v3`` where transformers rewrites it at load).
 """
 
 from transformers.models.deepseek_v3.modeling_deepseek_v3 import DeepseekV3Attention, DeepseekV3DecoderLayer, DeepseekV3MLP, DeepseekV3MoE

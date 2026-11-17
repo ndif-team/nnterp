@@ -2,52 +2,17 @@
 
 A family gives its modules standard *values* by wrapping them in `Envoy`
 subclasses (nnsight's ``envoys=``): `Layer` on the decoder block, `Attention`
-on the softmax-attention module, `Mlp` on the feed-forward, and
-`Moe` on a mixture of experts (an `Mlp` with routing values),
-`LinearAttention` on a hybrid's gated DeltaNet mixer, `SelectiveScan` on a
-Mamba-1 mixer and `StateSpace` on a Mamba-2 (SSD) mixer, all `RecurrentMixer`s
-(the mechanism every recurrent mixer shares). A multimodal wrapper's vision
-tower is a `Vision`, its blocks `VisionLayer` / `VisionAttention` /
-`VisionMlp`, whose stream values are `Patches`; the tower also serves
-where the image meets the text model (`ImageTokenMask`, `ImageFeatures`). The families under
-`nnterp.families` subclass these, so a family whose forward is spelled
-differently overrides only what differs, and key them on its own module types
-in its ``ENVOYS``.
+on the softmax-attention module, `Mlp` on the feed-forward, `Moe` on a mixture
+of experts, a `RecurrentMixer` (`LinearAttention`, `SelectiveScan`,
+`StateSpace`) on a recurrent mixer, and `Vision` with `VisionLayer`,
+`VisionAttention` and `VisionMlp` on a multimodal wrapper's vision tower. A
+family subclasses these, overriding only what its forward spells differently,
+and keys them on its own module types in its ``ENVOYS``.
 
-A value a checkpoint does not have says so: every descriptor here takes
-``unavailable=`` (a reason, or a function of the envoy returning one), reading
-it raises `Unavailable` with the reason before the model runs, and
-`Standard.support` / `StandardizedTransformer.support` report the reasons
-without raising. A family without a value assigns `unavailable("...")`.
-
-The three boundary values mean the same thing on every family:
-``layer_output`` is the residual stream leaving the block, and
-``attention_output`` / ``mlp_output`` are the *contributions* the sublayers
-add to it, so ``layer.input + attention_output + mlp_output == layer_output``
-whether the block is sequential or parallel. On a family whose sublayer adds
-the residual inside the module (BLOOM, MPT, DBRX) or adds a post-sublayer
-norm's output instead (Gemma-2/3, OLMo-2), the family's subclass points the
-value at the right place; the identity is what the tests check.
-
-One descriptor, `EProperty`, whose key is a path from the host envoy:
-
-* ``"output"``: the host's own output, a view over the same location as
-  ``.output``, so reading, writing and in-place edits all go through the
-  interleaver the way ``.output`` does (`Layer.layer_output`).
-* ``"../post_attention_layernorm.output"``, ``"embed_tokens.output"``: a value
-  produced by a module named relative to this one (a sandwich block's
-  post-sublayer norm, the root's embedding).
-* ``"/inputs"``: a path walked from the model's root, by standard names,
-  whatever the host (the vision tower's ``image_token_mask``).
-* ``"source.attention_interface_1.inputs"``: an operation inside a forward,
-  reached through ``.source``, optionally one element of it (``select``).
-* Computed from several served values, a `DerivedEProperty` (a DeltaNet
-  layer's state after every token). An operation inside a called
-  function only exists once someone has drilled into that call **in the
-  current run** — the interleaver resolves the callee from the live value and
-  clears what it built at the start of every run — so this descriptor drills
-  in before every read or write, the step a plain eproperty has no place for
-  (`Attention.attention_probabilities`).
+Every value is an `EProperty`, whose key is a path from the host envoy, or a
+`DerivedEProperty`, computed from several. A value a checkpoint does not have
+raises `Unavailable` with the reason, which `Standard.support` reports
+without raising.
 """
 
 from .attention import (

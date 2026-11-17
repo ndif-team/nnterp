@@ -39,60 +39,41 @@ class EProperty(eproperty):
     """An ``eproperty`` whose key is a path from the host, and which can say when it is unavailable.
 
     Args:
-        key: Where the value lives, relative to the host envoy: dotted segments
-            ending in ``output``, ``input`` or ``inputs``, or in another value
-            the module at that point serves (an engine's ``logits``). ``"output"`` is the
-            host's own output. A leading ``"/"`` anchors the path at the
-            model's root instead (``envoy.root``), walked down from there as a
-            relative path is, aliases included: ``"/inputs"`` is the model's
-            inputs, ``"/projector.output"`` the projector's output, from any
-            host. A leading ``"../"`` (repeatable) steps to the
-            parent module by native name, another name to a child module
-            (aliases included) or, under a ``source`` segment, to an
-            operation: ``"source"`` drills into the current module's or
-            operation's forward, instrumenting it for this run, so
-            ``"source.attention_interface_1.inputs"`` is the shared attention
-            call's arguments. Above the host the location is the path's
-            string, so ``"../source.hidden_states_view_0.output"`` is an
-            operation of the parent block's own forward, which the family
-            instruments at build (`Standard.sourced`); a call inside that
-            forward cannot be drilled from a child. A function of the host returning such a path, for a
-            forward that branches: it runs at read time, inside the trace, so it
-            can read the forward's own branch variable (`RecurrentMixer.KERNEL`) or the
-            config (a family's ``by_alibi``). ``None`` means the attribute's
-            name, for a bare marker (`unavailable`).
+        key: Where the value lives, as a path from the host envoy: dotted
+            segments ending in ``output``, ``input`` (the call's first
+            argument) or ``inputs`` (its ``(args, kwargs)``), or in another
+            value the module at that point serves. A name steps to a child
+            module, aliases included; ``source`` steps into the forward of the
+            current module or operation, where a name is an operation
+            (``"source.attention_interface_1.inputs"``); a leading ``"/"``
+            anchors the path at the model's root (``"/inputs"``); a leading
+            ``"../"`` (repeatable) steps to the parent module, where names are
+            native (``"../post_attention_layernorm.output"``) and ``source``
+            reaches the parent's own operations only, on an envoy that sets
+            `Standard.sourced`. A function of the host returning such a path
+            is called at read time, inside the trace, for a forward that
+            branches. ``None`` means the attribute's name, for a bare marker
+            (`unavailable`).
         description: Shown in the model's repr, like any eproperty's.
         unavailable: A reason string, or a function of the envoy returning a
             reason or ``None``. A reason makes every read and write raise
             `Unavailable` before the model runs, and shows up in
-            `Standard.support`. It is checked on the *instance*, so a
-            checkpoint's config can decide (``attn_implementation``, an alibi
-            variant), and a per-layer difference in a hybrid model too.
+            `Standard.support`. A function is asked on the instance, so a
+            checkpoint's config or a block's own modules can decide.
         select: One element of the served value: with ``inputs`` an int is a
             positional argument and a str a keyword; with ``output`` an int
-            indexes the returned tuple. A write repacks the element into the
-            current value, so assigning one argument of a call replaces just
-            that argument. ``input`` is the call's first argument, ``inputs``
-            with the first element selected. A function of the host returning
-            one of those (or ``None``, the whole value) selects per access, for
-            a value whose position differs between the calls a forward branches
-            to (`SelectiveScan`'s prompt and decode kernels, `StateSpace`'s
-            two kernels).
+            indexes the returned tuple. A write puts the element back into the
+            current value, so assigning one argument of a call replaces that
+            argument alone. A function of the host returning one of those (or
+            ``None``, the whole value) selects per access.
         in_place: Write by copying into the tensor the location holds instead of
             swapping another in, for a tensor the forward also holds under a
             second name it reads later (a block's ``residual``). An assignment
             is ``value[:] = new`` into the preprocess's view; reads are unchanged.
 
-    The location is served by nnsight the way any eproperty's is, whatever the
-    path: a module's output, a sibling norm's, or an operation's arguments,
-    with ``preprocess``, ``postprocess`` and ``transform`` all available. An
-    operation inside a called function only exists once someone has drilled
-    into that call in the *current* run (the interleaver resolves the callee
-    from the live value and clears what it built at the start of every run),
-    so a path through ``source`` is walked before every read or write. An
-    operation that is not there raises `SourceNotAvailable` naming what is,
-    rather than the `AttributeError` a descriptor would otherwise swallow into
-    "no attribute".
+    ``preprocess``, ``postprocess`` and ``transform`` work as on any
+    eproperty, whatever the path. A path whose operation this run's forward
+    does not have raises `SourceNotAvailable`, naming the operations it has.
     """
 
     def __init__(
@@ -361,11 +342,8 @@ class EProperty(eproperty):
     def piece_axis(self, obj: Envoy, value: Any, mesh: Any) -> int | None:
         """The axis ``value`` is one rank's piece along, or ``None`` when it is whole.
 
-        A value the model splits arrives ``1/tp`` as wide as the module's size
-        along `split_axis`; one nnsight reassembled (a sharded module's own input
-        or output, such as ``o_proj.input``) arrives whole. The shapes are the
-        same on every rank, so every rank takes the same branch and reaches the
-        same collectives.
+        A piece is ``1/tp`` as wide as the module's size along `split_axis`; a
+        value nnsight reassembled arrives whole.
         """
         axis = self.split_axis
         if axis is None or not isinstance(value, torch.Tensor):
@@ -410,12 +388,7 @@ def write_into(held: torch.Tensor, value: Any) -> None:
 
 
 def tensor_parallel_mesh(obj: Envoy) -> Any:
-    """The device mesh ``obj``'s model is split over tensor-parallel, or ``None``.
-
-    transformers keeps it on the root module of a model it sharded; any other
-    model (one device, vLLM, a model loaded without ``distributed_config``)
-    has none, and costs one attribute read.
-    """
+    """The device mesh ``obj``'s model is split over tensor-parallel, or ``None``."""
     if getattr(obj.root._module, "_device_mesh", None) is None:
         return None
     from nnsight.modeling.tp import device_mesh

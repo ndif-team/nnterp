@@ -27,11 +27,11 @@ TEXT = "The quick brown fox"  # any short text: the order does not depend on it
 
 
 def prompts(model: Any) -> list[tuple[tuple, dict]]:
-    """The inputs a probe may run on, each ``(args, kwargs)`` for an invoke, tried in order: on a model loaded
-    with a processor, `TEXT` with one small image first (the processor's chat template puts the image's
-    tokens in, or its ``image_token`` does where it has no template), so that a value an image gates (a block
-    that adds a deepstack feature at the image tokens) is reached too; then `TEXT` alone, which is all a
-    text-only load takes."""
+    """The inputs a probe may run on, each ``(args, kwargs)`` for an invoke, tried in order.
+
+    On a model loaded with a processor, `TEXT` with one small image first, so
+    that a value an image gates is reached too; then `TEXT` alone.
+    """
     processor = getattr(model, "processor", None)
     token = getattr(processor, "image_token", None)
     found: list[tuple[tuple, dict]] = []
@@ -78,19 +78,13 @@ def probe(model: Any, targets: list[tuple[int | None, str, Any, Any]], run: Any,
 def compute(model: Any) -> dict[int, dict[str, int]]:
     """Every available value's rank, by side: ``-1`` the root's values before the blocks, each layer its block's, ``num_layers`` the root's after.
 
-    One block of each shape (block class and the values it has) is probed, so a
-    hybrid's linear- and softmax-attention blocks are each measured. A rank
-    counts distinct locations in forward order: from 0 in each block, and once
-    across the root's two sides. A model not yet dispatched is probed with a
-    `scan`, or a `trace` (which loads the weights) where the forward cannot
-    run on fake tensors (Granite's ``torch.equal``, OPT's data-dependent
-    shapes, a grouped-mm mixture of experts in float32). A dispatched model is
-    probed with a `trace` only: a scan leaves fake tensors in a module that
-    caches its forward's result (a ``longrope`` rotary embedding).
-    A model loaded with its processor is probed with an image in the prompt
-    (`prompts`), since a value an image gates (Qwen3-VL's ``deepstack_output``)
-    is reached by no text-only forward; where that prompt cannot run, the
-    text alone is tried.
+    One block of each shape (block class and the values it has) is probed. A
+    rank counts distinct locations in forward order: from 0 in each block, and
+    once across the root's two sides. A model not yet dispatched is probed
+    with a `scan`, or a `trace` (which loads the weights) where the forward
+    cannot run on fake tensors. A dispatched model is probed with a `trace`
+    only: a scan leaves fake tensors in a module that caches its forward's
+    result. Each of `prompts` is tried in turn.
     """
     num_layers = len(model.layers)
     shapes: dict[tuple, list[int]] = {}

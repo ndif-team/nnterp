@@ -59,17 +59,17 @@ class Mlp(Mlp):
 
 
 def router_is_linear(moe) -> bool:
-    """Whether the router is a bare ``nn.Linear`` (transformers through 5.20), whose output is the logits; from 5.21 it is a
-    ``JambaTopKRouter`` whose forward computes them, the base's pattern."""
+    """Whether the router is a bare ``nn.Linear``, whose output is the logits, rather than a ``JambaTopKRouter``
+    whose forward computes them, the base's pattern."""
     return isinstance(moe.router._module, torch.nn.Linear)
 
 
 class Moe(Moe, Mlp):
     """Jamba's mixture of experts: a softmax top-k of the router's logits, the selected weights left unnormalized.
 
-    The router is a bare ``nn.Linear`` through transformers 5.20, so its output is the
-    logits; from 5.21 it is a ``JambaTopKRouter`` and the logits are the ``F.linear`` inside
-    its forward, as on every other mixture.
+    Where the router is a bare ``nn.Linear`` its output is the logits; where it is a
+    ``JambaTopKRouter`` the logits are the ``F.linear`` inside its forward, as on every
+    other mixture.
     """
 
     @TokenEProperty(

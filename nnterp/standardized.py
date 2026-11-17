@@ -30,11 +30,8 @@ Tokens = Int[Tensor, f"{BATCH} {SEQ}"]
 class StandardizedProperty:
     """A read-only value of the model that a family may define instead.
 
-    Wraps the standard implementation. On read, a function of the same name
-    in the model's family module wins (``def num_kv_heads(model): ...`` in
-    ``falcon.py``), so a family whose config spells a size its own way keeps
-    that knowledge beside its names and values, and the implementation here
-    stays the plain case.
+    Wraps the plain rule. On read, a function of the same name in the model's
+    family module wins (``def num_kv_heads(model)`` in ``falcon.py``).
     """
 
     def __init__(self, fget: Callable[[Any], Any]) -> None:
@@ -57,12 +54,9 @@ class StandardizedProperty:
 class StandardizedCapability(StandardizedProperty):
     """A method of the model that a family may define instead.
 
-    `StandardizedProperty` for a method: on attribute access, a function of
-    the same name in the model's family module (``def project_on_vocab(model,
-    hidden): ...`` in ``cohere.py``) is bound in place of the standard
-    implementation, so a family whose model does something of its own keeps
-    that beside its names and values, and the implementation here stays the
-    plain case.
+    `StandardizedProperty` for a method: a function of the same name in the
+    model's family module (``def project_on_vocab(model, hidden)``) is bound
+    in place of the plain one.
     """
 
     def __get__(self, obj: Any, owner: type | None = None) -> Any:
@@ -77,10 +71,8 @@ class Standardized:
     Mixed in ahead of the nnsight model class that runs the checkpoint
     (`StandardizedTransformer` over `TransformersModel`,
     `nnterp.StandardizedVLLM` over nnsight's ``VLLM``). The leaf resolves
-    ``family`` and hands its ``RENAME`` and ``ENVOYS`` to nnsight, and defines
-    the root's values (``logits``, ``token_embeddings``, ...), which are read
-    where its engine keeps them. Everything here is written against the
-    standard names and values only, so it holds on both.
+    ``family``, hands its ``RENAME`` and ``ENVOYS`` to nnsight, and defines
+    the root's values (``logits``, ``token_embeddings``, ...).
     """
 
     family: ModuleType
@@ -131,12 +123,10 @@ class Standardized:
     def probs_to_dict(self, probs: torch.Tensor, k: int = 5) -> dict[str, float]:
         """The ``k`` most likely tokens of one ``[vocab_size]`` distribution, as ``{token: probability}``, most likely first.
 
-        Keyed by the decoded text. Where two or more of the ``k`` decode to
-        the same text (partial UTF-8 byte tokens all decode to ``'\ufffd'``),
-        those entries are keyed by the tokenizer's raw vocabulary token
-        instead (``convert_ids_to_tokens``, unique per id), with the id
-        appended should even that repeat, so the dict always holds ``k``
-        entries, each with its own probability.
+        Keyed by the decoded text. Tokens among the ``k`` that decode to the
+        same text (partial UTF-8 byte tokens all decode to ``'\ufffd'``) are
+        keyed by their raw vocabulary token instead, with the id appended
+        should that repeat too, so the dict always holds ``k`` entries.
         """
         values, indices = probs.topk(k)
         ids = indices.tolist()
@@ -166,20 +156,10 @@ class Standardized:
 
         With ``layer``, that block's values by dotted name (``"layer_output"``,
         ``"self_attn.attention_probabilities"``, ``"mlp.mlp_output"``): ``None``
-        when available, else the reason, including ``"no <module> module"``
-        when the block has no such module at all (a hybrid's blocks have either
-        ``self_attn`` or ``linear_attn``). Without, the root's values
-        plus every block value: ``None`` when available on every block, else
-        ``{layer: reason}`` for the blocks where it is not, so a hybrid reads
-        as a short dict.
-
-        The tree decides what is listed: every child of a block that carries
-        standard values (a `Standard` envoy) is walked under its standard
-        name, so a value installed through ``envoys=`` or a registered family
-        appears here as it does in the envoy's own `Standard.support`, and a
-        module no block has (OPT's ``mlp``) has no entry. A standard child of
-        the root (the vision tower, `Vision`) is listed the same way, its own
-        `support` rows under its standard name (``"vision.image_features"``,
+        when available, else the reason. Without, the root's values plus every
+        block value: ``None`` when available on every block, else
+        ``{layer: reason}`` for the blocks where it is not. A vision tower's
+        values are listed under its name (``"vision.image_features"``,
         ``"vision.self_attn.attention_probabilities"``); a tower no image
         reaches lists none.
         """
@@ -226,7 +206,7 @@ class Standardized:
 
     @StandardizedProperty
     def head_dim(self) -> int:
-        """Width of one attention head: the config's ``head_dim`` when it says (Qwen3, Gemma), else ``hidden_size // num_heads``."""
+        """Width of one attention head: the config's ``head_dim`` when it has one, else ``hidden_size // num_heads``."""
         return getattr(self.config.get_text_config(), "head_dim", None) or self.hidden_size // self.num_heads
 
     @StandardizedProperty
@@ -259,15 +239,10 @@ class Standardized:
     ) -> Any:
         """The checkpoint's config, before any model is built.
 
-        A ready module carries its own, and a ``config=`` load argument is the
-        one the model is built from: a config object is returned as it is, a
-        path is read in place of the repo id. A repo id is read with
-        ``AutoConfig`` and the named kwargs, the ones that say where the
-        checkpoint is and how to fetch it, so it is looked for where the build
-        will look, and a config transformers cannot parse fails here with its
-        own error. The rest of the load's kwargs (``dtype``, ``device_map``,
-        ...) are the build's and are ignored here. The Hub caches the file, and
-        the meta build reads it again.
+        A ready module's own ``config``; a ``config=`` object as it is, or a
+        ``config=`` path read in place of the repo id; else the repo id's, read
+        with ``AutoConfig`` and the named kwargs, the ones that say where the
+        checkpoint is and how to fetch it. The load's other kwargs are ignored.
         """
         if isinstance(repo_id, torch.nn.Module):
             return repo_id.config
@@ -292,19 +267,18 @@ class Standardized:
 class StandardizedTransformer(Standardized, TransformersModel):
     """A causal language model whose modules answer to one set of names.
 
-    The checkpoint's config is read first (its ``model_type``), the matching
-    family toolkit is looked up in `nnterp.families.REGISTRY`, and the family's
-    ``RENAME`` is handed to nnsight's ``rename`` so every envoy in the tree also
-    answers to the standard name. The original names keep working: an alias is
-    an extra attribute on the same envoy, not a replacement.
-
-    The family's ``ENVOYS`` wraps its decoder blocks in its `Layer`
-    (``layer_output``), its attention modules in its `Attention`
-    (``attention_output``, ``attention_probabilities``) and its feed-forwards
-    in its `Mlp` (``mlp_output``). The pattern is read inside the eager
-    attention forward, so it is unavailable unless the model is loaded with
+    The checkpoint's ``model_type`` picks a family (`nnterp.families`). Its
+    ``RENAME`` gives the modules their standard names beside their own, and its
+    ``ENVOYS`` wrap the blocks, attention modules and feed-forwards in the
+    envoys that serve the standard values (`nnterp.components`). The pattern
+    and the other values read inside the eager attention forward need
     ``attn_implementation="eager"``; `support` says which values this
-    checkpoint has. See `nnterp.components`.
+    checkpoint has.
+
+    Inside a trace the root serves the whole model's values (`logits`,
+    `token_embeddings`, `next_token_probs`, the inputs); outside one, its
+    sizes (``hidden_size``, ``num_heads``, ``vocab_size``, ...), read off the
+    config.
 
     Args:
         repo_id: A HuggingFace repo id, or an already-loaded ``torch.nn.Module``
@@ -326,26 +300,6 @@ class StandardizedTransformer(Standardized, TransformersModel):
         **kwargs: Passed through to `TransformersModel`. ``task`` defaults to
             ``"text-generation"``; pass ``task="image-text-to-text"`` to load a
             multimodal checkpoint as its wrapper, with its processor.
-
-    Over the values, `skip_layers`, `steer`, `project_on_vocab` and
-    `get_topk_closest_tokens` do the common things (see each). Inside a
-    trace `input_ids`, `input_size` and `attention_mask` are what the model
-    was called with.
-
-    The root envoy also answers for the whole model, inside a trace: ``logits``
-    (the logits the model returns, after any softcap or scale past the head), ``token_embeddings``
-    (the embedding's output) and ``next_token_probs``; and outside one: the
-    sizes ``num_layers``, ``num_heads``, ``num_kv_heads``, ``head_dim``,
-    ``qk_head_dim``, ``hidden_size``, ``intermediate_size`` and ``vocab_size``,
-    read off the config, each a `StandardizedProperty` the family can define
-    instead; `project_on_vocab` is a `StandardizedCapability`, a method the family
-    can define the same way.
-
-    On an image-text-to-text checkpoint loaded with ``task="image-text-to-text"``
-    the text names keep their meaning (the language model's), the vision tower
-    is ``vision`` (a `Vision`, with its own blocks, sizes and values, among them
-    ``vision.image_token_mask`` and ``vision.image_features``) and the last
-    module before the scatter into the text stream is ``projector``.
 
     Attributes:
         family: The toolkit module the checkpoint resolved to, or the ``family`` passed.
@@ -425,9 +379,9 @@ class StandardizedTransformer(Standardized, TransformersModel):
     def logits(self, value: Any) -> Logits:
         """The logits the model returns, ``[batch, seq, vocab_size]``.
 
-        Read off the model's output, so a family that softcaps after
-        ``lm_head`` (Gemma-2) is already accounted for; ``lm_head.output`` is
-        the raw projection. Assigning replaces the logits in the model's output.
+        After anything the model does past ``lm_head`` (Gemma-2's softcap);
+        ``lm_head.output`` is the raw projection. Assigning replaces the logits
+        in the model's output.
         """
         return value.logits
 
@@ -441,9 +395,8 @@ class StandardizedTransformer(Standardized, TransformersModel):
     def token_embeddings(self, value: torch.Tensor) -> Residual:
         """The embedding module's output, ``[batch, seq, hidden_size]``.
 
-        Positional embeddings and embedding norms (GPT-2's ``wpe``, BLOOM's
-        ``word_embeddings_layernorm``) are applied after this by the families
-        that have them. Assign to replace it.
+        Positional embeddings and embedding norms come after it on the
+        families that have them (GPT-2's ``wpe``). Assign to replace it.
         """
         return value
 
@@ -491,13 +444,10 @@ class StandardizedTransformer(Standardized, TransformersModel):
         The logit lens: applied to a block's ``layer_output`` it reads that
         layer's prediction; applied to the last block's, it is `logits`.
         Works inside a trace on a live value and outside on a saved one.
-        After the head the plain case is the text config's
-        ``final_logit_softcapping``, when set (Gemma-2's own config; a
-        multimodal checkpoint's ``text_config``). A family whose model does
-        something else there (Cohere multiplies by ``logit_scale``, Granite
-        divides by ``logits_scaling``) defines
-        ``def project_on_vocab(model, hidden)`` in its module, which is bound
-        in this one's place (`StandardizedCapability`).
+        After the head the plain rule is the text config's
+        ``final_logit_softcapping``, when set. A family whose model does
+        something else there defines ``def project_on_vocab(model, hidden)``
+        in its module (`StandardizedCapability`).
         """
         logits = self.lm_head(self.norm(hidden))
         cap = getattr(self.config.get_text_config(), "final_logit_softcapping", None)
@@ -519,11 +469,11 @@ class StandardizedTransformer(Standardized, TransformersModel):
     def attention_mask(self, value: Any) -> Tokens:
         """The attention mask the model was called with, ``[batch, seq]``; zeros are padding. Assignable.
 
-        ``generate`` on transformers >= 5.18 calls the model with no mask when
-        no prompt is padded; the all-ones mask that stands for is installed
-        into the call on read (what earlier versions passed), so it is served
-        and edits to it reach the model. On a decode step it covers the cache
-        and the new token, ``[batch, past + seq]``, as the passed mask does.
+        ``generate`` calls the model with no mask when no prompt is padded;
+        the all-ones mask that stands for is installed into the call on read,
+        so it is served and edits to it reach the model. On a decode step it
+        covers the cache and the new token, ``[batch, past + seq]``, as the
+        passed mask does.
         """
         kwargs = value[1]
         if kwargs.get("attention_mask") is None:
@@ -610,10 +560,7 @@ class StandardizedTransformer(Standardized, TransformersModel):
     def _remoteable_class(self) -> type:
         """The class in this model's remote key: `TransformersModel`, what a server deploys.
 
-        A remote trace re-runs the block against the client's envoy tree, so
-        the aliases and the family's envoy classes travel with the request
-        (by reference: the server needs nnterp installed). The deployed model
-        itself is a plain `TransformersModel`, so the key says so; a
-        subclass-specific key would match nothing on the server.
+        The aliases and the family's envoy classes travel with the request, by
+        reference, so the server needs nnterp installed.
         """
         return TransformersModel

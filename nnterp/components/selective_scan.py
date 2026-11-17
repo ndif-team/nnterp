@@ -12,7 +12,7 @@ from jaxtyping import Float
 from torch import Tensor
 
 from .eproperty import DerivedEProperty, EProperty
-from .recurrent import RecurrentMixer, _dispatch, _modeling_module, _name, kernel, needs_recurrent_routing, needs_torch_kernels
+from .recurrent import RecurrentMixer, kernel, kernel_body, needs_recurrent_routing, needs_torch_kernels
 from .standard import BATCH, CHANNELS, GROUPS, SEQ, STATE_DIM
 
 #: The layouts at the scan, tokens before channels. ``B`` and ``C`` are one ``state_dim`` vector per token,
@@ -30,22 +30,6 @@ def _decoding(envoy: Envoy) -> bool:
     """Whether this call runs the single-step decode kernel rather than the prompt's scan."""
     cls = type(envoy)
     return cls.KERNEL(envoy) == cls.RECURRENT_KERNEL
-
-
-def needs_kernel_source(envoy: Envoy) -> str | None:
-    """Why a value read inside the kernels' own bodies is unavailable: they are not bound to the pure-torch functions."""
-    reason = needs_torch_kernels(envoy)
-    if reason:
-        return reason
-    cls = type(envoy)
-    module = _modeling_module(envoy)
-    for op in (cls.CHUNK_KERNEL, cls.RECURRENT_KERNEL):
-        if _dispatch(getattr(module, _name(op), None)):
-            return (
-                f"read inside transformers' pure-torch {_name(op)}, which this process reaches through its kernel "
-                "dispatcher; call nnterp.route_kernels(model.family, 'torch') before tracing this layer"
-            )
-    return None
 
 
 def needs_token_loop(envoy: Envoy) -> str | None:
@@ -74,12 +58,12 @@ def _argument(name: str):
 
 
 def _inside(ops: str) -> Any:
-    """A key at a binding inside whichever kernel fires: ``source.<KERNEL>.source.<op>.output``, the op per kernel."""
+    """A key at a binding inside whichever kernel fires, in the kernel's body (`kernel_body`): the op per kernel."""
 
     def locate(envoy: Envoy) -> str:
         cls = type(envoy)
         kernel_op = cls.KERNEL(envoy)
-        return f"source.{kernel_op}.source.{getattr(cls, ops)[kernel_op == cls.RECURRENT_KERNEL]}.output"
+        return f"{kernel_body(envoy, kernel_op)}.{getattr(cls, ops)[kernel_op == cls.RECURRENT_KERNEL]}.output"
 
     locate.__name__ = f"inside.{ops}"
     return locate
@@ -89,7 +73,7 @@ def _state_output_key(envoy: Envoy) -> str:
     """The state leaving the call: the scan's returned state, or the updated state the decode kernel copies into the cache."""
     cls = type(envoy)
     if _decoding(envoy):
-        return f"source.{cls.RECURRENT_KERNEL}.source.{cls.STEP_OUTPUT_OP}.output"
+        return f"{kernel_body(envoy, cls.RECURRENT_KERNEL)}.{cls.STEP_OUTPUT_OP}.output"
     return f"source.{cls.CHUNK_KERNEL}.output"
 
 
@@ -143,9 +127,14 @@ class SelectiveScan(RecurrentMixer):
 
     The pure-torch selective scan *is* the token loop, so
     ``route_kernels(model.family, "torch")`` binds each kernel name to its
-    own pure-torch function. With ``mamba_ssm`` installed the forward
-    dispatches both to its compiled kernels, which have no source to read
-    inside (and need CUDA): route before the first trace.
+    own pure-torch function; the state after each token needs it. With
+    ``mamba_ssm`` installed the forward dispatches both to its compiled
+    kernels, which have no source to read inside (and need CUDA): route
+    before the first trace. Without it the forward reaches the pure-torch
+    kernels through transformers' kernel dispatcher, and the two values
+    read inside a kernel (``attention_head_outputs``, a decode step's
+    ``state_output``) are keyed through it (`kernel_body`), so they need
+    no routing.
     """
 
     #: The call a prompt runs through: ``mamba_selective_scan(x, dt, A, B, C, D=, z=, delta_bias=, ...)``.
@@ -252,7 +241,7 @@ class SelectiveScan(RecurrentMixer):
 
     # -- inside the kernels --------------------------------------------------------------
 
-    @EProperty(_inside("READ_OPS"), description="y = C.h + D.x, the scan's read of the state before the gate and out_proj", unavailable=needs_kernel_source)
+    @EProperty(_inside("READ_OPS"), description="y = C.h + D.x, the scan's read of the state before the gate and out_proj", unavailable=needs_torch_kernels)
     def attention_head_outputs(self, value: torch.Tensor) -> ScanValues:
         """``y = C . h + D * x``, ``[batch, seq, channels]``: the scan's read before ``silu(z)`` and ``out_proj``."""
         return self._tokens_first(value)
@@ -261,7 +250,7 @@ class SelectiveScan(RecurrentMixer):
     def attention_head_outputs(self, value: torch.Tensor) -> torch.Tensor:
         return self._channels_first(value)
 
-    @EProperty(_state_output_key, select=lambda envoy: None if _decoding(envoy) else 1, description="The state leaving the layer", unavailable=needs_kernel_source)
+    @EProperty(_state_output_key, select=lambda envoy: None if _decoding(envoy) else 1, description="The state leaving the layer", unavailable=needs_torch_kernels)
     def state_output(self, value: torch.Tensor) -> ScanState:
         """The state after this call's last token, ``[batch, channels, state_dim]``: what the next decode step starts from.
 

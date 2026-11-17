@@ -2,8 +2,9 @@
 
 A family's test class subclasses both, `SelectiveScanSuite` first, and names
 a block whose mixer is a `SelectiveScan` (`SCAN_BLOCK`) and a real checkpoint
-to meta-build (`REAL`). Every test runs on transformers' pure-torch kernels:
-the class routes the family before its first trace and restores it after.
+to meta-build (`REAL`). The tests run on transformers' pure-torch kernels:
+the class routes the family before its first trace and restores it after,
+and one test reads unrouted in a process of its own.
 """
 
 import pytest
@@ -46,16 +47,75 @@ class SelectiveScanSuite:
         route_kernels(self.FAMILY, "default")
 
     def test_support_before_routing(self, model):
-        """Unrouted, the per-token state and the values inside the kernels say how to reach them."""
+        """Unrouted, the per-token state says how to reach it, and the values inside the kernels are as available as
+        the kernel's arguments."""
         route_kernels(self.FAMILY, "default")
         try:
             support = model.support()
         finally:
             route_kernels(self.FAMILY, "torch")
         blocks = self.scan_blocks(model)
-        for name in ("states", "state_output", "attention_head_outputs"):
-            assert all("route_kernels(model.family, 'torch')" in support[f"linear_attn.{name}"][i] for i in blocks), name
+        assert all("route_kernels(model.family, 'torch')" in support["linear_attn.states"][i] for i in blocks)
+        for name in ("state_output", "attention_head_outputs"):
+            assert support[f"linear_attn.{name}"] == support["linear_attn.attention_queries"], name
         assert not set(blocks) & set(model.support()["linear_attn.states"] or {})
+
+    def test_unrouted_without_mamba_ssm_reads_inside_the_dispatched_kernels(self):
+        """Without ``mamba_ssm`` an unrouted forward calls transformers' kernel dispatcher, which calls the pure-torch
+        kernels: `support` and `order` list ``attention_head_outputs`` and ``state_output``, and on a prompt and on
+        decode steps both, and the logits under an in-place edit of ``y``, are a routed run's, bit for bit. In a
+        process of its own, where ``mamba_ssm`` cannot be imported, so transformers binds its dispatcher at import."""
+        import json
+        import subprocess
+        import sys
+
+        code = f"""
+import sys
+sys.modules["mamba_ssm"] = None
+import json, nnsight, torch
+from nnterp import StandardizedTransformer, route_kernels
+
+NAMES = ["linear_attn.attention_head_outputs", "linear_attn.state_output"]
+
+def read(model):
+    mix = model.layers[{self.SCAN_BLOCK}].linear_attn
+    support = model.support(layer={self.SCAN_BLOCK})
+    got = []
+    with model.generate({PROMPT!r}, max_new_tokens=3, min_new_tokens=3, do_sample=False) as tracer:
+        for step in tracer.iter[:3]:
+            if step == 0:  # the scan binds y before it returns the state
+                got.append(mix.attention_head_outputs.save())
+                got.append(mix.state_output.save())
+            else:          # the decode kernel updates the state before it reads y from it
+                got.append(mix.state_output.save())
+                got.append(mix.attention_head_outputs.save())
+    with model.trace({PROMPT!r}):
+        clean = model.logits.save()
+    with model.trace({PROMPT!r}):
+        mix.attention_head_outputs[:, -1] = 0
+        edited = model.logits.save()
+    return [support[name] for name in NAMES], [*got, clean, edited], model.order({self.SCAN_BLOCK})
+
+load = lambda: StandardizedTransformer({self.REPO!r}, dispatch=True, attn_implementation="eager", **{dict(self.LOAD_KWARGS, device="cpu")!r})
+model = load()
+support, unrouted, order = read(model)
+route_kernels(model.family, "torch")
+_, routed, routed_order = read(load())
+print(json.dumps({{
+    "support": support,
+    "equal": [torch.equal(a, b) for a, b in zip(unrouted, routed)],
+    "edited": not torch.equal(unrouted[-1], unrouted[-2]),
+    "ranked": set(NAMES) <= set(order),
+    "order": all((order[a] < order[b]) == (routed_order[a] < routed_order[b]) for a in order for b in order),
+    "routed_only": sorted(set(routed_order) - set(order)),
+}}))
+"""
+        run = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+        assert run.returncode == 0, run.stderr[-2000:]
+        out = json.loads(run.stdout.strip().splitlines()[-1])
+        assert out["support"] == [None, None] and out["equal"] == [True] * 8 and out["edited"], out
+        # the routed order without the per-token state
+        assert out["ranked"] and out["order"] and out["routed_only"] == ["linear_attn.state", "linear_attn.states"], out
 
     def test_linear_values_shapes(self, model):
         mix = self.scan_mixer(model)

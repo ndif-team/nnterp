@@ -69,8 +69,7 @@ from .recurrent import (
     route_delta_rule, route_kernels,
 )
 from .selective_scan import (
-    ScanDecays, ScanQK, ScanState, ScanStates, ScanSteps, ScanValues, SelectiveScan, needs_kernel_source,
-    needs_token_loop,
+    ScanDecays, ScanQK, ScanState, ScanStates, ScanSteps, ScanValues, SelectiveScan, needs_token_loop,
 )
 from .standard import (
     BATCH, CHANNELS, EXPERTS, GROUPS, HEAD_DIM, HEADS, HIDDEN, IMAGE_TOKENS, IMAGES, INTERMEDIATE, KEY, KEY_DIM, KV_HEADS, MIXER_HEADS, TOKENS,
@@ -96,7 +95,7 @@ __all__ = [
     "ImageScatter", "PER_IMAGE", "PixtralVision", "QwenVision", "QwenVisionAttention",
     "NOT_ON_INTERFACE", "OWN_ARITHMETIC", "SHARDED_WEIGHTS", "SSDHeadOutputs", "SSDKeys", "SSDQueries", "SSDValues", "Standard", "StateSpace", "Unavailable",
     "attention_call", "call_reason", "chunk_per_token", "first_tensor", "holding", "image_token_id", "interface_reason", "mixture_reason", "needs_eager",
-    "needs_grouped_experts", "needs_kernel_source", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert", "projection_weight", "rotary_reason",
+    "needs_grouped_experts", "needs_per_token_chunks", "needs_recurrent_routing", "needs_token_loop", "needs_torch_kernels", "no_shared_expert", "projection_weight", "rotary_reason",
     "per_call", "pinned", "rewrap", "route_delta_rule", "route_kernels", "seq_first", "unavailable",
     "Neurons",
     "FlatResidual",

@@ -172,14 +172,11 @@ What a class does to `lm_head`'s output is arithmetic in its forward, which no
 op name pins, and `project_on_vocab` repeats it. Through 5.22
 `PaliGemmaForConditionalGeneration.forward` returns the head's output as it
 is; from 5.23 it applies the text config's `final_logit_softcapping` where the
-config has one (`modeling_paligemma.py`), which PaliGemma 2's `gemma2` text
-config does (30.0) and PaliGemma 1's `gemma` does not.
-`gemma2.project_on_vocab` caps where the loaded class's forward names the key
-(`inspect.getsource`), so the lens on the last block is the wrapper's `logits`
-on both. `test_the_lens_is_the_wrappers_logits`
-(`tests/families/test_gemma2.py`) checks that bit for bit: on the tiny
-checkpoint a cap of 30 moves the logits by less than `assert_close`'s
-tolerance.
+config has one, which PaliGemma 2's `gemma2` text config does (30.0) and
+PaliGemma 1's `gemma` does not. `gemma2.project_on_vocab` caps where the
+loaded class's forward names the key (`inspect.getsource`), so the lens on
+the last block is the wrapper's `logits` on both
+(`test_the_lens_is_the_wrappers_logits`, `tests/families/test_gemma2.py`).
 
 ### Names, not ops
 

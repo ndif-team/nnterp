@@ -10,14 +10,15 @@ whose envoy tree answers to one set of names on every transformer family, with s
 everywhere. Everything nnsight does (`trace`, `generate`, `.save()`, `tracer.iter`, invokes,
 `.source`, remote) works unchanged. nnsight is https://github.com/ndif-team/nnsight (its guide is
 its `CLAUDE.md`, its docs are under `docs/`), and the `nnsight` plugin of
-https://github.com/ndif-team/skills carries its skills. `StandardizedVLLM` is the same over
+https://github.com/ndif-team/skills carries its skill. `StandardizedVLLM` is the same over
 nnsight's `VLLM` engine. This file covers only what nnterp adds.
 
 This file is for agents working *in this repository*. An agent *using* nnterp from another project
-should install the `nnterp` plugin from https://github.com/ndif-team/skills (skills `nnterp`, `patterns`, `extending`)
+should install the `nnterp` plugin from https://github.com/ndif-team/skills (one skill, `nnterp`)
 and read the documentation site, which serves every page as Markdown
 (https://ndif-team.github.io/nnterp/llms.txt). When a change here alters what an agent should do,
-the matching skill changes too.
+the skill changes too: `plugins/nnterp/skills/nnterp/` there, its `SKILL.md` and the files under
+`references/` (the recipes and the extending guide among them).
 
 ---
 

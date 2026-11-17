@@ -204,7 +204,7 @@ A family that ships with nnterp also touches:
 - the site's API pages, regenerated with `python site/gen_reference.py`;
 - the family counts in `CLAUDE.md`, `README.md` and `docs/reference/families.md` (and
   `docs/usage/mixture-of-experts.md` for a mixture);
-- the `nnterp` plugin's skills in https://github.com/ndif-team/skills, where they count or list families.
+- the `nnterp` skill in https://github.com/ndif-team/skills, where it counts or lists families.
 
 ### `RENAME`
 

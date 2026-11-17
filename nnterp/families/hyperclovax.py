@@ -18,7 +18,7 @@ embedding module's output before the first block (``token_embeddings`` times it 
 divides), so the family's ``project_on_vocab`` does the same.
 
 HyperCLOVA X Vision V2 (``HyperCLOVAXVisionV2ForConditionalGeneration``, model
-type ``hyperclovax_vision_v2``, needs transformers 5.18 or later) wraps this text model
+type ``hyperclovax_vision_v2``) wraps this text model
 at ``model.language_model``. Its tower is the Qwen2.5-VL ViT at ``model.vision_model``,
 ``vision`` (a `QwenVision`: packed, windowed, its own ``merger`` inside), and a linear
 ``model.projector`` after the tower, ``projector``, maps the merger's output onto
@@ -44,7 +44,7 @@ from ..components import (
 )
 from .granitemoe import scaled_back
 
-try:  # the vision wrapper arrived in transformers 5.18
+try:  # the vision wrapper, where transformers has it
     from transformers.models.hyperclovax_vision_v2.modeling_hyperclovax_vision_v2 import HyperCLOVAXVisionV2Model
 except ImportError:
     HyperCLOVAXVisionV2Model = None

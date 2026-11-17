@@ -104,7 +104,7 @@ BLOCK = {
 STRIP = {
     "embed": "Scaled by √hidden_size inside the embedding module, so token_embeddings equals layers[0].input on text.",
     "logits": "logits = 30 · tanh(lm_head.output / 30), which project_on_vocab applies too; PaliGemma 2's wrapper "
-              "applies no cap.",
+              "caps where its class does, and project_on_vocab follows it.",
 }
 
 NOTES = """

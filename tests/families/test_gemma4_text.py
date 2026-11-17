@@ -232,17 +232,25 @@ class Gemma4Suite(FamilySuite):
         assert torch.equal(attn, post_attn) and torch.equal(mlp, post_ff)
 
     def test_logits_are_softcapped_from_the_text_config(self, model):
-        cap = model.config.get_text_config().final_logit_softcapping
-        with model.trace(PROMPT):
-            resid = model.layers[-1].layer_output.save()
-            raw = model.lm_head.output.save()
-            logits = model.logits.save()
+        text = model.config.get_text_config()
+        checkpoint_cap = text.final_logit_softcapping
+        if checkpoint_cap:
+            text.final_logit_softcapping = 0.1  # well below the logits, so an uncapped lens would differ
+        cap = text.final_logit_softcapping
+        try:
+            with model.trace(PROMPT):
+                resid = model.layers[-1].layer_output.save()
+                raw = model.lm_head.output.save()
+                logits = model.logits.save()
+            lens = model.project_on_vocab(resid)
+        finally:
+            text.final_logit_softcapping = checkpoint_cap
         if cap:
             torch.testing.assert_close(logits, cap * torch.tanh(raw / cap))
             assert not torch.equal(raw, logits)
         else:
             assert torch.equal(raw, logits)
-        torch.testing.assert_close(model.project_on_vocab(resid), logits)
+        torch.testing.assert_close(lens, logits)
 
     def test_sizes_are_the_top_level_ones(self, model):
         """The root's ``head_dim`` / ``num_kv_heads`` are the config's top-level values; each block's own are on its attention."""

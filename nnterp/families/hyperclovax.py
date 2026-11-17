@@ -44,7 +44,7 @@ from ..components import (
 )
 from .granitemoe import scaled_back
 
-try:  # the vision wrapper, where transformers has it
+try:  # the vision wrapper arrived in transformers 5.18
     from transformers.models.hyperclovax_vision_v2.modeling_hyperclovax_vision_v2 import HyperCLOVAXVisionV2Model
 except ImportError:
     HyperCLOVAXVisionV2Model = None

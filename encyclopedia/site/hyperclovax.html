@@ -1038,7 +1038,7 @@ embedding module's output before the first block (<code>token_embeddings</code> 
 <code>layers[0].input</code>); <code>logits_scaling</code> <em>multiplies</em> the head's output (Granite
 divides), so the family's <code>project_on_vocab</code> does the same.</p>
 <p>HyperCLOVA X Vision V2 (<code>HyperCLOVAXVisionV2ForConditionalGeneration</code>, model
-type <code>hyperclovax_vision_v2</code>, needs transformers 5.18 or later) wraps this text model
+type <code>hyperclovax_vision_v2</code>) wraps this text model
 at <code>model.language_model</code>. Its tower is the Qwen2.5-VL ViT at <code>model.vision_model</code>,
 <code>vision</code> (a <code>QwenVision</code>: packed, windowed, its own <code>merger</code> inside), and a linear
 <code>model.projector</code> after the tower, <code>projector</code>, maps the merger's output onto
@@ -1060,7 +1060,7 @@ the text width; <code>vision.image_features</code> is read at the scatter in
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">naver-hyperclovax/HyperCLOVAX-SEED-Think-14B</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">naver-hyperclovax/HyperCLOVAX-SEED-Think-14B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

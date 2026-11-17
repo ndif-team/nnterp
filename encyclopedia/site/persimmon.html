@@ -455,7 +455,7 @@ which are read after the split.</p></div>    <aside class="quirk-list">
   <div class="grid-notes">
     <div class="prose docstring"><p>Persimmon (<code>PersimmonForCausalLM</code>).</p>
 <p>Llama's tree with Persimmon's final norm: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, final_layernorm}</code> and <code>lm_head</code>; the
-residual added in the block, attention through the shared eager forward. The norms
+residual added in the block, attention through the shared attention interface. The norms
 are <code>nn.LayerNorm</code>. The attention projects queries, keys and values with one fused
 <code>query_key_value</code>, norms the queries and keys per head (<code>q_layernorm</code>,
 <code>k_layernorm</code>, under <code>qk_layernorm</code>) and applies the rotary embedding to
@@ -477,7 +477,7 @@ is the identity in eval.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">adept/persimmon-8b-base</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">adept/persimmon-8b-base</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

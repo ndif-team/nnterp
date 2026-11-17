@@ -1438,7 +1438,7 @@ summing to one over its own image's patches and exactly zero on the other images
   <div class="grid-notes">
     <div class="prose docstring"><p>Ministral 3 (<code>Ministral3ForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block, attention through the shared eager forward.
+added in the block, attention through the shared attention interface.
 The queries are scaled by position (<code>llama_4_scaling_beta</code>) after the rotary
 embedding and before the interface, so <code>attention_queries</code> are the scaled ones.</p>
 <p>The <code>mistral3</code> wrapper puts a Pixtral tower at <code>model.vision_tower</code>, which is
@@ -1462,7 +1462,7 @@ norm), and the projector <code>model.multi_modal_projector</code> (a norm, the
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">mistralai/Ministral-3-3B-Base-2512</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">mistralai/Ministral-3-3B-Base-2512</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

@@ -3660,7 +3660,7 @@ projector reads <code>tower_output</code> or a block's <code>layer_output</code>
   <div class="grid-notes">
     <div class="prose docstring"><p>Qwen2 / Qwen2.5 (<code>Qwen2ForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block, attention through the shared eager forward.</p>
+added in the block, attention through the shared attention interface.</p>
 <p>llava-interleave (a <code>llava</code> wrapper) and LLaVA-OneVision put a SigLIP tower at
 <code>model.vision_tower</code>, which is <code>vision</code> (its <code>post_layernorm</code> over the patches
 is <code>vision.norm</code>), and the projector <code>model.multi_modal_projector</code>, which is
@@ -3687,7 +3687,7 @@ write does not reach the text model.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">Qwen/Qwen2.5-0.5B</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">Qwen/Qwen2.5-0.5B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

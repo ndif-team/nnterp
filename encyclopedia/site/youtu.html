@@ -449,7 +449,7 @@ reaches that head only.</p></div>    <aside class="quirk-list">
     <div class="prose docstring"><p>Youtu-LLM (<code>YoutuForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
 added in the block, which returns a bare tensor. Attention is DeepSeek-V2's
-multi-head latent attention through the shared eager forward: queries and keys are
+multi-head latent attention through the shared attention interface: queries and keys are
 <code>qk_head_dim</code> wide (<code>qk_nope_head_dim + qk_rope_head_dim</code>), values
 <code>v_head_dim</code>, and the interface sees <code>num_heads</code> key/value heads. The config
 maps <code>head_dim</code> to <code>qk_rope_head_dim</code>, the rotary part only, so both widths come
@@ -469,7 +469,7 @@ from <code>deepseek_v2</code>'s size functions. The MLP is dense on every block.
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">tencent/Youtu-LLM-2B-Base</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">tencent/Youtu-LLM-2B-Base</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

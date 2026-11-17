@@ -645,7 +645,7 @@
   <div class="grid-notes">
     <div class="prose docstring"><p>Mixtral (<code>MixtralForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block, attention through the shared eager forward. The MLP is a sparse mixture of experts
+added in the block, attention through the shared attention interface. The MLP is a sparse mixture of experts
 (<code>Moe</code>); its router, <code>gate</code>, is aliased <code>router</code>.</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
@@ -662,7 +662,7 @@ added in the block, attention through the shared eager forward. The MLP is a spa
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">mistralai/Mixtral-8x7B-v0.1</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">mistralai/Mixtral-8x7B-v0.1</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

@@ -2871,7 +2871,7 @@ reach the text model.</p>  </div>
   <div class="grid-notes">
     <div class="prose docstring"><p>Mistral (<code>MistralForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block, attention through the shared eager forward.</p>
+added in the block, attention through the shared attention interface.</p>
 <p>Two towers sit at <code>model.vision_tower</code>, which is <code>vision</code>, with the projector
 <code>model.multi_modal_projector</code> as <code>projector</code>: Pixtral (a <code>PixtralVision</code>, every
 image's patches packed in one row, no final norm) on the <code>mistral3</code> wrapper
@@ -2901,7 +2901,7 @@ newline tokens, as the text model receives it. Pixtral-12B reads
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">mistralai/Mistral-7B-v0.1</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">mistralai/Mistral-7B-v0.1</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

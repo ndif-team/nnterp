@@ -1021,8 +1021,8 @@ Read <code>mlp.act_fn.output</code>, not the sign of <code>mlp.act_fn.input</cod
   <div class="grid-notes">
     <div class="prose docstring"><p>Apertus (<code>ApertusForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block under other norm names: <code>model.{embed_tokens, layers[i].{attention_layernorm, self_attn, feedforward_layernorm, mlp}, norm}</code> and
-<code>lm_head</code>, the residual added in the block, attention through the shared eager
-forward. <code>attention_layernorm</code> feeds the attention and <code>feedforward_layernorm</code>
+<code>lm_head</code>, the residual added in the block, attention through the shared attention
+interface. <code>attention_layernorm</code> feeds the attention and <code>feedforward_layernorm</code>
 the MLP, so they are aliased <code>input_layernorm</code> and <code>post_attention_layernorm</code>.
 The attention norms its queries and keys per head (<code>q_norm</code>, <code>k_norm</code>) before
 the rotary embedding. The MLP has no gate: <code>down_proj(xielu(up_proj(x)))</code>.</p></div>
@@ -1041,7 +1041,7 @@ the rotary embedding. The MLP has no gate: <code>down_proj(xielu(up_proj(x)))</c
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">swiss-ai/Apertus-8B-2509</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">swiss-ai/Apertus-8B-2509</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

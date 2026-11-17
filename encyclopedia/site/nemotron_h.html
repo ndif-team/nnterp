@@ -39356,7 +39356,7 @@ meanings, so the standard name is keyed on the mixer's class in <code>RENAME</co
 is the sublayer's <code>.input</code>). A block has exactly one of the three, so
 <code>support</code> reports the other two missing on it, per block, and the
 contribution identity is <code>input + &lt;the one sublayer's output&gt; == layer_output</code>.</p>
-<p>The attention runs the shared eager forward (no rotary embedding), so the
+<p>The attention runs the shared attention interface (no rotary embedding), so the
 base <code>Attention</code> holds; the Mamba-2 mixer is transformers' Mamba-2 code, so the
 base <code>StateSpace</code> holds; the MoE and the MLP return what the block adds. The
 model makes its logits in float32 (<code>lm_head(...).float()</code>), so
@@ -39364,8 +39364,8 @@ model makes its logits in float32 (<code>lm_head(...).float()</code>), so
 <code>num_attention_heads</code> / <code>num_key_value_heads</code> / <code>head_dim</code>; the dense
 MLP is <code>intermediate_size</code> wide, an MoE block's experts
 <code>moe_intermediate_size</code>.</p>
-<p>NemotronH Omni (<code>NemotronH_Omni_Reasoning_V3</code>, model type <code>nemotron_h_omni</code>,
-transformers 5.18 and later) holds this model whole at <code>language_model</code>
+<p>NemotronH Omni (<code>NemotronH_Omni_Reasoning_V3</code>, model type <code>nemotron_h_omni</code>)
+holds this model whole at <code>language_model</code>
 (<code>language_model.model.*</code>, <code>language_model.lm_head</code>) beside a RADIO tower at
 <code>vision_model</code>, <code>vision</code> (a <code>RadioVision</code>), and <code>multi_modal_projector</code>,
 <code>projector</code> (after the pixel shuffle). The root scatters the image features in
@@ -39394,7 +39394,7 @@ pattern and head outputs are <code>Unavailable</code> (<code>RADIO_PER_IMAGE</co
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">nvidia/NVIDIA-Nemotron-3-Nano-4B-BF16</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

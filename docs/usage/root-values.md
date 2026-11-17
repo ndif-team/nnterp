@@ -258,7 +258,7 @@ same way: [adding-a-family](../extending/adding-a-family.md#sizes).
   the same trace; `logits` and `next_token_probs` after them all.
 - **Assigning `input_ids` does not resize the mask.** Assign `attention_mask` to match when
   the new ids have another length.
-- **`attention_mask` under an unpadded `generate`.** transformers >= 5.18 drops the mask
+- **`attention_mask` under an unpadded `generate`.** `generate` drops the mask
   when no prompt is padded and calls the model with none; reading `attention_mask` then
   installs the all-ones mask that stands for (`[batch, past + seq]` on a decode step) into
   the call, so the read and in-place edits work.

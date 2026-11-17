@@ -198,7 +198,7 @@ an alias for, as it lists the `Standard` children of a block.
   pattern and head outputs `Unavailable` with `RADIO_PER_IMAGE`, as on the Qwen ViT. Its block
   scales each sublayer's output (`layer_scale1`, `layer_scale2`), so the contributions are the
   scales' outputs.
-- **`generate` encodes the images before the prompt call** on transformers 5.18 and later
+- **`generate` encodes the images before the prompt call**
   (`GenerationMixin._prepare_multimodal_encoder_kwargs_for_generation` calls the base
   model's `get_image_features` and hands the forward `mm_encoder_outputs`), on every wrapper
   whose forward takes `mm_encoder_outputs` and whose class lists images in its
@@ -455,8 +455,8 @@ The pinned checkpoints, all loadable offline once cached:
 | `qwen3_5_text`, `qwen3_5_moe_text` | `yujiepan/qwen3.5-tiny-random`, `yujiepan/qwen3.5-moe-tiny-random` | real check: `Qwen/Qwen3.5-0.8B` (text side) |
 | `llama4_text` | `yujiepan/llama-4-tiny-random`, config-patched as its text test does, in bfloat16 (its image processor returns bfloat16 pixels, which a float32 tower refuses); the text suite also runs on it under `image-text-to-text` | |
 | `gemma4_text` | `yujiepan/gemma-4-e-tiny-random` (with audio, so the audio path is checked on the same load); the text suite also runs on `trl-internal-testing/tiny-Gemma4ForConditionalGeneration` under `image-text-to-text` | real check: `google/gemma-4-E2B` |
-| `hyperclovax` | `hf-tiny-v2/tiny-random-HyperCLOVAXVisionV2ForConditionalGeneration` (transformers 5.18 and later; the classes skip before) | processor set to the model: merge size 1, the config's image token |
-| `nemotron_h` | `hf-tiny-v2/tiny-random-NemotronH_Omni_Reasoning_V3` (transformers 5.18 and later) | ships no processor files: the test builds the processor from its tokenizer with a 16 to 24 patch budget, and sets the unset `image_token_id`; pure-torch kernels (`route_kernels`) |
+| `hyperclovax` | `hf-tiny-v2/tiny-random-HyperCLOVAXVisionV2ForConditionalGeneration` (the classes skip on a transformers without the wrapper) | processor set to the model: merge size 1, the config's image token |
+| `nemotron_h` | `hf-tiny-v2/tiny-random-NemotronH_Omni_Reasoning_V3` (the classes skip on a transformers without the wrapper) | ships no processor files: the test builds the processor from its tokenizer with a 16 to 24 patch budget, and sets the unset `image_token_id`; pure-torch kernels (`route_kernels`) |
 | `gemma4_unified_text` | a tiny wrapper the test builds once into the temp dir: `google/gemma-4-12B`'s config (config only is cached) with `hf-tiny-v2/tiny-random-Gemma4UnifiedForCausalLM`'s text config, a 16-wide embedder, random weights, and a processor from that checkpoint's tokenizer plus the default image processor | no tiny wrapper is published; 12B's own names are checked on meta |
 
 ## What is served

@@ -10,7 +10,7 @@ sources: [nnterp/standardized.py, nnterp/families/__init__.py, nnterp/components
 
 ## What this is for
 
-nnterp is three small layers on nnsight 0.8, and each owns one kind of fact.
+nnterp is three small layers on nnsight, and each owns one kind of fact.
 A **family** (`nnterp/families/<model_type>.py`) knows the checkpoint's *names*
 and *which operation* in its forward each value lives at. A **component**
 (`nnterp/components/`) knows *what a value means* and how to read and write

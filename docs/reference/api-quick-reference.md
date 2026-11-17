@@ -242,13 +242,13 @@ The base of a recurrent mixer's envoy (`nnterp/components/recurrent.py`): how it
 
 | Constant | Default | What |
 |---|---|---|
-| `BRANCH` | `("use_precomputed_states_0", "cache_params_get_recurrent_state_0")` | The ops whose value says whether the call continues from a cached state, whichever of them the forward binds before it branches: the bool `use_precomputed_states` through transformers 5.20, the state the forward fetches from its cache (or `None`) from 5.21. |
+| `BRANCH` | `("use_precomputed_states_0", "cache_params_get_recurrent_state_0")` | The ops whose value says whether the call continues from a cached state, whichever of them the forward binds before it branches: the bool `use_precomputed_states`, or the state the forward fetches from its cache (or `None`). |
 | `SEQ_OP` | `"apply_mask_to_padding_states_0"` | The forward's masking of its input, once per call on every mixer: `[batch, seq, ...]`, the call's length. |
 | `CHUNK_KERNEL` | `None` | The call a prompt runs through. |
 | `RECURRENT_KERNEL` | `None` | The call each decode step of `generate` runs through. |
 | `STATE_OP` | `None` | Inside the token-by-token kernel, the binding of the state after each token's update; `None` when the kernels do not materialize it, and then `state`, `states`, `state_after` and `set_state_after` are unavailable. |
 | `STEP_STATE_OP` | `None` | Set when the decode kernel is a single-step update rather than the token loop (Mamba-1): the binding of the new state inside it. The prompt's kernel is then the token loop, and `route_kernels(..., "torch")` binds each name to its own pure-torch function. |
-| `KERNEL` | a `staticmethod` of the base | Whichever kernel fires on this call, by the forward's own test, one token over a cached state (`use_precomputed_states and seq_len == 1` through transformers 5.20, `recurrent_state is not None and seq_len == 1` from 5.21), decided once per call (`per_call`): `RECURRENT_KERNEL` when the `BRANCH` op the forward has holds a cached state (neither `None` nor `False`) and the sequence axis at `SEQ_OP` is 1, `CHUNK_KERNEL` otherwise, a prompt or several tokens over a cached state. The two ops are read in the order the forward makes them. From 5.21 a run with `use_cache=False` serves no kernel value: the forward fetches no state, so the read parks on an op the run never reaches. |
+| `KERNEL` | a `staticmethod` of the base | Whichever kernel fires on this call, by the forward's own test, one token over a cached state, decided once per call (`per_call`): `RECURRENT_KERNEL` when the `BRANCH` op the forward has holds a cached state (neither `None` nor `False`) and the sequence axis at `SEQ_OP` is 1, `CHUNK_KERNEL` otherwise, a prompt or several tokens over a cached state. The two ops are read in the order the forward makes them. A run with `use_cache=False` serves no kernel value: the forward fetches no state, so the read parks on an op the run never reaches. |
 
 | Value | Layout | Location | Assignable | Availability |
 |---|---|---|---|---|
@@ -351,7 +351,7 @@ A Mamba-2 (SSD) mixer (`layers[i].linear_attn` on Mamba-2, Nemotron-H, Bamba and
 
 | Value | Layout | Read at | Assignable | Unavailable when |
 |---|---|---|---|---|
-| `image_token_mask` | `ImageTokenMask` | the model's inputs (`"/inputs"`), so first in a trace (under `generate` on transformers 5.18 and later, after the tower: [vision.md](../usage/vision.md)): `input_ids == config.image_token_id` | no (`AttributeError`: assign `input_ids`) | `no_images()`, or the config names no `image_token_id` |
+| `image_token_mask` | `ImageTokenMask` | the model's inputs (`"/inputs"`), so first in a trace (under `generate`, after the tower: [vision.md](../usage/vision.md)): `input_ids == config.image_token_id` | no (`AttributeError`: assign `input_ids`) | `no_images()`, or the config names no `image_token_id` |
 | `patch_embeddings` | `Patches` | `patch_embed.output`, one row per patch before any position embedding, CLS token or pre-norm (a convolution's grid flattened, a view); on `PixtralVision` the packed row entering `ln_pre` | yes | `no_images()` |
 | `tower_output` | `Patches` | the last block's stream after `vision.norm` where there is one, before any pooling, CLS dropping or adapter: the tower's `last_hidden_state`, or where the stream is on a tower that returns something after those (Llama 4: `layernorm_post`; Gemma 4: the encoder) | yes | `no_images()` |
 | `image_features` | `ImageFeatures` | the features argument of the scatter in the wrapper model's forward (`ImageScatter.scatter`, `.scatter_argument`; the root's own forward where the family names `ROOT_SCATTER`) flat over the batch's image tokens: `layers[0].input[image_token_mask] == image_features` | yes; in-place edits land | as `image_token_mask`, or the family keys no `ImageScatter` on the wrapper's model |
@@ -541,7 +541,7 @@ Activation helpers on the standard values. `GetActivations = Callable[[Standardi
 - `model.logits` is the output's `.logits` (softcapped on Gemma-2, scaled on Cohere and Granite); `model.lm_head.output` is the raw projection, and `model.project_on_vocab(model.layers[-1].layer_output)` is `logits`.
 - `next_token_probs`, `input_size` and `states` are read-only.
 - `route_kernels(model.family, "torch")` before tracing a DeltaNet layer whose `state` you want; a forward `.source` has already instrumented keeps the binding it was compiled with.
-- A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace (after the tower under `generate` on transformers 5.18 and later), `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden_size]`.
+- A vision-language wrapper needs `task="image-text-to-text"` for `model.vision` to serve anything; read `vision.image_token_mask` first in the trace (after the tower under `generate`), `vision.image_features` after the tower's values; one image-carrying invoke per trace; `out[mask]` flattens the batch to `[image_tokens, hidden_size]`.
 
 ## Related
 

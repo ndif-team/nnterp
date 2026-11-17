@@ -75,8 +75,8 @@ native names they alias:
 | CLIP (Llava 1.5, VipLlava, LLaVA-NeXT, BakLLaVA) | `model.model.vision_tower` | `embeddings.patch_embedding` | `encoder.layers[i]` | native | `layer_norm1`, `layer_norm2` | none: CLIP's `post_layernorm` norms only the pooled CLS token | `model.model.multi_modal_projector` |
 | Pixtral (Mistral 3, Pixtral-12B), a `PixtralVision` | `model.model.vision_tower` | `patch_conv` | `transformer.layers[i]` | `attention`, `feed_forward` | `attention_norm`, `ffn_norm` | none | `model.model.multi_modal_projector` (merges each 2x2 block of patches on Mistral 3) |
 | the Qwen ViT (Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3-VL-MoE, Qwen3.5, Qwen3.5-MoE), a `QwenVision` | `model.model.visual` | `patch_embed` | `blocks[i]` | `attn` (a `QwenVisionAttention`), `mlp` | `norm1`, `norm2` | none: the merger norms its own input | `visual.merger`, inside the tower (folds each 2x2 block of patches into one token) |
-| the Qwen2.5-VL ViT of HyperCLOVA X Vision V2 (`hyperclovax`; transformers 5.18 and later), a `QwenVision` | `model.model.vision_model` | `patch_embed` | `blocks[i]` | `attn`, `mlp` | `norm1`, `norm2` | none | `model.model.projector`, a linear after the tower; the merger stays inside the tower, `vision.merger` |
-| RADIO (NemotronH Omni, `nemotron_h`; transformers 5.18 and later), a `RadioVision` | `model.vision_model` | `embeddings.patch_projection` (a linear; the CLS and register tokens and the position embedding come after) | `encoder.layer[i]` | `attention` (a `RadioAttention`), `mlp`; the contributions are `layer_scale1` / `layer_scale2`'s outputs | `norm1`, `norm2` | none | `model.multi_modal_projector` (after a pixel shuffle) |
+| the Qwen2.5-VL ViT of HyperCLOVA X Vision V2 (`hyperclovax`; needs transformers >= 5.18), a `QwenVision` | `model.model.vision_model` | `patch_embed` | `blocks[i]` | `attn`, `mlp` | `norm1`, `norm2` | none | `model.model.projector`, a linear after the tower; the merger stays inside the tower, `vision.merger` |
+| RADIO (NemotronH Omni, `nemotron_h`; needs transformers >= 5.18), a `RadioVision` | `model.vision_model` | `embeddings.patch_projection` (a linear; the CLS and register tokens and the position embedding come after) | `encoder.layer[i]` | `attention` (a `RadioAttention`), `mlp`; the contributions are `layer_scale1` / `layer_scale2`'s outputs | `norm1`, `norm2` | none | `model.multi_modal_projector` (after a pixel shuffle) |
 | Llama 4's ViT | `model.vision_model` | `patch_embedding` (unfold + linear) | `model.layers[i]` | native | native | `layernorm_post` | `model.multi_modal_projector` (a linear) |
 | Gemma 4's ViT | `model.model.vision_tower` | `patch_embedder.input_proj` (a linear; the 2D position embedding comes after) | `encoder.layers[i]` | native; the contributions are the post-norms' outputs (a sandwich block) | native: `post_attention_layernorm` *follows* the attention, as on the text block | none | `model.model.embed_vision` (an RMS norm and a linear) |
 | Gemma 4 unified's encoder-free embedder | `model.model.embed_vision` | `patch_dense` | none: no blocks | none | none | none | `embed_vision.multimodal_embedder` (an RMS norm and a linear) |
@@ -208,11 +208,11 @@ Under `generate` the tower runs once, for the prompt. `vision.image_token_mask` 
 `[batch, prompt_len]` on step 0 and `[batch, 1]`, all false, on every decode step (the new
 token is text); `vision.image_features` and the tower's values have one occurrence, step 0's,
 so read them on step 0 (`for step in tracer.iter[0]:`), and an edit before any step lands on
-the prompt call. On transformers 5.18 and later `generate` encodes the images *before* the
+the prompt call. `generate` encodes the images *before* the
 first forward (it passes the result to the model as `mm_encoder_outputs`), so there the
 tower's values come before `vision.image_token_mask`, which is read off the root's inputs: read
 the tower first, then the mask, or the mask and the tower in separate generates. In a trace,
-and in `generate` before 5.18 or on a wrapper whose class does not list images among its
+and on a wrapper whose class does not list images among its
 `input_modalities` (Qwen3.5 and Qwen3.5-MoE), the mask comes first. `vision.image_features` is
 after both either way:
 
@@ -257,7 +257,7 @@ Gemma 3's tower attends over 4096 patches, so under eager every block's pattern 
 card, and with it peaked at 11 GB.
 
 Read order is the forward's: `vision.image_token_mask` first (it comes off the inputs,
-like `input_ids`; under `generate` on transformers 5.18 and later, after the tower, above), then
+like `input_ids`; under `generate`, after the tower, above), then
 `token_embeddings` (the wrapper embeds the ids before it runs the tower; under `generate`, after the
 tower and the mask), then the tower's values, a block's attention interior before its
 `layer_output`, then `vision.image_features`, then the text model's. On the Qwen ViT the
@@ -395,8 +395,8 @@ names bind but `image_features` is `Unavailable` and says so.
 | `llama4_text` | Llama 4 (`llama4`) | Llama 4's ViT |
 | `gemma4_text` | Gemma 4 (`gemma4`) | Gemma 4's ViT |
 | `gemma4_unified_text` | Gemma 4 unified (`gemma4_unified`) | the encoder-free embedder |
-| `hyperclovax` | HyperCLOVA X Vision V2 (`hyperclovax_vision_v2`; transformers 5.18 and later) | the Qwen2.5-VL ViT |
-| `nemotron_h` | NemotronH Omni (`nemotron_h_omni`; transformers 5.18 and later) | RADIO |
+| `hyperclovax` | HyperCLOVA X Vision V2 (`hyperclovax_vision_v2`) | the Qwen2.5-VL ViT |
+| `nemotron_h` | NemotronH Omni (`nemotron_h_omni`) | RADIO |
 
 ## What is not covered yet
 

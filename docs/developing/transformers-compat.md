@@ -144,7 +144,11 @@ is the count of `last_recurrent_state = ...` bindings before the one after
 the token's update: two before the loop, the decay inside it, then the
 update. A release that adds or removes one binding moves it. The kernels'
 argument names `g`, `beta`, `initial_state` are the `select` keys of
-`decays`, `betas`, `state_input` (`linear_attention.py`).
+`decays`, `betas`, `state_input` (`linear_attention.py`). The fetch is made
+only with a cache, so from 5.21 a run with `use_cache=False` serves no kernel
+value on any recurrent mixer; through 5.20 such a run serves them, a Mamba-2
+prompt's `state_output` excepted (the chunk scan returns no final state
+without a cache).
 
 The kernels' first two arguments are the queries and the keys, which
 `attention_queries` and `attention_keys` serve as the call holds them.
@@ -237,10 +241,16 @@ a key, bound where it resolves (`RENAME`, `gpt_neox.py`).
    (`model.attention_mask` serves the all-ones mask it would have had,
    [root-values.md](../usage/root-values.md)), and encodes a wrapper's images before
    the first forward, so under `generate` the tower's values come before
-   `vision.image_token_mask` ([vision.md](../usage/vision.md)).
+   `vision.image_token_mask` ([vision.md](../usage/vision.md)). 5.18 is also
+   the first release that runs Doge's cross-domain mixture (before it the
+   block passes the mixture's tuple to dropout and the forward fails), that
+   reads MiniMax-M2's `rotary_dim` (5.17 ignores it and rotates the whole
+   head), and that has the HyperCLOVA X Vision V2 and NemotronH Omni wrappers.
 5. A checkpoint whose config no longer parses is a test-data problem, not a
    family problem: patch the config the way `_patched_checkpoint`
-   (`tests/families/test_olmo3.py`) does.
+   (`tests/families/test_olmo3.py`) does (5.17 does not parse that
+   checkpoint's flat `rope_parameters`; from 5.18 it parses, with plain
+   rotary on both layer types).
 
 ## What nnterp needs from nnsight
 

@@ -7,8 +7,7 @@ TITLE = "HyperCLOVA X"
 REFERENCE = "naver-hyperclovax/HyperCLOVAX-SEED-Think-14B"
 #: The tiny checkpoint the test suite builds the page from.
 PINNED = "hf-tiny-v2/tiny-random-HyperCLOVAXForCausalLM"
-#: Think-32B is a HyperCLOVA X Vision V2 wrapper (model_type hyperclovax_vision_v2, a key of WRAPPERS), which
-#: transformers builds from 5.18 on; on an earlier release its config does not read and the page greys it out.
+#: Think-32B is a HyperCLOVA X Vision V2 wrapper (model_type hyperclovax_vision_v2, a key of WRAPPERS).
 CHECKPOINTS = ["naver-hyperclovax/HyperCLOVAX-SEED-Think-14B", "naver-hyperclovax/HyperCLOVAX-SEED-Think-32B"]
 
 #: The vision-language wrapper of this family, keyed by the wrapper's config.model_type. Its vision encoder is the

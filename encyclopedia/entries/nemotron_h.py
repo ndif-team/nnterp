@@ -42,7 +42,7 @@ def _omni_processor(repo: str):
         )
 
 
-#: The vision-language wrapper of this family, keyed by the wrapper's config.model_type (transformers 5.18 and later).
+#: The vision-language wrapper of this family, keyed by the wrapper's config.model_type.
 #: Its RADIO vision encoder is hosted by this family alone, so it is inline (``tower``). Shapes, orders and identities
 #: were checked on the pinned tiny wrapper under transformers 5.19 (float32, eager, pure-torch kernels), with the
 #: processor tests/families/test_nemotron_h.py builds (the tiny checkpoint ships none, and leaves image_token_id unset).

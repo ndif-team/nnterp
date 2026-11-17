@@ -1,7 +1,6 @@
 """HyperCLOVA X, end to end: a sandwich block whose post-norms' outputs are added times residual_multiplier; and
-HyperCLOVA X Vision V2's Qwen2.5-VL tower and linear projector (transformers 5.18 and later)."""
+HyperCLOVA X Vision V2's Qwen2.5-VL tower and linear projector."""
 
-import pytest
 import test_granite
 import torch
 from qwen_vision_suite import PER_IMAGE_UNAVAILABLE, WIDE, QwenVisionSuite
@@ -13,9 +12,6 @@ from nnterp.families import hyperclovax
 
 REPO = "hf-tiny-v2/tiny-random-HyperCLOVAXForCausalLM"
 VISION_REPO = "hf-tiny-v2/tiny-random-HyperCLOVAXVisionV2ForConditionalGeneration"
-needs_vision_wrapper = pytest.mark.skipif(
-    hyperclovax.HyperCLOVAXVisionV2Model is None, reason="HyperCLOVA X Vision V2 is in transformers 5.18 and later"
-)
 
 
 class TestHyperCLOVAX(FamilySuite):
@@ -83,7 +79,6 @@ def align_vision_processor(model):
     align_processor(model, image_processor={"merge_size": model.config.vision_config.spatial_merge_size})
 
 
-@needs_vision_wrapper
 class TestHyperCLOVAXVisionWrapper(TestHyperCLOVAX):
     """HyperCLOVA X Vision V2 loaded as the wrapper with its processor: the text stack at ``model.language_model``."""
 
@@ -93,7 +88,6 @@ class TestHyperCLOVAXVisionWrapper(TestHyperCLOVAX):
     EXPECTED_UNAVAILABLE = PER_IMAGE_UNAVAILABLE
 
 
-@needs_vision_wrapper
 class TestHyperCLOVAXVision(QwenVisionSuite):
     """The Qwen2.5-VL ViT at ``model.vision_model`` (its merger inside) and the linear ``model.projector`` after it."""
 

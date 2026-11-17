@@ -1,6 +1,6 @@
 # Attention
 
-Six values on `model.layers[i].self_attn` are what happens inside the attention sublayer: the queries, keys and values that enter the softmax attention, the scores entering the softmax, the pattern the values are mixed with, and each head's output before the heads are concatenated and projected. They are read inside transformers' eager attention forward, so the model has to be loaded with `attn_implementation="eager"`.
+Six values on `model.layers[i].self_attn` are what happens inside the attention sublayer: the queries, keys and values that enter the softmax attention, the scores entering the softmax, the pattern the values are mixed with, and each head's output before the heads are concatenated and projected. They are read on and inside transformers' eager attention forward, so the model has to be loaded with `attn_implementation="eager"`.
 
 ```python
 import torch

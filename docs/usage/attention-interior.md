@@ -394,8 +394,10 @@ gains are refused there too).
 
 ## Requirement: eager attention
 
-All six live inside the eager attention forward. A model loaded with `sdpa`
-or `flash_attention_2` never runs it, and each value says so:
+The scores and the pattern are read inside the eager attention forward; the
+queries, keys and values are the arguments of the module's call to it, and the
+head outputs its first return. A model loaded with `sdpa` or
+`flash_attention_2` never runs it, and each value says so:
 
 ```python
 model = StandardizedTransformer("openai-community/gpt2", attn_implementation="sdpa")

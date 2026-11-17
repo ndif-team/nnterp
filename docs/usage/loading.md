@@ -203,7 +203,7 @@ way, since they read the config.
 `attn_implementation` is transformers' argument and it keeps transformers' default
 (`sdpa` where available). The attention interior (`attention_probabilities`,
 `attention_scores`, `attention_queries`, `attention_keys`, `attention_values`,
-`attention_head_outputs`) is read inside the eager attention forward, so under any other
+`attention_head_outputs`) is read on and inside the eager attention forward, so under any other
 implementation those values are unavailable and `support()` says so:
 
 ```

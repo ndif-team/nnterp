@@ -26,7 +26,7 @@ print(resid.shape, logits.shape)
 
 ### `attn_implementation="eager"`
 
-The values inside attention (`attention_probabilities`, `attention_scores`, the queries, keys, values and head outputs) are read inside transformers' eager attention forward. The default implementation is the checkpoint's, usually `sdpa`, and those values are then unavailable:
+The values inside attention (`attention_probabilities`, `attention_scores`, the queries, keys, values and head outputs) are read on and inside transformers' eager attention forward. The default implementation is the checkpoint's, usually `sdpa`, and those values are then unavailable:
 
 ```python
 model = StandardizedTransformer("openai-community/gpt2", dispatch=True, device="cpu")

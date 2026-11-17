@@ -64,7 +64,7 @@ The norm has to be frozen because it rescales each position by that position's o
 
 ## Per head
 
-`attention_head_outputs` is each head's output before concatenation and the output projection, `[batch, seq, num_heads, head_dim]`. The projection is linear, so a head's share of `attention_output` is its slice times the matching rows of the projection's weight. The projection is `o_proj` on every family (GPT-2's `c_proj` is aliased), but its weight layout differs: `torch.nn.Linear` stores `[out, in]`, GPT-2's `Conv1D` stores `[in, out]`.
+`attention_head_outputs` is each head's output before concatenation and the output projection, `[batch, seq, num_heads, head_dim]`. The projection is linear, so a head's share of `attention_output` is its slice times the matching rows of the projection's weight. The projection is `o_proj` on every family (GPT-2's `c_proj` is aliased), but its weight layout differs: `torch.nn.Linear` stores `[out, in]`, GPT-2's `Conv1D` stores `[in, out]`. `attention.output_weight(h)` is head `h`'s slice under either layout ([Head weights](../guide/values/head-weights.md)).
 
 ```python
 LAYER = 9

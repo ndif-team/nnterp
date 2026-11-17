@@ -31,7 +31,10 @@ DeltaNet's queries and keys (`num_k_heads` up to `num_v_heads`) where the mixer'
 5.23.0 and one per value head before ([below](#gated-deltanet-qwen3-next-qwen35-qwen35-moe)); the gated-DeltaNet
 families' test files pass on 5.21.1, 5.22.2 and 5.23.0. From 5.23.0 `PaliGemmaForConditionalGeneration` softcaps its
 logits where its text config sets a cap, and the PaliGemma 2 lens follows the loaded class
-([below](#after-the-head-paligemma-2)).
+([below](#after-the-head-paligemma-2)). Tensor parallelism (`distributed_config=`) has the floor of the installed
+nnsight, `nnsight.modeling.tp.MINIMUM_TRANSFORMERS`: 5.19.0 on nnsight 0.8.0 through 0.8.2, and 5.23.0 on nnsight's
+`dev` branch after them, which reads the plan a model resolves for itself, as 5.23.0 is the first to do.
+`tests/test_tensor_parallel.py` skips below that floor: with nnsight's `dev` it skips on 5.21.1 and passes on 5.23.0.
 `pyproject.toml` requires `nnsight>=0.8`,
 `transformers>=5.17` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below) and whose `rename` takes a dotted alias (`{"attn.c_proj":

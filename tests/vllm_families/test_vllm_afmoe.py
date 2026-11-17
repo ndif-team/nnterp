@@ -12,6 +12,9 @@ class TestVLLMAfmoe(VLLMFamilySuite):
     FAMILY = afmoe
     UNAVAILABLE = VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | {"mlp.mlp_neurons"}  # the NoPE blocks do not rotate
     NATIVE = LLAMA_ROWS
+    # vLLM's AFMoE reads its routing from four config fields transformers' ``AfmoeConfig`` does not define. Every
+    # released AFMoE config says them, with these values; the tiny checkpoint's says none.
+    ENGINE = {"hf_overrides": {"score_func": "sigmoid", "route_norm": True, "n_group": 1, "topk_group": 1}}
 
     def test_dense_then_mixture(self, model):
         """The first ``num_dense_layers`` blocks are dense; the others a mixture whose shared expert serves no contribution."""

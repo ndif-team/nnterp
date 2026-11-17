@@ -113,8 +113,8 @@ scaled copy), and `FusedLayer`, whose stream is the sum of the
 `(hidden_states, residual)` pair a fused block takes and returns.
 `transformers_backend.py` holds the bases of the families vLLM runs through
 its transformers backend, where transformers' own modules run inside the
-engine with the batch axis kept and the engine's attention layer outside
-the module tree. The block
+engine with the batch axis kept and the engine's attention layer as the
+attention module's `attn` child. The block
 runs in the engine's worker against the client's envoy classes, pickled by
 reference, the way a remote trace does. [usage/vllm](../usage/vllm.md).
 

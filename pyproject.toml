@@ -24,8 +24,8 @@ dependencies = ["nnsight>=0.8", "transformers>=5.17", "jaxtyping"]
 [project.optional-dependencies]
 # Tokenizers and processors some families' checkpoints need beyond transformers' defaults.
 models = ["sentencepiece", "tiktoken", "protobuf", "pillow"]
-# The vLLM engine (StandardizedVLLM).
-vllm = ["vllm"]
+# The vLLM engine (StandardizedVLLM), in the range nnsight's own vllm extra pins.
+vllm = ["vllm>=0.33,<0.34"]
 test = ["pytest", "pytest-xdist", "jinja2", "markdown", "peft"]
 # The encyclopedia generator (encyclopedia/build.py).
 encyclopedia = ["jinja2", "markdown", "pygments"]

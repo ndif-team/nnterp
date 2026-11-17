@@ -24,8 +24,8 @@ checkpoint loaded with ``task="image-text-to-text"`` the vision tower is
 ``model.vision.image_token_mask`` and ``model.vision.image_features``) and the
 projector ``model.projector``.
 
-`StandardizedVLLM` is the same over nnsight's ``VLLM`` engine, with vLLM's own
-implementation of each family under `nnterp.families.vllm`.
+`StandardizedVLLM` is the same over nnsight's ``VLLM`` engine, with a family
+for the modules vLLM runs each ``model_type`` with under `nnterp.families.vllm`.
 """
 
 from importlib.metadata import PackageNotFoundError, version as _version

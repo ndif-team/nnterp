@@ -1,6 +1,6 @@
-"""GPT-NeoX (Pythia) on vLLM, against the transformers engine: positions first, a plain block."""
+"""GPT-NeoX (Pythia) on vLLM's transformers backend, against the transformers engine: transformers' tree under ``model``, a parallel block."""
 
-from vllm_suite import VLLMFamilySuite
+from vllm_suite import NO_ROTARY, VLLMFamilySuite
 
 from nnterp.families.vllm import gpt_neox
 
@@ -8,14 +8,14 @@ from nnterp.families.vllm import gpt_neox
 class TestVLLMGPTNeoX(VLLMFamilySuite):
     REPO = "EleutherAI/pythia-70m"
     FAMILY = gpt_neox
-    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | {"layer_mid"}) - {"mlp.mlp_activation"}
+    UNAVAILABLE = (VLLMFamilySuite.UNAVAILABLE | NO_ROTARY | {"layer_mid"}) - {"mlp.mlp_activation"}
     NATIVE = {
-        "embed_tokens": "gpt_neox.embed_in",
-        "layers": "gpt_neox.layers",
-        "norm": "gpt_neox.final_layer_norm",
-        "lm_head": "embed_out",
-        "layers.0.self_attn": "gpt_neox.layers.0.attention",
-        "layers.0.mlp": "gpt_neox.layers.0.mlp",
+        "embed_tokens": "model.embed_in",
+        "layers": "model.layers",
+        "norm": "model.final_layer_norm",
+        "lm_head": "lm_head",
+        "layers.0.self_attn": "model.layers.0.attention",
+        "layers.0.mlp": "model.layers.0.mlp",
     }
     # Pythia-70m's queries reach the hundreds, so its softmax is as sharp as float32 allows and the two engines'
     # kernels part ways as depth compounds it: block 0's queries, keys and values agree to 5e-8 and its head outputs

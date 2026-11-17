@@ -1,10 +1,8 @@
 """OLMo 2 on vLLM, through its transformers backend (``Olmo2ForCausalLM`` -> ``TransformersForCausalLM``).
 
-vLLM has no OLMo 2 of its own: it runs transformers' modules, so the tree
-and the block are transformers' (see `nnterp.components.vllm.transformers_backend`),
-with Llama's names, the stream ``[1, tokens, hidden_size]`` and the engine's
-attention layer mounted as the attention's ``attn`` child. The block is
-post-norm, ``x + post_attention_layernorm(attn(x))`` and then ``+
+vLLM runs transformers' modules (see `nnterp.components.vllm.transformers_backend`),
+with Llama's names. The block is post-norm, ``x +
+post_attention_layernorm(attn(x))`` and then ``+
 post_feedforward_layernorm(mlp(x))``, so the contributions point at the
 sibling norms, as on transformers. The attention norms its queries and keys
 over every head at once before splitting them.

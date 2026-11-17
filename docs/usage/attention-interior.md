@@ -261,9 +261,10 @@ here. Three things differ:
   range(tokens))` is the `attention_queries` vLLM's attention layer receives, bit for bit, and
   outside a trace it raises `RuntimeError`. `positions` is `[tokens]`; on the M-RoPE rotary of the
   Qwen-VL text families a position is a text token's, the same on all three rows.
-- **Not served on vLLM's transformers backend** (OLMo, OLMo 2, SmolLM3, StarCoder2): the rotary
-  is a call inside a forward the backend rewrites at load, which nnsight cannot instrument.
-  GPT-BigCode, the backend's fifth family, has no rotary to serve and gives its no-rotary reason.
+- **Not served on vLLM's transformers backend** (the families [vllm.md](vllm.md#family-notes)
+  lists, OLMo, Phi, GLM and Pythia among them): the rotary is a call inside a forward the backend
+  rewrites at load, which nnsight cannot instrument. GPT-BigCode, which has no rotary to serve,
+  gives its no-rotary reason.
 - **Not served under latent attention** (DeepSeek-V2/V3, Kimi-K2, GLM-4.7-Flash): vLLM rotates
   only each query head's rope slice and the shared rope key, inside its latent-attention layer,
   where `StandardizedTransformer` serves whole-head queries.

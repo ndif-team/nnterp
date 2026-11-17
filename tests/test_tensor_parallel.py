@@ -16,10 +16,14 @@ import sys
 import pytest
 import torch
 import transformers
+from nnsight.modeling.tp import MINIMUM_TRANSFORMERS
 from packaging.version import Version
 
 pytestmark = [
-    pytest.mark.skipif(Version(transformers.__version__).release < (5, 19), reason="nnsight shards a model on transformers 5.19 and later"),
+    pytest.mark.skipif(
+        Version(transformers.__version__).release < Version(MINIMUM_TRANSFORMERS).release,
+        reason=f"nnsight shards a model on transformers {MINIMUM_TRANSFORMERS} and later",
+    ),
     pytest.mark.xdist_group("tensor_parallel"),  # one worker runs the two launches once
 ]
 

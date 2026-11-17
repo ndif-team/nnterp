@@ -11,14 +11,16 @@ wraps Gemma's: the text stack at ``model.language_model``, a SigLIP tower at
 ``model.vision_tower``, which is ``vision`` (its ``post_layernorm`` over the patches is
 ``vision.norm``), and a linear projector ``model.multi_modal_projector``, which is
 ``projector``; ``vision.image_features`` is read at the scatter (`ImageScatter`). Its processor
-refuses a prompt without an image: a text-only trace takes the tokenizer's encoding. The wrapper
-never softcaps its logits, whatever its ``text_config`` says, and `project_on_vocab` follows the class.
+refuses a prompt without an image: a text-only trace takes the tokenizer's encoding.
+`project_on_vocab` follows the class the checkpoint loads as: it softcaps with the text config's
+cap where that class's forward does.
 """
 
+import inspect
 from typing import TYPE_CHECKING
 
 import torch
-from transformers.models.gemma2.modeling_gemma2 import Gemma2Attention, Gemma2DecoderLayer, Gemma2ForCausalLM, Gemma2MLP
+from transformers.models.gemma2.modeling_gemma2 import Gemma2Attention, Gemma2DecoderLayer, Gemma2MLP
 from transformers.models.paligemma.modeling_paligemma import PaliGemmaModel
 from transformers.models.siglip.modeling_siglip import SiglipAttention, SiglipEncoderLayer, SiglipMLP, SiglipVisionModel
 
@@ -101,14 +103,14 @@ ENVOYS = {
 
 
 def project_on_vocab(model: "StandardizedTransformer", hidden: torch.Tensor) -> torch.Tensor:
-    """The logit lens as the model makes its logits: the final norm, ``lm_head``, and the softcap only where the class applies one.
+    """The logit lens as the model makes its logits: the final norm, ``lm_head``, and the softcap where the loaded class applies one.
 
-    ``Gemma2ForCausalLM`` caps with ``final_logit_softcapping``; PaliGemma 2's
-    ``PaliGemmaForConditionalGeneration`` never does, though its ``text_config``
-    sets 30, so neither does the lens on it.
+    The cap is the text config's ``final_logit_softcapping``. ``Gemma2ForCausalLM``'s
+    forward applies it; whether PaliGemma 2's ``PaliGemmaForConditionalGeneration``
+    does is read off its forward, which names the key where it caps.
     """
     logits = model.lm_head(model.norm(hidden))
     cap = getattr(model.config.get_text_config(), "final_logit_softcapping", None)
-    if cap and isinstance(model._module, Gemma2ForCausalLM):
+    if cap and "final_logit_softcapping" in inspect.getsource(type(model._module).forward):
         return cap * torch.tanh(logits / cap)
     return logits

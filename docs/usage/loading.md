@@ -262,9 +262,9 @@ are the base of the merge, so a family's or your own map never drops them.
 ## Across GPUs: `distributed_config=`
 
 A load with `distributed_config=DistributedConfig(tp_size=N)`, launched with
-`torchrun --nproc_per_node=N script.py` (one process per GPU, each running the whole script;
-nnsight docs/models/tensor-parallel.md), splits the model tensor-parallel (transformers 5.19
-or later). The standard values read whole, the same on every rank. nnsight reassembles a split module's own input and output; where a rank
+`torchrun --nproc_per_node=N script.py` (one process per GPU, each running the whole script),
+splits the model tensor-parallel. The sharding is nnsight's, and so is the transformers version
+it needs (nnsight docs/models/tensor-parallel.md). The standard values read whole, the same on every rank. nnsight reassembles a split module's own input and output; where a rank
 holds only its share of the heads or neurons, in the attention interior (`attention_queries`
 through `attention_head_outputs`) and at `mlp_activation`, nnterp gathers the value along that
 axis. An edit to one, in place or by assignment, goes back to each rank as its piece of the

@@ -29,9 +29,11 @@ class TestGemma2(FamilySuite):
     def test_logits_are_softcapped(self, model):
         assert model.config.final_logit_softcapping
         with model.trace(PROMPT):
+            last = model.layers[-1].layer_output.save()
             raw = model.lm_head.output.save()
             logits = model.logits.save()
         assert not torch.equal(raw, logits)
+        assert torch.equal(model.project_on_vocab(last), logits)  # exact: the cap moves these logits by less than assert_close's tolerance
 
 
 def test_the_gains_are_float32_on_a_bf16_load():
@@ -102,15 +104,17 @@ class TestPaliGemma2Wrapper(WrapperSuite):
     def text_input(self, model):
         return dict(model.tokenizer(PROMPT, return_tensors="pt"))
 
-    def test_the_wrapper_does_not_softcap_and_neither_does_the_lens(self, model):
-        """``text_config.final_logit_softcapping`` is set, but ``PaliGemmaForConditionalGeneration`` never applies it."""
-        assert model.config.get_text_config().final_logit_softcapping == 30.0
+    def test_the_lens_is_the_wrappers_logits(self, model):
+        """The logits are ``lm_head``'s output, softcapped with ``text_config.final_logit_softcapping`` or not as the loaded
+        ``PaliGemmaForConditionalGeneration`` makes them, and the lens on the last block is the logits. Exact: the cap moves
+        these logits by less than ``assert_close``'s tolerance."""
+        cap = model.config.get_text_config().final_logit_softcapping
         with model.trace(self.text_input(model)):
             last = model.layers[-1].layer_output.save()
             raw = model.lm_head.output.save()
             logits = model.logits.save()
-        assert torch.equal(raw, logits)
-        torch.testing.assert_close(model.project_on_vocab(last), logits)
+        assert torch.equal(logits, raw) != torch.equal(logits, cap * torch.tanh(raw / cap))  # one of the two, and they differ
+        assert torch.equal(model.project_on_vocab(last), logits)
 
     def test_the_prefix_attends_in_both_directions(self, model):
         """The processor marks the image and the prompt as the prefix: every block, sliding or full, attends over all of it."""

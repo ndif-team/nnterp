@@ -469,7 +469,8 @@ rotary, at a head patched through `interface` and at the neurons around the
 boundary between the ranks (one with gradients on) must
 match the one-process run, and every rank must agree bit for bit; `attention_input_gain` too, while
 `value_weight` and `output_weight` are refused on every rank with `SHARDED_WEIGHTS` and served in one
-process (`test_head_weights_are_refused_on_a_split_model`). It skips below transformers 5.19.
+process (`test_head_weights_are_refused_on_a_split_model`). It skips below the transformers version the installed
+nnsight shards on (`nnsight.modeling.tp.MINIMUM_TRANSFORMERS`).
 
 `tests/test_registry.py`: every module under `nnterp/families/` is
 named after its type, and there are at least 31

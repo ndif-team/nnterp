@@ -3,7 +3,7 @@ title: transformers Compatibility
 one_liner: The versions nnterp is developed against, exactly which operation names a transformers release can move, how the suite catches it, and the upgrade procedure.
 tags: [developing, compatibility, transformers, nnsight, versions, source]
 related: [docs/developing/testing.md, docs/developing/eproperty-internals.md, docs/developing/architecture.md, docs/developing/gotchas.md]
-sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/gpt_oss.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/falcon.py, nnterp/families/gptj.py, tests/families/suite.py, tests/conftest.py, pyproject.toml]
+sources: [nnterp/components/attention.py, nnterp/components/linear_attention.py, nnterp/components/recurrent.py, nnterp/families/gemma2.py, nnterp/families/gpt_oss.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/falcon.py, nnterp/families/gptj.py, tests/families/suite.py, tests/conftest.py, pyproject.toml]
 ---
 
 # transformers Compatibility
@@ -29,7 +29,12 @@ The suite is run on **5.21.1**, where it passes, and on **5.23.0**. From 5.23.0 
 DeltaNet's queries and keys (`num_k_heads` up to `num_v_heads`) where the mixer's forward did before, so
 `linear_attn.attention_queries` and `attention_keys`, the kernel call's arguments, are one per query/key head from
 5.23.0 and one per value head before ([below](#gated-deltanet-qwen3-next-qwen35-qwen35-moe)); the gated-DeltaNet
-families' test files pass on 5.21.1, 5.22.2 and 5.23.0.
+families' test files pass on 5.21.1, 5.22.2 and 5.23.0. From 5.23.0 `PaliGemmaForConditionalGeneration` softcaps its
+logits where its text config sets a cap, and the PaliGemma 2 lens follows the loaded class
+([below](#after-the-head-paligemma-2)). Tensor parallelism (`distributed_config=`) has the floor of the installed
+nnsight, `nnsight.modeling.tp.MINIMUM_TRANSFORMERS`: 5.19.0 on nnsight 0.8.0 through 0.8.2, and 5.23.0 on nnsight's
+`dev` branch after them, which reads the plan a model resolves for itself, as 5.23.0 is the first to do.
+`tests/test_tensor_parallel.py` skips below that floor: with nnsight's `dev` it skips on 5.21.1 and passes on 5.23.0.
 `pyproject.toml` requires `nnsight>=0.8`,
 `transformers>=5.17` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below) and whose `rename` takes a dotted alias (`{"attn.c_proj":
@@ -160,6 +165,18 @@ The kernel-dispatch closure names `torch_function` and `implementation`
 `transformers/integrations/hub_kernels.py`) are what
 `needs_torch_kernels`, `route_kernels` and `needs_recurrent_routing` read
 through `_dispatch` (`recurrent.py`).
+
+### After the head (PaliGemma 2)
+
+What a class does to `lm_head`'s output is arithmetic in its forward, which no
+op name pins, and `project_on_vocab` repeats it. Through 5.22
+`PaliGemmaForConditionalGeneration.forward` returns the head's output as it
+is; from 5.23 it applies the text config's `final_logit_softcapping` where the
+config has one, which PaliGemma 2's `gemma2` text config does (30.0) and
+PaliGemma 1's `gemma` does not. `gemma2.project_on_vocab` caps where the
+loaded class's forward names the key (`inspect.getsource`), so the lens on
+the last block is the wrapper's `logits` on both
+(`test_the_lens_is_the_wrappers_logits`, `tests/families/test_gemma2.py`).
 
 ### Names, not ops
 

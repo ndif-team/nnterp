@@ -1070,7 +1070,7 @@ class FamilySuite:
             clean = first_tensor(attn.output).save()
         saved = {}
         with model.trace(PROMPT):
-            interface = attn.interface  # read once, where the queries are; called twice
+            interface = attn.interface  # read where the queries are; called twice
             q, k, v = attn.attention_queries, attn.attention_keys, attn.attention_values
             keys, values = k.clone(), v.clone()
             keys[:, 0] = keys[:, 0] * 2
@@ -1089,13 +1089,15 @@ class FamilySuite:
 
     def test_interface_on_decode_steps(self, model):
         """Under generate each step's call has that step's mask and the whole cache: on the prompt and on a decode
-        step, the call gives that step's head outputs and pattern."""
+        step, the call gives that step's head outputs and pattern, made after both are read."""
         attn = self.interface_blocks(model)[0].self_attn
         read = []
         with model.generate(PROMPT, max_new_tokens=2, min_new_tokens=2, do_sample=False, use_cache=True) as tracer:  # a tiny config may turn the cache off
             for _ in tracer.iter[:2]:
-                heads, pattern = attn.interface(attn.attention_queries, attn.attention_keys, attn.attention_values)
-                read.append((heads.save(), pattern.save(), attn.attention_probabilities.save(), attn.attention_head_outputs.save()))
+                interface, q, k, v = attn.interface, attn.attention_queries, attn.attention_keys, attn.attention_values
+                probs, served = attn.attention_probabilities.save(), attn.attention_head_outputs.save()
+                heads, pattern = interface(q, k, v)
+                read.append((heads.save(), pattern.save(), probs, served))
         n = len(model.tokenizer(PROMPT).input_ids)
         for step, (heads, pattern, probs, served) in enumerate(read):
             assert pattern.shape[-2] == (n if step == 0 else 1), (step, tuple(pattern.shape))

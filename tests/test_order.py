@@ -11,8 +11,8 @@ LLAMA = "hf-internal-testing/tiny-random-LlamaForCausalLM"
 QWEN3_5 = "yujiepan/qwen3.5-tiny-random"
 
 #: Tiny Llama's block, in forward order: the queries and keys before the rotary are the rotary call's arguments, and
-#: the queries, keys and values the attention call's, one location each; the call to make again (`interface`) is read
-#: with the attention call's arguments and called before the scores, so it ranks between.
+#: the queries, keys and values the attention call's, one location each; the function to call again (`interface`) is
+#: read with the attention call's arguments, so it ranks just after them.
 LLAMA_BLOCK = {
     "layer_input": 0,
     "attention_norm_output": 1,

@@ -3,7 +3,7 @@
 import pytest
 import torch
 from qwen_vision_suite import PER_IMAGE_UNAVAILABLE, QwenVisionSuite
-from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, blocks
+from suite import FamilySuite, LINEAR, LLAMA_ROWS, PROMPT, VALUES, listed, blocks, delta_rule_heads
 
 from nnterp import StandardizedTransformer, Unavailable, route_delta_rule
 
@@ -52,7 +52,7 @@ class TestQwen3_5(FamilySuite):
                 value = getattr(mix, name)
                 got[name] = value.save() if value is not None else None
         batch, seq = got["attention_queries"].shape[:2]
-        assert got["attention_queries"].shape == got["attention_keys"].shape == (batch, seq, m.num_v_heads, m.head_k_dim)
+        assert got["attention_queries"].shape == got["attention_keys"].shape == (batch, seq, delta_rule_heads(m), m.head_k_dim)
         assert got["attention_values"].shape == (batch, seq, m.num_v_heads, m.head_v_dim)
         assert got["decays"].shape == got["betas"].shape == (batch, seq, m.num_v_heads)
         assert (got["decays"] <= 0).all() and got["decays"].dtype == torch.float32

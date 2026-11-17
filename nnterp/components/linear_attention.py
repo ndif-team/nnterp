@@ -53,12 +53,12 @@ class LinearAttention(RecurrentMixer):
 
     @EProperty(kernel("inputs"), select=0, description="The queries entering the delta rule", unavailable=needs_torch_kernels)
     def attention_queries(self, value: torch.Tensor) -> LinearQK:
-        """The queries the delta rule receives, ``[batch, seq, heads, key_dim]``: after the conv, the activation and the repeat to ``num_v_heads``."""
+        """The queries the delta-rule call receives, ``[batch, seq, heads, key_dim]``, after the conv and the activation: one per query/key head where the kernel repeats them to the value heads itself, one per value head where the mixer's forward has repeated them before the call."""
         return value
 
     @EProperty(kernel("inputs"), select=1, description="The keys entering the delta rule", unavailable=needs_torch_kernels)
     def attention_keys(self, value: torch.Tensor) -> LinearQK:
-        """The keys the delta rule receives, ``[batch, seq, heads, key_dim]``."""
+        """The keys the delta-rule call receives, ``[batch, seq, heads, key_dim]``, with as many heads as the queries."""
         return value
 
     @EProperty(kernel("inputs"), select=2, description="The values entering the delta rule", unavailable=needs_torch_kernels)

@@ -8,6 +8,7 @@ availability is honest, sizes match the tensors.
 """
 
 import contextlib
+import inspect
 import re
 
 import pytest
@@ -64,6 +65,14 @@ def contributions(layer):
 def recurrent_mixer(family):
     """The family's recurrent mixer envoy class (`LinearAttention`, `SelectiveScan` or `StateSpace`), or None."""
     return next((envoy for envoy in family.ENVOYS.values() if issubclass(envoy, RecurrentMixer)), None)
+
+
+def delta_rule_heads(module) -> int:
+    """How many heads a gated DeltaNet's kernel call receives its queries and keys with, read off the mixer as loaded: one
+    per value head where the mixer's forward repeats them before the call, one per query/key head where it leaves the
+    repeat to the kernel."""
+    repeats = "repeat_interleave" in inspect.getsource(type(module).forward)
+    return module.num_v_heads if repeats else module.num_k_heads
 
 
 def rows(container, layers, embed, norm, attn="self_attn", mlp="mlp", ln1="input_layernorm", ln2="post_attention_layernorm"):
@@ -1355,8 +1364,8 @@ class FamilySuite:
 
     # -- layouts -------------------------------------------------------------------
 
-    def axis_sizes(self, model, host):
-        """What each axis that is not a fact about the model must be on this model, off the input and the modules."""
+    def axis_sizes(self, model, host, name=None):
+        """What each axis that is not a fact about the model must be on this model for value ``name``, off the input and the modules."""
         seq = len(model.tokenizer(PROMPT).input_ids)
         sizes = {BATCH: 1, SEQ: seq, QUERY: seq, KEY: seq, TOKENS: seq}  # one prompt: the flattened tokens are the sequence
         streams = getattr(model.config.get_text_config(), "hc_mult", None)
@@ -1364,8 +1373,9 @@ class FamilySuite:
             sizes[STREAMS] = streams
         module = getattr(host, "_module", None)
         if isinstance(host, LinearAttention):
-            if hasattr(module, "num_v_heads"):  # a gated DeltaNet
-                sizes.update({MIXER_HEADS: module.num_v_heads, KEY_DIM: module.head_k_dim, VALUE_DIM: module.head_v_dim})
+            if hasattr(module, "num_v_heads"):  # a gated DeltaNet: the queries and keys have the head count the kernel receives
+                heads = delta_rule_heads(module) if name in ("attention_queries", "attention_keys") else module.num_v_heads
+                sizes.update({MIXER_HEADS: heads, KEY_DIM: module.head_k_dim, VALUE_DIM: module.head_v_dim})
             else:  # Kimi Delta Attention: one head size for keys and values
                 sizes.update({MIXER_HEADS: module.num_heads, KEY_DIM: module.head_dim, VALUE_DIM: module.head_dim})
         if isinstance(host, SelectiveScan):
@@ -1413,7 +1423,7 @@ class FamilySuite:
                 if saved is None:
                     continue  # a value that is legitimately None here (state_input on a fresh prompt)
                 assert isinstance(saved, value.layout), (host.path, name, tuple(saved.shape), value.dims)
-                sizes = self.axis_sizes(model, host)
+                sizes = self.axis_sizes(model, host, name)
                 for axis, size in zip(value.dims, saved.shape):
                     if axis == HEAD_DIM and self.KV_HEADS_EXPANDED:
                         continue

@@ -343,6 +343,37 @@ def test_two_invokes_read_one_mixers_values(second):
         assert "_per_call" not in mix.__dict__  # the records are the worker's, freed with it
 
 
+def test_delta_net_queries_and_keys_are_the_kernel_calls_own_arguments():
+    """A gated DeltaNet's queries and keys are served as the delta-rule call holds them, the call's own tensors with
+    nothing handed back: they are the arguments nnsight serves at the call, and an in-place edit reaches the kernel
+    under one invoke and, made after a later read of the call, from one of two, on that invoke's rows alone."""
+    prompt = "Hello world there"
+    model = StandardizedTransformer("yujiepan/qwen3.5-tiny-random", dispatch=True)
+    mix = model.layers[0].linear_attn
+    assert mix._module.num_k_heads < mix._module.num_v_heads  # the checkpoint whose head count depends on who repeats
+    own = []  # bound outside the trace: a name bound inside does not survive it
+    with model.trace(prompt):
+        args, _ = getattr(mix.source, type(mix).KERNEL(mix)).inputs
+        own.append(mix.attention_queries is args[0] and mix.attention_keys is args[1])
+        clean = mix.attention_head_outputs.save()
+    assert own == [True]
+    for name in ("attention_queries", "attention_keys"):
+        with torch.no_grad(), model.trace(prompt):
+            getattr(mix, name)[:] = 0
+            one = mix.attention_head_outputs.save()
+        assert not torch.equal(one, clean), name
+        with torch.no_grad(), model.trace() as tracer:
+            with tracer.invoke(prompt):
+                untouched = mix.attention_head_outputs.save()
+            with tracer.invoke(prompt):
+                served = getattr(mix, name)
+                _ = mix.attention_values  # the worker moves on: a copy handed back would go back here, unedited
+                served[:] = 0
+                edited = mix.attention_head_outputs.save()
+        torch.testing.assert_close(untouched, clean, msg=name)
+        assert not torch.allclose(edited, clean), name
+
+
 def test_edit_on_a_kernel_value_replays_on_another_prompt():
     """A ``model.edit`` replay runs on a fresh worker, so it reads the new call's arguments, not the first run's."""
     model = _mamba2()

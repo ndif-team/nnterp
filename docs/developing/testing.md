@@ -200,9 +200,9 @@ test on random weights (`random_weights(repo, **config)`): GPT-BigCode without m
 heads per `mp_num` part, and Phi-3 under grouped-query attention; Falcon-RW's runs it in `TestFalconRW`.
 `test_gemma2.py` checks that
 on a bf16 load both gains are `1 + weight` in float32, bit for bit. `tests/families/test_llama.py` runs both
-weight tests on the tiny Llama under a throwaway LoRA on `v_proj` and `o_proj` (`peft=` at load, B not zero)
-with the adapter enabled, disabled, merged, and disabled while merged, and checks the merged weight is
-`value_weight`'s bit for bit.
+weight tests on the tiny Llama under a throwaway LoRA, and a LoKr, on `v_proj` and `o_proj` (`peft=` at load,
+initialized away from zero) with the adapter enabled, disabled, merged, and disabled while merged, checks the
+merged weight is `value_weight`'s bit for bit, and under DoRA checks the refusal.
 
 **Layouts**
 

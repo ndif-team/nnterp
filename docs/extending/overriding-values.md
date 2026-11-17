@@ -338,8 +338,8 @@ class Attention(Attention):
 
 A family that only lays its projections out differently overrides the methods, reading the
 fused projection through `projection_weight(self, name)` (in `nnterp.components`). It returns
-the weight the projection's next forward applies (under a PEFT LoRA layer, the base plus each
-active, unmerged adapter's delta; the base once merged), and raises `Unavailable` with
+the weight the projection's next forward applies (under a PEFT adapter, the base layer's weight
+plus each active, unmerged adapter's delta), and raises `Unavailable` with
 `no_head_weights()`'s reason, on an undispatched model's meta weight, and on a quantized one:
 
 ```python

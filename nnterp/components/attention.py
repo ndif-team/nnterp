@@ -206,17 +206,18 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
 
     The module's ``weight`` (``[out_features, in_features]`` on a ``Linear``,
     the transpose on GPT-2's ``Conv1D``), so a slice of it is a live view of
-    the parameter. On a PEFT LoRA layer it is the weight the projection's next
-    forward applies, in the base weight's dtype: the base plus each active,
-    unmerged adapter's delta; the base once merged.
+    the parameter. On a PEFT adapter layer it is the weight the layer's next
+    forward applies: the base layer's weight, plus each active adapter's delta
+    while the layer is enabled and unmerged, in the base weight's dtype. A layer
+    left merged with its adapters disabled is unmerged, as its forward does first.
 
     Raises:
         Unavailable: the block has no per-head weights (`Attention.no_head_weights`),
             the model is not dispatched (its weights are meta), or the weight is
             quantized (its elements are codes, not the values it applies; a BitNet
             layer applies a function of it).
-        NotImplementedError: an adapter whose forward is not the base layer plus a
-            delta (DoRA, aLoRA, a non-LoRA tuner).
+        NotImplementedError: an active, unmerged adapter that PEFT does not flag as a
+            delta added to the base weight (DoRA and LoRA's other variants, OFT, IA3).
     """
     reason = attn.no_head_weights()
     if reason:
@@ -240,22 +241,19 @@ def projection_weight(attn: "Attention", name: str) -> Tensor:
             f"{attn.path}.{name} is a BitNet {type(module).__name__}: it applies a function of the weight it stores "
             "(ternarized or scaled), so no slice of that weight is a head's"
         )
-    if not adapted:
-        return weight
-    from peft.tuners.lora import LoraLayer
-
-    if not isinstance(module, LoraLayer) or getattr(module, "lora_variant", None) or any(getattr(module, "use_dora", {}).values()):
-        raise NotImplementedError(
-            f"{attn.path}.{name} is a {type(module).__name__} whose adapter is not a plain LoRA: its forward is not "
-            "the base layer plus a delta, so it has no one weight to slice"
-        )
-    if module.disable_adapters:
-        for adapter in reversed(module.merged_adapters):
-            weight = weight - module.get_delta_weight(adapter).to(weight.dtype)
-    elif not module.merged:
-        for adapter in module.active_adapters:
-            if adapter in module.lora_A:
-                weight = (weight + module.get_delta_weight(adapter)).to(weight.dtype)
+    if adapted and module.merged and module.disable_adapters:
+        module.unmerge()  # as the layer's next forward does first
+    if not adapted or module.merged or module.disable_adapters:
+        return weight  # no adapter, or its layer runs the base layer alone
+    for adapter in module.active_adapters:
+        if any(adapter in getattr(module, held) for held in module.adapter_layer_names):  # it has weights on this layer
+            # PEFT's flag for an adapter that is a delta added to the base weight; LoRA's variants carry it too, wrongly
+            if not module.supports_lora_conversion(adapter) or adapter in getattr(module, "lora_variant", ()):
+                raise NotImplementedError(
+                    f"{attn.path}.{name} is a {type(module).__module__}.{type(module).__name__} whose adapter {adapter!r} is "
+                    "not a delta added to the base weight, so the layer applies no one weight to slice while it is unmerged"
+                )
+            weight = (weight + module.get_delta_weight(adapter)).to(weight.dtype)
     return weight
 
 

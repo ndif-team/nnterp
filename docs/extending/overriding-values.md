@@ -220,9 +220,10 @@ exists.
 
 The element handed back is the object the call holds, so in-place edits reach the model;
 a transform is there for a value whose stub returns a copy. An output of `chunk`, `split`
-or `unbind` is the exception: torch refuses an in-place edit of it while gradients are on
-(GPT-2's queries). A value that has to take one reads a slice of that operation's input
-instead, a plain view, with a `postprocess` that rebuilds the whole for an assignment.
+or `unbind`, or a view of one (GPT-2's queries), is the exception: torch refuses an in-place
+edit of it while gradients are on. A value that has to take one reads a slice of that
+operation's input instead, a plain view, with a `postprocess` that rebuilds the whole for an
+assignment.
 
 ### Reuse the base description and the base layout name
 

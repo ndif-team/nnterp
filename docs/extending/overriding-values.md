@@ -3,7 +3,7 @@ title: Overriding Values
 one_liner: How a family redefines a standard value when the base does not hold — an `EProperty` keyed on a path (`../norm.output`, `source.<op>.input`, `source.<call>.inputs` with `select`), `unavailable` markers and predicates, `off_interface`, `seq_first`, a clone with a transform, `postprocess` for writes; and a root size, which is a plain function in the family module, not a descriptor.
 tags: [extending, families, eproperty, source, availability]
 related: [docs/extending/adding-a-family.md, docs/extending/custom-values.md, docs/extending/finding-source-ops.md]
-sources: [nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/layer.py, nnterp/components/mlp.py, nnterp/components/standard.py, nnterp/families/gemma2.py, nnterp/families/olmo2.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/gptj.py, nnterp/families/falcon.py, nnterp/families/gpt2.py, nnterp/families/gpt_oss.py, nnterp/families/llama4_text.py, nnterp/families/deepseek_v2.py, nnterp/families/deepseek_v3.py, nnterp/standardized.py]
+sources: [nnterp/components/eproperty.py, nnterp/components/attention.py, nnterp/components/layer.py, nnterp/components/mlp.py, nnterp/components/standard.py, nnterp/families/gemma2.py, nnterp/families/olmo2.py, nnterp/families/bloom.py, nnterp/families/mpt.py, nnterp/families/gptj.py, nnterp/families/falcon.py, nnterp/families/gpt2.py, nnterp/families/gpt_oss.py, nnterp/families/llama4_text.py, nnterp/families/gemma4_text.py, nnterp/families/deepseek_v2.py, nnterp/families/deepseek_v3.py, nnterp/standardized.py]
 ---
 
 # Overriding Values

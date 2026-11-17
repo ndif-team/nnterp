@@ -3312,7 +3312,7 @@ of 10000, so its attention blocks do rotate their queries and keys.</p></div>   
   stream; it has no <code>input_layernorm</code>, so the block input enters the attention.</li>
 </ul>
 <p>Each block has <code>self_attn</code> or <code>linear_attn</code>, never both. The attention runs
-the shared eager forward (query and key norms before it; no rotary embedding
+the shared attention interface (query and key norms before it; no rotary embedding
 when the checkpoint sets no <code>rope_theta</code>), so its contribution is OLMo-3's
 override at the post-attention norm. Both block classes hold one MLP class,
 <code>OlmoHybridMLP</code>, whose contribution is its own output on a linear block and the
@@ -3337,7 +3337,7 @@ before the kernel and lie in (0, 2).</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">allenai/Olmo-Hybrid-7B</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">allenai/Olmo-Hybrid-7B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

@@ -514,7 +514,7 @@ and <code>lm_head</code>, the residual added in the block, which returns a bare 
 queries for <code>num_key_value_heads</code> heads (<code>experts.map</code>) and later projects their
 outputs back (<code>experts.reduce</code>, in place of an <code>o_proj</code>). Keys and values come
 from one shared <code>kv_proj</code> and are tiled (<code>repeat</code>, not interleaved) to every
-query head before the shared eager forward, so the interface sees <code>num_heads</code>
+query head before the shared attention interface, so the interface sees <code>num_heads</code>
 key/value heads and interface head <code>h</code> is routing slot <code>h // num_kv_heads</code> over
 kv head <code>h % num_kv_heads</code>: which expert's parameters a head's query came from
 varies by token. The attention returns <code>(attn_output, attn_weights, router_logits)</code>. The MLP is a mixture of experts (<code>Moe</code>) that returns the routed hidden
@@ -541,7 +541,7 @@ per-slot outputs, sorted by expert, are unavailable.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">jetmoe/jetmoe-8b</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">jetmoe/jetmoe-8b</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

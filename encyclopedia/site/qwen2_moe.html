@@ -709,7 +709,7 @@ shared expert's contribution at <code>shared_expert_output</code>.</p></div>    
   <div class="grid-notes">
     <div class="prose docstring"><p>Qwen2-MoE (<code>Qwen2MoeForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block, attention through the shared eager forward. The MLP is a sparse mixture of experts with a shared expert.</p>
+added in the block, attention through the shared attention interface. The MLP is a sparse mixture of experts with a shared expert.</p>
 <p>A config with <code>mlp_only_layers</code> set (or a <code>decoder_sparse_step</code> above 1) gives the
 blocks it names a dense <code>Qwen2MoeMLP</code>, an <code>Mlp</code>; no released checkpoint sets either.
 The shared expert is a <code>Qwen2MoeMLP</code> too, so it serves the <code>Mlp</code> values of its own.</p></div>
@@ -728,7 +728,7 @@ The shared expert is a <code>Qwen2MoeMLP</code> too, so it serves the <code>Mlp<
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">Qwen/Qwen1.5-MoE-A2.7B</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">Qwen/Qwen1.5-MoE-A2.7B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

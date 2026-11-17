@@ -1295,7 +1295,7 @@ there measures the start of a reasoning trace, not the answer.</p></div>    <asi
     <div class="prose docstring"><p>GLM-4.5 / 4.6 and GLM-4.5-Air (<code>Glm4MoeForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
 added in the block, which returns a bare tensor. Attention goes through the shared
-eager forward; rotary embeddings cover only <code>partial_rotary_factor</code> of each head
+attention interface; rotary embeddings cover only <code>partial_rotary_factor</code> of each head
 and <code>q_norm</code>/<code>k_norm</code> run on the heads when <code>use_qk_norm</code> is set, both before
 the interface, so queries and keys are read as the interface sees them. <code>head_dim</code>
 is the config's (128 on the real checkpoints, not <code>hidden_size // num_heads</code>).</p>
@@ -1318,7 +1318,7 @@ shared expert (<code>mlp.shared_experts</code>) is a dense MLP of the same class
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">zai-org/GLM-4.5-Air</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">zai-org/GLM-4.5-Air</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

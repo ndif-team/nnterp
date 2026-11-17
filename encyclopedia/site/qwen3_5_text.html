@@ -9151,11 +9151,12 @@ The slider picks a block, each tick's color gives its block's shape, and the dia
 <p>On 0.8B and 9B the gate's sigmoid is small for most entries, so <code>attention_head_outputs</code> reaches
 the stream scaled far down, head by head. Attribute and patch heads at <code>attention_premix</code>,
 <code>o_proj</code>'s input, which is after the gate.</p>
-<h2>The DeltaNet's queries and keys are copied per value head on 4B and larger</h2>
-<p>On 4B, 9B and 27B the mixer repeats each key head's query and key up to the value heads before the
-kernel, so <code>attention_queries</code> and <code>attention_keys</code> have one head per value head, each key head copied
-into consecutive heads. An edit to one copy reaches only its own value head; edit every copy to change
-the key head.</p>
+<h2>A DeltaNet query/key head serves several value heads on 4B and larger</h2>
+<p>On 4B, 9B and 27B the mixer has fewer query/key heads than value heads, and each one is repeated over
+consecutive value heads. <code>attention_queries</code> and <code>attention_keys</code> are what the delta-rule call
+receives: one head per query/key head where the kernel does that repeat itself, so an edit to one
+reaches every value head it serves, and one head per value head where the mixer's forward has repeated
+them before the call.</p>
 <h2>Prepending <code>&lt;|endoftext|&gt;</code> changes the predictions</h2>
 <p>The tokenizer adds no beginning-of-sequence token, and position 0 draws much of the attention without
 growing into an outlier in the stream. Prepending <code>&lt;|endoftext|&gt;</code> as a sink changes what the model
@@ -9312,7 +9313,7 @@ and no deepstack), its blocks <code>vision.layers</code>; its <code>merger</code
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">Qwen/Qwen3.5-0.8B</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">Qwen/Qwen3.5-0.8B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

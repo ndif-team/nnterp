@@ -67,10 +67,10 @@
     <div class="ckpt-group" role="group" aria-labelledby="ckpt-group-2">
       <p class="micro ckpt-group-label" id="ckpt-group-2">not available</p>
       <div class="ckpt-option" role="option" id="ckpt-option-moonshotai--Moonlight-16B-A3B" data-ckpt="moonshotai/Moonlight-16B-A3B" data-name="Moonlight-16B-A3B"
-           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its meta build fails: ValueError: Couldn&#39;t instantiate the backend tokenizer from one of: ">
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its meta build fails: ValueError: The repository moonshotai/Moonlight-16B-A3B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/moonshotai/Moonlight-16B-A3B .">
         <span class="mono">Moonlight-16B-A3B</span>      </div>
       <div class="ckpt-option" role="option" id="ckpt-option-moonshotai--Moonlight-16B-A3B-Instruct" data-ckpt="moonshotai/Moonlight-16B-A3B-Instruct" data-name="Moonlight-16B-A3B-Instruct"
-           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its meta build fails: ValueError: Couldn&#39;t instantiate the backend tokenizer from one of: ">
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its meta build fails: ValueError: The repository moonshotai/Moonlight-16B-A3B-Instruct contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/moonshotai/Moonlight-16B-A3B-Instruct .">
         <span class="mono">Moonlight-16B-A3B-Instruct</span>      </div>
     </div>
   </div>
@@ -124,10 +124,10 @@
     <div class="ckpt-group" role="group" aria-labelledby="bar-ckpt-group-2">
       <p class="micro ckpt-group-label" id="bar-ckpt-group-2">not available</p>
       <div class="ckpt-option" role="option" id="bar-ckpt-option-moonshotai--Moonlight-16B-A3B" data-ckpt="moonshotai/Moonlight-16B-A3B" data-name="Moonlight-16B-A3B"
-           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its meta build fails: ValueError: Couldn&#39;t instantiate the backend tokenizer from one of: ">
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its meta build fails: ValueError: The repository moonshotai/Moonlight-16B-A3B contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/moonshotai/Moonlight-16B-A3B .">
         <span class="mono">Moonlight-16B-A3B</span>      </div>
       <div class="ckpt-option" role="option" id="bar-ckpt-option-moonshotai--Moonlight-16B-A3B-Instruct" data-ckpt="moonshotai/Moonlight-16B-A3B-Instruct" data-name="Moonlight-16B-A3B-Instruct"
-           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its meta build fails: ValueError: Couldn&#39;t instantiate the backend tokenizer from one of: ">
+           aria-selected="false" aria-disabled="true" title="not available in the encyclopedia: its meta build fails: ValueError: The repository moonshotai/Moonlight-16B-A3B-Instruct contains custom code which must be executed to correctly load the model. You can inspect the repository content at https://hf.co/moonshotai/Moonlight-16B-A3B-Instruct .">
         <span class="mono">Moonlight-16B-A3B-Instruct</span>      </div>
     </div>
   </div>
@@ -1440,12 +1440,12 @@ queries and keys with <code>self_attn.scaling</code>. Moonlight has no YaRN and 
   <div class="grid-notes">
     <div class="prose docstring"><p>DeepSeek-V3 (<code>DeepseekV3ForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block, attention through the shared eager forward. Multi-head latent attention as in V2; dense MLPs for the first <code>first_k_dense_replace</code> blocks, a mixture of experts after.
+added in the block, attention through the shared attention interface. Multi-head latent attention as in V2; dense MLPs for the first <code>first_k_dense_replace</code> blocks, a mixture of experts after.
 Moonshot's Kimi K2.5 / K2.6 / K2.7-Code (<code>Kimi_K25ForConditionalGeneration</code>) wrap this text
 model under <code>model.language_model</code> with <code>lm_head</code> at the root, so <code>RENAME</code> carries both
 spellings; they resolve by the wrapper's own type, <code>kimi_k25</code>, whose module re-exports <code>kimi_k2.py</code>,
-this family under Moonshot's type, whatever their <code>text_config</code> says (<code>kimi_k2</code> in the files, which
-transformers 5.20 and later rewrite to <code>deepseek_v3</code> at load).</p></div>
+this family under Moonshot's type, whatever their <code>text_config</code> says (<code>kimi_k2</code> in the files,
+<code>deepseek_v3</code> where transformers rewrites it at load).</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
       <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/deepseek_v3.py">nnterp/families/deepseek_v3.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_deepseek_v3.py">tests/families/test_deepseek_v3.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
@@ -1461,7 +1461,7 @@ transformers 5.20 and later rewrite to <code>deepseek_v3</code> at load).</p></d
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">deepseek-ai/DeepSeek-V3</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">deepseek-ai/DeepSeek-V3</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

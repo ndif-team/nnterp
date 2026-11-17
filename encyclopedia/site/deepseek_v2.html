@@ -1991,7 +1991,7 @@ always the chosen experts.</p></div>    <aside class="quirk-list">
   <div class="grid-notes">
     <div class="prose docstring"><p>DeepSeek-V2 (<code>DeepseekV2ForCausalLM</code>).</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block, attention through the shared eager forward. Multi-head latent attention: queries and keys are <code>qk_head_dim</code> wide (<code>qk_nope_head_dim + qk_rope_head_dim</code>), values <code>v_head_dim</code>, and the interface sees <code>num_heads</code> key/value heads whatever <code>num_key_value_heads</code> says. The first <code>first_k_dense_replace</code> blocks have a dense MLP, the rest a mixture of experts.</p></div>
+added in the block, attention through the shared attention interface. Multi-head latent attention: queries and keys are <code>qk_head_dim</code> wide (<code>qk_nope_head_dim + qk_rope_head_dim</code>), values <code>v_head_dim</code>, and the interface sees <code>num_heads</code> key/value heads whatever <code>num_key_value_heads</code> says. The first <code>first_k_dense_replace</code> blocks have a dense MLP, the rest a mixture of experts.</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
       <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/deepseek_v2.py">nnterp/families/deepseek_v2.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_deepseek_v2.py">tests/families/test_deepseek_v2.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
@@ -2007,7 +2007,7 @@ added in the block, attention through the shared eager forward. Multi-head laten
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">deepseek-ai/DeepSeek-V2-Lite</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">deepseek-ai/DeepSeek-V2-Lite</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

@@ -1746,8 +1746,8 @@ the lens for block <code>N</code> reads <code>model.layers[N].input</code>, the 
   <div class="grid-notes">
     <div class="prose docstring"><p>GPT-NeoX (<code>GPTNeoXForCausalLM</code>; Pythia, GPT-NeoX-20B).</p>
 <p>Its tree is <code>gpt_neox.{embed_in, emb_dropout, layers[i].{input_layernorm, post_attention_layernorm, attention, mlp}, final_layer_norm}</code>. The head is
-<code>lm_head</code> on current transformers and was <code>embed_out</code> before; that key
-binds only where it resolves, so both spellings map to <code>lm_head</code>.</p></div>
+<code>lm_head</code>; <code>RENAME</code> also carries <code>embed_out</code>, a key that binds only where
+it resolves.</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
       <p class="body-md"><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/nnterp/families/gpt_neox.py">nnterp/families/gpt_neox.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/tests/families/test_gpt_neox.py">tests/families/test_gpt_neox.py</a><br><a href="https://github.com/ndif-team/nnterp/blob/v2.0.0/docs/reference/families.md">docs/reference/families.md</a></p>
@@ -1763,7 +1763,7 @@ binds only where it resolves, so both spellings map to <code>lm_head</code>.</p>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">EleutherAI/pythia-70m-deduped</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">EleutherAI/pythia-70m-deduped</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

@@ -723,7 +723,7 @@ takes most of the attention. Leave position 0 out of activation statistics and s
     <div class="prose docstring"><p>GPT-BigCode (<code>GPTBigCodeForCausalLM</code>): StarCoder, SantaCoder.</p>
 <p>GPT-2's tree and GPT-2's block: <code>transformer.{wte, wpe, h[i].{ln_1, attn, ln_2, mlp}, ln_f}</code> and <code>lm_head</code>, the residual added in the block, which returns a bare
 tensor. The attention projects queries, keys and values with one fused <code>c_attn</code>
-and runs the shared eager forward. Under <code>multi_query</code> (every released checkpoint)
+and runs the shared attention interface. Under <code>multi_query</code> (every released checkpoint)
 the keys and values are one head shared by every query head, so <code>num_kv_heads</code> is
 1. Queries, keys and values are split views of the one <code>c_attn</code> tensor: torch
 refuses an in-place edit of <code>attention_queries</code> outside <code>torch.no_grad()</code> (assign
@@ -746,7 +746,7 @@ eager softmax runs in float32 regardless. The MLP is <code>n_inner</code> wide,
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">bigcode/gpt_bigcode-santacoder</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">bigcode/gpt_bigcode-santacoder</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

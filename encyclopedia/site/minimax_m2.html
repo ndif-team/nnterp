@@ -639,7 +639,7 @@ sum to one, and there is no shared expert.</p></div>    <aside class="quirk-list
   <div class="grid-notes">
     <div class="prose docstring"><p>MiniMax-M2 (<code>MiniMaxM2ForCausalLM</code>): MiniMax-M2, M2.5 and M2.7.</p>
 <p>Llama's tree and Llama's block: <code>model.{embed_tokens, layers[i].{input_layernorm, self_attn, post_attention_layernorm, mlp}, norm}</code> and <code>lm_head</code>, the residual
-added in the block with no scaling, attention through the shared eager forward.
+added in the block with no scaling, attention through the shared attention interface.
 The attention norms its queries and keys across the whole projection
 (<code>q_norm</code>/<code>k_norm</code> over <code>heads * head_dim</code>) before the head split; the
 queries and keys are read where they enter the interface, after the norms and
@@ -664,7 +664,7 @@ each query and key head is rotated.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">MiniMaxAI/MiniMax-M2</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">MiniMaxAI/MiniMax-M2</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

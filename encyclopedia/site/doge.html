@@ -1015,18 +1015,18 @@ per-channel gate (<code>input_residual</code>, then <code>post_attention_residua
 <code>layer_output == post_attention_residual * (input_residual * input + attention_output) + mlp_output</code>,
 which is the plain one only where both gates are one (their initial value). The
 gates are <code>layers[i]._module.input_residual</code> / <code>post_attention_residual</code>;
-nothing is computed or divided for you. The attention runs the shared eager
-forward with q/k norms and a <em>dynamic mask</em>: <code>dt_proj</code> of the values, through
+nothing is computed or divided for you. The attention runs the shared attention
+interface with q/k norms and a <em>dynamic mask</em>: <code>dt_proj</code> of the values, through
 <code>A</code>, gives each key a per-head bias, added to the causal mask (and, past
 <code>keep_window_size</code> keys, used to drop all but the top keys), so
 <code>attention_scores</code> carry it. The MLP is a gated <code>DogeMLP</code>, or the cross-domain
 mixture <code>DogeCDMoE</code> under <code>is_moe</code>, which returns <code>(hidden_states, router_logits)</code>.</p>
 <p>Doge-20M, -40M and -260M load and run. Of the <code>is_moe</code> checkpoints, Doge-40M-MoE
-loads and runs; it needs transformers 5.18 or later, whose block takes the first element
-of <code>DogeCDMoE</code>'s tuple. Where it runs, <code>mlp_output</code> is the mixture's hidden states
-(dense MLP plus routed experts); the six mixture values stay unavailable, since
-<code>router_gate</code> gives two sets of product-key logits per token rather than one per expert, and the
-experts are rows of two embedding tables. The routing views <code>router_gate</code>'s output as
+loads and runs: the block takes the first element of <code>DogeCDMoE</code>'s tuple, so
+<code>mlp_output</code> is the mixture's hidden states (dense MLP plus routed experts). The six
+mixture values are unavailable, since <code>router_gate</code> gives two sets of product-key logits
+per token rather than one per expert, and the experts are rows of two embedding tables.
+The routing views <code>router_gate</code>'s output as
 <code>(2, batch * seq, -1)</code>, which takes each token's two sets from other rows of the flattened batch, so a
 prompt's outputs depend on its length and on the other prompts in the trace: trace clean and corrupt
 prompts separately there.</p></div>
@@ -1045,7 +1045,7 @@ prompts separately there.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">SmallDoge/Doge-260M</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">SmallDoge/Doge-260M</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

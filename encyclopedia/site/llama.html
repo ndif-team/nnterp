@@ -3801,8 +3801,8 @@
     <span class="rn role-stream">(image_features)</span> -&gt; <span class="rl">ImageFeatures</span> <span class="rd">[image_tokens hidden_size]</span>: <span class="rd">The image features the text model receives at the image tokens, flat over them</span>
   )
   <span class="rn role-stream">(projector)</span>: VipLlavaMultiModalProjector(
-    <span class="rn">(projector_layernorm)</span>: LayerNorm<span class="rd">((5120,), eps=1e-05, elementwise_affine=True, bias=True)</span>
-    <span class="rn">(linear_1)</span>: Linear<span class="rd">(in_features=5120, out_features=4096, bias=True)</span>
+    <span class="rn">(projector_layernorm)</span>: LayerNorm<span class="rd">((1024,), eps=1e-05, elementwise_affine=True, bias=True)</span>
+    <span class="rn">(linear_1)</span>: Linear<span class="rd">(in_features=1024, out_features=4096, bias=True)</span>
     <span class="rn">(act)</span>: GELUActivation<span class="rd">()</span>
     <span class="rn">(linear_2)</span>: Linear<span class="rd">(in_features=4096, out_features=4096, bias=True)</span>
   )
@@ -4775,7 +4775,7 @@ not <code>vision.norm</code>.</p>
 <code>model.aligner</code>; Idefics 3 and SmolVLM keep their SigLIP-shaped ViT at
 <code>model.vision_model</code> (one row per image tile) with the pixel-shuffling
 <code>model.connector</code> as <code>projector</code>, and merge the features in a helper,
-<code>inputs_merger</code> (SmolVLM scatters them itself from transformers 5.21). Those towers' <code>post_layernorm</code> does norm the patches; since a
+<code>inputs_merger</code> (SmolVLM's model scatters them itself where its forward makes no such call). Those towers' <code>post_layernorm</code> does norm the patches; since a
 rename key cannot tell it from CLIP's, <code>SiglipVision</code> serves it as <code>vision.norm</code>.</p></div>
     <aside class="quirk-list">
       <p class="micro">sources</p>
@@ -4798,7 +4798,7 @@ rename key cannot tell it from CLIP's, <code>SiglipVision</code> serves it as <c
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">meta-llama/Llama-3.1-8B</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">meta-llama/Llama-3.1-8B</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

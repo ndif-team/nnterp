@@ -4583,7 +4583,7 @@ sublayers:</p>
   block's count, read off the module; the root's <code>num_heads</code> is the config's
   top-level <code>num_attention_heads</code>.</li>
 <li><strong>Gated attention.</strong> q/k norms before the rotary (partial on the full blocks),
-  the shared eager forward, then a softplus gate (<code>g_proj</code>, per head or per
+  the shared attention interface, then a softplus gate (<code>g_proj</code>, per head or per
   channel) on the interface's output before <code>o_proj</code>: <code>attention_head_outputs</code>
   are ungated and <code>attention_output</code> is the gated projection the block adds.</li>
 <li><strong>Mixture of experts.</strong> <code>mlp_layer_types</code> names the dense blocks
@@ -4608,7 +4608,7 @@ sublayers:</p>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">poolside/Laguna-XS-2.1</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">poolside/Laguna-XS-2.1</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

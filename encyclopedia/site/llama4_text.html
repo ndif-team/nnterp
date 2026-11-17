@@ -8029,8 +8029,8 @@ the text-generation task builds <code>Llama4ForCausalLM</code> from it, and a wr
 module passed in already loaded keeps the text model at
 <code>language_model.{model.*, lm_head}</code>, so <code>RENAME</code> carries both spellings
 and whichever the tree has binds.</p>
-<p>The block adds both residuals itself, attention through the shared eager
-forward (Llama 4's own copy, which keeps the softmax in the model dtype).
+<p>The block adds both residuals itself, attention through the shared attention
+interface (Llama 4's eager forward keeps the softmax in the model dtype).
 What differs from Llama, inside the attention and the feed-forward:</p>
 <ul>
 <li><strong>iRoPE.</strong> <code>no_rope_layers[i] == 0</code> marks a NoPE block: no rotary
@@ -8095,7 +8095,7 @@ task builds <code>Llama4ForCausalLM</code>, which has no tower.</p></div>
   <div class="rule"></div>
   <div class="colophon-row">
     <span class="micro">nnterp encyclopedia</span>
-    <span class="mono">built 2026-11-10 · nnterp 2.0.0rc2.dev154+g431e99e4e · transformers 5.21.0 · reference <span id="colophon-reference">meta-llama/Llama-4-Scout-17B-16E</span></span>
+    <span class="mono">built 2026-11-17 · nnterp 2.0.0rc2.dev270+gf451c59af · transformers 5.23.0 · reference <span id="colophon-reference">meta-llama/Llama-4-Scout-17B-16E</span></span>
   </div>
 </footer>
 <script src="static/encyclopedia.js"></script>

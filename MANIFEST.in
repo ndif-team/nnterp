@@ -1,6 +1,5 @@
 # Exclude git-tracked files that shouldn't be distributed
 exclude CLAUDE.md
-exclude GAPS.md
 exclude .gitignore
 
 # Exclude git-tracked directories

@@ -49,7 +49,7 @@ import torch
 import nnterp
 from nnterp import StandardizedTransformer, route_kernels
 
-route_kernels(nnterp.families.mamba, "torch")    # before the first trace; see "The kernels"
+route_kernels(nnterp.families.mamba, "torch")    # for the per-token state, and where mamba_ssm is installed; see "The kernels"
 model = StandardizedTransformer("state-spaces/mamba-130m-hf", dispatch=True)
 mix = model.layers[0].linear_attn
 prompt = "The Eiffel Tower is in the city of"
@@ -78,9 +78,7 @@ read at that call. transformers binds both names to `mamba_ssm`'s compiled
 CUDA kernels when it is installed: they have no Python source to read inside,
 and they do not run on CPU. Without `mamba_ssm` it binds them to its kernel
 dispatcher, a wrapper that calls the pure-torch functions. `route_kernels(family,
-"torch")` binds each name to its own pure-torch function, process-wide, and
-Mamba-1 needs it on every machine for the values read inside the kernels'
-bodies:
+"torch")` binds each name to its own pure-torch function, process-wide:
 
 - The pure-torch selective scan *is* a token loop, so after routing a prompt's
   state after every token exists without a second kernel, and `state`,
@@ -90,19 +88,19 @@ bodies:
   transformers' pure-torch mamba_selective_scan, but this process dispatches
   it to an optimized kernel (mamba_ssm) with no Python source; uninstall it, or
   call nnterp.route_kernels(model.family, 'torch'), to read these`.
-- Unrouted without `mamba_ssm`, the values at the call (`attention_queries`,
-  `attention_keys`, `attention_values`, `betas`, `decays`, `state_input`) are
-  served, and the values read inside the kernels' bodies are not:
-  `attention_head_outputs` and `state_output` report `read inside transformers'
-  pure-torch mamba_selective_scan, which this process reaches through its kernel
-  dispatcher; call nnterp.route_kernels(model.family, 'torch') before tracing
-  this layer`, and `state`, `states`, `state_after` and `set_state_after` the
-  same instruction for the state after each token. (Mamba-2's `StateSpace`
-  reads through the dispatcher instead: [state-space](state-space.md#the-kernels-have-to-be-the-pure-torch-ones).)
+- Unrouted without `mamba_ssm`, every value but the state after each token is
+  served. The two values inside a kernel's body (`attention_head_outputs`, and
+  a decode step's `state_output`) are read one call further down, inside the
+  function the dispatcher calls, and equal a routed run's bit for bit. `state`,
+  `states`, `state_after` and `set_state_after` report `the state after each
+  token is read inside the kernels' pure-torch bodies, which this process
+  reaches through transformers' kernel dispatcher. Call
+  nnterp.route_kernels(model.family, 'torch') before tracing this layer`.
 - Route before the first trace that reads a value inside the mixer: the first
   such read fixes the kernel the instrumented forward calls, and a plain trace
-  before it (a `layer_output` read on a GPU) does not. On CPU route before any
-  trace, since the unrouted kernels fail there (`Expected u.is_cuda()`).
+  before it (a `layer_output` read on a GPU) does not. On CPU with `mamba_ssm`
+  installed route before any trace, since its kernels fail there (`Expected
+  u.is_cuda()`).
   `route_kernels(family, "default")` restores the module's own bindings.
 - `model.train()` takes another path, the fused `mamba_inner_fn`, which
   `route_kernels` does not reroute: a training-mode trace fails without
@@ -211,12 +209,11 @@ before `t`".
   fetches its cached state only when it receives a cache, and the kernel choice reads that fetch, so a read inside
   the mixer parks on `cache_params_get_recurrent_state_0` and the run ends with `OutOfOrderError` naming it. Leave
   `use_cache` on (the default) for anything inside the mixer.
-- **Route before the first trace that reads the mixer, on every machine.** With `mamba_ssm`
+- **Route before the first trace that reads the mixer.** With `mamba_ssm`
   installed nothing runs on CPU and nothing inside the kernels is readable until
-  `route_kernels(family, "torch")`; without it the values at the call are served unrouted, but
-  `y`, `state_output` and the per-token state are read inside the kernels' bodies, which the
-  unrouted forward reaches through transformers' dispatcher. On a GPU a plain trace before
-  routing is harmless.
+  `route_kernels(family, "torch")`; without it only the per-token state needs the routing, and a
+  mixer already read unrouted keeps the dispatcher, so its `states` raises `AttributeError`. On a
+  GPU a plain trace before routing is harmless.
 - **Read order differs between the kernels.** In the scan, `y`
   (`attention_head_outputs`) is computed before the returned state
   (`state_output`); in the decode step the state is updated first and `y`

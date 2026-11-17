@@ -310,8 +310,8 @@ A Mamba-1 mixer (`layers[i].linear_attn` on Mamba, Falcon-Mamba and Jamba's Mamb
 | `betas` | `ScanSteps` | `softplus(dt + dt_bias)` from the call's arguments; a `DerivedEProperty` | no | `needs_torch_kernels` |
 | `decays` | `ScanDecays` | `A * betas`; a `DerivedEProperty` | no | `needs_torch_kernels` |
 | `state_input` | `ScanState`, or `None` on a prompt | the decode kernel's argument 0, a clone | on a decode step | `needs_torch_kernels` |
-| `attention_head_outputs` | `ScanValues` | `READ_OPS` inside the kernel: `y = C.h + D x` before `silu(z)` and `out_proj` | yes | `needs_kernel_source` |
-| `state_output` | `ScanState` | the scan's return 1, or `STEP_OUTPUT_OP` inside the decode kernel | yes: what the cache receives | `needs_kernel_source` |
+| `attention_head_outputs` | `ScanValues` | `READ_OPS` inside the kernel: `y = C.h + D x` before `silu(z)` and `out_proj` | yes | `needs_torch_kernels` |
+| `state_output` | `ScanState` | the scan's return 1, or `STEP_OUTPUT_OP` inside the decode kernel | yes: what the cache receives | `needs_torch_kernels` |
 | `state` / `states` | `ScanState` / `ScanStates` | the base's, at `STATE_OP` or `STEP_STATE_OP` | as the base | `needs_token_loop` |
 
 ## `StateSpace`
@@ -458,7 +458,6 @@ The axis names are plain string constants in `nnterp.components.standard` (expor
 | `needs_torch_kernels` | `needs_torch_kernels(envoy) -> str \| None` | The reason when the mixer's `CHUNK_KERNEL` or `RECURRENT_KERNEL` name dispatches to an optimized kernel (`flash-linear-attention`, `mamba_ssm`) with no Python source. |
 | `needs_per_token_chunks` | `needs_per_token_chunks(envoy) -> str \| None` | `needs_torch_kernels`, then, when the mixer's `chunk_size` is not 1, the reason naming the chunk size and `chunk_per_token`: the predicate of `StateSpace.states`. |
 | `needs_recurrent_routing` | `needs_recurrent_routing(envoy) -> str \| None` | The reason when `STATE_OP` is `None` (the kernels do not materialize the state per token), then `needs_torch_kernels`, then the reason when the prompt kernel is not the token-by-token loop (or, with `STEP_STATE_OP`, the decode kernel is still the dispatcher): call `route_kernels`. |
-| `needs_kernel_source` | `needs_kernel_source(envoy) -> str \| None` | `needs_torch_kernels`, then the reason when either kernel name is still transformers' dispatcher, whose body is not the kernel's: a `SelectiveScan` value read inside a kernel (`attention_head_outputs`, `state_output`). |
 | `needs_token_loop` | `needs_token_loop(envoy) -> str \| None` | `needs_recurrent_routing`, then the reason when a Mamba-1 checkpoint sets `use_mambapy` with `mambapy` installed (a parallel scan, no per-token binding). |
 | `needs_grouped_experts` | `needs_grouped_experts(envoy) -> str \| None` | `no_mixture()`, then the reason when the experts run neither `grouped_mm` nor `batched_mm` (it names `experts_implementation=`): the predicate of `Moe.expert_outputs`. |
 | `mixture_reason` | `mixture_reason(envoy) -> str \| None` | `envoy.no_mixture()`: the predicate of `Moe`'s other routing values. |

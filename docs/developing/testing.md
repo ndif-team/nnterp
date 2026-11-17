@@ -329,7 +329,8 @@ mix `SelectiveScanSuite` (`tests/families/scan_suite.py`) in before
 `FamilySuite`: a class-scoped autouse fixture routes the family to the
 pure-torch kernels for the whole class, and its tests check the values
 against the recurrence recomputed from them, the writes, the decode step and
-the per-token state on `SCAN_BLOCK`, and meta-build a real checkpoint's config
+the per-token state on `SCAN_BLOCK`, read the two values inside the kernels
+unrouted in a process of its own, and meta-build a real checkpoint's config
 (`REAL`). On a model with no softmax attention (Mamba), `attn_block(model)`
 skips the pattern and interior tests and `expected_values` drops the
 `self_attn.*` names.

@@ -65,17 +65,14 @@ def chunk_per_token(model: Any, enabled: bool = True) -> None:
     """Run every Mamba-2 mixer of ``model`` with a chunk size of 1, so the chunk scan keeps the state after every token.
 
     The chunk scan materializes the state at each chunk boundary
-    (``new_states``, `StateSpace.states`); with ``chunk_size == 1`` every
-    token is a boundary. The outputs are the same; the cost is not: the
-    recurrence between chunks is quadratic in the number of chunks, so a long
-    prompt runs markedly slower. Unlike `route_kernels`, which binds a
-    family's kernels process-wide, this sets an attribute of each mixer module
-    of this one model (``chunk_size``, which the forward reads on every
-    call), so it applies from the next trace and to no other model. Call it
+    (`StateSpace.states`); with ``chunk_size == 1`` every token is a
+    boundary. The outputs are the same; the cost is not: the recurrence
+    between chunks is quadratic in the number of chunks, so a long prompt runs
+    markedly slower. It sets ``chunk_size`` on each mixer module of this one
+    model, so it applies from the next trace and to no other model. Call it
     on a loaded model: a lazily built model's modules are replaced when its
     weights arrive. ``enabled=False`` restores the chunk size each mixer was
-    built with (``config.chunk_size``, ``mamba_chunk_size`` on Bamba, Falcon-H1
-    and GraniteMoeHybrid).
+    built with.
     """
     mixers = model.modules(include_fn=lambda envoy: isinstance(envoy, StateSpace))
     if not mixers:
@@ -126,7 +123,7 @@ NO_STATE_WRITES = (
 
 
 class StateSpace(RecurrentMixer):
-    """A Mamba-2 (SSD) mixer (Mamba-2, Nemotron-H, Bamba, Falcon-H1, Zamba2, GraniteMoeHybrid): a selective state space.
+    """A Mamba-2 (SSD) mixer: a selective state space.
 
     SSD, the state-space dual, is linear attention with a scalar decay per
     head. Per head, with the state ``h`` a ``head_dim`` by ``state_dim``
@@ -136,61 +133,22 @@ class StateSpace(RecurrentMixer):
         y = h C + D * x
 
     so the shared names mean what they mean on a gated DeltaNet
-    (`LinearAttention`):
+    (`LinearAttention`): ``C`` is the queries, what reads the state, and
+    ``B`` the keys, where a token writes into it, one per group of heads
+    (``n_groups``); ``x`` is the values, what is written; ``dt`` is the
+    ``betas`` and ``A * dt`` the ``decays``; ``y`` is the head outputs. The
+    state is served key side first, ``[batch, heads, state_dim, head_dim]``
+    (the shared `State` layout), the transpose of the cache's, and a decode
+    step's tensors with a sequence axis of 1.
 
-    * ``attention_queries`` is ``C``, what reads the state;
-      ``attention_keys`` is ``B``, where a token writes into it; both
-      ``[batch, seq, groups, state_dim]``, one per group of heads
-      (``n_groups``), shared by the heads in the group.
-    * ``attention_values`` is ``x`` (``hidden_states`` at the call), what is
-      written, ``[batch, seq, heads, head_dim]``.
-    * ``betas`` is ``dt = softplus(dt + dt_bias)``, the write strength,
-      ``[batch, seq, heads]``; ``decays`` is ``A * dt``, the log of how much of
-      the state each token keeps, ``[batch, seq, heads]``, float32 and
-      non-positive. Both are the kernel's ``dt`` argument seen through
-      ``dt_bias``, the softplus and ``A``; an assignment is carried back into
-      ``dt`` (`_dt_for`), so the kernel computes the assigned gate.
-    * ``state_input`` / ``state_output``: the state entering and leaving the
-      call, served as ``[batch, heads, state_dim, head_dim]`` (key side
-      first, the shared `State` layout), the transpose of the cache's
-      ``[batch, heads, head_dim, state_dim]``; an assignment is transposed
-      back. ``state_input`` is ``None`` on a fresh prompt.
-    * ``attention_head_outputs`` is ``y``, the scan's output with the ``D``
-      skip, before the gated norm and ``out_proj``,
-      ``[batch, seq, heads, head_dim]``.
-
-    Everything but ``attention_output`` is read at the scan call:
-    transformers' ``mamba2_chunk_scan`` on a prompt, its
-    ``mamba2_selective_state_update`` on a decode step (`RecurrentMixer.KERNEL`). The two
-    take their arguments in different places and the update has no sequence
-    axis, so each value selects by the kernel that fires (`argument`) and a
-    decode step's tensors are served with a sequence axis of 1, removed again
-    on assignment. The update writes the new state into the cache's buffer
-    and returns only ``y``, so a decode step's ``state_output`` is read inside
-    it, at ``UPDATED_STATE``.
-
-    The chunk scan materializes the state at every chunk boundary, in one
-    tensor (``new_states``, `CHUNK_STATES`); with a chunk size of 1
-    (`chunk_per_token`) every token is a boundary, and ``states`` and
-    ``state_after(t)`` read the state after every token of the call (a decode
-    step's is its ``state_output``). There is no per-token occurrence to walk
-    with ``tracer.iter`` (``state`` is unavailable, ``STATE_OP`` is ``None``),
-    and no per-token write: the scan computes every boundary state in one
-    cumulative step from the initial state, so ``set_state_after`` is
-    unavailable too. With ``mamba_ssm`` installed the kernels have no Python
-    source; ``route_kernels(model.family, "torch")`` binds transformers'
-    pure-torch ones (`RecurrentMixer`). Without it the forward reaches the
-    pure-torch kernels through transformers' kernel dispatcher, and the two
-    values read inside a kernel (a decode step's ``state_output``, the chunk
-    boundaries ``states`` reads) are keyed through it (`kernel_body`), so
-    nothing needs routing there.
-
-    A value that needs another argument of the call (``betas`` needs
-    ``dt_bias``, a prompt's ``state_output`` whether the scan returns a
-    state) reads the call's arguments once per call (`_arguments`), at the
-    call's first need, and finds them there after the model has moved into
-    the kernel. A value read after the model has moved past its location is
-    an out-of-order read.
+    The chunk scan materializes the state at every chunk boundary; with a
+    chunk size of 1 (`chunk_per_token`) every token is a boundary, and
+    ``states`` and ``state_after(t)`` read the state after every token of the
+    call. There is no per-token occurrence to walk with ``tracer.iter`` and no
+    per-token write, so ``state`` and ``set_state_after`` are unavailable.
+    With ``mamba_ssm`` installed the kernels have no Python source;
+    ``route_kernels(model.family, "torch")`` binds transformers' pure-torch
+    ones.
     """
 
     #: The call a prompt runs through: ``mamba2_chunk_scan(hidden_states, dt, A, B, C, chunk_size=, D=, dt_bias=, initial_states=, ...)``.
@@ -287,14 +245,7 @@ class StateSpace(RecurrentMixer):
         return dt
 
     def _dt_for(self, betas: torch.Tensor) -> torch.Tensor:
-        """The ``dt`` argument the kernel turns into ``betas``: the inverse of `_gate`, without the clamp.
-
-        ``log(expm1(b)) - dt_bias`` when the kernel applies the softplus
-        (written ``b + log(-expm1(-b))``, which does not overflow), so a
-        ``betas`` of 0 is a ``dt`` of ``-inf`` and the softplus returns 0. On a
-        decode step the ``[batch, 1, heads]`` value is expanded back over
-        ``head_dim``, the update's ``[batch, heads, head_dim]``.
-        """
+        """The ``dt`` argument the kernel turns into ``betas``: the inverse of `_gate`, without the clamp."""
         args = self._arguments()
         current, bias = args["dt"], args["dt_bias"]
         b = betas.float()
@@ -348,10 +299,8 @@ class StateSpace(RecurrentMixer):
     def state_input(self, value: Any) -> State | None:
         """The state this call starts from, key side first: ``None`` on a fresh prompt, the cached state on a decode step.
 
-        A transposed copy: the cache hands the kernel its own buffer and the
-        update overwrites it in place, so the live tensor would read as this
-        step's *output* by the time the trace ends. Assign to replace what the
-        step starts from.
+        A transposed copy, since the update overwrites the cache's buffer in
+        place. Assign to replace what the step starts from.
         """
         return value if value is None else value.transpose(-1, -2).clone()
 

@@ -104,11 +104,10 @@ def clip_rows(tower="model.vision_tower"):
 
 
 def encodes_images_in_generate(module):
-    """Whether transformers' ``generate`` runs the image encoder before the first forward (5.18 and later), on the condition
+    """Whether transformers' ``generate`` runs the image encoder before the first forward, on the condition
     ``GenerationMixin._maybe_prepare_encoder_kwargs_for_generation`` checks: the forward takes ``mm_encoder_outputs`` and the
     class lists images among its ``input_modalities`` (Qwen3.5's does not: it keeps the default ``"text"``)."""
-    supports = getattr(module, "_supports_mm_encoder_outputs", None)
-    return bool(supports and supports() and "image" in module.input_modalities)
+    return module._supports_mm_encoder_outputs() and "image" in module.input_modalities
 
 
 def align_processor(model, image_processor=None, **processor):
@@ -346,9 +345,9 @@ class VisionSuite:
         assert (first[clean["mask"]] == 0).all()
 
     def test_generate_encodes_the_images_before_the_prompt_call(self, model):
-        """Where transformers encodes the images in ``generate`` before the first forward (``mm_encoder_outputs``, 5.18 and
-        later), the tower's values come before ``image_token_mask``, which is read off the root's inputs; before that,
-        after it, as in a trace. ``image_features``, read at the scatter, is after both either way."""
+        """Where transformers encodes the images in ``generate`` before the first forward (``mm_encoder_outputs``), the
+        tower's values come before ``image_token_mask``, which is read off the root's inputs; elsewhere after it, as in
+        a trace. ``image_features``, read at the scatter, is after both either way."""
         early = encodes_images_in_generate(model._module)
         with model.generate(image_prompt(model), images=[IMAGE], max_new_tokens=2, do_sample=False):
             if early:

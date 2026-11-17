@@ -93,10 +93,10 @@ one scalar per token. `shared_expert_output` is that product, the term the mixtu
 `routed_output`; `shared_experts.output` is the expert's output before the gate. Measure or patch the
 shared expert's contribution at `shared_expert_output`.
 
-## The DeltaNet's queries and keys are copied per value head
+## A DeltaNet query/key head serves several value heads
 
-The mixer repeats each key head's query and key up to the value heads before the kernel, so
-`attention_queries` and `attention_keys` have one head per value head, each key head copied into
-consecutive heads. An edit to one copy reaches only its own value head; edit every copy to change the
-key head.
+The mixer has fewer query/key heads than value heads, and each one is repeated over consecutive value
+heads. `attention_queries` and `attention_keys` are what the delta-rule call receives: one head per
+query/key head where the kernel does that repeat itself, so an edit to one reaches every value head it
+serves, and one head per value head where the mixer's forward has repeated them before the call.
 """

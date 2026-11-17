@@ -286,7 +286,7 @@ The base's methods, on every `RecurrentMixer`:
 | `state_after` | `state_after(t: int) -> Tensor` | The state after token `t` of this call, counted from the call's own first token. |
 | `set_state_after` | `set_state_after(t: int, value: Tensor) -> None` | Assign `state` at token `t`; positions after `t` continue from `value`. Reads follow the forward: read earlier positions before the write, later ones after, and `states` only before it. |
 
-`heads` on these layouts is the module's `num_v_heads`, `key_dim` its `head_k_dim` and `value_dim` its `head_v_dim`. On a decode step the sequence axis is 1.
+`heads` on these layouts is the module's `num_v_heads`, `key_dim` its `head_k_dim` and `value_dim` its `head_v_dim`; on `attention_queries` and `attention_keys`, `heads` is the count the kernel call receives, `num_k_heads` where the kernel repeats them to the value heads itself. On a decode step the sequence axis is 1.
 
 ## `SelectiveScan`
 

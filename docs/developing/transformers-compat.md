@@ -25,6 +25,11 @@ the recurrent families' tests pass there; Jamba's router became a ``JambaTopKRou
 before), so its `router_logits` read whichever the mixture has; SmolVLM's model scatters its image features itself there
 (``masked_scatter``, as Llava does) where 5.20 called ``inputs_merger``, so its scatter host reads whichever operation
 the forward has, and the 5.20-only SmolVLM reshape bug that skipped its tower tests is fixed in 5.21.
+The suite is run on **5.21.1**, where it passes, and on **5.23.0**. From 5.23.0 the delta-rule kernels repeat a gated
+DeltaNet's queries and keys (`num_k_heads` up to `num_v_heads`) where the mixer's forward did before, so
+`linear_attn.attention_queries` and `attention_keys`, the kernel call's arguments, are one per query/key head from
+5.23.0 and one per value head before ([below](#gated-deltanet-qwen3-next-qwen35-qwen35-moe)); the gated-DeltaNet
+families' test files pass on 5.21.1, 5.22.2 and 5.23.0.
 `pyproject.toml` requires `nnsight>=0.8`,
 `transformers>=5.17` and `jaxtyping`. nnterp needs an nnsight whose `Envoy` has `parent` and `root`
 (below) and whose `rename` takes a dotted alias (`{"attn.c_proj":
@@ -134,8 +139,23 @@ is the count of `last_recurrent_state = ...` bindings before the one after
 the token's update: two before the loop, the decay inside it, then the
 update. A release that adds or removes one binding moves it. The kernels'
 argument names `g`, `beta`, `initial_state` are the `select` keys of
-`decays`, `betas`, `state_input` (`linear_attention.py`). The
-kernel-dispatch closure names `torch_function` and `implementation`
+`decays`, `betas`, `state_input` (`linear_attention.py`).
+
+The kernels' first two arguments are the queries and the keys, which
+`attention_queries` and `attention_keys` serve as the call holds them.
+Through 5.22 the mixer's forward (`Qwen3_5GatedDeltaNet.forward`, and
+Qwen3.5-MoE's, Qwen3-Next's, OLMo-Hybrid's) repeats them from `num_k_heads`
+to `num_v_heads` (`repeat_interleave` on the head axis) before the call, so
+the two values are one per value head. From 5.23 it passes them at
+`num_k_heads` and both kernels repeat them (`if num_k_heads !=
+num_v_heads:`, with `num_k_heads` taken from `key.shape`), so the two values
+are one per query/key head and an edit to one reaches the `num_v_heads //
+num_k_heads` consecutive value heads it serves. A mixer whose two counts are
+equal (Kimi-Linear, Qwen3.5-0.8B) reads the same on both. The suite takes
+the count it expects off the mixer's forward (`delta_rule_heads`,
+`tests/families/suite.py`).
+
+The kernel-dispatch closure names `torch_function` and `implementation`
 (`use_kernel_func_from_hub_with_fallback`,
 `transformers/integrations/hub_kernels.py`) are what
 `needs_torch_kernels`, `route_kernels` and `needs_recurrent_routing` read
@@ -172,7 +192,10 @@ a key, bound where it resolves (`RENAME`, `gpt_neox.py`).
   `TestQwen3_5.test_values_follow_the_step_under_generate`,
   `TestQwen3_5.test_per_token_state_with_the_recurrent_kernel`,
   `tests/families/test_qwen3_5_text.py`) catch the kernel names, the branch
-  binding, the argument names and the state binding.
+  binding, the argument names and the state binding, and with
+  `test_values_match_their_annotations` the head count the queries and keys
+  arrive with. `test_delta_net_queries_and_keys_are_the_kernel_calls_own_arguments`
+  (`tests/test_base.py`) checks the two are the call's own tensors.
 
 ## Procedure when upgrading transformers
 

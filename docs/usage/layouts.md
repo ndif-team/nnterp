@@ -295,16 +295,18 @@ compression rate (4 tokens on `compressed_sparse_attention`, 128 on
 
 ## `heads` on DeltaNet values
 
-On a hybrid's `linear_attn`, `heads` is the mixer's value-head count (`num_v_heads`), which
-is what the keys are repeated to before the delta rule; `key_dim` and `value_dim` are the
-mixer's `head_k_dim` and `head_v_dim`, not the root's `head_dim`:
+On a hybrid's `linear_attn`, `heads` is the mixer's value-head count (`num_v_heads`), and
+`key_dim` and `value_dim` are the mixer's `head_k_dim` and `head_v_dim`, not the root's
+`head_dim`. The queries and keys have the head count the kernel call receives them with:
+`num_k_heads` where the kernel repeats them to the value heads itself, `num_v_heads` where
+the mixer's forward has repeated them:
 
 ```python
 model = StandardizedTransformer("Qwen/Qwen3.5-9B", dispatch=True, attn_implementation="eager")
 mix = model.layers[0].linear_attn
 
 with model.trace(prompt):
-    q = mix.attention_queries.save()        # (1, seq, num_v_heads, head_k_dim)   bf16
+    v = mix.attention_values.save()         # (1, seq, num_v_heads, head_v_dim)   bf16
 with model.trace(prompt):
     g = mix.decays.save()                   # (1, seq, num_v_heads)               float32
 with model.trace(prompt):

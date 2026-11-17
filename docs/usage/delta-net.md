@@ -76,7 +76,7 @@ block', 7: ..., ...}`. `model.support(layer=i)` is flat for one block.
 | value | what it is | layout |
 | --- | --- | --- |
 | `attention_output` | what the mixer adds to the residual stream | `Residual`: `batch seq hidden_size` |
-| `attention_queries`, `attention_keys` | what the delta rule receives: after the short convolution, the activation and the repeat to the value heads, before the kernel's l2-norm (and, for the queries, its `1/sqrt(key_dim)` scale) | `LinearQK`: `batch seq heads key_dim` |
+| `attention_queries`, `attention_keys` | what the delta-rule call receives: after the short convolution and the activation, before the kernel's l2-norm (and, for the queries, its `1/sqrt(key_dim)` scale) | `LinearQK`: `batch seq heads key_dim` |
 | `attention_values` | the values the delta rule receives | `LinearV`: `batch seq heads value_dim` |
 | `decays` | the gate: the log of how much of the state each token keeps; float32, non-positive | `Gates`: `batch seq heads`; on Kimi-Linear `ChannelGates`: `batch seq heads key_dim`, one per key channel |
 | `betas` | how strongly each token's key/value pair is written into the state; in `(0, 1)`, or `(0, 2)` on OLMo-Hybrid with `linear_allow_neg_eigval` (the released checkpoints) | `Gates`: `batch seq heads` |
@@ -86,9 +86,14 @@ block', 7: ..., ...}`. `model.support(layer=i)` is flat for one block.
 
 The layout names are the aliases in `nnterp.components` (`LinearAttention.decays.layout
 is Gates`); `state` is a `State` and `states` a `States`, `batch seq heads key_dim
-value_dim`. `heads` is the mixer's `num_v_heads` (the queries and keys are repeated up to
-it), `key_dim` its `head_k_dim` and `value_dim` its `head_v_dim` (on Kimi-Linear, `heads` is
-`num_heads` and `key_dim` and `value_dim` are both `head_dim`). The state is
+value_dim`. `heads` is the mixer's `num_v_heads`, `key_dim` its `head_k_dim` and
+`value_dim` its `head_v_dim` (on Kimi-Linear, `heads` is `num_heads` and `key_dim` and
+`value_dim` are both `head_dim`). On the queries and keys `heads` is the count the kernel
+call receives them with. Where a mixer has fewer query/key heads than value heads
+(Qwen3-Next, Qwen3.5 from 4B up), that is `num_k_heads` if the kernel repeats them to the
+value heads itself, and an edit to one head then reaches the `num_v_heads // num_k_heads`
+consecutive value heads it serves; it is `num_v_heads` if the mixer's forward has already
+repeated them. The state is
 float32 in the torch kernels. Everything but `attention_output` is read at the
 delta-rule kernel call, so these are `EProperty` values keyed inside the
 forward (`kernel("inputs")`, the kernel that fires on this call); assign to
@@ -119,6 +124,7 @@ with model.trace(prompt):
     y = mix.attention_head_outputs.save()
 
 q, k = l2norm(q.float()) / q.shape[-1] ** 0.5, l2norm(k.float())    # what the kernel uses
+q, k = (t.repeat_interleave(v.shape[2] // t.shape[2], dim=2) for t in (q, k))   # one per value head, where the call holds fewer
 S = torch.zeros(q.shape[0], q.shape[2], q.shape[3], v.shape[3])      # [batch, heads, key_dim, value_dim]
 outs = []
 for t in range(q.shape[1]):

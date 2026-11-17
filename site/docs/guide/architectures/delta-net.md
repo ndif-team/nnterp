@@ -42,7 +42,7 @@ A block has `self_attn` or `linear_attn`, never both, following `config.layer_ty
 | `state_output` | `[batch, heads, key_dim, value_dim]` | the state after the call's last token, what the next decode step starts from |
 | `attention_head_outputs` | `[batch, seq, heads, value_dim]` | each head's read of the state, before the gated norm and the output projection |
 
-`heads` is the mixer's `num_v_heads`, and the queries and keys are repeated up to it. On Kimi-Linear the decay is one per key channel, so `decays` is `[batch, seq, heads, key_dim]`. The sequence axis is 1 on every recurrent mixer, where softmax attention's queries put the heads first. Signatures are on the [`linear_attention`](../../documentation/components/linear_attention.md) and [`recurrent`](../../documentation/components/recurrent.md) pages of the Documentation tab.
+`heads` is the mixer's `num_v_heads`. The queries and keys have as many heads as the kernel call receives: on a checkpoint with fewer query/key heads than value heads (Qwen3-Next, Qwen3.5 from 4B up) that is `num_k_heads` where the kernel repeats them to the value heads itself, and an edit to one head then reaches every value head it serves. On Kimi-Linear the decay is one per key channel, so `decays` is `[batch, seq, heads, key_dim]`. The sequence axis is 1 on every recurrent mixer, where softmax attention's queries put the heads first. Signatures are on the [`linear_attention`](../../documentation/components/linear_attention.md) and [`recurrent`](../../documentation/components/recurrent.md) pages of the Documentation tab.
 
 ## Kernels and `route_kernels`
 

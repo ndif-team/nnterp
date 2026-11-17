@@ -94,12 +94,13 @@ On 0.8B and 9B the gate's sigmoid is small for most entries, so `attention_head_
 the stream scaled far down, head by head. Attribute and patch heads at `attention_premix`,
 `o_proj`'s input, which is after the gate.
 
-## The DeltaNet's queries and keys are copied per value head on 4B and larger
+## A DeltaNet query/key head serves several value heads on 4B and larger
 
-On 4B, 9B and 27B the mixer repeats each key head's query and key up to the value heads before the
-kernel, so `attention_queries` and `attention_keys` have one head per value head, each key head copied
-into consecutive heads. An edit to one copy reaches only its own value head; edit every copy to change
-the key head.
+On 4B, 9B and 27B the mixer has fewer query/key heads than value heads, and each one is repeated over
+consecutive value heads. `attention_queries` and `attention_keys` are what the delta-rule call
+receives: one head per query/key head where the kernel does that repeat itself, so an edit to one
+reaches every value head it serves, and one head per value head where the mixer's forward has repeated
+them before the call.
 
 ## Prepending `<|endoftext|>` changes the predictions
 

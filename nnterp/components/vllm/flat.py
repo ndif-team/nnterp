@@ -37,9 +37,8 @@ def unbatched(value: torch.Tensor, rows: torch.Tensor, name: str, head_dim: int 
     """What `batched` served, back as the ``[tokens, ...]`` the model holds, refusing another shape.
 
     A written value is spliced into the step the engine is running, among
-    other requests' rows. One of the wrong height would reach the next kernel
-    as it is, where the mismatch can end the engine and every request in it,
-    so it is refused here, in the block that wrote it.
+    other requests' rows, where one of the wrong height can end the engine
+    and every request in it, so it is refused here.
     """
     expected = (1, *rows.shape)
     if head_dim is not None:
@@ -58,38 +57,28 @@ def unbatched(value: torch.Tensor, rows: torch.Tensor, name: str, head_dim: int 
 class Flat(EProperty):
     """An `EProperty` over a ``[tokens, ...]`` tensor, served as a private ``[1, tokens, ...]`` copy.
 
-    Takes what `EProperty` takes (a path for a key, ``select`` for one
-    argument of a call). The decorated function receives the batched copy and
-    returns the value; its annotation is the layout. In-place edits are handed
-    back to the model when the block moves on, and an assignment is checked
-    against the rows this request has before it is swapped in. An output
-    that is a tuple serves its first element unless ``select`` says another:
-    a norm vLLM calls with the residual beside the stream returns
-    ``(normed, residual)``, and the same norm called alone returns the tensor.
+    Takes what `EProperty` takes. The decorated function receives the batched
+    copy and returns the value. In-place edits are handed back to the model
+    when the block moves on, and an assignment is checked against the rows
+    this request has before it is swapped in. An output that is a tuple
+    serves its first element unless ``select`` says another.
 
     Args:
         heads: For a ``[tokens, num_heads * head_dim]`` tensor, where the head
-            axis goes: ``"first"`` serves ``[1, num_heads, tokens, head_dim]``
-            (the queries, keys and values), ``"last"`` ``[1, tokens, heads,
-            head_dim]`` (the head outputs). The width of a head is the
-            ``head_size`` of the module the key names, vLLM's attention layer,
-            or, for a module that has none (the output projection), the
-            host's ``head_dim``.
+            axis goes: ``"first"`` serves ``[1, num_heads, tokens, head_dim]``,
+            ``"last"`` ``[1, tokens, heads, head_dim]``. The width of a head is
+            the ``head_size`` of the module the key names or, for a module
+            that has none, the host's ``head_dim``.
         head_dim: The width of a head as a function of the host, for a value
-            whose key names no module that knows it: an operation of the
-            host's forward (the rotary call's arguments, split by the rotary
-            embedding's ``head_size``).
+            whose key names no module that knows it.
         batch: Whether the tensor already carries the batch axis, ``[1,
-            tokens, ...]``, as it does inside the transformers model vLLM's
-            transformers backend runs: its rows are then ``tensor[0]``, served
-            and handed back the same way. A function of the host for a value
-            whose model decides (the root's ``token_embeddings``).
+            tokens, ...]``, as on vLLM's transformers backend. A function of
+            the host for a value whose model decides.
         factor: For a value that is the tensor times a scalar of the model
             (Granite's ``residual_multiplier``), a function of the host
-            giving that scalar. The value is served multiplied and is a
-            computed copy: a write goes back divided by the factor, and a
-            read that edits nothing hands the model's tensor back untouched,
-            so dividing never rounds a clean forward.
+            giving that scalar. The value is served multiplied: a write goes
+            back divided by the factor, and a read that edits nothing hands
+            the model's tensor back untouched.
 
     ``in_place`` (`EProperty`'s) copies an edit or an assignment into the
     rows the model holds; the read is still a private copy.

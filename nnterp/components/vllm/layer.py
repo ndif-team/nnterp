@@ -38,12 +38,9 @@ def with_argument(inputs: tuple, index: int, name: str, value: Any) -> tuple:
 class Layer(standard.Layer):
     """A vLLM block that is called with the residual stream and returns it.
 
-    Two things vary between the blocks that work this way, and a family
-    states them: `STREAM`, where the stream sits in the block's call (GPT-2's
-    block takes it alone, most take the positions first), and the base's
-    ``returns_tuple``, for a block that returns the stream with something
-    beside it (Exaone4's and Cohere's return ``(hidden_states, residual)``
-    with the whole stream first, where a `FusedLayer` returns its two halves).
+    A family states `STREAM`, where the stream sits in the block's call (most
+    take the positions first), and the base's ``returns_tuple``, for a block
+    that returns the stream with something beside it.
     """
 
     #: The index of the residual stream in the block's call.
@@ -99,13 +96,10 @@ class Layer(standard.Layer):
 def summed(key: str, hidden: tuple = (0, "x"), residual: tuple = (1, "residual"), description: str | None = None) -> EProperty:
     """The stream at a call that takes it in two halves, ``hidden + residual``, ``[1, tokens, hidden_size]``.
 
-    A fused block hands its stream to the next norm as ``norm(hidden_states,
-    residual)``, and the norm adds the two before it normalizes (in place):
-    the stream is their sum, computed for the read. ``key`` is the call's
-    ``inputs``, ``hidden`` and ``residual`` where the halves sit in it, as
-    ``(index, name)``. An edit goes back as a change to the hidden half, and
-    a read that edits nothing hands the difference back as exactly zero; a
-    call without the residual (a block's first norm) is its stream alone.
+    ``key`` is the call's ``inputs``, ``hidden`` and ``residual`` where the
+    halves sit in it, as ``(index, name)``. An edit goes back as a change to
+    the hidden half; a call without the residual (a block's first norm) is
+    its stream alone.
     """
 
     module = key.rsplit(".", 1)[0]
@@ -127,18 +121,13 @@ def summed(key: str, hidden: tuple = (0, "x"), residual: tuple = (1, "residual")
 
 
 class FusedLayer(standard.Layer):
-    """A vLLM block with the residual add fused into the next norm (Llama, Qwen, Gemma, most families).
+    """A vLLM block with the residual add fused into the next norm, as on most families.
 
     It is called ``forward(positions, hidden_states, residual)`` and returns
     ``(hidden_states, residual)``: ``hidden_states`` is what the last sublayer
     produced and ``residual`` the stream before it, so the stream is their
-    sum, entering and leaving. The first block is called with ``residual``
-    ``None`` and the embeddings as ``hidden_states``.
-
-    The sum is computed for the read, so it is nobody's buffer. An edit goes
-    back as a change to ``hidden_states`` (the next norm adds the two), and
-    a read that edits nothing changes nothing: the difference it hands back is
-    exactly zero.
+    sum, entering and leaving. An edit goes back as a change to
+    ``hidden_states``, and a read that edits nothing changes nothing.
     """
 
     attention_input_gain = Layer.attention_input_gain

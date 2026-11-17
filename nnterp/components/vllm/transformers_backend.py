@@ -1,39 +1,22 @@
 """The base envoys of a family vLLM runs through its transformers backend: transformers' own modules, inside vLLM.
 
-vLLM has no implementation of its own for some architectures; its registry
-sends them to ``TransformersForCausalLM`` (``TransformersMoEForCausalLM`` for a
-mixture of experts), which builds transformers' model and runs it. The block,
-the attention and the MLP are transformers' classes, called the way
-transformers calls them, so the values sit where they sit on transformers.
-Three things differ, and these envoys absorb them:
+The block, the attention and the MLP are transformers' classes, called the
+way transformers calls them, so the values sit where they sit on
+transformers. Three things differ, and these envoys absorb them:
 
-* **The batch axis is there.** The backend adds a batch axis of one to the
-  engine's flat rows before calling the model and strips it after, so inside
-  the model a request's activations are ``[1, tokens, hidden_size]``. The values
-  are served as private copies all the same (`Flat` with ``batch=True``),
-  handed back when the block moves on, so they behave as every vLLM value
-  does: a saved one stays what it was read as, and an edit reaches the model.
-* **The attention layer is vLLM's.** The model is built with
-  ``_attn_implementation = "vllm"``: transformers' attention interface hands
-  the queries, keys and values to the engine's attention layer for that
-  block, which the backend sets on the attention module as its ``attn``
-  child. So it is the layer the vLLM `Attention` base reads: the queries,
-  keys and values are its inputs and the head outputs its output,
-  ``[tokens, num_heads * head_dim]`` as on every vLLM family, and the pattern
-  is recomputed from them, on the prefill only.
+* **The batch axis is there.** Inside the model a request's activations are
+  ``[1, tokens, hidden_size]``. The values are served as private copies all
+  the same (`Flat` with ``batch=True``).
+* **The attention layer is vLLM's.** The attention module's ``attn`` child is
+  the engine's attention layer, the one the vLLM `Attention` base reads.
 * **Some modules are vLLM's.** The backend fuses the query, key and value
   projections into one ``qkv_proj`` (and a gated MLP's into ``gate_up_proj``),
-  rewriting the module's forward to call it, swaps RMSNorms for vLLM's, and
-  replaces a mixture's experts with the engine's fused MoE kernel.
-  The values do not read inside those forwards: the rewritten forward is
-  compiled under the class's file and line numbers and bound on the
-  instance, so ``inspect``, and nnsight's ``.source`` with it, returns the
-  class's text, which still calls the projections the fusion removed
-  (docs/developing/gotchas.md). So the queries and keys before the rotary
-  embedding, which are arguments of a call inside the attention's forward
-  (``apply_rotary_pos_emb``), are not served here (`BACKEND_ROTARY`); the
-  limit lifts when vLLM registers the rewritten text in ``linecache`` under
-  its own file name and nnsight instruments the instance's forward.
+  rewriting the module's forward, where nnsight's ``.source`` then returns
+  the class's text (docs/developing/gotchas.md). So the queries and keys
+  before the rotary embedding, arguments of a call inside the attention's
+  forward, are not served here (`BACKEND_ROTARY`); the limit lifts when vLLM
+  registers the rewritten text in ``linecache`` under its own file name and
+  nnsight instruments the instance's forward.
 """
 
 from __future__ import annotations

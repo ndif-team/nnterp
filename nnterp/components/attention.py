@@ -69,10 +69,9 @@ OWN_ARITHMETIC = (
 def seq_first(value: torch.Tensor) -> torch.Tensor:
     """``[batch, num_heads, seq, head_dim]`` <-> ``[batch, seq, num_heads, head_dim]``, as a view.
 
-    The standard layout of ``attention_head_outputs`` is what the shared
-    interface returns, sequence before heads. A family whose own arithmetic
-    keeps heads first serves a transposed view on read, so in-place edits
-    still land, and transposes back on write; the transpose is its own inverse.
+    For a family whose own arithmetic keeps heads first in
+    ``attention_head_outputs``: a view on read, so in-place edits land, and
+    its own inverse on write.
     """
     return value.transpose(1, 2)
 
@@ -304,9 +303,8 @@ class Attention(Standard):
     def no_rotary(self) -> str | None:
         """Why this block applies no rotary embedding, or ``None``: the one place the prerope values and `rotate` ask.
 
-        A family without rotary embeddings (learned or sinusoidal positions,
-        ALiBi, none) overrides it with its reason, as does one whose blocks
-        differ (a NoPE block beside rotary ones).
+        A family without rotary embeddings, or whose blocks differ, overrides
+        it with its reason.
         """
         return None
 
@@ -315,11 +313,10 @@ class Attention(Standard):
 
         The base slices ``v_proj`` and ``o_proj``; a family that lays its
         projections out otherwise overrides those two methods instead. A family
-        with no output projection shared by its heads as one matrix (JetMoE's
-        per-expert ones, DeepSeek-V4's low-rank one) overrides this with its
-        reason. One whose values alone are not one linear map of the
-        attention's input (latent attention, a norm on the values) overrides
-        `value_weight` to refuse instead, and keeps `output_weight`.
+        with no output projection shared by its heads as one matrix overrides
+        this with its reason. One whose values alone are not one linear map of
+        the attention's input (latent attention, a norm on the values)
+        overrides `value_weight` to refuse instead, and keeps `output_weight`.
         """
         if tensor_parallel_mesh(self) is not None:
             return SHARDED_WEIGHTS
@@ -332,7 +329,7 @@ class Attention(Standard):
 
     @property
     def head_dim(self) -> int:
-        """Width of one head's values and outputs: the module's ``v_head_dim`` (latent attention, MiMo-V2-Flash), else its ``head_dim`` / ``head_size``."""
+        """Width of one head's values and outputs: the module's ``v_head_dim`` (latent attention), else its ``head_dim`` / ``head_size``."""
         size = module_int(self._module, "v_head_dim", "head_dim", "head_size")
         if size is None:
             raise unsized(self, "head_dim")
@@ -359,7 +356,7 @@ class Attention(Standard):
 
     @property
     def num_kv_heads(self) -> int:
-        """Key/value heads as projected: the module's ``num_key_value_heads`` / ``num_kv_heads`` / ``kv_heads``, else `num_heads` over its ``num_key_value_groups``, else the key projection's width over `qk_head_dim`, else `num_heads`."""
+        """Key/value heads as projected: the module's ``num_key_value_heads`` / ``num_kv_heads`` / ``kv_heads`` / ``n_kv_heads``, else `num_heads` over its ``num_key_value_groups``, else the key projection's width over `qk_head_dim`, else `num_heads`."""
         module = self._module
         size = module_int(module, "num_key_value_heads", "num_kv_heads", "kv_heads", "n_kv_heads")
         if size is not None:
@@ -378,8 +375,7 @@ class Attention(Standard):
         `rotate` at the positions they run at gives `attention_queries`.
         Assign to replace them; the block rotates what is written for the
         position it is written at, so a query moved from another position or
-        prompt is one assignment. Served on the attention's own forward, so
-        under any ``attn_implementation``.
+        prompt is one assignment. Served under any ``attn_implementation``.
         """
         return value
 
@@ -396,7 +392,7 @@ class Attention(Standard):
 
     @EProperty(f"source.{INTERFACE}.inputs", select=1, description="The queries entering attention", unavailable=interface_reason)
     def attention_queries(self, value: torch.Tensor) -> Queries:
-        """The queries the attention interface receives, ``[batch, num_heads, seq, head_dim]``.
+        """The queries the attention interface receives, ``[batch, num_heads, seq, qk_head_dim]``.
 
         After the query projection and, on a family with rotary embeddings,
         after they are applied (`attention_queries_prerope` is before). Assign
@@ -430,11 +426,11 @@ class Attention(Standard):
     def attention_scores(self, value: torch.Tensor) -> Pattern:
         """The scaled, masked scores entering the softmax, ``[batch, num_heads, query, key]``.
 
-        Where the family softcaps the scores (Gemma-2, VaultGemma with ``attn_logit_softcapping``) they are read
-        after the cap, so an additive edit lands on capped scores.
-
         ``softmax(attention_scores)`` is ``attention_probabilities`` up to the
-        dtype cast. Assign to replace them; in-place edits reach the model.
+        dtype cast. Where the family softcaps the scores (Gemma-2's
+        ``attn_logit_softcapping``) they are read after the cap, so an additive
+        edit lands on capped scores. Assign to replace them; in-place edits
+        reach the model.
         """
         return value
 
@@ -443,12 +439,10 @@ class Attention(Standard):
         """What the output projection receives, ``[batch, seq, num_heads, head_dim]``: the heads' outputs
         after any gate the attention applies, split by head as a view of the projection's flat input.
 
-        The projection is ``o_proj``, the family aliasing its own spelling
-        (``c_proj``, ``dense``, ``out_proj``, ``wo``) in ``RENAME``. The same
-        numbers as `attention_head_outputs` on a plain attention, at a module
-        boundary rather than inside the eager forward, so it is served under any
-        ``attn_implementation``. In-place edits reach the model; assignment
-        flattens the heads back.
+        The same numbers as `attention_head_outputs` on a plain attention, at
+        a module boundary (``o_proj``, which a family aliases its own spelling
+        to in ``RENAME``), so it is served under any ``attn_implementation``.
+        In-place edits reach the model; assignment flattens the heads back.
         """
         return value.view(*value.shape[:-1], self.num_heads, self.head_dim)
 
@@ -497,9 +491,7 @@ class Attention(Standard):
 
         What the attention interface returns; the module reshapes it to
         ``[batch, seq, hidden_size]`` and applies the output projection to get
-        ``attention_output``. Assign to replace it, or edit it in place: the
-        interface returns a contiguous tensor on most families and a plain
-        transposed view on GPT-2, and torch accepts in-place edits on both.
+        ``attention_output``. Assign to replace it, or edit it in place.
         """
         return value
 
@@ -524,25 +516,18 @@ class Attention(Standard):
             positions: Each row's absolute position, ``[seq]`` (a tensor or a
                 list), or ``[batch, seq]`` for an ``x`` of ``[batch, heads, seq,
                 qk_head_dim]`` whose prompts sit at different positions. On an
-                M-RoPE family (the Qwen-VL text families, Qwen3.5) with an image in
-                the prompt, the model's own ``[3, batch, seq]`` positions (the
-                rotary module's second argument): a token's position there is not
-                its index from the image on.
+                M-RoPE family with an image in the prompt, the model's own
+                ``[3, batch, seq]`` positions (the rotary module's second
+                argument): a token's position there is not its index from the
+                image on.
 
-        The rotary embedding module (its rope scaling included, and the
-        block's layer type where sliding and full blocks rotate differently)
-        and the apply function (partial or interleaved) are the family's own,
-        so ``rotate(attention_queries_prerope, positions)`` is the block's
+        ``rotate(attention_queries_prerope, positions)`` is the block's
         `attention_queries` bit for bit, and the same for the keys, where the
-        block does nothing more between its rotary and its attention (a family
-        that norms after the rotary, HunYuan or Llama 4, or tiles its keys,
-        JetMoE, does that to the result). A rope scaling that adapts to the
-        sequence (``dynamic``, ``longrope``) picks its frequencies from the
-        largest position given, as the model does from the whole prompt. The
-        embedding is computed by the model's rotary module wherever it lives
-        and applied on ``x``'s device, so `rotate` works on a model split over
-        several devices with ``device_map``. An ordinary call outside a trace;
-        inside one it computes without touching the trace.
+        block does nothing more between its rotary and its attention. A rope
+        scaling that adapts to the sequence (``dynamic``, ``longrope``) picks
+        its frequencies from the largest position given, as the model does
+        from the whole prompt. The result is on ``x``'s device. An ordinary
+        call outside a trace; inside one it computes without touching the trace.
 
         Raises:
             Unavailable: the block applies no rotary embedding (`no_rotary`).
@@ -573,10 +558,8 @@ class Attention(Standard):
     def apply_rotary(self, x: torch.Tensor, embedding: Any) -> torch.Tensor:
         """``x`` rotated by ``embedding`` with the family's ``apply_rotary_pos_emb(q, k, cos, sin)``, the function the forward calls.
 
-        Whatever that function does is what happens: a partial rotary it
-        slices itself (GPT-NeoX, Phi-3, GLM), an interleaved one (Cohere). A
-        family that slices outside it, or calls another function, overrides
-        this method.
+        A family that slices a partial rotary outside that function, or calls
+        another, overrides this method.
         """
         cos, sin = embedding
         apply = sys.modules[type(self._module).__module__].apply_rotary_pos_emb

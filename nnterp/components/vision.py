@@ -1,32 +1,10 @@
 """`Vision`: an image-text-to-text checkpoint's vision tower, and its blocks.
 
-A multimodal wrapper is a text model plus a vision tower, a projector, and a
-step that scatters the projected features into the text stream at the image
-tokens. The text model keeps the standard names it has everywhere; the tower
-answers to ``model.vision``, its blocks to ``vision.layers[i]``, and the last
-module before the scatter to ``model.projector``. The family names them in its
-``RENAME`` (keys that resolve only on the wrapper's tree) and keys these envoys
-on the tower's module types in its ``ENVOYS``.
-
-The tower's blocks are pre-norm attention + MLP blocks on transformers' shared
-attention interface (SigLIP, CLIP), so they are `Layer`, `Attention` and `Mlp`
-with the stream values re-annotated as `Patches`: ``layer_input``, ``layer_output``,
-``attention_output`` and ``mlp_output`` mean what they mean on a text block,
-``vision.layers[i].layer_input + attention_output + mlp_output == layer_output``. The
-attention interior is inherited unchanged: ``attention_probabilities`` is a
-`Pattern` whose ``batch`` axis is the tower's (one row per image) and whose
-``query``/``key`` axes are the image's patches. There is no causal mask (a
-patch attends to every patch of its image); a tower that masks does so for
-its own layout (Pixtral's block-diagonal mask between packed images, Gemma
-4's padded keys). The tower's sizes are on `Vision`, read off its own config;
-the root's sizes stay the text model's.
-
-Where the image meets the text model is the tower's too: ``vision.image_token_mask``
-(which positions of the text batch hold an image token, off the root's inputs)
-and ``vision.image_features`` (what the wrapper scatters into the token
-embeddings, flat over those tokens, read at the scatter in the forward of the
-module the family keys `ImageScatter` on), so
-``layers[0].input[vision.image_token_mask] == vision.image_features``.
+The tower answers to ``model.vision``, its blocks to ``vision.layers[i]``, and
+the last module before the scatter into the text stream to ``model.projector``.
+The blocks are `Layer`, `Attention` and `Mlp` with the stream values
+re-annotated as `Patches`, and the tower also serves where the image meets the
+text model: ``vision.image_token_mask`` and ``vision.image_features``.
 """
 
 from __future__ import annotations
@@ -55,7 +33,7 @@ ImageFeatures = Float[Tensor, f"{IMAGE_TOKENS} {HIDDEN}"]
 
 
 def image_token_id(config: Any) -> int | None:
-    """The id of the token the processor puts where an image's features go: ``image_token_id`` (``image_token_index`` on older configs)."""
+    """The id of the token the processor puts where an image's features go: ``image_token_id``, else ``image_token_index``."""
     for name in ("image_token_id", "image_token_index"):
         value = getattr(config, name, None)
         if isinstance(value, int):
@@ -101,12 +79,7 @@ def scatter_call(model: Any) -> tuple[str, int | str]:
 
 
 def no_image_features(vision: Vision) -> str | None:
-    """Why ``vision.image_features`` is unavailable, or ``None``.
-
-    ``image_features`` is read at the scatter, in the forward of the module the
-    family keys `ImageScatter` on; a wrapper whose family keys none there binds
-    the tower's names but does not serve the value.
-    """
+    """Why ``vision.image_features`` is unavailable, or ``None``."""
     reason = no_image_tokens(vision)
     if reason is None and scatter_host(vision.root) is None:
         model = vision.root
@@ -150,19 +123,11 @@ class ImageScatter(Standard):
     A family keys it on the wrapper model's type (``LlavaModel: ImageScatter``);
     `Vision.image_features` reads the `scatter_argument` of the `scatter`
     operation, the features in ``inputs_embeds.masked_scatter(image_mask,
-    image_features)``, which is what the text model receives at the image
-    tokens whatever the wrapper did after its projector (LLaVA-NeXT's
-    unpadding and newline tokens). A wrapper that writes the features in
-    elsewhere subclasses it with its own operation and argument. The forward
-    is instrumented at build (``sourced``), so the scatter is served after the
-    tower's values, which run inside the same forward. Carries no values of
+    image_features)``. A wrapper that writes the features in elsewhere
+    subclasses it with its own operation and argument; one that scatters in
+    the root's own forward has no child to key, and its family sets
+    ``ROOT_SCATTER`` to the operation's name instead. Carries no values of
     its own.
-
-    A wrapper that scatters in the root's own forward (Llama 4's
-    ``Llama4ForConditionalGeneration``) has no child to key: its family sets
-    ``ROOT_SCATTER`` to the operation's name, the root is the host
-    (`scatter_host`), and `StandardizedTransformer` instruments its own
-    forward at build.
     """
 
     sourced = True
@@ -185,11 +150,7 @@ class VisionLayer(Layer):
 
     @EProperty(key="input", description="The tower's stream entering the block", unavailable=no_tower_run)
     def layer_input(self, value: torch.Tensor) -> Patches:
-        """The tower's stream entering this block, ``[images, patches, vision_hidden_size]``, before any of its norms.
-
-        The block's first argument, with a packed tower's leading 1 (as
-        ``layer_output``); a view: assign or edit in place.
-        """
+        """The tower's stream entering this block, ``[images, patches, vision_hidden_size]``, before any of its norms: a view; assign or edit in place."""
         return as_patches(value)
 
     @layer_input.postprocess
@@ -302,35 +263,22 @@ class VisionMlp(Mlp):
 class Vision(Standard):
     """``model.vision``: a vision tower's root. Its blocks are ``layers``; its sizes are its own config's.
 
-    Values: ``patch_embeddings``, the patch embedding's output one row per patch
-    (before any position embedding, CLS token or pre-norm the tower adds), and
-    ``tower_output``, the last block's stream after the tower's final norm
-    where it has one, before any pooling, CLS dropping or adapter (the tower's
-    ``last_hidden_state``, unless the tower returns something after those).
-    The host reads the tower its own way: Gemma 3 pools ``tower_output``,
-    Llava 1.5 takes ``vision.layers[-2].layer_output`` and drops the CLS
-    token, so what reaches the projector is ``projector.input``, not
-    necessarily ``tower_output``. Where the image meets the text model:
-    ``image_token_mask``, read off the model's inputs, and ``image_features``,
-    read at the scatter (`ImageScatter`, keyed from the root), so
-    ``layers[0].input[image_token_mask] == image_features``. Both need an image
-    to reach the model (`no_images`).
+    The host reads the tower its own way (Llava 1.5 takes
+    ``vision.layers[-2].layer_output`` and drops the CLS token), so what
+    reaches the projector is ``projector.input``, not necessarily
+    `tower_output`. The image values need an image to reach the model
+    (`no_images`).
 
-    The sizes (`num_layers`, `vision_hidden_size`, `num_heads`, `head_dim`,
-    `intermediate_size`, `patch_size`, `image_size`) are read off the tower's
-    own config, the plain spellings SigLIP's and CLIP's use; a tower that
-    spells one its own way overrides the property on a subclass. The tower's
-    width is a different quantity from the text model's ``hidden_size`` and
-    is named apart, so `axis_size` on ``image_features`` (text width, served
-    here) walks past the tower to the root; ``num_heads``, ``head_dim``,
-    ``num_layers`` and ``intermediate_size`` keep the plain names and shadow
-    the root's on purpose, because the tower's values want the tower's numbers.
+    The sizes are read off the tower's own config under the plain spellings;
+    a tower that spells one its own way overrides the property on a subclass.
+    The tower's width is `vision_hidden_size`, named apart from the text
+    model's ``hidden_size``; the other sizes keep the plain names and are the
+    tower's.
 
     Attributes:
         layers: The tower's blocks, each a `VisionLayer`.
-        patch_embed: The patch embedding (a convolution on SigLIP and CLIP).
-        norm: The final norm over the patches, where the tower has one (SigLIP's ``post_layernorm``;
-            CLIP's norms only the pooled CLS token and is not aliased).
+        patch_embed: The patch embedding.
+        norm: The final norm over the patches, where the tower has one.
     """
 
     layers: Sequence[VisionLayer]
@@ -390,9 +338,9 @@ class Vision(Standard):
 
         On a convolution, which returns ``[images, vision_hidden_size, rows,
         columns]``, a view of it with the grid flattened, so in-place edits
-        land; on a linear patch embedding (Llama 4, Gemma 4), its output.
-        Assign a tensor of the same shape to replace it. Position embeddings,
-        a CLS token and a pre-norm come after.
+        land; on a linear patch embedding, its output. Assign a tensor of the
+        same shape to replace it. Position embeddings, a CLS token and a
+        pre-norm come after.
         """
         return value.flatten(2).transpose(1, 2) if value.dim() == 4 else as_patches(value)
 
@@ -461,13 +409,10 @@ class Vision(Standard):
     def support(self, layer: int | None = None) -> dict[str, Any]:
         """Which tower values this checkpoint has, the way `StandardizedTransformer.support` reports the text model's.
 
-        The tower's own values (``image_token_mask`` and ``image_features``
-        among them) plus every block value over ``layers`` (``"layer_output"``,
-        ``"self_attn.attention_probabilities"``, ...): ``None`` when available
-        on every block, else ``{layer: reason}``. With ``layer``, that block's
-        values alone. Empty on a load no image reaches (`no_images`): the tower
-        never runs, so the model's `support` has no ``vision`` rows, and a
-        read of an image value raises `Unavailable` saying why.
+        The tower's own values plus every block value over ``layers``:
+        ``None`` when available on every block, else ``{layer: reason}``. With
+        ``layer``, that block's values alone. Empty on a load no image reaches
+        (`no_images`).
         """
         if layer is not None:
             return blocks_support(self.layers, layer)
@@ -500,14 +445,11 @@ def no_concatenated_heads(envoy: Any) -> str | None:
 class QwenVisionAttention(VisionAttention):
     """The Qwen ViT's attention: one interface call per image (or window), so the interior is read whole around them.
 
-    ``attention_queries``, ``attention_keys`` and ``attention_values`` are the
-    whole ``[1, heads, patches, head_dim]`` tensors (the queries and keys after
-    the 2D rotary embedding) before the module splits them per image, and
-    ``attention_head_outputs`` is the per-image outputs concatenated back,
-    ``[1, patches, heads, head_dim]``, under any implementation but flash.
-    ``attention_scores`` and ``attention_probabilities`` are `Unavailable`
-    (`PER_IMAGE`): loading eager does not help, since the module splits
-    under every implementation.
+    The queries, keys and values are read before the module splits them per
+    image (the queries and keys after the 2D rotary embedding), and the head
+    outputs after it concatenates them back, under any implementation but
+    flash. The scores and the pattern are `Unavailable` (`PER_IMAGE`) under
+    every implementation.
     """
 
     def off_interface(self) -> str | None:
@@ -535,35 +477,20 @@ class QwenVisionAttention(VisionAttention):
 
 
 class QwenVision(Vision):
-    """The Qwen ViT (Qwen2-VL, Qwen2.5-VL, Qwen3-VL, Qwen3.5): packed, its merger inside, at ``model.visual``.
+    """The Qwen ViT: packed, its merger inside, at ``model.visual``.
 
     The tower runs on ``[patches, vision_hidden_size]``, every image's patches
     concatenated, so its stream values are `Patches` with 1 in the images
     axis, ``[1, patches, vision_hidden_size]``, and its blocks' attention is a
-    `QwenVisionAttention`.
-
-    The processor cuts each image into ``patch_size`` squares (two frames
-    deep), and lays them out in ``spatial_merge_size`` x ``spatial_merge_size``
-    blocks, each block's patches consecutive, images one after another; the
-    merger folds each block into one image token. So ``patches`` runs over
-    every image of the invoke, ``image_grid_thw`` (``[t, h, w]`` per image, in
-    patches) splits it, and an image's patches are in merge-block order, not
-    raster order. Qwen2.5-VL's tower further permutes them into attention
-    windows at entry: its blocks' values, ``tower_output`` and the merger's
-    output are in window order, and the tower restores the merge-block order
-    after the merger.
+    `QwenVisionAttention`. The processor's ``image_grid_thw`` (``[t, h, w]``
+    per image, in patches) splits the row, and an image's patches are in
+    merge-block order, not raster order.
 
     The tower has no final norm, so ``tower_output`` is the last block's
     stream, the merger's input. It is served at the tower's output, after the
     merger has run, so ``projector.input`` and ``projector.output`` are read
-    before ``tower_output``.
-
-    Sizes, off the vision config: ``vision_hidden_size`` is the tower's width
-    (``embed_dim`` on Qwen2-VL, whose config's ``hidden_size`` is the merger's
-    output width), ``num_heads``, ``intermediate_size`` (Qwen2-VL's is
-    ``embed_dim * mlp_ratio``), ``patch_size``, ``spatial_merge_size`` and
-    ``window_size`` (Qwen2.5-VL's, in pixels; ``None`` on the others).
-    ``image_size`` is `Unavailable`: the tower takes any resolution.
+    before ``tower_output``. ``image_size`` is `Unavailable`: the tower takes
+    any resolution.
     """
 
     @property
@@ -595,21 +522,17 @@ class QwenVision(Vision):
 
 
 class PixtralVision(Vision):
-    """Pixtral's tower (Mistral 3, Llava-Pixtral): *packed*, every image's patches in one row.
+    """Pixtral's tower: *packed*, every image's patches in one row.
 
-    The convolution runs on the batch padded to its largest image, each image
-    is cropped to its own grid, and the grids are flattened and concatenated
-    into ``[1, all patches, vision_hidden_size]`` before ``ln_pre``; the blocks
-    attend under a block-diagonal mask, so no patch sees another image's. So
-    `Patches` has a leading 1 here, and ``patch_embeddings`` is that packed
-    row as it enters ``ln_pre`` (the convolution's own output, ``patch_embed.output``,
-    is still the padded grid). The processor's ``image_sizes`` split the row
-    per image: ``(height // patch_size) * (width // patch_size)`` patches each,
-    in order. The attention interior is whole: one interface call over the
-    packed row, so ``attention_probabilities`` is ``[1, heads, all patches,
-    all patches]``, zero between images. ``image_size`` is `Unavailable`: the
-    config's is the largest side the processor resizes to, not one size every
-    image has.
+    `Patches` has a leading 1 here, and ``patch_embeddings`` is the packed row
+    as it enters ``ln_pre`` (the convolution's own output,
+    ``patch_embed.output``, is the padded grid). The processor's
+    ``image_sizes`` split the row per image: ``(height // patch_size) *
+    (width // patch_size)`` patches each, in order. The blocks attend under a
+    block-diagonal mask, so ``attention_probabilities`` is ``[1, heads, all
+    patches, all patches]``, zero between images. ``image_size`` is
+    `Unavailable`: the config's is the largest side the processor resizes to,
+    not one size every image has.
     """
 
     image_size = property(variable_resolution)

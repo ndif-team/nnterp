@@ -4,31 +4,22 @@ A toolkit is one module in this package, named after the ``model_type``
 (from the checkpoint's config) it covers. Each declares:
 
 * ``RENAME``: an nnsight ``rename`` dict mapping the family's own module names
-  onto the standard vocabulary (see `nnterp`). Keys are resolved relative to
-  every envoy in the tree, so a single-component key such as ``"attn"`` binds
-  in every block that has one, and a key that does not resolve anywhere is
-  simply skipped.
-* ``Layer``, ``Attention`` and ``Mlp``, and ``LinearAttention`` on a hybrid:
-  the family's own subclasses of `nnterp.components`'s, overriding only what its
-  forward spells differently.
+  onto the standard vocabulary (see `nnterp`).
+* ``Layer``, ``Attention`` and ``Mlp``: the family's own subclasses of
+  `nnterp.components`'s, overriding only what its forward spells differently.
 * ``ENVOYS``: an nnsight ``envoys`` dict keying those on the family's module
-  types (``envoys=`` matches by type first, then by path, in a native or an
-  alias spelling).
+  types.
 
-The module's name is its ``model_type`` (``gemma3_text.py`` covers
-``gemma3_text``), and that is the whole registry: `lookup` imports
-``nnterp.families.<model_type>`` on first use, so ``import nnterp`` loads no
-transformers modeling module. To add a family, write the module beside these;
-to add one from elsewhere, or to override a shipped one, pass it to `register`
-with the model types it covers; to use one for a single load, pass it as
-``StandardizedTransformer(..., family=)`` or ``StandardizedVLLM(..., family=)``.
-A ``model_type`` with neither gets `default`, the best-effort family, with a
-warning; it is not one of `known`.
+`lookup` imports ``nnterp.families.<model_type>`` on first use, so
+``import nnterp`` loads no transformers modeling module. To add a family,
+write the module beside these; to add one from elsewhere, or to override a
+shipped one, pass it to `register`; to use one for a single load, pass it as
+``StandardizedTransformer(..., family=)``. A ``model_type`` with neither gets
+`default`, the best-effort family, with a warning.
 
 Another engine's families live in a package of their own under this one,
-named after the engine: ``nnterp.families.vllm.llama`` is vLLM's implementation
-of the ``llama`` model type, looked up with ``lookup("llama", engine="vllm")``.
-There is no default on another engine: a type it has no family for raises.
+named after the engine: ``nnterp.families.vllm.llama``, looked up with
+``lookup("llama", engine="vllm")``. There is no default on another engine.
 """
 
 from __future__ import annotations
@@ -69,10 +60,8 @@ def resolve(config: Any, engine: str | None = None) -> ModuleType:
     """The family for a config: its own ``model_type`` where a family covers it, else its text model's.
 
     A multimodal wrapper usually resolves through its ``text_config`` (Llava to
-    ``llama``, Gemma 3 to ``gemma3_text``). A wrapper with a family of its own,
-    named after the wrapper, resolves to that family whatever its text config
-    says: Kimi K2.5's text config says ``deepseek_v3`` from transformers 5.20,
-    and `kimi_k25` covers it.
+    ``llama``). A wrapper with a family of its own, named after the wrapper,
+    resolves to that family whatever its text config says (``kimi_k25``).
     """
     text = getattr(config, "text_config", config)
     if text is not config and covers(config.model_type, engine):
@@ -89,17 +78,9 @@ def known(engine: str | None = None) -> list[str]:
 def lookup(model_type: str, engine: str | None = None) -> ModuleType:
     """The toolkit for ``model_type``: a registered one, else the module of that name, imported on first use.
 
-    With neither, on transformers, `default` with a warning: its
-    standardization is a name guess, which it checks at load (raising
-    `UnsupportedFamily` when the guess finds no blocks, embedding, final norm
-    or head, or the stream's shape does not hold), and what a guess cannot
-    make safe (the contributions, the logit lens) is unavailable.
-
-    ``engine`` names another engine's families (``"vllm"``): its modules are
-    their own implementations of the same checkpoints, with their own classes
-    and conventions, so they are their own toolkits under the same name.
-    `default` is written against transformers' modules, so it is no fallback
-    there: an engine's lookup with no family raises.
+    With neither, on transformers, `default` with a warning: a name guess,
+    which it checks at load. ``engine`` names another engine's families
+    (``"vllm"``), which have no default.
 
     Raises:
         UnsupportedFamily: on another engine, when there is neither.

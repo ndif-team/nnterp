@@ -34,7 +34,7 @@ class Mlp(Mlp):
 
 
 class Moe(Moe, Mlp):
-    """A mixture of experts: the module returns the routed hidden states (a bare tensor on this transformers), so the base holds."""
+    """A mixture of experts: the module returns the routed hidden states (a bare tensor), so the base holds."""
 
 
 #: Module type -> Envoy subclass, for nnsight's ``envoys=``.

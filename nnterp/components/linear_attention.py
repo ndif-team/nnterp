@@ -24,24 +24,17 @@ ChannelGates = Float[Tensor, f"{BATCH} {SEQ} {MIXER_HEADS} {KEY_DIM}"]
 
 
 class LinearAttention(RecurrentMixer):
-    """A gated DeltaNet mixer (Qwen3-Next, Qwen3.5/3.6, OLMo-Hybrid; Kimi-Linear's KDA subclasses it): linear attention with a recurrent state.
+    """A gated DeltaNet mixer (Qwen3.5's ``linear_attn``): linear attention with a recurrent state.
 
     It projects queries, keys and values like attention, but mixes them
     through a per-head recurrent state instead of a softmax over keys: for
     each token the state decays by a learned gate (``decays``), takes up the
     new key/value pair scaled by ``betas``, and the query reads against it.
-    So the shared names mean what they mean on `Attention` — the contribution,
-    the queries/keys/values the mixer receives, the per-head outputs — and
-    there is no pattern and no scores; instead there are the gate, the beta,
-    and the state entering and leaving the layer, one ``key_dim`` by
-    ``value_dim`` matrix per head.
-
-    Everything but ``attention_output`` is read at the delta-rule kernel
-    call: transformers' chunked rule on a prompt, its token-by-token rule on
-    a decode step, where the sequence axis is 1 and ``state_input`` is the
-    cached state. How that call is found, the kernels it needs, and the
-    state after every token (``route_kernels(model.family, "torch")``, or
-    ``route_delta_rule(model.family, "recurrent")``) are `RecurrentMixer`'s.
+    So the shared names mean what they mean on `Attention`, and there is no
+    pattern and no scores; instead there are the gate, the beta, and the
+    state entering and leaving the layer, one ``key_dim`` by ``value_dim``
+    matrix per head. On a decode step the sequence axis is 1 and
+    ``state_input`` is the cached state.
     """
 
     #: The call a prompt runs through: ``torch_chunk_gated_delta_rule(query, key, value, g=, beta=, initial_state=, ...)``.
@@ -73,17 +66,15 @@ class LinearAttention(RecurrentMixer):
 
     @EProperty(kernel("inputs"), select="beta", description="The per-token write strength into the state", unavailable=needs_torch_kernels)
     def betas(self, value: torch.Tensor) -> Gates:
-        """How strongly each token's key/value pair is written into the state, ``[batch, seq, heads]``, in ``(0, 1)`` (``(0, 2)`` on OLMo-Hybrid with ``linear_allow_neg_eigval``)."""
+        """How strongly each token's key/value pair is written into the state, ``[batch, seq, heads]``, in ``(0, 1)`` (``(0, 2)`` where the config sets ``linear_allow_neg_eigval``)."""
         return value
 
     @EProperty(kernel("inputs"), select="initial_state", description="The recurrent state entering the layer, or None at the start of a prompt (a copy of the cache's buffer)", unavailable=needs_torch_kernels)
     def state_input(self, value: Any) -> State | None:
         """The state this call starts from: ``None`` on a fresh prompt, the cached state on a decode step.
 
-        A copy: the cache hands the kernel its own buffer and overwrites it in
-        place with the step's new state afterwards, so the live tensor would
-        read as this step's *output* by the time the trace ends. Assign to
-        replace what the step starts from.
+        A copy, since the cache overwrites its buffer in place with the step's
+        new state. Assign to replace what the step starts from.
         """
         return value if value is None else value.clone()
 

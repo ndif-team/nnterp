@@ -5,24 +5,18 @@ checkpoint's ``model_type`` has neither a module here nor a registered family;
 no ``model_type`` names it.
 
 It serves what a name guess makes safe. ``RENAME`` maps Llama's names over the
-spellings the shipped families use for the containers (``model``,
-``transformer``, ``gpt_neox``, ``model.decoder``, ``backbone``, a multimodal
-``model.language_model`` or ``language_model.model``), the embedding, the
-blocks, the final norm, the head, and a block's attention, MLP and norms; a key
-that does not resolve on a checkpoint is skipped, so one dict serves every
-architecture. ``ENVOYS`` is keyed on the *standard* names: nnsight matches a
-string key against a module's alias paths as well as its native one, so
-``"self_attn"`` reaches GPT-2's ``attn`` once ``RENAME`` has aliased it, and
-``"layers.*"`` reaches every block.
+spellings the shipped families use, and ``ENVOYS`` is keyed on the *standard*
+names, which nnsight matches against a module's alias paths as well as its
+native one.
 
 Served: ``layer_output``, the root values (``final_norm_output`` only where
 the forward calls ``norm`` once), the sizes, and the attention
-interior wherever the module calls transformers' shared attention interface
-(the base `Attention`'s reads). Not served: ``attention_output``,
-``mlp_output``, `project_on_vocab`, the queries and keys before the rotary
-embedding and `Attention.rotate`, since what a sublayer adds to the stream,
-what follows ``lm_head`` and how a block rotates depend on code a name does not show; nor
-any mixture, recurrent-mixer or per-family value. Those need a family module
+interior wherever the module calls transformers' shared attention interface.
+Not served: ``attention_output``, ``mlp_output``, `project_on_vocab`, the
+queries and keys before the rotary embedding and `Attention.rotate`, since
+what a sublayer adds to the stream, what follows ``lm_head`` and how a block
+rotates depend on code a name does not show; nor any mixture,
+recurrent-mixer or per-family value. Those need a family module
 (docs/extending/adding-a-family.md). `check` runs at load and raises
 `UnsupportedFamily` when the guess does not hold.
 """
@@ -118,14 +112,11 @@ NORM_CALLS = "the forward calls norm {} times, not once: norm.output is its firs
 class Layer(Layer):
     """A decoder block as the default finds it.
 
-    ``layer_output`` is the base's: the block's output, or a tuple's first
-    element; `check` records which on ``returns_tuple``, so `skip_with` packs
-    the stream the way the block does. A block with no module the default
-    recognizes as its attention or MLP lists that module's values as
-    unavailable, so `support` shows what was not found. ``layer_mid`` and
-    ``mlp_norm_output`` are not served: whether the block has a stream
-    between its sublayers, and whether ``post_attention_layernorm`` is the
-    MLP's pre-norm, are facts about the block the default cannot tell.
+    `check` records on ``returns_tuple`` whether the block returns a tuple, so
+    `skip_with` packs the stream the way the block does. A block with no
+    module the default recognizes as its attention or MLP lists that module's
+    values as unavailable in `support`. ``layer_mid`` and ``mlp_norm_output``
+    are not served.
     """
 
     layer_mid = unavailable(
@@ -149,12 +140,10 @@ class Layer(Layer):
 class Attention(Attention):
     """An attention module as the default finds it.
 
-    The interior is the base's, read on transformers' shared attention
-    interface; on a forward that makes no such call it is unavailable.
-    ``attention_output`` is not served (`CONTRIBUTION`), nor the values
-    before the rotary embedding and `rotate` (`ROTARY`): the rotary call's
-    arguments and its cos/sin source differ between families in ways a name
-    does not show.
+    The interior is the base's, unavailable on a forward that does not call
+    transformers' shared attention interface. ``attention_output`` is not
+    served (`CONTRIBUTION`), nor the values before the rotary embedding and
+    `rotate` (`ROTARY`).
     """
 
     def off_interface(self) -> str | None:
@@ -214,12 +203,7 @@ REQUIRED = ("embed_tokens", "layers", "norm", "lm_head")
 
 
 def _guess(model: "StandardizedTransformer", missing: list[str]) -> dict[str, str]:
-    """A ``rename`` for the missing root modules, read off the module tree, for the error message.
-
-    The longest module list is the blocks, the first embedding the token
-    embedding, a norm beside the blocks the final norm, a linear on the root
-    as wide as the vocabulary the head.
-    """
+    """A ``rename`` for the missing root modules, read off the module tree, for the error message."""
     modules = dict(model._module.named_modules())
     lists = [(path, module) for path, module in modules.items() if isinstance(module, torch.nn.ModuleList) and path]
     blocks = max(lists, key=lambda item: len(item[1]))[0] if lists else None

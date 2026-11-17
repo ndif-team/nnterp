@@ -78,7 +78,7 @@ def _state_output_key(envoy: Envoy) -> str:
 
 
 class SelectiveScan(RecurrentMixer):
-    """A Mamba-1 mixer (Mamba, Falcon-Mamba, Jamba's Mamba blocks): a selective state-space scan.
+    """A Mamba-1 mixer: a selective state-space scan.
 
     Each channel of the mixer's inner width carries a state of ``state_dim``
     numbers. For each token ``t`` the mixer computes a step size per channel,
@@ -98,43 +98,12 @@ class SelectiveScan(RecurrentMixer):
     token keeps (``decays``, per channel and state dimension, where a
     DeltaNet's is one number per head).
 
-    The values are read at the kernel call the forward makes:
-    ``mamba_selective_scan(x, dt, A, B, C, D=, z=, delta_bias=, ...)`` on a
-    prompt, ``mamba_selective_state_update(state, x, dt, A, B, C, D, z=,
-    dt_bias=, ...)`` on a decode step (one token). The kernel's tensors are
-    channel-first (``x`` and ``dt`` ``[batch, channels, seq]``, ``B`` and
-    ``C`` ``[batch, state_dim, seq]``; a decode step drops the sequence
-    axis); each value is a view of the argument laid out tokens first, and
-    an assignment is laid back out, so reads, writes and in-place edits
-    reach the kernel.
-
-    * ``attention_queries`` / ``attention_keys``: ``C`` / ``B``,
-      ``[batch, seq, 1, state_dim]`` (one group).
-    * ``attention_values``: ``x``, ``[batch, seq, channels]``.
-    * ``betas``: ``softplus(dt + dt_bias)``, the step size, and ``decays``:
-      ``A * betas``, ``[batch, seq, channels, state_dim]``; derived, read-only.
-    * ``state_input``: a decode step's cached state, ``[batch, channels,
-      state_dim]`` (a copy; assign to replace it), ``None`` on a prompt, whose
-      scan starts from zeros.
-    * ``attention_head_outputs``: ``y`` before the gate and ``out_proj``,
-      ``[batch, seq, channels]``: a binding inside the kernel.
-    * ``state_output``: the state after the call's last token, as the cache
-      receives it: the scan's returned state on a prompt, the updated state
-      the decode kernel copies into the cache.
-    * ``state`` / ``states`` / ``state_after`` / ``set_state_after``: the
-      state after each token, from the scan's token loop (`STATE_OP`) on a
-      prompt and the single update (`STEP_STATE_OP`) on a decode step.
-
-    The pure-torch selective scan *is* the token loop, so
-    ``route_kernels(model.family, "torch")`` binds each kernel name to its
-    own pure-torch function; the state after each token needs it. With
-    ``mamba_ssm`` installed the forward dispatches both to its compiled
-    kernels, which have no source to read inside (and need CUDA): route
-    before the first trace. Without it the forward reaches the pure-torch
-    kernels through transformers' kernel dispatcher, and the two values
-    read inside a kernel (``attention_head_outputs``, a decode step's
-    ``state_output``) are keyed through it (`kernel_body`), so they need
-    no routing.
+    The kernel's tensors are channel-first; each value is a view of the
+    argument laid out tokens first, and an assignment is laid back out, so
+    reads, writes and in-place edits reach the kernel. The state after each
+    token needs ``route_kernels(model.family, "torch")``, and with
+    ``mamba_ssm`` installed every kernel value does: route before the first
+    trace.
     """
 
     #: The call a prompt runs through: ``mamba_selective_scan(x, dt, A, B, C, D=, z=, delta_bias=, ...)``.
@@ -227,9 +196,8 @@ class SelectiveScan(RecurrentMixer):
         """The state this call starts from: the cached state on a decode step, ``None`` on a prompt.
 
         A prompt's scan takes no state: it starts from zeros. On a decode
-        step, a copy: the kernel updates the cache's buffer in place, so the
-        live tensor would read as this step's output by the time the trace
-        ends. Assign to replace what the step starts from.
+        step, a copy, since the kernel updates the cache's buffer in place.
+        Assign to replace what the step starts from.
         """
         return value.clone() if _decoding(self) else None
 

@@ -98,23 +98,19 @@ def axis_size(envoy: Envoy, axis: str) -> int:
     """The size of layout axis ``axis`` on a value ``envoy`` serves.
 
     An axis that is a fact about the model is named as the size that holds
-    it (`HIDDEN` is ``"hidden_size"``, `HEADS` ``"num_heads"``), so its size
-    is that attribute: on ``envoy`` when its class declares it (an
-    attention's ``num_heads``, a mixture's ``num_experts``), else on the
-    first envoy above it that does, up to the model's root (``hidden_size``,
-    ``vocab_size``)::
+    it (`HIDDEN` is ``"hidden_size"``), so its size is that attribute: on
+    ``envoy`` when its class declares it, else on the first envoy above it
+    that does, up to the model's root::
 
         axis_size(model.layers[3], HIDDEN)          # model.hidden_size
         axis_size(model.layers[3].self_attn, HEADS)  # this block's heads
 
-    Only an envoy's class counts (a property, the root's
-    `StandardizedProperty`), never an attribute of the wrapped module, which
-    can share a name and hold another number.
+    Only an envoy's class counts, never an attribute of the wrapped module.
 
     Raises:
         ValueError: no envoy from ``envoy`` up to the root declares ``axis``:
-            it is not a fact about the model (the batch, the sequence, the
-            pattern's keys), and its size is the tensor's.
+            it is not a fact about the model (the batch, the sequence), and
+            its size is the tensor's.
     """
     host = envoy
     while host is not None:
@@ -140,16 +136,9 @@ def values(cls: type) -> dict[str, EProperty]:
 class Standard(Envoy):
     """An envoy carrying standard values: what `Layer`, `Attention` and `Mlp` share.
 
-    A value that is an operation inside a forward is served only on a call
-    whose forward was instrumented before the call began. Instrumenting on
-    first read is enough when the read comes before the module runs, which
-    is the usual case; it is too late when the worker is already parked
-    inside the module, as it is when a block's ``mlp_output`` (an operation
-    in the block's forward) is read after the block's ``attention_output``.
-    A family whose value sits in such a forward sets ``sourced = True`` on
-    that envoy, and the forward is instrumented when the envoy is built and
-    again when real weights replace meta ones, which reinstalls the plain
-    forward.
+    A subclass whose forward holds a value that is read after the module has
+    started running sets ``sourced = True``: the forward is then instrumented
+    when the envoy is built, ahead of any run.
     """
 
     #: Instrument this module's forward at build, ahead of any run (see the class docstring).
@@ -187,9 +176,8 @@ def standard_children(block: Envoy) -> dict[str, Standard]:
 def block_hosts(blocks: Any) -> dict[str, list[str]]:
     """Standard-value hosts across every block: module name -> value names, in first-seen order.
 
-    The union over the blocks, so a hybrid lists both ``self_attn`` and
-    ``linear_attn`` and a block lacking one reports it as missing; a
-    module no block has (OPT's ``mlp``) is not listed.
+    The union over the blocks, so a block lacking one reports it as missing;
+    a module no block has is not listed.
     """
     hosts: dict[str, dict[str, None]] = {}
     for block in blocks:

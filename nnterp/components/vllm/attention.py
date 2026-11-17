@@ -37,11 +37,8 @@ DECODE_STEP = (
 def on_decode_step(envoy: Envoy) -> str | None:
     """`DECODE_STEP` when a read made now would be served a decode step of the request, else ``None``.
 
-    A request's first visit to its attention layer is the prefill, every
-    prompt token at once, and each later one a decode step of one token. The
-    worker knows which visit a read would ask for before anything is read,
-    so the value refuses there, by name. Outside a trace there is no step to
-    ask about and the answer is the prefill's: `support` lists it available.
+    Outside a trace there is no step to ask about and the answer is the
+    prefill's: `support` lists the value available.
     """
     try:
         mediator = Mediator.current(envoy.path)
@@ -56,11 +53,10 @@ def scores(self: "Attention") -> Pattern:
     ``queries @ keys.T * scale``, softcapped where the layer softcaps, plus
     the ALiBi bias where the layer has slopes, with the keys a query may not
     see (later tokens, and tokens past the layer's sliding window) at
-    ``-inf``. The scale, the softcap, the slopes and the window are the ones
-    vLLM's attention layer was built with. The ALiBi bias is each head's
-    slope times how far behind the query the key is; transformers' families
-    write the same bias from another origin, which moves a query's scores by
-    one constant and leaves the pattern alone.
+    ``-inf``. The ALiBi bias is each head's slope times how far behind the
+    query the key is; transformers' families write the same bias from another
+    origin, which moves a query's scores by one constant and leaves the
+    pattern alone.
     """
     queries, keys = self.attention_queries, self.attention_keys
     keys = keys.repeat_interleave(queries.shape[1] // keys.shape[1], dim=1)  # grouped-query: one key head per group
@@ -88,33 +84,17 @@ def probabilities(self: "Attention") -> Pattern:
 class Attention(standard.Attention):
     """A vLLM attention module: its contribution, what goes into and comes out of the engine's attention layer, and the pattern.
 
-    The module projects (and, on a rotary family, rotates) its queries, keys
-    and values and calls vLLM's attention layer on them, ``self.attn(q, k,
-    v)``, which returns the per-head outputs the output projection then
-    mixes. Those four are the ``attn`` child's inputs and output, each
-    ``[tokens, num_heads * head_dim]``, served with the heads split out by the
-    module's own ``head_dim``. A family whose attention module names that
-    child, or its head width, another way points the values at it.
+    The queries, keys, values and head outputs are the inputs and output of
+    the module's ``attn`` child, vLLM's attention layer, for this step's rows:
+    on a decode step the keys and values are the new token's alone. A family
+    whose attention module names that child, or its head width, another way
+    points the values at it.
 
-    They are this step's rows: on a decode step the keys and values are the
-    new token's alone, and the earlier ones are in the engine's cache, which
-    the kernel reads for itself.
-
-    The queries and keys before the rotary embedding are the arguments of
-    the module's rotary call (`ROTARY`), after any query and key norm, in
-    the same layouts, and `rotate` calls that rotary embedding on any tensor
-    laid out like them. vLLM's rotary kernel rotates its arguments in place,
-    and they are split views of the fused ``qkv`` projection, so these are
-    private copies like every vLLM value, taken before the kernel runs.
-    `no_rotary` is the one place that decides a block has no rotary.
-
-    The scores and the pattern are computed inside the kernel, which serves
-    nothing between its inputs and its output, so here they are *recomputed*
-    from the queries and keys, with the layer's own scale, softcap and
-    window. That makes them read-only (the kernel never takes a pattern: edit
-    the queries or keys to change what a head attends to, or its head outputs
-    to change what it wrote) and there on the prefill only, where a step
-    holds every key; a decode step raises `Unavailable` (`on_decode_step`).
+    The scores and the pattern are inside the layer's kernel, so they are
+    recomputed from the queries and keys, with the layer's own scale, softcap
+    and window: read-only (edit the queries or keys to change what a head
+    attends to, or its head outputs to change what it wrote), and there on
+    the prefill only, where a step holds every key (`on_decode_step`).
     """
 
     interface = unavailable(
@@ -203,18 +183,15 @@ class Attention(standard.Attention):
             x: ``[..., tokens, head_dim]``: queries or keys the way
                 `attention_queries_prerope` / `attention_keys_prerope` serve them.
             positions: Each row's absolute position, ``[tokens]`` (a tensor, a
-                list or a ``range``). On an M-RoPE rotary (the Qwen-VL text
-                models) these are text positions, the same on its three rows;
-                a ``[3, tokens]`` tensor gives each row its own.
+                list or a ``range``). On an M-RoPE rotary these are text
+                positions, the same on its three rows; a ``[3, tokens]`` tensor
+                gives each row its own.
 
-        The block's ``rotary_emb``, vLLM's own module for the family (its rope
-        scaling, partial and interleaved rotations included), is called on a
-        private copy of ``x``, since its kernel rotates in place, so
         ``rotate(attention_queries_prerope, positions)`` is the block's
         `attention_queries` bit for bit where the block does nothing more
-        between its rotary and its attention. It runs in the engine's dtype
-        and on its device and returns ``x``'s. The module is the engine's, so
-        it is called inside a trace only, like `project_on_vocab`.
+        between its rotary and its attention. It returns ``x``'s dtype and
+        device. The rotary embedding is the engine's, so it is called inside a
+        trace only, like `project_on_vocab`.
 
         Raises:
             Unavailable: the block applies no rotary embedding (`no_rotary`).

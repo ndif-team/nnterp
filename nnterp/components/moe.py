@@ -1,23 +1,4 @@
-"""`Moe`: a mixture of experts, an `Mlp` whose routing and experts are standard values.
-
-Nearly every mixture in transformers computes the same thing::
-
-    logits, w, idx = router(x)          # logits [tokens, num_experts]; w, idx [tokens, top_k]; tokens = batch * seq
-    routed = experts(x, idx, w)         # [tokens, hidden_size]
-    out = routed (+ shared(x))
-
-and the experts module's call receives ``(hidden, top_k_index, top_k_weights)``.
-So the values are read where the model consumes them: the logits at the
-operation inside the router's forward that produces them (before any
-scoring), the weights and indices as the experts' arguments, the per-slot
-outputs inside transformers' shared experts implementation, the routed sum as
-the experts' output. Every write lands on the tensor the model uses.
-
-The routing tensors are flat over tokens; each value is served as this
-invoke's ``[batch, seq, ...]`` (a `TokenEProperty`), a view,
-so in-place edits land, and an assignment is spliced back into the flat
-tensor.
-"""
+"""`Moe`: a mixture of experts, an `Mlp` whose routing and experts are standard values."""
 
 from __future__ import annotations
 
@@ -98,29 +79,18 @@ def no_shared_expert(envoy: Envoy) -> str | None:
 class Moe(Mlp):
     """A mixture of experts: its routing, each routed expert's output, and the shared expert's.
 
-    ``mlp_output`` is what the block adds, as on any `Mlp`. The rest, read
-    where the model consumes them (``router``, ``experts`` and
-    ``shared_experts`` are the standard child names; a family aliases its
-    own):
+    The values are read where the model consumes them, on the shape nearly
+    every mixture in transformers has::
 
-    * ``router_logits`` ``[batch, seq, num_experts]``: before the scoring, at the
-      operation in the router's forward that produces them (`LOGITS`), so a
-      write changes the routing.
-    * ``expert_weights`` / ``expert_indices`` ``[batch, seq, top_k]``: the
-      experts module's arguments. Zero a weight to ablate that slot; write an
-      index to reroute (the weight is not recomputed).
-    * ``expert_outputs`` ``[batch, seq, top_k, hidden_size]``: each slot's weighted
-      output, inside transformers' ``grouped_mm`` / ``batched_mm`` experts
-      forward; unavailable under ``experts_implementation="eager"``.
-    * ``routed_output``: the experts' sum, ``expert_outputs.sum(2)``.
-    * ``shared_expert_output``: the shared expert's contribution, where there
-      is one; ``routed_output + shared_expert_output`` is the mixture's output.
+        logits, w, idx = router(x)          # logits [tokens, num_experts]; w, idx [tokens, top_k]; tokens = batch * seq
+        routed = experts(x, idx, w)         # [tokens, hidden_size]
+        out = routed (+ shared(x))
 
-    Its sizes, `num_experts` and `top_k`, are read off the router or the
-    experts module. `SCORING` says what the logits mean. A family whose module
-    runs the mixture only on some checkpoints (Gemma-4's dense MLP, which hosts
-    the block's experts) says why not in `no_mixture`, the one place every
-    value's availability starts from.
+    so every write lands on the tensor the model uses. ``router``,
+    ``experts`` and ``shared_experts`` are the standard child names; a family
+    aliases its own. `SCORING` says what the logits mean. A family whose
+    module runs the mixture only on some checkpoints says why not in
+    `no_mixture`, the one place every value's availability starts from.
     """
 
     # A routed MLP has no single activation or down projection; a module that runs no mixture on this
@@ -165,7 +135,7 @@ class Moe(Mlp):
 
     @property
     def top_k(self) -> int:
-        """Experts each token is routed to: the module's or router's ``top_k`` / ``num_experts_per_tok``."""
+        """Experts each token is routed to: the module's or router's ``top_k`` / ``num_experts_per_tok`` / ``moe_topk``."""
         for module in self._routing_modules():
             size = module_int(module, "top_k", "num_experts_per_tok", "moe_topk")
             if size is not None:

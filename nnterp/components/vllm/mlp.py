@@ -37,16 +37,11 @@ def neurons_reason(envoy: Envoy) -> str | None:
 class Mlp(standard.Mlp):
     """A vLLM feed-forward module: its contribution is its output.
 
-    The neurons are the down projection's input, as on transformers. On a
-    plain MLP (GPT-2's GELU) that is also the activation's output, and it is
-    read there for both: vLLM builds an activation by name once and shares the
-    one module between every block, so ``act_fn``'s own output cannot say
-    which block called it. A gated MLP is different on vLLM: its gate and up
-    projections are one ``gate_up_proj`` and its ``act_fn`` (``SiluAndMul``,
-    ``GeluAndMul``) computes ``act(gate) * up`` in one kernel, so what it
-    returns is already the neurons and ``act(gate)`` alone is never a tensor.
-    There `mlp_activation` is unavailable (`GATED`) and `mlp_neurons` is
-    ``act_fn``'s output. A mixture of experts has neither (`ROUTED`).
+    Both `mlp_activation` and `mlp_neurons` are read as the down projection's
+    input: vLLM shares one activation module between every block, so
+    ``act_fn``'s own output cannot say which block called it. On a gated MLP
+    ``act_fn`` computes ``act(gate) * up`` in one kernel, so `mlp_activation`
+    is unavailable (`GATED`). A mixture of experts has neither (`ROUTED`).
     """
 
     @Flat("down_proj.input", batch=on_transformers_backend, unavailable=activation_reason, description="The activation's output, [1, tokens, intermediate_size]; a plain MLP's only")

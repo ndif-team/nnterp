@@ -23,7 +23,7 @@ DeepSeek-VL keeps a SigLIP tower at ``model.vision_model`` with the projector
 ``model.aligner``; Idefics 3 and SmolVLM keep their SigLIP-shaped ViT at
 ``model.vision_model`` (one row per image tile) with the pixel-shuffling
 ``model.connector`` as ``projector``, and merge the features in a helper,
-``inputs_merger`` (SmolVLM scatters them itself from transformers 5.21). Those towers' ``post_layernorm`` does norm the patches; since a
+``inputs_merger`` (SmolVLM's model scatters them itself where its forward makes no such call). Those towers' ``post_layernorm`` does norm the patches; since a
 rename key cannot tell it from CLIP's, `SiglipVision` serves it as ``vision.norm``.
 """
 
@@ -97,9 +97,9 @@ class SiglipVision(Vision):
 
 
 class InputsMerger(ImageScatter):
-    """Idefics 3's model, and SmolVLM's through transformers 5.20: the features go in through
-    ``inputs_merger(..., image_hidden_states=...)``. SmolVLM scatters them itself from 5.21, the base's
-    ``masked_scatter``, so the operation is whichever the forward has."""
+    """Idefics 3's model and SmolVLM's: the features go in through
+    ``inputs_merger(..., image_hidden_states=...)`` where the forward calls it, and through the base's
+    ``masked_scatter`` where the model scatters them itself, so the operation is whichever the forward has."""
 
     @property
     def scatter(self) -> str:
